@@ -9,7 +9,10 @@ import { getKeyValueStore } from '@/lib/server/key-value';
 export const TOOL_RESULT_READER_TOOL_NAME = 'read_tool_result';
 
 const KEY_PREFIX = 'agi-tool-result';
+const INDEX_KEY_PREFIX = 'agi-tool-result-index';
 const TTL_SECONDS = 24 * 60 * 60;
+const TTL_MS = TTL_SECONDS * 1000;
+const MAX_LISTED_RESULTS = 10;
 const PAGE_CHARS = 40_000;
 const REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const STORED_RESULT_TAG = 'untrusted_tool_result';
@@ -23,8 +26,92 @@ interface StoredToolResult {
   totalChars: number;
 }
 
+export interface ToolResultOwner {
+  userId: string | undefined;
+  conversationId?: string | null;
+}
+
+export interface StoredToolResultSummary {
+  reference: string;
+  toolName: string | null;
+  totalChars: number;
+  storedAt: number;
+}
+
+type IndexedToolResult = Omit<StoredToolResultSummary, 'reference'>;
+
 function storageKey(userId: string, reference: string): string {
   return `${KEY_PREFIX}:${userId}:${reference}`;
+}
+
+function indexKey(userId: string, conversationId: string): string {
+  return `${INDEX_KEY_PREFIX}:${userId}:${conversationId}`;
+}
+
+async function indexStoredToolResult(
+  owner: ToolResultOwner,
+  reference: string,
+  entry: IndexedToolResult,
+): Promise<void> {
+  const store = getKeyValueStore();
+  if (!store || !owner.userId || !owner.conversationId) return;
+  const key = indexKey(owner.userId, owner.conversationId);
+  try {
+    await store
+      .batch()
+      .hashSet(key, { [reference]: JSON.stringify(entry) })
+      .expire(key, TTL_SECONDS)
+      .exec();
+  } catch (error) {
+    logger.warn({ error }, '[tool-result-store] stored result not listed for later turns');
+  }
+}
+
+function readIndexedToolResult(raw: unknown): IndexedToolResult | null {
+  let value: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const totalChars = record['totalChars'];
+  const storedAt = record['storedAt'];
+  if (typeof totalChars !== 'number' || typeof storedAt !== 'number') return null;
+  return {
+    toolName: typeof record['toolName'] === 'string' ? record['toolName'] : null,
+    totalChars,
+    storedAt,
+  };
+}
+
+export async function listConversationToolResults(
+  owner: ToolResultOwner,
+  now: number = Date.now(),
+): Promise<StoredToolResultSummary[]> {
+  const store = getKeyValueStore();
+  if (!store || !owner.userId || !owner.conversationId) return [];
+  let fields: Record<string, unknown> | null;
+  try {
+    fields = await store.hashGetAll<Record<string, unknown>>(
+      indexKey(owner.userId, owner.conversationId),
+    );
+  } catch (error) {
+    logger.warn({ error }, '[tool-result-store] earlier stored results could not be listed');
+    return [];
+  }
+  if (!fields) return [];
+  return Object.entries(fields)
+    .flatMap(([reference, raw]) => {
+      if (!REFERENCE_PATTERN.test(reference)) return [];
+      const entry = readIndexedToolResult(raw);
+      return entry && now - entry.storedAt < TTL_MS ? [{ reference, ...entry }] : [];
+    })
+    .sort((left, right) => right.storedAt - left.storedAt)
+    .slice(0, MAX_LISTED_RESULTS);
 }
 
 function referenceFor(toolCallId: string): string | null {
@@ -41,13 +128,14 @@ function inlineSlice(content: string): string {
   return buf.toString('utf8');
 }
 
-export async function referenceOversizedToolResult(input: {
-  userId: string | undefined;
-  toolCallId: string;
-  toolName: string;
-  content: string;
-  totalChars?: number;
-}): Promise<string | null> {
+export async function referenceOversizedToolResult(
+  input: ToolResultOwner & {
+    toolCallId: string;
+    toolName: string;
+    content: string;
+    totalChars?: number;
+  },
+): Promise<string | null> {
   if (!exceedsInlineLimit(input.content)) return null;
   const store = getKeyValueStore();
   const reference = referenceFor(input.toolCallId);
@@ -65,6 +153,11 @@ export async function referenceOversizedToolResult(input: {
     logger.warn({ error, tool: input.toolName }, '[tool-result-store] oversized result not kept');
     return null;
   }
+  await indexStoredToolResult(input, reference, {
+    toolName: input.toolName,
+    totalChars,
+    storedAt: Date.now(),
+  });
   const shown = inlineSlice(input.content);
   const cut = kept.length < totalChars;
   return (
@@ -81,17 +174,20 @@ export function trimmedToolResultNotice(toolCallId: string | undefined): string 
     : null;
 }
 
-export async function keepTrimmedToolResult(input: {
-  userId: string | undefined;
-  toolCallId: string;
-  content: string;
-}): Promise<boolean> {
+export async function keepTrimmedToolResult(
+  input: ToolResultOwner & {
+    toolCallId: string;
+    toolName?: string;
+    content: string;
+  },
+): Promise<boolean> {
   const store = getKeyValueStore();
   const reference = referenceFor(input.toolCallId);
   if (!store || !input.userId || !reference) return false;
   if (input.content.includes(`${STORED_RESULT_NOTICE_MARKER} "${reference}"`)) return true;
+  let saved: boolean;
   try {
-    return await store.set(
+    saved = await store.set(
       storageKey(input.userId, reference),
       {
         content: input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS),
@@ -103,6 +199,14 @@ export async function keepTrimmedToolResult(input: {
     logger.warn({ error }, '[tool-result-store] trimmed result not kept');
     return false;
   }
+  if (saved) {
+    await indexStoredToolResult(input, reference, {
+      toolName: input.toolName ?? null,
+      totalChars: input.content.length,
+      storedAt: Date.now(),
+    });
+  }
+  return saved;
 }
 
 export async function readStoredToolResult(
@@ -149,14 +253,26 @@ export async function readStoredToolResult(
   return { content: `${fenced}\n${next}`, isError: false };
 }
 
-export function toolResultReaderToolDef(): WebMcpToolDef {
+function describeEarlierResult(summary: StoredToolResultSummary): string {
+  const tool = summary.toolName ? `${summary.toolName}, ` : '';
+  return `"${summary.reference}" (${tool}${summary.totalChars} characters)`;
+}
+
+export function toolResultReaderToolDef(
+  earlierResults: readonly StoredToolResultSummary[] = [],
+): WebMcpToolDef {
+  const earlier =
+    earlierResults.length > 0
+      ? ` Results kept from earlier turns of this conversation: ${earlierResults
+          .map(describeEarlierResult)
+          .join('; ')}.`
+      : '';
   return {
     qualifiedName: TOOL_RESULT_READER_TOOL_NAME,
     serverId: 'agiworkforce',
     toolName: TOOL_RESULT_READER_TOOL_NAME,
     origin: 'operator',
-    description:
-      'Read a tool result that was too long to show in full or was removed from earlier in the conversation. Pass the reference from the notice that replaced it and the character offset to start from.',
+    description: `Read a tool result that was too long to show in full or was removed from earlier in the conversation. Pass the reference from the notice that replaced it and the character offset to start from.${earlier}`,
     inputSchema: {
       type: 'object',
       properties: {

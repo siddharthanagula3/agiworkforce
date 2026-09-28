@@ -29,10 +29,10 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-| vscode | partial | The CLI maps routingProfile speed to the same economy band as cost (developer_host.rs routing_profile_selection), so a Fastest row would be Economy under another name. It needs p-desktop-cli's fastest-slot preference (model speed in the Rust registry and preferred slots on AutoRoutingRequest); the VS Code row is then one entry in ROUTING_PROFILE_BY_AUTO_PROFILE. | ui |
+| vscode | partial | turn/start routingProfile speed now resolves with the fastest slots first and keeps that preference (ccf4744297); VS Code adds its Fastest row to ROUTING_PROFILE_BY_AUTO_PROFILE (p-sessions) | handler |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:442-442`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:3241-3241`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:2354-2354`, `apps/cli/src/app_server/developer_host.rs:1200-1200`
 
 ## S79.06: Quality-first profile.
 
@@ -186,7 +186,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The compiled Rust registry omits the release ledger's policyVersion, so a CLI routing decision cannot record which version made it; needs packages/ai/model-registry to compile it in. | handler |
+| cli | partial | The generated Rust registry now carries policies.release.policyVersion and routing_policy_version() reads it (ccf4744297); recording it on the CLI routing decision is p-mcp-rust's | handler |
 | chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
-Code: `apps/cli/src/routing/profile.rs:18-18`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`
+Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`

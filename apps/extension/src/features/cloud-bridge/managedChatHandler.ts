@@ -8,6 +8,9 @@ import {
 } from '@agiworkforce/types';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
+  AGIWORK_PLAN_MAX_STEPS,
+  MAX_AGIWORK_GOAL_CHARS,
+  MAX_AGIWORK_PLAN_STEP_CHARS,
   ManagedCloudAgentRunReferenceSchema,
   ToolApprovalResumeRequestSchema,
   ToolInputResumeRequestSchema,
@@ -92,6 +95,7 @@ export interface ChromeManagedChatRequest {
   fileAttachments?: ManagedChatFileAttachment[];
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
+  agiWorkPlan?: string[];
   webSearch?: boolean;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
@@ -296,6 +300,21 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)
   ) {
     return 'Invalid Managed Cloud request identity.';
+  }
+  if (
+    request.agiWorkPlan !== undefined &&
+    (request.workMode !== 'agiwork' ||
+      !Array.isArray(request.agiWorkPlan) ||
+      request.agiWorkPlan.length === 0 ||
+      request.agiWorkPlan.length > AGIWORK_PLAN_MAX_STEPS ||
+      request.agiWorkPlan.some(
+        (step) =>
+          typeof step !== 'string' ||
+          !step.trim() ||
+          step.trim().length > MAX_AGIWORK_PLAN_STEP_CHARS,
+      ))
+  ) {
+    return 'The AGI Work plan is invalid.';
   }
   if (
     request.completionMode !== undefined &&
@@ -586,12 +605,21 @@ export async function executeChromeManagedChat(
   };
   await dependencies.onRouting?.(routingResult);
 
+  const goal = request.text.trim();
+  const reviewsPlan =
+    request.workMode === 'agiwork' &&
+    request.completionMode !== 'unattended' &&
+    goal.length <= MAX_AGIWORK_GOAL_CHARS;
   const streamOptions: ManagedChatStreamOptions = {
     model: routing.modelKey,
     idempotencyKey: request.idempotencyKey ?? (await managedChatIdempotencyKey('send', request.id)),
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
     workMode: request.workMode === 'agiwork' ? 'agiwork' : 'chat',
+    ...(reviewsPlan ? { agiWorkGoal: goal } : {}),
+    ...(reviewsPlan && request.agiWorkPlan
+      ? { agiWorkPlan: request.agiWorkPlan.map((step) => step.trim()) }
+      : {}),
     ...(routedModelSearches && request.webSearch !== false && request.workMode !== 'agiwork'
       ? { webSearch: true, webFetch: true }
       : {}),

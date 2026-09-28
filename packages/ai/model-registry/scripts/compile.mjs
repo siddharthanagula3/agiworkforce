@@ -2546,6 +2546,7 @@ function buildNormalizedRegistry(
       ...(model.transientSameRouteRetries
         ? { transientSameRouteRetries: model.transientSameRouteRetries }
         : {}),
+      ...(model.speed ? { speed: model.speed } : {}),
       residencyRegions: governance[model.provider]?.residencyRegions ?? UNKNOWN_RESIDENCY_REGIONS,
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
     };
@@ -2670,6 +2671,7 @@ function buildNormalizedRegistry(
     policies: {
       auto: autoPolicy,
       legacyTiers: catalog.tierAllowedModels,
+      release: { policyVersion: routingPolicies.release.policyVersion },
     },
   };
 }

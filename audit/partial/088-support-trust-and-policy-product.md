@@ -134,16 +134,13 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 
 - Done when: After an update, users learn what changed (what's new, release notes) from inside the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Same as S2.28: the feed has the notes summary and link; the CLI prints them once p-desktop-cli reads releaseNotes. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 ## S88.14: Model-retirement notice.
 

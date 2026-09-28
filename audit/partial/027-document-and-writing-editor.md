@@ -177,7 +177,7 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | PDF export exists for a whole reply (message export sheet); the artifact viewer itself exports only Markdown/text. | ui |
+| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: the artifact viewer exports a document artifact as PDF from its Download as sheet. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -191,7 +191,7 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The viewer writes a Markdown file only for document/research artifacts; a Markdown block from a reply (typed as code) goes through the plain-text export. | handler |
+| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: a Markdown code block exports as a .md file, since the export options read the language as well as the type. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:237-241`
 

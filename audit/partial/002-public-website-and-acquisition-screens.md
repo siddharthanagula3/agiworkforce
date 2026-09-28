@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S2.28: Changelog and release notes.
-
-- Done when: A public changelog lists dated releases.
-- Wave: 3
-- Already works on: web
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | partials/auth dfff30ad7: GET /api/releases/cli/latest now carries releaseNotes {summary, url}. The terminal still has to print them: apps/cli/src/update_check.rs and render_release_notes in claude_parity.rs (p-desktop-cli, told the field shape). | ui |
-
-Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`, `apps/web/lib/releases/github-cli-releases.ts:56-56`, `apps/web/lib/releases/github-cli-releases.ts:76-76`
-
 ## S2.35: Contact and support page.
 
 - Done when: A contact / support page lets a visitor reach the company.

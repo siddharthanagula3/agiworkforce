@@ -224,7 +224,7 @@ describe('ingestPluginDirectory', () => {
 
     expect(byId.get('adobe-for-creativity')).toMatchObject({
       installs: 1200,
-      verified: true,
+      verified: false,
       runtime: { webInstallable: true, inspected: true },
       declaredSkills: ['background-removal'],
       sourceLocation: { sha: SHA },
@@ -242,7 +242,7 @@ describe('ingestPluginDirectory', () => {
     expect(byId.get('sales')).toMatchObject({ sourceFacet: 'partner', worksWith: ['cowork'] });
     expect(byId.get('searchfit-seo')).toMatchObject({
       sourceFacet: 'marketplace',
-      installCommand: 'claude plugin install searchfit-seo@claude-plugins-official',
+      installCommand: 'agi plugin install searchfit-seo@claude-plugins-official',
     });
     expect(cache.writes).toEqual(['snapshot', 'inspections', 'sync-state']);
     expect(cache.syncState).toMatchObject({
