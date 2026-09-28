@@ -30,7 +30,7 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued in the developer console at /developers. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       },
       "WorkspaceApiKeyAuth": {
         "type": "http",
@@ -2238,6 +2238,18 @@
           }
         ],
         "x-agi-api-key-scope": "inference:write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Required with a session bearer token. Optional with an AGI API key: when it is absent the gateway assigns the request its own key, so a retry is billed as a new request. Reuse a key only to retry the same body. `GET /usage/turns/{requestId}` looks up the credits a request settled at by the key it was sent with.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
