@@ -5,14 +5,12 @@ import Link from 'next/link';
 import {
   Archive,
   ArchiveRestore,
-  Download,
   LibraryBig,
   Link2,
   MoreHorizontal,
   Pencil,
   Terminal,
   Trash2,
-  type Icon,
 } from '@agiworkforce/icons';
 import {
   DropdownMenu,
@@ -27,21 +25,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
+import { ContinueOnDesktop } from '@/features/desktop-host';
 import { CODE_COPY, CODE_ROUTES } from '../code-surface';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
 const MENU_GLYPH_SIZE = 14;
-
-interface MenuLink {
-  href: string;
-  label: string;
-  glyph: Icon;
-}
-
-const OPEN_IN_LINKS: readonly MenuLink[] = [
-  { href: CODE_ROUTES.desktop, label: CODE_COPY.openDesktop, glyph: Download },
-];
 
 export interface CodeSessionMenuProps {
   verbose: boolean;
@@ -98,14 +87,14 @@ export function CodeSessionMenu({
               <Terminal size={MENU_GLYPH_SIZE} aria-hidden="true" />
               <span className={styles['menuRowLabel']}>{CODE_COPY.openTerminal}</span>
             </DropdownMenuItem>
-            {OPEN_IN_LINKS.map(({ href, label, glyph: Glyph }) => (
-              <DropdownMenuItem key={href} asChild>
-                <Link href={href}>
-                  <Glyph size={MENU_GLYPH_SIZE} aria-hidden="true" />
-                  <span className={styles['menuRowLabel']}>{label}</span>
-                </Link>
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem asChild>
+              <ContinueOnDesktop
+                label={CODE_COPY.openDesktop}
+                fallbackHref={CODE_ROUTES.desktop}
+                glyphSize={MENU_GLYPH_SIZE}
+                labelClassName={styles['menuRowLabel']}
+              />
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

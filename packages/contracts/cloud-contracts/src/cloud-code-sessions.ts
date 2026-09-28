@@ -37,9 +37,9 @@ export const CloudCodeSessionSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   closedAt: z.string().datetime().nullable(),
-  shareVisibility: z.enum(CLOUD_CODE_SHARE_VISIBILITIES).default('private'),
+  shareVisibility: z.enum(CLOUD_CODE_SHARE_VISIBILITIES).optional(),
   shareAudience: z.enum(['team', 'public']).optional(),
-  shareToken: z.string().nullable().default(null),
+  shareToken: z.string().nullable().optional(),
 });
 
 export const CloudCodeTerminalEntrySchema = z.object({
@@ -64,6 +64,7 @@ export const CloudCodeRuntimeSchema = z.object({
   diskSizeMB: z.number().nonnegative(),
   isPublic: z.boolean(),
   needsUserCredential: z.boolean().optional(),
+  runsOwnAgent: z.boolean().optional(),
 });
 
 export const CloudCodeSessionListSchema = z.object({

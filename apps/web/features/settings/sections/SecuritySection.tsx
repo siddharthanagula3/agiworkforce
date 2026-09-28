@@ -176,8 +176,10 @@ export function SecuritySection() {
           Current account boundary
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Hardware security keys, SMS MFA, and trusted-device lists are not available in the current
-          account contract. Passkeys sign you in.{' '}
+          Hardware security keys and SMS MFA are not available in the current account contract, and
+          no device skips the sign-in checks. Devices you linked, such as the CLI, VS Code, the
+          Chrome extension or the desktop app, are listed in Account settings under Linked devices,
+          where you can unlink each one. Passkeys sign you in.{' '}
           {authenticatorAvailable
             ? 'Authenticator app codes (TOTP) with recovery backup codes are the supported second factor.'
             : 'Authenticator app codes (TOTP) and backup codes are temporarily unavailable.'}{' '}

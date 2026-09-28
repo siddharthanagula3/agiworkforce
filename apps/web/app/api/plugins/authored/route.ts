@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z, ZodError } from 'zod';
+import { ZodError } from 'zod';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -11,21 +11,23 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import {
+  findOwnedPluginEntryByKey,
   storeOwnedPluginSource,
-  type OwnedPluginSkill,
 } from '@/lib/services/plugin-owned-source-service';
 import { pluginKeyFrom } from '@/features/plugins/server/directory/archive';
+import {
+  AUTHORED_PLUGIN_INVALID_CODE,
+  AUTHORED_PLUGIN_INVALID_MESSAGE,
+  AuthoredPluginBodySchema,
+  authoredSkillFiles,
+  authoredSkillIssues,
+} from '@/features/plugins/server/directory/authored-plugin';
 import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
 import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 import {
-  CLAUDE_PLUGIN_SKILLS_DIRECTORY,
-  CLAUDE_SKILL_FILE_NAME,
   PLUGIN_DIRECTORY_FALLBACK_VERSION,
-  PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL,
   uploadUnusableNameMessage,
 } from '@/features/plugins/server/directory/constants';
-import { SkillDraftBodySchema } from '@/app/api/skills/skill-draft-schema';
-import { buildSkillMarkdown, validateSkillDraft } from '@agiworkforce/skills';
 import {
   PluginMarketplaceManifestPluginSchema,
   type PluginSourceInstallResponse,
@@ -36,49 +38,25 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SOURCE_KIND_AUTHORED = 'authored';
-const INVALID_PLUGIN_CODE = 'PLUGIN_DRAFT_INVALID';
-const DUPLICATE_SKILL_MESSAGE = 'Each skill in a plugin needs its own name.';
-const INVALID_PLUGIN_MESSAGE = 'Give the plugin a name, a description and at least one skill.';
-
-const AuthoredPluginBodySchema = z
-  .object({
-    name: z.string().trim().min(1),
-    description: z.string().trim().min(1),
-    skills: z.array(SkillDraftBodySchema).min(1).max(PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
-  })
-  .strict();
+const DUPLICATE_PLUGIN_CODE = 'PLUGIN_NAME_TAKEN';
 
 function rejected(message: string, issues?: readonly string[]): NextResponse {
   return NextResponse.json(
-    { error: { code: INVALID_PLUGIN_CODE, message, ...(issues ? { issues } : {}) } },
+    { error: { code: AUTHORED_PLUGIN_INVALID_CODE, message, ...(issues ? { issues } : {}) } },
     { status: 422 },
   );
 }
 
-function skillFilesOf(
-  skills: readonly z.infer<typeof SkillDraftBodySchema>[],
-): { files: OwnedPluginSkill[] } | { issues: string[] } {
-  const seen = new Set<string>();
-  const files: OwnedPluginSkill[] = [];
-  const issues: string[] = [];
-  for (const skill of skills) {
-    const validation = validateSkillDraft(skill);
-    if (!validation.ok) {
-      issues.push(...validation.errors);
-      continue;
-    }
-    if (seen.has(skill.name)) {
-      issues.push(DUPLICATE_SKILL_MESSAGE);
-      continue;
-    }
-    seen.add(skill.name);
-    files.push({
-      name: skill.name,
-      path: `${CLAUDE_PLUGIN_SKILLS_DIRECTORY}/${skill.name}/${CLAUDE_SKILL_FILE_NAME}`,
-      content: buildSkillMarkdown(skill),
-    });
-  }
-  return issues.length > 0 ? { issues } : { files };
+function duplicateName(name: string): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: DUPLICATE_PLUGIN_CODE,
+        message: `You already have a plugin named "${name}". Open it to edit it, or choose another name.`,
+      },
+    },
+    { status: 409 },
+  );
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
@@ -93,7 +71,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const parsed = AuthoredPluginBodySchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: { code: INVALID_PLUGIN_CODE, message: INVALID_PLUGIN_MESSAGE } },
+      { error: { code: AUTHORED_PLUGIN_INVALID_CODE, message: AUTHORED_PLUGIN_INVALID_MESSAGE } },
       { status: 400 },
     );
   }
@@ -107,11 +85,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (refused) return refused;
 
-  const skillFiles = skillFilesOf(parsed.data.skills);
-  if ('issues' in skillFiles) {
-    return rejected(skillFiles.issues[0] ?? INVALID_PLUGIN_MESSAGE, skillFiles.issues);
-  }
-  const files = skillFiles.files;
+  const issues = authoredSkillIssues(parsed.data.skills);
+  if (issues.length > 0) return rejected(issues[0] ?? AUTHORED_PLUGIN_INVALID_MESSAGE, issues);
+  const files = authoredSkillFiles(parsed.data.skills);
 
   let declared;
   try {
@@ -129,7 +105,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof ZodError) {
       return rejected(
-        INVALID_PLUGIN_MESSAGE,
+        AUTHORED_PLUGIN_INVALID_MESSAGE,
         error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
       );
     }
@@ -137,6 +113,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    if (await findOwnedPluginEntryByKey(db, userId, SOURCE_KIND_AUTHORED, declared.id)) {
+      return duplicateName(declared.name);
+    }
     const plugins = await storeOwnedPluginSource(db, userId, {
       kind: SOURCE_KIND_AUTHORED,
       sourceName: declared.name,

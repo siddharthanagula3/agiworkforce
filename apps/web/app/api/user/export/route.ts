@@ -656,6 +656,17 @@ const apiKeyExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const developerWebhookEndpointExportSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  description: z.string().nullable(),
+  event_types: z.array(z.string()),
+  secret_prefix: z.string(),
+  enabled: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const developerProjectExportSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -2597,6 +2608,19 @@ async function collectUserData(
     values: [user.id],
     schema: developerProjectExportSchema,
     section: 'developer_projects',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['developer_webhook_endpoints'] = await queryExportRows({
+    db,
+    sql: `select id, url, description, event_types, secret_prefix, enabled, created_at, updated_at
+          from developer_webhook_endpoints
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: developerWebhookEndpointExportSchema,
+    section: 'developer_webhook_endpoints',
     userId: user.id,
     ledger,
   });

@@ -2,6 +2,12 @@ import Link from 'next/link';
 
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { listScheduledModelRetirements } from '@/lib/developer-api/model-retirements';
+import {
+  DEVELOPER_WEBHOOK_EVENTS,
+  DEVELOPER_WEBHOOK_TEST_EVENT,
+  DEVELOPER_WEBHOOK_TIMEOUT_SECONDS,
+  developerWebhookRetryDays,
+} from '@/lib/developer-api/webhook-events';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { SITE_URL } from '@/lib/seo/site';
 import { Header } from '@shared/components/layout/Header';
@@ -181,6 +187,59 @@ const HTTP_TABS = [
   },
 ] as const;
 
+const WEBHOOK_TABS = [
+  {
+    label: 'Payload',
+    language: 'json',
+    code: `{
+  "object": "event",
+  "id": "4f2b1c9e-6a3d-4c8e-9b1f-2d7e5a0c3b18",
+  "type": "api_key.revoked",
+  "created_at": 1790553600,
+  "data": {
+    "id": "b7a0e2d4-1f3c-4e5a-8b6d-9c0f1e2a3b4c",
+    "name": "Production",
+    "project_id": null,
+    "reason": "deleted"
+  }
+}`,
+    note: 'webhook-id carries the event id, which stays the same when a delivery is retried or resent.',
+  },
+  {
+    label: 'Python',
+    language: 'python',
+    code: `# pip install standardwebhooks
+import os
+from standardwebhooks.webhooks import Webhook
+
+webhook = Webhook(os.environ["AGI_WEBHOOK_SECRET"])
+
+def handle(request_body: bytes, headers: dict) -> None:
+    event = webhook.verify(request_body, headers)
+    print(event["type"], event["data"])`,
+    note: 'verify raises when the signature does not match or the timestamp is more than five minutes old.',
+  },
+  {
+    label: 'TypeScript',
+    language: 'typescript',
+    code: `// npm install standardwebhooks
+import { Webhook } from 'standardwebhooks';
+
+const webhook = new Webhook(process.env.AGI_WEBHOOK_SECRET!);
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const event = webhook.verify(body, Object.fromEntries(request.headers)) as {
+    type: string;
+    data: unknown;
+  };
+  console.log(event.type, event.data);
+  return new Response(null, { status: 204 });
+}`,
+    note: 'Verify the raw body exactly as received; parsing and re-serialising it changes the bytes that were signed.',
+  },
+] as const;
+
 const CREDENTIAL_TABS = [
   {
     label: 'Session token',
@@ -287,7 +346,40 @@ export default function ApiDocsPage() {
           </Stack>
         </Section>
 
-        <Section id="migrating" labelledBy="agi-api-docs-migrating-title" rule>
+        <Section id="webhooks" labelledBy="agi-api-docs-webhooks-title" rule>
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-api-docs-webhooks-title">
+                Webhooks.
+              </h2>
+              <Prose>
+                Register an HTTPS endpoint in the <Link href="/developers">developer console</Link>{' '}
+                and choose its events. Each event is a POST with a JSON body carrying{' '}
+                <code>object</code>, <code>id</code>, <code>type</code>, <code>created_at</code> in
+                Unix seconds and <code>data</code>. Requests follow Standard Webhooks:{' '}
+                <code>webhook-id</code> is the event id, <code>webhook-timestamp</code> the send
+                time in Unix seconds, and <code>webhook-signature</code> is <code>v1,</code>{' '}
+                followed by the base64 HMAC-SHA256 of the id, the timestamp and the raw body joined
+                with full stops, keyed with the part of your <code>whsec_</code> secret after the
+                prefix. Answer with a 2xx within {DEVELOPER_WEBHOOK_TIMEOUT_SECONDS} seconds. Any
+                other answer, a redirect or silence is retried with exponential backoff for about{' '}
+                {developerWebhookRetryDays()} days, and the console&apos;s delivery log shows each
+                attempt and resends any delivery. Send test event delivers{' '}
+                <code>{DEVELOPER_WEBHOOK_TEST_EVENT}</code>.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Events an endpoint can receive"
+              rows={DEVELOPER_WEBHOOK_EVENTS.map((event) => ({
+                label: <code>{event.type}</code>,
+                value: event.description,
+              }))}
+            />
+            <CodeTabs tabs={WEBHOOK_TABS} title="Receiving and verifying an event" />
+          </Stack>
+        </Section>
+
+        <Section id="migrating" labelledBy="agi-api-docs-migrating-title" rule ground="2">
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-api-docs-migrating-title">
@@ -349,7 +441,7 @@ export default function ApiDocsPage() {
           </Stack>
         </Section>
 
-        <Section id="deprecations" labelledBy="agi-api-docs-deprecations-title" rule ground="2">
+        <Section id="deprecations" labelledBy="agi-api-docs-deprecations-title" rule>
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-api-docs-deprecations-title">
@@ -381,7 +473,7 @@ export default function ApiDocsPage() {
           </Stack>
         </Section>
 
-        <Section id="reference" labelledBy="agi-api-docs-reference-title" rule>
+        <Section id="reference" labelledBy="agi-api-docs-reference-title" rule ground="2">
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-api-docs-reference-title">

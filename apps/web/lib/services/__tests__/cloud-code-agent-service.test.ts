@@ -754,7 +754,12 @@ describe('Cloud Code runs the harness the session was created with', () => {
       planTier: 'pro',
       idempotencyKey: '11111111-1111-4111-8111-111111111111',
       signal: new AbortController().signal,
-      preApproved: { toolUseId: 'call-1', command: 'rm build.log', approved: true },
+      preApproved: {
+        toolUseId: 'call-1',
+        toolName: 'run_command',
+        args: { command: 'rm build.log' },
+        approved: true,
+      },
     });
 
     expect(vi.mocked(runCloudCodeAgentTurn)).toHaveBeenCalledTimes(1);

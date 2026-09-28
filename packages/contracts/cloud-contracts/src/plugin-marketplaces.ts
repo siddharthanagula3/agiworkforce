@@ -259,3 +259,35 @@ export const PluginInstallationSettingsPatchSchema = z
   .strict();
 
 export type PluginInstallationSettingsPatch = z.infer<typeof PluginInstallationSettingsPatchSchema>;
+
+export const PLUGIN_DRAFT_TOOL_NAME = 'draft_plugin';
+export const PLUGIN_DRAFT_RESULT_KEY = 'plugin_draft';
+
+export const PluginDraftSkillSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const PluginDraftSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  skills: z.array(PluginDraftSkillSchema).min(1),
+});
+
+export type PluginDraft = z.infer<typeof PluginDraftSchema>;
+
+export function readPluginDraftToolResult(toolName: string, result: unknown): PluginDraft | null {
+  if (toolName !== PLUGIN_DRAFT_TOOL_NAME || typeof result !== 'string') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const draft = PluginDraftSchema.safeParse(
+    (parsed as Record<string, unknown>)[PLUGIN_DRAFT_RESULT_KEY],
+  );
+  return draft.success ? draft.data : null;
+}
