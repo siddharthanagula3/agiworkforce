@@ -748,6 +748,15 @@
                   "maxLength": 253
                 },
                 "description": "Never read or cite pages on these sites."
+              },
+              "connectors": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "description": "Connected apps to search for the run's planned questions, by connector id. An app is read through the MCP `search` and `fetch` tools deep research servers expose; one that offers no `search` tool, or is not connected to your account, is named in the report as not searched. Applies only to Deep Research."
               }
             }
           },
@@ -810,6 +819,11 @@
                     }
                   }
                 }
+              },
+              "guidance": {
+                "type": "string",
+                "maxLength": 2000,
+                "description": "Guidance for the rest of the run, sent when it resumes. It is added to the plan as a step and the searches still to run are re-planned to follow it."
               },
               "deliverable": {
                 "type": "object",
