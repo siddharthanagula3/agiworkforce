@@ -14,13 +14,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server builds a layered effective-capability document for /api/me, but the web UI never reads it; each control is gated by its own separate check (static platform matrix, plan, deployment flags). | ui |
-| desktop | partial | The server builds a layered effective-capability document for /api/me, but the web UI never reads it; each control is gated by its own separate check (static platform matrix, plan, deployment flags). | ui |
+| web | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
+| desktop | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
 | cli | partial | Upgrade to partial (miss handler) for consistency with the web cell, which is partial for per-control checks: the CLI resolves per-model availability in one place (model_verdict combines trust mode, configured keys and the cached plan tier) and the picker and request path read it. Remaining: no feature-level resolver, and operator kill switches / the server capability document are never read by the CLI. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:879-886`
+Code: `packages/contracts/types/src/capability-handshake/evaluator.ts:120-120`, `packages/ui/unified-chat/src/lib/capabilities.tsx:36-36`, `packages/ui/unified-chat/src/lib/capabilities.tsx:56-56`, `apps/web/shared/stores/web-auth-store.ts:138-138`
 
 ## S78.03: Model-dependent accepted-file types.
 

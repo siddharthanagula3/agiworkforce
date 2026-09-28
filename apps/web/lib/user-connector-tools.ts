@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/mcp';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import type { InteractiveCard } from '@agiworkforce/types';
+import type { CustomConnectorTransport } from '@agiworkforce/cloud-contracts';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -902,7 +903,7 @@ export interface UserCustomConnectorSummary {
   shortId: string;
   name: string;
   url: string;
-  transport: string;
+  transport: CustomConnectorTransport;
   createdAt: string;
   updatedAt: string;
   signInRequired: boolean;
@@ -929,7 +930,7 @@ export async function getUserCustomConnectorSummaries(
       short_id: string;
       name: string;
       url: string;
-      transport: string;
+      transport: CustomConnectorTransport;
       auth_header_enc: string | null;
       sign_in_required: boolean;
       created_at: string;

@@ -132,6 +132,11 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   },
   { route: 'developers/webhooks/[endpointId]/test/route.ts', reason: 'dedicated_record' },
   { route: 'llm/v1/chat/completions/guest/route.ts', reason: 'pre_account' },
+  { route: 'llm/v1/chat/completions/runs/[runId]/steer/route.ts', reason: 'own_content' },
+  {
+    route: 'llm/v1/chat/completions/runs/[runId]/steer/[steerId]/route.ts',
+    reason: 'own_content',
+  },
 ] as const;
 
 export interface RequiredRouteAuditEvents {

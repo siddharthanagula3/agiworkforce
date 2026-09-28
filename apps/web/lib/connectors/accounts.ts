@@ -1,21 +1,6 @@
-export const CONNECTOR_ACCOUNT_SCOPES = ['personal', 'work', 'service'] as const;
-export type ConnectorAccountScope = (typeof CONNECTOR_ACCOUNT_SCOPES)[number];
-
 /** The key every grant written before multi-account support carries. */
 export const DEFAULT_CONNECTOR_ACCOUNT_KEY = 'default';
 export const MAX_CONNECTOR_ACCOUNT_KEY_LENGTH = 128;
-
-export interface ConnectorAccount {
-  connectorId: string;
-  accountKey: string;
-  accountLabel: string | null;
-  scope: ConnectorAccountScope;
-  isDefault: boolean;
-  grantedScopes: string[];
-  connectedAt: string;
-  updatedAt: string;
-  needsReauthorization: boolean;
-}
 
 export function normalizeConnectorAccountKey(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();

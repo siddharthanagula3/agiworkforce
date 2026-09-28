@@ -273,6 +273,30 @@ pub fn ui_surface_elevated() -> Color {
     best_color(active_palette().surface_elevated)
 }
 
+pub fn ui_agent(color: &str) -> Option<Color> {
+    let light_ground = matches!(ACTIVE_THEME.load(Ordering::Relaxed), 1 | 4);
+    let rgb = match (color, light_ground) {
+        ("red", false) => (255, 110, 110),
+        ("red", true) => (185, 28, 45),
+        ("blue", false) => (120, 170, 255),
+        ("blue", true) => (30, 90, 200),
+        ("green", false) => (100, 215, 130),
+        ("green", true) => (20, 120, 60),
+        ("yellow", false) => (240, 205, 90),
+        ("yellow", true) => (130, 95, 0),
+        ("purple", false) => (190, 145, 255),
+        ("purple", true) => (115, 55, 190),
+        ("orange", false) => (255, 165, 95),
+        ("orange", true) => (170, 80, 0),
+        ("pink", false) => (255, 135, 195),
+        ("pink", true) => (175, 35, 115),
+        ("cyan", false) => (95, 210, 230),
+        ("cyan", true) => (0, 115, 135),
+        _ => return None,
+    };
+    Some(best_color(rgb))
+}
+
 /// Badge background for the default chat mode.
 pub fn ui_mode_default() -> Color {
     ui_status_bar_bg()

@@ -26,10 +26,14 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 
-const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));
+const userSkillService = vi.hoisted(() => ({
+  findUserSkillWithFiles: vi.fn(
+    async () => null as { skill: Skill; access: SkillToolFileAccess } | null,
+  ),
+}));
 vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
-  findUserSkillByName: userSkillService.findUserSkillByName,
+  findUserSkillWithFiles: userSkillService.findUserSkillWithFiles,
 }));
 
 const directorySkills = vi.hoisted(() => ({
@@ -55,7 +59,6 @@ vi.mock('@/lib/server/neon-db', () => {
 import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
 import { resolveToolRetrySafety, runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
-import type { UserSkillRecord } from '@/lib/services/user-skill-service';
 
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -186,7 +189,7 @@ describe('managed Cloud Skill tool loop', () => {
 
   beforeEach(async () => {
     provider.stream.mockReset();
-    userSkillService.findUserSkillByName.mockReset();
+    userSkillService.findUserSkillWithFiles.mockReset();
     neonAdapter.query.mockReset();
     neonAdapter.query.mockResolvedValue([]);
     root = await mkdtemp(join(tmpdir(), 'cloud-skill-loop-'));
@@ -303,14 +306,22 @@ describe('managed Cloud Skill tool loop', () => {
   });
 
   it("loads a signed-in caller's own skill when it is absent from the managed catalog", async () => {
-    userSkillService.findUserSkillByName.mockResolvedValueOnce({
-      id: 'user-skill-1',
-      name: 'my-standup-notes',
-      description: 'Format my daily standup notes.',
-      body: 'Lead with blockers, then yesterday, then today.',
-      createdAt: '2026-08-01T00:00:00.000Z',
-      updatedAt: '2026-08-01T00:00:00.000Z',
-    } satisfies UserSkillRecord);
+    userSkillService.findUserSkillWithFiles.mockResolvedValueOnce({
+      skill: {
+        name: 'my-standup-notes',
+        description: 'Format my daily standup notes.',
+        body: 'Lead with blockers, then yesterday, then today.',
+        contentHash: 'sha256:1111',
+        filePath: 'user-skills/my-standup-notes/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: {},
+      },
+      access: {
+        listFiles: async () => [],
+        readFile: async () => ({ ok: false, reason: 'not_found' }),
+      },
+    });
     provider.stream
       .mockResolvedValueOnce(toolCallStream('my-standup-notes'))
       .mockResolvedValueOnce(finalAnswerStream('Notes formatted.'));
@@ -319,7 +330,7 @@ describe('managed Cloud Skill tool loop', () => {
       runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
     );
 
-    expect(userSkillService.findUserSkillByName).toHaveBeenCalledWith(
+    expect(userSkillService.findUserSkillWithFiles).toHaveBeenCalledWith(
       expect.anything(),
       'caller-1',
       'my-standup-notes',
@@ -331,8 +342,7 @@ describe('managed Cloud Skill tool loop', () => {
     expect(output).toContain('Notes formatted.');
   });
 
-  it('loads a skill from an installed directory plugin after the caller skills miss', async () => {
-    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
+  it('loads a skill from an installed directory plugin before the caller skills', async () => {
     directorySkills.findInstalledDirectorySkillWithFiles.mockResolvedValueOnce({
       skill: {
         name: 'session-report',
@@ -368,7 +378,6 @@ describe('managed Cloud Skill tool loop', () => {
   });
 
   it('still fails a name that matches neither the managed catalog nor the caller skills', async () => {
-    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
     provider.stream
       .mockResolvedValueOnce(toolCallStream('nowhere-skill'))
       .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
@@ -435,7 +444,6 @@ describe('managed Cloud Skill tool loop', () => {
     neonAdapter.query.mockImplementation(async (sql: string) =>
       sql.includes('user_settings') ? [{ settings: {} }] : [],
     );
-    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
     provider.stream
       .mockResolvedValueOnce(toolCallStream('nowhere-skill'))
       .mockResolvedValueOnce(toolCallStream('design-review'))

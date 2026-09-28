@@ -83,5 +83,9 @@
     "thinkingState": "思考: {{state}}",
     "unavailable": "利用不可",
     "visionCapability": "ビジョン"
+  },
+  "counts": {
+    "concurrentAnswers_one": "プランでは一度に {{count}} 件の回答を実行できるため、残りは1件が完了するたびに開始されます。",
+    "concurrentAnswers_other": "プランでは一度に {{count}} 件の回答を実行できるため、残りは1件が完了するたびに開始されます。"
   }
 }

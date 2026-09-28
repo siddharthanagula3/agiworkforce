@@ -54,33 +54,15 @@ Code: `apps/mobile/src/features/settings/voice-language/index.tsx:321-321`, `app
 ## S50.04: Download generated speech.
 
 - Done when: Generated speech can be downloaded as an audio file.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | flag-off: speech downloads only through the third-party ElevenLabs connector when the operator maps it | flag-off |
-| desktop | partial | No server TTS or audio download of our own; speech files are possible only through a generic third-party ElevenLabs connector via the chat tool loop, which is connectable only when the operator maps its endpoint in CONNECTOR_MCP_SERVERS_JSON. | flag-off |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/voice/live-voice-tools.ts:1-1`, `apps/web/features/connectors/data/connectors.ts:465-473`, `apps/web/lib/connectors/catalog.ts:184-184`, `apps/web/app/api/connectors/route.ts:555-567`
 
 ## S50.31: Custom-voice creation as a separately governed product.
 
 - Done when: Custom voices (cloned or designed) are a separate, governed product with its own consent and access rules.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | flag-off: custom voices only through the third-party ElevenLabs connector when the operator maps it | flag-off |
-| desktop | partial | No custom-voice product of our own; voice cloning exists only as a generic third-party ElevenLabs connector via the chat tool loop, and that connector is connectable only when the operator maps its endpoint in CONNECTOR_MCP_SERVERS_JSON (no consent or access rules of ours). | flag-off |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/voice/live-voice-tools.ts:1-1`, `apps/web/features/connectors/data/connectors.ts:465-473`, `apps/web/lib/connectors/catalog.ts:184-184`, `apps/web/app/api/connectors/route.ts:555-567`

@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
-import type {
-  CloudAgentRun,
-  ManagedCloudArtifactIndexEntry,
-  ManagedCloudAgentRunClient,
+import {
+  MAX_CLOUD_AGENT_RUN_STEER_LENGTH,
+  isCloudAgentRunSteerProgressId,
+  isCloudAgentRunSteerable,
+  type CloudAgentRun,
+  type ManagedCloudArtifactIndexEntry,
+  type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
@@ -20,6 +23,7 @@ import {
   readCloudRunSteps,
 } from './cloudRunPresentation';
 import { decideCloudRunApprovalInteractively, describeCloudRunFailure } from './cloudRunApproval';
+import { t } from '../../l10n';
 
 export {
   decideCloudRunApproval,
@@ -29,11 +33,11 @@ export {
 
 export type CloudRunDetailClient = Pick<
   ManagedCloudAgentRunClient,
-  'getRun' | 'resumeRun' | 'cancelRun'
+  'getRun' | 'resumeRun' | 'cancelRun' | 'steerRun'
 >;
 
 export type CloudRunAction =
-  'approve' | 'reject' | 'cancel' | 'open-web' | 'open-artifact' | 'copy-result';
+  'approve' | 'reject' | 'cancel' | 'steer' | 'open-web' | 'open-artifact' | 'copy-result';
 
 export interface CloudRunDetailItem extends vscode.QuickPickItem {
   action?: CloudRunAction;
@@ -71,9 +75,25 @@ export function buildCloudRunDetailItems(
   if (steps.length > 0) {
     items.push({ label: 'Progress', kind: vscode.QuickPickItemKind.Separator });
     for (const step of steps) {
+      const steered = isCloudAgentRunSteerProgressId(step.id);
       items.push({
-        label: `$(${cloudRunStepIcon(step.status)}) ${step.summary}`,
+        label: steered
+          ? `$(comment) ${step.summary}`
+          : `$(${cloudRunStepIcon(step.status)}) ${step.summary}`,
+        ...(steered ? { description: t('cloudSteer.delivered') } : {}),
         ...(step.detail === undefined ? {} : { detail: step.detail }),
+      });
+    }
+  }
+
+  const waiting = run.pendingSteers ?? [];
+  if (waiting.length > 0) {
+    const unread = isCloudRunSettled(run.state);
+    items.push({ label: t('cloudSteer.waitingSection'), kind: vscode.QuickPickItemKind.Separator });
+    for (const steer of waiting) {
+      items.push({
+        label: `$(clock) ${steer.text}`,
+        description: unread ? t('cloudSteer.unread') : t('cloudSteer.queued'),
       });
     }
   }
@@ -134,6 +154,13 @@ export function buildCloudRunDetailItems(
       },
       { label: '$(x) Reject', description: names, action: 'reject' },
     );
+  }
+  if (isCloudAgentRunSteerable(run)) {
+    items.push({
+      label: `$(comment-discussion) ${t('cloudSteer.action')}`,
+      description: t('cloudSteer.actionDescription'),
+      action: 'steer',
+    });
   }
   if (!isCloudRunSettled(run.state)) {
     items.push({
@@ -214,6 +241,28 @@ export async function showCloudRunDetail(
   if (picked.action === 'copy-result') {
     await vscode.env.clipboard.writeText(cloudRunResultText(snapshot.events));
     void vscode.window.showInformationMessage('AGI Workforce: copied the task result.');
+    return;
+  }
+
+  if (picked.action === 'steer') {
+    const message = await vscode.window.showInputBox({
+      title: t('cloudSteer.action'),
+      prompt: t('cloudSteer.prompt'),
+      placeHolder: t('cloudSteer.actionDescription'),
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        value.trim().length > MAX_CLOUD_AGENT_RUN_STEER_LENGTH
+          ? t('cloudSteer.tooLong', { count: MAX_CLOUD_AGENT_RUN_STEER_LENGTH.toLocaleString() })
+          : undefined,
+    });
+    const text = message?.trim() ?? '';
+    if (text === '') return;
+    await runCloudRunMutation(
+      () => client.steerRun(run.id, text),
+      t('cloudSteer.sent'),
+      t('cloudSteer.failed'),
+      host,
+    );
     return;
   }
 

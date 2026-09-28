@@ -5,8 +5,12 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import type { ReactNode } from 'react';
 
 import {
+  ConnectConflictResponseSchema,
+  ConnectorErrorResponseSchema,
+  MANAGED_CLOUD_CONNECTORS_PATH,
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
   type CommunityPlugin,
+  type ConnectRequest,
   type CommunityPluginPatch,
   type ManagedSkillSummary,
   type MemberOrganizationPluginPatch,
@@ -70,7 +74,6 @@ import {
 
 import {
   CONNECTORS_FAILED_COPY,
-  CONNECTORS_PATH,
   CONNECTOR_INDEXING_NOTICE,
   CONNECT_FAILED_COPY,
   CSRF_HEADER,
@@ -80,6 +83,7 @@ import {
   MARKETPLACE_REMOVE_UNSENT_COPY,
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
+  pluginConnectorsLines,
   pluginDependenciesInstalledLine,
   uploadDependenciesInstalledLine,
   PLUGIN_UNINSTALL_FAILED_COPY,
@@ -224,13 +228,6 @@ const EMPTY_SKILL_INDEX: ReadonlyMap<string, ManagedSkillSummary> = new Map();
 const EMPTY_CATALOG: readonly ManagedSkillSummary[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
-
-interface ConnectStartBody {
-  message?: string;
-  oauthStartPath?: string;
-  installStartPath?: string;
-  credentialsPath?: string;
-}
 
 const CREDENTIALS_STATUS = 409;
 
@@ -1141,20 +1138,23 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         await loadConnectors();
         return;
       }
-      const response = await postJson(CONNECTORS_PATH, {
+      const response = await postJson(MANAGED_CLOUD_CONNECTORS_PATH, {
         connectorId: id,
         authType: DEFAULT_CONNECT_AUTH_TYPE,
-      });
+      } satisfies ConnectRequest);
       if (response.ok) {
         await loadConnectors();
         return;
       }
-      const body = (await response.json().catch(() => ({}))) as ConnectStartBody;
-      if (response.status === CREDENTIALS_STATUS && body.credentialsPath) {
+      const raw: unknown = await response.json().catch(() => null);
+      const conflict = ConnectConflictResponseSchema.safeParse(raw);
+      const body = conflict.success ? conflict.data : null;
+      if (response.status === CREDENTIALS_STATUS && body?.credentialsPath) {
         setCredentialFormId(id);
         return;
       }
-      const plaidRoutes = response.status === CREDENTIALS_STATUS ? plaidLinkRoutesOf(body) : null;
+      const plaidRoutes =
+        response.status === CREDENTIALS_STATUS && body ? plaidLinkRoutesOf(body) : null;
       if (plaidRoutes && typeof window !== 'undefined') {
         try {
           await connectBankAccountsWithPlaid(plaidRoutes);
@@ -1166,14 +1166,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         await loadConnectors();
         return;
       }
-      const start = body.oauthStartPath
+      const start = body?.oauthStartPath
         ? withConnectorReturnPath(body.oauthStartPath, currentConnectorReturnPath())
-        : body.installStartPath;
+        : body?.installStartPath;
       if (start && typeof window !== 'undefined') {
         window.location.href = start;
         return;
       }
-      connectorErrors.current[id] = body.message ?? CONNECT_FAILED_COPY;
+      const failure = ConnectorErrorResponseSchema.safeParse(raw);
+      connectorErrors.current[id] =
+        (failure.success ? failure.data.message : undefined) ?? CONNECT_FAILED_COPY;
       await loadConnectors();
     },
     [loadConnectors, onConnectConnector],
@@ -1247,11 +1249,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
-      if (outcome.dependencies.length === 0) return undefined;
-      return pluginDependenciesInstalledLine(
-        record?.name ?? userEntry?.name ?? id,
-        outcome.dependencies.map((dependency) => dependency.name),
-      );
+      const lines = [
+        ...(outcome.dependencies.length > 0
+          ? [
+              pluginDependenciesInstalledLine(
+                record?.name ?? userEntry?.name ?? id,
+                outcome.dependencies.map((dependency) => dependency.name),
+              ),
+            ]
+          : []),
+        ...pluginConnectorsLines(outcome.connectors),
+      ];
+      return lines.length > 0 ? lines.join(' ') : undefined;
     },
     [
       findCommunityPlugin,
@@ -1437,6 +1446,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
         omittedFiles?: readonly string[];
         dependencies?: ReadonlyArray<{ name: string }>;
+        connectors?: {
+          added: ReadonlyArray<{ name: string; signInRequired: boolean }>;
+          failed: ReadonlyArray<{ name: string; reason: string }>;
+        };
         error?: { message?: string };
       };
       if (!response.ok) {
@@ -1456,6 +1469,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           ...(body.dependencies?.length
             ? [uploadDependenciesInstalledLine(body.dependencies.map((item) => item.name))]
             : []),
+          ...pluginConnectorsLines(body.connectors ?? null),
         ],
       };
     },
