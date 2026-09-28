@@ -24,11 +24,32 @@ export interface CloudRunListClient {
 export type CloudRunClientResolution =
   { status: 'ready'; client: CloudRunListClient } | { status: 'signed-out' };
 
-const NEEDS_YOU_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
-  'awaiting_input',
-  'awaiting_approval',
-  'paused',
-]);
+type CloudRunStage = 'needs-you' | 'working' | 'review' | 'done' | 'stopped';
+
+const RUN_STAGES: Record<CloudAgentRun['state'], CloudRunStage> = {
+  awaiting_input: 'needs-you',
+  awaiting_approval: 'needs-you',
+  paused: 'needs-you',
+  queued: 'working',
+  planning: 'working',
+  running: 'working',
+  resuming: 'working',
+  ready_for_review: 'review',
+  completed: 'done',
+  archived: 'done',
+  partial: 'stopped',
+  failed: 'stopped',
+  cancelled: 'stopped',
+  timed_out: 'stopped',
+};
+
+const STAGE_GROUPS: readonly { stage: CloudRunStage; label: string; icon: string }[] = [
+  { stage: 'needs-you', label: 'Needs you', icon: 'bell-dot' },
+  { stage: 'working', label: 'Working', icon: 'sync' },
+  { stage: 'review', label: 'Ready for review', icon: 'eye' },
+  { stage: 'done', label: 'Done', icon: 'pass' },
+  { stage: 'stopped', label: 'Stopped', icon: 'circle-slash' },
+];
 
 export class CloudRunTreeItem extends vscode.TreeItem {
   constructor(readonly run: CloudAgentRun) {
@@ -124,14 +145,12 @@ export class CloudTasksTreeProvider
 
     try {
       const page = await resolution.client.listRuns({ limit: CLOUD_TASKS_PAGE_LIMIT });
-      const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
-      const waiting = page.runs.filter(needsYou);
-      if (waiting.length === 0) return page.runs.map((run) => new CloudRunTreeItem(run));
-      const others = page.runs.filter((run) => !needsYou(run));
-      return [
-        new CloudTasksGroupItem('Needs you', waiting, 'bell-dot'),
-        ...(others.length === 0 ? [] : [new CloudTasksGroupItem('Recent', others, 'history')]),
-      ];
+      const stageOf = (run: CloudAgentRun): CloudRunStage =>
+        run.pendingApproval === undefined ? RUN_STAGES[run.workState ?? run.state] : 'needs-you';
+      return STAGE_GROUPS.flatMap(({ stage, label, icon }) => {
+        const runs = page.runs.filter((run) => stageOf(run) === stage);
+        return runs.length === 0 ? [] : [new CloudTasksGroupItem(label, runs, icon)];
+      });
     } catch (error) {
       return [
         new CloudTasksNoticeItem(

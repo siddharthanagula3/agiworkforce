@@ -750,6 +750,13 @@ export function getWebviewContent(
       gap: 6px;
       margin-top: 10px;
     }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
     .approval-card__guidance {
       width: 100%;
       margin-top: 8px;
@@ -4916,6 +4923,49 @@ export function getWebviewContent(
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4957,6 +5007,20 @@ export function getWebviewContent(
         }
         card.appendChild(verdictEl);
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
+
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
       }
 
       if (payload.detail) {

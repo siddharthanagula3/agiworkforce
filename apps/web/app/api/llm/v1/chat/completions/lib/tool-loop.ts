@@ -335,6 +335,10 @@ import {
   isManagedOfficeFileTool,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
+import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
+import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
 import {
@@ -818,6 +822,9 @@ function canonicalToolCategory(
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isClarifyTool(toolName)) return 'other';
+  if (isMemoryTool(toolName)) return 'memory';
+  if (isFileSearchTool(toolName)) return 'filesystem';
+  if (isScheduleTool(toolName)) return 'other';
   if (toolName === 'execute_code') return 'code-execution';
   if (
     toolName === 'write_file' ||
@@ -1887,6 +1894,7 @@ async function runMcpTool(
     inputResponses?: Record<string, unknown>;
     requestState?: string;
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    temporaryChat?: boolean;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1924,6 +1932,52 @@ async function runMcpTool(
       }
     }
     return { content: result.content, isError: result.isError };
+  }
+
+  if (isScheduleTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (!executionContext?.userId) {
+      return { content: 'A signed-in account is required to create a schedule.', isError: true };
+    }
+    return executeScheduleTool(toolCall.args, {
+      db: callerScopedDb(executionContext, executionContext.userId),
+      userId: executionContext.userId,
+      clientTimeZone: executionContext.clientTimeZone,
+      temporaryChat: executionContext.temporaryChat === true,
+    });
+  }
+
+  if (isFileSearchTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (!executionContext?.userId) {
+      return { content: 'A signed-in account is required to search files.', isError: true };
+    }
+    return executeFileSearchTool(toolCall.args, {
+      db: callerScopedDb(executionContext, executionContext.userId),
+      userId: executionContext.userId,
+      organizationId: executionContext.organizationId,
+      temporaryChat: executionContext.temporaryChat === true,
+    });
+  }
+
+  if (isMemoryTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (!executionContext?.userId) {
+      return { content: 'A signed-in account is required to use Memory.', isError: true };
+    }
+    return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
+      db: callerScopedDb(executionContext, executionContext.userId),
+      userId: executionContext.userId,
+      organizationId: executionContext.organizationId,
+      source: memoryToolSource(executionContext.surface),
+      temporaryChat: executionContext.temporaryChat === true,
+    });
   }
 
   if (isManagedOfficeFileTool(toolCall.qualifiedName)) {
@@ -2346,6 +2400,9 @@ export function isToolOffered(
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
   }
+  if (isMemoryTool(qualifiedName)) return availableTools.has(qualifiedName);
+  if (isFileSearchTool(qualifiedName)) return availableTools.has(qualifiedName);
+  if (isScheduleTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
@@ -3095,7 +3152,12 @@ export async function* runToolLoop(
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
-    const requested = Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : [];
+    const query = typeof args['query'] === 'string' ? args['query'] : '';
+    const matched = query ? searchToolsByKeyword(mcpTools, query) : [];
+    const requested = [
+      ...(Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : []),
+      ...matched.map((tool) => tool.qualifiedName),
+    ];
     const loaded = expandDeferredToolSchemas(mcpTools, requested);
     for (const tool of loaded) loadedToolNames.add(tool.qualifiedName);
     deferredToolSchemas = deferredToolSchemas.filter(
@@ -3103,9 +3165,18 @@ export async function* runToolLoop(
     );
     if (loaded.length === 0) {
       return {
-        content:
-          'No connected tool matched those names. Use the exact qualified names from the list on this tool.',
+        content: query
+          ? `No connected tool matched "${query}". Try other keywords, or use an exact qualified name from the list on this tool.`
+          : 'No connected tool matched those names. Use the exact qualified names from the list on this tool.',
         isError: true,
+      };
+    }
+    if (matched.length > 0) {
+      return {
+        content: `Loaded ${loaded.length} tool schema(s). Matches for "${query}":\n${matched
+          .map((tool) => `- ${tool.qualifiedName}: ${tool.description ?? tool.toolName}`)
+          .join('\n')}\nCall them on the next step.`,
+        isError: false,
       };
     }
     return {
@@ -4314,6 +4385,7 @@ export async function* runToolLoop(
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               webSearchDomainPolicy: processed.webSearchDomainPolicy ?? null,
               surface: processed.chatSurface,
+              temporaryChat: processed.conversationIsTemporary === true,
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },

@@ -17,7 +17,6 @@ nothing is left.
 | desktop | partial | Group models by family; the catalogue groups by developer and shows the family only on the About card. | ui |
 | mobile | partial | Group models by family; the sheet groups cloud models by routing tier and puts on-device models in their own section. | ui |
 | cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
-| vscode | partial | Group models by family; the popover groups by provider and access boundary. | ui |
 | chrome | partial | Group models by family; "More models" groups by provider only. | ui |
 
 Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:166-167`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`
@@ -66,10 +65,9 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `
 | --- | --- | --- | --- |
 | mobile | partial | Mark recommended models; the sheet leads with Auto profiles but labels no model as recommended. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Recommend actual models; the "Recommended" group holds only Auto. | ui |
 | chrome | partial | Label the short list as recommended; the dropdown shows a primary list then "More models" without saying why. | ui |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1107-1117`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1095-1145`, `apps/extension/src/side_panel.ts:6168-6208`
+Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`, `apps/extension/src/side_panel.ts:6168-6208`
 
 ## S15.09: Default-profile option.
 
@@ -85,18 +83,6 @@ Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670
 | chrome | partial | Add an explicit default model setting; today the last pick is remembered in extension storage and there is no separate default. | ui |
 
 Code: `apps/web/features/settings/sections/GeneralSection.tsx:917-939`, `apps/web/shared/stores/model-store.ts:385-387`, `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
-
-## S15.11: Model description.
-
-- Done when: Each model in the selector has a short description of what it is good for.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Describe each model; the picker shows only a tier word (Fastest, Balanced, Most capable) and context size. | ui |
-
-Code: `apps/cli/src/tui/widgets/model_picker.rs:487-511`, `apps/cli/src/design_system.rs:365-371`
 
 ## S15.12: Input-modality badges.
 
@@ -153,17 +139,16 @@ Code: `apps/mobile/src/features/model-picker/service.ts:171-175`
 
 - Done when: The selector tells the user which models are faster or slower.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
 | desktop | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
 | mobile | partial | Show relative speed per model; only the effort choices describe speed ("Faster and cheaper than the default"). | ui |
-| vscode | partial | Show relative speed; rows carry a Premium/Balanced/Economy tier, not speed. | ui |
 | chrome | partial | Show speed on every row; "Fastest/Balanced/Most capable" appears only for models without a description. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `packages/ui/unified-chat/src/lib/modelPicker.ts:53-57`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:94-98`
+Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `packages/ui/unified-chat/src/lib/modelPicker.ts:53-57`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`, `apps/extension/src/side_panel.ts:6035-6041`
 
 ## S15.17: Relative usage or cost information.
 
@@ -180,46 +165,42 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `
 
 - Done when: Models the user's plan cannot use are marked with the plan that unlocks them.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Name the plan a locked model needs; locked cloud rows say only "sign in", even for a signed-in user on a lower plan. | ui |
 | vscode | partial | Tell signed-in Free and Basic users which plan unlocks a model; the popover labels every cloud group "Unavailable" with "Sign in or add a provider key", even when they are signed in. | ui |
 | chrome | partial | Show models the plan cannot use with the plan that unlocks them; today they are left out of the list (the premium-gated style is never applied), and only signed-out users see "Sign in for models". | ui |
 
-Code: `apps/cli/src/tui/widgets/model_picker.rs:488-497`, `apps/cli/src/tui/widgets/model_picker.rs:191-199`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`, `apps/extension/src/side_panel.ts:2627-2627`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`, `apps/extension/src/side_panel.ts:2627-2627`, `apps/extension/src/side_panel.ts:6177-6179`
 
 ## S15.19: Preview or experimental badge.
 
 - Done when: Preview or experimental models carry a visible badge in the selector.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Badge preview/experimental models in the list; the lifecycle stage appears only on the model's About card ("Beta" in the list means an environment lock). | ui |
 | desktop | partial | Badge preview/experimental models in the list; the stage is only on the About card. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The item is a badge in the selector. The cited status icon lives in `agi models list` (a separate subcommand); the in-session /models output prints T/V/R only and the picker rows have no beta or deprecated mark, which the auditor's own note concedes. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:193-194`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`, `apps/cli/src/provider.rs:259-263`, `apps/cli/src/provider.rs:289-290`
+Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:193-194`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`
 
 ## S15.20: Deprecated-model notice.
 
 - Done when: A model scheduled for retirement shows a notice with its leaving date before it disappears.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Say when a deprecated model leaves; agi models list marks it only with "!" and the TUI picker drops deprecated catalog entries without notice. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/provider.rs:259-263`, `apps/cli/src/provider.rs:289-290`, `apps/cli/src/lib.rs:2237-2243`
 
 ## S15.21: Temporary-unavailability state.
 
@@ -380,16 +361,13 @@ Code: `apps/cli/src/tui/tui_app.rs:1847-1859`
 
 - Done when: Switching to a model that cannot handle the current conversation (images, tools, context) asks for confirmation and explains what will be lost.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Warn what a new model cannot do (images, tools, context); today the only switch check refuses a model outside the chat's trust boundary. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 ## S15.35: Preserve-or-remove incompatible attachments choice.
 

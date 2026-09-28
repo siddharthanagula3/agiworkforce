@@ -122,7 +122,9 @@ Descriptor fields, validated by `apps/web/lib/connectors/oauth-registry.ts`:
 `connectorId`, `displayName`, `issuer`, `authorizationUrl`, `tokenUrl`,
 `revocationUrl`, `mcpUrl`, `transport`, `scopes`, `tokenAuthMethod`,
 `authorizationParams`, `codeChallengeMethodsSupported`, `resourceIndicator`,
-`enabled`. `issuer` names the authorization server the app was registered with:
+`mcpHeaders`, `enabled`. `mcpHeaders` names at most four `X-MCP-*` option
+headers sent with every call to the MCP server beside the grant's
+`Authorization`, which it cannot replace. `issuer` names the authorization server the app was registered with:
 when the server's protected resource metadata no longer lists it, and lists no
 authorization server whose own metadata declares it, the connector is refused
 rather than sending the pair to a different server, and the callback checks
@@ -194,10 +196,16 @@ a client the host registers itself
 - Console: https://github.com/settings/apps/new, a GitHub App. Callback URL
   `<origin>/api/connectors/oauth/callback`. Turn on "Expire user authorization
   tokens" so the app issues refresh tokens.
-- Repository permissions for the server's default toolsets: Metadata read,
-  Contents read and write, Issues read and write, Pull requests read and write,
-  Actions read. A GitHub App's permissions are its ceiling; it ignores the
-  `scope` parameter.
+- Repository permissions for the server's default toolsets plus Actions:
+  Metadata read, Contents read and write, Issues read and write, Pull requests
+  read and write, Actions read. A GitHub App's permissions are its ceiling; it
+  ignores the `scope` parameter.
+- The remote server enables only its default toolsets unless the request names
+  others, by path (`/x/<toolset>`, one at a time) or by the `X-MCP-Toolsets`
+  header (a comma-separated list), so the descriptor's `mcpHeaders` names the
+  five default toolsets and `actions`, which reads workflow runs and job logs
+  (https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
+  `/x/all` is not used: it would exceed the per-account connector tool cap.
 - Descriptor, from the server's own metadata (fetched 2026-09-27):
 
   ```json
@@ -209,7 +217,10 @@ a client the host registers itself
     "tokenUrl": "https://github.com/login/oauth/access_token",
     "mcpUrl": "https://api.githubcopilot.com/mcp/",
     "transport": "streamable-http",
-    "scopes": ["offline_access"]
+    "scopes": ["offline_access"],
+    "mcpHeaders": {
+      "X-MCP-Toolsets": "context,repos,issues,pull_requests,users,actions"
+    }
   }
   ```
 

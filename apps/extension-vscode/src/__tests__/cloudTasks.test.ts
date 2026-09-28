@@ -148,7 +148,9 @@ describe('cloud tasks tree', () => {
       }),
     );
 
-    const [item] = (await provider.getChildren()) as CloudRunTreeItem[];
+    const [group] = await provider.getChildren();
+    expect(group?.label).toBe('Needs you');
+    const [item] = (await provider.getChildren(group)) as CloudRunTreeItem[];
 
     expect(item?.label).toBe('Migrate the billing ledger');
     expect(item?.contextValue).toBe('cloudRunPendingApproval');
@@ -289,7 +291,8 @@ describe('cloud task inline approval', () => {
         client: { listRuns: vi.fn().mockResolvedValue({ runs: [run], nextCursor: null }) },
       }),
     );
-    const [item] = (await provider.getChildren()) as CloudRunTreeItem[];
+    const [group] = await provider.getChildren();
+    const [item] = (await provider.getChildren(group)) as CloudRunTreeItem[];
 
     expect(readCloudRunCommandArgument(item)?.id).toBe(run.id);
     expect(readCloudRunCommandArgument(undefined)).toBeUndefined();

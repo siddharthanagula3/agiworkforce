@@ -7,8 +7,8 @@
 //!
 //! 2. `run_mcp_server`: a CLI-local MCP stdio server that serves MCP
 //!    2026-07-28 statelessly and 2025-era clients through `initialize`. It
-//!    advertises only tools that are actually callable from this context. Until
-//!    agent exec is wired for stdio MCP, the tool list is intentionally empty.
+//!    exposes the CLI's own file, search, shell, git and LSP tools; the
+//!    connecting client is responsible for confirming each call.
 
 pub(crate) mod account;
 mod developer_host;
@@ -28,6 +28,8 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+use crate::tui::approval_broker::ApprovalDecision;
+
 /// Serve a developer session over stdio.
 ///
 /// Stdout becomes the protocol channel here and stays one for the life of the
@@ -45,11 +47,34 @@ pub async fn run_developer_session_stdio(
 
 const MCP_SERVER_CACHE_TTL_MS: u64 = 3_600_000;
 
+const MCP_SERVER_CORE_TOOLS: &[&str] = &[
+    "read_file",
+    "read_many_files",
+    "write_file",
+    "edit_file",
+    "multiedit",
+    "apply_patch",
+    "notebook_edit",
+    "resolve_conflict",
+    "run_command",
+    "list_directory",
+    "search_files",
+    "grep_files",
+    "glob",
+    "list_worktrees",
+    "lsp_definition",
+    "lsp_hover",
+    "lsp_diagnostics",
+    "lsp_completion",
+    "lsp_document_symbols",
+    "lsp_format",
+];
+
 /// MCP-protocol stdio handler for `agi mcp-server`.
 ///
-/// The stdio MCP server currently exposes no tools. A full one-shot agent exec
-/// requires a configured provider/model session, approval plumbing, and event
-/// streaming; advertising that tool before it is callable would be fake wiring.
+/// Like `claude mcp serve`, it exposes the tools that run on this machine
+/// without an agent session. Tools that need a model, a session plan or a
+/// person at this terminal stay out of the list.
 pub async fn run_mcp_server() -> Result<()> {
     crate::output::claim_stdout_for_protocol();
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -65,7 +90,7 @@ pub async fn run_mcp_server() -> Result<()> {
         if frame.is_empty() {
             continue;
         }
-        for reply in mcp_server_replies(frame) {
+        for reply in mcp_server_replies(frame).await {
             stdout
                 .write_all(serde_json::to_string(&reply)?.as_bytes())
                 .await?;
@@ -83,7 +108,71 @@ fn mcp_server_identity() -> Implementation {
     }
 }
 
-fn mcp_server_replies(frame: &str) -> Vec<Value> {
+fn mcp_server_tools() -> Vec<crate::models::ToolDefinition> {
+    use crate::runtime::tool_catalog::{built_in_tool_definitions, git_tool_definitions};
+    let shell = cfg!(windows).then_some("powershell");
+    let mut tools: Vec<_> = built_in_tool_definitions()
+        .into_iter()
+        .filter(|definition| {
+            MCP_SERVER_CORE_TOOLS.contains(&definition.name.as_str())
+                || Some(definition.name.as_str()) == shell
+        })
+        .collect();
+    tools.extend(git_tool_definitions());
+    tools
+}
+
+fn mcp_tool_listing(definition: &crate::models::ToolDefinition) -> Value {
+    json!({
+        "name": definition.name,
+        "description": definition.description,
+        "inputSchema": definition.input_schema,
+        "annotations": { "readOnlyHint": definition.is_read_only },
+    })
+}
+
+async fn call_cli_tool(params: Option<&Value>) -> Result<Value, RpcError> {
+    let name = params
+        .and_then(|params| params.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !mcp_server_tools().iter().any(|tool| tool.name == name) {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("Tool '{name}' is not advertised by this MCP server."),
+        ));
+    }
+    let arguments = params
+        .and_then(|params| params.get("arguments"))
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let call = crate::agent::ToolCall {
+        name: name.to_string(),
+        args: crate::agent::value_to_legacy_args(&arguments),
+    };
+    let refuse_prompts: crate::tools::ApprovalCallback =
+        Arc::new(|_| Box::pin(async { ApprovalDecision::Deny }));
+    let opts = crate::tools::ToolExecOptions {
+        require_confirmation: false,
+        auto_approve_safe: false,
+        auto_approve_edits: false,
+        quiet: true,
+        approval_callback: Some(refuse_prompts),
+        privacy_mode: crate::agent::PrivacyMode::Local,
+        workspace_root: std::env::current_dir().ok(),
+        mcp_tool_definitions: None,
+    };
+    let (text, is_error) = match crate::tools::execute_tool_with_opts(&call, &opts).await {
+        Ok(result) => (result.output, !result.success),
+        Err(error) => (format!("{error:#}"), true),
+    };
+    Ok(json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": is_error,
+    }))
+}
+
+async fn mcp_server_replies(frame: &str) -> Vec<Value> {
     let request: Value = match serde_json::from_str(frame) {
         Ok(request) => request,
         Err(e) => {
@@ -128,22 +217,11 @@ fn mcp_server_replies(frame: &str) -> Vec<Value> {
             ];
         }
         "tools/list" => Ok(server::cacheable(
-            json!({ "tools": [] }),
+            json!({ "tools": mcp_server_tools().iter().map(mcp_tool_listing).collect::<Vec<_>>() }),
             MCP_SERVER_CACHE_TTL_MS,
             CacheScope::Public,
         )),
-        "tools/call" => {
-            let name = params
-                .and_then(|params| params.get("name"))
-                .and_then(Value::as_str)
-                .unwrap_or("(unknown)");
-            Err(RpcError::new(
-                INVALID_PARAMS,
-                format!(
-                    "Tool '{name}' is not advertised by this MCP server. Use a typed CLI developer session (stdio or WebSocket), or run `agi <prompt>` directly."
-                ),
-            ))
-        }
+        "tools/call" => call_cli_tool(params).await,
         _ => Err(RpcError::new(
             METHOD_NOT_FOUND,
             format!("Unknown: {method}"),
@@ -164,22 +242,25 @@ fn mcp_server_replies(frame: &str) -> Vec<Value> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn mcp_server_does_not_advertise_unwired_exec_tool() {
-        let replies: Vec<Value> = [
+    #[tokio::test]
+    async fn mcp_server_does_not_advertise_unwired_exec_tool() {
+        let mut replies: Vec<Value> = Vec::new();
+        for frame in [
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agiworkforce_exec","arguments":{"prompt":"hi"}}}"#,
-        ]
-        .iter()
-        .flat_map(|frame| mcp_server_replies(frame))
-        .collect();
+        ] {
+            replies.extend(mcp_server_replies(frame).await);
+        }
         assert!(replies.len() >= 3, "expected at least 3 response lines");
 
         let tools = replies[1]["result"]["tools"]
             .as_array()
             .expect("tools/list must return a tools array");
-        assert!(tools.is_empty(), "unwired exec tool must not be advertised");
+        assert!(
+            tools.iter().all(|tool| tool["name"] != "agiworkforce_exec"),
+            "unwired exec tool must not be advertised"
+        );
 
         assert_eq!(
             replies[2]["error"]["code"],
