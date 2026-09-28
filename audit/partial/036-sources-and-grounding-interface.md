@@ -84,14 +84,14 @@ Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/componen
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The retrieval time is recorded on each web source (retrievedAt) and report citations carry accessedAt, but no citation, card or report shows it. | ui |
-| desktop | partial | Same as web (hosted): The retrieval time is recorded on each web source (retrievedAt) and report citations carry accessedAt, but no citation, card or report shows it. | ui |
+| web | partial | Research report sources show Published and Retrieved dates (4fde83c28); chat web-search citations still carry no retrieval time (x_search_results has no retrieved date field). | ui |
+| desktop | partial | Research report sources show Published and Retrieved dates (4fde83c28); chat web-search citations still carry no retrieval time (x_search_results has no retrieved date field). | ui |
 | mobile | partial | Report citations arrive with accessedAt and the mobile report service parses it, but the sources list never shows it. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/web-search/web-search-tool.ts:445-445`, `packages/ui/unified-chat/src/components/markdown/CitationChip.tsx:99-104`, `apps/mobile/src/features/research/service.ts:52-52`, `apps/mobile/src/features/research/ReportsScreen.tsx:128-132`
+Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:227-227`, `apps/mobile/src/features/research/service.ts:52-52`, `apps/mobile/src/features/research/ReportsScreen.tsx:128-132`
 
 ## S36.07: Source-type icon.
 
@@ -209,14 +209,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1013`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The user can choose what a research run may read (sites, own files) before it starts, and a project's knowledge set grounds its chats, but there is no per-answer evidence set to add, pin or drop sources. | ui |
-| desktop | partial | Same as web (hosted): The user can choose what a research run may read (sites, own files) before it starts, and a project's knowledge set grounds its chats, but there is no per-answer evidence set to add, pin or drop sources. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:239-251`, `apps/web/app/api/llm/v1/chat/completions/route.ts:538-541`
 
 ## S36.25: Citation-preserving export.
 

@@ -74,6 +74,40 @@ export async function requireSharingManager(
   return member;
 }
 
+/**
+ * Who may share a project, change who can open it or stop sharing it: anyone
+ * who manages sharing, or the project's own owner when their role lets them
+ * share their work (0316).
+ */
+export async function requireProjectSharingRight(
+  db: DatabaseAdapter,
+  membership: OrgMembership | null,
+  userId: string,
+  projectId: string,
+): Promise<OrgMembership> {
+  const member = requireOrgMember(membership);
+  const permissions = await resolveOrganizationPermissions(member.organizationId, userId);
+  if (permissions.has('sharing.manage')) return member;
+  if (permissions.has('content.share')) {
+    const [owned] = await db.query<{ id: string }>(
+      `select id
+         from public.user_projects
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3::uuid
+          and deleted_at is null
+        limit 1`,
+      [projectId, userId, member.organizationId],
+    );
+    if (owned) return member;
+  }
+  throw createError
+    .forbidden(
+      "Only the project's owner or someone who manages sharing can change who can open it.",
+    )
+    .asUserSafe();
+}
+
 export function requireOrgMember(membership: OrgMembership | null): OrgMembership {
   if (!membership) {
     throw createError.forbidden('You are not a member of an organization.');

@@ -61,7 +61,8 @@ export function ProjectShareDialog({
 
   const data = overview.data ?? null;
   const shared = data?.sharedProjects.find((project) => project.projectId === projectId) ?? null;
-  const canManage = Boolean(data?.canManageSharing) && isOwner;
+  const canManage =
+    Boolean(data?.canManageSharing) || (Boolean(data?.canShareOwnProjects) && isOwner);
 
   let body: ReactNode;
   if (overview.isLoading) {
@@ -79,14 +80,22 @@ export function ProjectShareDialog({
         members.
       </p>
     );
+  } else if (!canManage && shared) {
+    body = (
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <p style={noteStyle}>Only the project&rsquo;s owner changes who can open it.</p>
+        <SharedProjectMemberAccessList project={shared} members={data.members} canManage={false} />
+      </div>
+    );
   } else if (!canManage) {
     body = (
       <p style={noteStyle}>
-        {shared
-          ? 'This project is shared in your workspace. Only its owner, with a role that can manage sharing, changes who can open it.'
-          : 'This project is not shared. Only its owner, with a role that can manage sharing, can share it.'}
+        This project is not shared. Only its owner can share it, when their workspace role lets them
+        share their work.
       </p>
     );
+  } else if (!shared && !isOwner) {
+    body = <p style={noteStyle}>This project is not shared. Only its owner can share it.</p>;
   } else if (!shared) {
     body = (
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
@@ -117,7 +126,7 @@ export function ProjectShareDialog({
     body = (
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
         <SharedProjectAudienceControl project={shared} />
-        <SharedProjectMemberAccessList project={shared} members={data.members} />
+        <SharedProjectMemberAccessList project={shared} members={data.members} canManage />
         <div>
           <Button
             size="sm"

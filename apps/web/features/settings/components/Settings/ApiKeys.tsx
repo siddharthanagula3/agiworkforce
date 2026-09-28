@@ -31,6 +31,8 @@ import {
 import { Plus, Key, Copy, Trash2, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  API_KEY_EXPIRY_CHOICES,
+  API_KEY_EXPIRY_LABELS,
   createApiKeySchema,
   type CreateApiKeyFormData,
 } from '@features/settings/schemas/settings-validation';
@@ -50,6 +52,7 @@ interface ApiKey {
   scopes: ApiKeyScope[];
   created_at: string;
   last_used_at?: string | null;
+  expires_at?: string | null;
 }
 
 interface ApiKeysPanelProps {
@@ -177,6 +180,9 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                     Created: {new Date(apiKey.created_at).toLocaleDateString()}
                     {apiKey.last_used_at &&
                       ` - Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
+                    {apiKey.expires_at
+                      ? ` - ${new Date(apiKey.expires_at).getTime() <= Date.now() ? 'Expired' : 'Expires'}: ${new Date(apiKey.expires_at).toLocaleDateString()}`
+                      : ' - Never expires'}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -286,6 +292,33 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={apiKeyForm.control}
+                      name="expiresInDays"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-foreground">Expires</FormLabel>
+                          <FormControl>
+                            <select
+                              value={field.value ?? 'never'}
+                              onChange={(event) => field.onChange(event.target.value)}
+                              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                            >
+                              {API_KEY_EXPIRY_CHOICES.map((choice) => (
+                                <option key={choice} value={choice}>
+                                  {API_KEY_EXPIRY_LABELS[choice]}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormDescription>
+                            Requests made with an expired key are refused. You can revoke a key at
+                            any time.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         type="button"
@@ -346,6 +379,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
 const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
   name: '',
   scopes: ['models:read', 'inference:write'],
+  expiresInDays: 'never',
 };
 
 export function ApiKeysManager() {

@@ -450,14 +450,22 @@
           },
           "tier": {
             "type": "string",
-            "enum": ["basic", "pro", "max"],
-            "description": "Lowest paid tier that may select this model."
+            "enum": ["free", "basic", "pro", "max"],
+            "description": "Lowest plan that may select this model."
           },
           "context_window": {
             "type": "integer"
           },
           "max_output": {
             "type": "integer"
+          },
+          "image_detail": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["auto", "low", "high", "original"]
+            },
+            "description": "The image `detail` values this model accepts, from the model registry. Present only on models the registry records; a model without it accepts `auto`, `low` and `high`."
           },
           "capabilities": {
             "type": "object",
@@ -488,6 +496,12 @@
                 "nullable": true
               }
             }
+          },
+          "deprecation_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "The day this model stops being served, published while it is still listed so callers can move before then. `null` when no retirement is scheduled."
           }
         }
       },
@@ -561,7 +575,7 @@
                   "enum": ["system", "user", "assistant", "tool", "function"]
                 },
                 "content": {
-                  "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`).",
+                  "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`). An `image_url` part may set `detail` to `auto`, `low` or `high`, or to `original` on a model the registry lists for original-resolution image inspection (listed in `image_detail` by `GET /llm/v1/models`). A detail value the model does not accept answers 400 `image_detail_unsupported`.",
                   "oneOf": [
                     {
                       "type": "string"
@@ -666,7 +680,7 @@
           },
           "response_format": {
             "type": "object",
-            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`.",
+            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`. When the registry marks the serving model for structured output and its provider offers a native JSON mode, the request also asks the provider for that mode.",
             "properties": {
               "type": {
                 "type": "string",
@@ -734,6 +748,93 @@
                   "maxLength": 253
                 },
                 "description": "Never read or cite pages on these sites."
+              }
+            }
+          },
+          "research_resume": {
+            "type": "object",
+            "description": "Continues a Deep Research run that stopped for its plan to be approved, or that failed or was stopped. Applies only when `research` is true.",
+            "properties": {
+              "sources": {
+                "type": "array",
+                "maxItems": 100,
+                "description": "Sources the run had already gathered, so they are not fetched again.",
+                "items": {
+                  "type": "object",
+                  "required": ["url"],
+                  "properties": {
+                    "url": { "type": "string", "format": "uri", "maxLength": 2000 },
+                    "title": { "type": "string", "maxLength": 500 },
+                    "snippet": { "type": "string", "maxLength": 2000 }
+                  }
+                }
+              },
+              "steps": {
+                "type": "array",
+                "maxItems": 50,
+                "description": "The plan the run proposed.",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "type", "description", "status"],
+                  "properties": {
+                    "id": { "type": "string", "maxLength": 100 },
+                    "type": {
+                      "type": "string",
+                      "enum": ["search", "read", "analyze", "synthesize", "verify"]
+                    },
+                    "description": { "type": "string", "maxLength": 500 },
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending", "running", "completed", "failed"]
+                    }
+                  }
+                }
+              },
+              "approved_steps": {
+                "type": "array",
+                "maxItems": 50,
+                "description": "The plan to run, as you approved or edited it. The run follows these steps instead of the proposed ones.",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "type", "description", "status"],
+                  "properties": {
+                    "id": { "type": "string", "maxLength": 100 },
+                    "type": {
+                      "type": "string",
+                      "enum": ["search", "read", "analyze", "synthesize", "verify"]
+                    },
+                    "description": { "type": "string", "maxLength": 500 },
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending", "running", "completed", "failed"]
+                    }
+                  }
+                }
+              },
+              "deliverable": {
+                "type": "object",
+                "description": "What the finished report should be.",
+                "properties": {
+                  "depth": { "type": "string", "enum": ["executive-summary", "full-report"] },
+                  "format": {
+                    "type": "string",
+                    "enum": ["prose", "prose-with-tables", "bullet-brief"]
+                  },
+                  "minSources": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 40,
+                    "description": "Distinct sources the run must have before it finishes; 0 sets no floor."
+                  },
+                  "stopWhenNoNewSources": {
+                    "type": "boolean",
+                    "description": "Stop gathering once a round finds no new source."
+                  },
+                  "saveToLibrary": {
+                    "type": "boolean",
+                    "description": "Also keep the finished report in your Library."
+                  }
+                }
               }
             }
           },

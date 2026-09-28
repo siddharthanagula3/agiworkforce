@@ -53,11 +53,13 @@ import {
   findOpenGitHubPullRequest,
   getGitHubRepositoryDefaultBranch,
   assertRepositoryIsVerified,
+  getGitHubPullRequestStatus,
   getInstallationAccessToken,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
   type GitHubPullRequest,
 } from '@/lib/github-app';
+import type { CloudCodePullRequestStatus } from '@agiworkforce/cloud-contracts';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
   buildCloudCodePullRequestBody,
@@ -86,6 +88,7 @@ const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
 const GITHUB_CLONE_PERMISSIONS = { contents: 'read' } as const;
 const GITHUB_PUSH_PERMISSIONS = { contents: 'write' } as const;
 const GITHUB_PULL_REQUEST_PERMISSIONS = { contents: 'read', pull_requests: 'write' } as const;
+const GITHUB_PULL_REQUEST_STATUS_PERMISSIONS = { pull_requests: 'read', checks: 'read' } as const;
 const GIT_DEFAULT_REMOTE = 'origin';
 const DETACHED_HEAD_BRANCH = 'HEAD';
 const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
@@ -2297,6 +2300,47 @@ async function recordPullRequest(
   const row = rows[0];
   if (!row) throw new CloudCodeNotFoundError();
   return mapCloudCodeSession(row);
+}
+
+export async function readCloudCodeSessionPullRequestStatus(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodePullRequestStatus> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (!session.pullRequestUrl || !session.pullRequestNumber || !session.repositoryUrl) {
+    throw new CloudCodeValidationError('Code session has no pull request');
+  }
+  const parsed = parseGithubRepositoryUrl(session.repositoryUrl);
+  if (!parsed) {
+    throw new CloudCodeValidationError('Code session repository is not a GitHub repository');
+  }
+  const credential = await resolveGithubCloneCredential(
+    owner.userId,
+    session.repositoryUrl,
+    GITHUB_PULL_REQUEST_STATUS_PERMISSIONS,
+  ).catch(() => null);
+  if (!credential) {
+    throw new CloudCodeUnavailableError(
+      'No connected GitHub installation can read the checks on this pull request',
+    );
+  }
+  const status = await getGitHubPullRequestStatus(
+    credential.password,
+    parsed.owner,
+    parsed.repo,
+    session.pullRequestNumber,
+  );
+  return {
+    number: status.number,
+    url: session.pullRequestUrl,
+    state: status.state,
+    draft: status.draft,
+    merged: status.merged,
+    checksState: status.checksState,
+    failedChecks: status.failedChecks,
+    reviewState: status.reviewState,
+  };
 }
 
 /**

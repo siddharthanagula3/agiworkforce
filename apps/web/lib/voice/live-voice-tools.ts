@@ -17,6 +17,7 @@ import {
   WRITE_FILE_TOOL,
 } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
@@ -356,7 +357,9 @@ export async function resolveLiveVoiceFunctionTools(input: {
   const productTools: ChatFunctionTool[] = [
     ...(tierPolicy.allowSearch ? [urlFetchToolDef()] : []),
     createManagedOfficeFileToolDefinition(),
-    ...(e2bProvisioningReady() ? e2bExecutionToolDefs() : []),
+    ...(e2bProvisioningReady()
+      ? e2bExecutionToolDefs({ officeRendering: e2bChatTemplate() !== null })
+      : []),
   ];
   const candidates = [
     ...productTools.map((tool) => ({

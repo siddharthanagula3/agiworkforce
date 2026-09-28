@@ -615,10 +615,6 @@
     "message": "Adding images… Send will be available when they are ready.",
     "description": "Composer attachment status while selected images are being read"
   },
-  "spAttachmentHistoryLimitation": {
-    "message": "Attachments are sent with this message but are not shown in Chrome chat history.",
-    "description": "Composer disclosure for attachments that are not kept in the side panel history"
-  },
   "spAttachUploadFromDevice": {
     "message": "Upload from device",
     "description": "Attachment menu item that opens the device file chooser for images, PDFs and text files"
@@ -638,7 +634,12 @@
   "spDocumentUploadFailed": {
     "message": "$FILE$ could not be uploaded.",
     "description": "Status under a file attachment when the upload fails without a server reason",
-    "placeholders": { "file": { "content": "$1", "example": "notes.pdf" } }
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.pdf"
+      }
+    }
   },
   "spDocumentRetry": {
     "message": "Retry",
@@ -647,7 +648,12 @@
   "spDocumentRemove": {
     "message": "Remove $FILE$",
     "description": "Accessible label for the button that removes a file attachment",
-    "placeholders": { "file": { "content": "$1", "example": "notes.pdf" } }
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.pdf"
+      }
+    }
   },
   "spDocumentSignInRequired": {
     "message": "Sign in to AGI Cloud to upload files.",
@@ -656,14 +662,6 @@
   "spDocumentAccountChanged": {
     "message": "Your AGI account changed. Attach the file again.",
     "description": "File attachment error when the signed-in account changes during upload"
-  },
-  "spAttachmentReadFailed": {
-    "message": "That image could not be read. Choose another file and try again.",
-    "description": "Composer error when one selected image cannot be read"
-  },
-  "spAttachmentReadMultipleFailed": {
-    "message": "One or more images could not be read. Choose them again and retry.",
-    "description": "Composer error when multiple selected images cannot be read"
   },
   "spAttachmentReadAllFailed": {
     "message": "Images could not be read. Choose them again and retry.",
@@ -1570,5 +1568,521 @@
         "example": "req_123"
       }
     }
+  },
+  "spInteractiveCardReadOnly": {
+    "message": "This card is read-only in Chrome.",
+    "description": "Status under a result card that can only be answered on another surface"
+  },
+  "spMapPlacesLabel": {
+    "message": "Resolved map places",
+    "description": "Accessible name of the list of places on a map result card"
+  },
+  "spBubbleRetry": {
+    "message": "Retry",
+    "description": "Button that sends a failed or stopped turn again"
+  },
+  "spBubbleSwitchModel": {
+    "message": "Switch model",
+    "description": "Button on a failed turn that opens the model menu"
+  },
+  "spAuthorUser": {
+    "message": "You said:",
+    "description": "Screen reader heading before each message the user sent"
+  },
+  "spAuthorAssistant": {
+    "message": "AGI said:",
+    "description": "Screen reader heading before each assistant answer"
+  },
+  "spMessageContextLabel": {
+    "message": "Sent with this message",
+    "description": "Accessible name of the files, images and pages shown on a sent message"
+  },
+  "spCopyMessage": {
+    "message": "Copy message",
+    "description": "Button that copies a message the user sent"
+  },
+  "spCopyResponse": {
+    "message": "Copy response",
+    "description": "Button that copies an assistant answer"
+  },
+  "spRegenerate": {
+    "message": "Try again",
+    "description": "Button under the latest answer that opens the try again menu"
+  },
+  "spRegenerateMenuLabel": {
+    "message": "Try again options",
+    "description": "Accessible name of the try again menu"
+  },
+  "spRegenerateSame": {
+    "message": "Try again",
+    "description": "Menu item that answers the latest message again with the same model"
+  },
+  "spRegenerateWithHeading": {
+    "message": "Try again with",
+    "description": "Heading above the models the latest message can be answered again with"
+  },
+  "spResendMessage": {
+    "message": "Send again",
+    "description": "Button on the latest sent message that sends it again for a new answer"
+  },
+  "spActivitySourcesFor": {
+    "message": "Sources for $QUERY$",
+    "description": "Activity step that listed search sources for a query",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "weather in Austin"
+      }
+    }
+  },
+  "spActivitySourcesReviewed": {
+    "message": "Reviewed sources",
+    "description": "Activity step that listed search sources without a query"
+  },
+  "spActivityCreated": {
+    "message": "Created $NAME$",
+    "description": "Activity step for a file the assistant produced",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spArtifactDownloadUnavailable": {
+    "message": "Download unavailable in Chrome for this artifact.",
+    "description": "Shown when a produced file has no address Chrome can open"
+  },
+  "spArtifactOpenOrDownloadNamed": {
+    "message": "Open or download $NAME$",
+    "description": "Tooltip of the link that opens a produced file",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spArtifactOpenOrDownload": {
+    "message": "Open or download",
+    "description": "Link that opens a produced file"
+  },
+  "spApprovalRequiredWithRisk": {
+    "message": "$RISK$ risk · Your approval is required before this tool can run.",
+    "description": "Approval request with the risk level the server reported",
+    "placeholders": {
+      "risk": {
+        "content": "$1",
+        "example": "medium"
+      }
+    }
+  },
+  "spApprovalRequired": {
+    "message": "Your approval is required before this tool can run.",
+    "description": "Approval request without a risk level"
+  },
+  "spApprovalRecordedApproved": {
+    "message": "Approved · decision recorded",
+    "description": "Status after the user approved a tool call"
+  },
+  "spApprovalRecordedDeclined": {
+    "message": "Declined · decision recorded",
+    "description": "Status after the user declined a tool call"
+  },
+  "spApprovalApproveNamed": {
+    "message": "Approve $NAME$",
+    "description": "Accessible name of the approve button for a named tool",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "read_page"
+      }
+    }
+  },
+  "spApprovalApprove": {
+    "message": "Approve",
+    "description": "Button that approves a tool call"
+  },
+  "spApprovalDeclineNamed": {
+    "message": "Decline $NAME$",
+    "description": "Accessible name of the decline button for a named tool",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "read_page"
+      }
+    }
+  },
+  "spApprovalDecline": {
+    "message": "Decline",
+    "description": "Button that declines a tool call"
+  },
+  "spApprovalUnavailable": {
+    "message": "This approval cannot be continued from the current Chrome session.",
+    "description": "Shown when an approval cannot be answered from this panel"
+  },
+  "spActivityStepWaitingForDevice": {
+    "message": "Waiting for $DEVICE$ to run this step.",
+    "description": "Activity step detail while a step waits for one of the user’s devices",
+    "placeholders": {
+      "device": {
+        "content": "$1",
+        "example": "Work laptop"
+      }
+    }
+  },
+  "spActivityStepNeedsInput": {
+    "message": "A connector asked for details before this step can continue.",
+    "description": "Activity step detail while a connector waits for details from the user"
+  },
+  "spActivityRequestHeading": {
+    "message": "Request",
+    "description": "Heading above the input a tool received"
+  },
+  "spActivityResultHeading": {
+    "message": "Result",
+    "description": "Heading above the output a tool returned"
+  },
+  "spActivityNeedsInput": {
+    "message": "Needs your input · $ELAPSED$",
+    "description": "Activity summary while the run waits for details from the user",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityNeedsApproval": {
+    "message": "Needs your approval · $ELAPSED$",
+    "description": "Activity summary while the run waits for an approval",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityWaitingForDevice": {
+    "message": "Waiting for $DEVICE$ · $ELAPSED$",
+    "description": "Activity summary while a step waits for one of the user’s devices",
+    "placeholders": {
+      "device": {
+        "content": "$1",
+        "example": "Work laptop"
+      },
+      "elapsed": {
+        "content": "$2",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityWaitingForDesktop": {
+    "message": "Waiting for your desktop · $ELAPSED$",
+    "description": "Activity summary while a step waits for the user’s desktop app",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityWorkedFor": {
+    "message": "Worked for $ELAPSED$",
+    "description": "Activity summary of a finished run",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityFinishedWithErrors": {
+    "message": "Finished with errors · $ELAPSED$",
+    "description": "Activity summary of a run that finished with some steps failed",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityFailedAfter": {
+    "message": "Failed after $ELAPSED$",
+    "description": "Activity summary of a failed run",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityCancelledAfter": {
+    "message": "Cancelled after $ELAPSED$",
+    "description": "Activity summary of a cancelled run",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityPausedAfter": {
+    "message": "Paused after $ELAPSED$",
+    "description": "Activity summary of a paused run",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivityWorkingFor": {
+    "message": "Working for $ELAPSED$",
+    "description": "Activity summary of a running run",
+    "placeholders": {
+      "elapsed": {
+        "content": "$1",
+        "example": "12s"
+      }
+    }
+  },
+  "spActivitySteps_one": {
+    "message": "$COUNT$ step",
+    "description": "Number of steps in a run, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spActivitySteps_other": {
+    "message": "$COUNT$ steps",
+    "description": "Number of steps in a run, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "spCitationMore": {
+    "message": "$SITE$ +$COUNT$",
+    "description": "Citation label naming the first source and how many more it groups",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "wikipedia.org"
+      },
+      "count": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "spSourcesCount_one": {
+    "message": "$COUNT$ source",
+    "description": "Button that lists the sources of an answer, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spSourcesCount_other": {
+    "message": "$COUNT$ sources",
+    "description": "Button that lists the sources of an answer, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "spSourcesListLabel": {
+    "message": "Sources used for this answer",
+    "description": "Accessible name of the list of an answer’s sources"
+  },
+  "spAnswerFileGenericType": {
+    "message": "File",
+    "description": "Type label for a produced file with no known type"
+  },
+  "spAnswerFileOpen": {
+    "message": "Open $FILE$",
+    "description": "Button that opens a produced file in a new tab",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spAnswerFileDownload": {
+    "message": "Download $FILE$",
+    "description": "Button that saves a produced file",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spAnswerFileDownloading": {
+    "message": "Downloading $FILE$…",
+    "description": "Status while a produced file is saved",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spAnswerFileDownloadFailed": {
+    "message": "$FILE$ could not be downloaded. Try again.",
+    "description": "Status when saving a produced file fails",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "spAnswerFileUnavailable": {
+    "message": "This file cannot be opened from Chrome.",
+    "description": "Shown on a produced file with no address Chrome can open"
+  },
+  "spAnswerImageLoading": {
+    "message": "Loading image…",
+    "description": "Status while a produced image loads"
+  },
+  "spAnswerImageFailed": {
+    "message": "$FILE$ could not be shown here. Open it instead.",
+    "description": "Status when a produced image cannot be shown inline",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "chart.png"
+      }
+    }
+  },
+  "spAnswerFilesLabel": {
+    "message": "Files from this answer",
+    "description": "Accessible name of the files and images an answer produced"
+  },
+  "spRetryNeedsAttachments": {
+    "message": "The images or page from this message are no longer attached. Attach them again, then send.",
+    "description": "Shown when a message is sent again after its images or page were cleared by a reload"
+  },
+  "spEmptyResponse": {
+    "message": "No response was returned. Try again.",
+    "description": "Failed turn text when the model returned nothing"
+  },
+  "spAttachmentUnsupported": {
+    "message": "$FILE$ cannot be attached. Attach a PNG, JPEG, WebP or GIF image, a PDF, or a text or Markdown file.",
+    "description": "Composer notice for a file type the chat cannot read",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.docx"
+      }
+    }
+  },
+  "spAttachmentTooMany": {
+    "message": "$FILE$ was not added. Only $MAX$ files can be sent with one message.",
+    "description": "Composer notice when a file would pass the per-message file count",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.pdf"
+      },
+      "max": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
+  },
+  "spAttachmentOverBudget": {
+    "message": "$FILE$ was not added. Attachments must total under $LIMIT$.",
+    "description": "Composer notice when a file would pass the per-message size budget",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.pdf"
+      },
+      "limit": {
+        "content": "$2",
+        "example": "20 MB"
+      }
+    }
+  },
+  "spAttachmentEmpty": {
+    "message": "$FILE$ is empty.",
+    "description": "Composer notice for an empty file",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.txt"
+      }
+    }
+  },
+  "spAttachmentFileTooLarge": {
+    "message": "$FILE$ is too large. Each file must be under $LIMIT$.",
+    "description": "Composer notice for a file over the per-file size limit",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "notes.pdf"
+      },
+      "limit": {
+        "content": "$2",
+        "example": "20 MB"
+      }
+    }
+  },
+  "spAttachmentImageName": {
+    "message": "Image",
+    "description": "Name shown for an image that arrived without a file name"
+  },
+  "spAttachmentReadFailedNamed": {
+    "message": "$FILE$ could not be read. Try adding it again.",
+    "description": "Composer notice when an image cannot be read",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "photo.png"
+      }
+    }
+  },
+  "spScreenshotName": {
+    "message": "Screenshot",
+    "description": "Name shown for a screenshot of the browser tab"
+  },
+  "spContextChipRemove": {
+    "message": "Remove $PAGE$",
+    "description": "Accessible name of the button that removes an attached page",
+    "placeholders": {
+      "page": {
+        "content": "$1",
+        "example": "Example Domain"
+      }
+    }
+  },
+  "spThinkingPreparing": {
+    "message": "Preparing",
+    "description": "Status beside the thinking dots before the answer starts"
+  },
+  "spThinkingReadingPage": {
+    "message": "Reading the page",
+    "description": "Status beside the thinking dots while a page command reads the page"
+  },
+  "spStopping": {
+    "message": "Stopping…",
+    "description": "Status while a stopped answer waits for the stop to take effect"
+  },
+  "spReconnecting": {
+    "message": "Reconnecting…",
+    "description": "Status while the panel reattaches to an answer after the connection dropped"
   }
 }

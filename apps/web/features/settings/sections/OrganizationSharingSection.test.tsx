@@ -69,6 +69,7 @@ function overview(overrides: Record<string, unknown> = {}) {
       currentUserId: 'user-owner',
       currentUserRole: 'admin',
       canManageSharing: true,
+      canShareOwnProjects: true,
       members: [
         {
           userId: 'user-owner',
@@ -230,12 +231,13 @@ describe('OrganizationSharingSection', () => {
     expect(screen.getByText(/Visible to 1 of 2 members/)).toBeInTheDocument();
   });
 
-  it('hides every mutation control from a member who cannot manage sharing', () => {
+  it('hides every mutation control from a viewer who can neither manage nor share', () => {
     mockOverview.mockReturnValue(
       overview({
         currentUserId: 'user-member',
-        currentUserRole: 'member',
+        currentUserRole: 'viewer',
         canManageSharing: false,
+        canShareOwnProjects: false,
       }),
     );
     renderSection();
@@ -273,7 +275,59 @@ describe('OrganizationSharingSection', () => {
     await user.selectOptions(picker, 'own-project');
     await user.click(screen.getByRole('button', { name: /share project with organization/i }));
 
-    expect(mockShareProject).toHaveBeenCalledWith('own-project', expect.anything());
+    expect(mockShareProject).toHaveBeenCalledWith(
+      { projectId: 'own-project', audience: 'invited' },
+      expect.anything(),
+    );
+  });
+
+  it('lets a member who owns a shared project manage it, and only that project', () => {
+    mockOverview.mockReturnValue(
+      overview({
+        currentUserId: 'user-member',
+        currentUserRole: 'member',
+        canManageSharing: false,
+        canShareOwnProjects: true,
+        sharedProjects: [
+          {
+            projectId: PROJECT,
+            organizationId: ORG,
+            name: 'Roadmap',
+            ownerUserId: 'user-owner',
+            sharedByUserId: 'user-owner',
+            defaultAccess: 'read',
+            createdAt: '2026-01-03T00:00:00.000Z',
+            memberGrants: [],
+          },
+          {
+            projectId: 'mine-project',
+            organizationId: ORG,
+            name: 'My research',
+            ownerUserId: 'user-member',
+            sharedByUserId: 'user-member',
+            defaultAccess: 'none',
+            createdAt: '2026-01-04T00:00:00.000Z',
+            memberGrants: [],
+          },
+        ],
+      }),
+    );
+    renderSection();
+
+    const stopButtons = screen.getAllByRole('button', { name: /stop sharing/i });
+    const projectStops = stopButtons.filter((button) =>
+      button.closest('li')?.textContent?.includes('My research'),
+    );
+    expect(projectStops).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', {
+        name: (_name, element) =>
+          element.textContent === 'Stop sharing' &&
+          Boolean(element.closest('li')?.textContent?.includes('Roadmap')),
+      }),
+    ).toBeNull();
+    expect(screen.getByLabelText('People with access to My research')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Add people' })).toBeInTheDocument();
   });
 
   it('denies one member with an explicit `none`, not by un-sharing for everyone', async () => {

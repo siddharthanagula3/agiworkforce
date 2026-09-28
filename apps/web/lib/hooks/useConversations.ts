@@ -170,6 +170,7 @@ export function toWebConversation(
     isArchived: conversation.archived,
     isTemporary: conversation.isTemporary,
     ...(conversation.workMode ? { workMode: conversation.workMode } : {}),
+    ...(conversation.needsYou ? { needsYou: true } : {}),
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };

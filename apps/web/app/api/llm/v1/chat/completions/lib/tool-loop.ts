@@ -360,6 +360,8 @@ import {
   isPlacesSearchTool,
 } from '@/lib/places/places-tool';
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
+import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
+import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
@@ -769,6 +771,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
   return isUrlFetchTool(toolName) ||
     isMapSearchTool(toolName) ||
     isPlacesSearchTool(toolName) ||
+    isItineraryTool(toolName) ||
     isClarifyTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -834,6 +837,7 @@ function canonicalToolCategory(
   if (isManagedOfficeFileTool(toolName)) return 'artifact';
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
+  if (isItineraryTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
@@ -1896,6 +1900,36 @@ function callerScopedDb(
   });
 }
 
+function placesSearchBilling(
+  executionContext:
+    | {
+        userId?: string;
+        organizationId: string | null;
+        requestId?: string;
+        planTier?: string | null;
+        turnRef?: string;
+        surface?: string | null;
+        usageAttribution?: UsageAttribution;
+        freeTrialSpend?: FreeTrialToolSpend;
+      }
+    | undefined,
+): PlacesSearchBilling | undefined {
+  const userId = executionContext?.userId;
+  const requestId = executionContext?.requestId;
+  if (!userId || !requestId) return undefined;
+  return {
+    userId,
+    organizationId: executionContext.organizationId ?? null,
+    planTier: executionContext.planTier ?? null,
+    requestId,
+    turnRef: executionContext.turnRef ?? requestId,
+    surface: executionContext.surface ?? null,
+    attribution: executionContext.usageAttribution,
+    db: callerScopedDb(executionContext, userId),
+    ...(executionContext.freeTrialSpend ? { freeTrial: executionContext.freeTrialSpend } : {}),
+  };
+}
+
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutorResolution>,
@@ -2079,29 +2113,12 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const billingUserId = executionContext?.userId;
-    const billingRequestId = executionContext?.requestId;
+    const billing = placesSearchBilling(executionContext);
     const outcome = await executePlacesSearch(toolCall.args, {
       toolCallId: toolCall.id,
       timeZone: executionContext?.clientTimeZone,
       signal: executionContext?.signal,
-      ...(billingUserId && billingRequestId
-        ? {
-            billing: {
-              userId: billingUserId,
-              organizationId: executionContext?.organizationId ?? null,
-              planTier: executionContext?.planTier ?? null,
-              requestId: billingRequestId,
-              turnRef: executionContext?.turnRef ?? billingRequestId,
-              surface: executionContext?.surface ?? null,
-              attribution: executionContext?.usageAttribution,
-              db: callerScopedDb(executionContext, billingUserId),
-              ...(executionContext?.freeTrialSpend
-                ? { freeTrial: executionContext.freeTrialSpend }
-                : {}),
-            },
-          }
-        : {}),
+      ...(billing ? { billing } : {}),
     });
     const content = formatPlacesResultForModel(outcome);
     if (!outcome.ok) {
@@ -2113,6 +2130,26 @@ async function runMcpTool(
     }
     const card = buildPlacesCard(outcome.payload, { toolCallId: toolCall.id });
     return card ? { content, isError: false, interactiveCard: card } : { content, isError: false };
+  }
+
+  if (isItineraryTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const billing = placesSearchBilling(executionContext);
+    const outcome = await executeItineraryTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      timeZone: executionContext?.clientTimeZone,
+      signal: executionContext?.signal,
+      ...(billing ? { billing } : {}),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : {
+          content: outcome.content,
+          isError: true,
+          ...(outcome.unaffordable ? { unavailable: true } : {}),
+        };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
@@ -2455,6 +2492,7 @@ export function isToolOffered(
     isWebSearchTool(qualifiedName) ||
     isMapSearchTool(qualifiedName) ||
     isPlacesSearchTool(qualifiedName) ||
+    isItineraryTool(qualifiedName) ||
     isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);

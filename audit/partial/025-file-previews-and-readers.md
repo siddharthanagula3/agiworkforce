@@ -28,7 +28,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
-| vscode | partial | Artifacts open in a VS Code editor tab; uploaded or Library files cannot be opened from the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
@@ -43,7 +42,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
-| vscode | partial | Artifacts open in a VS Code editor tab; uploaded or Library files cannot be opened from the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
@@ -198,10 +196,9 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | `agi artifacts show --out` saves an artifact's content to disk; uploaded or Library files cannot be downloaded. | ui |
-| vscode | partial | "Save Artifact to Workspace" writes an artifact to disk; uploaded or Library files cannot be downloaded. | ui |
 | chrome | partial | Only files generated in a chat can be opened or downloaded from their chat bubble; there is no file store to download originals from. | ui |
 
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:145-149`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
 
 ## S25.27: Download converted representation.
 
