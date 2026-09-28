@@ -13,8 +13,9 @@ use agiworkforce_protocol::developer_session::{
     McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
     McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse, McpServerParams,
     McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
-    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, SettingsReadResponse,
+    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PermissionsListResponse,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary,
+    SavedPermission, SavedPermissionDecision, SavedPermissionKind, SettingsReadResponse,
     SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
     SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
     SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
@@ -901,6 +902,108 @@ pub fn remove_hook(
     hooks::apply_hooks_command(&format!("remove {event} {}", params.position))
         .map_err(|error| invalid(format!("{error:#}")))?;
     Ok(list_hooks(workspace_root))
+}
+
+pub fn list_saved_permissions() -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+    let store = crate::permissions::PermissionStore::load().map_err(internal)?;
+    let mut permissions = Vec::new();
+    for (scope, rules, decision) in [
+        ("allow", &store.always_allow, SavedPermissionDecision::Allow),
+        ("deny", &store.always_deny, SavedPermissionDecision::Deny),
+    ] {
+        let mut rules: Vec<&String> = rules.iter().collect();
+        rules.sort();
+        for rule in rules {
+            let (kind, label) = match rule
+                .strip_prefix("file:")
+                .and_then(|rest| rest.split_once(':'))
+            {
+                Some((operation, path)) => (
+                    SavedPermissionKind::File,
+                    format!("{} {path}", file_operation_label(operation)),
+                ),
+                None => (SavedPermissionKind::Command, rule.clone()),
+            };
+            permissions.push(SavedPermission {
+                id: saved_permission_id(scope, rule),
+                kind,
+                label,
+                decision,
+            });
+        }
+    }
+    for rule in crate::features::exec::exec_policy::user_approved_rules().map_err(internal)? {
+        permissions.push(SavedPermission {
+            id: saved_permission_id("exec_policy", &rule.line),
+            kind: SavedPermissionKind::ExecPolicy,
+            label: rule.prefix.join(" "),
+            decision: if rule.allow {
+                SavedPermissionDecision::Allow
+            } else {
+                SavedPermissionDecision::Deny
+            },
+        });
+    }
+    Ok(PermissionsListResponse { permissions })
+}
+
+pub fn remove_saved_permission(
+    id: &str,
+) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+    let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
+    let stored = [("allow", false), ("deny", true)]
+        .into_iter()
+        .find_map(|(scope, deny)| {
+            let rules = if deny {
+                &store.always_deny
+            } else {
+                &store.always_allow
+            };
+            rules
+                .iter()
+                .find(|rule| saved_permission_id(scope, rule) == id)
+                .map(|rule| (deny, rule.clone()))
+        });
+    let removed = if let Some((deny, rule)) = stored {
+        if deny {
+            store.always_deny.remove(&rule);
+        } else {
+            store.always_allow.remove(&rule);
+        }
+        store.save().map_err(internal)?;
+        true
+    } else {
+        match crate::features::exec::exec_policy::user_approved_rules()
+            .map_err(internal)?
+            .into_iter()
+            .find(|rule| saved_permission_id("exec_policy", &rule.line) == id)
+        {
+            Some(rule) => crate::features::exec::exec_policy::remove_user_approved_rule(&rule.line)
+                .map_err(internal)?,
+            None => false,
+        }
+    };
+    if !removed {
+        return Err(DeveloperSessionHostError::not_found(
+            "No saved approval has that id; list them again",
+        ));
+    }
+    list_saved_permissions()
+}
+
+fn saved_permission_id(scope: &str, rule: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{scope}\n{rule}").as_bytes());
+    crate::hex::encode(&digest[..8])
+}
+
+fn file_operation_label(operation: &str) -> &str {
+    match operation {
+        "write" => "Write",
+        "edit" | "multiedit" => "Edit",
+        "patch" => "Patch",
+        other => other,
+    }
 }
 
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {

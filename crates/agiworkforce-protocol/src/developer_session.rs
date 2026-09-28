@@ -109,6 +109,8 @@ pub mod method {
     pub const WORKTREE_CREATE: &str = "worktree/create";
     pub const WORKTREE_LIST: &str = "worktree/list";
     pub const WORKTREE_REMOVE: &str = "worktree/remove";
+    pub const PERMISSIONS_LIST: &str = "permissions/list";
+    pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -373,6 +375,8 @@ pub struct AppServerCapabilities {
     pub mcp_tools: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub installs: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub saved_permissions: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -850,6 +854,8 @@ pub struct PendingApprovalSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub proposed_content: Option<String>,
+    #[serde(default)]
+    pub always_allow_saved: bool,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -2331,6 +2337,47 @@ pub struct WorktreeListResponse {
     pub worktrees: Vec<WorktreeSummary>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SavedPermissionKind {
+    Command,
+    File,
+    ExecPolicy,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SavedPermissionDecision {
+    Allow,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SavedPermission {
+    pub id: String,
+    pub kind: SavedPermissionKind,
+    pub label: String,
+    pub decision: SavedPermissionDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsListResponse {
+    pub permissions: Vec<SavedPermission>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsRemoveParams {
+    pub id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -3183,6 +3230,7 @@ mod tests {
                 risk_level: Some(AgentEventApprovalRiskLevel::High),
                 reversible: Some(false),
                 proposed_content: None,
+                always_allow_saved: false,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),

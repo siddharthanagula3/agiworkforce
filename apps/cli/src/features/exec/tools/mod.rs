@@ -1642,7 +1642,8 @@ async fn execute_powershell(
                         },
                         "Allow this PowerShell command?",
                         vec![describe_command(&permission_command)],
-                    ),
+                    )
+                    .saving_always_allow(true),
                 )
                 .await
                 {
