@@ -609,6 +609,10 @@ export const CLOUD_RUNS_PANEL_CSS =
     justify-content: space-between;
     gap: 8px;
   }
+
+  .sp-run-approval .sp-connector-input {
+    margin: 6px 0 0;
+  }
 ` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'needs-you' | 'all';
