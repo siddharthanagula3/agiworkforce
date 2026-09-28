@@ -1202,6 +1202,8 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
   }
 }
 
+let newChatModelSelection = 'auto';
+
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
@@ -1209,6 +1211,7 @@ function clearStoredMessages(): void {
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
+  _ctx.selectedModel = newChatModelSelection;
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1282,6 +1285,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   renderRecentProjects();
   if (previousOwner) {
     _ctx.selectedModel = 'auto';
+    newChatModelSelection = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
   }
   _ctx.currentModelKey = undefined;
@@ -5492,6 +5496,7 @@ function applyModelSelection(value: string): void {
         : resolveModelEffort(value, _ctx.reasoningEffort);
   }
   _ctx.selectedModel = value;
+  newChatModelSelection = value;
   renderModelNotice(null);
   chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: value }).catch(() => {});
   refreshModelPickerUI();
@@ -7804,6 +7809,7 @@ function buildUI(): void {
     const storedModel = result[SELECTED_MODEL_STORAGE_KEY] as string | undefined;
     if (storedModel) {
       _ctx.selectedModel = storedModel;
+      newChatModelSelection = storedModel;
     }
     renderModelDropdown();
     renderModelTrigger();
