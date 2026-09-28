@@ -5394,6 +5394,7 @@ export function getWebviewContent(
     var APPROVAL_OUTCOMES = {
       once: APPROVED_STATE + ' once.',
       session: APPROVED_STATE + ' for the rest of this session.',
+      always: L10N.alwaysAllowedOutcome,
       deny: DENIED_STATE + '.',
       abort: 'Turn aborted.',
       expired: 'The turn ended before this was answered.',
@@ -5570,6 +5571,22 @@ export function getWebviewContent(
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      if (payload.alwaysAllow) {
+        var always = document.createElement('button');
+        always.type = 'button';
+        always.className = 'approval-card__action';
+        always.dataset.decision = 'always';
+        always.textContent = L10N.alwaysAllow;
+        always.title = L10N.alwaysAllowHint;
+        always.addEventListener('click', function () {
+          vscode.postMessage({
+            type: 'respondToApproval',
+            payload: { requestId: payload.requestId, decision: 'always' },
+          });
+        });
+        var denyButton = actions.querySelector('[data-decision="deny"]');
+        actions.insertBefore(always, denyButton);
+      }
       var guidance = document.createElement('input');
       guidance.type = 'text';
       guidance.className = 'approval-card__guidance';
@@ -5605,7 +5622,9 @@ export function getWebviewContent(
     }
 
     function resolveApprovalCard(requestId, outcome) {
-      if (outcome === 'once' || outcome === 'session') restartPendingToolClocks();
+      if (outcome === 'once' || outcome === 'session' || outcome === 'always') {
+        restartPendingToolClocks();
+      }
       var entry = approvalCards[requestId];
       if (!entry) return;
       delete approvalCards[requestId];

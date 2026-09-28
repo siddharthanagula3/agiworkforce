@@ -1,3 +1,8 @@
+import {
+  ARTIFACT_RUNTIME_CONNECTOR_ID_PATTERN,
+  ARTIFACT_RUNTIME_MAX_CONNECTORS,
+} from '@agiworkforce/cloud-contracts';
+
 export type ArtifactKind = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
@@ -20,7 +25,7 @@ export interface SandboxIncomingMessage {
 }
 
 export type ArtifactRuntimeRequest =
-  | { op: 'complete'; prompt: string }
+  | { op: 'complete'; prompt: string; connectors: string[] }
   | { op: 'storage.get'; key: string; shared: boolean }
   | { op: 'storage.set'; key: string; value: string; shared: boolean }
   | { op: 'storage.delete'; key: string; shared: boolean }
@@ -32,6 +37,16 @@ export interface ArtifactRuntimeHost {
 
 const RUNTIME_REQUEST_ID = /^runtime-\d{1,12}$/;
 const MAX_RUNTIME_TEXT_CHARS = 5_000_000;
+
+function runtimeConnectors(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > ARTIFACT_RUNTIME_MAX_CONNECTORS) return null;
+  const connectors = value.filter(
+    (entry): entry is string =>
+      typeof entry === 'string' && ARTIFACT_RUNTIME_CONNECTOR_ID_PATTERN.test(entry),
+  );
+  return connectors.length === value.length ? [...new Set(connectors)] : null;
+}
 
 function runtimeText(value: unknown): string | null {
   return typeof value === 'string' && value.length <= MAX_RUNTIME_TEXT_CHARS ? value : null;
@@ -50,7 +65,8 @@ export function parseArtifactRuntimeRequest(value: unknown): ArtifactRuntimeRequ
   switch (source['op']) {
     case 'complete': {
       const prompt = runtimeText(source['prompt']);
-      return prompt === null ? null : { op: 'complete', prompt };
+      const connectors = runtimeConnectors(source['connectors']);
+      return prompt === null || connectors === null ? null : { op: 'complete', prompt, connectors };
     }
     case 'storage.get':
       return key === null ? null : { op: 'storage.get', key, shared };

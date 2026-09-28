@@ -368,6 +368,13 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
     await (await this.apiClient()).sessions.revokeSession(sessionId);
   }
 
+  async createSignInToken(userId: string, expiresInSeconds: number): Promise<string> {
+    const signInToken = await (
+      await this.apiClient()
+    ).signInTokens.createSignInToken({ userId, expiresInSeconds });
+    return signInToken.token;
+  }
+
   async listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]> {
     const response = await (await this.apiClient()).users.getOrganizationMembershipList({ userId });
     return response.data.map((membership) => ({

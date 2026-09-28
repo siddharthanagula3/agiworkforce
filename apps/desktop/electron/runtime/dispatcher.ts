@@ -1,12 +1,14 @@
 import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
+  BROWSER_SIGN_IN_START,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
   LOCAL_INFERENCE_COMMANDS,
   LocalInferenceRefused,
   ShellCommandRefused,
+  evaluateShellPolicy,
   assertLocalTurnCarriesNoAttachments,
   isBackgroundWorkKind,
   isDesktopCapability,
@@ -91,6 +93,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { startBrowserSignIn } from '../browserSignIn';
 import { showDevicePrompt } from './devicePrompts';
 import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
@@ -119,7 +122,15 @@ import { readLocalModelSettings, writeLocalModelSettings } from './localModelSet
 import { recordDesktopEvent } from './desktopTelemetryService';
 import type { DesktopTelemetryEvent } from './desktopTelemetry';
 import { readClipboard } from './clipboardService';
-import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './shellService';
+import {
+  cancelShellRun,
+  readBackgroundCommand,
+  runShellCommand,
+  startBackgroundCommand,
+  stopBackgroundCommand,
+  type ShellApprovalRequest,
+  type ShellInputApprovalRequest,
+} from './shellService';
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
@@ -491,6 +502,19 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     reason:
       'Commands you run here start real programs on this Mac, with your account, in this folder.',
   },
+  shell_start: {
+    capability: 'shell.execute',
+    reason:
+      'A command started here keeps running on this Mac, with your account, in this folder, until it ends or is stopped.',
+  },
+  shell_read: {
+    capability: 'shell.execute',
+    reason: 'The agent wants to read or type into a command it started in this folder.',
+  },
+  shell_stop: {
+    capability: 'shell.execute',
+    reason: 'The agent wants to stop a command it started in this folder.',
+  },
   app_open_path: {
     capability: 'application.control',
     reason: 'Opening a file here hands it to whichever app your Mac opens that kind of file with.',
@@ -672,6 +696,28 @@ async function approveShellCommand(
         noLink: true,
       };
   const result = await showDevicePrompt(window, options);
+  return result.response === 1;
+}
+
+const MAX_SHOWN_INPUT = 400;
+
+async function approveShellInput(
+  window: BrowserWindow | null,
+  { program, input }: ShellInputApprovalRequest,
+): Promise<boolean> {
+  const line = input.split('\n')[0]?.trim() ?? '';
+  if (line !== '' && evaluateShellPolicy(readShellPolicy(), line).decision === 'allow') return true;
+  const shown = input.length > MAX_SHOWN_INPUT ? `${input.slice(0, MAX_SHOWN_INPUT)}…` : input;
+  const result = await showDevicePrompt(window, {
+    type: 'warning' as const,
+    buttons: ['Cancel', 'Type it'],
+    defaultId: 0,
+    cancelId: 0,
+    title: `Type into ${program}?`,
+    message: `Let AGI type this into ${program}?`,
+    detail: `${shown}\n\n${program} is running in a terminal on this Mac, and whatever it is waiting for receives this text as if you typed it.`,
+    noLink: true,
+  });
   return result.response === 1;
 }
 
@@ -943,6 +989,32 @@ async function execute(
     }
     case 'shell_cancel':
       return cancelShellRun(requireString(args, 'runId'));
+    case 'shell_start': {
+      const root = resolveRoot(args);
+      return startBackgroundCommand({
+        runId: requireString(args, 'runId'),
+        root,
+        relativePath: optionalString(args, 'path', ''),
+        command: requireString(args, 'command'),
+        policy: readShellPolicy(),
+        sandbox: await shellSandbox(),
+        network: 'deny',
+        approve: (request) => approveShellCommand(window, request),
+        emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+      });
+    }
+    case 'shell_read': {
+      const root = resolveRoot(args);
+      const typed = args['input'];
+      return readBackgroundCommand(
+        requireString(args, 'runId'),
+        root.id,
+        typeof typed === 'string' ? typed : undefined,
+        (request) => approveShellInput(window, request),
+      );
+    }
+    case 'shell_stop':
+      return stopBackgroundCommand(requireString(args, 'runId'), resolveRoot(args).id);
     case 'shell_policy_read':
       return readShellPolicy();
     case 'shell_policy_write':
@@ -1103,6 +1175,8 @@ async function execute(
       return setDispatchTaskRunner(window, requireBoolean(args, 'ready'));
     case DISPATCH_TASK_REPORT:
       return reportDispatchTask(window, args);
+    case BROWSER_SIGN_IN_START:
+      return startBrowserSignIn();
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':

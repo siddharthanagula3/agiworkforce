@@ -314,7 +314,12 @@
         "kind": "until-deleted"
       },
       "classification": ["operational", "credential"],
-      "events": ["connector_added", "connector_removed", "connector_setting_changed"],
+      "events": [
+        "connector_added",
+        "connector_removed",
+        "connector_authorization_started",
+        "connector_setting_changed"
+      ],
       "storage": "cloud",
       "deepLink": null
     },
