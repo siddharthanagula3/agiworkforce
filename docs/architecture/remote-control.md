@@ -4,7 +4,8 @@ Status: Current
 Owner: Desktop and mobile surface maintainers
 Last updated: 2026-09-28
 
-How a phone drives a coding session on the desktop the user is signed in on.
+How a phone drives a coding session on the desktop, or in a VS Code window, the user is
+signed in on.
 This is the map of the path and its trust boundaries. The rules that govern
 changing any of it are in `AGENTS.md`; the surrounding architecture is in
 `docs/architecture/overview.md`.
@@ -12,7 +13,7 @@ changing any of it are in `AGENTS.md`; the surrounding architecture is in
 ## What it is, and what it is not
 
 Remote control attaches a **companion** (the mobile app) to a **host** (the
-Electron desktop shell) so the companion can watch and steer a local coding
+Electron desktop shell, or the VS Code extension) so the companion can watch and steer a local coding
 session that is already running on the host. It is not screen sharing, and it is
 not a second place a session can start: every session runs on the host, under the
 host's own capability grants, and the companion only sends control actions to it.
@@ -29,6 +30,7 @@ peers and enforces size and action limits on what passes.
 | Host: coding session control                 | `packages/platform/utils/src/remoteControl/codeRemoteController.ts`  |
 | Host: envelope signing and verification      | `packages/platform/utils/src/remoteControl/dispatchEnvelope.ts`      |
 | Desktop wiring of the host                   | `apps/desktop/electron/remote/remoteControlService.ts`               |
+| VS Code wiring of the host                   | `apps/extension-vscode/src/features/remote-control/`                 |
 | Companion: session list, attach, steer       | `apps/mobile/src/features/companion/remote-code`                     |
 | Pairing issuance                             | `apps/web/app/api/pair/initiate/route.ts`                            |
 | Relay                                        | `services/signaling-server`                                          |

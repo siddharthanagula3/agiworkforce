@@ -26,3 +26,4 @@ export {
   type SignedDispatchEnvelope,
 } from './dispatchEnvelope';
 export { createControlReceiptLedger, type ControlReceiptLedger } from './controlReceipts';
+export { developerSessionEventFromNotification, readTurnFailure } from './sessionEvents';
