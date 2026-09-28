@@ -228,15 +228,14 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 
 - Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
-| vscode | partial | The surface now says it shows your account memory, not a folder's. It still does not name the account's active workspace or show shared workspace knowledge; the sync feed returns no workspace name. | ui |
 | chrome | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 
-Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension-vscode/src/features/surfaces/index.ts:343-343`
+Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-110`
 
 ## S39.27: Memory-used indication.
 

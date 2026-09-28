@@ -1,0 +1,55 @@
+import { pluralForms, t } from '../../l10n';
+
+export function webviewStrings() {
+  return {
+    retry: t('webview.retry'),
+    details: t('webview.details'),
+    copy: t('webview.copy'),
+    copyResponse: t('webview.copyResponse'),
+    copied: t('webview.copied'),
+    copyFailed: t('webview.copyFailed'),
+    goodResponse: t('webview.goodResponse'),
+    badResponse: t('webview.badResponse'),
+    removeRating: t('webview.removeRating'),
+    failed: t('webview.failed'),
+    newerDiffReplaced: t('webview.newerDiffReplaced'),
+    couldNotOpenDiff: t('webview.couldNotOpenDiff'),
+    cloudSessionExpired: t('webview.cloudSessionExpired'),
+    localStillAvailable: t('webview.localStillAvailable'),
+    signInAgain: t('webview.signInAgain'),
+    accountNeedsAttention: t('webview.accountNeedsAttention'),
+    sessionExpired: t('webview.sessionExpired'),
+    tryAgain: t('webview.tryAgain'),
+    checking: t('webview.checking'),
+    openWorkspaceToBegin: t('webview.openWorkspaceToBegin'),
+    restrictedMode: t('webview.restrictedMode'),
+    runtimeNeedsSetup: t('webview.runtimeNeedsSetup'),
+    openFolderToBegin: t('webview.openFolderToBegin'),
+    trustWorkspaceFirst: t('webview.trustWorkspaceFirst'),
+    cliUnavailable: t('webview.cliUnavailable'),
+    openFolder: t('webview.openFolder'),
+    manageTrust: t('webview.manageTrust'),
+    installCli: t('webview.installCli'),
+    openSetup: t('webview.openSetup'),
+    activity: t('webview.activity'),
+    starting: t('webview.starting'),
+    completed: t('webview.completed'),
+    completedWithErrors: t('webview.completedWithErrors'),
+    collapseDetails: t('webview.collapseDetails'),
+    expandDetails: t('webview.expandDetails'),
+    lineDelta: t('webview.lineDelta'),
+    actions: pluralForms('webview.actions'),
+    errors: pluralForms('webview.errors'),
+    runningCount: pluralForms('webview.runningCount'),
+    completedCount: pluralForms('webview.completedCount'),
+    linesWritten: pluralForms('webview.linesWritten'),
+    contextUsedUnknownWindow: pluralForms('webview.contextUsedUnknownWindow'),
+    contextUsed: pluralForms('webview.contextUsed'),
+    answerTokens: pluralForms('webview.answerTokens'),
+    moreLinesHidden: pluralForms('webview.moreLinesHidden'),
+  };
+}
+
+export function webviewStringsScript(): string {
+  return JSON.stringify(webviewStrings()).replace(/</gu, '\\u003c');
+}

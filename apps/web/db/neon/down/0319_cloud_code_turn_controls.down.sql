@@ -1,4 +1,4 @@
--- Reversal of 0317 : Code approvals hold a shell command of at most 2,000
+-- Reversal of 0319 : Code approvals hold a shell command of at most 2,000
 -- characters, and every turn stops at the default step limit.
 --
 -- WHAT THIS COSTS: a pending approval for a file edit or for a command longer
@@ -33,6 +33,6 @@ alter table public.cloud_code_agent_approvals
   drop column if exists tool_name;
 
 delete from public.schema_migrations
- where filename = '0317_cloud_code_turn_controls.sql';
+ where filename = '0319_cloud_code_turn_controls.sql';
 
 commit;

@@ -8,6 +8,7 @@ import {
   isFreeOfChargePlanTier,
   isPerSeatBillingPlan,
   isSelfServeIndividualPlanTier,
+  managedQuotaResetAt,
   normalizeBillingPlanTier,
   type BillingPlanTier,
   type ManagedUsageSummaryResponse,
@@ -73,21 +74,15 @@ function quotaResetAt(
   code: string | undefined,
   usage: ManagedUsageSummaryResponse | null,
 ): string | undefined {
-  if (!usage || !code) return undefined;
-  switch (code.toLowerCase()) {
-    case 'insufficient_credits':
-    case 'monthly_limit_exceeded':
-    case 'monthly_credit_limit_reached':
-      return usage.usage_reset_at ?? undefined;
-    case 'rolling_five_hour_limit_reached':
-      return usage.session_reset_at ?? undefined;
-    case 'rolling_weekly_limit_reached':
-      return usage.weekly_reset_at ?? undefined;
-    case 'flagship_weekly_limit_reached':
-      return usage.flagship_weekly_reset_at ?? undefined;
-    default:
-      return undefined;
-  }
+  if (!usage) return undefined;
+  return (
+    managedQuotaResetAt(code, {
+      usageResetAt: usage.usage_reset_at,
+      sessionResetAt: usage.session_reset_at,
+      weeklyResetAt: usage.weekly_reset_at,
+      flagshipWeeklyResetAt: usage.flagship_weekly_reset_at,
+    }) ?? undefined
+  );
 }
 
 function noUpgradeQuotaReason(code: string | undefined, currentTier: BillingPlanTier): string {

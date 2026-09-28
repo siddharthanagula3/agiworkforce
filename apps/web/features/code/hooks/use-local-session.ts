@@ -38,7 +38,12 @@ export interface LocalSessionState {
   stopping: boolean;
   error: string | null;
   contextTokens: number | null;
-  send: (text: string, model?: string, agentMode?: DeveloperAgentMode) => Promise<void>;
+  send: (
+    text: string,
+    model?: string,
+    agentMode?: DeveloperAgentMode,
+    maxTurns?: number,
+  ) => Promise<void>;
   stop: () => Promise<void>;
   decideApproval: (approved: boolean) => Promise<void>;
 }
@@ -228,7 +233,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
   }, [rootId, threadId, load]);
 
   const send = useCallback(
-    async (text: string, model?: string, agentMode?: DeveloperAgentMode) => {
+    async (text: string, model?: string, agentMode?: DeveloperAgentMode, maxTurns?: number) => {
       if (!rootId || !threadId || text.trim() === '') return;
       setSending(true);
       setError(null);
@@ -240,6 +245,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           text,
           ...(model ? { model } : {}),
           ...(agentMode ? { agentMode } : {}),
+          ...(maxTurns ? { maxTurns } : {}),
         });
         setTurn((current) => ({ ...current, turnId }));
       } catch (cause: unknown) {

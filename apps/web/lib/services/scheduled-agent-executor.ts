@@ -1,11 +1,6 @@
 import 'server-only';
 
-import {
-  createPostgresContextManifestStore,
-  resolveContext,
-  type ContextCandidate,
-  type ContextSourceLoader,
-} from '@agiworkforce/context-engine';
+import { createPostgresContextManifestStore, resolveContext } from '@agiworkforce/context-engine';
 import {
   classifyTaskLocally,
   detectIndicScript,
@@ -66,6 +61,7 @@ import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   formatProjectSystemPrompt,
   loadProjectContext,
+  projectContextLoaders,
   type LoadedProjectContext,
 } from '@/lib/services/project-context-service';
 import {
@@ -355,47 +351,6 @@ function withheldCapabilityNote(plan: {
     `cannot pause to ask you. Choose "${readOnly}" in Settings → Capabilities → Tool ` +
     'approvals to let scheduled runs do this.'
   );
-}
-
-const PROJECT_SOURCE_BUDGET_CHARS: Readonly<Record<string, number>> = {
-  project_instruction: 8_000,
-  project_knowledge_file: 48_000,
-  project_sibling_chat: 16_000,
-};
-
-/**
- * The project's own sources as engine candidates, one loader per class so the
- * manifest says which kind of project context contributed what. The text is
- * what each source contributes to the prompt, so the engine budgets and
- * deduplicates the same strings the model will read.
- */
-export function projectContextLoaders(context: LoadedProjectContext): ContextSourceLoader[] {
-  const siblingSources = context.sources.filter(
-    (source) => source.sourceClass === 'project_sibling_chat',
-  );
-  const textFor = (source: (typeof context.sources)[number]): string => {
-    const { locator } = source.provenance;
-    if (source.sourceClass === 'project_instruction') return context.instructions?.trim() ?? '';
-    if (source.sourceClass === 'project_knowledge_file') {
-      const fileId = locator.slice('project_knowledge_files/'.length);
-      const file = context.knowledgeFiles.find((entry) => entry.fileId === fileId);
-      const passages = file?.selection?.passages.map((passage) => passage.text).join('\n');
-      return passages || file?.extractedText?.trim() || file?.summary?.trim() || '';
-    }
-    return context.siblingChats[siblingSources.indexOf(source)]?.preview?.trim() ?? '';
-  };
-
-  return [...new Set(context.sources.map((source) => source.sourceClass))].map((sourceClass) => ({
-    sourceClass,
-    budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? 8_000,
-    load: (): ContextCandidate[] =>
-      context.sources
-        .filter((source) => source.sourceClass === sourceClass)
-        .flatMap((source): ContextCandidate[] => {
-          const text = textFor(source);
-          return text ? [{ source, text }] : [];
-        }),
-  }));
 }
 
 /**

@@ -4305,6 +4305,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             })
         }
 
+        "/skills" if arg.starts_with("remove") => {
+            let name = arg.trim_start_matches("remove").trim();
+            SlashResult::SystemMessage(if name.is_empty() {
+                "Usage: /skills remove <skill name>".to_string()
+            } else {
+                match std::env::current_dir()
+                    .map_err(anyhow::Error::from)
+                    .and_then(|root| crate::installs::remove_skill(&root, name))
+                {
+                    Ok(removed) => format!("Removed the skill {}.", removed.display()),
+                    Err(error) => format!("Could not remove '{name}': {error:#}"),
+                }
+            })
+        }
+
         "/skills" => {
             let skills = crate::skills::discover_skills();
             if skills.is_empty() {
@@ -4378,6 +4393,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 Ok(message) => SlashResult::SystemMessage(message),
                 Err(error) => SlashResult::SystemMessage(format!("{error:#}")),
             }
+        }
+
+        "/plugin" | "/plugins"
+            if matches!(
+                arg.split_whitespace().next(),
+                Some("enable" | "disable" | "remove" | "uninstall")
+            ) =>
+        {
+            SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
+                "Usage: /plugins enable|disable|remove <name>".to_string()
+            }))
         }
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {

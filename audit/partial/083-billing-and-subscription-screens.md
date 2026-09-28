@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Comparison built and reached from the paywall; the Billing screen row is in post-codex/no-yearly-s83-mobile-billing.patch (cloud-billing/index.tsx is Codex-held); in-app purchase needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
+| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch adds a Compare plans row to Settings > Billing (cloud-billing/index.tsx is Codex-held); in-app purchase still needs FEATURES.billing and MOBILE_IAP_ENABLED | flag-off |
 
-Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`, `apps/mobile/src/features/settings/plans/index.tsx:70-70`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:129-129`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
 
 ## S83.03: Upgrade checkout.
 
@@ -39,9 +39,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile's proration note says the renewal date stays the same (wrong for tier upgrades), and upgrades cannot be bought in the app. | ui, flag-off |
+| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch replaces the wrong 'renewal date stays the same' note with the web rule (an upgrade starts a new billing period that day, with a credit for unused time) and states top-ups in credits with the real expiry rule; buying in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:385-390`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
 
 ## S83.06: Tax and total-price display.
 
@@ -75,9 +75,9 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Trial copy (Free trial ends <date>, then renews unless you cancel) is in post-codex/no-yearly-s83-mobile-billing.patch; cloud-billing/index.tsx is Codex-held. Apply after Codex lands. | ui |
+| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch shows 'Free trial ends <date>, then renews unless you cancel.' on the Billing plan card; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
+Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/features/billing/store.ts:26-26`
 
 ## S83.09: Payment-method entry.
 
@@ -171,9 +171,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | End-of-term copy (Access ends <date>, you keep the plan until then) is in post-codex/no-yearly-s83-mobile-billing.patch; Codex-held file. | ui |
+| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch shows 'Access ends <date>. You keep <plan> until then.' for a subscription set to cancel; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
+Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/features/billing/store.ts:26-26`
 
 ## S83.25: Mobile purchase restoration.
 

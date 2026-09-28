@@ -1,0 +1,179 @@
+import 'server-only';
+
+import type { ContextSourceClass } from '@agiworkforce/context';
+import {
+  createPostgresContextManifestStore,
+  resolveContext,
+  type ContextManifest,
+  type ContextSourceLoader,
+} from '@agiworkforce/context-engine';
+
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { logger } from '@/lib/logger';
+import type { PastChatCitation } from '@/lib/past-chat-citation';
+import {
+  formatManagedMemorySystemPrompt,
+  loadOrganizationContextPolicy,
+  loadProjectMemoryScope,
+  loadSuppressedMemorySources,
+  managedMemoryContextLoader,
+  type ManagedMemoryContextDb,
+  type ManagedMemoryContextItem,
+  type ManagedMemoryPolicy,
+} from './managed-memory-context-service';
+import {
+  formatPastChatContext,
+  PAST_CHAT_DEGRADED_NOTICE,
+  pastChatCitation,
+  pastChatContextLoader,
+} from './past-chat-context-service';
+import {
+  projectContextLoaders,
+  type LoadedProjectContext,
+  type ProjectContextBlock,
+} from './project-context-service';
+
+export interface InteractiveTurnContext {
+  readonly projectBlocks: readonly ProjectContextBlock[];
+  readonly pastChatPrompt: string | null;
+  readonly pastChatSources: readonly PastChatCitation[];
+  readonly memoryPrompt: string | null;
+  readonly memories: readonly ManagedMemoryContextItem[];
+  readonly manifest: ContextManifest | null;
+}
+
+export function accountMemoryRequested(
+  surface: CloudChatSurface,
+  memoryEnabled: boolean | undefined,
+): boolean {
+  return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
+}
+
+function classWithdrawn(manifest: ContextManifest, sourceClass: ContextSourceClass): boolean {
+  const entry = manifest.entries.find((candidate) => candidate.sourceClass === sourceClass);
+  return entry !== undefined && entry.candidateCount > 0 && entry.includedCount === 0;
+}
+
+export async function resolveInteractiveTurnContext(
+  db: ManagedMemoryContextDb,
+  input: {
+    turnId: string;
+    userId: string;
+    organizationId: string | null;
+    projectId: string | null;
+    conversationId: string | null;
+    temporaryChat: boolean;
+    surface: CloudChatSurface;
+    memoryEnabled: boolean | undefined;
+    policy: ManagedMemoryPolicy;
+    query: string;
+    projectContext: LoadedProjectContext | null;
+    projectBlocks: readonly ProjectContextBlock[];
+  },
+): Promise<InteractiveTurnContext> {
+  const includeMemory =
+    input.policy.enabled &&
+    !input.temporaryChat &&
+    accountMemoryRequested(input.surface, input.memoryEnabled);
+  const includePastChats =
+    input.policy.searchPastChats &&
+    !input.temporaryChat &&
+    input.surface !== 'api' &&
+    input.memoryEnabled !== false &&
+    input.query.length > 0;
+  if (!includeMemory && !includePastChats && !input.projectContext) {
+    return {
+      projectBlocks: input.projectBlocks,
+      pastChatPrompt: null,
+      pastChatSources: [],
+      memoryPrompt: null,
+      memories: [],
+      manifest: null,
+    };
+  }
+
+  const [suppressedSources, scope] = await Promise.all([
+    includeMemory ? loadSuppressedMemorySources(db, { userId: input.userId }) : Promise.resolve([]),
+    includeMemory || includePastChats
+      ? loadProjectMemoryScope(db, { userId: input.userId, projectId: input.projectId })
+      : Promise.resolve(undefined),
+  ]);
+
+  const memoryLoader = includeMemory
+    ? managedMemoryContextLoader(db, {
+        userId: input.userId,
+        organizationId: input.organizationId,
+        suppressedSources,
+        ...(scope ? { scope } : {}),
+        query: input.query,
+      })
+    : null;
+  const pastChatLoader = includePastChats
+    ? pastChatContextLoader(db, {
+        userId: input.userId,
+        query: input.query,
+        organizationId: input.organizationId,
+        currentConversationId: input.conversationId,
+        ...(scope ? { scope } : {}),
+      })
+    : null;
+  const loaders: ContextSourceLoader[] = [
+    ...(input.projectContext ? projectContextLoaders(input.projectContext) : []),
+    ...(pastChatLoader ? [pastChatLoader] : []),
+    ...(memoryLoader ? [memoryLoader] : []),
+  ];
+
+  const resolution = await resolveContext({
+    turnId: input.turnId,
+    actor: {
+      userId: input.userId,
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+    },
+    policy: await loadOrganizationContextPolicy(db, input.organizationId),
+    loaders,
+    temporaryChat: input.temporaryChat,
+    onLoaderError: (sourceClass, error) => {
+      logger.warn(
+        { error, userId: input.userId, turnId: input.turnId, sourceClass },
+        'A context source failed to load; the turn continues without it',
+      );
+    },
+  });
+
+  if (!input.temporaryChat) {
+    void createPostgresContextManifestStore(db)
+      .write(resolution.manifest)
+      .catch((error: unknown) => {
+        logger.warn(
+          { error, userId: input.userId, turnId: input.turnId },
+          'The turn context manifest could not be stored',
+        );
+      });
+  }
+
+  const memories = memoryLoader
+    ? resolution.itemsOf('account_memory').flatMap((item) => {
+        const memory = memoryLoader.itemFor(item.source.id);
+        return memory ? [memory] : [];
+      })
+    : [];
+  const excerpts = pastChatLoader
+    ? resolution.itemsOf('past_chat').flatMap((item) => {
+        const excerpt = pastChatLoader.excerptFor(item.source.id);
+        return excerpt ? [{ ...excerpt, content: item.text }] : [];
+      })
+    : [];
+  const recallDegraded = pastChatLoader?.degraded() === true;
+
+  return {
+    projectBlocks: input.projectBlocks.filter(
+      (block) => !classWithdrawn(resolution.manifest, block.sourceClass),
+    ),
+    pastChatPrompt: recallDegraded ? PAST_CHAT_DEGRADED_NOTICE : formatPastChatContext(excerpts),
+    pastChatSources: recallDegraded ? [] : excerpts.map(pastChatCitation),
+    memoryPrompt: formatManagedMemorySystemPrompt(memories),
+    memories,
+    manifest: resolution.manifest,
+  };
+}

@@ -8,6 +8,7 @@ export {
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
+  addDeveloperMemory,
   answerDeveloperApproval,
   cancelLocalChat,
   cancelLocalCommand,

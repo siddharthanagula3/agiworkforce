@@ -287,15 +287,12 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/fea
 
 - Done when: A user can turn an installed plugin off and on without uninstalling it.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The runtime can toggle a plugin through its app-server API, but no agi command or slash command does it; users must edit the disabled list by hand. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/app_server/surfaces.rs:194-201`, `apps/cli/src/tui/tui_app.rs:3762-3790`
 
 ## S54.25: Update.
 
