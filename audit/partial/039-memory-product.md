@@ -230,9 +230,9 @@ Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add sensitive-memory controls on mobile; the never-remember list can only be edited on web, and on-device learning (Local mode) has no credential or special-category filter at all. | ui, handler |
+| mobile | partial | partials/slack cf040c03f9: in Cloud mode the phone edits the never-remember terms and the per-source switches in the same memory preference namespace the server enforces. Left: Local mode learning has no credential or special-category filter; the shared prohibitedMemoryCategory lives in @agiworkforce/context, which apps/mobile/package.json (held by Codex) does not list, so it needs that dependency after Codex lands or the classifier moved into @agiworkforce/types. | handler |
 
-Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`
+Code: `apps/mobile/app/(app)/settings/memory.tsx:460-460`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:15-15`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:98-98`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:248-248`
 
 ## S39.30: Memory reset independent from chat deletion.
 

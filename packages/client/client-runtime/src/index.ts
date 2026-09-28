@@ -170,3 +170,4 @@ export type {
 } from './workspacePolicy';
 export * from './connectors';
 export * from './cache-namespace';
+export * from './sse';
