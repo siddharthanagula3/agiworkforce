@@ -16375,6 +16375,16 @@ loadPromptShortcuts();
 chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
+const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+let lastAccountRefreshOnReturn = Date.now();
+function refreshAccountOnReturn(): void {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS) return;
+  lastAccountRefreshOnReturn = Date.now();
+  void refreshCloudAccountUI();
+}
+document.addEventListener('visibilitychange', refreshAccountOnReturn);
+window.addEventListener('focus', refreshAccountOnReturn);
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
     refreshPageHostname();
