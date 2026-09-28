@@ -166,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} फ़ाइल",
+    "fileCount_other": "{{count}} फ़ाइलें",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -410,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "फ़िलहाल स्केच सिर्फ़ इसी सत्र तक रहते हैं, ऐप बंद करने पर बोर्ड साफ़ हो जाता है।"
+    "sessionOnlyNotice": "फ़िलहाल स्केच सिर्फ़ इसी सत्र तक रहते हैं, ऐप बंद करने पर बोर्ड साफ़ हो जाता है।",
+    "elementCount_one": "{{count}} एलिमेंट",
+    "elementCount_other": "{{count}} एलिमेंट"
   }
 }

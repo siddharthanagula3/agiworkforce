@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
+import { confirmNavigation } from '../primitives/UnsavedChanges';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, keepOpenForMenuEscape } from '../sidebar/Menu';
 import type {
@@ -2115,8 +2116,18 @@ export function SettingsModal({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) return;
-    setNavSearch('');
-    onClose();
+    confirmNavigation(() => {
+      setNavSearch('');
+      onClose();
+    });
+  };
+
+  const selectSection = (key: string) => {
+    if (key === activeSection) {
+      onSectionChange(key);
+      return;
+    }
+    confirmNavigation(() => onSectionChange(key));
   };
 
   return (
@@ -2188,7 +2199,7 @@ export function SettingsModal({
                         label={t(`nav.${item.key}`, item.label)}
                         Icon={item.icon}
                         isActive={activeSection === item.key}
-                        onClick={onSectionChange}
+                        onClick={selectSection}
                         badge={navBadges?.[item.key]}
                       />
                     ))}
@@ -2209,7 +2220,7 @@ export function SettingsModal({
                     label={t(`nav.${entry.key}`, entry.label)}
                     Icon={entry.icon}
                     isActive={activeSection === entry.key}
-                    onClick={onSectionChange}
+                    onClick={selectSection}
                     badge={navBadges?.[entry.key]}
                   />
                 ))}
