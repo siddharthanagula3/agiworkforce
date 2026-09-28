@@ -15,6 +15,7 @@ import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes } from '@/lib/api-key-scopes'
 import { recordAuditEvent } from '@/lib/security-audit';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { readLiveDeveloperProject } from '@/lib/services/developer-project-service';
+import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
@@ -121,6 +122,15 @@ async function handleCreate(request: NextRequest) {
       ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
       ...(projectId ? { subjectRef: projectId } : {}),
     },
+  });
+
+  await queueDeveloperWebhookEvent(db, userId, 'api_key.created', {
+    id: row.id,
+    name,
+    key_prefix: row.key_prefix,
+    scopes: resolveApiKeyScopes(row.scopes),
+    project_id: projectId,
+    expires_at: expiresAt ? expiresAt.toISOString() : null,
   });
 
   return NextResponse.json(
