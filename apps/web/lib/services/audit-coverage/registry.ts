@@ -159,6 +159,10 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
     eventTypes: ['agent_run_lifecycle_changed'],
   },
   {
+    route: 'voice/live/sessions/[sessionId]/tools/route.ts',
+    eventTypes: ['tool_approval_decided'],
+  },
+  {
     route: 'llm/v1/chat/completions/runs/[runId]/pause/route.ts',
     eventTypes: ['agent_run_lifecycle_changed'],
   },

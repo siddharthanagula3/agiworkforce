@@ -260,17 +260,16 @@ Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/u
 
 - Done when: A panel lists a resource's saved versions (when, what) and lets the user open or restore one.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
-| desktop | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
 | mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
 | cli | partial | /rewind only steps back N checkpoints blind; add a list of checkpoints (time, last message) to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1273-1273`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1313-1313`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:643-643`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`, `apps/cli/src/tui/tui_app.rs:3591-3591`, `apps/cli/src/repl/registry.rs:872-872`
 
 ## S9.27: Diff viewer.
 

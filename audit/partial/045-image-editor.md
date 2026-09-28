@@ -78,31 +78,25 @@ nothing is left.
 
 - Done when: User extends an image beyond its borders (outpainting) and the new area is generated to match.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The API contract and route accept operation "outpaint", but no client offers it; the composer deliberately omits it because it cannot author the larger canvas and mask. | ui |
-| desktop | partial | The API contract and route accept operation "outpaint", but no client offers it; the composer deliberately omits it because it cannot author the larger canvas and mask. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:49-55`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:185-190`
 
 ## S45.19: Reframe.
 
 - Done when: User changes the framing or aspect ratio of an existing image and gets the same scene reframed.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The aspect-ratio menu regenerates from the prompt at the new ratio; the existing image is not reframed or extended. | handler |
-| desktop | partial | The aspect-ratio menu regenerates from the prompt at the new ratio; the existing image is not reframed or extended. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:577-580`, `apps/web/features/chat/components/ImageGenerationCard.tsx:439-446`
 
 ## S45.22: Reference-based composition.
 

@@ -10,11 +10,14 @@ import {
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   ManagedCloudScheduleShareResponseSchema,
+  ManagedCloudScheduleRecentRunListResponseSchema,
+  MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH,
   managedCloudScheduleSharedPath,
   managedCloudScheduleSharePath,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
+  type ManagedCloudScheduleRecentRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleShare,
 } from '@agiworkforce/cloud-contracts';
@@ -82,6 +85,11 @@ export interface ScheduleApi {
     approval: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ScheduleRun>;
+  listRecentRuns(input: PageInput): Promise<{
+    runs: ManagedCloudScheduleRecentRun[];
+    pagination: { limit: number; offset: number };
+    hasMore: boolean;
+  }>;
   shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
   unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
   getSharedSchedule(token: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
@@ -249,6 +257,20 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
       );
       return {
         runs: body.runs as ScheduleRun[],
+        pagination: body.pagination,
+        hasMore: body.runs.length === body.pagination.limit,
+      };
+    },
+
+    async listRecentRuns({ limit, offset, signal }) {
+      const body = await request(
+        `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?limit=${limit}&offset=${offset}`,
+        { credentials: 'include', signal },
+        ManagedCloudScheduleRecentRunListResponseSchema,
+        'Recent schedule results returned an invalid response.',
+      );
+      return {
+        runs: body.runs,
         pagination: body.pagination,
         hasMore: body.runs.length === body.pagination.limit,
       };

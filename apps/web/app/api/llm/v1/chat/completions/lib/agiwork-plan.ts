@@ -225,7 +225,18 @@ export function agiWorkExecutionDirective(steps: AgiWorkPlanStep[]): string {
   ].join('\n');
 }
 
-export function agiWorkPlanEvent(steps: AgiWorkPlanStep[], responseModel: string): string {
+export const AgiWorkSuppliedPlanSchema = z.object({
+  steps: z
+    .array(z.string().trim().min(1).max(MAX_PLAN_STEP_CHARS))
+    .min(1)
+    .max(AGIWORK_PLAN_MAX_STEPS),
+});
+
+export function agiWorkPlanEvent(
+  steps: AgiWorkPlanStep[],
+  responseModel: string,
+  review?: { goal: AgiWorkGoal; awaitingApproval: boolean },
+): string {
   return `data: ${JSON.stringify({
     choices: [
       {
@@ -236,6 +247,7 @@ export function agiWorkPlanEvent(steps: AgiWorkPlanStep[], responseModel: string
               description: step.description,
               status: step.status,
             })),
+            ...(review ? { goal: review.goal, awaiting_approval: review.awaitingApproval } : {}),
           },
         },
         index: 0,
@@ -292,5 +304,5 @@ export function agiWorkPlanProgressEvents(steps: AgiWorkPlanStep[]): AgentEvent[
         ]
       : [];
   });
-  return [...started, overview];
+  return [overview, ...started];
 }

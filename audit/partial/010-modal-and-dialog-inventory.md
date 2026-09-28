@@ -422,31 +422,29 @@ Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98
 
 - Done when: Leaving an editor with unsaved edits warns the user and lets them keep editing or discard.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the schedule draft (browser close via beforeunload) and the artifact source editor warn; add in-app navigation guards for other editors. | states |
-| desktop | partial | Only the schedule draft (browser close via beforeunload) and the artifact source editor warn; add in-app navigation guards for other editors. | states |
 | mobile | partial | Only the Personalization screen asks before discarding edits; other edit screens do not. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/SchedulesPage.tsx:256-256`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1377-1377`, `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
 
 ## S10.42: Edit-conflict resolution.
 
 - Done when: When the same item was changed elsewhere, the user sees both versions and chooses which to keep (or merges).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Draft conflicts are detected and reported ("changed elsewhere"), but the user cannot compare versions or pick which to keep. | ui |
-| desktop | partial | Draft conflicts are detected and reported ("changed elsewhere"), but the user cannot compare versions or pick which to keep. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | `agi sync import` keeps the local file on a conflict and lists it in the report; the user cannot compare or pick the imported version. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/hooks/use-conversation-draft-sync.ts:124-124`, `apps/web/features/chat/hooks/use-conversation-draft-sync.ts:121-121`, `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
+Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 ## S10.43: Export options.
 
