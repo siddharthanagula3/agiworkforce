@@ -71,6 +71,7 @@ export type {
   SkillToolResultCode,
   SkillToolRuntimeContext,
   SkillUnavailability,
+  SkillWithFileAccess,
 } from './tool';
 export {
   matchSkillsForPrompt,

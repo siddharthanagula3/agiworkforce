@@ -512,7 +512,7 @@
       "owner": "apps/web/lib/services/user-skill-service.ts",
       "capabilities": ["canUseSkills"],
       "concepts": ["skill"],
-      "tables": ["user_skills"]
+      "tables": ["user_skills", "user_skill_files"]
     },
     {
       "name": "plugins",

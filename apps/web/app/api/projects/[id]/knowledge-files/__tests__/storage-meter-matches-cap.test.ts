@@ -9,6 +9,9 @@ const source = [
   .map((file) => readFileSync(join(process.cwd(), file), 'utf8'))
   .join('\n');
 
+const WORKSPACE_PLAN_READ =
+  /resolveEntitledPlanTier\(db, userId, \{\s*workspaceOrganizationId: organizationId,?\s*\}\)/g;
+
 function usageQueries(): string[] {
   return source
     .split('select coalesce(sum(k.byte_count), 0) as total')
@@ -33,8 +36,8 @@ describe('the storage meter is computed over the same set the cap enforces', () 
     }
   });
 
-  it('sizes the meter and the cap from the same seat-aware plan', () => {
-    expect(source.match(/resolveEntitledPlanTier\(db, userId\)/g)).toHaveLength(2);
+  it('sizes the meter and the cap from the same seat-aware plan of the active workspace', () => {
+    expect(source.match(WORKSPACE_PLAN_READ)).toHaveLength(2);
     expect(source).not.toContain('SubscriptionService');
   });
 
@@ -43,7 +46,7 @@ describe('the storage meter is computed over the same set the cap enforces', () 
       source.indexOf('let limitBytes: number | null = null;'),
       source.indexOf('storage: { usedBytes, limitBytes }'),
     );
-    expect(getHandler).toContain('resolveEntitledPlanTier(db, userId)');
+    expect(getHandler.match(WORKSPACE_PLAN_READ)).toHaveLength(1);
     expect(getHandler.match(/} catch \(error\) {/g)?.length).toBeGreaterThanOrEqual(2);
     expect(getHandler).not.toContain('throw error;');
   });

@@ -241,6 +241,7 @@ describe('readPluginArchive acceptance', () => {
         description: 'Summarise things',
         path: 'skills/summarise/SKILL.md',
         content: skillFile('summarise', 'Summarise things', 'Do it.'),
+        files: [],
       },
     ]);
   });

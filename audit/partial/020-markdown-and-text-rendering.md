@@ -152,17 +152,14 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 
 - Done when: A rendered table offers a download (CSV/XLSX) of its contents.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Download as CSV exists only for table/CSV artifacts in the artifact panel; a Markdown table inside an answer has no download. | ui |
-| desktop | partial | Download as CSV exists only for table/CSV artifacts in the artifact panel; a Markdown table inside an answer has no download. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1445-1445`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:988-988`
 
 ## S20.19: Inline mathematical notation.
 
@@ -241,17 +238,14 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: Searching finds text inside an answer and highlights the matching words in the rendered answer.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Search jumps to the message and outlines the whole bubble; the matched words are not highlighted inside the answer and there is no find-in-conversation bar. | ui |
-| desktop | partial | Search jumps to the message and outlines the whole bubble; the matched words are not highlighted inside the answer and there is no find-in-conversation bar. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:270-270`, `apps/web/features/chat/pages/WebChatPage.tsx:3933-3933`
 
 ## S20.28: Print and export rendering.
 
@@ -261,13 +255,13 @@ Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:270-270`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
-| desktop | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
+| web | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
+| desktop | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
 | mobile | partial | PDF export converts only headings, bold/italic, code and flat lists; tables, math, links and list numbering are lost. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5468-5468`, `apps/web/features/chat/services/document-export-service.ts:169-169`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:36-36`, `apps/mobile/services/fileCreation.ts:59-59`
+Code: `packages/ui/unified-chat/src/components/markdown/markdownDocument.ts:230-230`, `apps/web/features/chat/services/export-pdf.ts:868-868`, `apps/web/features/chat/services/export-pdf.ts:422-422`, `apps/web/features/chat/services/export-pdf.ts:845-845`
 
 ## S20.29: Right-to-left content.
 

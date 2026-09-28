@@ -33,9 +33,21 @@ export interface PdfAttachmentContent {
   scannedPagesOmitted: number[];
 }
 
+type PdfAttachmentFailureReason = 'corrupt' | 'encrypted';
+
+const PDF_FAILURE_MESSAGES: Readonly<Record<PdfAttachmentFailureReason, string>> = {
+  corrupt: 'could not be read as a PDF.',
+  encrypted: 'is password protected. Remove the password and upload it again.',
+};
+
+const PDF_PASSWORD_EXCEPTION = 'PasswordException';
+
 export class PdfAttachmentUnreadableError extends Error {
-  constructor(readonly filename: string) {
-    super(`${filename} could not be read as a PDF.`);
+  constructor(
+    readonly filename: string,
+    readonly reason: PdfAttachmentFailureReason = 'corrupt',
+  ) {
+    super(`${filename} ${PDF_FAILURE_MESSAGES[reason]}`);
     this.name = 'PdfAttachmentUnreadableError';
   }
 }
@@ -249,6 +261,9 @@ export async function extractPdfAttachmentContent(
     return { text, pages, pageImages, pagesOmitted, scannedPagesOmitted };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
+    if (error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION) {
+      throw new PdfAttachmentUnreadableError(filename, 'encrypted');
+    }
     logger.warn({ err: error, filename }, '[pdf] attachment content extraction failed');
     throw new PdfAttachmentUnreadableError(filename);
   } finally {

@@ -35,12 +35,19 @@ export interface FileSearchMatch {
   preview: string;
 }
 
+export interface FileTextEdit {
+  path: string;
+  replacements: number;
+  sizeBytes: number;
+}
+
 export const FILESYSTEM_COMMANDS = [
   'file_list',
   'file_stat',
   'file_read_text',
   'file_read_bytes',
   'file_write_text',
+  'file_edit_text',
   'file_create_directory',
   'file_rename',
   'file_delete',

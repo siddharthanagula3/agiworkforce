@@ -17,6 +17,8 @@ use super::session::{
 /// Subdirectory under the CLI config directory where managed sessions live.
 pub const MANAGED_SESSION_DIR_NAME: &str = "managed_sessions";
 
+pub const CHECKPOINT_DIR_EXTENSION: &str = "checkpoints";
+
 /// User-facing references accepted by the managed session control helpers.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ManagedSessionReference {
@@ -501,6 +503,16 @@ fn fork_redacted_managed_session_in(
     )))
 }
 
+pub fn checkpoint_dir(session_path: &Path) -> PathBuf {
+    let mut name = session_path
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(".");
+    name.push(CHECKPOINT_DIR_EXTENSION);
+    session_path.with_file_name(name)
+}
+
 /// Delete a session file together with what is kept beside it: its writer
 /// lease and any copy set aside when two writers collided on it.
 fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference) -> Result<()> {
@@ -511,6 +523,11 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
             resolved.path.display()
         )
     })?;
+    let checkpoints = checkpoint_dir(&resolved.path);
+    if checkpoints.exists() {
+        fs::remove_dir_all(&checkpoints)
+            .with_context(|| format!("Failed to delete {}", checkpoints.display()))?;
+    }
     let Some(file_name) = resolved.path.file_name().and_then(|name| name.to_str()) else {
         return Ok(());
     };

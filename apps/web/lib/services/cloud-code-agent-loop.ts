@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { CLOUD_CODE_DEFAULT_TURN_STEPS, type ToolApprovalPolicy } from '@agiworkforce/types';
 import type {
   ChatRequest,
   ContentBlock,
@@ -23,9 +24,12 @@ import {
   CLOUD_CODE_LIST_FILES_TOOL,
   CLOUD_CODE_READ_FILE_TOOL,
   CLOUD_CODE_RUN_COMMAND_TOOL,
-  classifyCommandRisk,
+  cloudCodeActionLabel,
   cloudCodeAgentToolDefs,
+  cloudCodeApprovalModeLine,
+  cloudCodeApprovalSummary,
   executeCodeAsShellCommand,
+  gateCloudCodeTool,
 } from './cloud-code-agent-tools';
 import { EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
 import {
@@ -35,7 +39,7 @@ import {
   type ProviderUsageObservation,
 } from './managed-usage-accounting-service';
 
-export const CLOUD_CODE_AGENT_MAX_STEPS = 24;
+export const CLOUD_CODE_AGENT_MAX_STEPS = CLOUD_CODE_DEFAULT_TURN_STEPS;
 export const CLOUD_CODE_AGENT_MAX_DURATION_MS = CLOUD_CODE_TURN_BUDGET_MS;
 export const CLOUD_CODE_AGENT_MAX_TOOL_OUTPUT = 30_000;
 
@@ -81,9 +85,20 @@ export interface CloudCodeToolRunner {
 export interface CloudCodeApprovalRequest {
   stepIndex: number;
   toolUseId: string;
+  toolName: string;
+  args: Record<string, unknown>;
   command: string;
   reason: string;
 }
+
+export interface CloudCodePreApproved {
+  toolUseId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  approved: boolean;
+}
+
+const CLOUD_CODE_DEFAULT_APPROVAL_POLICY: ToolApprovalPolicy = 'auto_approve_read_only';
 
 export interface CloudCodeAgentEvent {
   type: 'assistant-text' | 'tool-start' | 'tool-end';
@@ -146,7 +161,8 @@ export interface RunCloudCodeAgentTurnInput {
   workspacePath?: string;
   projectInstructions?: ProjectInstruction[];
   priorMessages?: ProviderMessage[];
-  preApproved?: { toolUseId: string; command: string; approved: boolean };
+  preApproved?: CloudCodePreApproved;
+  approvalPolicy?: ToolApprovalPolicy;
   /**
    * Read between steps and before every tool call. A stop arrives as a row in
    * another request, not as an abort on this one's signal, so the loop asks
@@ -169,6 +185,10 @@ function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
   const lines = [resolvePromptText(CLOUD_CODE_AGENT_PROMPT_ID)];
   if (input.repositoryUrl) lines.push('', `Repository: ${input.repositoryUrl}`);
   if (input.workspacePath) lines.push(`Workspace: ${input.workspacePath}`);
+  lines.push(
+    '',
+    cloudCodeApprovalModeLine(input.approvalPolicy ?? CLOUD_CODE_DEFAULT_APPROVAL_POLICY),
+  );
   for (const instruction of input.projectInstructions ?? []) {
     lines.push('', `Project instructions from ${instruction.fileName}:`, instruction.content);
   }
@@ -324,6 +344,27 @@ function rawProviderFailure(error: unknown): string {
   return String(error);
 }
 
+async function runApprovedTool(
+  runner: CloudCodeToolRunner,
+  toolName: string,
+  args: Record<string, unknown>,
+  commandDeadlineMs: number,
+): Promise<CloudCodeToolOutcome> {
+  const path = typeof args['path'] === 'string' ? args['path'] : '';
+  switch (toolName) {
+    case CLOUD_CODE_RUN_COMMAND_TOOL:
+      return runner.runCommand(String(args['command'] ?? ''), commandDeadlineMs);
+    case CLOUD_CODE_READ_FILE_TOOL:
+      return path
+        ? runner.readFile(path)
+        : { output: 'read_file requires a "path".', isError: true };
+    case CLOUD_CODE_LIST_FILES_TOOL:
+      return runner.listFiles(path || undefined);
+    default:
+      return runner.runSharedExecutionTool(toolName, args);
+  }
+}
+
 export async function runCloudCodeAgentTurn(
   input: RunCloudCodeAgentTurnInput,
 ): Promise<CloudCodeAgentResult> {
@@ -345,20 +386,25 @@ export async function runCloudCodeAgentTurn(
   let finalMessage = '';
 
   if (input.preApproved) {
-    const { toolUseId, command, approved } = input.preApproved;
+    const { toolUseId, toolName, args, approved } = input.preApproved;
     const outcome: CloudCodeToolOutcome = approved
-      ? await input.runner.runCommand(command, commandDeadlineMs())
-      : { output: `The user declined to run: ${command}`, isError: true };
+      ? await runApprovedTool(input.runner, toolName, args, commandDeadlineMs())
+      : {
+          output: `The user declined to run: ${cloudCodeActionLabel(toolName, args)}`,
+          isError: true,
+        };
     messages.push({ role: 'user', content: [toolResultBlock(toolUseId, outcome)] });
     await input.onEvent?.({
       type: 'tool-end',
       stepIndex: stepsUsed,
-      toolName: CLOUD_CODE_RUN_COMMAND_TOOL,
-      toolArgs: { command },
+      toolName,
+      toolArgs: args,
       output: outcome.output,
       isError: outcome.isError,
     });
   }
+
+  const approvalPolicy = input.approvalPolicy ?? CLOUD_CODE_DEFAULT_APPROVAL_POLICY;
 
   const usage = createObservedProviderUsage();
 
@@ -490,13 +536,20 @@ export async function runCloudCodeAgentTurn(
 
       if (shellCommand && 'refused' in shellCommand) {
         outcome = { output: `Refused: ${shellCommand.refused}`, isError: true };
-      } else if (shellCommand) {
-        const { command } = shellCommand;
-        const verdict = classifyCommandRisk(command);
+      } else if (!shellCommand && !isExecutionTool(call.name)) {
+        outcome = {
+          output: `Tool "${call.name}" is not available in Code sessions.`,
+          isError: true,
+        };
+      } else {
+        const command = shellCommand ? shellCommand.command : null;
+        const gate = gateCloudCodeTool(approvalPolicy, call.name, command);
+        const toolName = command === null ? call.name : CLOUD_CODE_RUN_COMMAND_TOOL;
+        const args = command === null ? call.input : { command };
 
-        if (verdict.risk === 'denied') {
-          outcome = { output: `Refused: ${verdict.reason}`, isError: true };
-        } else if (verdict.risk === 'requires_approval') {
+        if (gate.action === 'refuse') {
+          outcome = { output: `Refused: ${gate.reason}`, isError: true };
+        } else if (gate.action === 'ask') {
           messages.push({ role: 'user', content: results });
           return {
             stopReason: 'awaiting_approval',
@@ -507,30 +560,17 @@ export async function runCloudCodeAgentTurn(
             pendingApproval: {
               stepIndex: stepsUsed,
               toolUseId: call.id,
-              command,
-              reason: verdict.reason,
+              toolName,
+              args,
+              command: cloudCodeApprovalSummary(toolName, args),
+              reason: gate.reason,
             },
           };
         } else {
-          outcome = await runToolStep(() => input.runner.runCommand(command, commandDeadlineMs()));
+          outcome = await runToolStep(() =>
+            runApprovedTool(input.runner, toolName, args, commandDeadlineMs()),
+          );
         }
-      } else if (call.name === CLOUD_CODE_READ_FILE_TOOL) {
-        const path = typeof call.input['path'] === 'string' ? call.input['path'] : '';
-        outcome = path
-          ? await runToolStep(() => input.runner.readFile(path))
-          : { output: 'read_file requires a "path".', isError: true };
-      } else if (call.name === CLOUD_CODE_LIST_FILES_TOOL) {
-        const path = typeof call.input['path'] === 'string' ? call.input['path'] : undefined;
-        outcome = await runToolStep(() => input.runner.listFiles(path));
-      } else if (isExecutionTool(call.name)) {
-        outcome = await runToolStep(() =>
-          input.runner.runSharedExecutionTool(call.name, call.input),
-        );
-      } else {
-        outcome = {
-          output: `Tool "${call.name}" is not available in Code sessions.`,
-          isError: true,
-        };
       }
 
       results.push(toolResultBlock(call.id, outcome));
