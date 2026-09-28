@@ -16,6 +16,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { formatObjective, SLO_CATALOGUE } from '@/lib/server/slo/catalogue';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'SLA',
@@ -140,7 +141,7 @@ export default function SlaPage() {
                 when a plan agreement says so.
               </strong>{' '}
               Local and BYOK modes have no AGI service in the request path, so there is nothing for
-              us to commit to there. Reviewed {LAST_REVIEWED}.
+              us to commit to there. Reviewed {LAST_REVIEWED}. <PolicyVersionsLink policy="sla" />
             </>
           }
           ctas={[

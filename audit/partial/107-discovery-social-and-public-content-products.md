@@ -49,13 +49,10 @@ nothing is left.
 
 - Done when: Public and third-party content shows who made it and where it came from (publisher, author, source, versions, "copied from").
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Publisher, author and source show on plugin and directory pages, but shared chats, forks and published artifacts carry no creator or "copied from" lineage, and plugin release history reads signature columns from pending migration 0289, so it is empty in production. | persistence |
-| desktop | partial | The in-app directory shows publisher and author; shared chats, forks and artifacts carry no creator or lineage (plugin public pages open in the system browser). | persistence |
-
-Code: `apps/web/app/plugins/[id]/page.tsx:176-178`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:254-257`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`, `apps/web/features/plugins/server/registry-source.ts:114-120`
 
 ## S107.15: Content reporting.
 
@@ -73,12 +70,11 @@ Code: `apps/web/app/plugins/[id]/page.tsx:176-178`, `packages/ui/ui/src/director
 
 - Done when: Third-party publishers can get their plugins or content in front of users: a submission path or a user-added publisher source, with the publisher named.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Users can add any publisher's plugin marketplace by repository URL, but publishers have no way to submit to the public directory; /partners says there is no program or application form (email only). | ui, handler |
-| desktop | partial | Same as web: in-app Add marketplace works; no publisher submission path. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Plugins install from any git URL and search one fixed registry, but the TUI "+ Add Marketplace" row is static text with no handler and there is no submission path. | handler |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:761-768`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1142-1147`, `apps/web/app/partners/page.tsx:57-59`, `apps/cli/src/tui/widgets/screen_renderers.rs:560-564`
+Code: `apps/cli/src/tui/widgets/screen_renderers.rs:560-564`, `apps/cli/src/lib.rs:2909-2912`, `apps/cli/src/marketplace.rs:138-140`

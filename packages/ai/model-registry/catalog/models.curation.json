@@ -325,6 +325,18 @@
       "verifiedBy": "official-xai-chat-completions-reference",
       "status": "CORRECTION",
       "notes": "Grok 4.6 is a reasoning model and rejects stop, frequency_penalty and presence_penalty. docs.x.ai/developers/rest-api-reference/inference/chat-completions, retrieved 2026-09-28, marks stop and frequency_penalty with 'Reasoning models don't support this parameter' and presence_penalty as unsupported for reasoning models, so its reasoning records them as unsupportedRequestParameters."
+    },
+    {
+      "date": "2026-09-28",
+      "verifiedBy": "official-anthropic-and-openai-pdf-guides",
+      "status": "CORRECTION",
+      "notes": "Claude and GPT chat models take PDFs natively. platform.claude.com/docs/en/build-with-claude/pdf-support, retrieved 2026-09-28: all active models support PDF processing, up to 600 pages per request, 100 when the request's context window is under 1M tokens, within a 32 MB request. developers.openai.com/api/docs/guides/pdf-files, retrieved 2026-09-28: models with vision capabilities, gpt-4o and later, take PDF file inputs under 50 MB per request. Their inputModalities now record pdf, and Claude Haiku 4.5, whose context window is 200K tokens, records 100 pages and 100 images per request."
+    },
+    {
+      "date": "2026-09-28",
+      "verifiedBy": "official-provider-image-guides",
+      "status": "ADDITION",
+      "notes": "Harness media input limits. platform.claude.com/docs/en/build-with-claude/vision, retrieved 2026-09-28: 600 images per API request, 100 for models with a 200k-token context window. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-28: up to 1,500 images per request. ai.google.dev/gemini-api/docs/image-understanding, retrieved 2026-09-28: 3,600 image files per request; ai.google.dev/gemini-api/docs/document-processing: PDFs up to 1,000 pages."
     }
   ],
   "providers": {
@@ -844,6 +856,7 @@
         "detailValues": ["low", "high", "original", "auto"]
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -957,6 +970,7 @@
         "detailValues": ["low", "high", "original", "auto"]
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -1069,6 +1083,7 @@
         "detailValues": ["low", "high", "original", "auto"]
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -1181,6 +1196,7 @@
         "detailValues": ["low", "high", "original", "auto"]
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -1238,6 +1254,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Reasoning", "Complex Agentic Work", "Coding", "Long Documents"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -1305,6 +1322,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -1377,6 +1395,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks", "Long Documents"],
+      "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -1442,6 +1461,9 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Low Latency", "High Volume", "Tool Use"],
+      "inputModalities": ["text", "image", "pdf"],
+      "imageInput": { "maxImagesPerRequest": 100 },
+      "documentInput": { "maxPagesPerRequest": 100 },
       "deprecation_date": null,
       "reasoning": {
         "capable": true,

@@ -15,6 +15,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Trust: a dated posture ledger',
@@ -295,7 +296,9 @@ export default function TrustPage() {
             <h2 className="agi-ds-h2" id="agi-trust-review-title">
               Last reviewed {LAST_REVIEWED}. Next review {NEXT_REVIEW}.
             </h2>
-            <Prose size="sm">Managed Cloud is in public alpha.</Prose>
+            <Prose size="sm">
+              Managed Cloud is in public alpha. <PolicyVersionsLink policy="trust" />
+            </Prose>
           </Stack>
         </Section>
 
@@ -381,6 +384,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: the record of the repositories, web pages, MCP servers and connector items an account reached. They are deleted with the account.',
+                      },
                       {
                         label: '2026-09-28',
                         value:

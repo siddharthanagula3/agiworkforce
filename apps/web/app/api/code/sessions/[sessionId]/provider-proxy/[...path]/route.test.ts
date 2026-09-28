@@ -894,7 +894,10 @@ describe('provider-proxy route', () => {
       const response = await POST(req, context);
 
       expect(response.status).toBe(402);
-      expect(mockDbQuery).not.toHaveBeenCalled();
+      expect(mockDbQuery).toHaveBeenCalledTimes(1);
+      expect(String(mockDbQuery.mock.calls[0]?.[0])).toContain(
+        'from public.organization_members membership',
+      );
       expect(fetchMock).not.toHaveBeenCalled();
 
       vi.unstubAllGlobals();

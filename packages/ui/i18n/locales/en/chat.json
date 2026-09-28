@@ -67,7 +67,13 @@
     "sharedFrom": "Shared from AGI",
     "sharedWithWorkspace": "Shared with your workspace",
     "renderFailed": "This artifact failed to render: {{error}}",
-    "svgUnavailable": "This SVG contained nothing that could be safely displayed."
+    "svgUnavailable": "This SVG contained nothing that could be safely displayed.",
+    "runtimeSignIn": "Sign in to use this app's AI and saved data.",
+    "runtimeSignInAction": "Sign in",
+    "runtimeConsentLabel": "AI permission",
+    "runtimeConsent": "This app wants to use AI with your account. Each request counts toward your plan's usage.",
+    "runtimeAllow": "Allow",
+    "runtimeDecline": "Don't allow"
   },
   "sidebar": {
     "activeConversation": "Active conversation",

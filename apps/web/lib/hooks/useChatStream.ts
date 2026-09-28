@@ -1,6 +1,7 @@
 'use client';
 
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -119,6 +120,10 @@ import {
 } from './turnStartProgress';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import {
+  ATTACHMENTS_TRUNCATED_HEADER,
+  readAttachmentTruncationHeader,
+} from '@/lib/chat-attachment-truncation-notice';
+import {
   PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
   readPastChatSourcesHeaderValue,
@@ -214,6 +219,7 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
+  officeFormat?: ChatOutputFormat;
   thinkingEnabled?: boolean;
   thinkingEffort?: Effort;
   styleMode?: string;
@@ -3434,6 +3440,7 @@ export function useChatStream(): UseChatStreamReturn {
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
         officeCreationEnabled: options.officeCreation,
+        officeOutputFormat: options.officeFormat,
         workMode: options.workMode,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
@@ -3796,6 +3803,7 @@ export function useChatStream(): UseChatStreamReturn {
                   : undefined,
               code_execution: options.codeExecution || undefined,
               office_creation: options.officeCreation || undefined,
+              office_format: (options.officeCreation && options.officeFormat) || undefined,
               skill_name: options.skillName,
               disabled_connector_ids: options.disabledConnectorIds?.length
                 ? options.disabledConnectorIds
@@ -3864,6 +3872,12 @@ export function useChatStream(): UseChatStreamReturn {
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
+          }
+          const truncatedAttachments = readAttachmentTruncationHeader(
+            response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
+          );
+          if (truncatedAttachments.length > 0) {
+            updateMessage(userMessageId, { truncatedAttachments }, conversationId);
           }
 
           const outcome = await consumeAssistantStream({

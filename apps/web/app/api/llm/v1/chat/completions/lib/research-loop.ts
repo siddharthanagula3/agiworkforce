@@ -56,11 +56,12 @@ import type {
   ThinkingBlock,
 } from '@agiworkforce/types';
 import { DEFAULT_RESEARCH_DELIVERABLE, RESEARCH_PAUSED_REASON } from '@agiworkforce/types';
+import { cloudAgentRunSteerProgressId } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
-import type { ToolLoopFailoverPlan } from './tool-loop';
+import type { ToolLoopFailoverPlan, ToolLoopSteerMessage } from './tool-loop';
 import {
   toolStatusEvent as loopToolStatusEvent,
   toolResultEvent,
@@ -312,6 +313,7 @@ export interface ResearchLoopOptions {
   toolApprovalPolicy?: ToolApprovalPolicy;
   connectorPermissions?: ConnectorToolPermissions;
   isPauseRequested?: () => Promise<boolean>;
+  takeSteerMessages?: () => Promise<readonly ToolLoopSteerMessage[]>;
   guidance?: string;
   sources?: ResearchSourceRequest;
   readConnectorSources?: (queries: readonly string[]) => Promise<readonly ResearchConnectorRead[]>;
@@ -1123,6 +1125,7 @@ function replanDirective(completedQueries: string[], pendingQueries: string[]): 
 }
 
 const MAX_RESUME_SNIPPET_CHARS = 300;
+const STEER_RECEIVED_SUMMARY = 'Read your message';
 
 function resumeContextNote(completedQueries: string[], sources: SourceAggregator): string {
   const searched =
@@ -1718,6 +1721,19 @@ export async function* runResearchLoop(
     }
   }
 
+  async function takeSteers(): Promise<readonly ToolLoopSteerMessage[]> {
+    if (!options.takeSteerMessages) return [];
+    try {
+      return await options.takeSteerMessages();
+    } catch (error) {
+      logger.warn(
+        { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
+        '[research-loop] steering messages could not be read; the run continues',
+      );
+      return [];
+    }
+  }
+
   async function* pauseIfRequested(): AsyncGenerator<Uint8Array, boolean> {
     if (!(await pauseWasRequested())) return false;
     await persistRun('interrupted', '', RESEARCH_PAUSED_REASON);
@@ -2252,7 +2268,7 @@ export async function* runResearchLoop(
     if (gathered) yield encoder.encode(gathered);
   }
 
-  async function* applyGuidance(guidance: string): AsyncGenerator<Uint8Array, void> {
+  async function* noteGuidance(guidance: string): AsyncGenerator<Uint8Array, void> {
     const stamp = new Date(now()).toISOString();
     const firstPending = plan.findIndex((step) => step.status === 'pending');
     plan.splice(firstPending === -1 ? plan.length : firstPending, 0, {
@@ -2265,9 +2281,13 @@ export async function* runResearchLoop(
     });
     messages.push({ role: 'user', content: guidanceNote(guidance) });
     yield planEvent();
+  }
+
+  async function* applyGuidance(guidance: string): AsyncGenerator<Uint8Array, void> {
+    yield* noteGuidance(guidance);
     if (!planningTurnEnabled || !continuingRun) return;
 
-    iteration = 1;
+    iteration = Math.max(iteration, 1);
     yield status('planning', 'Updating the plan to follow your guidance');
     try {
       const completedQueries = plan
@@ -2320,6 +2340,21 @@ export async function* runResearchLoop(
         },
         '[research-loop] guidance could not re-plan the run; the plan is unchanged',
       );
+    }
+  }
+
+  async function* applySteers(replan: boolean): AsyncGenerator<Uint8Array, void> {
+    for (const steer of await takeSteers()) {
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'progress-update',
+          progressId: cloudAgentRunSteerProgressId(steer.id),
+          summary: STEER_RECEIVED_SUMMARY,
+          detail: steer.text,
+          status: 'completed',
+        }),
+      );
+      yield* replan ? applyGuidance(steer.text) : noteGuidance(steer.text);
     }
   }
 
@@ -2461,6 +2496,8 @@ export async function* runResearchLoop(
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
       if (yield* pauseIfRequested()) return;
+      yield* applySteers(true);
+      if (yield* flushCancellationIfRequested()) return;
       iteration = planningTurnEnabled ? round + 1 : round;
       if (round === 1 && options.readConnectorSources) {
         if (yield* flushCancellationIfRequested()) return;
@@ -2698,6 +2735,7 @@ export async function* runResearchLoop(
       yield planEvent();
     }
 
+    yield* applySteers(false);
     // ── Synthesis turn (always runs when any gathering succeeded) ──
     iteration = Math.min(iteration + 1, maxIterations);
     // Any plan step still pending never ran (the gathering phase was cut short

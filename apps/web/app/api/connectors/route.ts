@@ -63,6 +63,10 @@ import {
   BANK_ACCOUNTS_LINK_PATH,
 } from '@/lib/connectors/plaid-config';
 import {
+  accountUrlConnector,
+  ACCOUNT_URL_CONNECTORS,
+} from '@/lib/connectors/account-url-connectors';
+import {
   SENSITIVE_DATA_CONNECTOR_IDS,
   sensitiveDataRegionRefusal,
 } from '@/lib/connectors/sensitive-data-connectors';
@@ -165,6 +169,9 @@ function getAvailableConnectorIds(): string[] {
   }
   if (describeConnectorSetup(BANK_ACCOUNTS_CONNECTOR_ID) === null) {
     available.add(BANK_ACCOUNTS_CONNECTOR_ID);
+  }
+  for (const { connectorId } of ACCOUNT_URL_CONNECTORS) {
+    if (describeConnectorSetup(connectorId) === null) available.add(connectorId);
   }
   if (
     isGitHubInstallationLinkingAvailable() &&
@@ -589,6 +596,27 @@ async function handleCreateConnector(request: NextRequest) {
     return NextResponse.json(
       { error: regionRefusal, message: regionRefusal, connectorId: body.connectorId },
       { status: 403 },
+    );
+  }
+
+  const byAccountUrl = accountUrlConnector(body.connectorId);
+  if (byAccountUrl) {
+    const setup = describeConnectorSetup(body.connectorId, byAccountUrl.name);
+    if (setup) {
+      return NextResponse.json(
+        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        { status: 501 },
+      );
+    }
+    const message = `Add ${byAccountUrl.name} in Settings, Connectors, Add custom connector, with your account's MCP server URL.`;
+    return NextResponse.json(
+      {
+        error: message,
+        message,
+        connectorId: body.connectorId,
+        accountUrlConnector: byAccountUrl.connectorId,
+      },
+      { status: 409 },
     );
   }
 

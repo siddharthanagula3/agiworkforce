@@ -45,6 +45,6 @@ describe('tab events cost nothing when nothing is being watched', () => {
       backgroundSource.indexOf('chrome.tabs.onActivated.addListener('),
       backgroundSource.indexOf('chrome.commands.onCommand.addListener('),
     );
-    expect(handler).toContain('if (!lease) return;');
+    expect(handler).toContain('if (!lease || lease.takeover) return;');
   });
 });

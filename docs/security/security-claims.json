@@ -20,6 +20,22 @@
       ]
     },
     {
+      "id": "escalation-never-falls-through-to-allow",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "An escalation never falls through to an allow.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts#resolveToolCallGate"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.test.ts",
+          "name": "never lets an escalation fall through to an allow, even on a run that can pause"
+        }
+      ]
+    },
+    {
       "id": "approval-mode-follows-account-policy",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",
@@ -32,6 +48,40 @@
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
           "name": "puts a turn that offers only a built-in tool into manual mode"
+        }
+      ]
+    },
+    {
+      "id": "memory-tools-offered-only-on-the-apps",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "The three Memory tools are offered only on the web, desktop and mobile apps, only while Memory is on and the chat is not temporary.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#applyMemoryToolCapability",
+        "apps/web/lib/services/memory-commands.ts#MEMORY_COMMAND_CLIENT_SURFACES"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "offers the memory tools only on the apps, only with Memory on and never in a temporary chat"
+        }
+      ]
+    },
+    {
+      "id": "model-saved-memory-passes-write-admission",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "A memory the model saves passes the same write admission and never-remember list as `/remember`.",
+      "implementation": [
+        "apps/web/lib/server/tools/memory-tools.ts#createMemoryCommandPorts",
+        "apps/web/lib/services/memory-commands.ts#memoryWriteAdmission",
+        "apps/web/lib/services/managed-memory-context-service.ts#memoryWriteAdmission"
+      ],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-memory-write-gate.mjs"
         }
       ]
     },

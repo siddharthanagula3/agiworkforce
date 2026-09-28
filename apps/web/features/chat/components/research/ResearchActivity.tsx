@@ -264,7 +264,9 @@ export function ResearchActivity({
   const [pauseRequested, setPauseRequested] = useState(false);
   const [steerOpen, setSteerOpen] = useState(false);
   const [steerDraft, setSteerDraft] = useState('');
-  const [steerQueued, setSteerQueued] = useState(false);
+  const guidanceRead = (research.steps ?? []).filter(isResearchGuidanceStep).length;
+  const [steerSentAfter, setSteerSentAfter] = useState<number | null>(null);
+  const steerQueued = steerSentAfter !== null && guidanceRead <= steerSentAfter;
   const [resumeGuidance, setResumeGuidance] = useState('');
 
   const requestPause = async () => {
@@ -276,13 +278,13 @@ export function ResearchActivity({
   const submitSteer = async () => {
     const guidance = steerDraft.trim();
     if (!guidance || !runAction || !messageId) return;
-    setSteerQueued(true);
+    setSteerSentAfter(guidanceRead);
     setSteerOpen(false);
     if (await runAction(messageId, { kind: 'steer', guidance })) {
       setSteerDraft('');
       return;
     }
-    setSteerQueued(false);
+    setSteerSentAfter(null);
     setSteerOpen(true);
   };
 
