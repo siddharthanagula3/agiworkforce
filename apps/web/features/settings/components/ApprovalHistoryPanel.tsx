@@ -20,10 +20,11 @@ function formatTimestamp(value: string): string {
 }
 
 export function ApprovalHistoryPanel() {
-  const [offset, setOffset] = useState(0);
-  const history = useApprovalHistory(PAGE_SIZE, offset);
+  const [cursors, setCursors] = useState<readonly (string | null)[]>([null]);
+  const history = useApprovalHistory(PAGE_SIZE, cursors.at(-1) ?? null);
   const approvals = history.data?.approvals ?? [];
-  const hasMore = history.data?.hasMore === true;
+  const nextCursor = history.data?.hasMore ? (history.data.nextCursor ?? null) : null;
+  const onFirstPage = cursors.length === 1;
 
   return (
     <section className="space-y-3" aria-labelledby="approval-history-heading">
@@ -60,7 +61,7 @@ export function ApprovalHistoryPanel() {
         </div>
       ) : approvals.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {offset === 0 ? 'No tool approvals yet.' : 'No older approvals.'}
+          {onFirstPage ? 'No tool approvals yet.' : 'No older approvals.'}
         </p>
       ) : (
         <ul
@@ -98,20 +99,22 @@ export function ApprovalHistoryPanel() {
         </ul>
       )}
 
-      {offset > 0 || hasMore ? (
+      {!onFirstPage || nextCursor ? (
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))}
-            disabled={offset === 0 || history.isFetching}
+            onClick={() => setCursors((stack) => (stack.length > 1 ? stack.slice(0, -1) : stack))}
+            disabled={onFirstPage || history.isFetching}
             className="inline-flex min-h-6 items-center text-xs font-medium text-primary hover:underline disabled:opacity-50"
           >
             Newer
           </button>
           <button
             type="button"
-            onClick={() => setOffset((value) => value + PAGE_SIZE)}
-            disabled={!hasMore || history.isFetching}
+            onClick={() => {
+              if (nextCursor) setCursors((stack) => [...stack, nextCursor]);
+            }}
+            disabled={!nextCursor || history.isFetching}
             className="inline-flex min-h-6 items-center text-xs font-medium text-primary hover:underline disabled:opacity-50"
           >
             Older

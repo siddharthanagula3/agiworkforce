@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
 import { ReportChart } from './ReportChart';
+import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 import {
@@ -21,6 +22,53 @@ const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
 const TABLE_COLUMN_CHARACTER_WIDTH = 8;
 const TABLE_COLUMN_PADDING = 16;
+const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
+const ESCAPE_SENTINEL_BASE = 0xe000;
+const ESCAPE_SENTINELS = /[\ue021-\ue07e]/g;
+const INLINE_MATH = /(?<![\\$])\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;
+
+function codeSpanEnd(text: string, open: number): number {
+  const close = text.indexOf('`', open + 1);
+  return close === -1 || text.slice(open + 1, close).includes('\n') ? -1 : close;
+}
+
+function inlineMathEnd(text: string, open: number): number {
+  if (text[open - 1] === '$' || text[open + 1] === '$') return -1;
+  const close = text.indexOf('$', open + 1);
+  if (close <= open + 1 || text.slice(open + 1, close).includes('\n')) return -1;
+  return text[close - 1] === '\\' || text[close + 1] === '$' ? -1 : close;
+}
+
+function protectEscapes(text: string): string {
+  let out = '';
+  let idx = 0;
+  while (idx < text.length) {
+    const ch = text[idx]!;
+    const next = text[idx + 1];
+    if (ch === '\\' && next !== undefined && ESCAPABLE_PUNCTUATION.test(next)) {
+      out += String.fromCharCode(ESCAPE_SENTINEL_BASE + next.charCodeAt(0));
+      idx += 2;
+      continue;
+    }
+    const spanEnd =
+      ch === '`' ? codeSpanEnd(text, idx) : ch === '$' ? inlineMathEnd(text, idx) : -1;
+    if (spanEnd !== -1) {
+      out += text.slice(idx, spanEnd + 1);
+      idx = spanEnd + 1;
+      continue;
+    }
+    out += ch;
+    idx += 1;
+  }
+  return out;
+}
+
+function restoreEscapes(text: string, keepBackslash = false): string {
+  return text.replace(ESCAPE_SENTINELS, (sentinel) => {
+    const literal = String.fromCharCode(sentinel.charCodeAt(0) - ESCAPE_SENTINEL_BASE);
+    return keepBackslash ? `\\${literal}` : literal;
+  });
+}
 
 function openAssistantLink(url: string): void {
   const kind = classifyExternalLink(url);
@@ -39,19 +87,19 @@ function openAssistantLink(url: string): void {
 
 export function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const mathRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g;
+  const mathRegex = new RegExp(INLINE_MATH);
   let lastIdx = 0;
   let keyCounter = 0;
   let match: RegExpExecArray | null;
 
   while ((match = mathRegex.exec(text)) !== null) {
     if (match.index > lastIdx) {
-      parts.push(text.slice(lastIdx, match.index));
+      parts.push(restoreEscapes(text.slice(lastIdx, match.index)));
     }
     parts.push(
       <MathBlock
         key={`${keyBase}-imath-${keyCounter++}`}
-        latex={match[1]!.trim()}
+        latex={restoreEscapes(match[1]!.trim(), true)}
         display={false}
       />,
     );
@@ -59,16 +107,17 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
   }
 
   if (lastIdx < text.length) {
-    parts.push(text.slice(lastIdx));
+    parts.push(restoreEscapes(text.slice(lastIdx)));
   }
   return parts;
 }
 
 export function renderInlineMarkdown(
-  text: string,
+  source: string,
   keyBase = 'inline',
   renderColors: ColorScheme = defaultColors,
 ): React.ReactNode[] {
+  const text = protectEscapes(source);
   const parts: React.ReactNode[] = [];
   const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
   let lastIdx = 0;
@@ -87,7 +136,7 @@ export function renderInlineMarkdown(
           key={`bold-${keyBase}-${inlineKey++}`}
           style={{ color: renderColors.textPrimary, fontWeight: '700' }}
         >
-          {inlineMatch[2]}
+          {restoreEscapes(inlineMatch[2])}
         </Text>,
       );
     } else if (inlineMatch[3]) {
@@ -96,7 +145,7 @@ export function renderInlineMarkdown(
           key={`italic-${keyBase}-${inlineKey++}`}
           style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
         >
-          {inlineMatch[3]}
+          {restoreEscapes(inlineMatch[3])}
         </Text>,
       );
     } else if (inlineMatch[4]) {
@@ -105,7 +154,7 @@ export function renderInlineMarkdown(
           key={`strike-${keyBase}-${inlineKey++}`}
           style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
         >
-          {inlineMatch[4]}
+          {restoreEscapes(inlineMatch[4])}
         </Text>,
       );
     } else if (inlineMatch[5]) {
@@ -119,12 +168,12 @@ export function renderInlineMarkdown(
             color: renderColors.textPrimary,
           }}
         >
-          {` ${inlineMatch[5]} `}
+          {` ${restoreEscapes(inlineMatch[5], true)} `}
         </Text>,
       );
     } else if (inlineMatch[6] && inlineMatch[7]) {
-      const linkText = inlineMatch[6];
-      const linkUrl = inlineMatch[7];
+      const linkText = restoreEscapes(inlineMatch[6]);
+      const linkUrl = restoreEscapes(inlineMatch[7]);
       parts.push(
         <Text
           key={`link-${keyBase}-${inlineKey++}`}
@@ -196,13 +245,13 @@ function renderTextSegment(
   renderColors: ColorScheme,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const lines = text.split('\n');
+  const lines = protectEscapes(text).split('\n');
   let idx = 0;
 
   while (idx < lines.length) {
     const line = lines[idx]!;
 
-    const headerMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headerMatch) {
       const level = headerMatch[1]!.length;
       const headerText = headerMatch[2]!;
@@ -455,6 +504,89 @@ function renderTextSegment(
   return nodes;
 }
 
+function renderCodeCard(
+  key: string,
+  codeContent: string,
+  fenceLanguage: string | undefined,
+  highlightCode: boolean,
+  renderColors: ColorScheme,
+): React.ReactElement {
+  const languageLabel = fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
+  const codeTokens: SyntaxToken[] = highlightCode
+    ? tokenizeCode(codeContent, fenceLanguage)
+    : [{ text: codeContent, type: 'plain' }];
+  return (
+    <View
+      key={key}
+      style={{
+        backgroundColor: renderColors.surfaceHover,
+        borderRadius: 8,
+        marginVertical: 6,
+        overflow: 'hidden',
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          paddingLeft: 12,
+          paddingRight: 8,
+          paddingTop: 8,
+          paddingBottom: 2,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: '500',
+            color: renderColors.textMuted,
+            flexShrink: 1,
+          }}
+          numberOfLines={1}
+        >
+          {languageLabel}
+        </Text>
+        <CodeBlockCopyButton code={codeContent} />
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={true}
+        scrollEventThrottle={16}
+        style={{
+          paddingTop: 2,
+          paddingBottom: 10,
+          paddingHorizontal: 12,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 13,
+            lineHeight: 19,
+            fontFamily: 'Menlo',
+            color: renderColors.textPrimary,
+          }}
+          selectable
+        >
+          {codeTokens.map((token, tokenIdx) =>
+            token.type === 'plain' ? (
+              token.text
+            ) : (
+              <Text
+                key={`${key}-tok-${tokenIdx}`}
+                style={{ color: syntaxTokenColor(token.type, renderColors) }}
+              >
+                {token.text}
+              </Text>
+            ),
+          )}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
+
 export interface MarkdownRenderOptions {
   /**
    * A streaming message re-renders on every token, and highlighting re-tokenises
@@ -500,80 +632,24 @@ export function renderMarkdownContent(
         lastIndex = match.index + match[0].length;
         continue;
       }
-      const languageLabel =
-        fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
-      const codeTokens: SyntaxToken[] = highlightCode
-        ? tokenizeCode(codeContent, fenceLanguage)
-        : [{ text: codeContent, type: 'plain' }];
+      const codeCard = renderCodeCard(
+        `code-${keyCounter++}`,
+        codeContent,
+        fenceLanguage,
+        highlightCode,
+        renderColors,
+      );
       elements.push(
-        <View
-          key={`code-${keyCounter++}`}
-          style={{
-            backgroundColor: renderColors.surfaceHover,
-            borderRadius: 8,
-            marginVertical: 6,
-            overflow: 'hidden',
-          }}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 8,
-              paddingLeft: 12,
-              paddingRight: 8,
-              paddingTop: 8,
-              paddingBottom: 2,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: '500',
-                color: renderColors.textMuted,
-                flexShrink: 1,
-              }}
-              numberOfLines={1}
-            >
-              {languageLabel}
-            </Text>
-            <CodeBlockCopyButton code={codeContent} />
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={true}
-            scrollEventThrottle={16}
-            style={{
-              paddingTop: 2,
-              paddingBottom: 10,
-              paddingHorizontal: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 19,
-                fontFamily: 'Menlo',
-                color: renderColors.textPrimary,
-              }}
-              selectable
-            >
-              {codeTokens.map((token, tokenIdx) =>
-                token.type === 'plain' ? (
-                  token.text
-                ) : (
-                  <Text
-                    key={`code-tok-${keyCounter}-${tokenIdx}`}
-                    style={{ color: syntaxTokenColor(token.type, renderColors) }}
-                  >
-                    {token.text}
-                  </Text>
-                ),
-              )}
-            </Text>
-          </ScrollView>
-        </View>,
+        fenceLanguage === 'mermaid' && highlightCode ? (
+          <MermaidDiagramBlock
+            key={`diagram-${keyCounter++}`}
+            source={codeContent}
+            colors={renderColors}
+            sourceBlock={codeCard}
+          />
+        ) : (
+          codeCard
+        ),
       );
     }
 
