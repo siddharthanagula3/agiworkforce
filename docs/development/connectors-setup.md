@@ -275,6 +275,31 @@ through `https://mcp.svc.cloud.microsoft/enterprise`, not mail or files
 - Variables: `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_ID`,
   `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_SECRET`.
 
+### BigQuery
+
+Google hosts a BigQuery MCP server at `https://bigquery.googleapis.com/mcp`
+(https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp). Its protected
+resource metadata, read on 2026-09-27, names `https://accounts.google.com/` as
+the authorization server and `https://www.googleapis.com/auth/bigquery` as the
+only supported scope, which views and manages all BigQuery data. The ceiling
+admits `bigquery.readonly` and `devstorage.read_only` only, so a `bigquery`
+descriptor pointing at that server cannot be granted the scope the server
+asks for. Admitting the manage scope is an owner decision, like `gmail.modify`
+and Box's `root_readwrite`.
+
+Snowflake and Databricks host MCP servers per account, so there is no single
+endpoint to pin; a user adds one by URL as a custom connector, with the OAuth
+client they registered at the vendor under Advanced settings. Neither page says
+whether the server publishes MCP authorization metadata, which the custom
+connector sign-in needs, so that part is unverified. Snowflake-managed
+servers (GA) live at
+`https://<account_url>/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`
+and use Snowflake OAuth
+(https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp).
+Databricks managed servers (Public Preview) live on the workspace host, for
+example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
+(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
+
 ### Notion
 
 - Self-service: `https://mcp.notion.com/mcp` accepts a client by metadata URL
