@@ -5010,21 +5010,37 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
-  const pendingResearchGuidanceRef = useRef(new Map<string, string>());
+  const steerResearchRun = useCallback(
+    async (id: string, guidance: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      if (!runId) {
+        toast.error('This research cannot take guidance now. Pause it and resume with your note.');
+        return false;
+      }
+      try {
+        await createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        }).steerRun(runId, guidance);
+        return true;
+      } catch (error) {
+        toast.error(
+          toUserMessage(error, 'Could not send your guidance. The research is still running.'),
+        );
+        return false;
+      }
+    },
+    [displayedMessages, getToken],
+  );
 
   const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
     async (id, action) => {
       if (action.kind === 'pause') return pauseResearchRun(id);
-      if (action.kind === 'steer') {
-        pendingResearchGuidanceRef.current.set(id, action.guidance);
-        if (await pauseResearchRun(id)) return true;
-        pendingResearchGuidanceRef.current.delete(id);
-        return false;
-      }
+      if (action.kind === 'steer') return steerResearchRun(id, action.guidance);
       await handleRetryResearch(id, action.guidance);
       return true;
     },
-    [handleRetryResearch, pauseResearchRun],
+    [handleRetryResearch, pauseResearchRun, steerResearchRun],
   );
 
   const {
@@ -5061,26 +5077,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       researchToolConnectorIds,
     ],
   );
-
-  useEffect(() => {
-    if (isStreaming) return;
-    for (const [id, guidance] of pendingResearchGuidanceRef.current) {
-      const phase = displayedMessages.find((m) => m.id === id)?.metadata?.research?.phase;
-      if (phase === 'paused') {
-        pendingResearchGuidanceRef.current.delete(id);
-        void handleRetryResearch(id, guidance);
-        return;
-      }
-      if (phase !== 'planning' && phase !== 'searching' && phase !== 'synthesizing') {
-        pendingResearchGuidanceRef.current.delete(id);
-        if (phase === 'complete') {
-          toast.info(
-            'The research finished before your guidance could be applied. Ask a follow-up to take it further.',
-          );
-        }
-      }
-    }
-  }, [displayedMessages, handleRetryResearch, isStreaming]);
 
   /**
    * Send a follow-up question about a saved research report as an ordinary
