@@ -39,14 +39,13 @@ Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/
 
 - Done when: The assistant can call a tool that searches the user's files (by name or content) and returns matching paths or snippets.
 - Wave: 3
-- Already works on: web, mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | search_files also runs in the desktop app over the account's files; searching a granted local folder as a device step (file_glob/file_grep) belongs to p-sessions. | handler |
 | chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
 
-Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`, `apps/web/lib/services/memory-commands.ts:32-32`
 
 ## S57.05: File-read tool.
 
