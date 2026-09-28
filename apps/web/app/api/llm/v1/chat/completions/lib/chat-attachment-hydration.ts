@@ -475,10 +475,13 @@ export async function hydrateChatAttachments(
             type: 'text',
             text: `[${filename} has no text layer; its ${content.pageImages.length === 1 ? 'page is' : `${content.pageImages.length} pages are`} attached as images]`,
           },
-          ...content.pageImages.map((image) => ({
-            type: 'image_url' as const,
-            image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
-          })),
+          ...content.pageImages.flatMap((image) => [
+            { type: 'text' as const, text: `[Page ${image.page}]` },
+            {
+              type: 'image_url' as const,
+              image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
+            },
+          ]),
         ];
         continue;
       }
