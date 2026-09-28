@@ -307,5 +307,33 @@
     "morningNamed": "सुप्रभात, {{name}}",
     "afternoonNamed": "नमस्कार, {{name}}",
     "eveningNamed": "शुभ संध्या, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} शॉर्टकट बंद है",
+    "shortcutsOff_other": "{{count}} शॉर्टकट बंद हैं",
+    "searchHistoryCleared_one": "इतिहास से {{count}} खोज हटाई गई",
+    "searchHistoryCleared_other": "इतिहास से {{count}} खोजें हटाई गईं",
+    "searches_one": "{{count}} खोज",
+    "searches_other": "{{count}} खोजें",
+    "searchesOf_one": "{{max}} में से {{count}} खोज",
+    "searchesOf_other": "{{max}} में से {{count}} खोजें",
+    "sources_one": "{{count}} स्रोत",
+    "sources_other": "{{count}} स्रोत",
+    "intermediateSteps_one": "{{count}} मध्यवर्ती चरण",
+    "intermediateSteps_other": "{{count}} मध्यवर्ती चरण",
+    "conversations_one": "{{count}} बातचीत",
+    "conversations_other": "{{count}} बातचीत",
+    "tools_one": "{{count}} टूल",
+    "tools_other": "{{count}} टूल",
+    "citations_one": "{{count}} उद्धरण",
+    "citations_other": "{{count}} उद्धरण",
+    "checkpoints_one": "{{count}} चेकपॉइंट",
+    "checkpoints_other": "{{count}} चेकपॉइंट",
+    "usedTools_one": "{{count}} टूल इस्तेमाल हुआ",
+    "usedTools_other": "{{count}} टूल इस्तेमाल हुए",
+    "runningTools_one": "{{count}} टूल चल रहा है",
+    "runningTools_other": "{{count}} टूल चल रहे हैं",
+    "runningToolsOf_one": "{{running}}/{{count}} टूल चल रहा है: {{name}}",
+    "runningToolsOf_other": "{{running}}/{{count}} टूल चल रहे हैं: {{name}}"
   }
 }

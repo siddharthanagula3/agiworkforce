@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUpdater } from '../../features/updates/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
 import { UpdateDialog } from '../../features/updates';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 export function UpdateSettings() {
+  const { plural } = useUiTranslation('common');
   const {
     status,
     updateInfo,
@@ -40,9 +42,22 @@ export function UpdateSettings() {
     const diffDays = Math.floor(diffHours / 24);
 
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    if (diffMins < 60) {
+      return plural('relative.minutesAgo', diffMins, {
+        one: '{{count}} minute ago',
+        other: '{{count}} minutes ago',
+      });
+    }
+    if (diffHours < 24) {
+      return plural('relative.hoursAgo', diffHours, {
+        one: '{{count}} hour ago',
+        other: '{{count}} hours ago',
+      });
+    }
+    return plural('relative.daysAgo', diffDays, {
+      one: '{{count}} day ago',
+      other: '{{count}} days ago',
+    });
   };
 
   const getStatusInfo = () => {

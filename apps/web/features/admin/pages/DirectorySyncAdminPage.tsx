@@ -1,6 +1,6 @@
 'use client';
 
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -77,6 +77,7 @@ export default function DirectorySyncAdminPage({
 }: {
   organizationId?: string;
 } = {}) {
+  const { plural } = useUiTranslation('settings');
   const orgQuery = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : '';
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -532,7 +533,10 @@ export default function DirectorySyncAdminPage({
                   <div>
                     <p className="text-sm text-foreground">{group.display_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {group.member_count} member{group.member_count === 1 ? '' : 's'}
+                      {plural('counts.members', group.member_count, {
+                        one: '{{count}} member',
+                        other: '{{count}} members',
+                      })}
                     </p>
                   </div>
                   <label className="flex flex-col gap-1 text-xs text-muted-foreground">

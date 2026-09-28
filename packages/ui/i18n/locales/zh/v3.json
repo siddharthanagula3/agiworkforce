@@ -166,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} 个文件",
+    "fileCount_other": "{{count}} 个文件",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -410,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "目前草图仅保留在本次会话中, 关闭应用后画板会被清空。"
+    "sessionOnlyNotice": "目前草图仅保留在本次会话中, 关闭应用后画板会被清空。",
+    "elementCount_one": "{{count}} 个元素",
+    "elementCount_other": "{{count}} 个元素"
   }
 }
