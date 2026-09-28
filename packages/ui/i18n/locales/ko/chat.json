@@ -332,5 +332,14 @@
     "runningTools_other": "도구 {{count}}개 실행 중",
     "runningToolsOf_one": "도구 실행 중 {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "도구 실행 중 {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "표",
+    "expand": "표 확대",
+    "copy": "표 복사",
+    "copied": "표를 복사했습니다",
+    "copyFailed": "복사하지 못했습니다. 클립보드를 사용할 수 없습니다",
+    "download": "CSV로 다운로드",
+    "close": "확대한 표 닫기"
   }
 }

@@ -384,5 +384,14 @@
     "runningToolsOf_few": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "جارٍ التشغيل {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "جدول",
+    "expand": "توسيع الجدول",
+    "copy": "نسخ الجدول",
+    "copied": "تم نسخ الجدول",
+    "copyFailed": "تعذّر النسخ، الحافظة غير متاحة",
+    "download": "تنزيل بتنسيق CSV",
+    "close": "إغلاق الجدول الموسّع"
   }
 }

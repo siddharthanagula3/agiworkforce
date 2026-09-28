@@ -332,5 +332,14 @@
     "runningTools_other": "Exécution de {{count}} outils",
     "runningToolsOf_one": "Exécution de {{running}}/{{count}} outil : {{name}}",
     "runningToolsOf_other": "Exécution de {{running}}/{{count}} outils : {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tableau",
+    "expand": "Agrandir le tableau",
+    "copy": "Copier le tableau",
+    "copied": "Tableau copié",
+    "copyFailed": "Échec de la copie, presse-papiers indisponible",
+    "download": "Télécharger en CSV",
+    "close": "Fermer le tableau agrandi"
   }
 }

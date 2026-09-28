@@ -332,5 +332,14 @@
     "runningTools_other": "{{count}} टूल चल रहे हैं",
     "runningToolsOf_one": "{{running}}/{{count}} टूल चल रहा है: {{name}}",
     "runningToolsOf_other": "{{running}}/{{count}} टूल चल रहे हैं: {{name}}"
+  },
+  "markdownTable": {
+    "label": "तालिका",
+    "expand": "तालिका बड़ी करें",
+    "copy": "तालिका कॉपी करें",
+    "copied": "तालिका कॉपी हो गई",
+    "copyFailed": "कॉपी नहीं हो सका, क्लिपबोर्ड उपलब्ध नहीं है",
+    "download": "CSV के रूप में डाउनलोड करें",
+    "close": "बड़ी तालिका बंद करें"
   }
 }
