@@ -172,6 +172,7 @@ import {
 import {
   formatUsageResetIn,
   getVideoAspectOptionsForModel,
+  getVideoDurationOptionsForModel,
   getVideoQualityOptionsForModel,
 } from '@agiworkforce/types';
 import {
@@ -1145,6 +1146,8 @@ const ChatComposerNewComponent = ({
   const [videoResolution, setVideoResolution] = useState<string>('720p');
   const [showVideoAspectMenu, setShowVideoAspectMenu] = useState(false);
   const [showVideoQualityMenu, setShowVideoQualityMenu] = useState(false);
+  const [videoDurationChoice, setVideoDurationChoice] = useState<number | null>(null);
+  const [showVideoDurationMenu, setShowVideoDurationMenu] = useState(false);
 
   const videoAspectOptions = useMemo(
     () => getVideoAspectOptionsForModel(videoModelId),
@@ -1161,11 +1164,14 @@ const ChatComposerNewComponent = ({
   const effectiveVideoQuality =
     videoQualityOptions.find((option) => option.id === videoResolution) ?? videoQualityOptions[0];
   const effectiveVideoResolution = effectiveVideoQuality?.id ?? '720p';
-  // Some output tuples narrow the model-wide duration list. The composer has
-  // no independent duration picker, so selecting one of those tuples must
-  // carry its required duration; otherwise the route applies its 4s default
-  // and rejects the visible 1080p/4K selection as an impossible combination.
-  const effectiveVideoDurationSecs = effectiveVideoQuality?.durationSecs?.[0];
+  const videoDurationOptions = useMemo(
+    () => getVideoDurationOptionsForModel(videoModelId, effectiveVideoQuality),
+    [videoModelId, effectiveVideoQuality],
+  );
+  const effectiveVideoDurationSecs =
+    videoDurationChoice !== null && videoDurationOptions.includes(videoDurationChoice)
+      ? videoDurationChoice
+      : videoDurationOptions[0];
 
   // Catalog entries are candidates, not proof of this deployment's keys and
   // durable storage. Once the server handshake resolves, keep each selection
@@ -1526,6 +1532,7 @@ const ChatComposerNewComponent = ({
   const imageOperationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoAspectTriggerRef = useRef<HTMLButtonElement>(null);
   const videoQualityTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoDurationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoModelTriggerRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -4860,6 +4867,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowVideoAspectMenu((p) => !p);
+                          setShowVideoDurationMenu(false);
                           setShowVideoQualityMenu(false);
                           setShowVideoModelMenu(false);
                         }}
@@ -4912,6 +4920,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowVideoQualityMenu((p) => !p);
+                          setShowVideoDurationMenu(false);
                           setShowVideoAspectMenu(false);
                           setShowVideoModelMenu(false);
                         }}
@@ -4951,6 +4960,54 @@ const ChatComposerNewComponent = ({
                               </span>
                             )}
                             {effectiveVideoResolution === opt.id && (
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+                  {!selectedVideoIsPromotional && videoDurationOptions.length > 1 && (
+                    <div className="relative">
+                      <button
+                        ref={videoDurationTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowVideoDurationMenu((p) => !p);
+                          setShowVideoQualityMenu(false);
+                          setShowVideoAspectMenu(false);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="Select video length"
+                      >
+                        {effectiveVideoDurationSecs}s
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={videoDurationTriggerRef}
+                        open={showVideoDurationMenu}
+                        label="Video length"
+                        onRequestClose={() => setShowVideoDurationMenu(false)}
+                        className="w-40 p-1"
+                      >
+                        {videoDurationOptions.map((secs) => (
+                          <button
+                            key={secs}
+                            type="button"
+                            onClick={() => {
+                              setVideoDurationChoice(secs);
+                              setShowVideoDurationMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoDurationSecs === secs
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{secs} seconds</span>
+                            {effectiveVideoDurationSecs === secs && (
                               <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
                           </button>
