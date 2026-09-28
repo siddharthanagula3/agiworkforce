@@ -131,14 +131,13 @@ Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
 - Done when: The user can review the approvals they chose to remember (always-allow/deny) and remove any of them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | partials/desktop-cli 6e04a0306: approval/requested carries alwaysAllowSaved, ReviewDecision takes always_allow, permissions/list and permissions/remove cover permissions.toml and rules/user-approved.rules (the TUI also offers Always Allow only where it saves). VS Code's Always allow button and Saved approvals list are p-sessions'. | ui |
 | chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
 
-Code: `apps/cli/src/app_server/developer_host.rs:3841-3841`, `apps/cli/src/app_server/developer_host.rs:4564-4564`, `apps/cli/src/app_server/surfaces.rs:993-993`, `apps/cli/src/app_server/surfaces.rs:1036-1036`
+Code: `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/computer-use/approvalPolicy.ts:209-247`
 
 ## S86.25: Revoke all optional grants.
 

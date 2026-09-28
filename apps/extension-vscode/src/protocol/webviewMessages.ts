@@ -218,7 +218,7 @@ const rateAnswer = z.object({
   }),
 });
 
-export const APPROVAL_DECISIONS = ['once', 'session', 'deny', 'abort'] as const;
+export const APPROVAL_DECISIONS = ['once', 'session', 'always', 'deny', 'abort'] as const;
 export const ApprovalDecisionSchema = z.enum(APPROVAL_DECISIONS);
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
 

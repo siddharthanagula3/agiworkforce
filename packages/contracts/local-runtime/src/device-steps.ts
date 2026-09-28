@@ -24,6 +24,9 @@ export const DEVICE_STEP_TOOLS = [
   'device_find_files',
   'device_search_text',
   'device_run_command',
+  'device_start_command',
+  'device_command_output',
+  'device_command_stop',
   'device_screenshot',
   'device_zoom',
   'device_move',
@@ -139,6 +142,27 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     scope: 'workspace',
     description:
       "Run one command inside a folder the user granted on their desktop. The user approves the exact command before it starts. Returns the command's output and exit code.",
+  },
+  device_start_command: {
+    command: 'shell_start',
+    capability: 'shell.execute',
+    scope: 'workspace',
+    description:
+      'Start a command that keeps running, such as a dev server, a watcher or an interactive program, in a terminal inside a folder the user granted on their desktop. The user approves the exact command before it starts. Returns a runId and the first output; the command keeps running after this step, so read it with device_command_output and end it with device_command_stop.',
+  },
+  device_command_output: {
+    command: 'shell_read',
+    capability: 'shell.execute',
+    scope: 'workspace',
+    description:
+      'Read what a command started with device_start_command printed since the last read, and whether it is still running. Pass input to type into it first; end the input with a newline to press Enter. The user approves typed input the way they approve a command.',
+  },
+  device_command_stop: {
+    command: 'shell_stop',
+    capability: 'shell.execute',
+    scope: 'workspace',
+    description:
+      'Stop a command started with device_start_command, and everything it started. Use it when the command is no longer needed.',
   },
   device_screenshot: {
     command: 'computer_screenshot',
@@ -486,6 +510,8 @@ export interface DeviceStepRequest {
   oldText?: string;
   newText?: string;
   replaceAll?: boolean;
+  runId?: string;
+  input?: string;
 }
 
 export class DeviceStepRefused extends Error {
@@ -756,13 +782,35 @@ export function planDeviceStep(
     );
   }
 
-  if (tool === 'device_run_command') {
+  if (tool === 'device_run_command' || tool === 'device_start_command') {
     const command = readBoundedString(args['command'], 2_000);
     if (!command) {
       throw new DeviceStepRefused('invalid-arguments', 'A command step needs a "command".');
     }
     const path = readBoundedString(args['path'], 1_000);
     return { tool, rootId, command, ...(path ? { path } : {}) };
+  }
+
+  if (tool === 'device_command_output' || tool === 'device_command_stop') {
+    const runId = readBoundedString(args['runId'], MAX_FIELD_LENGTH);
+    if (!runId) {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        `${tool} needs the "runId" device_start_command returned.`,
+      );
+    }
+    if (tool === 'device_command_stop') return { tool, rootId, runId };
+    const input = args['input'];
+    if (
+      input !== undefined &&
+      (typeof input !== 'string' || input.length > MAX_DEVICE_TYPE_LENGTH)
+    ) {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        `"input" must be text of at most ${MAX_DEVICE_TYPE_LENGTH} characters.`,
+      );
+    }
+    return { tool, rootId, runId, ...(typeof input === 'string' && input !== '' ? { input } : {}) };
   }
 
   if (tool === 'device_list_folder') {
@@ -845,6 +893,14 @@ export function describeDeviceStep(
       return `Search ${where} for "${request.query}"`;
     case 'device_run_command':
       return `Run ${request.command} in ${where}`;
+    case 'device_start_command':
+      return `Start ${request.command} in ${where}`;
+    case 'device_command_output':
+      return request.input
+        ? `Type into a running command in ${where}`
+        : `Read a running command's output in ${where}`;
+    case 'device_command_stop':
+      return `Stop a running command in ${where}`;
     case 'device_screenshot':
       return request.display === undefined
         ? 'Take a screenshot of your screen'
