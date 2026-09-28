@@ -318,6 +318,7 @@ export type AuditEventType =
   | 'encryption_key_provisioned'
   | 'encryption_key_revoked'
   | 'data_region_change_requested'
+  | 'data_region_change_cancelled'
   | 'data_region_changed'
   /**
    * A provider call was refused because it would have crossed the trust
@@ -471,6 +472,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'domain_retention_sweep_completed',
   'retention_policy_changed',
   'data_region_change_requested',
+  'data_region_change_cancelled',
   'data_region_changed',
   'privacy_request_submitted',
 ]);
@@ -818,6 +820,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'encryption_key_revoked':
       return 'encryption_key';
     case 'data_region_change_requested':
+    case 'data_region_change_cancelled':
     case 'data_region_changed':
       return 'data_region';
     case 'provider_egress_refused':
