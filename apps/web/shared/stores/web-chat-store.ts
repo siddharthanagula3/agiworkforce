@@ -85,6 +85,12 @@ export interface ComposerToggleState {
    * catalog owns the body.
    */
   selectedSkillName: string | null;
+  agiWorkScope: AgiWorkComposerScope | null;
+}
+
+export interface AgiWorkComposerScope {
+  constraints: string;
+  deliverable: string;
 }
 
 /**
@@ -104,6 +110,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   imageMode: false,
   videoMode: false,
   selectedSkillName: null,
+  agiWorkScope: null,
 });
 
 /**

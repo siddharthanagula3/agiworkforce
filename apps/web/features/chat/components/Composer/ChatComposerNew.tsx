@@ -918,6 +918,7 @@ const ChatComposerNewComponent = ({
     imageMode,
     videoMode,
     selectedSkillName,
+    agiWorkScope,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
@@ -938,6 +939,14 @@ const ChatComposerNewComponent = ({
     (name: string | null) => setComposerToggles({ selectedSkillName: name }),
     [setComposerToggles],
   );
+
+  useEffect(() => {
+    if (!agiWorkScope) return;
+    setAgiWorkConstraints(agiWorkScope.constraints);
+    setAgiWorkDeliverable(agiWorkScope.deliverable);
+    setAgiWorkFieldsOpen(Boolean(agiWorkScope.constraints || agiWorkScope.deliverable));
+    setComposerToggles({ agiWorkScope: null });
+  }, [agiWorkScope, setComposerToggles]);
 
   // Per-conversation connector opt-out (persisted, unlike the toggles above --
   // see `disabledConnectorIdsByConversation` in the chat store).
