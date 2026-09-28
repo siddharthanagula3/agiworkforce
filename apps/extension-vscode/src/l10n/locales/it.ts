@@ -570,6 +570,25 @@ const it = {
   'cloudSteer.waitingSection': 'I tuoi messaggi',
   'cloudSteer.failed': 'non è stato possibile inviare il tuo messaggio',
   'cloudSteer.tooLong': 'Un messaggio può contenere al massimo {count} caratteri.',
+  'savedApprovals.title': 'Approvazioni salvate',
+  'savedApprovals.placeholder': 'Regole che la CLI di AGI applica in ogni sessione',
+  'savedApprovals.empty':
+    "Nessuna approvazione salvata finora. Scegli Consenti sempre su un'approvazione per salvarne una.",
+  'savedApprovals.allowed': 'Sempre consentito',
+  'savedApprovals.denied': 'Sempre negato',
+  'savedApprovals.kindCommand': 'Comando shell',
+  'savedApprovals.kindFile': 'Modifica di file',
+  'savedApprovals.kindPolicy': 'Regola di criterio dei comandi',
+  'savedApprovals.removeTitle': 'Rimuovere questa approvazione salvata?',
+  'savedApprovals.removeAllowed':
+    'AGI chiederà di nuovo la prossima volta che vorrà fare questo: {label}',
+  'savedApprovals.removeDenied':
+    'AGI potrà chiedere di nuovo di fare questo invece di essere rifiutato: {label}',
+  'savedApprovals.noun': 'approvazioni salvate',
+  'webview.alwaysAllow': 'Consenti sempre',
+  'webview.alwaysAllowHint':
+    'Salva una regola così AGI smette di chiederlo in ogni sessione. Gestiscila in Approvazioni salvate.',
+  'webview.alwaysAllowedOutcome': 'Sempre consentito. AGI non lo chiederà più.',
 };
 
 export default it;

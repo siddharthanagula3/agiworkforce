@@ -712,6 +712,24 @@ const ar = {
   'cloudSteer.waitingSection': 'رسائلك',
   'cloudSteer.failed': 'تعذر إرسال رسالتك',
   'cloudSteer.tooLong': 'يمكن أن تتكون الرسالة من {count} حرفًا كحد أقصى.',
+  'savedApprovals.title': 'الموافقات المحفوظة',
+  'savedApprovals.placeholder': 'القواعد التي يطبقها AGI CLI في كل جلسة',
+  'savedApprovals.empty':
+    'لا توجد موافقات محفوظة بعد. اختر السماح دائمًا في طلب موافقة لحفظ واحدة.',
+  'savedApprovals.allowed': 'مسموح دائمًا',
+  'savedApprovals.denied': 'مرفوض دائمًا',
+  'savedApprovals.kindCommand': 'أمر طرفية',
+  'savedApprovals.kindFile': 'تعديل ملف',
+  'savedApprovals.kindPolicy': 'قاعدة سياسة الأوامر',
+  'savedApprovals.removeTitle': 'هل تريد إزالة هذه الموافقة المحفوظة؟',
+  'savedApprovals.removeAllowed':
+    'سيسأل AGI مرة أخرى في المرة القادمة التي يريد فيها فعل هذا: {label}',
+  'savedApprovals.removeDenied': 'قد يطلب AGI فعل هذا مرة أخرى بدلًا من رفضه: {label}',
+  'savedApprovals.noun': 'الموافقات المحفوظة',
+  'webview.alwaysAllow': 'السماح دائمًا',
+  'webview.alwaysAllowHint':
+    'يحفظ قاعدة حتى يتوقف AGI عن السؤال عن هذا في كل الجلسات. يمكنك إدارتها من الموافقات المحفوظة.',
+  'webview.alwaysAllowedOutcome': 'مسموح دائمًا. لن يسأل AGI عن هذا مرة أخرى.',
 };
 
 export default ar;

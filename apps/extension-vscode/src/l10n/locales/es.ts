@@ -572,6 +572,25 @@ const es = {
   'cloudSteer.waitingSection': 'Sus mensajes',
   'cloudSteer.failed': 'no se pudo enviar su mensaje',
   'cloudSteer.tooLong': 'Un mensaje puede tener como máximo {count} caracteres.',
+  'savedApprovals.title': 'Aprobaciones guardadas',
+  'savedApprovals.placeholder': 'Reglas que la CLI de AGI aplica en todas las sesiones',
+  'savedApprovals.empty':
+    'Aún no hay aprobaciones guardadas. Elija Permitir siempre en una aprobación para guardar una.',
+  'savedApprovals.allowed': 'Siempre permitido',
+  'savedApprovals.denied': 'Siempre denegado',
+  'savedApprovals.kindCommand': 'Comando de shell',
+  'savedApprovals.kindFile': 'Edición de archivo',
+  'savedApprovals.kindPolicy': 'Regla de política de comandos',
+  'savedApprovals.removeTitle': '¿Quitar esta aprobación guardada?',
+  'savedApprovals.removeAllowed':
+    'AGI volverá a preguntar la próxima vez que quiera hacer esto: {label}',
+  'savedApprovals.removeDenied':
+    'AGI podrá volver a pedir hacer esto en lugar de recibir un rechazo: {label}',
+  'savedApprovals.noun': 'aprobaciones guardadas',
+  'webview.alwaysAllow': 'Permitir siempre',
+  'webview.alwaysAllowHint':
+    'Guarda una regla para que AGI deje de preguntar por esto en todas las sesiones. Adminístrela en Aprobaciones guardadas.',
+  'webview.alwaysAllowedOutcome': 'Siempre permitido. AGI no volverá a preguntar por esto.',
 };
 
 export default es;

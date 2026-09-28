@@ -632,6 +632,24 @@ const ru = {
   'cloudSteer.waitingSection': 'Ваши сообщения',
   'cloudSteer.failed': 'не удалось отправить ваше сообщение',
   'cloudSteer.tooLong': 'Сообщение может содержать не более {count} символов.',
+  'savedApprovals.title': 'Сохранённые подтверждения',
+  'savedApprovals.placeholder': 'Правила, которые AGI CLI применяет во всех сессиях',
+  'savedApprovals.empty':
+    'Сохранённых подтверждений пока нет. Выберите «Всегда разрешать» в запросе, чтобы сохранить правило.',
+  'savedApprovals.allowed': 'Всегда разрешено',
+  'savedApprovals.denied': 'Всегда запрещено',
+  'savedApprovals.kindCommand': 'Команда оболочки',
+  'savedApprovals.kindFile': 'Изменение файла',
+  'savedApprovals.kindPolicy': 'Правило политики команд',
+  'savedApprovals.removeTitle': 'Удалить это сохранённое подтверждение?',
+  'savedApprovals.removeAllowed':
+    'AGI снова спросит, когда в следующий раз захочет сделать это: {label}',
+  'savedApprovals.removeDenied': 'AGI сможет снова попросить сделать это вместо отказа: {label}',
+  'savedApprovals.noun': 'сохранённые подтверждения',
+  'webview.alwaysAllow': 'Всегда разрешать',
+  'webview.alwaysAllowHint':
+    'Сохраняет правило, чтобы AGI больше не спрашивал об этом ни в одной сессии. Управлять им можно в разделе «Сохранённые подтверждения».',
+  'webview.alwaysAllowedOutcome': 'Всегда разрешено. AGI больше не будет спрашивать об этом.',
 };
 
 export default ru;

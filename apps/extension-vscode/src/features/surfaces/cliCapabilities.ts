@@ -32,6 +32,8 @@ export const CLI_CAPABILITY_METHODS = {
   accountLogin: 'startAccountLogin',
   accountLoginWait: 'waitForAccountLogin',
   accountToken: 'accountToken',
+  savedPermissions: 'listSavedPermissions',
+  savedPermissionsRemove: 'removeSavedPermission',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
@@ -48,6 +50,7 @@ export type CliFamily = keyof Pick<
   | 'account'
   | 'installs'
   | 'mcpTools'
+  | 'savedPermissions'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -78,6 +81,8 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   accountLogin: 'account',
   accountLoginWait: 'account',
   accountToken: 'account',
+  savedPermissions: 'savedPermissions',
+  savedPermissionsRemove: 'savedPermissions',
 };
 
 const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
@@ -91,6 +96,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   account: 'account sign-in',
   installs: 'installing and removing from VS Code',
   mcpTools: 'MCP server tool lists',
+  savedPermissions: 'saved approvals',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

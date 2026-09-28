@@ -467,6 +467,24 @@ const hi = {
   'cloudSteer.waitingSection': 'आपके संदेश',
   'cloudSteer.failed': 'आपका संदेश नहीं भेजा जा सका',
   'cloudSteer.tooLong': 'एक संदेश में अधिकतम {count} वर्ण हो सकते हैं।',
+  'savedApprovals.title': 'सहेजी गई स्वीकृतियाँ',
+  'savedApprovals.placeholder': 'वे नियम जिन्हें AGI CLI हर सत्र में लागू करता है',
+  'savedApprovals.empty':
+    'अभी कोई स्वीकृति सहेजी नहीं गई है। सहेजने के लिए किसी स्वीकृति पर हमेशा अनुमति दें चुनें।',
+  'savedApprovals.allowed': 'हमेशा अनुमत',
+  'savedApprovals.denied': 'हमेशा अस्वीकृत',
+  'savedApprovals.kindCommand': 'शेल कमांड',
+  'savedApprovals.kindFile': 'फ़ाइल संपादन',
+  'savedApprovals.kindPolicy': 'कमांड नीति नियम',
+  'savedApprovals.removeTitle': 'यह सहेजी गई स्वीकृति हटाएँ?',
+  'savedApprovals.removeAllowed': 'अगली बार यह करना चाहने पर AGI फिर से पूछेगा: {label}',
+  'savedApprovals.removeDenied':
+    'अस्वीकार होने के बजाय AGI इसे करने के लिए फिर से पूछ सकता है: {label}',
+  'savedApprovals.noun': 'सहेजी गई स्वीकृतियाँ',
+  'webview.alwaysAllow': 'हमेशा अनुमति दें',
+  'webview.alwaysAllowHint':
+    'एक नियम सहेजता है ताकि AGI किसी भी सत्र में इसके लिए न पूछे। इसे सहेजी गई स्वीकृतियाँ में प्रबंधित करें।',
+  'webview.alwaysAllowedOutcome': 'हमेशा अनुमत। AGI इसके लिए फिर नहीं पूछेगा।',
 };
 
 export default hi;

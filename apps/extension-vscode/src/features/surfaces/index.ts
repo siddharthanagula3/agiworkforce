@@ -42,7 +42,13 @@ export {
 } from './surfaceMenu';
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
-export { manageHooks, manageMcpServers, managePlugins, manageSkills } from './capabilityManagement';
+export {
+  manageHooks,
+  manageMcpServers,
+  managePlugins,
+  manageSavedApprovals,
+  manageSkills,
+} from './capabilityManagement';
 export type {
   SessionListSource,
   SessionOrigin,

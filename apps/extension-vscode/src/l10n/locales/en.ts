@@ -459,6 +459,23 @@ const en = {
   'cloudSteer.waitingSection': 'Your messages',
   'cloudSteer.failed': 'your message could not be sent',
   'cloudSteer.tooLong': 'A message can be at most {count} characters.',
+  'savedApprovals.title': 'Saved approvals',
+  'savedApprovals.placeholder': 'Rules the AGI CLI applies in every session',
+  'savedApprovals.empty':
+    'No approvals are saved yet. Choose Always allow on an approval to save one.',
+  'savedApprovals.allowed': 'Always allowed',
+  'savedApprovals.denied': 'Always denied',
+  'savedApprovals.kindCommand': 'Shell command',
+  'savedApprovals.kindFile': 'File edit',
+  'savedApprovals.kindPolicy': 'Command policy rule',
+  'savedApprovals.removeTitle': 'Remove this saved approval?',
+  'savedApprovals.removeAllowed': 'AGI asks again the next time it wants to do this: {label}',
+  'savedApprovals.removeDenied': 'AGI may ask to do this again instead of being refused: {label}',
+  'savedApprovals.noun': 'saved approvals',
+  'webview.alwaysAllow': 'Always allow',
+  'webview.alwaysAllowHint':
+    'Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.',
+  'webview.alwaysAllowedOutcome': 'Always allowed. AGI will not ask again for this.',
 };
 
 export default en;

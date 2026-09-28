@@ -412,6 +412,24 @@ const ja = {
   'cloudSteer.waitingSection': 'あなたのメッセージ',
   'cloudSteer.failed': 'メッセージを送信できませんでした',
   'cloudSteer.tooLong': 'メッセージは最大 {count} 文字です。',
+  'savedApprovals.title': '保存済みの承認',
+  'savedApprovals.placeholder': 'AGI CLI がすべてのセッションで適用するルール',
+  'savedApprovals.empty':
+    '保存済みの承認はまだありません。承認で「常に許可」を選ぶと保存されます。',
+  'savedApprovals.allowed': '常に許可',
+  'savedApprovals.denied': '常に拒否',
+  'savedApprovals.kindCommand': 'シェルコマンド',
+  'savedApprovals.kindFile': 'ファイルの編集',
+  'savedApprovals.kindPolicy': 'コマンドポリシーのルール',
+  'savedApprovals.removeTitle': 'この保存済みの承認を削除しますか？',
+  'savedApprovals.removeAllowed': '次にこれを行おうとするとき、AGI は再び確認します: {label}',
+  'savedApprovals.removeDenied':
+    '拒否される代わりに、AGI が再びこれの許可を求めることがあります: {label}',
+  'savedApprovals.noun': '保存済みの承認',
+  'webview.alwaysAllow': '常に許可',
+  'webview.alwaysAllowHint':
+    'ルールを保存し、どのセッションでも AGI がこれを確認しないようにします。「保存済みの承認」で管理できます。',
+  'webview.alwaysAllowedOutcome': '常に許可しました。AGI はこれを再び確認しません。',
 };
 
 export default ja;
