@@ -5,9 +5,15 @@ import type {
   CancellationSemantics,
   CloudCodeAgentStep,
   CloudCodeSession,
+  CloudCodeTurnMode,
   ProviderMessage,
 } from '@agiworkforce/types';
-import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
+  SLOT_REGISTRY,
+  isCloudCodeTurnMode,
+  normalizeModelId,
+} from '@agiworkforce/types';
 import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
 import {
   MANAGED_CLOUD_E2B_TENANT_ID,
@@ -476,6 +482,7 @@ export interface StartCloudCodeAgentTurnInput {
   idempotencyKey: string;
   signal: AbortSignal;
   maxSteps?: number | null;
+  mode?: CloudCodeTurnMode;
 }
 
 export interface CloudCodeAgentTurnOutcome {
@@ -611,16 +618,20 @@ export interface PersistedAgentTurnExecution {
 
 const MIN_REMAINING_STEPS = 1;
 
-async function readTurnStepBound(
+async function readTurnControls(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   turnId: string,
-): Promise<number | null> {
-  const rows = await db.query<{ max_steps: number | null }>(
-    'select max_steps from cloud_code_agent_turns where id = $1 and user_id = $2 limit 1',
+): Promise<{ stepBound: number | null; mode: CloudCodeTurnMode }> {
+  const rows = await db.query<{ max_steps: number | null; mode: string | null }>(
+    'select max_steps, mode from cloud_code_agent_turns where id = $1 and user_id = $2 limit 1',
     [turnId, owner.userId],
   );
-  return rows[0]?.max_steps ?? null;
+  const mode = rows[0]?.mode;
+  return {
+    stepBound: rows[0]?.max_steps ?? null,
+    mode: isCloudCodeTurnMode(mode) ? mode : CLOUD_CODE_DEFAULT_TURN_MODE,
+  };
 }
 
 export async function executePersistedAgentTurn(
@@ -657,7 +668,7 @@ async function runClaimedAgentTurn(
           cloudCodeSessionBaseBranch(await getCloudCodeSession(db, owner, sessionId)),
         );
   const approvalPolicy = await loadToolApprovalPolicy(db, owner.userId);
-  const stepBound = await readTurnStepBound(db, owner, turnId);
+  const { stepBound, mode } = await readTurnControls(db, owner, turnId);
 
   let reservation: ManagedUsageRequestReservation;
   try {
@@ -805,6 +816,7 @@ async function runClaimedAgentTurn(
         ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
         ...(input.preApproved ? { preApproved: input.preApproved } : {}),
         approvalPolicy,
+        mode,
         ...(stepBound !== null
           ? { maxSteps: Math.max(MIN_REMAINING_STEPS, stepBound - initialStepIndex) }
           : {}),
@@ -1059,14 +1071,19 @@ export async function prepareCloudCodeAgentTurn(
   if (session.state !== 'ready' && session.state !== 'running') {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
+  if (input.mode === 'plan' && selectHarnessRunner(session.runtimeId)) {
+    throw new CloudCodeConflictError(
+      'Plan mode is not available for this runtime. Choose an editing mode instead.',
+    );
+  }
 
   const provider = resolveProviderFromModel(model);
 
   const turnRows = await db.query<{ id: string }>(
     `insert into cloud_code_agent_turns
        (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state,
-        max_steps)
-     values ($1, $2, $3, $4, $5, $6, $7, 'running', $8)
+        max_steps, mode)
+     values ($1, $2, $3, $4, $5, $6, $7, 'running', $8, $9)
      on conflict (user_id, idempotency_key) do update set updated_at = now()
      returning id`,
     [
@@ -1078,6 +1095,7 @@ export async function prepareCloudCodeAgentTurn(
       model,
       provider,
       input.maxSteps ?? null,
+      input.mode ?? CLOUD_CODE_DEFAULT_TURN_MODE,
     ],
   );
   const turnId = turnRows[0]?.id;
