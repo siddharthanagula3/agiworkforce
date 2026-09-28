@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { headingAnchor } from '@/lib/support/doc-topics';
 import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
 
 type ArticleProps = { params: Promise<{ slug: string }> };
@@ -56,7 +57,11 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
             <Stack gap="loose">
               {article.sections.map((section) => (
                 <div key={section.id} className="space-y-4">
-                  {section.heading ? <h2 className="agi-ds-h2">{section.heading}</h2> : null}
+                  {section.heading ? (
+                    <h2 className="agi-ds-h2 scroll-mt-24" id={headingAnchor(section.heading)}>
+                      {section.heading}
+                    </h2>
+                  ) : null}
                   <ReactMarkdown
                     skipHtml
                     disallowedElements={['img']}

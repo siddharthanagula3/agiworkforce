@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
@@ -2613,7 +2614,11 @@ export async function processRequest(
 
   let requestId: string;
   try {
-    requestId = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
+    const idempotencyHeader = request.headers.get('idempotency-key');
+    requestId =
+      idempotencyHeader === null && resolveAuthenticatedSurface(request, auth) === 'api'
+        ? `agi.chat.api.${randomUUID()}`
+        : parseManagedUsageIdempotencyKey(idempotencyHeader);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return { ok: false, response: managedUsageErrorResponse(error, subscription) };
