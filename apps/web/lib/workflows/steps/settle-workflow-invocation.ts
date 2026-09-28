@@ -147,6 +147,10 @@ async function settleBilling(
   const provider = serving.provider;
   const model = serving.chatRequest.model;
 
+  const attempt =
+    outcome === 'completed' || outcome === 'failed' || outcome === 'cancelled'
+      ? { outcome, errorClass }
+      : null;
   if (billing.kind === 'managed') {
     const { kind: _kind, ...reservation } = billing;
     const managedUsageDb = createClaimedUserScopedDb(db, {
@@ -160,10 +164,7 @@ async function settleBilling(
       usage,
       reason: `cloud_agent_workflow_${outcome}`,
       cancelled: outcome === 'cancelled',
-      attempt:
-        outcome === 'completed' || outcome === 'failed' || outcome === 'cancelled'
-          ? { outcome, errorClass }
-          : null,
+      attempt,
     });
     return finalization.actualCostCents;
   }
@@ -174,6 +175,7 @@ async function settleBilling(
     // resume reserves again. Settling it as anything but a normal completion
     // would leave free budget reserved against a turn that is no longer running.
     outcome: outcome === 'awaiting_input' || outcome === 'paused' ? 'completed' : outcome,
+    attempt,
     provider,
     model,
     cost: observedTurnCost(usage, { provider, model }),

@@ -202,6 +202,7 @@ async function refundFailedReservation(
     await settleFreeTrialRequest({
       reservation: processed.freeTrial,
       outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass },
     });
     return;
   }

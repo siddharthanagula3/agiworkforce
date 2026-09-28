@@ -26,6 +26,7 @@ import {
   type LucideIcon,
   LifeBuoy,
   Gift,
+  MessagesSquare,
 } from 'lucide-react';
 
 export type SettingsNavKey =
@@ -61,6 +62,7 @@ export type SettingsNavKey =
   | 'reflect'
   | 'time-focus'
   | 'skills'
+  | 'slack'
   | 'help'
   | 'referrals'
   // Conversation-data sections. Web registers these as settings sections and
@@ -193,6 +195,7 @@ const SETTINGS_NAV_KEY_SET: ReadonlySet<string> = new Set<SettingsNavKey>([
   'reflect',
   'time-focus',
   'skills',
+  'slack',
   'help',
   'referrals',
   'archived',
@@ -315,6 +318,12 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'skills', label: 'Skills', icon: BookOpen },
       { key: 'connectors', label: 'Connectors', icon: Plug },
       { key: 'plugins', label: 'Plugins', icon: Puzzle },
+      {
+        key: 'slack',
+        label: 'Slack',
+        icon: MessagesSquare,
+        keywords: ['slack app', 'bot', 'direct message', 'mention', 'channel'],
+      },
     ],
   },
 ];
