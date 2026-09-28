@@ -673,6 +673,8 @@ const ru = {
   'mcpDetails.expired':
     'Эти сведения больше не хранятся. Выполните AGI Workforce: Show MCP Servers и выберите «Сведения о сервере», чтобы снова проверить {name}.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'Веб-поиск недоступен в этом сеансе. {reason} Отключите Browse the web, чтобы отправить без него.',
 };
 
 export default ru;

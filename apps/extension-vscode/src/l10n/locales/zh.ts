@@ -392,6 +392,8 @@ const zh = {
   'mcpDetails.expired':
     '这些详情已不再保留。请运行 AGI Workforce: Show MCP Servers 并选择“服务器详情”，以再次检查 {name}。',
   'mcpDetails.field': '{label}：{value}',
+  'chatNotice.webSearchDenied':
+    '此会话无法使用网页搜索。{reason} 如需不搜索直接发送，请关闭 Browse the web。',
 };
 
 export default zh;

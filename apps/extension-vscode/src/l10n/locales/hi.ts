@@ -508,6 +508,8 @@ const hi = {
   'mcpDetails.expired':
     'ये विवरण अब सहेजे नहीं हैं। {name} को फिर से जाँचने के लिए AGI Workforce: Show MCP Servers चलाएँ और सर्वर का विवरण चुनें।',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'इस सत्र में वेब खोज उपलब्ध नहीं है। {reason} इसके बिना भेजने के लिए Browse the web बंद करें।',
 };
 
 export default hi;

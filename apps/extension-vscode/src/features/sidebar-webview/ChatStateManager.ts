@@ -21,6 +21,7 @@ import {
 import {
   PROVIDER_DISPLAY,
   canUseBillingPlanCapability,
+  capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
   isAutoModeModelId,
@@ -30,6 +31,7 @@ import {
   type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
+  type CapabilityDenialDescriptor,
   type DeveloperReasoningEffort,
   type LocalModelListResponse,
   type LocalModelSummary,
@@ -62,6 +64,7 @@ import {
 } from '../../integrations/developerSessionValidation';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import {
+  accountCapabilityDecision,
   clearAccountTierCache,
   recordAccountIdentityTier,
   resolveTier,
@@ -72,6 +75,7 @@ import { EXTENSION_ID } from '../../platform/version';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
+  accountIdentityForDisplay,
   accountTypeForTier,
   fetchAccountIdentity,
   getAccountAuthState,
@@ -357,6 +361,10 @@ export type ExtToWebviewMessage =
   | { type: 'sessionBinding'; payload: { epoch: number } }
   | { type: 'activeProject'; payload: { name: string | null } }
   | { type: 'startSuggestions'; payload: StartSuggestions }
+  | {
+      type: 'webSearchGate';
+      payload: { denied: false } | { denied: true; title: string; message: string };
+    }
   | {
       type: 'recentConversations';
       payload: {
@@ -1690,8 +1698,9 @@ export class ChatStateManager {
     if (state.status !== 'signed-in') {
       const cli = await resolveAccountPresence(this._secrets, this._cliCapabilities);
       if (cli.source === 'cli' && cli.cli !== undefined) {
-        await recordAccountIdentityTier(this._context, cli.cli.tier);
+        await recordAccountIdentityTier(this._context, cli.cli.tier, null);
         if (shouldPost()) {
+          this._postWebSearchGate();
           this._post({
             type: 'accountStatus',
             payload: {
@@ -1708,7 +1717,10 @@ export class ChatStateManager {
         }
         return;
       }
-      if (shouldPost()) this._post({ type: 'accountStatus', payload: { status: state.status } });
+      if (shouldPost()) {
+        this._postWebSearchGate();
+        this._post({ type: 'accountStatus', payload: { status: state.status } });
+      }
       return;
     }
 
@@ -1717,17 +1729,42 @@ export class ChatStateManager {
     if (refreshedState.status !== 'signed-in') {
       await clearAccountTierCache(this._context);
       if (shouldPost()) {
+        this._postWebSearchGate();
         this._post({ type: 'accountStatus', payload: { status: refreshedState.status } });
       }
       return;
     }
-    if (identity) await recordAccountIdentityTier(this._context, identity.tier);
+    if (identity) {
+      await recordAccountIdentityTier(
+        this._context,
+        identity.tier,
+        identity.capabilityDocument ?? null,
+      );
+    }
     if (!shouldPost()) return;
+    this._postWebSearchGate();
     this._post({
       type: 'accountStatus',
       payload: identity
-        ? { status: refreshedState.status, identity }
+        ? { status: refreshedState.status, identity: accountIdentityForDisplay(identity) }
         : { status: refreshedState.status },
+    });
+  }
+
+  private _webSearchDenial(): CapabilityDenialDescriptor | undefined {
+    const decision = accountCapabilityDecision(this._context, 'canUseWebSearch');
+    if (decision === null || decision.allowed) return undefined;
+    return capabilityDenialDescriptor(decision.reason ?? 'entitlement_missing');
+  }
+
+  private _postWebSearchGate(): void {
+    const denial = this._webSearchDenial();
+    this._post({
+      type: 'webSearchGate',
+      payload:
+        denial === undefined
+          ? { denied: false }
+          : { denied: true, title: denial.title, message: denial.message },
     });
   }
 
@@ -1752,7 +1789,9 @@ export class ChatStateManager {
   public async pushStartSuggestions(): Promise<void> {
     this._post({
       type: 'startSuggestions',
-      payload: await resolveStartSuggestions(this._secrets, this._cliCapabilities),
+      payload: await resolveStartSuggestions(this._secrets, this._cliCapabilities, {
+        connectors: accountCapabilityDecision(this._context, 'canUseConnectors')?.allowed !== false,
+      }),
     });
   }
 
@@ -3127,6 +3166,15 @@ export class ChatStateManager {
         const writable = await this._prepareToWrite(thread);
         if (!writable || conversationEpoch !== this._conversationEpoch) return false;
         if (this._cancelBeforeTurnStart()) return false;
+      }
+      const webSearchDenial =
+        browseWeb && thread.trustMode === 'managed' ? this._webSearchDenial() : undefined;
+      if (webSearchDenial !== undefined) {
+        this._postError(
+          t('chatNotice.webSearchDenied', { reason: webSearchDenial.message }),
+          webSearchDenial.decidedBy === 'entitlement' ? PLAN_REFUSAL : PERMISSION_REFUSAL,
+        );
+        return false;
       }
       let activeTurnId: string | undefined;
       let terminal = false;
