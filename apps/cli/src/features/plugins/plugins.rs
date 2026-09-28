@@ -136,6 +136,43 @@ pub struct McpServerConfig {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PluginDependency {
+    Reference(String),
+    Detailed {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        marketplace: Option<String>,
+    },
+}
+
+impl PluginDependency {
+    pub fn reference(&self) -> String {
+        match self {
+            PluginDependency::Reference(reference) => reference.clone(),
+            PluginDependency::Detailed {
+                name,
+                marketplace: Some(marketplace),
+                ..
+            } => format!("{name}@{marketplace}"),
+            PluginDependency::Detailed { name, .. } => name.clone(),
+        }
+    }
+
+    pub fn version_range(&self) -> Option<&str> {
+        match self {
+            PluginDependency::Reference(_) => None,
+            PluginDependency::Detailed { version, .. } => version
+                .as_deref()
+                .map(str::trim)
+                .filter(|range| !range.is_empty()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -173,7 +210,7 @@ pub struct PluginManifest {
     /// Cross-plugin dependencies (plugin name or `name@marketplace`
     /// shorthand).
     #[serde(default)]
-    pub dependencies: Vec<String>,
+    pub dependencies: Vec<PluginDependency>,
     #[serde(default)]
     pub engines: HashMap<String, String>,
     #[serde(default)]
@@ -585,7 +622,12 @@ impl PluginsManager {
                 manifest_hooks: manifest.as_ref().and_then(|m| m.hooks.clone()),
                 manifest_dependencies: manifest
                     .as_ref()
-                    .map(|m| m.dependencies.clone())
+                    .map(|m| {
+                        m.dependencies
+                            .iter()
+                            .map(PluginDependency::reference)
+                            .collect()
+                    })
                     .unwrap_or_default(),
             });
         }
