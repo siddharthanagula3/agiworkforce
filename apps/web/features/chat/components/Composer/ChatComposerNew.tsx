@@ -69,7 +69,12 @@ import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { VideoCostEstimate } from './VideoCostEstimate';
-import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
+import {
+  ComposerPlusMenu,
+  PluginsGlyph,
+  connectorToggleId,
+  type ComposerPlusMenuConnector,
+} from './ComposerPlusMenu';
 import {
   COMPOSER_FILES_ATTACH_FAILED_COPY,
   COMPOSER_FILES_LOADING_LABEL,
@@ -561,6 +566,7 @@ const VOICE_TRANSCRIPT_SEPARATOR = ' ';
 const COMPOSER_CARET_END = 'end';
 const MENTION_INDEX_FIRST = 0;
 const NO_MENTION_FILES: readonly LibraryItem[] = [];
+const MENTION_CONNECTOR_LIMIT = 6;
 const KEY_ARROW_DOWN = 'ArrowDown';
 const KEY_ARROW_UP = 'ArrowUp';
 const KEY_ENTER = 'Enter';
@@ -2466,6 +2472,14 @@ const ChatComposerNewComponent = ({
     [projectScopeSelectable, projectPicker, mentionMatches],
   );
 
+  const filteredMentionConnectors = useMemo(
+    () =>
+      connectedConnectorOptions
+        .filter((connector) => mentionMatches(connector.label))
+        .slice(0, MENTION_CONNECTOR_LIMIT),
+    [connectedConnectorOptions, mentionMatches],
+  );
+
   const mentionFiles = useLibraryFiles(showMentions && !attachmentsUnavailable, mentionQuery);
   const mentionFileItems = attachmentsUnavailable ? NO_MENTION_FILES : mentionFiles.items;
 
@@ -2473,9 +2487,13 @@ const ChatComposerNewComponent = ({
     () => [
       ...filteredSkills.map((skill) => ({ kind: 'skill' as const, skill })),
       ...filteredMentionProjects.map((project) => ({ kind: 'project' as const, project })),
+      ...filteredMentionConnectors.map((connector) => ({
+        kind: 'connector' as const,
+        connector,
+      })),
       ...mentionFileItems.map((file) => ({ kind: 'file' as const, file })),
     ],
-    [filteredSkills, filteredMentionProjects, mentionFileItems],
+    [filteredSkills, filteredMentionProjects, filteredMentionConnectors, mentionFileItems],
   );
 
   const activeMentionIndex =
@@ -2511,6 +2529,31 @@ const ChatComposerNewComponent = ({
       textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     }, 0);
   }, [message, mentionStartIndex]);
+
+  const insertMentionReference = useCallback(
+    (id: string, label: string) => {
+      const commit = mentionCommitRef.current;
+      if (commit) {
+        commit.insertMention({ id, label });
+        mentionCommitRef.current = null;
+        setShowMentions(false);
+        return;
+      }
+      if (mentionStartIndex === -1) return;
+      const before = message.substring(0, mentionStartIndex);
+      const cursorPos = textareaRef.current?.selectionStart || message.length;
+      const after = message.substring(cursorPos).replace(/^[ \t]+/, '');
+      const reference = `@${label} `;
+      const nextCursor = before.length + reference.length;
+      setMessage(`${before}${reference}${after}`);
+      setShowMentions(false);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      }, 0);
+    },
+    [message, mentionStartIndex],
+  );
 
   const enableSkillRequirements = useCallback(
     (skill: SkillItem) => {
@@ -2548,6 +2591,15 @@ const ChatComposerNewComponent = ({
     [replaceMentionToken, projectPicker, clearFolder],
   );
 
+  const handleMentionConnectorSelect = useCallback(
+    (connector: ComposerPlusMenuConnector) => {
+      const toggleId = connectorToggleId(connector);
+      if (disabledConnectorIds.includes(toggleId)) setConnectorEnabled(toggleId, true);
+      insertMentionReference(toggleId, connector.label);
+    },
+    [disabledConnectorIds, setConnectorEnabled, insertMentionReference],
+  );
+
   const handleMentionFileSelect = useCallback(
     (file: LibraryItem) => {
       replaceMentionToken();
@@ -2563,12 +2615,14 @@ const ChatComposerNewComponent = ({
     if (!item) return;
     if (item.kind === 'skill') handleMentionSelect(item.skill);
     else if (item.kind === 'project') handleMentionProjectSelect(item.project.id);
+    else if (item.kind === 'connector') handleMentionConnectorSelect(item.connector);
     else handleMentionFileSelect(item.file);
   }, [
     mentionItems,
     activeMentionIndex,
     handleMentionSelect,
     handleMentionProjectSelect,
+    handleMentionConnectorSelect,
     handleMentionFileSelect,
   ]);
 
@@ -4418,6 +4472,44 @@ const ChatComposerNewComponent = ({
               </>
             )}
 
+            {filteredMentionConnectors.length > 0 && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  Connected apps
+                </div>
+                {filteredMentionConnectors.map((connector, i) => {
+                  const index = filteredSkills.length + filteredMentionProjects.length + i;
+                  return (
+                    <button
+                      key={connector.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeMentionIndex}
+                      onMouseEnter={() => setMentionIndex(index)}
+                      onClick={() => handleMentionConnectorSelect(connector)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                        index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <OfficialConnectorLogo
+                        connector={connector}
+                        className="h-5 w-5 shrink-0 rounded-full shadow-none"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{connector.label}</div>
+                        {connector.description ? (
+                          <div className="truncate text-xs text-muted-foreground">
+                            {connector.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
             {!attachmentsUnavailable && (
               <>
                 <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
@@ -4434,7 +4526,11 @@ const ChatComposerNewComponent = ({
                   <p className="px-3 py-2 text-xs text-muted-foreground">No matching files.</p>
                 ) : (
                   mentionFileItems.map((file, i) => {
-                    const index = filteredSkills.length + filteredMentionProjects.length + i;
+                    const index =
+                      filteredSkills.length +
+                      filteredMentionProjects.length +
+                      filteredMentionConnectors.length +
+                      i;
                     const Glyph = libraryFileGlyph(file);
                     return (
                       <button
