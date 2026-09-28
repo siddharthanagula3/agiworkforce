@@ -6,6 +6,8 @@ const CLAMD_CONFIG = '--config-file=/etc/clamav/clamd.conf';
 const FRESHCLAM_CONFIG = '--config-file=/etc/clamav/freshclam.conf';
 const SIGNATURE_REFRESH_TIMEOUT_MS = 120_000;
 const FRESHCLAM_RESTART_DELAY_MS = 60 * 60 * 1000;
+const CLAMD_PROBE_INTERVAL_MS = 30_000;
+const CLAMD_UNRESPONSIVE_LIMIT_MS = 5 * 60 * 1000;
 
 export interface Daemon {
   stop: () => void;
@@ -68,4 +70,27 @@ export function startFreshclam(restartDelayMs = FRESHCLAM_RESTART_DELAY_MS): Dae
       current?.kill('SIGTERM');
     },
   };
+}
+
+export function watchClamd(
+  scans: () => Promise<boolean>,
+  onUnresponsive: () => void,
+  intervalMs = CLAMD_PROBE_INTERVAL_MS,
+  limitMs = CLAMD_UNRESPONSIVE_LIMIT_MS,
+): Daemon {
+  let scannedAt = Date.now();
+  const timer = setInterval(() => {
+    void scans().then((scanning) => {
+      if (scanning) {
+        scannedAt = Date.now();
+        return;
+      }
+      const silentMs = Date.now() - scannedAt;
+      if (silentMs < limitMs) return;
+      clearInterval(timer);
+      log('error', 'clamd_unresponsive', { silentMs });
+      onUnresponsive();
+    });
+  }, intervalMs);
+  return { stop: () => clearInterval(timer) };
 }

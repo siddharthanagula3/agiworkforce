@@ -91,11 +91,13 @@ contract; the parts that decide an upload are:
   days old are reported as `stale` there without failing it, because Fly stops
   routing to a machine that fails this check, and scanning on older signatures
   beats refusing every upload. Fly does not restart a machine for a failing
-  check ([health checks](https://docs.fly.io/reference/health-checks/)); the
-  troubleshooting list below covers that. `GET /health/signatures` fails once
-  the signatures are stale; Fly runs it as the `signatures` monitoring check,
-  which never affects routing. Without the bearer token both answer only
-  `{"status": …}`; the engine and signature versions need the token.
+  check ([health checks](https://docs.fly.io/reference/health-checks/)), so the
+  service watches the same probe and exits once clamd has not detected the
+  test string for five minutes, and Fly's `on-failure` restart policy restarts
+  the machine. `GET /health/signatures` fails once the signatures are stale;
+  Fly runs it as the `signatures` monitoring check, which never affects
+  routing. Without the bearer token both answer only `{"status": …}`; the
+  engine and signature versions need the token.
 - `services/upload-scanner/__tests__/clamd-config.test.ts` pins the clamd
   settings above: `AlertExceedsMax`, `AlertEncrypted`, the in-memory spool and
   the loopback address.
@@ -113,10 +115,11 @@ $0.00000193 per GB-second, and the region's 1.19 multiplier. Deploys use the
 before it retires the old one, so a deploy never leaves the web without a
 scanner.
 
-clamd exiting stops the service, and Fly restarts the machine. freshclam
-exiting does not: it exits by design when the ClamAV CDN refuses it, so clamd
-keeps scanning with the signatures it has, freshclam starts again an hour
-later, and `/health` reports the growing signature age.
+clamd exiting stops the service, and so do five minutes without a detection
+of the test string; either way Fly restarts the machine. freshclam exiting does
+not: it exits by design when the ClamAV CDN refuses it, so clamd keeps scanning
+with the signatures it has, freshclam starts again an hour later, and `/health`
+reports the growing signature age.
 
 ## Runbook: running the scanner
 
@@ -221,13 +224,10 @@ bluegreen swap, so the scanner never goes down in between.
 
 - `/health` answers `unavailable`: clamd is not up, or it answers but did not
   detect the EICAR test string. `fly logs` shows why, usually signatures still
-  loading after a restart, or an out-of-memory exit. Fly stops routing to the
-  machine but does not restart it, so if the check still fails once clamd has
-  loaded, restart the machine; `fly machine list` names its id:
-
-  ```sh
-  fly machine restart <machine id> --app agiworkforce-upload-scanner
-  ```
+  loading after a restart, or an out-of-memory exit. After five minutes without
+  a detection the service logs `clamd_unresponsive` and exits, and Fly restarts
+  the machine. If it keeps failing after restarts, the clamd lines in
+  `fly logs` name the cause.
 
 - `fly checks list --app agiworkforce-upload-scanner` shows the `signatures`
   check failing, and `/health` answers `status` `stale`: freshclam has not
