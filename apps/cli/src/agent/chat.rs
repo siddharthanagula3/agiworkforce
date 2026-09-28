@@ -1720,6 +1720,117 @@ impl TurnHostAdapter<'_> {
             args: effective_args,
         }
     }
+
+    async fn run_sequential_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+    ) -> ExecResult {
+        let legacy = super::executor::ToolCall {
+            name: call.name.clone(),
+            args: value_to_legacy_args(&args),
+        };
+
+        let tool_result = if call.name == "update_plan" {
+            let payload = self.session.handle_update_plan(&args);
+            let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            let message = payload
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("plan handled")
+                .to_string();
+            if !self.session.quiet {
+                let path_disp = self
+                    .session
+                    .current_plan_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default();
+                narrate!(
+                    "  {} {} ({}{})",
+                    "->".dimmed(),
+                    "update_plan".bold(),
+                    sanitize_terminal_text(&message),
+                    if path_disp.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" -> {path_disp}")
+                    }
+                );
+            }
+            crate::tools::ToolResult {
+                tool_name: "update_plan".to_string(),
+                success,
+                output: payload.to_string(),
+            }
+        } else if is_team_tool(&call.name) {
+            // `None`: this orchestrator session has no per-teammate identity yet.
+            // Pass the executing teammate's name here once teammate-scoped
+            // sessions exist to enforce the message sender.
+            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None)
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        } else if call.name.starts_with("mcp_") {
+            let approval_callback = self.session.recorded_approval_callback();
+            let require_confirmation = !self.session.skips_approval();
+            match execute_mcp_tool(
+                &mut self.session.mcp_manager,
+                &call.name,
+                args.clone(),
+                self.session.privacy_mode,
+                require_confirmation,
+                approval_callback,
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        } else {
+            let opts = crate::tools::ToolExecOptions {
+                mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
+                require_confirmation: !self.session.skips_approval(),
+                auto_approve_safe: self.session.auto_approve_safe,
+                auto_approve_edits: self
+                    .session
+                    .governed_permission_mode()
+                    .auto_approves_edits(),
+                quiet: self.session.quiet,
+                approval_callback: self.session.recorded_approval_callback(),
+                privacy_mode: self.session.privacy_mode,
+                workspace_root: self
+                    .session
+                    .managed_session
+                    .as_ref()
+                    .and_then(|session| session.workspace_root.clone())
+                    .or_else(|| std::env::current_dir().ok()),
+            };
+            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        };
+
+        ExecResult {
+            ok: tool_result.success,
+            output: tool_result.output,
+        }
+    }
 }
 
 fn declared_tool_timeout(tool_name: &str, mode: DispatchMode) -> Option<std::time::Duration> {
@@ -2178,10 +2289,14 @@ impl TurnHost for TurnHostAdapter<'_> {
             args: value_to_legacy_args(&prepared.args),
         };
         Box::pin(async move {
-            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+            let (result, notes) = crate::tools::collect_approval_notes(
+                crate::tools::execute_tool_with_opts(&legacy, &opts),
+            )
+            .await;
+            match result {
                 Ok(r) => ExecResult {
                     ok: r.success,
-                    output: r.output,
+                    output: crate::tools::with_approval_notes(r.output, &notes),
                 },
                 Err(e) => ExecResult {
                     ok: false,
@@ -2245,109 +2360,11 @@ impl TurnHost for TurnHostAdapter<'_> {
         call: &ToolCallResponse,
         args: serde_json::Value,
     ) -> ExecResult {
-        let legacy = super::executor::ToolCall {
-            name: call.name.clone(),
-            args: value_to_legacy_args(&args),
-        };
-
-        let tool_result = if call.name == "update_plan" {
-            let payload = self.session.handle_update_plan(&args);
-            let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-            let message = payload
-                .get("message")
-                .and_then(|v| v.as_str())
-                .unwrap_or("plan handled")
-                .to_string();
-            if !self.session.quiet {
-                let path_disp = self
-                    .session
-                    .current_plan_path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default();
-                narrate!(
-                    "  {} {} ({}{})",
-                    "->".dimmed(),
-                    "update_plan".bold(),
-                    sanitize_terminal_text(&message),
-                    if path_disp.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" -> {path_disp}")
-                    }
-                );
-            }
-            crate::tools::ToolResult {
-                tool_name: "update_plan".to_string(),
-                success,
-                output: payload.to_string(),
-            }
-        } else if is_team_tool(&call.name) {
-            // `None`: this orchestrator session has no per-teammate identity yet.
-            // Pass the executing teammate's name here once teammate-scoped
-            // sessions exist to enforce the message sender.
-            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None)
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => crate::tools::ToolResult {
-                    tool_name: call.name.clone(),
-                    success: false,
-                    output: format!("tool error: {:#}", e),
-                },
-            }
-        } else if call.name.starts_with("mcp_") {
-            let approval_callback = self.session.recorded_approval_callback();
-            let require_confirmation = !self.session.skips_approval();
-            match execute_mcp_tool(
-                &mut self.session.mcp_manager,
-                &call.name,
-                args.clone(),
-                self.session.privacy_mode,
-                require_confirmation,
-                approval_callback,
-            )
-            .await
-            {
-                Ok(r) => r,
-                Err(e) => crate::tools::ToolResult {
-                    tool_name: call.name.clone(),
-                    success: false,
-                    output: format!("tool error: {:#}", e),
-                },
-            }
-        } else {
-            let opts = crate::tools::ToolExecOptions {
-                mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
-                require_confirmation: !self.session.skips_approval(),
-                auto_approve_safe: self.session.auto_approve_safe,
-                auto_approve_edits: self
-                    .session
-                    .governed_permission_mode()
-                    .auto_approves_edits(),
-                quiet: self.session.quiet,
-                approval_callback: self.session.recorded_approval_callback(),
-                privacy_mode: self.session.privacy_mode,
-                workspace_root: self
-                    .session
-                    .managed_session
-                    .as_ref()
-                    .and_then(|session| session.workspace_root.clone())
-                    .or_else(|| std::env::current_dir().ok()),
-            };
-            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
-                Ok(r) => r,
-                Err(e) => crate::tools::ToolResult {
-                    tool_name: call.name.clone(),
-                    success: false,
-                    output: format!("tool error: {:#}", e),
-                },
-            }
-        };
-
+        let (result, notes) =
+            crate::tools::collect_approval_notes(self.run_sequential_tool(call, args)).await;
         ExecResult {
-            ok: tool_result.success,
-            output: tool_result.output,
+            ok: result.ok,
+            output: crate::tools::with_approval_notes(result.output, &notes),
         }
     }
 
