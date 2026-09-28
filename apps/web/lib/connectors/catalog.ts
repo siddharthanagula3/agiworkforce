@@ -216,9 +216,6 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   snowflake: mcpConnector('snowflake', 'connection-string', 'high-impact'),
   bigquery: mcpConnector('bigquery', 'oauth2', 'high-impact'),
   databricks: mcpConnector('databricks', 'api-key', 'high-impact'),
-  postgresql: mcpConnector('postgresql', 'connection-string', 'high-impact'),
-  mongodb: mcpConnector('mongodb', 'connection-string', 'high-impact'),
-  redis: mcpConnector('redis', 'connection-string', 'high-impact'),
   elasticsearch: mcpConnector('elasticsearch', 'api-key', 'high-impact'),
   pipedrive: mcpConnector('pipedrive', 'oauth2', 'read-write'),
   zendesk: mcpConnector('zendesk', 'api-key', 'read-write'),
@@ -263,33 +260,6 @@ export function isKnownConnectorId(connectorId: string): boolean {
 
 export function isDeviceLocalConnector(connectorId: string): boolean {
   return getConnectorCapability(connectorId)?.implementation === 'device-local';
-}
-
-/**
- * A device-local connector is the machine it runs on, so there is no second one
- * of it to connect. Everything else reaches an account a provider owns, and a
- * person can hold more than one of those.
- */
-export function connectorSupportsMultipleAccounts(connectorId: string): boolean {
-  const record = getConnectorCapability(connectorId);
-  return record === null ? true : record.implementation !== 'device-local';
-}
-
-/**
- * Credentials that are not tied to one person signing in, so they can back a
- * shared account a team operates rather than an individual's.
- */
-const SERVICE_ACCOUNT_AUTH_SCHEMES: readonly ConnectorAuthScheme[] = [
-  'service-account',
-  'api-key',
-  'connection-string',
-  'pat',
-];
-
-export function connectorSupportsServiceAccount(connectorId: string): boolean {
-  const record = getConnectorCapability(connectorId);
-  if (record === null || record.implementation === 'device-local') return false;
-  return SERVICE_ACCOUNT_AUTH_SCHEMES.includes(record.authScheme);
 }
 
 export function allowsPresentTenseCopy(connectorId: string): boolean {
