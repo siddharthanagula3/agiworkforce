@@ -32,7 +32,6 @@ import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
-import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
   enterMediaMode,
   exitMediaMode,
@@ -52,6 +51,7 @@ import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
 import type { Attachment } from './AttachmentPreview';
 
@@ -67,6 +67,23 @@ interface AddToChatSheetProps {
 }
 
 const SNAP_POINTS = ['75%'];
+const LIBRARY_PICKER_SIZE = 12;
+const CLOUD_ATTACH_RETENTION_NOTE =
+  'Files you attach are uploaded to AGI Cloud and kept in your Library until you delete them.';
+
+interface LibraryPick {
+  id: string;
+  fileName: string;
+  subtitle: string;
+  isImage: boolean;
+  attachment: Attachment;
+}
+
+type CloudLibraryState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; picks: LibraryPick[] }
+  | { status: 'error' };
 
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
   {
@@ -89,8 +106,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const chatStyle = useChatStore((s) => s.chatStyle);
   const localConversations = useChatStore((s) => s.conversations);
   const localMessages = useChatStore((s) => s.messages);
-  const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
-  const cloudMessages = useChatCloudMessageStore((s) => s.messages);
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
@@ -168,18 +183,62 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         (p) => p.id === activeProjectId,
       ) ?? null)
     : null;
-  const libraryDocuments = useMemo(() => {
-    const conversations =
-      appMode === 'cloud'
-        ? cloudConversations
-        : localConversations.filter(
-            (conversation) => executionModeForConversation(conversation) === 'local',
-          );
-    const messages = appMode === 'cloud' ? cloudMessages : localMessages;
-    return collectSearchableMobileFiles(conversations, messages).filter(
-      (file) => !file.mimeType.startsWith('image/'),
+  const localLibraryPicks = useMemo((): LibraryPick[] => {
+    if (appMode === 'cloud') return [];
+    const conversations = localConversations.filter(
+      (conversation) => executionModeForConversation(conversation) === 'local',
     );
-  }, [appMode, cloudConversations, cloudMessages, localConversations, localMessages]);
+    return collectSearchableMobileFiles(conversations, localMessages)
+      .filter((file) => !file.mimeType.startsWith('image/'))
+      .map((file) => ({
+        id: file.id,
+        fileName: file.fileName,
+        subtitle: file.conversationTitle,
+        isImage: false,
+        attachment: {
+          id: `library-${file.id}`,
+          uri: file.uri,
+          mimeType: file.mimeType,
+          fileName: file.fileName,
+          ...(file.fileSize != null ? { fileSize: file.fileSize } : {}),
+          ...(file.assetId ? { assetId: file.assetId } : {}),
+        },
+      }));
+  }, [appMode, localConversations, localMessages]);
+
+  const [cloudLibrary, setCloudLibrary] = useState<CloudLibraryState>({ status: 'idle' });
+  const loadCloudLibrary = useCallback(() => {
+    setCloudLibrary({ status: 'loading' });
+    fetchLibraryPage({ limit: LIBRARY_PICKER_SIZE })
+      .then((page) =>
+        setCloudLibrary({
+          status: 'ready',
+          picks: page.assets
+            .filter((asset) => asset.kind !== 'video')
+            .map((asset) => ({
+              id: asset.id,
+              fileName: asset.fileName,
+              subtitle: asset.sourceLabel,
+              isImage: asset.kind === 'image',
+              attachment: {
+                id: `library-${asset.id}`,
+                uri: asset.uri,
+                mimeType: asset.mimeType,
+                fileName: asset.fileName,
+                ...(asset.byteCount != null ? { fileSize: asset.byteCount } : {}),
+                assetId: asset.id,
+              },
+            })),
+        }),
+      )
+      .catch(() => setCloudLibrary({ status: 'error' }));
+  }, []);
+  const libraryPicks =
+    appMode === 'cloud'
+      ? cloudLibrary.status === 'ready'
+        ? cloudLibrary.picks
+        : []
+      : localLibraryPicks;
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -212,17 +271,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   }, [haptic, closeSheet, onFile]);
 
   const handleAttachFromLibrary = useCallback(
-    (document: (typeof libraryDocuments)[number]) => {
+    (pick: LibraryPick) => {
       haptic();
       closeSheet();
-      onAttachFromLibrary({
-        id: `library-${document.id}`,
-        uri: document.uri,
-        mimeType: document.mimeType,
-        fileName: document.fileName,
-        ...(document.fileSize != null ? { fileSize: document.fileSize } : {}),
-        ...(document.assetId ? { assetId: document.assetId } : {}),
-      });
+      onAttachFromLibrary(pick.attachment);
     },
     [closeSheet, haptic, onAttachFromLibrary],
   );
@@ -301,7 +353,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       index={-1}
       accessible={false}
       onChange={(index) => {
-        if (index < 0) setHandoff(null);
+        if (index < 0) {
+          setHandoff(null);
+          return;
+        }
+        if (appMode === 'cloud' && cloudLibrary.status !== 'loading') loadCloudLibrary();
       }}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
@@ -391,7 +447,24 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           ) : null}
         </View>
 
-        {libraryDocuments.length > 0 ? (
+        {appMode === 'cloud' ? (
+          <Text
+            style={{
+              paddingHorizontal: 20,
+              marginTop: -8,
+              paddingBottom: 16,
+              fontSize: 12,
+              lineHeight: 17,
+              color: themeColors.textMuted,
+            }}
+          >
+            {CLOUD_ATTACH_RETENTION_NOTE}
+          </Text>
+        ) : null}
+
+        {libraryPicks.length > 0 ||
+        (appMode === 'cloud' &&
+          (cloudLibrary.status === 'loading' || cloudLibrary.status === 'error')) ? (
           <View style={{ paddingBottom: 20 }}>
             <Text
               style={{
@@ -405,60 +478,104 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             >
               Attach from Library
             </Text>
-            <ScrollView
-              horizontal
-              contentInsetAdjustmentBehavior="automatic"
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-            >
-              {libraryDocuments.map((document) => (
+            {appMode === 'cloud' && cloudLibrary.status === 'loading' ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingHorizontal: 20,
+                }}
+                accessibilityLiveRegion="polite"
+              >
+                <ActivityIndicator size="small" color={themeColors.textMuted} />
+                <Text style={{ fontSize: 13, color: themeColors.textMuted }}>
+                  Loading your Library
+                </Text>
+              </View>
+            ) : appMode === 'cloud' && cloudLibrary.status === 'error' ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingHorizontal: 20,
+                }}
+              >
+                <Text style={{ flex: 1, fontSize: 13, color: themeColors.textSecondary }}>
+                  Your Library could not load.
+                </Text>
                 <Pressable
-                  key={document.id}
-                  onPress={() => handleAttachFromLibrary(document)}
+                  onPress={loadCloudLibrary}
                   accessibilityRole="button"
-                  accessibilityLabel={`Attach ${document.fileName} from Library`}
-                  style={{
-                    width: 176,
-                    minHeight: 70,
-                    padding: 12,
-                    borderRadius: 14,
-                    backgroundColor: cardBg,
-                    borderWidth: 1,
-                    borderColor: dividerColor,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
+                  accessibilityLabel="Try loading your Library again"
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
                 >
-                  <View
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: themeColors.teal }}>
+                    Try again
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                contentInsetAdjustmentBehavior="automatic"
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+              >
+                {libraryPicks.map((pick) => (
+                  <Pressable
+                    key={pick.id}
+                    onPress={() => handleAttachFromLibrary(pick)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Attach ${pick.fileName} from Library`}
                     style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 11,
+                      width: 176,
+                      minHeight: 70,
+                      padding: 12,
+                      borderRadius: 14,
+                      backgroundColor: cardBg,
+                      borderWidth: 1,
+                      borderColor: dividerColor,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: themeColors.accentSurface,
+                      gap: 10,
                     }}
                   >
-                    <FileText size={18} color={themeColors.teal} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text
-                      numberOfLines={2}
-                      style={{ color: themeColors.textPrimary, fontSize: 13, fontWeight: '600' }}
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 11,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: themeColors.accentSurface,
+                      }}
                     >
-                      {document.fileName}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: themeColors.textMuted, fontSize: 11, marginTop: 3 }}
-                    >
-                      {document.conversationTitle}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
+                      {pick.isImage ? (
+                        <ImageIcon size={18} color={themeColors.teal} />
+                      ) : (
+                        <FileText size={18} color={themeColors.teal} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        numberOfLines={2}
+                        style={{ color: themeColors.textPrimary, fontSize: 13, fontWeight: '600' }}
+                      >
+                        {pick.fileName}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={{ color: themeColors.textMuted, fontSize: 11, marginTop: 3 }}
+                      >
+                        {pick.subtitle}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
           </View>
         ) : null}
 

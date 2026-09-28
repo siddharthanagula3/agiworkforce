@@ -345,7 +345,7 @@ export function SlackSection() {
             margin: '0 0 var(--space-1)',
           }}
         >
-          Slack
+          Slack app
         </h1>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
           Message AGI Workforce in Slack, or mention it in a channel, and it answers in the thread

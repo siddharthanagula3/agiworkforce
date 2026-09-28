@@ -15,8 +15,8 @@ import { ComputerUseControlBar } from './ComputerUseControlBar';
 import { DesktopTitleStrip } from './DesktopTitleStrip';
 import { DesktopUpdateNotice } from './DesktopUpdateNotice';
 
-const DispatchTaskRunner = dynamic(
-  () => import('./DispatchTaskRunner').then((module) => module.DispatchTaskRunner),
+const DesktopChatRunner = dynamic(
+  () => import('./DesktopChatRunner').then((module) => module.DesktopChatRunner),
   { ssr: false },
 );
 
@@ -32,7 +32,7 @@ function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   return (
     <>
       <DesktopTitleStrip />
-      {host.shell === 'electron' ? <DispatchTaskRunner host={host} /> : null}
+      {host.shell === 'electron' ? <DesktopChatRunner host={host} /> : null}
       <div className="pointer-events-none fixed left-1/2 top-3 z-[var(--z-popover)] flex w-[min(92vw,560px)] -translate-x-1/2 flex-col gap-2">
         <ComputerUseControlBar />
         <DesktopUpdateNotice host={host} />

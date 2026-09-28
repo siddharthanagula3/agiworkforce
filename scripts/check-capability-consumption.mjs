@@ -47,8 +47,20 @@ export const CAPABILITY_READERS = Object.freeze({
     ],
   },
   chrome: {
-    gap: 'The side panel never requests /api/me, so no Chrome control knows what the server granted and each one assumes the feature is there.',
-    owner: 'apps/extension',
+    reads: [
+      {
+        file: 'apps/extension/src/features/cloud-bridge/capabilityDocument.ts',
+        evidence: 'capability_handshake',
+      },
+      {
+        file: 'apps/extension/src/features/cloud-bridge/capabilityDocument.ts',
+        evidence: 'resolveCapabilityDocumentDecision\\(',
+      },
+      {
+        file: 'apps/extension/src/side_panel.ts',
+        evidence: "capabilityAllowed\\(capabilityDocument, 'canUseVoice'\\)",
+      },
+    ],
   },
   vscode: {
     reads: [
