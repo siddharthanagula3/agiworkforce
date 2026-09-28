@@ -537,6 +537,9 @@ impl AgentSession {
         let Some(previous) = self.managed_auto_routing().cloned() else {
             return;
         };
+        if self.server_routes_auto() {
+            return;
+        }
 
         let has_image_attachment = !self.pending_image_blocks.is_empty();
         let task_type =
@@ -572,18 +575,9 @@ impl AgentSession {
 
         let model_before = self.model.clone();
         // Trust handling mirrors the app-server host's apply_auto_thread_model:
-        // Managed keeps Provider::ManagedCloud and never installs direct
-        // upstream fallbacks; BYOK switches through the catalog and installs
-        // the direct chain. A stale-state mismatch skips rather than failing
-        // the turn.
+        // BYOK switches through the catalog and installs the direct chain. A
+        // stale-state mismatch skips rather than failing the turn.
         match previous.trust_mode {
-            agiworkforce_model_registry::TrustMode::ManagedCloud => {
-                if !matches!(self.provider, crate::models::Provider::ManagedCloud) {
-                    return;
-                }
-                self.model = selection.provider_model_id.clone();
-                self.fallback_chain = None;
-            }
             agiworkforce_model_registry::TrustMode::Byok => {
                 if self.privacy_mode != super::PrivacyMode::Byok {
                     return;
@@ -598,7 +592,8 @@ impl AgentSession {
                     &chain_ids.join(","),
                 ));
             }
-            agiworkforce_model_registry::TrustMode::Local
+            agiworkforce_model_registry::TrustMode::ManagedCloud
+            | agiworkforce_model_registry::TrustMode::Local
             | agiworkforce_model_registry::TrustMode::OnDevice => return,
         }
 
@@ -736,6 +731,53 @@ impl AgentSession {
                 None
             }
         }
+    }
+
+    pub(crate) fn server_routes_auto(&self) -> bool {
+        self.managed_auto_routing().is_some_and(|state| {
+            state.trust_mode == agiworkforce_model_registry::TrustMode::ManagedCloud
+        }) && matches!(self.provider, crate::models::Provider::ManagedCloud)
+    }
+
+    pub(crate) fn request_model(&self) -> String {
+        match self.managed_auto_routing() {
+            Some(state) if self.server_routes_auto() => {
+                crate::routing::profile::gateway_request(&state.selection, state.speed_first)
+                    .0
+                    .to_string()
+            }
+            _ => self.model.clone(),
+        }
+    }
+
+    pub(crate) fn request_routing_profile(&self) -> Option<&'static str> {
+        self.managed_auto_routing()
+            .filter(|_| self.server_routes_auto())
+            .and_then(|state| {
+                crate::routing::profile::gateway_request(&state.selection, state.speed_first).1
+            })
+    }
+
+    pub(crate) fn adopt_served_model(&mut self, served: &str) {
+        if !self.server_routes_auto()
+            || agiworkforce_model_registry::is_auto_routing_selection(served)
+        {
+            return;
+        }
+        let Some(mut state) = self.managed_auto_routing().cloned() else {
+            return;
+        };
+        let served_key = crate::model_catalog::canonical_model_id(served);
+        if served_key == state.model_key {
+            return;
+        }
+        self.model = crate::model_catalog::served_model_id(&served_key);
+        state.model_key = served_key;
+        self.set_managed_auto_routing(Some(state));
+        self.emit_turn_notice(format!(
+            "Auto chose {} for this message",
+            crate::model_catalog::display_name(&self.model)
+        ));
     }
 
     pub(super) fn emit_turn_notice(&self, notice: String) {
@@ -1545,7 +1587,7 @@ impl TurnHostAdapter<'_> {
             models::stream_completion(
                 self.config,
                 &self.session.provider,
-                &self.session.model,
+                &self.session.request_model(),
                 &self.session.messages,
                 self.max_tokens,
                 Some(&self.tool_defs),
@@ -1584,7 +1626,7 @@ impl TurnHostAdapter<'_> {
                             match models::stream_completion(
                                 self.config,
                                 &self.session.provider,
-                                &self.session.model,
+                                &self.session.request_model(),
                                 &self.session.messages,
                                 self.max_tokens,
                                 Some(&self.tool_defs),
@@ -1673,12 +1715,13 @@ impl TurnHostAdapter<'_> {
                                         stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
                                         reasoning_output_tokens: 0,
                                         managed_request_id: None,
+                                        resolved_model: None,
                                     })
                                 } else {
                                     models::stream_completion(
                                         self.config,
                                         &self.session.provider,
-                                        &self.session.model,
+                                        &self.session.request_model(),
                                         &self.session.messages,
                                         self.max_tokens,
                                         Some(&self.tool_defs),
@@ -1718,7 +1761,7 @@ impl TurnHostAdapter<'_> {
         let continuation = match models::stream_completion(
             self.config,
             &self.session.provider,
-            &self.session.model,
+            &self.session.request_model(),
             &self.session.messages,
             self.max_tokens,
             Some(&self.tool_defs),
@@ -1741,7 +1784,7 @@ impl TurnHostAdapter<'_> {
                         models::stream_completion(
                             self.config,
                             &self.session.provider,
-                            &self.session.model,
+                            &self.session.request_model(),
                             &self.session.messages,
                             self.max_tokens,
                             Some(&self.tool_defs),
@@ -1764,6 +1807,9 @@ impl TurnHostAdapter<'_> {
     fn accept_completion(&mut self, result: models::CompletionResult) -> Completion {
         if let Some(request_id) = result.managed_request_id.clone() {
             self.managed_request_ids.push(request_id);
+        }
+        if let Some(served) = result.resolved_model.as_deref() {
+            self.session.adopt_served_model(served);
         }
         completion_from_result(result)
     }
@@ -1807,7 +1853,7 @@ impl TurnHostAdapter<'_> {
                 let retried = models::stream_completion(
                     self.config,
                     &self.session.provider,
-                    &self.session.model,
+                    &self.session.request_model(),
                     &self.session.messages,
                     self.max_tokens,
                     Some(&self.tool_defs),
@@ -2144,15 +2190,20 @@ impl TurnHost for TurnHostAdapter<'_> {
         // caller's `on_chunk` for the first completion, `continuation_sink()`
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
+        let routing_profile = self.session.request_routing_profile();
         let completion = match phase {
-            TurnPhase::First if self.search_turn => models::searching(self.complete_first()).await,
-            TurnPhase::First => self.complete_first().await,
-            TurnPhase::Continuation => self.complete_continuation().await,
+            TurnPhase::First if self.search_turn => {
+                models::routed(routing_profile, models::searching(self.complete_first())).await
+            }
+            TurnPhase::First => models::routed(routing_profile, self.complete_first()).await,
+            TurnPhase::Continuation => {
+                models::routed(routing_profile, self.complete_continuation()).await
+            }
         };
         if let Ok(completion) = &completion {
             self.record_completion_usage(completion);
         }
-        self.settle_generation(completion?).await
+        models::routed(routing_profile, self.settle_generation(completion?)).await
     }
 
     fn record_assistant(&mut self, completion: &Completion) {
@@ -3515,6 +3566,7 @@ mod tests {
         };
         let completion = |request_id: Option<&str>| models::CompletionResult {
             managed_request_id: request_id.map(str::to_string),
+            resolved_model: None,
             ..live_completion("step", Vec::new())
         };
 
@@ -4002,6 +4054,7 @@ mod tests {
             stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
             reasoning_output_tokens: 0,
             managed_request_id: None,
+            resolved_model: None,
         }
     }
 
@@ -4617,6 +4670,7 @@ mod tests {
             stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
             reasoning_output_tokens: 0,
             managed_request_id: None,
+            resolved_model: None,
         }
     }
 
