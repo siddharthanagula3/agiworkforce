@@ -17,6 +17,8 @@ export interface ChromeManagedChatRoutingRequest {
   previousTaskType?: RoutingTaskType | null;
 }
 
+export const CHROME_MANAGED_RUNTIME_PROFILE = 'chrome/managed-chat';
+
 export function resolveChromeManagedChatRoute(
   request: ChromeManagedChatRoutingRequest,
 ): AutoRouteDecision {
@@ -27,7 +29,7 @@ export function resolveChromeManagedChatRoute(
     taskType: classifier.type,
     subscriptionTier: request.subscriptionTier,
     trustMode: 'managed_cloud',
-    runtimeProfileId: 'chrome/managed-chat',
+    runtimeProfileId: CHROME_MANAGED_RUNTIME_PROFILE,
     currentModelKey: request.currentModelKey,
     previousTaskType: request.previousTaskType,
     fallbackToAutoForCapabilityMismatch: true,

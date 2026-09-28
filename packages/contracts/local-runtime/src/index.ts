@@ -98,6 +98,8 @@ export type { DeveloperAgentMode, DeveloperSessionNegotiation } from './develope
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
+  BrowserActivityEntry,
+  BrowserActivityOutcome,
   BrowserPairRequestPrompt,
   BrowserPairingCommand,
   BrowserPairingState,
@@ -126,6 +128,7 @@ export type {
   FileSearchMatch,
   FileStat,
   FileTextContent,
+  FileTextEdit,
   FilesystemCommand,
 } from './filesystem';
 
@@ -247,6 +250,7 @@ export {
 export type { ContainmentOptions, PathPlatform } from './path-safety';
 
 export {
+  BROWSER_STEP_COMMAND,
   DEVICE_HOST_HEADER,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
@@ -261,6 +265,7 @@ export {
   MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_HOST_HEADER_LENGTH,
   MAX_DEVICE_REVIEW_LENGTH,
+  MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   MAX_DEVICE_STEP_ROOTS,
@@ -268,6 +273,7 @@ export {
   MAX_DEVICE_WAIT_MS,
   describeDeviceDisplays,
   describeDeviceStep,
+  deviceStepBrowserCommand,
   deviceStepCapability,
   deviceStepCommand,
   deviceStepScope,
@@ -331,3 +337,11 @@ export type {
   ComputerUseStatus,
   DeviceFrontWindow,
 } from './computer-use';
+
+export { BACKGROUND_WORK_KINDS, isBackgroundWorkKind } from './background-activity';
+export type {
+  BackgroundActivity,
+  BackgroundCodingRuntime,
+  BackgroundCommandRun,
+  BackgroundWorkKind,
+} from './background-activity';

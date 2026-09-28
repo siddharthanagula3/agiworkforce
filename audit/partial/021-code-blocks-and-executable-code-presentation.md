@@ -42,33 +42,29 @@ nothing is left.
 
 - Done when: A code block can be downloaded as a source file with a sensible extension.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only code that became an artifact can be downloaded (artifact panel Download source); an ordinary code block in the answer offers Copy only. | ui |
-| desktop | partial | Only code that became an artifact can be downloaded (artifact panel Download source); an ordinary code block in the answer offers Copy only. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:763-763`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:745-745`
-
 ## S21.08: Full-screen code view.
 
 - Done when: A code block can be opened in a full-screen/expanded view.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Full screen exists for artifacts in the artifact panel only; an inline code block cannot be expanded. | ui |
-| desktop | partial | Full screen exists for artifacts in the artifact panel only; an inline code block cannot be expanded. | ui |
 | mobile | partial | Code artifacts open in a full-screen viewer; an ordinary code block in the answer cannot. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:241-241`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:318-318`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:364-364`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:56-56`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:364-364`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:56-56`
 
 ## S21.09: Highlighted changed lines.
 
@@ -78,12 +74,12 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:241-241`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Added/removed lines are coloured only when the model writes a ```diff block; ordinary code suggestions carry no changed-line markers. | ui |
-| desktop | partial | Added/removed lines are coloured only when the model writes a ```diff block; ordinary code suggestions carry no changed-line markers. | ui |
+| web | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
+| desktop | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:98-98`, `packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts:11-11`
+Code: `packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx:133-133`, `packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts:11-11`
 
 ## S21.10: Diff formatting.
 
@@ -110,11 +106,10 @@ Code: `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:98-9
 
 - Done when: Where multiple runtimes exist, the user can choose the runtime/language for execution.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The auditor's identifier regex includes selectedRuntime but its `in` excluded apps/web/features/code, where the Cloud Code composer offers exactly that: a runtime select of harnesses and environment images. The item says 'where offered'; it is offered for code sessions, not for chat execution, hence partial. |  |
-| desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -192,14 +187,14 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:40-40`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only Regenerate the whole answer re-runs code; there is no re-run for the execution itself. | ui |
-| desktop | partial | Only Regenerate the whole answer re-runs code; there is no re-run for the execution itself. | ui |
+| web | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
+| desktop | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
 | mobile | partial | Web is partial on the strength of Regenerate; mobile's MessageBubble has the same 'Regenerate response' action, so the cell must match. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Web and desktop are partial because Regenerate re-runs the whole answer; VS Code has the same class of control, a Retry button on a failed turn that resends lastSendPayload, and was scored missing. Same evidence, same status. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2946-2946`, `apps/web/features/chat/components/messages/MessageBubble.tsx:1996-1996`
+Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`
 
 ## S21.22: Stop execution.
 
@@ -209,12 +204,12 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2946-2946`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop halts the whole reply; there is no stop control on the running execution itself. | ui |
-| desktop | partial | Stop halts the whole reply; there is no stop control on the running execution itself. | ui |
+| web | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
+| desktop | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
 | mobile | partial | Web is partial because Stop aborts the whole reply while server-side code runs; mobile has the identical mechanism (send button becomes 'Stop generating' and stopStreaming aborts the request) and code execution is done on mobile (S21.12), yet it was scored missing. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2662-2662`, `apps/web/features/chat/components/messages/MessageBubble.tsx:1996-1996`
+Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`
 
 ## S21.23: Reset runtime.
 
@@ -251,14 +246,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2662-2662`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only artifacts can be edited in the artifact panel; an ordinary code block cannot be opened in the editor. | ui |
-| desktop | partial | Only artifacts can be edited in the artifact panel; an ordinary code block cannot be opened in the editor. | ui |
+| web | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
+| desktop | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:485-485`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:488-488`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:668-668`
 
 ## S21.26: Open in coding workspace.
 
@@ -294,12 +289,12 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:485-485`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The composer only explains when a model or plan cannot run code; nothing tells the user what the sandbox can access before it runs. | ui |
-| desktop | partial | The composer only explains when a model or plan cannot run code; nothing tells the user what the sandbox can access before it runs. | ui |
+| web | partial | the composer should say the sandbox reaches only GitHub, npm and PyPI and that attached files are copied in (p-contrast next batch). | ui |
+| desktop | partial | the composer should say the sandbox reaches only GitHub, npm and PyPI and that attached files are copied in (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4511-4511`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1300-1300`
+Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1376-1376`
 
 ## S21.30: Unsupported-runtime state.
 

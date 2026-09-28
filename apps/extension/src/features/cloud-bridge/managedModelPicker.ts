@@ -1,19 +1,30 @@
 import {
   CAPABILITY_LABEL,
+  CHAT_MODEL_TYPES,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
+  canUseBillingPlanCapability,
+  canAccessModelForSubscriptionTier,
   clampEffortToEntitlement,
   getBillingPlanPricing,
   getModelEffortOptions,
   getModelMetadataById,
   getModelReasoning,
+  getModelRegistryFacts,
+  getPickerModelsForRuntimeProfile,
   resolveModelEffort,
   splitEffortsByEntitlement,
   type CapabilityTier,
   type Effort,
   type ModelQuality,
+  type ModelSpeed,
 } from '@agiworkforce/types';
+import {
+  buildModelPickerShortList,
+  resolvePlanLockLabel,
+} from '@agiworkforce/unified-chat/model-picker';
 import type { ManagedModelAccess } from './freeTrialClient';
+import { CHROME_MANAGED_RUNTIME_PROFILE } from './managedChatRouting';
 
 export interface ManagedModelPickerOption {
   value: string;
@@ -22,6 +33,15 @@ export interface ManagedModelPickerOption {
   capability?: CapabilityTier;
   description?: string;
   quality?: ModelQuality;
+  speed?: ModelSpeed;
+  family?: string | null;
+  lockLabel?: string;
+}
+
+export interface ManagedModelPickerView {
+  current: ManagedModelPickerOption | null;
+  recommended: ManagedModelPickerOption[];
+  more: ManagedModelPickerOption[];
 }
 
 export interface ManagedEffortControlState {
@@ -52,6 +72,22 @@ function capabilityForQuality(qualityTier: string): CapabilityTier | undefined {
   }
 }
 
+function pickerOption(modelId: string, lockLabel?: string): ManagedModelPickerOption | null {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata || metadata.status === 'deprecated') return null;
+  return {
+    value: metadata.id,
+    label: metadata.name,
+    provider: metadata.provider,
+    capability: capabilityForQuality(metadata.qualityTier),
+    ...(metadata.bestFor[0] ? { description: metadata.bestFor[0] } : {}),
+    quality: metadata.quality,
+    speed: metadata.speed,
+    family: getModelRegistryFacts(metadata.id)?.family ?? null,
+    ...(lockLabel ? { lockLabel } : {}),
+  };
+}
+
 export function getManagedModelPickerOptions(
   access: ManagedModelAccess | null,
 ): ManagedModelPickerOption[] {
@@ -59,18 +95,70 @@ export function getManagedModelPickerOptions(
 
   const options: ManagedModelPickerOption[] = [{ ...AUTO_OPTION }];
   for (const modelId of access.modelIds) {
-    const metadata = getModelMetadataById(modelId);
-    if (!metadata || metadata.status === 'deprecated') continue;
-    options.push({
-      value: metadata.id,
-      label: metadata.name,
-      provider: metadata.provider,
-      capability: capabilityForQuality(metadata.qualityTier),
-      ...(metadata.bestFor[0] ? { description: metadata.bestFor[0] } : {}),
-      quality: metadata.quality,
-    });
+    const option = pickerOption(modelId);
+    if (option) options.push(option);
   }
   return options;
+}
+
+function keepFamiliesTogether(
+  options: readonly ManagedModelPickerOption[],
+): ManagedModelPickerOption[] {
+  const members = new Map<string, ManagedModelPickerOption[]>();
+  for (const option of options) {
+    const key = option.family ?? option.value;
+    const family = members.get(key);
+    if (family) family.push(option);
+    else members.set(key, [option]);
+  }
+  return [...members.values()].flat();
+}
+
+export function buildManagedModelPickerView(
+  access: ManagedModelAccess,
+  selectedModel: string,
+): ManagedModelPickerView {
+  const admitted = getManagedModelPickerOptions(access).filter((option) => option.value !== 'auto');
+  const admittedIds = new Set(admitted.map((option) => option.value));
+  const locked = getPickerModelsForRuntimeProfile(CHROME_MANAGED_RUNTIME_PROFILE, {
+    modelTypes: [...CHAT_MODEL_TYPES],
+  }).flatMap((model) => {
+    if (
+      admittedIds.has(model.id) ||
+      canAccessModelForSubscriptionTier(model.id, access.subscriptionTier)
+    ) {
+      return [];
+    }
+    const lockLabel = resolvePlanLockLabel(model.id);
+    const option = lockLabel ? pickerOption(model.id, lockLabel) : null;
+    return option ? [option] : [];
+  });
+  const options = [...admitted, ...locked];
+  const byId = new Map(options.map((option) => [option.value, option]));
+  const shortList = buildModelPickerShortList({
+    models: options.map((option) => ({
+      id: option.value,
+      displayName: option.label,
+      providerKey: option.provider ?? '',
+    })),
+    planTier: access.subscriptionTier,
+    favouriteModelIds: [],
+    conversationModelId: null,
+    selectedModelId: selectedModel,
+    admitsModel: (modelId) => admittedIds.has(modelId),
+    autoGuidance: '',
+    autoContinuityGuidance: () => '',
+  });
+  const recommended = shortList.recommended.flatMap((row) => byId.get(row.id) ?? []);
+  const current = shortList.current ? (byId.get(shortList.current.id) ?? null) : null;
+  const shown = new Set(
+    [...recommended, ...(current ? [current] : [])].map((option) => option.value),
+  );
+  return {
+    current,
+    recommended,
+    more: keepFamiliesTogether(options.filter((option) => !shown.has(option.value))),
+  };
 }
 
 const PRIMARY_CAPABILITY_ORDER: readonly CapabilityTier[] = ['most-capable', 'balanced', 'fastest'];
@@ -116,6 +204,13 @@ export function reconcileManagedModelSelection(
 export function getManagedModelBadgeLabel(modelId: string): string {
   if (modelId === 'auto') return AUTO_OPTION.label;
   return getModelMetadataById(modelId)?.name ?? modelId;
+}
+
+export function agiWorkUnlockPlanLabel(): string | undefined {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canUseBillingPlanCapability(candidate, 'agi_work'),
+  );
+  return tier ? getBillingPlanPricing(tier).label : undefined;
 }
 
 function manualModelSelectionPlanLabel(): string | undefined {
