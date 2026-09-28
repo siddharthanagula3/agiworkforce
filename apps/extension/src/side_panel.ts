@@ -254,6 +254,7 @@ import {
 } from './features/cloud-bridge/memoryClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
+import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
@@ -6646,6 +6647,12 @@ function returnFollowUpsToComposer(): void {
 
 function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
+  const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount());
+  if (imageLimitNotice) {
+    composerAttachmentNotices = [imageLimitNotice];
+    updateAttachmentPreview();
+    return;
+  }
   const prompt = expandPromptShortcut(
     resolveComposerPrompt(
       text,
@@ -7353,9 +7360,29 @@ function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
+function composerImageCount(): number {
+  return (
+    pendingAttachments.length +
+    pendingDocuments.filter((entry) => entry.mimeType.startsWith('image/')).length
+  );
+}
+
+function selectedModelImageLimitNotice(images: number): string | null {
+  const model = getModelMetadataById(_ctx.selectedModel);
+  if (!model) return null;
+  const limit = managedModelImageLimit(model.id);
+  if (limit === null || images <= limit) return null;
+  return tPlural('spAttachmentModelImageLimit', limit, [model.name]);
+}
+
 function admitComposerAttachment(dataUrl: string, name: string): boolean {
   if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
     composerAttachmentNotices.push(t('spAttachmentUnsupported', [name]));
+    return false;
+  }
+  const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount() + 1);
+  if (imageLimitNotice) {
+    composerAttachmentNotices.push(imageLimitNotice);
     return false;
   }
   if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
