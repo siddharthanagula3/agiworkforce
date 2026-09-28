@@ -234,16 +234,15 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`,
 
 - Done when: The user can open an answer's sources and see each one's title, origin and the excerpt it contributed, then open it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Sources expand to a list of titles and domains that open in the browser; show the excerpt each source contributed. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Reviewed sources show only as title links inside an activity step; add an inspector with each source's excerpt. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/extension/src/features/side-panel/bubbles.ts:411-411`, `apps/extension/src/features/side-panel/bubbles.ts:540-540`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`
 
 ## S9.30: Credit-balance card.
 
