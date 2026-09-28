@@ -7,6 +7,7 @@
     "apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts": "replaces an oversized system message in place and contributes no layer of its own",
     "apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts": "adds the file sources block to a request the processor resolved before the loop started",
     "apps/web/features/chat/pages/WebChatPage.tsx": "client composer; what it sends reaches the server as request messages, and the server resolves the layers",
+    "apps/web/features/developers/components/RequestPlayground.tsx": "client playground; the system message is the developer's own request field, sent to the API exactly as their code would send it, and the server resolves the layers",
     "apps/web/lib/hooks/useChatStream.ts": "client stream; the style instruction it sends reaches the server as a request system message, and the server resolves the layers",
     "apps/web/lib/server/scanned-document-text.ts": "an optical character recognition call with a fixed prompt and no user instruction layer",
     "apps/web/lib/services/managed-memory-context-service.ts": "renders the recalled memory block; the request processor tags its layer at the call site",
