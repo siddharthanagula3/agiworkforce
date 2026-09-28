@@ -16,13 +16,19 @@ const DEFAULT_STATE: HostPreferencesState = {
     launchAtLogin: false,
     quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk[0] as string,
     screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot[0] as string,
+    windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot[0] as string,
     voiceShortcut: HOST_SHORTCUT_CHOICES.voice[0] as string,
     showInMenuBar: true,
     cliPath: '',
     sessionCompletionAlerts: 'background',
     sessionApprovalAlerts: true,
   },
-  shortcutStatus: { quickAsk: 'registered', screenshot: 'registered', voice: 'registered' },
+  shortcutStatus: {
+    quickAsk: 'registered',
+    screenshot: 'registered',
+    windowShot: 'registered',
+    voice: 'registered',
+  },
 };
 
 const RESOLVED_CLI: DeveloperRuntimeStatus = {
@@ -192,7 +198,14 @@ describe('the desktop settings section', () => {
   // A control that silently did nothing would be worse than no control: the
   // shell tells the panel the chord did not take, and the panel says so.
   it('says why a shortcut did not take', async () => {
-    installHost({ shortcutStatus: { quickAsk: 'taken', screenshot: 'duplicate', voice: 'off' } });
+    installHost({
+      shortcutStatus: {
+        quickAsk: 'taken',
+        screenshot: 'duplicate',
+        windowShot: 'off',
+        voice: 'off',
+      },
+    });
     render(<DesktopSettingsSection />);
 
     expect(await screen.findByText('Already used by another app.')).toBeInTheDocument();

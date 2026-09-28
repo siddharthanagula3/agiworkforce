@@ -2,8 +2,9 @@ use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
     AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventError,
     AgentEventFileChangeKind, AgentEventFileChanged, AgentEventProgressStatus,
-    AgentEventProgressUpdate, AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
-    AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
+    AgentEventProgressUpdate, AgentEventSource, AgentEventSourceList, AgentEventStop,
+    AgentEventStopReason, AgentEventToolExecutionEnd, AgentEventToolExecutionQueued,
+    AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
@@ -2459,6 +2460,27 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
 
                 match result {
                     Ok(turn) => {
+                        if !turn.sources.is_empty() {
+                            emit_agent_event(
+                                &task_thread_id,
+                                &task_turn_id,
+                                &task_event_sequence,
+                                &task_notifications,
+                                AgentEvent::SourceList(AgentEventSourceList {
+                                    tool_call_id: None,
+                                    query: None,
+                                    sources: turn
+                                        .sources
+                                        .iter()
+                                        .map(|source| AgentEventSource {
+                                            url: source.url.clone(),
+                                            title: source.title.clone(),
+                                            snippet: source.snippet.clone(),
+                                        })
+                                        .collect(),
+                                }),
+                            );
+                        }
                         last_response = turn.response;
                         final_incomplete = turn.incomplete;
                         cumulative_input_tokens =
