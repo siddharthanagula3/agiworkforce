@@ -810,14 +810,13 @@ enum Command {
         #[command(subcommand)]
         action: Option<TriggersSubcommand>,
     },
-    /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
+    /// Run as MCP server (stdio), exposing the CLI's file, shell, git and LSP tools.
     ///
-    /// The handler speaks the protocol and answers initialize/tools/list, but
-    /// advertises an empty tool list on purpose: one-shot agent exec over stdio
-    /// MCP needs provider/model session, approval plumbing and event streaming,
-    /// and advertising a tool before it is callable would be fake wiring. Stated
-    /// here so the command's help matches what it does, the behaviour itself is
-    /// deliberate, not a defect.
+    /// Like `claude mcp serve`, it lists the tools that run on this machine
+    /// without an agent session and runs each call through the normal executor,
+    /// with the workspace policy and trust gate intact. The connecting client
+    /// confirms each call; tools that need a model, a plan or a person at this
+    /// terminal are not listed.
     McpServer,
     /// Generate shell completion scripts.
     #[command(alias = "completions")]

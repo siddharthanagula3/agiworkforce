@@ -51,17 +51,6 @@
       },
       "enabled": false
     },
-    "slack": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-slack"
-      ],
-      "env": {
-        "SLACK_BOT_TOKEN": "<from_oauth:slack>"
-      },
-      "enabled": false
-    },
     "windows_ui": {
       "command": "powershell.exe",
       "args": [
