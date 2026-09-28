@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
-import type { ManagedCloudScheduleSources } from '@agiworkforce/cloud-contracts';
-import { listConnectors, type CloudConnectorEntry } from '../../api/cloudConnectors';
+import type {
+  ConnectorConnection,
+  ManagedCloudScheduleSources,
+} from '@agiworkforce/cloud-contracts';
+import { listConnectors } from '../../api/cloudConnectors';
 import { CONNECTORS } from '../connectors/connectorDefinitions';
 
 interface DesktopScheduleAccessFieldsProps {
@@ -12,7 +15,7 @@ interface DesktopScheduleAccessFieldsProps {
     sources?: ManagedCloudScheduleSources;
     connectors?: string[] | null;
   }) => void;
-  loadConnectors?: () => Promise<{ connectors: CloudConnectorEntry[] }>;
+  loadConnectors?: () => Promise<{ connectors: ConnectorConnection[] }>;
 }
 
 interface ConnectedConnector {
@@ -37,7 +40,7 @@ const SOURCE_OPTIONS: ReadonlyArray<{
 
 const CHECKBOX_CLASS = 'mt-0.5 accent-[var(--chat-accent-primary)]';
 
-function connectorName(entry: CloudConnectorEntry): string {
+function connectorName(entry: ConnectorConnection): string {
   if (entry.name) return entry.name;
   const catalogId = entry.connectorId.replace(/-/g, '_');
   const known = CONNECTORS.find((connector) => connector.id === catalogId);
@@ -55,7 +58,7 @@ export function DesktopScheduleAccessFields({
   loadConnectors = listConnectors,
 }: DesktopScheduleAccessFieldsProps) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [entries, setEntries] = useState<CloudConnectorEntry[]>([]);
+  const [entries, setEntries] = useState<ConnectorConnection[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {

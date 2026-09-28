@@ -121,7 +121,17 @@ export interface ConversationEntry {
   savedAt: number;
   routing: ConversationRoutingState;
   projectId?: string;
+  customTitle?: string;
+  pinned?: boolean;
+  archived?: boolean;
   cloudSync?: ConversationCloudSyncState;
+}
+
+export interface ConversationEntryChanges {
+  customTitle?: string | null;
+  pinned?: boolean;
+  archived?: boolean;
+  projectId?: string | null;
 }
 
 export interface ConversationRoutingState {
@@ -687,14 +697,18 @@ function normalizeConversationEntry(
   if (!title) return undefined;
   const cloudSync = normalizeCloudSyncState(entry['cloudSync']);
   const projectId = normalizeConversationProjectId(entry['projectId']);
+  const customTitle = normalizeConversationTitle(entry['customTitle']);
   const normalized: ConversationEntry = {
     id: entry['id'],
     owner,
-    title,
+    title: customTitle ?? title,
     messages,
     savedAt: entry['savedAt'],
     routing: normalizeRoutingState(entry['routing']),
     ...(projectId ? { projectId } : {}),
+    ...(customTitle ? { customTitle } : {}),
+    ...(entry['pinned'] === true ? { pinned: true } : {}),
+    ...(entry['archived'] === true ? { archived: true } : {}),
     ...(cloudSync ? { cloudSync } : {}),
   };
   commitHistoryNormalizationBudget(budget, entryBudget);
@@ -1129,10 +1143,13 @@ export async function appendBackgroundTurn(
     const entry: ConversationEntry = {
       id: conversationId,
       owner: { ...owner },
-      title: normalizeConversationTitle(title) ?? deriveTitle(messages),
+      title: existing?.customTitle ?? normalizeConversationTitle(title) ?? deriveTitle(messages),
       messages,
       savedAt: Date.now(),
       routing: normalizeRoutingState(routing),
+      ...(existing?.customTitle ? { customTitle: existing.customTitle } : {}),
+      ...(existing?.pinned ? { pinned: true } : {}),
+      ...(existing?.archived ? { archived: true } : {}),
       ...(existing?.cloudSync ? { cloudSync: existing.cloudSync } : {}),
     };
     store.conversations = [
@@ -1214,7 +1231,7 @@ export async function upsertConversation(
     const base: ConversationEntry = existing
       ? {
           ...existing,
-          title: deriveTitle(carried),
+          title: existing.customTitle ?? deriveTitle(carried),
           messages: carried,
           savedAt: Date.now(),
           routing: normalizeRoutingState(routing),
@@ -1280,7 +1297,7 @@ export async function saveActiveConversation(
     const entry: ConversationEntry = existing
       ? {
           ...existing,
-          title: deriveTitle(normalizedMessages),
+          title: existing.customTitle ?? deriveTitle(normalizedMessages),
           messages: normalizedMessages,
           savedAt: Date.now(),
           routing: normalizeRoutingState(routing),
@@ -1393,6 +1410,44 @@ export async function getConversation(
 export interface ConversationDeletionRecord {
   cloudConversationId?: string;
   organizationId?: string | null;
+}
+
+export async function updateConversationEntry(
+  owner: ManagedCloudOwner,
+  id: string,
+  changes: ConversationEntryChanges,
+): Promise<ConversationEntry | undefined> {
+  assertManagedCloudOwner(owner);
+  return mutateStore(async (store) => {
+    const index = store.conversations.findIndex(
+      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
+    );
+    const current = store.conversations[index];
+    if (!current) return undefined;
+    let next: ConversationEntry = applyConversationProject({ ...current }, changes.projectId);
+    if (changes.customTitle !== undefined) {
+      const customTitle =
+        changes.customTitle === null ? undefined : normalizeConversationTitle(changes.customTitle);
+      if (customTitle) next = { ...next, customTitle, title: customTitle };
+      else {
+        const { customTitle: _cleared, ...rest } = next;
+        next = { ...rest, title: deriveTitle(next.messages) };
+      }
+    }
+    if (changes.pinned !== undefined) {
+      const { pinned: _pinned, ...rest } = next;
+      next = changes.pinned ? { ...rest, pinned: true } : rest;
+    }
+    if (changes.archived !== undefined) {
+      const { archived: _archived, ...rest } = next;
+      next = changes.archived ? { ...rest, archived: true } : rest;
+    }
+    store.conversations = store.conversations.map((entry, position) =>
+      position === index ? next : entry,
+    );
+    await writeStore(store);
+    return next;
+  });
 }
 
 export async function deleteConversation(

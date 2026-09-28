@@ -320,7 +320,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'plugins', label: 'Plugins', icon: Puzzle },
       {
         key: 'slack',
-        label: 'Slack',
+        label: 'Slack app',
         icon: MessagesSquare,
         keywords: ['slack app', 'bot', 'direct message', 'mention', 'channel'],
       },

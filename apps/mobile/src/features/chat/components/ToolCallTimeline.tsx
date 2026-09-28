@@ -178,7 +178,14 @@ function ToolCallTimelineRow({
         ? label.completedForm
         : label.displayName;
   const chip = trailingChipLabel(tool);
-  const hasBody = Boolean(tool.searchResults?.length || tool.input || tool.output || tool.command);
+  const hasBody = Boolean(
+    tool.searchResults?.length ||
+    tool.input ||
+    tool.output ||
+    tool.command ||
+    tool.stderr ||
+    tool.exitCode !== undefined,
+  );
   const isSearch = isWebSearchTool(tool.name);
   const highRiskApproval =
     tool.approvalRiskLevel === 'high' && !approvalExpired && !tool.approvalDecision;
@@ -397,6 +404,7 @@ function ToolCallTimelineRow({
                   </Text>
                 </View>
               ) : null}
+              <ExecutionErrorOutput tool={tool} fontSize={11.5} numberOfLines={12} />
               {needsFullScreen(tool) ? (
                 <Pressable
                   onPress={() => onOpenFullScreen(tool)}
@@ -422,8 +430,66 @@ function ToolCallTimelineRow({
 const FULLSCREEN_OUTPUT_THRESHOLD = 600;
 
 function needsFullScreen(tool: ToolCall): boolean {
-  const size = (tool.output?.length ?? 0) + (tool.command?.length ?? tool.input?.length ?? 0);
-  return size > FULLSCREEN_OUTPUT_THRESHOLD || (tool.output?.split('\n').length ?? 0) > 12;
+  const size =
+    (tool.output?.length ?? 0) +
+    (tool.stderr?.length ?? 0) +
+    (tool.command?.length ?? tool.input?.length ?? 0);
+  return (
+    size > FULLSCREEN_OUTPUT_THRESHOLD ||
+    (tool.output?.split('\n').length ?? 0) > 12 ||
+    (tool.stderr?.split('\n').length ?? 0) > 12
+  );
+}
+
+function ExecutionErrorOutput({
+  tool,
+  fontSize,
+  numberOfLines,
+}: {
+  tool: ToolCall;
+  fontSize: number;
+  numberOfLines?: number;
+}) {
+  const colors = useThemeColors();
+  if (!tool.stderr && tool.exitCode === undefined) return null;
+  return (
+    <View style={{ gap: 6 }}>
+      {tool.stderr ? (
+        <View>
+          <Text
+            style={{
+              fontSize: fontSize - 1.5,
+              fontWeight: '600',
+              color: colors.agentError,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              marginBottom: 4,
+            }}
+          >
+            Stderr
+          </Text>
+          <Text
+            selectable={numberOfLines === undefined}
+            numberOfLines={numberOfLines}
+            style={{ fontFamily: 'monospace', fontSize, color: colors.agentError }}
+          >
+            {tool.stderr}
+          </Text>
+        </View>
+      ) : null}
+      {tool.exitCode !== undefined ? (
+        <Text
+          style={{
+            fontSize: fontSize - 0.5,
+            fontWeight: '600',
+            color: tool.exitCode === 0 ? colors.agentSuccess : colors.agentError,
+          }}
+        >
+          Exit code {tool.exitCode}
+        </Text>
+      ) : null}
+    </View>
+  );
 }
 
 export function ToolCallDetailsSheet({
@@ -546,6 +612,7 @@ export function ToolCallDetailsSheet({
               </Text>
             </View>
           ) : null}
+          <ExecutionErrorOutput tool={tool} fontSize={12.5} />
         </ScrollView>
       </View>
     </Modal>

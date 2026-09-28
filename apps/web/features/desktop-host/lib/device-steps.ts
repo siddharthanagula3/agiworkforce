@@ -12,6 +12,7 @@ import {
   deviceStepScope,
   getHostBridge,
   isDeviceStepTool,
+  isScreenDeviceStep,
   readDeviceFrontWindow,
   type DesktopHostDeclaration,
   type DeviceScreenDisplay,
@@ -21,8 +22,10 @@ import {
   type FileStat,
   type FileTextContent,
   type FileTextEdit,
+  type BackgroundShellOutput,
   type ShellRunResult,
 } from '@agiworkforce/local-runtime-contract';
+import { noteComputerUseConversation } from './computer-use-conversation';
 import { DesktopHostUnavailable } from './runtime-client';
 
 /**
@@ -108,6 +111,16 @@ function describeCommandRun(result: ShellRunResult): string {
   if (result.stdout) parts.push(`stdout:\n${result.stdout}`);
   if (result.stderr) parts.push(`stderr:\n${result.stderr}`);
   if (result.truncated) parts.push('[output truncated]');
+  return parts.join('\n\n');
+}
+
+function describeBackgroundOutput(result: BackgroundShellOutput): string {
+  const state = result.running
+    ? `runId ${result.runId}, still running`
+    : `runId ${result.runId}, ended with exit ${result.exitCode ?? 'unknown'}`;
+  const parts = [state];
+  if (result.truncated) parts.push('[earlier output dropped]');
+  parts.push(result.output ? `output:\n${result.output}` : '(no new output)');
   return parts.join('\n\n');
 }
 
@@ -333,6 +346,30 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
       });
       return describeCommandRun(result);
     }
+    case 'device_start_command': {
+      const result = await invokeDeviceCommand<BackgroundShellOutput>(command, {
+        runId: crypto.randomUUID(),
+        rootId: input['rootId'],
+        command: input['command'],
+        ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+      });
+      return describeBackgroundOutput(result);
+    }
+    case 'device_command_output': {
+      const result = await invokeDeviceCommand<BackgroundShellOutput>(command, {
+        rootId: input['rootId'],
+        runId: input['runId'],
+        ...(typeof input['input'] === 'string' ? { input: input['input'] } : {}),
+      });
+      return describeBackgroundOutput(result);
+    }
+    case 'device_command_stop': {
+      const result = await invokeDeviceCommand<BackgroundShellOutput>(command, {
+        rootId: input['rootId'],
+        runId: input['runId'],
+      });
+      return describeBackgroundOutput(result);
+    }
   }
 }
 
@@ -350,6 +387,7 @@ export async function executeDeviceStep(
   if (!isDeviceStepTool(tool)) {
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
+  if (isScreenDeviceStep(tool)) noteComputerUseConversation();
   try {
     if (tool === 'device_screenshot' || tool === 'device_zoom') {
       return await captureFor(tool, input);

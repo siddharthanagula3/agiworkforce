@@ -27,6 +27,7 @@ import {
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   WEB_SEARCH_CITATION_DELTA_KEY,
+  type AgentEventSource,
   type Effort,
   type InteractiveCard,
   type ManagedQuotaBlockPresentation,
@@ -561,9 +562,7 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
   return reversed.reverse();
 }
 
-export interface ManagedChatSourceWire {
-  url: string;
-  title: string;
+export interface ManagedChatSourceWire extends AgentEventSource {
   publishedDate?: string;
 }
 

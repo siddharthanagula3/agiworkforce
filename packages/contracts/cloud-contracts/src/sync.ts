@@ -111,6 +111,8 @@ export const ConversationWireDeltaSchema = z.object({
   model: z.string().nullable(),
   project_id: z.string().nullable(),
   pinned: z.boolean(),
+  starred: z.boolean().optional(),
+  archived: z.boolean().optional(),
   active_leaf_message_id: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),

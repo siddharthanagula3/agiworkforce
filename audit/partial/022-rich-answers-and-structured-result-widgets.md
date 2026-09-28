@@ -25,11 +25,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Source rows show only domain and title; the snippet is received but never displayed, and there is no preview on the chip. | ui |
+| mobile | partial | The source list shows each result's title, site and snippet before it opens, and the citation chip preview shows title and site; the chip shows the snippet once post-codex/chat-gates-s22.02-mobile-citation-snippet.patch is applied (MessageBubble is held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:181-181`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:18-18`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`, `apps/mobile/src/features/chat/components/CitationChip.tsx:39-39`
 
 ## S22.03: Search-result lists.
 
@@ -66,12 +66,12 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1513-1513`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Chart artifacts open as text in the full-screen viewer; nothing draws an interactive chart. | ui |
+| mobile | partial | Charts drawn from an answer are now interactive (tap a category or slice for its values, legend). Chart artifacts still open as text in the full-screen viewer: the web chart spec parser lives in packages/ui/unified-chat and would have to move to a shared package before the Codex-held ArtifactFullScreen can draw them. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`
+Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:269-269`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.09: Inspectable chart data.
 
@@ -81,12 +81,12 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chart spec is readable as text in the artifact viewer, but there is no chart and no structured data view. | ui |
+| mobile | partial | An answer's chart shows its values on tap and its data as a selectable table (Show data). Chart artifacts in the full-screen viewer are still text, as in S22.08. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`
+Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:82-82`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.10: Geographic maps.
 
@@ -140,12 +140,9 @@ Code: `apps/web/features/chat/components/messages/cards/map/PlaceDetailPopup.tsx
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Email artifacts open as plain Markdown text; there is no email widget or copy/send action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`
 
 ## S22.29: Interactive questionnaires.
 
@@ -173,46 +170,37 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 
 - Done when: Mind-map answers render as a drawn mind map.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.32: Flowcharts.
 
 - Done when: Flowchart answers render as a drawn flowchart diagram.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.33: Timelines.
 
 - Done when: Timeline answers render as a drawn timeline.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.36: Interactive demonstrations.
 
