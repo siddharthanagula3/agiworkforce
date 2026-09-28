@@ -11464,6 +11464,11 @@ function buildUI(): void {
       const status = m['status'];
       if (status === 'running' && typeof runId === 'string' && runGeneration !== undefined) {
         cuPanel.setRunState(true, runId, runGeneration);
+        cuPanel.setPaused(false);
+        switchTab('computer-use');
+      } else if (status === 'paused' && cuPanel.ownsRun(runId)) {
+        cuPanel.noteRunActivity();
+        cuPanel.setPaused(true, typeof m['reason'] === 'string' ? m['reason'] : undefined);
         switchTab('computer-use');
       } else if (
         (status === 'stopped' || status === 'completed' || status === 'error') &&

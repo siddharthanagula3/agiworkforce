@@ -21,7 +21,15 @@ export interface ComputerUseRunLease {
   readonly controller: AbortController;
   tabIntentUrl: string;
   actionInFlight: boolean;
+  lastActionEndedAt: number;
   completion: Promise<unknown> | null;
+  takeover: ComputerUseTakeover | null;
+}
+
+export interface ComputerUseTakeover {
+  readonly reason: string;
+  readonly handedBack: Promise<void>;
+  readonly handBack: () => void;
 }
 
 export interface ComputerUseStartIntent {
@@ -87,10 +95,32 @@ export class ComputerUseRunCoordinator {
       initialCredential: input.credential,
       controller: new AbortController(),
       actionInFlight: false,
+      lastActionEndedAt: 0,
       completion: null,
+      takeover: null,
     };
     this.active = lease;
     return lease;
+  }
+
+  beginTakeover(lease: ComputerUseRunLease, reason: string): ComputerUseTakeover {
+    this.assertCurrent(lease);
+    if (lease.takeover) return lease.takeover;
+    let handBack: () => void = () => undefined;
+    const handedBack = new Promise<void>((resolve) => {
+      handBack = resolve;
+    });
+    lease.takeover = { reason, handedBack, handBack };
+    return lease.takeover;
+  }
+
+  endTakeover(lease: ComputerUseRunLease): boolean {
+    this.assertCurrent(lease);
+    const takeover = lease.takeover;
+    if (!takeover) return false;
+    lease.takeover = null;
+    takeover.handBack();
+    return true;
   }
 
   getActive(): ComputerUseRunLease | null {
@@ -111,6 +141,7 @@ export class ComputerUseRunCoordinator {
   setActionInFlight(lease: ComputerUseRunLease, active: boolean): void {
     this.assertCurrent(lease);
     lease.actionInFlight = active;
+    if (!active) lease.lastActionEndedAt = Date.now();
   }
 
   commitTabIntent(lease: ComputerUseRunLease, url: string): void {

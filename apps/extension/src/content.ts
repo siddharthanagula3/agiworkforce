@@ -285,6 +285,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return { success: true } as ExtensionResponse;
     }
 
+    case 'AGI_CU_WATCH_INPUT' as ExtensionMessage['type']:
+      watchUserInput((message as unknown as { watching?: unknown }).watching === true);
+      return { success: true } as ExtensionResponse;
+
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
   }
@@ -1833,6 +1837,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
   'AGI_RUN_AUTOFILL',
+  'AGI_CU_WATCH_INPUT',
   'AGI_CU_SHOW_ACTION',
 ]);
 
@@ -1863,6 +1868,27 @@ function showActionPoint(x: number, y: number): void {
   root.append(style, ring);
   document.documentElement.appendChild(host);
   setTimeout(() => host.remove(), ACTION_POINT_VISIBLE_MS);
+}
+
+const USER_INPUT_REPORT_INTERVAL_MS = 1_000;
+const USER_INPUT_EVENTS = ['pointerdown', 'keydown'] as const;
+let userInputWatcher: ((event: Event) => void) | null = null;
+
+function watchUserInput(watching: boolean): void {
+  if (userInputWatcher) {
+    for (const type of USER_INPUT_EVENTS) window.removeEventListener(type, userInputWatcher, true);
+    userInputWatcher = null;
+  }
+  if (!watching) return;
+  let lastReportAt = 0;
+  userInputWatcher = (event: Event) => {
+    if (!event.isTrusted) return;
+    const now = Date.now();
+    if (now - lastReportAt < USER_INPUT_REPORT_INTERVAL_MS) return;
+    lastReportAt = now;
+    void chrome.runtime.sendMessage({ type: 'AGI_CU_USER_INPUT' }).catch(() => undefined);
+  };
+  for (const type of USER_INPUT_EVENTS) window.addEventListener(type, userInputWatcher, true);
 }
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

@@ -40,6 +40,26 @@ export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'ask_user_to_take_over',
+      description:
+        'Hand the page to the user and wait. Use it when the page needs the user to sign in, ' +
+        'solve a CAPTCHA or other human check, or enter a password, payment card or other ' +
+        'sensitive detail. Returns when the user hands the page back, with the page as it is then.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: {
+            type: 'string',
+            description: 'What the user needs to do, in one short sentence.',
+          },
+        },
+        required: ['reason'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'screenshot',
       description:
         'Capture a screenshot of the current browser tab. Returns a base64 PNG image. Use this to see the current state of the page before and after actions.',
