@@ -32,7 +32,7 @@ use agiworkforce_protocol::developer_session::{
     ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
     ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
     TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary,
+    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -405,7 +405,7 @@ impl CliDeveloperSessionHost {
             tools: true,
             mcp: self.load_integrations,
             checkpoints: true,
-            worktrees: false,
+            worktrees: true,
             models: true,
             account: true,
             instructions: true,
@@ -3278,6 +3278,80 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(added)
     }
 
+    async fn create_worktree(
+        &self,
+        params: WorktreeCreateParams,
+    ) -> Result<WorktreeSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let worktree = crate::runtime::worktree::open_session_worktree(
+            &self.workspace_root,
+            params.name.as_deref(),
+        )
+        .await
+        .map_err(invalid_request)?;
+        let summary = worktree_summary(&worktree).await?;
+        self.emit(
+            "worktree/created",
+            serde_json::json!({ "worktree": summary }),
+        );
+        Ok(summary)
+    }
+
+    async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let mut worktrees = Vec::new();
+        for worktree in crate::runtime::worktree::list_session_worktrees(&self.workspace_root)
+            .await
+            .map_err(invalid_request)?
+        {
+            worktrees.push(worktree_summary(&worktree).await?);
+        }
+        Ok(WorktreeListResponse { worktrees })
+    }
+
+    async fn remove_worktree(
+        &self,
+        params: WorktreeRemoveParams,
+    ) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let worktree = crate::runtime::worktree::list_session_worktrees(&self.workspace_root)
+            .await
+            .map_err(invalid_request)?
+            .into_iter()
+            .find(|worktree| worktree.name == params.name)
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found(format!(
+                    "No worktree named '{}' is open for this repository",
+                    params.name
+                ))
+            })?;
+        if !params.force
+            && crate::runtime::worktree::session_worktree_has_work(&worktree)
+                .await
+                .map_err(internal_error)?
+        {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' has changes or commits that are not on its base; removing it with force deletes them and its branch",
+                params.name
+            )));
+        }
+        crate::runtime::worktree::remove_session_worktree(&worktree, params.force)
+            .await
+            .map_err(invalid_request)?;
+        self.emit(
+            "worktree/removed",
+            serde_json::json!({ "name": worktree.name }),
+        );
+        let mut worktrees = Vec::new();
+        for remaining in crate::runtime::worktree::list_session_worktrees(&self.workspace_root)
+            .await
+            .map_err(invalid_request)?
+        {
+            worktrees.push(worktree_summary(&remaining).await?);
+        }
+        Ok(WorktreeListResponse { worktrees })
+    }
+
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
         // Flip admission before waiting for the exclusive lifecycle guard so a
         // queued WebSocket request cannot slip in behind shutdown.
@@ -3465,6 +3539,19 @@ fn trust_mode_of(privacy_mode: crate::agent::PrivacyMode) -> DeveloperSessionTru
         crate::agent::PrivacyMode::Byok => DeveloperSessionTrustMode::Byok,
         crate::agent::PrivacyMode::Managed => DeveloperSessionTrustMode::Managed,
     }
+}
+
+async fn worktree_summary(
+    worktree: &crate::runtime::worktree::SessionWorktree,
+) -> Result<WorktreeSummary, DeveloperSessionHostError> {
+    Ok(WorktreeSummary {
+        name: worktree.name.clone(),
+        path: worktree.path.display().to_string(),
+        branch: worktree.branch.clone(),
+        has_work: crate::runtime::worktree::session_worktree_has_work(worktree)
+            .await
+            .map_err(internal_error)?,
+    })
 }
 
 fn validated_max_turns(requested: Option<u32>) -> Result<Option<usize>, DeveloperSessionHostError> {
