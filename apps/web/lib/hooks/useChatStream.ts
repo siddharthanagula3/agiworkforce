@@ -141,6 +141,7 @@ import {
   parseResearchPlanEvent,
   parseResearchRunConfig,
   rendersResearchPlan,
+  researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
@@ -3645,7 +3646,10 @@ export function useChatStream(): UseChatStreamReturn {
           const apiMessages: ApiMessage[] = currentMessages
             .filter((m) => m.id !== assistantMessageId)
             .flatMap((m) => {
-              const turn: ApiMessage = { role: m.role, content: buildApiMessageContent(m) };
+              const turn: ApiMessage = {
+                role: m.role,
+                content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
+              };
               const settled = settledInteractiveCardTurn(m);
               return settled ? [turn, settled] : [turn];
             });
