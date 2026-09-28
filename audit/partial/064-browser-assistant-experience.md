@@ -66,23 +66,20 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | YouTube chips send only the video title and visible page text; nothing fetches the transcript or captions. | handler |
+| chrome | partial | Decision needed: no leader page confirms video answers from transcripts in a browser extension (Gemini in Chrome support.google.com/gemini/answer/16283624 and Claude in Chrome pages are silent, help.openai.com refuses fetch); either read YouTube captions for the existing Summarize video chips or remove those chips. | handler |
 
-Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:52-74`, `apps/extension/src/features/content/in-page-panel/panel.ts:423-433`
+Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:54-54`
 
 ## S64.10: Open URL.
 
 - Done when: The assistant opens a web address in the browser for the user.
 - Wave: 3
-- Already works on: desktop, cli, vscode
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | In Chrome itself the side-panel chat cannot open a page; only the job-autofill agent and commands from a paired AGI Desktop or CLI can navigate. | ui |
-
-Code: `apps/extension/src/features/computer-use/agentLoop.ts:338-350`, `apps/extension/src/features/native-bridge/desktopCommands.ts:102-106`, `apps/extension/src/side_panel.ts:9490-9502`, `apps/extension/src/content.ts:1137-1150`
 
 ## S64.13: Organize tabs.
 
@@ -94,14 +91,12 @@ Code: `apps/extension/src/features/computer-use/agentLoop.ts:338-350`, `apps/ext
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The user can only add or remove the current tab from one "AGI" tab group; the assistant never groups, sorts or closes tabs. | handler |
-
-Code: `apps/extension/src/side_panel.ts:9539-9549`, `apps/extension/src/background.ts:1310-1320`
 
 ## S64.14: Website search.
 
 - Done when: The assistant runs a search on a website and reads the results back.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -110,15 +105,14 @@ Code: `apps/extension/src/side_panel.ts:9539-9549`, `apps/extension/src/backgrou
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | No site-search action: the agent must type into the site's search box by guessed CSS selector, because browser_read_page returns text without element selectors. | handler |
 | vscode | partial | Same as the CLI runtime it drives: search only by typing into a guessed CSS selector. | handler |
-| chrome | partial | The agent can type and click, but the side-panel chat cannot open a page; only the job-autofill agent and commands from a paired AGI Desktop or CLI can navigate. | ui |
 
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`, `apps/extension/src/features/computer-use/agentLoop.ts:283-290`
+Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.15: Form filling.
 
 - Done when: The assistant fills in a web form on the user's behalf.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -126,14 +120,14 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | browser_type fills one field per call by CSS selector, but the agent never receives the form's fields or selectors, so it must guess them. | handler |
 | vscode | partial | Same limit as the CLI runtime: one guessed CSS selector per field. | handler |
-| chrome | partial | Autofill and the agent only fill job applications on Greenhouse, Lever, LinkedIn and Ashby; any other form is refused. | surface-only |
 
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`, `apps/extension/src/features/side-panel/computerUsePanel.ts:652-656`
+Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.16: Multi-step website task.
 
 - Done when: The user gives a goal and the assistant carries it out over several steps on websites.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -142,69 +136,60 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The agent can chain read, click, type, navigate and screenshot, but has no element selectors, back/forward or tab control, so many sites cannot be completed. | handler |
 | vscode | partial | Same limits as the CLI runtime it drives. | handler |
-| chrome | partial | The multi-step agent loop exists, but it starts only when job-form autofill stalls; the user cannot give it any other goal. | ui |
 
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`, `apps/extension/src/side_panel.ts:9490-9502`
+Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.17: Structured site-tool invocation.
 
 - Done when: The assistant calls tools a website declares (e.g. WebMCP) instead of clicking through the page.
-- Wave: 2
+- Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The background can list and call a page's WebMCP tools and the agent loop accepts them, but no panel or run ever asks for them. | ui, mount |
-
-Code: `apps/extension/src/background.ts:3517-3530`, `apps/extension/src/features/computer-use/agentLoop.ts:44-49`
 
 ## S64.18: Visible action timeline.
 
 - Done when: Each browser action the assistant takes is listed for the user as it happens.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:945-958`, `apps/extension/src/side_panel.ts:9407-9413`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.19: Live browser preview.
 
 - Done when: The user can watch the browser the assistant is driving while it works.
-- Wave: 2
+- Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
-
-Code: `apps/extension/src/background.ts:4707-4720`, `apps/extension/src/features/side-panel/computerUsePanel.ts:945-958`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.20: Active-tab indicator.
 
 - Done when: A visible marker shows which tab the assistant is working in.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | Nothing in the product marks the driven tab; only Chrome's own "debugging this browser" bar, which names the whole browser, shows control. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:685-700`
 
 ## S64.21: Login handoff.
 
 - Done when: When a site needs the user to sign in, the assistant pauses, lets them sign in, then continues.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -213,14 +198,12 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:685-700`
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The agent spots sign-in walls and never types passwords, but it can only stop and report; there is no way to sign in and let the same run continue. | ui, handler |
-
-Code: `apps/extension/src/features/computer-use/escalationEngine.ts:149-154`, `apps/extension/src/features/computer-use/approvalPolicy.ts:219-221`
 
 ## S64.22: Human verification handoff.
 
 - Done when: When a site shows a CAPTCHA or human check, the assistant hands it to the user and resumes after.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -229,14 +212,12 @@ Code: `apps/extension/src/features/computer-use/escalationEngine.ts:149-154`, `a
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | A CAPTCHA is detected on job forms but is passed to the agent, not the person; nothing pauses for the user to solve it and resume. | ui, handler |
-
-Code: `apps/extension/src/features/computer-use/escalationEngine.ts:156-161`
 
 ## S64.25: Pause/stop.
 
 - Done when: The user can pause or stop the assistant's browser task at any moment.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -245,29 +226,26 @@ Code: `apps/extension/src/features/computer-use/escalationEngine.ts:156-161`
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Interrupting the turn stops further browser calls, but there is no pause that keeps the task to resume. | ui |
 | vscode | partial | Stopping the turn in the runtime ends browser calls; there is no pause. | ui |
-| chrome | partial | Stop ends the run immediately, but there is no pause that keeps the run for later. | ui |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`, `apps/extension/src/features/side-panel/computerUsePanel.ts:662-666`, `apps/extension/src/features/side-panel/computerUsePanel.ts:770-780`
+Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.26: Download review.
 
 - Done when: Files the assistant downloads are approved and listed so the user can review them.
-- Wave: 2
-- Already works on: desktop
+- Wave: 3
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
-
-Code: `apps/extension/src/features/side-panel/browserToolsPanel.ts:290-311`, `apps/extension/src/features/computer-use/approvalPolicy.ts:211-222`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.27: Upload review.
 
 - Done when: Before the assistant uploads a file to a website the user reviews and approves it.
-- Wave: 2
+- Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -275,20 +253,14 @@ Code: `apps/extension/src/features/side-panel/browserToolsPanel.ts:290-311`, `ap
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
-
-Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1092-1100`, `apps/extension/src/features/computer-use/agentLoop.ts:725-731`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.32: Browser-task result summary.
 
 - Done when: When a browser task ends the assistant reports what it did and what still needs the user.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:976-984`, `apps/extension/src/features/computer-use/escalationEngine.ts:276-281`, `apps/extension/src/side_panel.ts:9490-9502`

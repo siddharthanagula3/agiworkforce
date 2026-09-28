@@ -66,6 +66,7 @@ const runtime: DeveloperRuntimeModels = {
   ],
   hostModels: [],
   defaultModelId: CONFIGURED_MODEL,
+  defaultAgentMode: null,
   managedSignedIn: false,
 };
 
@@ -150,6 +151,7 @@ describe('local code surface', () => {
         models: [{ id: OTHER_MODEL, provider: 'qa-provider', local: false }],
         hostModels: [],
         defaultModelId: OTHER_MODEL,
+        defaultAgentMode: null,
         managedSignedIn: true,
       },
       [{ ...session, model: OTHER_MODEL }],
@@ -565,6 +567,7 @@ describe('the model a new local session starts on', () => {
       models: [],
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: topTierId,
+      defaultAgentMode: null,
       managedSignedIn: false,
     };
 
@@ -581,6 +584,7 @@ describe('the model a new local session starts on', () => {
       models: [],
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: topTierId,
+      defaultAgentMode: null,
       managedSignedIn: false,
     };
 
@@ -592,6 +596,7 @@ describe('the model a new local session starts on', () => {
       models: [],
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: cheapId,
+      defaultAgentMode: null,
       managedSignedIn: false,
     };
 
@@ -601,7 +606,13 @@ describe('the model a new local session starts on', () => {
   it('offers nothing when the host can reach nothing', () => {
     expect(
       startingModelId(
-        { models: [], hostModels: [], defaultModelId: null, managedSignedIn: false },
+        {
+          models: [],
+          hostModels: [],
+          defaultModelId: null,
+          defaultAgentMode: null,
+          managedSignedIn: false,
+        },
         [],
       ),
     ).toBeUndefined();

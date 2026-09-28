@@ -93,7 +93,7 @@ export function LocalByokHandoffDialog({
                 {localLabel}
               </Badge>
               <span className="text-muted-foreground">to</span>
-              <Badge variant="outline" className="gap-1 border-cyan-500/40 text-info-text">
+              <Badge variant="outline" className="gap-1 border-info-fill/40 text-info-text">
                 <FileCheck2 className="h-3 w-3" />
                 {targetProviderLabel ? `${targetLabel} · ${targetProviderLabel}` : targetLabel}
               </Badge>

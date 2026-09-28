@@ -289,6 +289,8 @@ export interface DirectoryPluginDetail {
   permissions?: readonly string[];
   scan?: DirectoryPluginScan | null;
   versions?: DirectoryPluginVersions;
+  editable?: boolean;
+  customizable?: boolean;
   version?: string;
   enabled?: boolean;
   examplePrompts: readonly string[];
@@ -343,6 +345,7 @@ export interface DirectoryPluginDraftSkill {
   name: string;
   description: string;
   body: string;
+  path?: string;
 }
 
 export interface DirectoryPluginDraft {
@@ -390,6 +393,9 @@ export interface DirectoryAdapter {
     acknowledgedScans?: readonly string[],
   ) => Promise<DirectoryUploadResult>;
   createPlugin?: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
+  loadPluginDraft?: (id: string) => Promise<DirectoryPluginDraft>;
+  updatePlugin?: (id: string, draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
+  customizePlugin?: (id: string) => Promise<string>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginVersion?: (

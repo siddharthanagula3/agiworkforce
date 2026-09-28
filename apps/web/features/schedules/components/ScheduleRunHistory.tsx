@@ -51,14 +51,12 @@ function runStatusLabel(status: ScheduleRun['status']): string {
 
 function runStatusIcon(run: ScheduleRun) {
   if (run.status === 'success') {
-    return (
-      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-    );
+    return <CheckCircle2 className="h-4 w-4 text-success-text" aria-hidden="true" />;
   }
   if (run.status === 'running') {
     return (
       <Loader2
-        className="h-4 w-4 animate-spin text-amber-600 motion-reduce:animate-none dark:text-amber-400"
+        className="h-4 w-4 animate-spin text-info-text motion-reduce:animate-none"
         aria-hidden="true"
       />
     );
