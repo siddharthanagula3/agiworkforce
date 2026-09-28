@@ -84,6 +84,11 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   'User.Read': { sentence: 'Reads your basic Microsoft profile.', access: READ },
   'Mail.Read': { sentence: 'Reads your Outlook mail.', access: READ },
   'Mail.Send': { sentence: 'Sends mail from your Outlook account.', access: WRITE },
+  'Calendars.Read': { sentence: 'Reads your Outlook calendar.', access: READ },
+  'Calendars.ReadWrite': {
+    sentence: 'Creates events on your Outlook calendar and invites the people you name.',
+    access: WRITE,
+  },
   'Files.Read': { sentence: 'Reads your OneDrive files.', access: READ },
   'Files.ReadWrite.AppFolder': {
     sentence: "Reads and writes files inside this app's own OneDrive folder.",
