@@ -222,6 +222,7 @@ pub struct AgentSession {
     /// `task` spawning via `SubagentManager`.
     pub(crate) subagent_depth: usize,
     pub(crate) team_manager: Option<teams::TeamManager>,
+    pub(crate) team_identity: Option<String>,
     /// Post-turn memory consolidation work owned by this session.
     ///
     /// The app-server drains these handles during interrupt/shutdown so an old
@@ -247,6 +248,7 @@ pub struct AgentSession {
     /// re-resolution falls back conservatively (byok trust → "byok", else
     /// "free"), matching the app-server host's semantics.
     pub(crate) auto_routing_tier: Option<String>,
+    pub(crate) cloud_project: Option<String>,
     /// Image blocks queued for the next `send()` call.  They are prepended to
     /// the user message as `ContentBlock::Image` parts so the model receives
     /// both the images and the text prompt in a single multipart user turn.
@@ -701,6 +703,7 @@ impl AgentSession {
             subagent_manager: None,
             subagent_depth: 0,
             team_manager: None,
+            team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
@@ -710,6 +713,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            cloud_project: None,
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
@@ -809,8 +813,38 @@ impl AgentSession {
                 })
             });
         }
+        if self.team_identity.is_some() {
+            tool_definitions.retain(|tool_definition| tool_definition.name != "spawn_teammate");
+        }
 
         tool_definitions
+    }
+
+    pub(crate) fn callable_tool_definitions(
+        &self,
+        offered: &[ToolDefinition],
+    ) -> Vec<ToolDefinition> {
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+        let planning_locked = self.plan_mode && !self.plan_approved;
+        let mut callable = offered.to_vec();
+        callable.extend(
+            crate::runtime::tool_catalog::deferred_executable_tool_definitions(
+                planning_locked,
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            )
+            .into_iter()
+            .filter(|definition| !offered.iter().any(|tool| tool.name == definition.name))
+            .filter(|definition| {
+                !self.disallowed_tools.iter().any(|spec| {
+                    crate::tool_filters::spec_blocks_entire_tool_for_schema(spec, &definition.name)
+                })
+            }),
+        );
+        callable
     }
 
     /// Ask the desktop shell, once per session, whether a browser is paired.
@@ -1780,7 +1814,7 @@ impl AgentSession {
             title,
             model: Some(self.model.clone()),
             provider: Some(models::provider_persistence_name(&self.provider)),
-            project_id: linked_cloud_project(),
+            project_id: self.cloud_project_id(),
             messages: self
                 .messages
                 .iter()
@@ -1805,6 +1839,10 @@ impl AgentSession {
                 "this turn is saved on this device but not yet in your account: {error}"
             )),
         }
+    }
+
+    pub(crate) fn cloud_project_id(&self) -> Option<String> {
+        self.cloud_project.clone().or_else(linked_cloud_project)
     }
 
     pub fn managed_session_id(&self) -> Option<&str> {
@@ -2227,7 +2265,7 @@ mod tests {
     #[test]
     fn test_build_team_tool_definitions_count() {
         let defs = build_team_tool_definitions();
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), 5);
     }
 
     #[test]

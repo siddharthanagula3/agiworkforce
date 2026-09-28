@@ -22,7 +22,7 @@ import {
 import { shaFromInstalledVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import type { DirectoryFetch } from './official-marketplace';
-import { fetchPluginSkillFiles, parseSkillFile } from './skill-files';
+import { fetchPluginSkillFiles, parseSkillFile, pluginContentPaths } from './skill-files';
 import {
   communitySkillFileAccess,
   organizationSkillFileAccess,
@@ -172,7 +172,7 @@ async function ownSourcePlan(
     return {
       revision,
       location: record.sourceLocation,
-      skillPaths: record.runtime.components.skillPaths,
+      skillPaths: pluginContentPaths(record.runtime.components),
     };
   }
 
@@ -195,7 +195,7 @@ async function directorySourcePlan(
   return {
     revision: sha,
     location: { ...location, sha },
-    skillPaths: record.runtime.components.skillPaths,
+    skillPaths: pluginContentPaths(record.runtime.components),
   };
 }
 

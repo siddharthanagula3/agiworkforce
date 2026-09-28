@@ -1,10 +1,10 @@
 import 'server-only';
 
+import { connectorCategoryToolName } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
-import { connectorCategoryToolName } from '@shared/types/connectorToolCategories';
 import { resolveConnectorToolMetadata } from './tool-metadata';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';

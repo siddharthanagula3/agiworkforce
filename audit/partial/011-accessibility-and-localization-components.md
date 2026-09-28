@@ -22,14 +22,13 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/fe
 
 - Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
-| chrome | partial | b21db27be: each tab view has an h1, drawer and Recents h2; bridge and schedules titles belong to other lanes | bridge URL title, schedules title |
 
-Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
+Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
 
 ## S11.06: Focus restoration after panel closure.
 

@@ -196,6 +196,7 @@ describe('processRequest on the Free usage windows', () => {
     expect(mocks.settleFree).toHaveBeenCalledWith({
       reservation: expect.objectContaining({ kind: 'free_trial', reservedMicrousd: 7_500 }),
       outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'free_trial_token_budget_reached' },
     });
     expect(mocks.freeResetAt).toHaveBeenCalledWith('user-free');
     expect(response.status).toBe(429);

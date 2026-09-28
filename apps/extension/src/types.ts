@@ -4,6 +4,7 @@ import type {
   ManagedCloudAgentRunReference,
   GeneratedFileWire,
   ToolApprovalDecisionWire,
+  ToolInputResponseWire,
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 import type {
@@ -48,6 +49,7 @@ export type NativeMessageType =
   | 'CANCEL_STREAM'
   | 'RESUME_CHAT_RUN'
   | 'RESOLVE_CHAT_APPROVAL'
+  | 'RESOLVE_CHAT_INPUT'
   | 'CANCEL_COMPUTER_USE'
   | 'GET_COMPUTER_USE_STATE'
   | 'PAUSE_COMPUTER_USE'
@@ -547,6 +549,15 @@ export interface ResolveChatApprovalMessage extends BaseMessage {
   cloudRun: ManagedCloudAgentRunReference;
   toolApprovals: ToolApprovalDecisionWire[];
   guidance?: string;
+}
+
+export interface ResolveChatInputMessage extends BaseMessage {
+  type: 'RESOLVE_CHAT_INPUT';
+  owner: ManagedCloudOwner;
+  clientInstanceId: string;
+  id: string;
+  cloudRun: ManagedCloudAgentRunReference;
+  toolInputs: ToolInputResponseWire[];
 }
 
 export interface ChatChunkMessage {
@@ -1052,6 +1063,7 @@ export type ExtensionMessage =
   | CancelStreamMessage
   | ResumeChatRunMessage
   | ResolveChatApprovalMessage
+  | ResolveChatInputMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
   | GetAccessibilityTreeMessage
