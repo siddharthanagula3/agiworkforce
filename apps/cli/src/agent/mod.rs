@@ -801,6 +801,15 @@ impl AgentSession {
                 mcp_tool_definitions.as_deref(),
             );
 
+        if !planning_locked
+            && self.privacy_mode == PrivacyMode::Managed
+            && crate::plans::cached_plan_allows("image_generation")
+        {
+            tool_definitions.extend(crate::runtime::tool_catalog::image_tool_definitions(
+                self.allowed_tools.as_deref(),
+            ));
+        }
+
         if !self.disallowed_tools.is_empty() {
             tool_definitions.retain(|tool_definition| {
                 !self.disallowed_tools.iter().any(|spec| {
