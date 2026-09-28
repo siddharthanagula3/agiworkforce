@@ -311,6 +311,7 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -332,6 +333,7 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -360,6 +362,7 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
@@ -492,6 +495,7 @@
       "provider": "experientiallabs",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
