@@ -689,6 +689,27 @@ impl AgentSession {
         })
     }
 
+    fn search_refusal(&self) -> Option<String> {
+        if self.privacy_mode == super::PrivacyMode::Managed {
+            return (!crate::model_catalog::supports_web_search(&self.model)).then(|| {
+                "/search needs a model that can search the web. Switch to Auto or a search-capable model, then try again.".to_string()
+            });
+        }
+        if !self
+            .effective_tool_definitions()
+            .iter()
+            .any(|tool| tool.name == models::WEB_SEARCH_TOOL)
+        {
+            return Some(
+                "/search needs the web_search tool, and this session does not offer it."
+                    .to_string(),
+            );
+        }
+        crate::tools::search_key_provider().is_none().then(|| {
+            "/search needs a web search key in this session. Save a Brave Search or Tavily key with `agi login brave` or `agi login tavily`, or set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY.".to_string()
+        })
+    }
+
     async fn project_conversation(&self) -> Option<String> {
         if self.privacy_mode != super::PrivacyMode::Managed {
             return None;
@@ -780,6 +801,7 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        let search_turn = std::mem::take(&mut self.search_next_turn);
         // Whether the paired browser is reachable decides whether the browser
         // family is in this turn's schema list, and it is resolved here
         // because this is the one place every surface passes through.
@@ -801,6 +823,10 @@ impl AgentSession {
         self.re_resolve_auto_route_for_turn(user_input);
 
         if let Some(refusal) = self.image_limit_refusal() {
+            self.pending_image_blocks.clear();
+            anyhow::bail!(refusal);
+        }
+        if let Some(refusal) = search_turn.then(|| self.search_refusal()).flatten() {
             self.pending_image_blocks.clear();
             anyhow::bail!(refusal);
         }
@@ -1000,7 +1026,10 @@ message -- revise and call `update_plan` again.\n\n",
         // 200k is a provider 400, not a longer answer.
         let max_tokens = config.effective_max_tokens(&self.model);
 
-        let tool_defs = self.effective_tool_definitions();
+        let mut tool_defs = self.effective_tool_definitions();
+        if search_turn && self.privacy_mode == super::PrivacyMode::Managed {
+            tool_defs.retain(|tool| tool.name != models::WEB_SEARCH_TOOL);
+        }
         let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
         let available_tool_names = callable_tool_defs
             .iter()
@@ -1082,6 +1111,7 @@ message -- revise and call `update_plan` again.\n\n",
                 concurrency_safe_names,
                 plan_mode_mutating_names,
                 max_tokens,
+                search_turn,
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
@@ -1391,6 +1421,7 @@ struct TurnHostAdapter<'a> {
     concurrency_safe_names: HashSet<String>,
     plan_mode_mutating_names: HashSet<String>,
     max_tokens: u32,
+    search_turn: bool,
     /// The caller's stream callback, used for the first completion only (the
     /// continuation turns use `continuation_sink()`), matching the historical
     /// first-vs-continuation text routing.
@@ -2107,6 +2138,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
         let completion = match phase {
+            TurnPhase::First if self.search_turn => models::searching(self.complete_first()).await,
             TurnPhase::First => self.complete_first().await,
             TurnPhase::Continuation => self.complete_continuation().await,
         };
@@ -3434,6 +3466,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3466,6 +3499,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3679,6 +3713,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3987,6 +4022,7 @@ mod tests {
                 plan_mode_mutating_names: name_set(tools.plan_mode_mutating),
                 max_tokens: 1_024,
                 first_on_chunk: None,
+                search_turn: false,
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
@@ -4542,6 +4578,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4676,6 +4713,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4722,6 +4760,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),

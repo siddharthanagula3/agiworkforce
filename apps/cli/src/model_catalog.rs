@@ -313,6 +313,8 @@ struct SharedModelMetadata {
     input_modalities: Vec<String>,
     #[serde(default, rename = "imageInput")]
     image_input: Option<SharedImageInput>,
+    #[serde(default, rename = "providerCompatibility")]
+    provider_compatibility: SharedProviderCompatibility,
     /// Prompt-consuming models must publish this. Media APIs may omit it
     /// because token context is inapplicable; those entries are parsed so the
     /// shared catalog remains readable, then excluded by the CLI model-type
@@ -440,6 +442,14 @@ struct SharedModelCapabilities {
     tools: bool,
     vision: bool,
     thinking: bool,
+    #[serde(default)]
+    search: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SharedProviderCompatibility {
+    #[serde(default, rename = "forcedToolChoice")]
+    forced_tool_choice: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1801,6 +1811,19 @@ pub fn nearest_supported_effort<'a>(requested: &str, levels: &'a [String]) -> Op
         .filter_map(|level| rank(level).map(|position| (level, position)))
         .min_by_key(|(_, position)| (position.abs_diff(wanted), usize::MAX - position))
         .map(|(level, _)| level.as_str())
+}
+
+pub fn supports_web_search(model_id: &str) -> bool {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .is_some_and(|model| model.capabilities.search || model.capabilities.tools)
+}
+
+pub fn accepts_forced_tool_choice(model_id: &str) -> bool {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .and_then(|model| model.provider_compatibility.forced_tool_choice)
+        != Some(false)
 }
 
 pub fn max_images_per_request(model_id: &str) -> Option<u64> {
