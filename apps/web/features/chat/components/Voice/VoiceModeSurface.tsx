@@ -182,6 +182,7 @@ export function VoiceModeSurface({
       focus={focusMode}
       growIn
       reducedMotion={session.reducedMotion}
+      level={session.audioLevel}
       onClick={toggleFocusMode}
       className={focusMode ? 'pointer-events-auto' : undefined}
     />

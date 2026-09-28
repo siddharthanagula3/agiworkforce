@@ -14,6 +14,7 @@ import {
   isVoiceSessionActive,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
+  type VoiceOrbLevelSource,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
 import {
@@ -68,6 +69,7 @@ export interface VoiceSessionController {
   toolActivity: readonly LiveVoiceToolActivity[];
   toolApprovals: readonly LiveVoicePendingApproval[];
   toolOutcomes: readonly LiveVoiceToolOutcome[];
+  audioLevel: VoiceOrbLevelSource;
   decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   cancelBackendWork: () => void;
   reconnecting: boolean;
@@ -99,6 +101,12 @@ const UNRECOVERABLE_START_CODES = new Set([
   'microphone_unavailable',
   'unsupported',
 ]);
+
+const voiceLevel: VoiceOrbLevelSource = {
+  get current() {
+    return controller.session?.level ?? 0;
+  },
+};
 
 const controller = {
   session: null as LiveVoiceSession | null,
@@ -609,6 +617,7 @@ export function useVoiceSession({
     backendBusy,
     toolActivity,
     toolOutcomes,
+    audioLevel: voiceLevel,
     toolApprovals,
     decideToolApproval,
     cancelBackendWork,

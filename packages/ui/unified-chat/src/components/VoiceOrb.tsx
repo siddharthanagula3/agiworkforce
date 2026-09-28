@@ -23,6 +23,7 @@ const ORB_TOKEN = {
 
 const BREATH_PERIOD_MS = 5_200;
 const BREATH_AMPLITUDE = 0.035;
+const LEVEL_AMPLITUDE = 0.14;
 const BAND_PERIOD_MS = 11_000;
 const BAND_RADIUS_RATIO = 0.85;
 const BAND_ORBIT_RATIO = 0.45;
@@ -116,6 +117,10 @@ function paintOrb(
   context.restore();
 }
 
+export interface VoiceOrbLevelSource {
+  readonly current: number;
+}
+
 export interface VoiceOrbCanvasProps {
   orbState: OrbState;
   focus: boolean;
@@ -124,6 +129,7 @@ export interface VoiceOrbCanvasProps {
   canvasSize?: number;
   sphereSize?: number;
   className?: string;
+  level?: VoiceOrbLevelSource;
 }
 
 /**
@@ -139,6 +145,7 @@ export function VoiceOrbCanvas({
   canvasSize = DEFAULT_ORB_CANVAS_SIZE,
   sphereSize = DEFAULT_ORB_SPHERE_SIZE,
   className,
+  level,
 }: VoiceOrbCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bornAtRef = useRef<number | null>(null);
@@ -182,12 +189,13 @@ export function VoiceOrbCanvas({
       const grown = growIn ? Math.min(elapsed / ORB_GROW_IN_MS, 1) : 1;
       const seeded = ORB_SEED_SIZE + (restingDiameter - ORB_SEED_SIZE) * grown;
       const breath = 1 + BREATH_AMPLITUDE * Math.sin((elapsed / BREATH_PERIOD_MS) * FULL_TURN);
-      paintOrb(context, colours, canvasSize, seeded * breath, elapsed);
+      const loudness = 1 + LEVEL_AMPLITUDE * Math.min(1, Math.max(0, level?.current ?? 0));
+      paintOrb(context, colours, canvasSize, seeded * breath * loudness, elapsed);
       frame = window.requestAnimationFrame(tick);
     };
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
-  }, [colours, growIn, reducedMotion, restingDiameter, canvasSize]);
+  }, [colours, growIn, reducedMotion, restingDiameter, canvasSize, level]);
 
   return (
     <canvas
@@ -218,6 +226,7 @@ export interface VoiceOrbProps {
   canvasSize?: number;
   sphereSize?: number;
   showLabel?: boolean;
+  level?: VoiceOrbLevelSource;
 }
 
 export function VoiceOrb({
@@ -231,6 +240,7 @@ export function VoiceOrb({
   canvasSize = DEFAULT_ORB_CANVAS_SIZE,
   sphereSize = DEFAULT_ORB_SPHERE_SIZE,
   showLabel = true,
+  level,
 }: VoiceOrbProps) {
   return (
     <div className={cn('flex flex-col items-center gap-2', className)}>
@@ -250,6 +260,7 @@ export function VoiceOrb({
           reducedMotion={reducedMotion}
           canvasSize={canvasSize}
           sphereSize={sphereSize}
+          {...(level ? { level } : {})}
         />
       </button>
       {showLabel && label && (
