@@ -94,6 +94,7 @@ export function getRegistryRoute(routeId: string): RegistryRoute | null {
   return routes[routeId] ?? null;
 }
 import { normalizeBillingPlanTier } from './billing-catalog';
+import { CENTS_PER_USD, MICROUSD_PER_USD } from './credits';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';
@@ -2462,6 +2463,28 @@ export function calculateCatalogVideoCostCents(input: {
     (output.width * output.height * input.durationSecs * formula.framesPerSecond) /
     formula.pixelsPerToken;
   return Math.ceil(Number((videoTokens * usdPerToken * 100).toFixed(8)));
+}
+
+const MICROUSD_PER_CATALOG_CENT = MICROUSD_PER_USD / CENTS_PER_USD;
+
+export function videoGenerationCostMicrousd(input: {
+  model: ModelMetadata;
+  resolution: string;
+  aspectRatio: string;
+  durationSecs: number;
+  generateAudio: boolean;
+}): number | null {
+  const { model, resolution, durationSecs } = input;
+  if (model.videoGeneration?.pricing) {
+    const cents = calculateCatalogVideoCostCents(input);
+    return cents === null ? null : cents * MICROUSD_PER_CATALOG_CENT;
+  }
+  const byResolution = model.videoPerSecondCostByResolution;
+  const perSecond = byResolution
+    ? byResolution[resolution as keyof typeof byResolution]
+    : model.videoPerSecondCost;
+  if (perSecond === undefined || !Number.isFinite(perSecond)) return null;
+  return Math.ceil(Number((perSecond * durationSecs * 100).toFixed(8))) * MICROUSD_PER_CATALOG_CENT;
 }
 
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
