@@ -31,6 +31,7 @@ import {
   parseToolArguments,
   type ResolveCloudToolApproval,
 } from './CloudToolApprovalControls';
+import { RunSteerInput } from './RunSteerInput';
 
 const ACTIVITY_PAGE_SIZE = 20;
 
@@ -42,6 +43,7 @@ export interface AgentActivityTimelineProps {
   onResolveApproval?: ResolveCloudToolApproval;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
+  steerRunId?: string;
 }
 
 function formatDuration(ms: number): string {
@@ -393,6 +395,7 @@ export function AgentActivityTimeline({
   onResolveApproval,
   approvalExpired = false,
   onResendApproval,
+  steerRunId,
 }: AgentActivityTimelineProps) {
   const colors = useThemeColors();
   const isActive =
@@ -516,6 +519,10 @@ export function AgentActivityTimeline({
             }
             return <StaticRow key={entry.id} entry={entry} />;
           })}
+
+          {steerRunId && activity.status === 'running' ? (
+            <RunSteerInput runId={steerRunId} />
+          ) : null}
 
           {activity.status === 'completed' ? (
             <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 7 }}>
