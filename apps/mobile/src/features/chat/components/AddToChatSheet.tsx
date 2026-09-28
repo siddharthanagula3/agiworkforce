@@ -18,6 +18,7 @@ import {
   Bot,
   Film,
   Check,
+  Sparkles,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -53,6 +54,7 @@ import { executionModeForConversation } from '@/src/features/chat/utils/conversa
 import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
@@ -64,6 +66,7 @@ interface AddToChatSheetProps {
   onOpenModelPicker: () => void;
   onOpenProjectPicker: () => void;
   onAttachFromLibrary: (attachment: Attachment) => void;
+  onOpenSkills?: () => void;
 }
 
 const SNAP_POINTS = ['75%'];
@@ -95,6 +98,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenModelPicker,
     onOpenProjectPicker,
     onAttachFromLibrary,
+    onOpenSkills,
   },
   ref,
 ) {
@@ -172,6 +176,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'video_generation');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
+  const selectedSkillName = useMobileSkillSelectionStore((s) => s.selection?.name ?? null);
 
   const localActiveProjectId = useProjectStore((s) => s.activeProjectId);
   const localProjects = useProjectStore((s) => s.projects);
@@ -327,6 +332,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     haptic();
     exitMediaMode();
   }, [haptic]);
+
+  const handleOpenSkills = useCallback(() => {
+    if (!onOpenSkills) return;
+    haptic();
+    closeSheet();
+    onOpenSkills();
+  }, [closeSheet, haptic, onOpenSkills]);
 
   const handleConnectors = useCallback(() => {
     haptic();
@@ -887,6 +899,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             pending={handoff === 'style'}
             onPress={handleOpenStyleSelector}
           />
+          {appMode === 'cloud' && FEATURES.skills && onOpenSkills ? (
+            <ConfigLink
+              icon={<Sparkles size={18} color={themeColors.textMuted} />}
+              label="Skills"
+              value={selectedSkillName ?? 'Choose'}
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+              onPress={handleOpenSkills}
+            />
+          ) : null}
           {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
