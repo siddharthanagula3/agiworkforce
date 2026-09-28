@@ -63,7 +63,7 @@ const SINGLE_REQUEST_ROUTES = [
 const DEFERRALS = [
   [
     'apps/web/app/api/uploads/chat-attachment/put/route.ts',
-    'apps/web/app/api/uploads/chat-attachment/complete/route.ts',
+    'apps/web/lib/server/chat-attachment-completion.ts',
   ],
   [
     'apps/web/app/api/uploads/knowledge-file/put/route.ts',

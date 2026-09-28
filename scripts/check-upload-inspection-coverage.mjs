@@ -26,7 +26,7 @@ const API_ROOT = 'apps/web/app/api';
 const DEFERRED = [
   {
     route: 'apps/web/app/api/uploads/chat-attachment/put/route.ts',
-    completedBy: 'apps/web/app/api/uploads/chat-attachment/complete/route.ts',
+    completedBy: 'apps/web/lib/server/chat-attachment-completion.ts',
   },
   {
     route: 'apps/web/app/api/uploads/knowledge-file/put/route.ts',
