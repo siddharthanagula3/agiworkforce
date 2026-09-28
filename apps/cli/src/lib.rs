@@ -1125,6 +1125,15 @@ enum ProjectsSubcommand {
         /// Project id or name.
         project: String,
     },
+    /// Add a file to a project's knowledge, where its chats can search it.
+    AddFile {
+        /// Project id or name.
+        project: String,
+        /// The file to add.
+        path: std::path::PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
     /// Delete a project from the account by id or name.
     Delete {
         /// Project id or name.
@@ -2092,8 +2101,10 @@ async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputForma
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let url = code_sessions::page_url(client.base(), id);
-            if crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated())
-            {
+            if crate::oauth::open_external_url(
+                &url,
+                crate::oauth::UserActionContext::user_initiated(),
+            ) {
                 println!("Opened {url}");
             } else {
                 println!("Open this link to continue the session: {url}");
@@ -2431,6 +2442,31 @@ async fn handle_projects_command(
                 "Created '{}' in your account ({}).",
                 project.name, project.id
             );
+            Ok(())
+        }
+        ProjectsSubcommand::AddFile {
+            project,
+            path,
+            json,
+        } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            let file = cloud::knowledge::add_file(privacy, &found.id, path)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&file)?);
+            } else {
+                println!(
+                    "Added {} to '{}'. Chats in the project, and managed turns in a directory linked to it, can search it.",
+                    terminal_text::sanitize_terminal_text(&file.file_name),
+                    found.name
+                );
+            }
             Ok(())
         }
         ProjectsSubcommand::Link { project } => {
