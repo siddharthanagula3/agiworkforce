@@ -6,11 +6,8 @@ import { codeDeepLink } from '../lib/deep-links';
 import { useDesktopHost } from '../lib/host';
 
 const DEVICES_PATH = '/api/settings/devices';
-const DOWNLOAD_PATH = '/download';
 const DESKTOP_SHELL = 'electron';
 const UNNAMED_DESKTOP = 'Your desktop';
-const OPEN_LABEL = 'Open in AGI Cloud';
-const DOWNLOAD_LABEL = 'Get the desktop app';
 
 const PRESENCE_RANK: Readonly<Record<DevicePresence, number>> = {
   online: 0,
@@ -20,7 +17,7 @@ const PRESENCE_RANK: Readonly<Record<DevicePresence, number>> = {
 
 const PRESENCE_COPY: Readonly<Record<DevicePresence, string>> = {
   online: 'is online',
-  sleeping: 'is asleep and wakes when you open it',
+  sleeping: 'is asleep and wakes when AGI Cloud opens',
   offline: 'is offline; open AGI Cloud on it first',
 };
 
@@ -32,12 +29,10 @@ interface ListedDesktop {
   lastSeenAt: string | null;
 }
 
-export interface DesktopHandoff {
-  href: string;
-  label: string;
-  status: string | null;
-  presence: DevicePresence | null;
-}
+export type PairedDesktop =
+  | { kind: 'in-desktop' }
+  | { kind: 'no-desktop' }
+  | { kind: 'desktop'; href: string; presence: DevicePresence; status: string };
 
 function seenAt(device: ListedDesktop): number {
   const parsed = device.lastSeenAt ? Date.parse(device.lastSeenAt) : Number.NaN;
@@ -57,7 +52,7 @@ function pickDesktop(devices: unknown): ListedDesktop | null {
   return desktops[0] ?? null;
 }
 
-export function useDesktopHandoff(sessionId?: string): DesktopHandoff | null {
+export function usePairedDesktop(sessionId?: string): PairedDesktop {
   const host = useDesktopHost();
   const [desktop, setDesktop] = useState<ListedDesktop | null>(null);
 
@@ -77,15 +72,13 @@ export function useDesktopHandoff(sessionId?: string): DesktopHandoff | null {
     };
   }, [host]);
 
-  if (host) return null;
-  if (!desktop) {
-    return { href: DOWNLOAD_PATH, label: DOWNLOAD_LABEL, status: null, presence: null };
-  }
+  if (host) return { kind: 'in-desktop' };
+  if (!desktop) return { kind: 'no-desktop' };
   const presence = desktop.presence ?? 'offline';
   return {
+    kind: 'desktop',
     href: codeDeepLink(sessionId),
-    label: OPEN_LABEL,
-    status: `${desktop.name?.trim() || UNNAMED_DESKTOP} ${PRESENCE_COPY[presence]}`,
     presence,
+    status: `${desktop.name?.trim() || UNNAMED_DESKTOP} ${PRESENCE_COPY[presence]}`,
   };
 }
