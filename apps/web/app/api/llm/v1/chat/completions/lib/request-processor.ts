@@ -269,6 +269,7 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
+import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
 import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
@@ -775,7 +776,6 @@ export function applyClarifyCardCapability(
     !shouldOfferClarifyTool({
       userMessage: params.userMessage,
       hasAttachment: params.hasAttachment,
-      webSearch: request.web_search === true,
       research: request.research === true,
       agiWork: request.work_mode === 'agiwork',
     })
@@ -1024,6 +1024,7 @@ export type ProcessedRequest = {
     deliverable: ResearchDeliverableSpec;
   };
   /** §24: the sources and site restriction this research run was given. */
+  webSearchDomainPolicy?: ResearchDomainPolicy;
   researchSources?: {
     files: boolean;
     allowDomains: string[];
@@ -3825,6 +3826,12 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
+  const webSearchDomainPolicy = researchMode
+    ? null
+    : createResearchDomainPolicy({
+        allow: chatRequest.research_sources?.allow_domains,
+        deny: chatRequest.research_sources?.deny_domains,
+      });
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
   // lit, `runResearchLoop` never executed, and the user received an ordinary
@@ -5020,6 +5027,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
+    ...(!researchMode && webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
     ...(researchMode && chatRequest.research_sources
       ? {
           researchSources: {
