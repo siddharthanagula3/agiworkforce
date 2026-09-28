@@ -1581,15 +1581,6 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: oneOf('editor', 'textarea'),
     description: 'which composer editor the browser mounts',
   }),
-  published('NEXT_PUBLIC_LIVE_VOICE_SAMPLE_BASE_URL', {
-    type: 'url',
-    owner: 'apps/web/features/chat',
-    defaultValue: null,
-    requiredIn: [],
-    validate: isUrl,
-    description:
-      'where the voice settings load a short sample of each live voice, as <base>/<voice>.mp3',
-  }),
   published('NEXT_PUBLIC_FREE_LANE_UI', {
     type: 'enum',
     owner: 'apps/web/features/chat',
