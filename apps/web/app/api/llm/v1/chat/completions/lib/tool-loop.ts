@@ -79,6 +79,8 @@ import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
   getModelMetadataById,
+  getRegistryRoute,
+  harnessFeatureImplemented,
   isAutoModeModelId,
   isBrowserCommand,
   isImageChatToolName,
@@ -407,6 +409,7 @@ const MAX_RETRY_HELD_PROVIDER_CHARS = 64 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
 
 const MAX_PARALLEL_TOOL_CALLS = 4;
+const PARALLEL_TOOL_CALLS_FEATURE = 'parallelToolCalls';
 
 const MAX_TOOL_RESULT_HISTORY_CHARS = 200_000;
 const KEEP_RECENT_TOOL_RESULTS = 6;
@@ -4447,10 +4450,18 @@ export async function* runToolLoop(
     if (calls.length > 0) processed.toolExecutionObserved = true;
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+    const servingHarnessId = getRegistryRoute(
+      servedRouteId ??
+        buildServingRouteId(servingProcessed.provider, servingProcessed.llmRequest.model),
+    )?.harnessId;
+    const readOnlyConcurrency =
+      servingHarnessId && harnessFeatureImplemented(servingHarnessId, PARALLEL_TOOL_CALLS_FEATURE)
+        ? MAX_PARALLEL_TOOL_CALLS
+        : 1;
 
     const toolStartedAt = new Map<string, number>();
     const parallelGroup =
-      readOnly.length > 1
+      readOnly.length > 1 && readOnlyConcurrency > 1
         ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
         : undefined;
     for (const tc of calls) {
@@ -4680,14 +4691,10 @@ export async function* runToolLoop(
       );
     };
 
-    const parallelResults = await mapWithConcurrency(
-      readOnly,
-      MAX_PARALLEL_TOOL_CALLS,
-      async (tc) => {
-        const result = await executeTool(tc);
-        return { tc, ...result };
-      },
-    );
+    const parallelResults = await mapWithConcurrency(readOnly, readOnlyConcurrency, async (tc) => {
+      const result = await executeTool(tc);
+      return { tc, ...result };
+    });
     results.push(...parallelResults);
 
     for (const tc of mutating) {
