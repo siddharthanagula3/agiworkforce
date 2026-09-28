@@ -4,6 +4,7 @@ import {
   Brain,
   Download,
   ExternalLink,
+  Share2,
   FileOutput,
   Folder,
   Globe,
@@ -26,6 +27,7 @@ import { formatDeliverableTypeLine } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
   AGIWORK_GOAL_PROGRESS_ID,
+  AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
   AGIWORK_PLAN_PROGRESS_ID_PREFIX,
 } from '../../lib/agi-work-progress';
 import {
@@ -41,6 +43,7 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
+  type AgiWorkExcludedTool,
   type AgiWorkRerunGoal,
   formatTaskCost,
   formatTaskTokens,
@@ -50,6 +53,7 @@ import {
   taskStateTone,
   TASK_TONE_BADGE_CLASS,
   workModeLabel,
+  taskResultText,
 } from './task-display';
 
 // Below `lg` the list and this panel can no longer sit side by side, so
@@ -145,17 +149,70 @@ function useMobileTakeoverDialog(
   }, [active, panelRef]);
 }
 
-function parseGoalDetail(detail: string | undefined): {
-  constraints?: string;
-  deliverable?: string;
-} {
+type PlanItemStatus = 'completed' | 'failed' | 'running' | 'stopped' | 'pending';
+
+interface PlanItem {
+  ordinal: number;
+  description: string;
+  status: PlanItemStatus;
+}
+
+const PLAN_ITEM_STATUS_LABEL: Record<PlanItemStatus, string> = {
+  completed: 'Done',
+  failed: 'Failed',
+  running: 'In progress',
+  stopped: 'Stopped',
+  pending: 'Not started',
+};
+
+const STOPPED_SHORT_STATES = new Set(['partial', 'timed_out', 'cancelled', 'failed']);
+
+function planItems(
+  overview: AgentActivityProgressEntry | undefined,
+  steps: AgentActivityProgressEntry[],
+  live: boolean,
+): PlanItem[] {
+  if (!overview?.detail) return [];
+  return overview.detail.split('\n').flatMap((line): PlanItem[] => {
+    const match = /^(\d+)\.\s*(.+)$/.exec(line.trim());
+    if (!match) return [];
+    const ordinal = Number(match[1]);
+    const step = steps.find(
+      (entry) => entry.progressId === `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}agiwork-plan-${ordinal}`,
+    );
+    const status: PlanItemStatus =
+      step?.status === 'completed' || step?.status === 'failed'
+        ? step.status
+        : step?.status === 'running'
+          ? live
+            ? 'running'
+            : 'stopped'
+          : step?.status === 'cancelled'
+            ? 'stopped'
+            : 'pending';
+    return [{ ordinal, description: match[2]!, status }];
+  });
+}
+
+const EXCLUDED_TOOL_BY_LABEL: Record<string, AgiWorkExcludedTool> = {
+  'web search': 'web_search',
+  'code execution': 'code_execution',
+};
+
+function parseGoalDetail(detail: string | undefined): Omit<AgiWorkRerunGoal, 'goal'> {
   if (!detail) return {};
-  const result: { constraints?: string; deliverable?: string } = {};
+  const result: Omit<AgiWorkRerunGoal, 'goal'> = {};
   for (const line of detail.split('\n')) {
     const constraints = line.match(/^Constraints:\s*(.+)$/);
     if (constraints?.[1]) result.constraints = constraints[1].trim();
     const deliverable = line.match(/^Deliverable:\s*(.+)$/);
     if (deliverable?.[1]) result.deliverable = deliverable[1].trim();
+    const toolsOff = line.match(/^Tools off:\s*(.+)$/);
+    if (toolsOff?.[1]) {
+      result.excludedTools = toolsOff[1]
+        .split(',')
+        .flatMap((label) => EXCLUDED_TOOL_BY_LABEL[label.trim().toLowerCase()] ?? []);
+    }
   }
   return result;
 }
@@ -333,6 +390,7 @@ export interface TaskDetailPanelProps {
   onClose(): void;
   onOpenConversation(conversationId: string): void;
   onRerun?(goal: AgiWorkRerunGoal): void;
+  onShare?(conversationId: string): void;
 }
 
 export function TaskDetailPanel({
@@ -346,6 +404,7 @@ export function TaskDetailPanel({
   onClose,
   onOpenConversation,
   onRerun,
+  onShare,
 }: TaskDetailPanelProps) {
   const isMobileTakeover = useIsNarrowViewport(MOBILE_TAKEOVER_QUERY);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -386,10 +445,15 @@ export function TaskDetailPanel({
     (entry): entry is AgentActivityProgressEntry =>
       entry.kind === 'progress' && entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX),
   );
+  const planOverview = entries.find(
+    (entry): entry is AgentActivityProgressEntry =>
+      entry.kind === 'progress' && entry.progressId === AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+  );
   const progress = entries.filter(
     (entry): entry is Extract<AgentActivityEntry, { kind: 'progress' } | { kind: 'tool' }> =>
       (entry.kind === 'progress' &&
         entry.progressId !== AGIWORK_GOAL_PROGRESS_ID &&
+        entry.progressId !== AGIWORK_PLAN_OVERVIEW_PROGRESS_ID &&
         !entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX)) ||
       entry.kind === 'tool',
   );
@@ -403,6 +467,11 @@ export function TaskDetailPanel({
     (entry): entry is AgentActivityErrorEntry => entry.kind === 'error',
   );
   const tone = taskStateTone(runWorkState(run));
+  const live = isLiveTaskState(runWorkState(run));
+  const resultText = taskResultText(events);
+  const plan = planItems(planOverview, planSteps, live);
+  const remaining = plan.filter((item) => item.status !== 'completed');
+  const stoppedShort = !live && STOPPED_SHORT_STATES.has(runWorkState(run)) && plan.length > 0;
 
   return (
     <aside
@@ -500,7 +569,51 @@ export function TaskDetailPanel({
         </section>
       ) : null}
 
-      {planSteps.length > 0 ? (
+      {plan.length > 0 ? (
+        <section
+          data-testid="task-plan"
+          aria-label="Task plan"
+          className="mx-4 mb-4 rounded-md border border-border/70 p-3"
+        >
+          <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+            Plan · {plan.length}
+          </p>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {plan.map((item) => (
+              <li key={item.ordinal} className="flex gap-2 text-xs text-foreground">
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mt-1 h-1.5 w-1.5 shrink-0 rounded-full',
+                    item.status === 'completed' && 'bg-success-fill',
+                    item.status === 'failed' && 'bg-destructive',
+                    item.status === 'running' && 'bg-primary',
+                    item.status === 'stopped' && 'bg-muted-foreground',
+                    item.status === 'pending' && 'border border-muted-foreground',
+                  )}
+                />
+                <span className="min-w-0 break-words">
+                  {item.ordinal}. {item.description}
+                  <span className="sr-only">, {PLAN_ITEM_STATUS_LABEL[item.status]}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          {stoppedShort ? (
+            <div data-testid="task-plan-remaining" className="mt-3 border-t border-border/70 pt-2">
+              <p className="text-xs text-foreground">
+                Done {plan.length - remaining.length} of {plan.length} steps before it stopped.
+              </p>
+              {remaining.length > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Remaining:{' '}
+                  {remaining.map((item) => `${item.ordinal}. ${item.description}`).join('; ')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : planSteps.length > 0 ? (
         <section
           data-testid="task-plan"
           aria-label="Task plan"
@@ -526,6 +639,21 @@ export function TaskDetailPanel({
               </li>
             ))}
           </ol>
+        </section>
+      ) : null}
+
+      {resultText ? (
+        <section
+          data-testid="task-result"
+          aria-label={live ? 'Latest output' : 'Result'}
+          className="mx-4 mb-4 rounded-md border border-border/70 p-3"
+        >
+          <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+            {live ? 'Latest output' : 'Result'}
+          </p>
+          <p className="mt-1.5 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm text-foreground">
+            {resultText}
+          </p>
         </section>
       ) : null}
 
@@ -635,6 +763,17 @@ export function TaskDetailPanel({
               This historical run has no source-conversation reference.
             </p>
           )}
+          {run.conversationId && onShare && !live ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2 mt-3 h-7 text-xs"
+              onClick={() => onShare(run.conversationId!)}
+            >
+              <Share2 className="mr-1.5 h-3 w-3" />
+              Share task
+            </Button>
+          ) : null}
         </details>
       </div>
 

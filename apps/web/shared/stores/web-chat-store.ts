@@ -42,7 +42,7 @@ import {
   accountUsageBlockEqual,
   type AccountUsageBlock,
 } from '@/features/chat/stores/account-usage-block';
-import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
+import type { AgiWorkExcludableTool, AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
 import {
   resolveLeafForSibling,
   resolveVisibleThread,
@@ -85,6 +85,13 @@ export interface ComposerToggleState {
    * catalog owns the body.
    */
   selectedSkillName: string | null;
+  agiWorkScope: AgiWorkComposerScope | null;
+}
+
+export interface AgiWorkComposerScope {
+  constraints: string;
+  deliverable: string;
+  excludedTools: AgiWorkExcludableTool[];
 }
 
 /**
@@ -104,6 +111,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   imageMode: false,
   videoMode: false,
   selectedSkillName: null,
+  agiWorkScope: null,
 });
 
 /**

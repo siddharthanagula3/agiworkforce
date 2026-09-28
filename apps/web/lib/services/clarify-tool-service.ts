@@ -50,6 +50,7 @@ export interface ClarifyOfferContext {
   hasAttachment: boolean;
   webSearch: boolean;
   research: boolean;
+  agiWork?: boolean;
 }
 
 export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
@@ -60,7 +61,7 @@ export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
   if (context.hasAttachment) return false;
   if (CLARIFY_OFFER_URL_RE.test(trimmed)) return false;
   if (CLARIFY_OFFER_CODE_FENCE_RE.test(trimmed)) return false;
-  if (CLARIFY_OFFER_OPENING_VERB_RE.test(trimmed)) return false;
+  if (!context.agiWork && CLARIFY_OFFER_OPENING_VERB_RE.test(trimmed)) return false;
   return true;
 }
 

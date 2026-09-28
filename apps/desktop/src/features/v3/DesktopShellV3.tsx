@@ -744,6 +744,12 @@ export function DesktopShellV3({
                   <DesktopTasks
                     onOpenConversation={handleOpenProjectConversation}
                     onStartChat={() => handleNewChat()}
+                    onRerunWork={(draft) => {
+                      handleNewChat();
+                      const chat = useSharedChatStore.getState();
+                      chat.setDraftContent(draft);
+                      chat.setPendingWorkMode('agiwork');
+                    }}
                   />
                 </Suspense>
               </div>
