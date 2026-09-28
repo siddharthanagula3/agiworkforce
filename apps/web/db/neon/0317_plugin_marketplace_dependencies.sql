@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0326: plugin dependencies in registered marketplaces
+-- Migration 0317: plugin dependencies in registered marketplaces
 --
 -- Why    : installing a plugin installs the plugins it declares it depends on,
 --          as Claude Code does (code.claude.com/docs/en/plugin-dependencies).

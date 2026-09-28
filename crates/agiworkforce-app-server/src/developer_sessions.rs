@@ -4,21 +4,23 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookListResponse,
-    InitializeParams, InitializeResponse, LocalModelListResponse, McpLoginParams, McpLoginResponse,
-    McpServerListResponse, MemoryAddParams, MemoryAddResponse, ModelListParams, PluginListResponse,
-    PluginSetEnabledParams, ProtocolVersionUnsupportedData, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-    THREAD_WRITER_CONFLICT_ERROR_CODE,
+    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookAddParams,
+    HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
+    LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse, McpServerListResponse,
+    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
+    MemoryAddResponse, ModelListParams, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
+    TurnSteerParams, TurnSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -275,8 +277,78 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported("mcp/login"))
     }
 
+    async fn test_mcp_server(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_TEST))
+    }
+
+    async fn list_mcp_server_tools(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_TOOLS))
+    }
+
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
         Err(unsupported("hooks/list"))
+    }
+
+    async fn install_skill(
+        &self,
+        _params: SkillInstallParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::SKILLS_INSTALL))
+    }
+
+    async fn remove_skill(
+        &self,
+        _params: SkillRemoveParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::SKILLS_REMOVE))
+    }
+
+    async fn install_plugin(
+        &self,
+        _params: PluginInstallParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PLUGINS_INSTALL))
+    }
+
+    async fn remove_plugin(
+        &self,
+        _params: PluginRemoveParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PLUGINS_REMOVE))
+    }
+
+    async fn add_mcp_server(
+        &self,
+        _params: McpAddParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_ADD))
+    }
+
+    async fn remove_mcp_server(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_REMOVE))
+    }
+
+    async fn add_hook(
+        &self,
+        _params: HookAddParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::HOOKS_ADD))
+    }
+
+    async fn remove_hook(
+        &self,
+        _params: HookRemoveParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::HOOKS_REMOVE))
     }
 
     async fn read_settings(&self) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
@@ -815,6 +887,103 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .login_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_TEST => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .test_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_TOOLS => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_mcp_server_tools(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::SKILLS_INSTALL => {
+                let params = match parse_params::<SkillInstallParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .install_skill(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::SKILLS_REMOVE => {
+                let params = match parse_params::<SkillRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_skill(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLUGINS_INSTALL => {
+                let params = match parse_params::<PluginInstallParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .install_plugin(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLUGINS_REMOVE => {
+                let params = match parse_params::<PluginRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_plugin(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_ADD => {
+                let params = match parse_params::<McpAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .add_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_REMOVE => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::HOOKS_ADD => {
+                let params = match parse_params::<HookAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.add_hook(params).await.map(serde_json::to_value)
+            }
+            method::HOOKS_REMOVE => {
+                let params = match parse_params::<HookRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_hook(params)
                     .await
                     .map(serde_json::to_value)
             }

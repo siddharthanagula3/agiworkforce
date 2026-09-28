@@ -3,9 +3,11 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   FREE_DAILY_CAPS,
+  MONTHLY_METERED_UNITS,
   getFreeDailyCap,
   getTierPolicy,
   type FreeDailyCap,
+  type MonthlyMeteredUnit,
   type RateCardFeature,
 } from '@agiworkforce/types';
 import { AppError, ErrorCode } from '@/lib/errors';
@@ -14,16 +16,8 @@ import { countUserFeatureUnitsSince } from './cogs-ledger-service';
 import { resolveEntitledPlanTier } from './entitlement-resolution';
 import { ManagedUsageRequestError, UPGRADE_HREF } from './managed-usage-request-service';
 
-export const TIER_METERED_UNITS = [
-  'voice_minutes',
-  'video_seconds',
-  'computer_use_requests',
-] as const;
-
 export type FreeDailyUnit =
   'message_writes' | 'conversation_creates' | 'egress_bytes' | 'email_sends' | 'vector_queries';
-
-export type MonthlyMeteredUnit = (typeof TIER_METERED_UNITS)[number];
 
 export type TierMeteredUnit = MonthlyMeteredUnit | FreeDailyUnit;
 
@@ -276,11 +270,11 @@ export async function readTierUnitUsage(
 ): Promise<TierUnitUsagePeriod> {
   const [period, consumed] = await Promise.all([
     readTierUnitPeriod(db),
-    Promise.all(TIER_METERED_UNITS.map((unit) => readConsumedTierUnits(db, userId, unit))),
+    Promise.all(MONTHLY_METERED_UNITS.map((unit) => readConsumedTierUnits(db, userId, unit))),
   ]);
   return {
     ...period,
-    units: TIER_METERED_UNITS.map((unit, index) => ({
+    units: MONTHLY_METERED_UNITS.map((unit, index) => ({
       unit,
       consumed: consumed[index] ?? 0,
       ...getTierUnitAllowance(planTier, unit),

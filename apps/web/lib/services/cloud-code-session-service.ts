@@ -9,6 +9,8 @@ import {
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
+  cloudCodeShareVisibilityFor,
+  isCloudCodeShareVisibility,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
   type CloudCodeAgentTurnRecord,
@@ -310,6 +312,8 @@ interface SessionRow extends Record<string, unknown> {
   created_at: string | Date;
   updated_at: string | Date;
   closed_at: string | Date | null;
+  share_visibility?: string | null;
+  share_token?: string | null;
 }
 
 interface TerminalEntryRow extends Record<string, unknown> {
@@ -423,6 +427,11 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     closedAt: row.closed_at ? iso(row.closed_at) : null,
+    shareVisibility: isCloudCodeShareVisibility(row.share_visibility)
+      ? row.share_visibility
+      : 'private',
+    shareAudience: cloudCodeShareVisibilityFor(row.organization_id),
+    shareToken: row.share_token ?? null,
   };
 }
 
