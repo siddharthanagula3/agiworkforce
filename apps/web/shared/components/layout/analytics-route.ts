@@ -25,6 +25,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'code',
     'customize',
     'from-share',
+    'images',
     'library',
     'projects',
     'schedules',

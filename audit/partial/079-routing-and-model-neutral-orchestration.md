@@ -10,17 +10,15 @@ nothing is left.
 
 - Done when: A project can set a default model that new chats in the project use.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects store a default model (API field default_model_id) but no control sets it and chats in the project do not use it; only a workspace-wide default model is applied. | ui, handler |
-| desktop | partial | Projects store a default model (API field default_model_id) but no control sets it and chats in the project do not use it; only a workspace-wide default model is applied. | ui, handler |
 | mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2242-2244`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
+Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 ## S79.05: Speed-first profile.
 
