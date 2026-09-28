@@ -110,6 +110,7 @@ export * from './subscription-entitlement';
 
 export * from './managed-usage-balance';
 export * from './account-usage-client';
+export * from './account-usage-wire';
 
 export * from './cloud-code';
 export * from './cloud-code-agent-model';
