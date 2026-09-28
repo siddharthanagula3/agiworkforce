@@ -81,14 +81,13 @@ Code: `apps/extension-vscode/package.json:638-639`
 
 - Done when: The user can put chosen sources into a named collection (e.g. a project's knowledge) and have chats search only/also that collection.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | partials/desktop-cli 124831c84d: turn/start takes cloudProjectId and files the thread's hosted conversation under it, so the project's knowledge files are searched; VS Code must send the active project's id (p-sessions). | ui |
 | chrome | partial | Chrome can reopen a project's chats (which stay grounded in its sources) but cannot start a chat in a project or add/choose sources. | ui |
 
-Code: `apps/cli/src/app_server/developer_host.rs:2353-2353`, `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
 
 ## S34.20: Search suggestions.
 
