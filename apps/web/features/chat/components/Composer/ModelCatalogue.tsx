@@ -1,7 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
+import {
+  MODEL_PICKER_RELEASE_STAGE_LABEL,
+  resolveModelLineLabel,
+  resolveModelReleaseStage,
+  resolveModelSpeedLabel,
+} from '@agiworkforce/unified-chat/model-picker';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import type { ModelCatalogueDeveloper } from '@features/chat/lib/use-model-catalogue';
 import {
@@ -53,6 +59,57 @@ const CHIP_CLASS =
   'rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:outline-none';
 const CARD_LABEL_CLASS = 'text-xs text-muted-foreground';
 const CARD_VALUE_CLASS = 'text-sm text-foreground';
+const LINE_GROUP_LABEL_CLASS = 'px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground';
+
+interface ModelLineGroup {
+  key: string;
+  label: string;
+  entries: ModelCatalogueEntry[];
+}
+
+function releasedAtMs(entry: ModelCatalogueEntry): number {
+  const releasedAt = entry.releasedOn ? Date.parse(entry.releasedOn) : Number.NaN;
+  return Number.isNaN(releasedAt) ? Number.NEGATIVE_INFINITY : releasedAt;
+}
+
+function newestFirst(left: ModelCatalogueEntry, right: ModelCatalogueEntry): number {
+  return (
+    releasedAtMs(right) - releasedAtMs(left) || left.displayName.localeCompare(right.displayName)
+  );
+}
+
+function groupByModelLine(entries: readonly ModelCatalogueEntry[]): ModelLineGroup[] {
+  const labels = new Map(
+    entries.map((entry) => [entry.id, resolveModelLineLabel(entry.displayName)] as const),
+  );
+  const lineKeys = new Set([...labels.values()].map((label) => label.toLowerCase()));
+  const groups = new Map<string, ModelLineGroup>();
+  for (const entry of [...entries].sort(newestFirst)) {
+    const label = labels.get(entry.id) ?? entry.displayName;
+    const lower = label.toLowerCase();
+    const developerPrefix = `${(entry.developerLabel ?? '').toLowerCase()} `;
+    const unprefixed = lower.startsWith(developerPrefix)
+      ? lower.slice(developerPrefix.length)
+      : null;
+    const key = unprefixed && lineKeys.has(unprefixed) ? unprefixed : lower;
+    const group = groups.get(key);
+    if (group) {
+      group.entries.push(entry);
+    } else {
+      groups.set(key, {
+        key,
+        label: key === lower ? label : label.slice(developerPrefix.length),
+        entries: [entry],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
+function releaseStageLabel(entry: ModelCatalogueEntry): string | null {
+  const stage = resolveModelReleaseStage(entry.id, entry.displayName);
+  return stage ? MODEL_PICKER_RELEASE_STAGE_LABEL[stage] : null;
+}
 
 type CapabilityChipKey =
   'vision' | 'reasoning' | 'tools' | 'search' | 'codeExecution' | 'imageOut' | 'videoOut' | 'audio';
@@ -154,7 +211,15 @@ function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
   );
 }
 
-function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () => void }) {
+function ModelCard({
+  entry,
+  lineLabel,
+  onBack,
+}: {
+  entry: ModelCatalogueEntry;
+  lineLabel: string;
+  onBack: () => void;
+}) {
   const capabilities = CAPABILITY_CHIPS.filter((chip) => chip.matches(entry));
   const messageCredits = entry.freePool ? null : estimateMessageCredits(entry.id);
   const rates = entry.freePool ? null : creditsPerMillionTokens(entry.id);
@@ -180,7 +245,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
         <div>
           <dt className={CARD_LABEL_CLASS}>Family</dt>
-          <dd className={CARD_VALUE_CLASS}>{entry.family ?? 'None'}</dd>
+          <dd className={CARD_VALUE_CLASS}>{lineLabel}</dd>
         </div>
         <div>
           <dt className={CARD_LABEL_CLASS}>Typical message</dt>
@@ -335,6 +400,24 @@ export function ModelCatalogue({
     [entries],
   );
 
+  const listId = useId();
+  const lineGroups = useMemo(
+    () =>
+      railKey === FAVOURITES_RAIL_KEY || railKey === RECENTS_RAIL_KEY
+        ? null
+        : groupByModelLine(visible),
+    [railKey, visible],
+  );
+  const lineLabelById = useMemo(
+    () =>
+      new Map(
+        (lineGroups ?? []).flatMap((group) =>
+          group.entries.map((entry) => [entry.id, group.label] as const),
+        ),
+      ),
+    [lineGroups],
+  );
+
   const cardEntry = cardModelId ? entries.find((entry) => entry.id === cardModelId) : undefined;
 
   const toggleChip = (key: CapabilityChipKey) => {
@@ -356,8 +439,184 @@ export function ModelCatalogue({
     })),
   ];
 
+  const renderEntry = (entry: ModelCatalogueEntry) => {
+    const isSelected = entry.id === selectedModelId;
+    const isFavourite = favourites.has(entry.id);
+    const comingSoon = entry.availability !== 'live';
+    const environment = entry.requiresEnvironment
+      ? isEnvironmentLocked(entry.requiresEnvironment)
+      : { locked: false };
+    const planLocked = !entry.admitted;
+    const notOffered = isSelectable ? !isSelectable(entry.id) : false;
+    const hardLocked =
+      comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
+    const locked = planLocked || hardLocked;
+    const credits =
+      entry.eventAccess || entry.freePool ? null : (messageCredits.get(entry.id) ?? null);
+    const costLabel = messageCostLabel(entry, credits);
+    const speedLabel = resolveModelSpeedLabel(entry.id);
+    const stageLabel = hardLocked ? null : releaseStageLabel(entry);
+    return (
+      <div key={entry.id} className="flex items-center gap-0">
+        <button
+          type="button"
+          role="option"
+          aria-selected={isSelected}
+          disabled={hardLocked}
+          title={
+            comingSoon
+              ? COMING_SOON_TAG_LABEL
+              : entry.temporarilyUnavailable
+                ? UNAVAILABLE_TEXT
+                : notOffered
+                  ? NOT_OFFERED_TEXT
+                  : environment.reason
+          }
+          aria-label={
+            comingSoon
+              ? `${entry.displayName} - ${COMING_SOON_TAG_LABEL}`
+              : entry.temporarilyUnavailable
+                ? `${entry.displayName} - ${UNAVAILABLE_TEXT}`
+                : environment.locked
+                  ? `${entry.displayName} - ${environment.reason ?? ENVIRONMENT_TAG_LABEL}`
+                  : notOffered
+                    ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
+                    : planLocked && entry.minimumPlanLabel
+                      ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
+                      : [entry.displayName, stageLabel, speedLabel, costLabel]
+                          .filter(Boolean)
+                          .join(', ')
+          }
+          onClick={() => {
+            if (hardLocked) return;
+            if (planLocked) onUpgradeRequest?.();
+            else onSelect(entry.id);
+          }}
+          className={[
+            ROW_CLASS,
+            'min-w-0 flex-1',
+            hardLocked
+              ? 'cursor-not-allowed opacity-45'
+              : planLocked
+                ? 'cursor-pointer opacity-80 hover:bg-muted/40 hover:opacity-100'
+                : 'cursor-pointer hover:bg-muted/60 focus-visible:bg-muted/60',
+          ].join(' ')}
+        >
+          <ProviderLogo providerKey={entry.developer} size={16} />
+          <span className="min-w-0 flex-1">
+            <span
+              className={[
+                ROW_NAME_CLASS,
+                isSelected ? 'font-medium text-foreground' : 'font-normal text-foreground',
+              ].join(' ')}
+            >
+              {entry.displayName}
+            </span>
+            <span className={ROW_GUIDANCE_CLASS}>
+              {[entry.developerLabel, speedLabel].filter(Boolean).join(' · ')}
+            </span>
+          </span>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {isNewRelease(entry, now) && (
+              <span
+                className={`${TAG_CLASS} bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
+              >
+                {NEW_TAG_LABEL}
+              </span>
+            )}
+            {entry.isRouter && (
+              <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>
+                {ROUTER_TAG_LABEL}
+              </span>
+            )}
+            {stageLabel && (
+              <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>{stageLabel}</span>
+            )}
+            {entry.freePool && !entry.eventAccess ? (
+              <span className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}>
+                {FREE_POOL_TAG_LABEL}
+              </span>
+            ) : credits !== null ? (
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                {formatMessageCredits(credits)}
+              </span>
+            ) : entry.priceBand && !entry.eventAccess && !entry.freePool ? (
+              <PriceBandMark filled={entry.priceBand.filled} scale={entry.priceBand.scale} />
+            ) : null}
+            {comingSoon && (
+              <span className={`${TAG_CLASS} bg-muted/50 text-muted-foreground`}>
+                {COMING_SOON_TAG_LABEL}
+              </span>
+            )}
+            {!comingSoon && environment.locked && (
+              <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>
+                {ENVIRONMENT_TAG_LABEL}
+              </span>
+            )}
+            {entry.eventAccess && !entry.temporarilyUnavailable && (
+              <span
+                className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
+              >
+                {EVENT_TAG_LABEL}
+              </span>
+            )}
+            {entry.temporarilyUnavailable && (
+              <span className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}>
+                {UNAVAILABLE_TEXT}
+              </span>
+            )}
+            {notOffered && !comingSoon && !entry.temporarilyUnavailable && (
+              <span className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}>
+                {NOT_OFFERED_TEXT}
+              </span>
+            )}
+            {!hardLocked && planLocked && entry.minimumPlanLabel && (
+              <span className={`${TAG_CLASS} whitespace-nowrap bg-primary/10 text-primary`}>
+                <Lock className="mr-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
+                {`${entry.minimumPlanLabel} and above`}
+              </span>
+            )}
+            {isSelected && !locked && (
+              <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            )}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleFavourite(entry.id)}
+          aria-pressed={isFavourite}
+          aria-label={
+            isFavourite
+              ? `Remove ${entry.displayName} from favourites`
+              : `Add ${entry.displayName} to favourites`
+          }
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
+        >
+          <Star
+            className={['h-4 w-4', isFavourite ? 'text-primary' : ''].join(' ')}
+            aria-hidden="true"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => setCardModelId(entry.id)}
+          aria-label={`About ${entry.displayName}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
+        >
+          <CircleHelp className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  };
+
   if (cardEntry) {
-    return <ModelCard entry={cardEntry} onBack={() => setCardModelId(null)} />;
+    return (
+      <ModelCard
+        entry={cardEntry}
+        lineLabel={lineLabelById.get(cardEntry.id) ?? resolveModelLineLabel(cardEntry.displayName)}
+        onBack={() => setCardModelId(null)}
+      />
+    );
   }
 
   return (
@@ -474,187 +733,17 @@ export function ModelCatalogue({
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">
                 {EMPTY_LIST_TEXT}
               </p>
+            ) : lineGroups && lineGroups.length > 1 ? (
+              lineGroups.map((group, index) => (
+                <div key={group.key} role="group" aria-labelledby={`${listId}-line-${index}`}>
+                  <p id={`${listId}-line-${index}`} className={LINE_GROUP_LABEL_CLASS}>
+                    {group.label}
+                  </p>
+                  {group.entries.map(renderEntry)}
+                </div>
+              ))
             ) : (
-              visible.map((entry) => {
-                const isSelected = entry.id === selectedModelId;
-                const isFavourite = favourites.has(entry.id);
-                const comingSoon = entry.availability !== 'live';
-                const environment = entry.requiresEnvironment
-                  ? isEnvironmentLocked(entry.requiresEnvironment)
-                  : { locked: false };
-                const planLocked = !entry.admitted;
-                const notOffered = isSelectable ? !isSelectable(entry.id) : false;
-                const hardLocked =
-                  comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
-                const locked = planLocked || hardLocked;
-                const credits =
-                  entry.eventAccess || entry.freePool
-                    ? null
-                    : (messageCredits.get(entry.id) ?? null);
-                const costLabel = messageCostLabel(entry, credits);
-                return (
-                  <div key={entry.id} className="flex items-center gap-0">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      disabled={hardLocked}
-                      title={
-                        comingSoon
-                          ? COMING_SOON_TAG_LABEL
-                          : entry.temporarilyUnavailable
-                            ? UNAVAILABLE_TEXT
-                            : notOffered
-                              ? NOT_OFFERED_TEXT
-                              : environment.reason
-                      }
-                      aria-label={
-                        comingSoon
-                          ? `${entry.displayName} - ${COMING_SOON_TAG_LABEL}`
-                          : entry.temporarilyUnavailable
-                            ? `${entry.displayName} - ${UNAVAILABLE_TEXT}`
-                            : environment.locked
-                              ? `${entry.displayName} - ${environment.reason ?? ENVIRONMENT_TAG_LABEL}`
-                              : notOffered
-                                ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
-                                : planLocked && entry.minimumPlanLabel
-                                  ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
-                                  : costLabel
-                                    ? `${entry.displayName}, ${costLabel}`
-                                    : entry.displayName
-                      }
-                      onClick={() => {
-                        if (hardLocked) return;
-                        if (planLocked) onUpgradeRequest?.();
-                        else onSelect(entry.id);
-                      }}
-                      className={[
-                        ROW_CLASS,
-                        'min-w-0 flex-1',
-                        hardLocked
-                          ? 'cursor-not-allowed opacity-45'
-                          : planLocked
-                            ? 'cursor-pointer opacity-80 hover:bg-muted/40 hover:opacity-100'
-                            : 'cursor-pointer hover:bg-muted/60 focus-visible:bg-muted/60',
-                      ].join(' ')}
-                    >
-                      <ProviderLogo providerKey={entry.developer} size={16} />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={[
-                            ROW_NAME_CLASS,
-                            isSelected
-                              ? 'font-medium text-foreground'
-                              : 'font-normal text-foreground',
-                          ].join(' ')}
-                        >
-                          {entry.displayName}
-                        </span>
-                        <span className={ROW_GUIDANCE_CLASS}>{entry.developerLabel}</span>
-                      </span>
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                        {isNewRelease(entry, now) && (
-                          <span
-                            className={`${TAG_CLASS} bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
-                          >
-                            {NEW_TAG_LABEL}
-                          </span>
-                        )}
-                        {entry.isRouter && (
-                          <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>
-                            {ROUTER_TAG_LABEL}
-                          </span>
-                        )}
-                        {entry.freePool && !entry.eventAccess ? (
-                          <span
-                            className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}
-                          >
-                            {FREE_POOL_TAG_LABEL}
-                          </span>
-                        ) : credits !== null ? (
-                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                            {formatMessageCredits(credits)}
-                          </span>
-                        ) : entry.priceBand && !entry.eventAccess && !entry.freePool ? (
-                          <PriceBandMark
-                            filled={entry.priceBand.filled}
-                            scale={entry.priceBand.scale}
-                          />
-                        ) : null}
-                        {comingSoon && (
-                          <span className={`${TAG_CLASS} bg-muted/50 text-muted-foreground`}>
-                            {COMING_SOON_TAG_LABEL}
-                          </span>
-                        )}
-                        {!comingSoon && environment.locked && (
-                          <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>
-                            {ENVIRONMENT_TAG_LABEL}
-                          </span>
-                        )}
-                        {entry.eventAccess && !entry.temporarilyUnavailable && (
-                          <span
-                            className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
-                          >
-                            {EVENT_TAG_LABEL}
-                          </span>
-                        )}
-                        {entry.temporarilyUnavailable && (
-                          <span
-                            className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}
-                          >
-                            {UNAVAILABLE_TEXT}
-                          </span>
-                        )}
-                        {notOffered && !comingSoon && !entry.temporarilyUnavailable && (
-                          <span
-                            className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}
-                          >
-                            {NOT_OFFERED_TEXT}
-                          </span>
-                        )}
-                        {!hardLocked && planLocked && entry.minimumPlanLabel && (
-                          <span
-                            className={`${TAG_CLASS} whitespace-nowrap bg-primary/10 text-primary`}
-                          >
-                            <Lock
-                              className="mr-0.5 inline h-4 w-4 align-[-0.1em]"
-                              aria-hidden="true"
-                            />
-                            {`${entry.minimumPlanLabel} and above`}
-                          </span>
-                        )}
-                        {isSelected && !locked && (
-                          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                        )}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleFavourite(entry.id)}
-                      aria-pressed={isFavourite}
-                      aria-label={
-                        isFavourite
-                          ? `Remove ${entry.displayName} from favourites`
-                          : `Add ${entry.displayName} to favourites`
-                      }
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
-                    >
-                      <Star
-                        className={['h-4 w-4', isFavourite ? 'text-primary' : ''].join(' ')}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCardModelId(entry.id)}
-                      aria-label={`About ${entry.displayName}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
-                    >
-                      <CircleHelp className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                );
-              })
+              (lineGroups?.[0]?.entries ?? visible).map(renderEntry)
             )}
           </div>
         </div>

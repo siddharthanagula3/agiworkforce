@@ -16,6 +16,7 @@ import {
   normalizeUIPlanTier,
   type ModelCapabilities,
   type ModelMetadata,
+  type ModelSpeed,
 } from '@agiworkforce/types';
 import { listProfileModelOrder, resolveTierMaximumProfile } from '@agiworkforce/routing';
 
@@ -152,6 +153,84 @@ export function resolveModelGuidanceKind(modelId: string): ModelPickerGuidanceKi
 
 export function resolveModelGuidance(modelId: string): string {
   return MODEL_PICKER_GUIDANCE[resolveModelGuidanceKind(modelId)];
+}
+
+export const MODEL_PICKER_SPEED_LABEL: Readonly<Partial<Record<ModelSpeed, string>>> = {
+  'very-fast': 'Very fast',
+  fast: 'Fast',
+  slow: 'Slower',
+};
+
+export function resolveModelSpeedLabel(modelId: string): string | null {
+  const speed = getModelMetadataById(modelId)?.speed;
+  return speed ? (MODEL_PICKER_SPEED_LABEL[speed] ?? null) : null;
+}
+
+export type ModelReleaseStage = 'preview' | 'experimental' | 'beta' | 'alpha';
+
+export const MODEL_PICKER_RELEASE_STAGE_LABEL: Readonly<Record<ModelReleaseStage, string>> = {
+  preview: 'Preview',
+  experimental: 'Experimental',
+  beta: 'Beta',
+  alpha: 'Alpha',
+};
+
+const RELEASE_STAGE_WORDS: ReadonlyMap<string, ModelReleaseStage> = new Map<
+  string,
+  ModelReleaseStage
+>([
+  ['preview', 'preview'],
+  ['exp', 'experimental'],
+  ['experimental', 'experimental'],
+  ['beta', 'beta'],
+  ['alpha', 'alpha'],
+]);
+
+function releaseStageIn(text: string | undefined): ModelReleaseStage | null {
+  if (!text) return null;
+  for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    const stage = RELEASE_STAGE_WORDS.get(word);
+    if (stage) return stage;
+  }
+  return null;
+}
+
+export function resolveModelReleaseStage(
+  modelId: string,
+  displayName?: string,
+): ModelReleaseStage | null {
+  const metadata = getModelMetadataById(modelId);
+  return (
+    releaseStageIn(metadata?.apiModelId) ??
+    releaseStageIn(metadata?.name ?? displayName) ??
+    releaseStageIn(modelId)
+  );
+}
+
+const MODEL_LINE_DROPPED_WORDS: ReadonlySet<string> = new Set([
+  ...RELEASE_STAGE_WORDS.keys(),
+  'latest',
+  'instruct',
+]);
+const MODEL_LINE_VERSION = /^v?\d+(?:[.:]\d+)*[a-z]?$/i;
+const MODEL_LINE_SIZE = /^(?:\d+x)?\d+(?:\.\d+)?[bkmt]$|^a\d+(?:\.\d+)?b$/i;
+const MODEL_LINE_CODE = /^[a-z]\d+(?:\.\d+)*[a-z]?$/i;
+const MODEL_LINE_TRAILING_VERSION = /^([a-z][a-z.]*[a-z])\d+(?:\.\d+)*$/i;
+
+export function resolveModelLineLabel(displayName: string): string {
+  const prefixEnd = displayName.indexOf(': ');
+  const name = prefixEnd > 0 ? displayName.slice(prefixEnd + 2) : displayName;
+  const words = name
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/[\s-]+/)
+    .filter(Boolean);
+  const kept = words.flatMap((word, index) => {
+    if (MODEL_LINE_DROPPED_WORDS.has(word.toLowerCase())) return [];
+    if (MODEL_LINE_VERSION.test(word) || MODEL_LINE_SIZE.test(word)) return [];
+    if (MODEL_LINE_CODE.test(word)) return index === 0 ? [word] : [];
+    return [MODEL_LINE_TRAILING_VERSION.exec(word)?.[1] ?? word];
+  });
+  return kept.length > 0 ? kept.join(' ') : name.trim();
 }
 
 export function resolvePlanLockLabel(modelId: string): string | null {
