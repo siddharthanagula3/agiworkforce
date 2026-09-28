@@ -195,6 +195,7 @@ export interface DirectoryConnectorDetail {
   connected?: boolean;
   /** An authorization was started for this connector and never finished. */
   authorizationPending?: boolean;
+  needsReauthorization?: boolean;
   /** Names the actual connection path when it is not a plain Connect. */
   connectLabel?: string;
   /** Installed plugins that declare this connector in their requirements. */

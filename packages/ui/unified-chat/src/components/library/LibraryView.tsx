@@ -70,6 +70,7 @@ import {
   isAcceptedAttachmentType,
 } from '@agiworkforce/types';
 import { FileKindIcon } from './FileKindIcon';
+import { MediaJobsSection, type MediaJobsTransport } from './MediaJobsSection';
 
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
 export type LibraryTab =
@@ -283,6 +284,7 @@ export interface LibraryTransport {
   remixItem?: (item: LibraryItem) => Promise<void>;
   addToProject?: (item: LibraryItem, folder: LibraryFolder) => Promise<void>;
   shareArtifact?: (item: LibraryItem) => Promise<void>;
+  mediaJobs?: MediaJobsTransport;
 }
 
 interface PageState {
@@ -876,6 +878,10 @@ export function LibraryView({
           />
         ) : null}
       </header>
+
+      {transport.mediaJobs && !viewDeleted ? (
+        <MediaJobsSection transport={transport.mediaJobs} />
+      ) : null}
 
       {uploadFiles ? (
         <input

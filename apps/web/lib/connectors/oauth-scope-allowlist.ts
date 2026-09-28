@@ -54,7 +54,11 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   bigquery: [...GOOGLE_IDENTITY_SCOPES, ...google('bigquery.readonly', 'devstorage.read_only')],
   gcp: [...GOOGLE_IDENTITY_SCOPES, ...google('cloud-platform.read-only')],
 
-  outlook: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, ...graph('User.Read', 'Mail.Read', 'Mail.Send')],
+  outlook: [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    ...graph('User.Read', 'Mail.Read', 'Mail.Send', 'Calendars.Read', 'Calendars.ReadWrite'),
+  ],
   onedrive: [
     ...OIDC_SCOPES,
     OFFLINE_ACCESS_SCOPE,

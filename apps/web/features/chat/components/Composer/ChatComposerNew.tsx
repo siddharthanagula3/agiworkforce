@@ -1501,6 +1501,7 @@ const ChatComposerNewComponent = ({
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const dictationEnabled = useSettingsStore((s) => s.dictationEnabled);
+  const followUpBehavior = useSettingsStore((s) => s.followUpBehavior);
   const dictationSwitchedOff = useBillingStore((s) =>
     dictationSwitchedOffReason(s.disabledFeatures),
   );
@@ -3684,6 +3685,27 @@ const ChatComposerNewComponent = ({
     [onSteerQueuedMessage],
   );
 
+  const canSteerQueued = useCallback(
+    (queued: QueuedFollowUp) =>
+      Boolean(onSteerQueuedMessage) &&
+      streamingRunId !== null &&
+      !queued.steerId &&
+      queued.conversationId === (conversationId ?? null) &&
+      queued.args[0].trim().length > 0 &&
+      !queued.args[1]?.length,
+    [onSteerQueuedMessage, streamingRunId, conversationId],
+  );
+
+  const autoSteeredIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (followUpBehavior !== 'steer') return;
+    for (const queued of queuedFollowUps) {
+      if (autoSteeredIdsRef.current.has(queued.id) || !canSteerQueued(queued)) continue;
+      autoSteeredIdsRef.current.add(queued.id);
+      void steerQueuedMessage(queued.id);
+    }
+  }, [canSteerQueued, followUpBehavior, queuedFollowUps, steerQueuedMessage]);
+
   const editQueuedMessage = useCallback(
     (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
@@ -4068,12 +4090,7 @@ const ChatComposerNewComponent = ({
                   <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
               </span>
-              {onSteerQueuedMessage &&
-              streamingRunId &&
-              !queued.steerId &&
-              queued.conversationId === (conversationId ?? null) &&
-              queued.args[0].trim().length > 0 &&
-              !queued.args[1]?.length ? (
+              {canSteerQueued(queued) ? (
                 <button
                   type="button"
                   onClick={() => void steerQueuedMessage(queued.id)}

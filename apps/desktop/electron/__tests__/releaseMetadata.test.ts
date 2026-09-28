@@ -13,11 +13,12 @@ describe('Electron cloud release source guards', () => {
     expect(builderConfig).toMatch(/protocols:[\s\S]*schemes:[\s\S]*agiworkforce-cloud/);
   });
 
-  it('ships only the supported signed DMG path, without a fictional updater feed', () => {
+  it('ships signed DMGs and the zip archives the cloud update feed serves', () => {
     expect(builderConfig).not.toMatch(/api\/releases\/electron\/mac/);
-    expect(builderConfig).not.toMatch(/target:\s*zip/);
+    expect(builderConfig).toMatch(/target:\s*zip/);
     expect(builderConfig).not.toMatch(/^publish:/m);
-    expect(releaseWorkflow).not.toMatch(/latest-mac\.yml|"\$out"\/\*\.zip/);
+    expect(releaseWorkflow).not.toMatch(/latest-mac\.yml/);
+    expect(releaseWorkflow).toMatch(/"\$out"\/\*\.zip/);
   });
 
   it('pins every downstream checkout to the validated release tag', () => {
