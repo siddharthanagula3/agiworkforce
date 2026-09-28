@@ -98,3 +98,14 @@ export const RELEASES: readonly Release[] = [
     ],
   },
 ];
+
+export function releaseSlug(release: Pick<Release, 'date'>): string {
+  return release.date
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function releasePath(release: Pick<Release, 'date'>): string {
+  return `/release-notes/${releaseSlug(release)}`;
+}
