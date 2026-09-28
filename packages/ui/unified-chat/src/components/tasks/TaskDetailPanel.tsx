@@ -42,6 +42,7 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
+  type AgiWorkExcludedTool,
   type AgiWorkRerunGoal,
   formatTaskCost,
   formatTaskTokens,
@@ -192,17 +193,25 @@ function planItems(
   });
 }
 
-function parseGoalDetail(detail: string | undefined): {
-  constraints?: string;
-  deliverable?: string;
-} {
+const EXCLUDED_TOOL_BY_LABEL: Record<string, AgiWorkExcludedTool> = {
+  'web search': 'web_search',
+  'code execution': 'code_execution',
+};
+
+function parseGoalDetail(detail: string | undefined): Omit<AgiWorkRerunGoal, 'goal'> {
   if (!detail) return {};
-  const result: { constraints?: string; deliverable?: string } = {};
+  const result: Omit<AgiWorkRerunGoal, 'goal'> = {};
   for (const line of detail.split('\n')) {
     const constraints = line.match(/^Constraints:\s*(.+)$/);
     if (constraints?.[1]) result.constraints = constraints[1].trim();
     const deliverable = line.match(/^Deliverable:\s*(.+)$/);
     if (deliverable?.[1]) result.deliverable = deliverable[1].trim();
+    const toolsOff = line.match(/^Tools off:\s*(.+)$/);
+    if (toolsOff?.[1]) {
+      result.excludedTools = toolsOff[1]
+        .split(',')
+        .flatMap((label) => EXCLUDED_TOOL_BY_LABEL[label.trim().toLowerCase()] ?? []);
+    }
   }
   return result;
 }

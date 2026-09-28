@@ -10,10 +10,13 @@ export function runWorkState(run: Pick<CloudAgentRun, 'state' | 'workState'>): A
   return run.workState ?? run.state;
 }
 
+export type AgiWorkExcludedTool = 'web_search' | 'code_execution';
+
 export interface AgiWorkRerunGoal {
   goal: string;
   constraints?: string;
   deliverable?: string;
+  excludedTools?: AgiWorkExcludedTool[];
 }
 
 export function workModeLabel(mode: CloudAgentWorkMode): string {

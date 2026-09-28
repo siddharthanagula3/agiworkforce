@@ -51,6 +51,7 @@ export function TasksPage() {
             agiWorkScope: {
               constraints: goal.constraints ?? '',
               deliverable: goal.deliverable ?? '',
+              excludedTools: goal.excludedTools ?? [],
             },
           },
           PENDING_CONVERSATION_KEY,

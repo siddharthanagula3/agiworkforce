@@ -14,11 +14,23 @@ export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
 export const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
 export const AGIWORK_PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
 
+export const AGIWORK_EXCLUDABLE_TOOLS = ['web_search', 'code_execution'] as const;
+export type AgiWorkExcludableTool = (typeof AGIWORK_EXCLUDABLE_TOOLS)[number];
+
+const AGIWORK_TOOL_LABELS: Record<AgiWorkExcludableTool, string> = {
+  web_search: 'web search',
+  code_execution: 'code execution',
+};
+
 export const AgiWorkGoalSchema = z
   .object({
     goal: z.string().trim().min(1).max(MAX_AGIWORK_GOAL_CHARS),
     constraints: z.string().trim().max(MAX_AGIWORK_GOAL_FIELD_CHARS).optional(),
     deliverable: z.string().trim().max(MAX_AGIWORK_GOAL_FIELD_CHARS).optional(),
+    excludedTools: z
+      .array(z.enum(AGIWORK_EXCLUDABLE_TOOLS))
+      .max(AGIWORK_EXCLUDABLE_TOOLS.length)
+      .optional(),
   })
   // Drop optional fields that arrived empty so `{ goal, constraints: '' }` and
   // `{ goal }` are stored identically.
@@ -26,6 +38,9 @@ export const AgiWorkGoalSchema = z
     goal: value.goal,
     ...(value.constraints ? { constraints: value.constraints } : {}),
     ...(value.deliverable ? { deliverable: value.deliverable } : {}),
+    ...(value.excludedTools && value.excludedTools.length > 0
+      ? { excludedTools: [...new Set(value.excludedTools)] }
+      : {}),
   }));
 
 export type AgiWorkGoal = z.infer<typeof AgiWorkGoalSchema>;
@@ -88,8 +103,14 @@ export function agiWorkGoalHeadline(goal: AgiWorkGoal): string {
 }
 
 export function agiWorkPlanningDirective(goal: AgiWorkGoal): string {
+  const excluded = new Set(goal.excludedTools ?? []);
+  const tools = [
+    ...(excluded.has('web_search') ? [] : ['web search', 'fetch']),
+    ...(excluded.has('code_execution') ? [] : ['code execution']),
+    'file creation',
+  ];
   const lines = [
-    'You are about to start an AGI Work run with tools (web search, fetch, code execution, file creation).',
+    `You are about to start an AGI Work run with tools (${tools.join(', ')}).`,
     `Objective: ${goal.goal}`,
   ];
   if (goal.constraints) lines.push(`Constraints: ${goal.constraints}`);
@@ -228,6 +249,11 @@ export function agiWorkGoalProgressEvent(goal: AgiWorkGoal): AgentEvent {
   const detailParts: string[] = [];
   if (goal.constraints) detailParts.push(`Constraints: ${goal.constraints}`);
   if (goal.deliverable) detailParts.push(`Deliverable: ${goal.deliverable}`);
+  if (goal.excludedTools?.length) {
+    detailParts.push(
+      `Tools off: ${goal.excludedTools.map((tool) => AGIWORK_TOOL_LABELS[tool]).join(', ')}`,
+    );
+  }
   return {
     type: 'progress-update',
     progressId: AGIWORK_GOAL_PROGRESS_ID,

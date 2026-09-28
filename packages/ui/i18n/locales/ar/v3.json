@@ -381,6 +381,9 @@
       "constraintsPlaceholder": "الحدود، ما يجب تجنّبه، المصادر المفضّلة…",
       "deliverableLabel": "المُخرَج",
       "deliverablePlaceholder": "الناتج الملموس الذي تتوقعه (ملف، جدول، ملخّص…)",
+      "toolsLabel": "الأدوات التي يمكن لهذه المهمة استخدامها",
+      "toolWebSearch": "البحث على الويب والتصفح",
+      "toolCodeExecution": "تنفيذ التعليمات البرمجية",
       "palette": {
         "label": "أدوات AGI Work",
         "searchPlaceholder": "ابحث في الإضافات والمجلدات والمهارات",

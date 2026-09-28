@@ -381,6 +381,9 @@
       "constraintsPlaceholder": "Límites, cosas a evitar, fuentes preferidas…",
       "deliverableLabel": "Entregable",
       "deliverablePlaceholder": "El resultado concreto que esperas (un archivo, una tabla, un resumen…)",
+      "toolsLabel": "Herramientas que puede usar esta tarea",
+      "toolWebSearch": "Búsqueda web y navegación",
+      "toolCodeExecution": "Ejecución de código",
       "palette": {
         "label": "Herramientas de AGI Work",
         "searchPlaceholder": "Buscar complementos, carpetas y habilidades",
