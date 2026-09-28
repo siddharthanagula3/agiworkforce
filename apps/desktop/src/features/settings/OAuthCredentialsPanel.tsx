@@ -7,13 +7,7 @@ import { Label } from '@/ui/Label';
 import { Badge } from '@/ui/Badge';
 
 type OAuthCredentialProvider =
-  | 'github'
-  | 'google'
-  | 'slack'
-  | 'notion'
-  | 'figma'
-  | 'microsoft'
-  | 'atlassian';
+  'github' | 'google' | 'slack' | 'notion' | 'figma' | 'microsoft' | 'atlassian';
 
 interface ProviderDef {
   id: OAuthCredentialProvider;
@@ -71,7 +65,7 @@ const PROVIDERS: ProviderDef[] = [
     description: 'Outlook, OneDrive, Teams, Office 365',
     docsUrl: 'https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade',
     clientIdLabel: 'Application (client) ID',
-    clientSecretLabel: 'Client Secret Value',
+    clientSecretLabel: 'Client Secret Value (optional for public clients)',
   },
   {
     id: 'atlassian',
@@ -271,7 +265,7 @@ export function OAuthCredentialsPanel() {
   const handleSave = useCallback(
     async (id: OAuthCredentialProvider) => {
       const { clientId, clientSecret } = state[id];
-      if (!clientId.trim() || !clientSecret.trim()) {
+      if (!clientId.trim() || (id !== 'microsoft' && !clientSecret.trim())) {
         toast.error('Both fields required', {
           description: 'Enter a Client ID and Client Secret before saving.',
         });
