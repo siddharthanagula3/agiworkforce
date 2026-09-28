@@ -44,6 +44,7 @@ function backupStore() {
     getStream: vi.fn(),
     copyIfMatch: vi.fn(),
     presignPut: vi.fn(),
+    presignGet: vi.fn(),
   };
 }
 
