@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -227,7 +228,7 @@ async function handleListModels(request: NextRequest) {
   );
 }
 
-export const GET = withErrorHandler(handleListModels);
+export const GET = withAdmittedRateLimitHeaders(withErrorHandler(handleListModels));
 
 export function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: getCorsHeaders(request) });

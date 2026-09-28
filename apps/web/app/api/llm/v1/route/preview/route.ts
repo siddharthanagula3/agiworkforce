@@ -22,6 +22,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
@@ -209,7 +210,9 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
   );
 }
 
-export const POST = withCorsRoute(withErrorHandler(handleRoutePreview));
+export const POST = withCorsRoute(
+  withAdmittedRateLimitHeaders(withErrorHandler(handleRoutePreview)),
+);
 
 export function OPTIONS(request: NextRequest): Response {
   return (

@@ -8,6 +8,7 @@ import {
 import { getModels, getModelMetadataById, type ModelMetadata } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   buildManagedComputeGateResponse,
@@ -260,7 +261,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
   });
 }
 
-export const POST = withErrorHandler(handleEmbeddings);
+export const POST = withAdmittedRateLimitHeaders(withErrorHandler(handleEmbeddings));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
