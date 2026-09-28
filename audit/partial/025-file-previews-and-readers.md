@@ -126,13 +126,9 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A cited project PDF opens at the cited page (#page=N) and paging is left to the browser's built-in PDF viewer; the product has no page controls. | ui |
-| desktop | partial | A cited project PDF opens at the cited page (#page=N) and paging is left to the browser's built-in PDF viewer; the product has no page controls. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/web/features/projects/components/FilePreviewModal.tsx:360-366`
 
 ## S25.14: Zoom controls.
 
@@ -166,13 +162,9 @@ Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/we
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Library viewer asks about the whole file ("Ask about this file"); there is no way to target a page or range. | ui |
-| desktop | partial | The Library viewer asks about the whole file ("Ask about this file"); there is no way to target a page or range. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1136-1175`, `apps/web/features/library/components/LibraryView.tsx:189-191`
 
 ## S25.22: Citation-linked highlighting.
 
@@ -181,14 +173,10 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1136-1175
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A project-file citation opens the file at the cited page, but nothing highlights the cited passage. | ui |
-| desktop | partial | A project-file citation opens the file at the cited page, but nothing highlights the cited passage. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/web/features/projects/components/SourcesPanel.tsx:600-603`, `apps/web/features/projects/components/FilePreviewModal.tsx:360-366`
 
 ## S25.25: Full-screen mode.
 

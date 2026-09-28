@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/voice` records and transcribes, then sends the text as a turn (no composer field). Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:216-216`
+Code: `apps/cli/src/tui/tui_app.rs:5010-5011`, `apps/cli/src/voice.rs:299-299`
 
 ## S49.02: Editable transcription before send.
 
@@ -27,10 +27,10 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The transcript is shown for ENTER/re-record/discard, but cannot be edited before sending. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:216-216`
+Code: `apps/cli/src/voice.rs:229-229`
 
 ## S49.03: Dictation language selection.
 
@@ -173,11 +173,11 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:58-58`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | A RecordingOverlay with a duration readout exists but is not mounted anywhere; the composer shows only a waveform while recording. | mount |
-| cli | partial | Shows the recorded length after stopping ("N.Ns recorded") plus a live indicator, not a running clock. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`, `apps/cli/src/voice.rs:718-718`
 
 ## S49.25: Transcript export.
 

@@ -158,15 +158,14 @@ Code: `apps/desktop/electron/appMenu.ts:212-214`, `apps/desktop/electron/main.ts
 
 - Done when: An editor (prompt, document or source) can take over the whole screen for focused editing and return to the chat.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
 | desktop | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
-| cli | partial | The keybindings screen advertises "Ctrl+E Open external editor for current input", but the TUI binds no Ctrl+E: unbound control chords are dropped. Wire Ctrl+E to $EDITOR or remove the line. | handler |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1611-1611`, `apps/cli/src/tui/widgets/screen_renderers.rs:886-887`, `apps/cli/src/tui/tui_app.rs:2502-2505`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1611-1611`
 
 ## S7.16: Full-screen report reader.
 

@@ -162,11 +162,11 @@ Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-110`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
-| cli | partial | Markdown tables print as bordered static text with 40-character column caps; no sorting or scrolling of wide tables. | ui |
+| cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | vscode | partial | Markdown tables render static through markdown-it in the sidebar; no sortable data table. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:276-290`, `apps/extension-vscode/src/webview/render.ts:5-10`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`, `apps/extension-vscode/src/webview/render.ts:5-10`
 
 ## S9.17: Media gallery.
 
@@ -322,14 +322,13 @@ Code: `apps/extension/src/side_panel.ts:8368-8368`, `apps/extension/src/features
 
 - Done when: One view states in plain language what the assistant or a connected app is allowed to do (scopes, autonomy, allowed sites or tools).
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The TUI /status shows mode and sandbox, but the allow/deny rule list only prints in the `agi --no-tui` REPL; show the rules in the TUI. | ui |
 | vscode | partial | The header pill names the trust boundary and the mode picker sets autonomy, but nothing lists what a session may do (tools, folders, commands) in one place. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3408-3408`, `apps/cli/src/tui/tui_app.rs:3636-3636`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
 
 ## S9.33: Integration connection card.
 

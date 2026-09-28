@@ -128,18 +128,6 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:284-293`, `apps/web
 
 Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-752`, `apps/web/lib/hooks/useConversations.ts:450-461`, `apps/web/app/api/search/route.ts:256-262`, `apps/mobile/src/features/settings/general/index.tsx:48-54`
 
-## S85.14: Diagnostic-sharing choice.
-
-- Done when: The user can choose whether crash reports and diagnostics are sent, and the choice is honoured.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
-
-Code: `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`, `apps/cli/src/crash_reports.rs:35-50`, `apps/cli/src/lib.rs:3106-3111`
-
 ## S85.16: Temporary-chat preferences.
 
 - Done when: The user can make new chats temporary by default (not saved, not used for memory) and the preference is honoured.

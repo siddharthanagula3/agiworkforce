@@ -48,14 +48,13 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:1010-1016`, `apps/extension-vscod
 
 - Done when: The agent can touch only folders the user granted, and the user grants or revokes each folder.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Grant is real in the TUI (untrusted_shell_refusal raises an approval, mod.rs:930-972; trust::grant), but revoke exists only as the REPL slash command /trust revoke \| /untrust (repl/slash_commands.rs:161, repl/registry.rs:494 → trust::revoke); the TUI handle_slash has no /trust and there is no `agi trust` subcommand (Command enum lib.rs:726+). R-l mode-only → partial. remaining: 'Folder trust can be revoked only in the REPL (`agi --no-tui`, /untrust); add /untrust or an `agi trust revoke` subcommand to the default TUI.' |  |
 | vscode | partial | The criterion needs grant AND revoke. VS Code only relays the runtime's TrustDirectory/untrusted-workspace approval (a grant, approvalScope.ts:18; exec/tools/mod.rs:930-972); no VS Code control lists or revokes trusted folders. trust::revoke is reached only from the REPL /trust revoke\|/untrust (repl/registry.rs:494). remaining: 'Folders can be trusted from the approval prompt but not revoked from VS Code; add a trusted-folders setting with remove.' |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools/mod.rs:498-507`, `apps/cli/src/features/exec/tools/mod.rs:1028-1029`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:18-18`
 
 ## S59.06: Per-domain permission.
 

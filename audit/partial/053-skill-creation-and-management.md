@@ -90,15 +90,12 @@ Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-30`, `apps/
 
 - Done when: The product tells users how and when a skill is invoked (slash name, button, or automatic matching).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Skills are listed as /name in help and autocomplete, but typing one only sends the text as a prompt; nothing loads that skill. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:376-378`, `apps/cli/src/tui/tui_app.rs:4116-4118`
 
 ## S53.09: Instruction editor.
 
@@ -181,16 +178,15 @@ Code: `packages/tools/skills/src/tool.ts:180-200`
 
 - Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Skill names appear as slash commands, but /name only sends text; $skill mention matching exists but is unwired, so nothing forces the named skill to load. | handler |
 | vscode | partial | The VS Code / menu lists skills but running one calls the runtime's runCommand, which executes only six built-ins; a skill command fails with a warning. | handler |
 | chrome | missing | Not built on this surface. |  |
 | api | partial | skill_name works on POST /api/llm/v1/chat/completions but is undocumented in the API reference. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:376-378`, `apps/cli/src/tui/tui_app.rs:4116-4118`, `apps/cli/src/skills.rs:14-19`, `apps/extension-vscode/src/core/commandSetup.ts:2318-2324`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:2318-2324`, `apps/cli/src/app_server/surfaces.rs:30-30`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
 
 ## S53.18: Automatic relevance-based invocation.
 

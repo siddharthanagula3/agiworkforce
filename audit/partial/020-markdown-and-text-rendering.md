@@ -23,14 +23,13 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: **bold**, *italic* and ~~strikethrough~~ render with the matching text styles.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Strikethrough is parsed but drawn with no strike style, so deleted text reads as normal text. | ui |
 | chrome | partial | Bold and italic work, but ~~strikethrough~~ is never converted (the sanitizer allows <del> yet the renderer emits none), so tildes show literally. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/cli/src/tui/markdown_renderer.rs:42-42`, `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:106-106`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:106-106`
 
 ## S20.04: Ordered lists.
 
@@ -49,14 +48,13 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5051
 
 - Done when: Indented sub-lists render nested under their parent item with deeper indentation.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Nested lists are flattened: every level uses the same indent, and when an inner list ends the outer list loses its numbering. | ui |
 | chrome | partial | Indented sub-items are not matched (the list pattern anchors at column 0), so nested levels print as plain text lines. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/cli/src/tui/markdown_renderer.rs:151-151`, `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:116-116`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:116-116`
 
 ## S20.07: Task lists.
 
@@ -106,18 +104,6 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 
 Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:95-95`
 
-## S20.12: Links.
-
-- Done when: [text](url) renders as a link the reader can see and follow.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Link text is underlined but the URL is discarded, so the reader cannot see or open where the link points. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/cli/src/tui/markdown_renderer.rs:138-138`
-
 ## S20.13: Autolinks.
 
 - Done when: A bare URL in the answer (https://…, www.…) becomes a clickable link.
@@ -156,15 +142,12 @@ Code: `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/cli/src/tui/markdown_render
 
 - Done when: A table wider than the answer column scrolls horizontally instead of overflowing or being cut off.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Wide tables are clipped: each column is truncated to 40 characters with no horizontal scroll or wrapping. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/cli/src/tui/markdown_renderer.rs:287-287`
 
 ## S20.18: Download-table action.
 
@@ -275,13 +258,13 @@ Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:270-270`
 
 - Done when: Printing or exporting an answer/conversation keeps the rendered formatting (headings, lists, tables, code, math).
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
 | desktop | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
 | mobile | partial | PDF export converts only headings, bold/italic, code and flat lists; tables, math, links and list numbering are lost. | ui |
-| cli | partial | /export prints the transcript as Markdown into the pane; nothing is written to a file and there is no print or rendered export. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

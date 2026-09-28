@@ -45,18 +45,6 @@ Code: `apps/extension/src/types.ts:787-787`, `apps/extension/src/side_panel.ts:9
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S42.15: Pause briefings.
-
-- Done when: The user can pause and resume briefings.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A schedule can only be created paused (--paused); there is no pause or resume command for an existing one. | ui |
-
-Code: `apps/cli/src/lib.rs:1124-1124`
-
 ## S42.16: Quiet hours.
 
 - Done when: During quiet hours the product holds proactive notifications and nudges.

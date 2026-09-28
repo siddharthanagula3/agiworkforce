@@ -305,16 +305,15 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
-| cli | partial | The footer always shows a ctx bar and percentage, but nothing warns as it nears 100%; add a warning that suggests /compact. | states |
 | vscode | partial | Near the limit the token counter only changes colour (75% / 90%); add a text warning that is also announced. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/cli/src/tui/tui_app.rs:2029-2029`, `apps/cli/src/tui/tui_app.rs:3422-3422`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3312-3312`
 
 ## S10.28: Usage-limit notice.
 
@@ -487,14 +486,13 @@ Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/c
 
 - Done when: Before diagnostics or crash reports leave the device, the user is told what is included and chooses (or sets a preference that is honoured).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Diagnostics leave only when the user taps Export Diagnostics and shares the file, but nothing says what the bundle contains before sharing. | ui |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
 
-Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`, `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`
+Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`
 
 ## S10.47: Data-export request.
 

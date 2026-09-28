@@ -13,14 +13,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The All tab lists media_assets (chat uploads, generated images/files/videos); project knowledge files are not in it or its search, projects only appear as folders that leave the Library. | ui, handler |
-| desktop | partial | The All tab lists media_assets (chat uploads, generated images/files/videos); project knowledge files are not in it or its search, projects only appear as folders that leave the Library. | ui, handler |
 | mobile | partial | All lists media_assets plus local/cloud artifacts; project files are absent, and type filters and artifact search run only over pages already loaded. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/library/page.tsx:4-17`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:852-874`, `apps/web/app/api/library/route.ts:67-97`, `apps/web/lib/server/media-assets.ts:454-510`
+Code: `apps/mobile/app/(app)/library/index.tsx:1-8`, `apps/mobile/src/features/library/index.tsx:249-270`, `apps/mobile/src/features/library/index.tsx:91-120`, `apps/mobile/src/features/library/libraryClient.ts:53-80`
 
 ## S24.02: Uploaded-files view.
 
@@ -98,14 +96,10 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Items shared with you appear only on Workspace > Sharing (projects, conversations, artifacts shared org-wide); the Library has no Shared-with-me view and nothing for files. | ui |
-| desktop | partial | Items shared with you appear only on Workspace > Sharing (projects, conversations, artifacts shared org-wide); the Library has no Shared-with-me view and nothing for files. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:445-452`
 
 ## S24.11: Folder hierarchy.
 
@@ -114,14 +108,10 @@ Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settin
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects appear as one flat level of "folders" in the All tab and opening one leaves the Library for the project page; there are no user folders or nesting. | ui, handler |
-| desktop | partial | Projects appear as one flat level of "folders" in the All tab and opening one leaves the Library for the project page; there are no user folders or nesting. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:720-727`, `apps/web/features/library/components/LibraryView.tsx:137-139`
 
 ## S24.12: Grid/list toggle.
 
@@ -237,14 +227,10 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generated files record a derivation graph (file_lineage, migration 0257: edit/export/copy parents), but no Library or file UI shows earlier versions or restores one. | ui, api |
-| desktop | partial | Generated files record a derivation graph (file_lineage, migration 0257: edit/export/copy parents), but no Library or file UI shows earlier versions or restores one. | ui, api |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/server/generated-file-persist.ts:66-80`
 
 ## S24.33: Storage-consumption display.
 
@@ -299,11 +285,7 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1438-1446
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Processing/indexing state is shown only for project knowledge files; Library items show no upload or processing status. | ui |
-| desktop | partial | Processing/indexing state is shown only for project knowledge files; Library items show no upload or processing status. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:283-283`, `apps/web/features/projects/components/KnowledgeFilesPanel.tsx:41-48`

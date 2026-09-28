@@ -178,16 +178,16 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:36-36`, `apps/mobi
 ## S12.14: Voice entry.
 
 - Done when: From the new-chat screen the user can start a spoken (voice-mode) conversation.
-- Wave: 3
+- Wave: 2
 - Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Give /voice a transcription path that works with an AGI account; today it needs the user's own OPENAI_API_KEY or a locally installed whisper binary and aborts otherwise. | api |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Add a voice-conversation mode; the side panel's mic only dictates into the text box. | ui, handler |
 
-Code: `crates/agiworkforce-command-registry/src/lib.rs:386-392`, `apps/cli/src/tui/tui_app.rs:4654-4665`, `apps/cli/src/voice.rs:300-330`, `apps/extension/src/side_panel.ts:9531-9535`
+Code: `apps/cli/src/voice.rs:354-354`, `apps/extension/src/side_panel.ts:9531-9535`, `apps/extension/src/side_panel.ts:10170-10170`
 
 ## S12.15: Agentic-work entry.
 
