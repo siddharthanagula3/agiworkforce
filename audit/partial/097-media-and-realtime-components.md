@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S97.03: Reference-asset manager.
-
-- Done when: Reference assets (library images) are stored, listed and resolved as inputs that guide new generations.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Library images can be reused only as the single source of an edit (by asset id); add saved reference sets and multi-image or style references for new generations. | handler |
-
-Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:410-439`, `packages/contracts/cloud-contracts/src/managed-media.ts:120-126`
-
 ## S97.04: Mask-processing service.
 
 - Done when: Masks for inpaint/outpaint are validated and normalised (size, alpha) before they reach the provider.
@@ -27,17 +16,6 @@ Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:410-439`, `
 | platform | partial | A user-supplied mask file is forwarded to OpenAI unchanged; add mask validation and conversion (dimensions, alpha channel) and a way to draw one. | handler |
 
 Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:470-475`, `packages/contracts/cloud-contracts/src/managed-media.ts:127-134`
-
-## S97.13: Subtitle/transcript generation.
-
-- Done when: Media gets a generated transcript or timed subtitles (SRT/VTT).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Transcription returns plain text for an uploaded audio clip only; add timed subtitle output (SRT/VTT) and transcripts for generated or uploaded videos. | handler |
-
-Code: `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:474-481`
 
 ## S97.17: Text-to-speech service.
 
