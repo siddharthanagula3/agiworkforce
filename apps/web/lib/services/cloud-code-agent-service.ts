@@ -544,7 +544,7 @@ function terminalErrorMessage(
   result: CloudCodeAgentResult,
   stoppedByUser: boolean,
   preservedFiles = 0,
-  stepLimit = CLOUD_CODE_AGENT_MAX_STEPS,
+  stepLimit: number = CLOUD_CODE_AGENT_MAX_STEPS,
 ): string | null {
   const preserved = preservedWorkSentence(preservedFiles);
   if (result.errorMessage) return `${result.errorMessage}${preserved}`.slice(0, 2000);

@@ -18,12 +18,15 @@ import {
   type IRunOptions,
   type ParagraphChild,
 } from 'docx';
-import type {
-  DocumentAlign,
-  DocumentBlock,
-  DocumentInline,
-  DocumentListItem,
-  DocumentTableRow,
+import {
+  RIGHT_TO_LEFT_TEXT,
+  documentDirection,
+  type DocumentAlign,
+  type DocumentBlock,
+  type DocumentDirection,
+  type DocumentInline,
+  type DocumentListItem,
+  type DocumentTableRow,
 } from '@agiworkforce/unified-chat/markdown-document';
 import { texToDocxMath } from './export-math';
 
@@ -61,17 +64,23 @@ const CHECKED_BOX = '☒ ';
 const UNCHECKED_BOX = '☐ ';
 
 const ALIGNMENTS: Readonly<
-  Record<Exclude<DocumentAlign, null>, (typeof AlignmentType)[keyof typeof AlignmentType]>
+  Record<Exclude<DocumentAlign, null> | 'start', (typeof AlignmentType)[keyof typeof AlignmentType]>
 > = {
   left: AlignmentType.LEFT,
   center: AlignmentType.CENTER,
   right: AlignmentType.RIGHT,
+  start: AlignmentType.START,
 };
 
 interface DocxContext {
   readonly quoteDepth: number;
   readonly listLevel: number;
+  readonly direction: DocumentDirection;
   readonly color?: string;
+}
+
+function directionOptions(direction: DocumentDirection): Partial<IParagraphOptions> {
+  return direction === 'rtl' ? { bidirectional: true } : {};
 }
 
 interface RunMarks {
@@ -110,11 +119,15 @@ class OrderedListNumbering {
 }
 
 function textRuns(text: string, options: IRunOptions): TextRun[] {
-  return text
-    .split('\n')
-    .map(
-      (part, index) => new TextRun({ ...options, text: part, ...(index > 0 ? { break: 1 } : {}) }),
-    );
+  return text.split('\n').map(
+    (part, index) =>
+      new TextRun({
+        ...options,
+        ...(RIGHT_TO_LEFT_TEXT.test(part) ? { rightToLeft: true } : {}),
+        text: part,
+        ...(index > 0 ? { break: 1 } : {}),
+      }),
+  );
 }
 
 function inlineChildren(inlines: readonly DocumentInline[], marks: RunMarks): ParagraphChild[] {
@@ -207,6 +220,7 @@ class DocxBuilder {
           new Paragraph({
             heading: HEADING_LEVELS[Math.min(Math.max(block.level, 1), HEADING_LEVELS.length) - 1],
             children: inlineChildren(block.inlines, {}),
+            ...directionOptions(context.direction),
             ...bodyIndent(context),
           }),
         ];
@@ -215,6 +229,7 @@ class DocxBuilder {
           new Paragraph({
             children: inlineChildren(block.inlines, { color: context.color }),
             spacing: { after: PARAGRAPH_AFTER },
+            ...directionOptions(context.direction),
             ...bodyIndent(context),
           }),
         ];
@@ -229,7 +244,7 @@ class DocxBuilder {
           color: MUTED_COLOR,
         });
       case 'table':
-        return [this.table(block.align, block.rows)];
+        return [this.table(block.align, block.rows, context.direction)];
       case 'math':
         return texToDocxMath(block.tex, true).map(
           (line) =>
@@ -277,6 +292,7 @@ class DocxBuilder {
       const markerParagraph = new Paragraph({
         children: lead,
         spacing: { after: PARAGRAPH_AFTER / 2 },
+        ...directionOptions(context.direction),
         ...marker,
       });
       const remaining = first?.kind === 'paragraph' ? rest : item.blocks;
@@ -297,10 +313,15 @@ class DocxBuilder {
     );
   }
 
-  private table(align: readonly DocumentAlign[], rows: readonly DocumentTableRow[]): Table {
+  private table(
+    align: readonly DocumentAlign[],
+    rows: readonly DocumentTableRow[],
+    direction: DocumentDirection,
+  ): Table {
     const columnCount = Math.max(1, ...rows.map((row) => row.length));
     return new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
+      ...(direction === 'rtl' ? { visuallyRightToLeft: true } : {}),
       columnWidths: columnWidths(rows, columnCount),
       rows: rows.map(
         (row, rowIndex) =>
@@ -312,8 +333,9 @@ class DocxBuilder {
                 new TableCell({
                   children: [
                     new Paragraph({
-                      alignment: ALIGNMENTS[align[column] ?? 'left'],
+                      alignment: ALIGNMENTS[align[column] ?? 'start'],
                       children: inlineChildren(row[column] ?? [], { bold: rowIndex === 0 }),
+                      ...directionOptions(direction),
                     }),
                   ],
                   ...(rowIndex === 0
@@ -335,6 +357,7 @@ class DocxBuilder {
 
 export function buildDocxDocument(blocks: readonly DocumentBlock[], header: DocxHeader): Document {
   const builder = new DocxBuilder();
+  const direction = documentDirection(blocks, header.title);
   const headerParagraphs = [
     ...(header.title
       ? [
@@ -342,10 +365,12 @@ export function buildDocxDocument(blocks: readonly DocumentBlock[], header: Docx
             text: header.title,
             heading: HeadingLevel.TITLE,
             spacing: { after: 200 },
+            ...directionOptions(direction),
           }),
         ]
       : []),
     new Paragraph({
+      ...directionOptions(direction),
       children: [
         new TextRun({
           text: [header.author ? `By ${header.author}` : '', header.date]
@@ -358,7 +383,7 @@ export function buildDocxDocument(blocks: readonly DocumentBlock[], header: Docx
       spacing: { after: 400 },
     }),
   ];
-  const body = builder.blocks(blocks, { quoteDepth: 0, listLevel: 0 });
+  const body = builder.blocks(blocks, { quoteDepth: 0, listLevel: 0, direction });
   return new Document({
     creator: header.author || 'AGI',
     title: header.title || 'Document',

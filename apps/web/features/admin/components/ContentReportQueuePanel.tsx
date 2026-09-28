@@ -91,9 +91,7 @@ export default function ContentReportQueuePanel() {
     <section className="space-y-4" aria-labelledby="content-report-queue-title">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase text-sky-700 dark:text-sky-300">
-            Trust and safety
-          </p>
+          <p className="font-mono text-xs uppercase text-info-text">Trust and safety</p>
           <h2 id="content-report-queue-title" className="mt-1 text-h2 text-foreground">
             Content report queue
           </h2>
@@ -223,7 +221,7 @@ export default function ContentReportQueuePanel() {
                       type="button"
                       disabled={pendingId === report.id}
                       onClick={() => void applyDisposition(report, disposition.status)}
-                      className="rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-700 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-100"
+                      className="rounded-md border border-info-fill/30 bg-info-fill/10 px-3 py-2 text-sm text-info-text hover:bg-info-fill/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {disposition.label}
                     </button>

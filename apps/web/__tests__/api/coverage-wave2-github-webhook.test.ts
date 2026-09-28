@@ -62,6 +62,9 @@ vi.mock('@/lib/github-app', () => ({
   getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-abc123',
+  getGitHubIssue: vi.fn(async () => null),
+  getGitHubPullRequestForTask: vi.fn(async () => null),
+  listGitHubFailedChecks: vi.fn(async () => []),
 }));
 
 vi.mock('@agiworkforce/types', async () => {

@@ -196,8 +196,8 @@ export function ScheduleCard({
               </h2>
               {isRunningNow && (
                 <span className="relative flex h-2.5 w-2.5 shrink-0" title="Running now">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75 motion-reduce:animate-none" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-info-fill opacity-75 motion-reduce:animate-none" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-info-fill" />
                   <span className="sr-only">Running now</span>
                 </span>
               )}
@@ -225,7 +225,7 @@ export function ScheduleCard({
             {schedule.description && (
               <p className="break-words text-sm text-muted-foreground">{schedule.description}</p>
             )}
-            <p className="line-clamp-3 break-words text-sm leading-relaxed text-foreground/85">
+            <p className="line-clamp-3 break-words text-sm leading-relaxed text-muted-foreground">
               {schedule.prompt || 'No task instructions are stored.'}
             </p>
 

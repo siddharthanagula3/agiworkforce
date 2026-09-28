@@ -81,7 +81,7 @@ function fakeDb(options: {
       if (guards("and state = 'pending'") && approval.state !== 'pending') return [];
       if (guards('and expires_at > now()') && approval.expired) return [];
       approval.state = String(params?.[2] ?? 'decided');
-      return [{ command: approval.command }];
+      return [{ command: approval.command, tool_name: 'run_command', tool_args: {} }];
     }
 
     if (text.startsWith('select state, expires_at <= now() as is_expired')) {
@@ -162,7 +162,11 @@ describe('a pending Cloud Code approval can actually be decided', () => {
 
     expect(vi.mocked(executePersistedAgentTurn)).toHaveBeenCalledTimes(1);
     const call = vi.mocked(executePersistedAgentTurn).mock.calls[0]?.[0];
-    expect(call?.preApproved).toMatchObject({ approved: true, command: DANGEROUS_COMMAND });
+    expect(call?.preApproved).toMatchObject({
+      approved: true,
+      toolName: 'run_command',
+      args: { command: DANGEROUS_COMMAND },
+    });
     expect(call?.turnId).toBe(TURN_ID);
     expect(record.stopReason).toBe('done');
     expect(harness.turn.state).toBe('running');
@@ -179,7 +183,7 @@ describe('a pending Cloud Code approval can actually be decided', () => {
     const harness = fakeDb({});
     await decide(harness.db);
     const call = vi.mocked(executePersistedAgentTurn).mock.calls[0]?.[0];
-    expect(call?.preApproved?.command).toBe(DANGEROUS_COMMAND);
+    expect(call?.preApproved?.args).toEqual({ command: DANGEROUS_COMMAND });
   });
 });
 

@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
+  DEVELOPER_PROJECT_CREDIT_LIMIT_MAX,
   DEVELOPER_PROJECT_NAME_MAX,
   createDeveloperProject,
   listDeveloperProjects,
@@ -16,6 +17,13 @@ import {
 
 const CreateProjectSchema = z.object({
   name: z.string().trim().min(1).max(DEVELOPER_PROJECT_NAME_MAX),
+  monthlyCreditLimit: z
+    .number()
+    .int()
+    .positive()
+    .max(DEVELOPER_PROJECT_CREDIT_LIMIT_MAX)
+    .nullable()
+    .default(null),
 });
 
 async function handleList(request: NextRequest) {
@@ -37,7 +45,7 @@ async function handleCreate(request: NextRequest) {
   const body = await readValidatedJsonBody(
     request,
     CreateProjectSchema,
-    `A project needs a name of up to ${DEVELOPER_PROJECT_NAME_MAX} characters.`,
+    `A project needs a name of up to ${DEVELOPER_PROJECT_NAME_MAX} characters and, optionally, a whole number of credits as its monthly limit.`,
   );
   const project = await createDeveloperProject(db, userId, body);
   return NextResponse.json({ project }, { status: 201 });

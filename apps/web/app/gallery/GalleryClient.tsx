@@ -6,6 +6,16 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { X, Code, Layers, Plus } from 'lucide-react';
 import {
+  CircleHelp,
+  FileText,
+  Globe,
+  ListChecks,
+  MonitorPlay,
+  Palette,
+  SquarePen,
+  type Icon,
+} from '@agiworkforce/icons';
+import {
   useArtifactsStore,
   isGeneratedFileArtifactId,
 } from '@/features/chat/stores/artifacts-store';
@@ -24,7 +34,7 @@ import { INSPIRATION, inspirationPath, type InspirationCard } from './inspiratio
 interface ArtifactCategory {
   id: string;
   label: string;
-  icon: string;
+  icon: Icon;
   prompt: string;
 }
 
@@ -32,43 +42,43 @@ const ARTIFACT_CATEGORIES: ArtifactCategory[] = [
   {
     id: 'apps',
     label: 'Apps and websites',
-    icon: '🌐',
+    icon: Globe,
     prompt: 'Build me a web app or website. ',
   },
   {
     id: 'documents',
     label: 'Documents',
-    icon: '📄',
+    icon: FileText,
     prompt: 'Help me create a professional document. ',
   },
   {
     id: 'games',
     label: 'Games',
-    icon: '🎮',
+    icon: MonitorPlay,
     prompt: 'Build a simple browser game. ',
   },
   {
     id: 'productivity',
     label: 'Productivity tools',
-    icon: '⚡',
+    icon: ListChecks,
     prompt: 'Create a productivity tool or utility. ',
   },
   {
     id: 'creative',
     label: 'Creative projects',
-    icon: '✨',
+    icon: Palette,
     prompt: 'Help me with a creative project. ',
   },
   {
     id: 'quiz',
     label: 'Quiz or survey',
-    icon: '📝',
+    icon: CircleHelp,
     prompt: 'Build an interactive quiz or survey. ',
   },
   {
     id: 'scratch',
     label: 'Start from scratch',
-    icon: '🔲',
+    icon: SquarePen,
     prompt: '',
   },
 ];
@@ -492,7 +502,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
                 (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
               }}
             >
-              <span style={{ fontSize: 'var(--agi-text-lg)' }}>{cat.icon}</span>
+              <cat.icon size={20} aria-hidden="true" style={{ color: 'var(--agi-ink)' }} />
               <span
                 style={{
                   fontSize: 'var(--agi-text-sm)',
