@@ -4846,8 +4846,8 @@ const ChatComposerNewComponent = ({
                         ))}
                         {imageMaskFile === undefined && (
                           <p className="px-3 py-1.5 text-xs text-muted-foreground">
-                            Attach a second image, black where the model should redraw, to mask an
-                            edit.
+                            Attach a second PNG the same size, transparent where the model should
+                            redraw, to mask an edit.
                           </p>
                         )}
                       </AnchoredComposerMenu>
