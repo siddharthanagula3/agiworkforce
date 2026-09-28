@@ -111,6 +111,7 @@ pub mod voice {
 pub mod app_server;
 pub mod apply_patch;
 pub mod approval_audit;
+pub(crate) mod approval_details;
 pub mod ecosystem;
 pub mod init;
 pub mod interactive;
@@ -1386,9 +1387,9 @@ enum ModelsSubcommand {
 enum ApprovalsSubcommand {
     /// Show saved approval rules.
     List,
-    /// Always allow a command prefix.
+    /// Always allow a command prefix, or domain:<host> for web_fetch.
     Allow { rule: String },
-    /// Always deny a command prefix.
+    /// Always deny a command prefix, or domain:<host> (*.host for subdomains) to block a site for web_fetch and the browser.
     Deny { rule: String },
     /// Allow a command prefix for this process.
     Session { rule: String },

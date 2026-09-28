@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { isPluginEntryWebInstallable, type PluginInstallation } from '@agiworkforce/types';
+import {
+  isPluginEntryWebInstallable,
+  type PluginInstallation,
+  type PluginManifest,
+  type PluginRegistryEntry,
+} from '@agiworkforce/types';
 import type {
   PluginConnectorRequirementState,
   PluginInstallationSettings,
@@ -19,6 +24,13 @@ import {
   assertPluginPackageInstallable,
   PluginPackageRefusedError,
 } from './plugin-marketplace-service';
+import {
+  parsePluginDependencies,
+  pluginDependencyLabel,
+  PluginDependencyError,
+  resolvePluginDependencies,
+  type PluginDependencyNode,
+} from './plugin-dependencies';
 
 interface PluginInstallationRow {
   plugin_id: string;
@@ -145,28 +157,142 @@ async function assertVersionNotSuspended(
   );
 }
 
-export async function installWebPlugin(
+export interface RegistryPlugin {
+  entry: PluginRegistryEntry;
+  manifest: PluginManifest;
+}
+
+export interface WebPluginInstallDependency {
+  plugin: RegistryPlugin;
+  requiredBy: string;
+  satisfied: boolean;
+}
+
+export interface WebPluginInstallPlan {
+  root: RegistryPlugin;
+  dependencies: WebPluginInstallDependency[];
+}
+
+interface PreparedInstallation {
+  pluginId: string;
+  version: string;
+  declaredSkills: string[];
+  permissions: string[];
+}
+
+async function findWebInstallablePlugin(
+  db: DatabaseAdapter,
+  pluginId: string,
+): Promise<RegistryPlugin | null> {
+  const found = await getPluginRegistryEntry(db, pluginId);
+  if (!found || !isPluginEntryWebInstallable(found.entry) || !found.manifest) return null;
+  return { entry: found.entry, manifest: found.manifest };
+}
+
+function registryDependencyNode(
+  plugin: RegistryPlugin,
+  rootId: string,
+): PluginDependencyNode<RegistryPlugin> {
+  const dependencies = parsePluginDependencies(plugin.manifest.dependencies);
+  if (!dependencies) {
+    throw new PluginDependencyError(
+      `${plugin.entry.id} declares dependencies that cannot be read, so ${rootId} was not installed.`,
+    );
+  }
+  return { name: plugin.entry.id, marketplace: null, plugin, dependencies };
+}
+
+async function satisfiedRegistryPlugins(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginIds: readonly string[],
+): Promise<Set<string>> {
+  const rows = await db.query<{ plugin_id: string }>(
+    `select installation.plugin_id
+       from public.plugin_installations installation
+       left join public.plugin_registry_versions pinned
+              on pinned.plugin_id = installation.plugin_id
+             and pinned.version = installation.installed_version
+      where installation.user_id = $1
+        and installation.plugin_id = any($2::text[])
+        and installation.enabled = true
+        and installation.review_required = false
+        and coalesce(pinned.status, 'published') <> 'suspended'`,
+    [userId, pluginIds],
+  );
+  return new Set(rows.map((row) => row.plugin_id));
+}
+
+export async function planWebPluginInstall(
   db: DatabaseAdapter,
   userId: string,
   pluginId: string,
-): Promise<PluginInstallation | null> {
-  const found = await getPluginRegistryEntry(db, pluginId);
-  if (!found || !isPluginEntryWebInstallable(found.entry) || !found.manifest) return null;
+): Promise<WebPluginInstallPlan | null> {
+  const root = await findWebInstallablePlugin(db, pluginId);
+  if (!root) return null;
 
-  await assertVersionNotSuspended(db, found.entry.id, found.entry.version);
+  const rootId = root.entry.id;
+  const resolved = await resolvePluginDependencies(
+    registryDependencyNode(root, rootId),
+    async (reference, declaredBy) => {
+      const label = pluginDependencyLabel(reference);
+      const requiredBy = declaredBy.name;
+      if (reference.marketplace !== null) {
+        throw new PluginDependencyError(
+          `Dependency "${label}" (required by ${requiredBy}) is in marketplace "${reference.marketplace}", which is not in the allowlist. A built-in plugin depends on built-in plugins only, so ${rootId} was not installed.`,
+        );
+      }
+      if (reference.version !== null) {
+        throw new PluginDependencyError(
+          `Dependency "${label}" (required by ${requiredBy}) asks for version ${reference.version}, and built-in plugins install at their current version only, so ${rootId} was not installed.`,
+        );
+      }
+      const found = await findWebInstallablePlugin(db, reference.name);
+      if (!found) {
+        throw new PluginDependencyError(
+          `Dependency "${label}" (required by ${requiredBy}) is not available to install here, so ${rootId} was not installed.`,
+        );
+      }
+      return registryDependencyNode(found, rootId);
+    },
+  );
+  if (resolved.length === 0) return { root, dependencies: [] };
+
+  const satisfied = await satisfiedRegistryPlugins(
+    db,
+    userId,
+    resolved.map((dependency) => dependency.plugin.entry.id),
+  );
+  return {
+    root,
+    dependencies: resolved.map(({ plugin, requiredBy }) => ({
+      plugin,
+      requiredBy,
+      satisfied: satisfied.has(plugin.entry.id),
+    })),
+  };
+}
+
+async function prepareInstallation(
+  db: DatabaseAdapter,
+  userId: string,
+  plugin: RegistryPlugin,
+): Promise<PreparedInstallation> {
+  const { entry } = plugin;
+  await assertVersionNotSuspended(db, entry.id, entry.version);
 
   await assertPluginPackageInstallable(db, {
-    pluginId: found.entry.id,
-    version: found.entry.version,
-    source: found.entry.source,
-    publisherKind: found.entry.publisher.kind,
-    sha256: found.entry.integrity.sha256,
-    signature: found.entry.integrity.signature,
-    signatureAlgorithm: found.entry.integrity.signatureAlgorithm,
+    pluginId: entry.id,
+    version: entry.version,
+    source: entry.source,
+    publisherKind: entry.publisher.kind,
+    sha256: entry.integrity.sha256,
+    signature: entry.integrity.signature,
+    signatureAlgorithm: entry.integrity.signatureAlgorithm,
   });
 
-  const declared = normalizePluginPermissions(found.entry.permissions);
-  const previouslyApproved = await readApprovedPermissions(db, userId, pluginId);
+  const declared = normalizePluginPermissions(entry.permissions);
+  const previouslyApproved = await readApprovedPermissions(db, userId, entry.id);
   const diff = diffPluginPermissions(previouslyApproved ?? declared, declared);
 
   if (previouslyApproved !== null && diff.expands) {
@@ -177,11 +303,47 @@ export async function installWebPlugin(
               pending_permissions = $3::jsonb,
               updated_at = now()
         where user_id = $1 and plugin_id = $2`,
-      [userId, pluginId, JSON.stringify(declared)],
+      [userId, entry.id, JSON.stringify(declared)],
     );
-    throw new PluginPermissionReviewRequiredError(pluginId, diff.added, previouslyApproved);
+    throw new PluginPermissionReviewRequiredError(entry.id, diff.added, previouslyApproved);
   }
 
+  return {
+    pluginId: entry.id,
+    version: entry.version,
+    declaredSkills: entry.declaredSkills,
+    permissions: declared,
+  };
+}
+
+export async function installWebPlugin(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+  plan?: WebPluginInstallPlan,
+): Promise<PluginInstallation | null> {
+  const resolved = plan ?? (await planWebPluginInstall(db, userId, pluginId));
+  if (!resolved) return null;
+
+  const dependencies: PreparedInstallation[] = [];
+  for (const dependency of resolved.dependencies) {
+    if (!dependency.satisfied) {
+      dependencies.push(await prepareInstallation(db, userId, dependency.plugin));
+    }
+  }
+  const root = await prepareInstallation(db, userId, resolved.root);
+
+  for (const dependency of dependencies.reverse()) {
+    await writeInstallation(db, userId, dependency);
+  }
+  return writeInstallation(db, userId, root);
+}
+
+async function writeInstallation(
+  db: DatabaseAdapter,
+  userId: string,
+  prepared: PreparedInstallation,
+): Promise<PluginInstallation | null> {
   const rows = await db.query<PluginInstallationRow>(
     `insert into public.plugin_installations
        (user_id, plugin_id, installed_version, enabled, enabled_skills,
@@ -197,10 +359,10 @@ export async function installWebPlugin(
      returning plugin_id, installed_version, enabled, installed_at, updated_at`,
     [
       userId,
-      pluginId,
-      found.entry.version,
-      JSON.stringify(found.entry.declaredSkills),
-      JSON.stringify(declared),
+      prepared.pluginId,
+      prepared.version,
+      JSON.stringify(prepared.declaredSkills),
+      JSON.stringify(prepared.permissions),
     ],
   );
   return rows[0] ? mapInstallation(rows[0]) : null;

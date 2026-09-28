@@ -228,13 +228,19 @@ async function* walk(
   }
 }
 
+export interface SearchOptions {
+  ignoreCase?: boolean;
+}
+
 export async function globFiles(
   root: WorkspaceRoot,
   pattern: string,
   relativePath = '',
+  options: SearchOptions = {},
 ): Promise<FileEntry[]> {
   const resolved = await resolveWithinRoot(root, relativePath);
-  const matcher = globToRegExp(pattern);
+  const exact = globToRegExp(pattern);
+  const matcher = options.ignoreCase ? new RegExp(exact.source, 'i') : exact;
   const results: FileEntry[] = [];
 
   for await (const found of walk(resolved.absolute, resolved.relative, 0)) {
@@ -246,10 +252,31 @@ export async function globFiles(
   return results;
 }
 
+function grepText(
+  relative: string,
+  text: string,
+  query: string,
+  limit: number,
+  ignoreCase: boolean,
+): FileSearchMatch[] {
+  if (!ignoreCase) {
+    return grepLines(relative, text, query, { limit, previewLimit: GREP_PREVIEW_LIMIT });
+  }
+  const lines = text.split('\n');
+  return grepLines(relative, text.toLowerCase(), query.toLowerCase(), {
+    limit,
+    previewLimit: GREP_PREVIEW_LIMIT,
+  }).map((match) => ({
+    ...match,
+    preview: (lines[match.line - 1] ?? match.preview).slice(0, GREP_PREVIEW_LIMIT),
+  }));
+}
+
 export async function grepFiles(
   root: WorkspaceRoot,
   query: string,
   relativePath = '',
+  options: SearchOptions = {},
 ): Promise<FileSearchMatch[]> {
   if (query.length === 0) return [];
   const resolved = await resolveWithinRoot(root, relativePath);
@@ -269,10 +296,13 @@ export async function grepFiles(
     if (looksBinary(buffer)) continue;
 
     matches.push(
-      ...grepLines(found.relative, buffer.toString('utf8'), query, {
-        limit: MAX_GREP_MATCHES - matches.length,
-        previewLimit: GREP_PREVIEW_LIMIT,
-      }),
+      ...grepText(
+        found.relative,
+        buffer.toString('utf8'),
+        query,
+        MAX_GREP_MATCHES - matches.length,
+        options.ignoreCase === true,
+      ),
     );
   }
   return matches;

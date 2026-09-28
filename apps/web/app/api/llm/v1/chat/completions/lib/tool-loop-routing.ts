@@ -7,6 +7,11 @@ import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { isManagedOfficeFileTool } from '@/lib/services/managed-office-file-service';
 import { isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import {
+  ITINERARY_TOOL_NAME,
+  PLACES_SEARCH_TOOL_NAME,
+  PRODUCT_COMPARISON_TOOL_NAME,
+} from '@agiworkforce/types';
+import {
   DEFAULT_TOOL_APPROVAL_POLICY,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
@@ -22,6 +27,8 @@ export interface ToolLoopInputClassification {
   hasSkillTools: boolean;
   hasOfficeFileTools: boolean;
   hasMapSearchTools: boolean;
+  hasPlaceTools: boolean;
+  hasProductComparisonTools: boolean;
   hasDeviceStepTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
@@ -67,6 +74,10 @@ export function classifyToolLoopInputs(
   const hasSkillTools = names.includes(SKILL_TOOL_NAME);
   const hasOfficeFileTools = names.some(isManagedOfficeFileTool);
   const hasMapSearchTools = names.some(isMapSearchTool);
+  const hasPlaceTools = names.some(
+    (name) => name === PLACES_SEARCH_TOOL_NAME || name === ITINERARY_TOOL_NAME,
+  );
+  const hasProductComparisonTools = names.includes(PRODUCT_COMPARISON_TOOL_NAME);
   // A device step is carried out by the user's own machine while the loop is
   // suspended. Without the loop there is nothing to suspend, and the raw tool
   // call would reach the client as a call nobody runs.
@@ -80,6 +91,8 @@ export function classifyToolLoopInputs(
     hasSkillTools,
     hasOfficeFileTools,
     hasMapSearchTools,
+    hasPlaceTools,
+    hasProductComparisonTools,
     hasDeviceStepTools,
     shouldRun:
       hasMcpTools ||
@@ -89,6 +102,8 @@ export function classifyToolLoopInputs(
       hasSkillTools ||
       hasOfficeFileTools ||
       hasMapSearchTools ||
+      hasPlaceTools ||
+      hasProductComparisonTools ||
       hasDeviceStepTools,
     approvalMode:
       hasMcpTools ||

@@ -43,6 +43,7 @@ export function fetchedMarketplace(
       description: null,
       ownerName: 'Anthropic',
       renames: {},
+      allowCrossMarketplaceDependenciesOn: [],
       plugins,
       skipped: [],
     },

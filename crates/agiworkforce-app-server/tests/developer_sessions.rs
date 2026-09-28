@@ -137,6 +137,7 @@ impl DeveloperSessionHost for FakeHost {
                 provider: LocalModelProvider::Ollama,
             }],
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 
@@ -330,6 +331,12 @@ fn capabilities() -> AppServerCapabilities {
         thread_delete: false,
         reconnect: false,
         writer_lease: false,
+        thread_unarchive: false,
+        thread_search: false,
+        fork_at_message: false,
+        prompt_commands: false,
+        max_turns: false,
+        memory: false,
     }
 }
 
@@ -693,6 +700,7 @@ async fn routes_thread_turn_and_control_methods_to_one_host() {
             ThreadForkParams {
                 thread_id: "thread-1".to_string(),
                 title: None,
+                through_message_index: None,
             },
         ))
         .await;
@@ -1039,6 +1047,7 @@ impl DeveloperSessionHost for SurfaceHost {
         Ok(LocalModelListResponse {
             models: Vec::new(),
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 
@@ -1799,6 +1808,7 @@ impl DeveloperSessionHost for HandoffHost {
         Ok(LocalModelListResponse {
             models: Vec::new(),
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 

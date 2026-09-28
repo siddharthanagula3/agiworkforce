@@ -8,11 +8,16 @@ import {
   type ApplicationOpenResult,
   type BrowserPairingState,
   type ClipboardSnapshot,
+  type ComputerUseStatus,
+  type DesktopPermissionsReview,
   type DeviceRegistryProfile,
+  type PermissionDecision,
+  type SystemPermissionKind,
   type RemoteControlStartRequest,
   type RemoteControlState,
   type FileEntry,
   type FileBinaryContent,
+  type FileSearchMatch,
   type FileTextContent,
   type LocalChatMessage,
   type LocalChatResult,
@@ -99,6 +104,27 @@ export function readWorkspaceFileBytes(rootId: string, path: string): Promise<Fi
   return invoke<FileBinaryContent>('file_read_bytes', { rootId, path });
 }
 
+export function findWorkspaceFilesByName(
+  rootId: string,
+  query: string,
+  path: string,
+): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>('file_glob', {
+    rootId,
+    pattern: `**${query}*`,
+    path,
+    ignoreCase: true,
+  });
+}
+
+export function searchWorkspaceText(
+  rootId: string,
+  query: string,
+  path: string,
+): Promise<FileSearchMatch[]> {
+  return invoke<FileSearchMatch[]>('file_grep', { rootId, query, path, ignoreCase: true });
+}
+
 function decodeBase64(base64: string): ArrayBuffer {
   const binary = atob(base64);
   const buffer = new ArrayBuffer(binary.length);
@@ -116,7 +142,7 @@ function decodeBase64(base64: string): ArrayBuffer {
  */
 export async function readWorkspaceFile(
   rootId: string,
-  entry: FileEntry,
+  entry: Pick<FileEntry, 'name' | 'path'>,
   mimeType: string,
 ): Promise<File> {
   const content = await readWorkspaceFileBytes(rootId, entry.path);
@@ -246,6 +272,55 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
 
 export function readDeviceRegistryProfile(): Promise<DeviceRegistryProfile> {
   return invoke<DeviceRegistryProfile>(DEVICE_REGISTRY_PROFILE_COMMAND);
+}
+
+export function readComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_status');
+}
+
+export function setComputerUseEnabled(enabled: boolean): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_set_enabled', { enabled });
+}
+
+export function stopComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_stop');
+}
+
+export function takeOverComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_take_over');
+}
+
+export function handBackComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_hand_back');
+}
+
+export function finishComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_finish');
+}
+
+export function onComputerUseChanged(listener: (status: ComputerUseStatus) => void): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'computer-use-changed') listener(event.status);
+  });
+}
+
+export function openSystemPermissionSettings(permission: SystemPermissionKind): Promise<boolean> {
+  return invoke<boolean>('system_permission_open', { permission });
+}
+
+export function readDesktopPermissions(): Promise<DesktopPermissionsReview> {
+  return invoke<DesktopPermissionsReview>('permission_review');
+}
+
+export function revokeDesktopPermission(
+  decision: Pick<PermissionDecision, 'capability' | 'scope'>,
+): Promise<DesktopPermissionsReview> {
+  return invoke<DesktopPermissionsReview>('permission_revoke', {
+    capability: decision.capability,
+    scope: decision.scope,
+  });
 }
 
 export function readRemoteControl(): Promise<RemoteControlState> {

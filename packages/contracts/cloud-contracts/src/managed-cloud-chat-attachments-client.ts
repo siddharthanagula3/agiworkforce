@@ -12,6 +12,12 @@ import {
   resolveChatAttachmentMimeType,
   type ManagedCloudChatAttachment,
 } from './chat-attachments';
+import { sha256HexOfBlob } from './file-digest';
+import {
+  createManagedCloudResumableUploadClient,
+  isResumableUploadUnavailable,
+} from './managed-cloud-resumable-upload-client';
+import { shouldUploadInParts } from './resumable-uploads';
 
 export interface ManagedCloudChatAttachmentsClientConfig {
   baseUrl?: string;
@@ -102,6 +108,11 @@ export function createManagedCloudChatAttachmentsClient(
   const baseUrl = normalizeBaseUrl(config.baseUrl ?? '');
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const uploadFetchImpl = config.uploadFetchImpl ?? fetchImpl;
+  const resumable = createManagedCloudResumableUploadClient({
+    ...config,
+    fetchImpl,
+    uploadFetchImpl,
+  });
 
   async function mutationHeaders(): Promise<HeadersInit> {
     const headers = new Headers(await config.getHeaders?.());
@@ -109,6 +120,40 @@ export function createManagedCloudChatAttachmentsClient(
     return config.decorateMutationHeaders
       ? config.decorateMutationHeaders(headers)
       : Object.fromEntries(headers.entries());
+  }
+
+  async function uploadInParts(
+    file: File,
+    mimeType: string,
+    options: ManagedCloudChatAttachmentUploadOptions,
+    onCompleting: () => void,
+  ): Promise<ManagedCloudChatAttachment | null> {
+    const { signal, conversationId, temporary } = options;
+    try {
+      const completed = await resumable.upload({
+        file,
+        request: {
+          kind: 'chat-attachment',
+          fileName: file.name,
+          mimeType,
+          byteCount: file.size,
+          checksumSha256: await sha256HexOfBlob(file),
+        },
+        completion: {
+          ...(conversationId ? { conversationId } : {}),
+          ...(temporary ? { temporary } : {}),
+        },
+        ...(signal ? { signal } : {}),
+        onCompleting,
+      });
+      if (completed.kind !== 'chat-attachment') {
+        throw new ManagedCloudChatAttachmentHttpError(`Could not verify ${file.name}.`, 502);
+      }
+      return completed.attachment;
+    } catch (error) {
+      if (isResumableUploadUnavailable(error)) return null;
+      throw error;
+    }
   }
 
   async function post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
@@ -146,6 +191,18 @@ export function createManagedCloudChatAttachmentsClient(
             throw new Error(
               `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
             );
+          }
+
+          if (shouldUploadInParts(file.size)) {
+            reportStatus(onStatus, { index, fileName: file.name, phase: 'uploading' });
+            const attachment = await uploadInParts(file, mimeType, options, () =>
+              reportStatus(onStatus, { index, fileName: file.name, phase: 'verifying' }),
+            );
+            if (attachment) {
+              uploaded.push(attachment);
+              reportStatus(onStatus, { index, fileName: file.name, phase: 'complete' });
+              continue;
+            }
           }
 
           const presignRequest = ManagedCloudChatAttachmentPresignRequestSchema.parse({

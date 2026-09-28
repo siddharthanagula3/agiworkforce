@@ -1,3 +1,4 @@
+import { RESUMABLE_UPLOAD_PART_BYTES } from '@agiworkforce/cloud-contracts';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 export const DEFAULT_API_PAYLOAD_CEILING_BYTES = 4 * 1024 * 1024;
@@ -13,6 +14,7 @@ const PAYLOAD_CEILINGS: ReadonlyArray<readonly [string, number]> = [
   ['/api/scim/', 256 * 1024],
   ['/api/llm/v1/chat/completions', 2_000_000],
   ['/api/uploads/', MAX_ATTACHMENT_BYTES],
+  ['/api/files/uploads/', RESUMABLE_UPLOAD_PART_BYTES],
   ['/api/chat/conversations/', 24 * 1024 * 1024],
 ];
 
