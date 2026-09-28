@@ -123,4 +123,5 @@ export type DesktopRuntimeEvent =
   | { kind: 'dispatch-task'; task: DispatchTaskAssignment }
   | { kind: 'dispatch-task-cancel'; requestId: string }
   | { kind: 'device-prompt-changed'; open: boolean }
-  | { kind: 'computer-use-handed-back' };
+  | { kind: 'computer-use-handed-back' }
+  | { kind: 'browser-sign-in-expired' };

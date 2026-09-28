@@ -653,7 +653,8 @@ function deliverDeepLink(url: string): void {
   const signIn = readBrowserSignInLink(url);
   if (signIn.kind !== 'not-sign-in') {
     showMainWindow();
-    void mainWindow?.loadURL(signIn.url);
+    if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
+    if (signIn.kind === 'expired') sendRuntimeEvent({ kind: 'browser-sign-in-expired' });
     return;
   }
 
