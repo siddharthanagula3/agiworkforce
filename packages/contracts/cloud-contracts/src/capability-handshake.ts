@@ -45,7 +45,7 @@ export function parseEffectiveCapabilityDocument(data: unknown): EffectiveCapabi
 // rather than as two surfaces quietly disagreeing about the same user.
 export const CAPABILITY_CONTRACT_ACCOUNT = {
   userId: 'capability_contract_account',
-  tier: 'pro',
+  tier: 'free',
   cloudExecutionDeploymentEnabled: true,
   computedAt: '2026-08-17T00:00:00.000Z',
   billingPeriodEndsAt: '2026-09-01T00:00:00.000Z',
@@ -54,7 +54,8 @@ export const CAPABILITY_CONTRACT_ACCOUNT = {
 } as const;
 
 export const CAPABILITY_CONTRACT_EXPECTATIONS = {
-  canUseDeepResearch: { allowed: false, policySource: 'tier:pro' },
+  canUseDeepResearch: { allowed: false, policySource: 'tier:free' },
+  canUseImages: { allowed: false, policySource: 'tier:free' },
   canUseWebSearch: { allowed: true, policySource: null },
   canUseCloudModels: { allowed: true, policySource: null },
 } as const;
