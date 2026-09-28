@@ -468,8 +468,14 @@ pub(super) async fn execute_todo_write(
 // ask_user tool
 // ---------------------------------------------------------------------------
 
-pub(super) async fn execute_ask_user(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let question = match args.get("question") {
+pub(super) async fn execute_ask_user(
+    args: &HashMap<String, String>,
+    approval_callback: Option<&super::ApprovalCallback>,
+) -> Result<ToolResult> {
+    let question = match args
+        .get("question")
+        .filter(|question| !question.trim().is_empty())
+    {
         Some(q) => q,
         None => {
             return Ok(ToolResult {
@@ -479,6 +485,50 @@ pub(super) async fn execute_ask_user(args: &HashMap<String, String>) -> Result<T
             });
         }
     };
+    let answer = |success: bool, output: String| ToolResult {
+        tool_name: "ask_user".into(),
+        success,
+        output,
+    };
+
+    if args.get("kind").map(String::as_str) == Some("approval") {
+        let request = crate::tui::approval_broker::ApprovalRequest::new(
+            crate::tui::approval_broker::ApprovalRequestKind::AskUser {
+                question: question.clone(),
+            },
+            question.clone(),
+            Vec::new(),
+        );
+        let approved = match super::request_approval(approval_callback, request).await {
+            Some(decision) => super::approval_allows(decision),
+            None if crate::interactive::can_prompt() => dialoguer::Confirm::new()
+                .with_prompt(question.as_str())
+                .default(false)
+                .interact()
+                .unwrap_or(false),
+            None => return Ok(answer(
+                false,
+                "No one can answer here, so nothing was approved. Do not proceed with the action."
+                    .into(),
+            )),
+        };
+        return Ok(answer(
+            true,
+            if approved {
+                "The user approved.".into()
+            } else {
+                "The user declined. Do not proceed with it.".into()
+            },
+        ));
+    }
+
+    if approval_callback.is_some() || !crate::interactive::can_prompt() {
+        return Ok(answer(
+            false,
+            "A typed answer cannot be collected mid-turn here. Ask the question in your reply and end the turn; the user will answer in their next message."
+                .into(),
+        ));
+    }
 
     eprintln!(
         "\n{} {}",
@@ -486,16 +536,12 @@ pub(super) async fn execute_ask_user(args: &HashMap<String, String>) -> Result<T
         question
     );
 
-    let answer = dialoguer::Input::<String>::new()
+    let reply = dialoguer::Input::<String>::new()
         .with_prompt("Your answer")
         .interact_text()
         .unwrap_or_else(|_| "(no answer)".to_string());
 
-    Ok(ToolResult {
-        tool_name: "ask_user".into(),
-        success: true,
-        output: format!("User responded: {}", answer),
-    })
+    Ok(answer(true, format!("User responded: {reply}")))
 }
 
 // ---------------------------------------------------------------------------

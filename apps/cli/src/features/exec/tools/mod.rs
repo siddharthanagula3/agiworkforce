@@ -620,7 +620,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
         "todo_write" => execute_todo_write(&call.args, opts.workspace_root.as_deref()).await,
-        "ask_user" => execute_ask_user(&call.args).await,
+        "ask_user" => execute_ask_user(&call.args, opts.approval_callback.as_ref()).await,
         "read_many_files" => execute_read_many_files(&call.args).await,
         "team_create" => execute_team_create(&call.args).await,
         "team_delete" => execute_team_delete(&call.args).await,

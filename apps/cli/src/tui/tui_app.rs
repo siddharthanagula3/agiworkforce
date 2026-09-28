@@ -168,7 +168,36 @@ struct ToolCell {
     summary: String,
     state: crate::tui::transcript_cell::TranscriptCellState,
     output_preview: Option<String>,
+    timing: ToolTiming,
+    full_output: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+enum ToolTiming {
+    #[default]
+    Unknown,
+    Running(Instant),
+    Finished(u64),
+}
+
+impl ToolTiming {
+    fn label(self) -> Option<String> {
+        let millis = match self {
+            ToolTiming::Unknown => return None,
+            ToolTiming::Running(started) => started.elapsed().as_millis() as u64,
+            ToolTiming::Finished(millis) => millis,
+        };
+        Some(if millis < 1_000 {
+            format!("{millis}ms")
+        } else {
+            format!("{:.1}s", millis as f64 / 1_000.0)
+        })
+    }
+}
+
+static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+const EXPANDED_TOOL_OUTPUT_LINES: usize = 200;
 
 /// Per-tool-type glyph shown before the tool name (distinct from the run-state
 /// glyph) so the transcript reads at a glance which kind of action ran.
@@ -237,12 +266,35 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
         };
         spans.push(Span::styled(text, style));
     }
+    if let Some(elapsed) = cell.timing.label() {
+        spans.push(Span::styled(
+            format!("  ({elapsed})"),
+            Style::default().fg(ui_muted()),
+        ));
+    }
     let mut lines = vec![Line::from(spans)];
-    if let Some(preview) = &cell.output_preview {
-        lines.push(Line::from(vec![
+    let expanded = EXPAND_TOOL_OUTPUT.load(std::sync::atomic::Ordering::Relaxed);
+    match (&cell.full_output, &cell.output_preview) {
+        (Some(output), _) if expanded => {
+            let total = output.lines().count();
+            for line in output.lines().take(EXPANDED_TOOL_OUTPUT_LINES) {
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(line.to_string(), Style::default().fg(ui_muted())),
+                ]));
+            }
+            if total > EXPANDED_TOOL_OUTPUT_LINES {
+                lines.push(Line::from(Span::styled(
+                    format!("    … {} more lines", total - EXPANDED_TOOL_OUTPUT_LINES),
+                    Style::default().fg(ui_muted()),
+                )));
+            }
+        }
+        (_, Some(preview)) => lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled(preview.clone(), Style::default().fg(ui_muted())),
-        ]));
+        ])),
+        _ => {}
     }
     lines
 }
@@ -2549,6 +2601,19 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
     if super::composer_edits::is_external_editor_key(key) {
         return InputAction::OpenEditor;
+    }
+    if key.code == KeyCode::Char('o') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        let expanded = !EXPAND_TOOL_OUTPUT.fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+        app.status_notice = Some((
+            if expanded {
+                "showing full tool output, Ctrl-O to collapse"
+            } else {
+                "tool output collapsed"
+            }
+            .to_string(),
+            Instant::now(),
+        ));
+        return InputAction::None;
     }
 
     match key.code {
@@ -5243,12 +5308,15 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 summary,
                 state: TranscriptCellState::Running,
                 output_preview: None,
+                timing: ToolTiming::Running(Instant::now()),
+                full_output: None,
             });
         }
         TuiAppEvent::ToolCompleted {
             call_id,
             status,
             output,
+            duration_ms,
             ..
         } => {
             if let Some(cell) = cells.iter_mut().find(|c| c.call_id == call_id) {
@@ -5258,6 +5326,9 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                     _ => TranscriptCellState::Complete,
                 };
                 cell.output_preview = compact_tool_output_preview(&output);
+                cell.timing = ToolTiming::Finished(duration_ms);
+                cell.full_output = Some(sanitize_terminal_text(output.trim_end()).into_owned())
+                    .filter(|output| !output.is_empty());
             }
         }
         _ => {}
@@ -5499,6 +5570,15 @@ async fn send_message_with_prompt(
                                             .contains(crossterm::event::KeyModifiers::CONTROL));
                                 if cancelled {
                                     break;
+                                }
+                                if key.code == crossterm::event::KeyCode::Char('o')
+                                    && key
+                                        .modifiers
+                                        .contains(crossterm::event::KeyModifiers::CONTROL)
+                                {
+                                    EXPAND_TOOL_OUTPUT
+                                        .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+                                    continue;
                                 }
                                 let Some(draft) = edit_turn_draft(&mut app.input, &mut app.cursor, key) else {
                                     continue;
@@ -5783,6 +5863,8 @@ mod tests {
             summary: "src/main.rs".into(),
             state: TranscriptCellState::Complete,
             output_preview: None,
+            timing: ToolTiming::default(),
+            full_output: None,
         };
         let t = line0(&edit);
         assert!(
@@ -5797,6 +5879,8 @@ mod tests {
             summary: "ls -la".into(),
             state: TranscriptCellState::Running,
             output_preview: None,
+            timing: ToolTiming::default(),
+            full_output: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -5811,6 +5895,8 @@ mod tests {
             summary: String::new(),
             state: TranscriptCellState::Failed,
             output_preview: None,
+            timing: ToolTiming::default(),
+            full_output: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -7163,6 +7249,7 @@ mod tests {
             "tasks",
             "task",
             "personalize",
+            "tools",
             "fast",
             "new",
             "models",
@@ -7877,6 +7964,8 @@ mod tests {
             summary: format!("echo {ESCAPE_PAYLOAD}safe"),
             state: crate::tui::transcript_cell::TranscriptCellState::Complete,
             output_preview: compact_tool_output_preview(&format!("out {ESCAPE_PAYLOAD}ok")),
+            timing: ToolTiming::default(),
+            full_output: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();

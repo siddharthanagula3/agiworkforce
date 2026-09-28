@@ -362,6 +362,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["ctx"],
         ),
         RegistryCommand::builtin_slash(
+            "tools",
+            "List the model's tools (/tools <name>, /tools log, /tools retry)",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "personalize",
             "Show or set how replies address you and read (/personalize set <field> <value>)",
             false,

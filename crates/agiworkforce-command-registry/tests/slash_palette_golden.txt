@@ -36,6 +36,7 @@
 /replay
 /insights
 /context [ctx]
+/tools
 /personalize
 /tasks [task]
 /config
