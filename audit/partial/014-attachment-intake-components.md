@@ -70,14 +70,13 @@ Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/c
 
 - Done when: The user can attach a web page by its URL so its content is used as context for the message.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
-| chrome | partial | The item is attaching a page by its URL. The cited control captures the text of the tab currently open; there is no URL input, and the auditor's own note concedes the user must navigate first. Page-context capture is a partial answer, not done. |  |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`, `apps/extension/src/side_panel.ts:9881-9903`, `apps/extension/_locales/en/messages.json:1161-1161`
+Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`
 
 ## S14.09: Cloud-file picker.
 
