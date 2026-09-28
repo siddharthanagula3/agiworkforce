@@ -42,6 +42,7 @@ export const CONCEPT_NAMES = [
   'usage-reservation',
   'audit-event',
   'file',
+  'external-reference',
   'notification',
   'device',
   'agent-run',
