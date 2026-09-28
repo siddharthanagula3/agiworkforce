@@ -1,7 +1,17 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { getTierPolicy, type ModelMetadata } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getTierPolicy,
+  normalizeBillingPlanTier,
+  type ModelMetadata,
+} from '@agiworkforce/types';
+import {
+  LIVE_VOICE_WORK_TASK_TOOL,
+  MAX_AGIWORK_GOAL_CHARS,
+  type LiveVoiceClientHandoff,
+} from '@agiworkforce/cloud-contracts';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { appendWebSearchTool } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { loadMcpToolDefs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
@@ -212,15 +222,16 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     policyTool: LIST_FILES_TOOL,
   },
   {
-    id: 'agi_work',
-    label: 'Working on a task',
+    id: LIVE_VOICE_WORK_TASK_TOOL,
+    label: 'Starting a task',
     toolClass: 'function',
     risk: 'write',
-    reachable: false,
+    reachable: true,
     reason:
-      'a multi-turn plan with approval checkpoints, and the provider-side delegation has no callback into the tool loop that could pause for one',
-    timeoutMs: LONG_TOOL_TIMEOUT_MS,
+      'the voice client hands the goal to the chat as an AGI Work turn, which starts the durable run, tracks it in Tasks and stops there for any approval its plan needs',
+    timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: true,
+    policyTool: LIVE_VOICE_WORK_TASK_TOOL,
   },
   {
     id: 'connectors',
@@ -331,12 +342,38 @@ function delegationFunctionTool(
   return { type: 'function', name, description, parameters, strict: false };
 }
 
+function liveVoiceWorkTaskToolDef(): ChatFunctionTool {
+  return {
+    function: {
+      name: LIVE_VOICE_WORK_TASK_TOOL,
+      description:
+        'Start an AGI Work task: a longer piece of work that runs in the background with a plan, ' +
+        'is tracked in Tasks and keeps going after this voice session ends. Use it when the user ' +
+        'asks for work that takes many steps, such as research, a report or a multi-step job. ' +
+        "Pass the goal in the user's words, with every detail they gave.",
+      parameters: {
+        type: 'object',
+        properties: {
+          goal: {
+            type: 'string',
+            maxLength: MAX_AGIWORK_GOAL_CHARS,
+            description: 'What the task should achieve, with the details the user gave.',
+          },
+        },
+        required: ['goal'],
+        additionalProperties: false,
+      },
+    },
+  };
+}
+
 export async function resolveLiveVoiceFunctionTools(input: {
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
   planTier: string | null;
   backendModel: ModelMetadata;
+  clientHandoffs: readonly LiveVoiceClientHandoff[];
 }): Promise<LiveVoiceFunctionTools> {
   const tierPolicy = getTierPolicy(input.planTier);
   if (input.backendModel.capabilities?.tools === false || tierPolicy.allowToolUse === false) {
@@ -358,6 +395,10 @@ export async function resolveLiveVoiceFunctionTools(input: {
   const productTools: ChatFunctionTool[] = [
     ...(tierPolicy.allowSearch ? [urlFetchToolDef()] : []),
     createManagedOfficeFileToolDefinition(),
+    ...(input.clientHandoffs.includes(LIVE_VOICE_WORK_TASK_TOOL) &&
+    canUseBillingPlanCapability(normalizeBillingPlanTier(input.planTier), 'agi_work')
+      ? [liveVoiceWorkTaskToolDef()]
+      : []),
     ...(e2bProvisioningReady()
       ? e2bExecutionToolDefs({ officeRendering: e2bChatTemplate() !== null })
       : []),
