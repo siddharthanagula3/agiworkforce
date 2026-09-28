@@ -101,6 +101,10 @@
   --color-info-text: var(--info-text);
   --color-info-fill: var(--info-fill);
   --color-info-on-fill: var(--info-on-fill);
+  --color-diff-added-fill: var(--diff-added-fill);
+  --color-diff-added-text: var(--diff-added-text);
+  --color-diff-removed-fill: var(--diff-removed-fill);
+  --color-diff-removed-text: var(--diff-removed-text);
 
   /* Sans and serif each name a role, not a hue: --font-sans is the product
      face every unscoped element inherits (chat shell, app chrome), sourced

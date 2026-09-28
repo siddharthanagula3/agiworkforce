@@ -28,6 +28,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'user-pro',
+    organizationId: null,
   })),
 }));
 

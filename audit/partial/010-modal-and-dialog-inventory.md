@@ -190,20 +190,6 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
-## S10.20: Select among connected accounts.
-
-- Done when: When a service has several connected accounts, a dialog lets the user pick which one to use or make default.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| desktop | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/accounts/route.ts:44-52`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
-
 ## S10.21: Install Plugin.
 
 - Done when: An install dialog shows the plugin and installs it into the account or workspace.
@@ -357,31 +343,25 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 ## S10.35: Screen-sharing source selection.
 
 - Done when: When sharing the screen, the user picks which screen or window to share before anything is captured.
-- Wave: 2
-- Already works on: desktop
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | In a plain browser the composer hides screenshot capture (capability table says web cannot capture); only the feedback dialog uses the browser picker. Offer the browser screen/window picker in the composer. | mount |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4465-4465`, `apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:54-54`
 
 ## S10.39: Sensitive-data transfer approval.
 
 - Done when: Before private or sensitive data is sent to an outside destination, the user is asked to approve that transfer and told what goes where.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| desktop | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| mobile | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:83-83`, `packages/ui/unified-chat/src/components/ToolCallCard.tsx:473-473`, `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`
+Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
 
 ## S10.40: Remote-device pairing.
 

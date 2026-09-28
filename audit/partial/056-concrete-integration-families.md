@@ -48,9 +48,9 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | web | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
 | desktop | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
 | mobile | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
-| chrome | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
+| chrome | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.04: Email sending.
 
@@ -64,9 +64,9 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/extension/
 | desktop | partial | 0bdcfd2f3 adds send_draft beside Google's Gmail server tools: it sends a reviewed draft through Gmail drafts.send, declared a non-reversible external send so it asks under every policy (Claude parity: support.claude.com/en/articles/10166901, fetched 2026-09-27). It runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. | flag-off |
 | mobile | partial | 0bdcfd2f3 adds send_draft beside Google's Gmail server tools: it sends a reviewed draft through Gmail drafts.send, declared a non-reversible external send so it asks under every policy (Claude parity: support.claude.com/en/articles/10166901, fetched 2026-09-27). It runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
+| chrome | partial | 0bdcfd2f3 adds send_draft, a non-reversible external send that asks under every policy; it runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/gmail-actions.ts:347-347`, `apps/web/lib/user-connector-tools.ts:2605-2605`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:258-258`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
+Code: `apps/web/lib/connectors/gmail-actions.ts:347-347`, `apps/web/lib/user-connector-tools.ts:2605-2605`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:258-258`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`
 
 ## S56.05: Email attachments.
 
@@ -80,9 +80,9 @@ Code: `apps/web/lib/connectors/gmail-actions.ts:347-347`, `apps/web/lib/user-con
 | mobile | partial | 0bdcfd2f3 and b1a59f084 add read_attachments (PDF, Office and text attachments as fenced text) and create_draft_with_attachments (up to five of the account's own /api/files/<id> files in a MIME draft). Both run once the owner adds the gmail descriptor and client pair. | flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Messages can be read, but no pinned email tool downloads an attachment or attaches a file to a draft; add attachment tools; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
+| chrome | partial | read_attachments and create_draft_with_attachments (0bdcfd2f3, b1a59f084) run once the owner adds the gmail descriptor and client pair. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/gmail-actions.ts:369-369`, `apps/web/lib/connectors/gmail-actions.ts:307-307`, `apps/web/lib/user-connector-tools.ts:2375-2375`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
+Code: `apps/web/lib/connectors/gmail-actions.ts:369-369`, `apps/web/lib/connectors/gmail-actions.ts:307-307`, `apps/web/lib/user-connector-tools.ts:2375-2375`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`
 
 ## S56.07: Calendar search.
 
@@ -166,18 +166,18 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 ## S56.12: Contacts and recipient lookup.
 
 - Done when: The assistant can look up people in the user's address book to find a recipient's email or details.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No address-book connector (Google Contacts, Outlook People); people can be looked up only inside CRM and support tools (HubSpot, Intercom). | handler |
-| desktop | partial | No address-book connector (Google Contacts, Outlook People); people can be looked up only inside CRM and support tools (HubSpot, Intercom). | handler |
-| mobile | partial | No address-book connector (Google Contacts, Outlook People); people can be looked up only inside CRM and support tools (HubSpot, Intercom). | handler |
+| web | partial | partials/mcp-web 4ce42bb0b: Google Contacts connects read-only to Google's People API MCP server (https://people.googleapis.com/mcp/v1, Developer Preview, page updated 2026-09-18) with contacts.readonly and directory.readonly, and its search_contacts, search_directory_people and get_user_profile tools are declared reads. It turns on when the owner enables the People API and People MCP API in the Google Cloud project and adds the google-contacts CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID and _CLIENT_SECRET. Extension chats read it through the same account once it is connected in the web app. | flag-off |
+| desktop | partial | partials/mcp-web 4ce42bb0b: Google Contacts connects read-only to Google's People API MCP server (https://people.googleapis.com/mcp/v1, Developer Preview, page updated 2026-09-18) with contacts.readonly and directory.readonly, and its search_contacts, search_directory_people and get_user_profile tools are declared reads. It turns on when the owner enables the People API and People MCP API in the Google Cloud project and adds the google-contacts CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID and _CLIENT_SECRET. Extension chats read it through the same account once it is connected in the web app. | flag-off |
+| mobile | partial | Mobile chats get the tools once the account is connected on the web. Listing Google Contacts in the mobile connectors screen is post-codex/p-mcp-web-S56.12-S56.46-mobile-connectors.patch (index.tsx is held by Codex); the owner settings above still apply. | ui, flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No address-book connector (Google Contacts, Outlook People); people can be looked up only inside CRM and support tools (HubSpot, Intercom). | handler |
+| chrome | partial | partials/mcp-web 4ce42bb0b: Google Contacts connects read-only to Google's People API MCP server (https://people.googleapis.com/mcp/v1, Developer Preview, page updated 2026-09-18) with contacts.readonly and directory.readonly, and its search_contacts, search_directory_people and get_user_profile tools are declared reads. It turns on when the owner enables the People API and People MCP API in the Google Cloud project and adds the google-contacts CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID and _CLIENT_SECRET. Extension chats read it through the same account once it is connected in the web app. | flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/catalog.ts:156-156`, `apps/web/lib/connectors/directory/sources/first-party.json:72-72`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:46-46`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:321-321`
 
 ## S56.15: Cloud-file creation.
 
@@ -197,15 +197,12 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 ## S56.17: Folder and sharing management.
 
 - Done when: The assistant can create folders and manage sharing (links, collaborators) in a connected cloud drive.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode
+- Wave: 3
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/connectors/directory/sources/first-party.json:436-436`
 
 ## S56.18: Document editing.
 
@@ -251,9 +248,9 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extensi
 | desktop | partial | 693fe31f9 admits Slack's search:read.public/.private/.im/.mpim (scopes verified at docs.slack.dev assistant.search.context). Slack is a preregistered vendor, so the owner must register the Slack app with these scopes and add its descriptor; Teams has no Microsoft-hosted MCP server we could verify. | flag-off |
 | mobile | partial | 693fe31f9 admits Slack's search:read.public/.private/.im/.mpim (scopes verified at docs.slack.dev assistant.search.context). Slack is a preregistered vendor, so the owner must register the Slack app with these scopes and add its descriptor; Teams has no Microsoft-hosted MCP server we could verify. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
+| chrome | partial | Slack's search:read scopes are admitted (693fe31f9); the owner must register the Slack app with them and add its descriptor; Teams has no Microsoft-hosted MCP server that could be verified. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.22: Team-message drafting and posting.
 
@@ -338,7 +335,7 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/extension/
 | web | partial | GitHub's hosted MCP server (repos toolset, search_code) is now pinned as github-mcp; it connects once the owner adds the github-mcp CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET from a GitHub App. GitLab still has no pinned server. | flag-off |
 | desktop | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
 | mobile | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
-| chrome | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
+| chrome | partial | GitHub hosted MCP (search_code) is pinned as github-mcp and connects once the owner adds its descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET; GitLab has no pinned server. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
 Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/web/lib/connectors/catalog.ts:163-163`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:169-169`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`
 
@@ -354,9 +351,9 @@ Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `app
 | desktop | partial | 02fb5c4be sends descriptor X-MCP-* option headers; the documented github-mcp descriptor names the five default toolsets plus actions (list_workflow_runs, get_job_logs). It works once the owner adds that descriptor, the GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. | flag-off |
 | mobile | partial | 02fb5c4be sends descriptor X-MCP-* option headers; the documented github-mcp descriptor names the five default toolsets plus actions (list_workflow_runs, get_job_logs). It works once the owner adds that descriptor, the GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
+| chrome | partial | The github-mcp descriptor with the actions toolset (list_workflow_runs, get_job_logs) works once the owner adds it, a GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-connector-tools.ts:1310-1310`, `docs/development/connectors-setup.md:222-222`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
+Code: `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-connector-tools.ts:1310-1310`, `docs/development/connectors-setup.md:222-222`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`
 
 ## S56.34: Design-file inspection.
 
@@ -373,33 +370,30 @@ Code: `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-conn
 
 - Done when: The assistant can run queries against a connected database.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
-| desktop | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
-| mobile | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
+| mobile | partial | Mobile chats query Neon and Supabase once they are connected on the web, but the mobile connectors screen lists only its static catalog and custom connectors, so they cannot be connected from the phone. That screen is held by Codex. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:538-538`
 
 ## S56.37: Warehouse analysis.
 
 - Done when: The assistant can analyze data in a connected data warehouse.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
-| desktop | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
-| mobile | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
+| web | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
+| desktop | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
+| mobile | partial | Mobile can add a custom connector by URL in AddCustomConnectorModal, which the new URL check also governs, but the modal is held by Codex and has no Snowflake or Databricks preset. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
+| chrome | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/connectors/account-url-connectors.ts:21-21`, `apps/web/app/api/connectors/route.ts:617-617`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:669-669`
 
 ## S56.38: Dashboard creation.
 
@@ -499,26 +493,26 @@ Code: `apps/mobile/app/(app)/settings/integrations.tsx:182-182`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
-| desktop | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
-| mobile | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
+| web | partial | partials/mcp-web 5ab7fcf59: health records connect through HealthEx's MCP server (https://api.healthex.io/mcp, OAuth metadata, DCR and PKCE, docs.healthex.io read 2026-09-28), as in Claude. Opt-in, only declared read tools reach the model, connecting is refused outside the United States, the sign-in window is 30 minutes, save_memory is refused for the rest of a turn that read health data, and disconnect revokes at HealthEx and erases the tokens. It stays unavailable until the owner signs HealthEx's agreement, has a lawyer confirm whether the FTC Health Breach Notification Rule applies, registers a client at https://api.healthex.io/oauth/register and adds the healthex descriptor with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID (and _CLIENT_SECRET only for a confidential client). | flag-off |
+| desktop | partial | partials/mcp-web 5ab7fcf59: health records connect through HealthEx's MCP server (https://api.healthex.io/mcp, OAuth metadata, DCR and PKCE, docs.healthex.io read 2026-09-28), as in Claude. Opt-in, only declared read tools reach the model, connecting is refused outside the United States, the sign-in window is 30 minutes, save_memory is refused for the rest of a turn that read health data, and disconnect revokes at HealthEx and erases the tokens. It stays unavailable until the owner signs HealthEx's agreement, has a lawyer confirm whether the FTC Health Breach Notification Rule applies, registers a client at https://api.healthex.io/oauth/register and adds the healthex descriptor with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID (and _CLIENT_SECRET only for a confidential client). | flag-off |
+| mobile | partial | Mobile chats read the records once HealthEx is connected on the web. Listing HealthEx in the mobile connectors screen is in post-codex/p-mcp-web-S56.12-S56.46-mobile-connectors.patch; the owner steps above still apply. | ui, flag-off |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
+| chrome | partial | partials/mcp-web 5ab7fcf59: health records connect through HealthEx's MCP server (https://api.healthex.io/mcp, OAuth metadata, DCR and PKCE, docs.healthex.io read 2026-09-28), as in Claude. Opt-in, only declared read tools reach the model, connecting is refused outside the United States, the sign-in window is 30 minutes, save_memory is refused for the rest of a turn that read health data, and disconnect revokes at HealthEx and erases the tokens. It stays unavailable until the owner signs HealthEx's agreement, has a lawyer confirm whether the FTC Health Breach Notification Rule applies, registers a client at https://api.healthex.io/oauth/register and adds the healthex descriptor with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID (and _CLIENT_SECRET only for a confidential client). | flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/catalog.ts:253-253`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:229-229`, `apps/web/lib/connectors/sensitive-data-connectors.ts:32-32`, `apps/web/lib/connectors/sensitive-data-connectors.ts:51-51`
 
 ## S56.47: Financial-account connections.
 
 - Done when: The assistant can read balances and transactions from a connected financial account.
-- Wave: 3
+- Wave: 2
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
-| desktop | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
-| mobile | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
+| web | partial | partials/mcp-web ca04fbda2 and 0bd9bccf0: Bank accounts connect through Plaid Link (plaid.com/docs/link/web and /docs/api, read 2026-09-28), as in ChatGPT's personal finance experience: live balances from /accounts/balance/get and transactions from /transactions/get as declared read tools, transactions product only, United States banks only, results fenced, save_memory refused for the rest of a turn that read bank data, and /item/remove on every disconnect and on account erasure. It stays unavailable until the owner signs Plaid's agreement, gets production access for transactions, completes the Dashboard compliance center details OAuth banks need, has a lawyer confirm whether the GLBA Safeguards Rule applies, and sets PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV. Extension chats read it once it is connected in the web app. | flag-off |
+| desktop | partial | partials/mcp-web ca04fbda2 and 0bd9bccf0: Bank accounts connect through Plaid Link (plaid.com/docs/link/web and /docs/api, read 2026-09-28), as in ChatGPT's personal finance experience: live balances from /accounts/balance/get and transactions from /transactions/get as declared read tools, transactions product only, United States banks only, results fenced, save_memory refused for the rest of a turn that read bank data, and /item/remove on every disconnect and on account erasure. It stays unavailable until the owner signs Plaid's agreement, gets production access for transactions, completes the Dashboard compliance center details OAuth banks need, has a lawyer confirm whether the GLBA Safeguards Rule applies, and sets PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV. Extension chats read it once it is connected in the web app. | flag-off |
+| mobile | partial | Mobile chats read balances and transactions once a bank is linked on the web. Linking from the phone needs Plaid's React Native SDK or Hosted Link, which is not built; the mobile connectors screen is also held by Codex. | ui, flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
+| chrome | partial | partials/mcp-web ca04fbda2 and 0bd9bccf0: Bank accounts connect through Plaid Link (plaid.com/docs/link/web and /docs/api, read 2026-09-28), as in ChatGPT's personal finance experience: live balances from /accounts/balance/get and transactions from /transactions/get as declared read tools, transactions product only, United States banks only, results fenced, save_memory refused for the rest of a turn that read bank data, and /item/remove on every disconnect and on account erasure. It stays unavailable until the owner signs Plaid's agreement, gets production access for transactions, completes the Dashboard compliance center details OAuth banks need, has a lawyer confirm whether the GLBA Safeguards Rule applies, and sets PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV. Extension chats read it once it is connected in the web app. | flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/bank-accounts.ts:154-154`, `apps/web/lib/connectors/bank-accounts.ts:191-191`, `apps/web/lib/connectors/bank-accounts.ts:312-312`, `apps/web/lib/connectors/bank-accounts.ts:349-349`

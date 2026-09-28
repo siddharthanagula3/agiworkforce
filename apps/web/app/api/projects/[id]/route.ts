@@ -64,7 +64,8 @@ async function selectProjectWithConversationCount(
               where c.project_id = p.id::text
                 and c.user_id = $2
                 and c.organization_id is not distinct from $3::uuid
-                and c.deleted_at is null) as conversation_count
+                and c.deleted_at is null
+                and coalesce(c.is_temporary, false) = false) as conversation_count
        from user_projects p
       where p.id = $1
         and p.user_id = $2
@@ -94,7 +95,8 @@ async function selectSharedProjectWithConversationCount(
               where c.project_id = p.id::text
                 and c.user_id = $2
                 and c.organization_id is not distinct from $4::uuid
-                and c.deleted_at is null) as conversation_count
+                and c.deleted_at is null
+                and coalesce(c.is_temporary, false) = false) as conversation_count
        from user_projects p
       where p.id = $1
         and p.id = any($3::uuid[])

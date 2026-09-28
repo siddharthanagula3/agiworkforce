@@ -6,7 +6,7 @@ import type {
 import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
-import type { ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
 import { t, tPlural } from '../../i18n';
 
 export interface SidePanelMessageAttachment {
@@ -57,6 +57,7 @@ export interface SidePanelChatMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  codeExecution?: ManagedCodeExecution;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -90,6 +91,7 @@ export interface StoredSidePanelChatMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  codeExecution?: ManagedCodeExecution;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -181,6 +183,7 @@ export function hydrateStoredChatMessage(
     ...(message.interactiveCards
       ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
       : {}),
+    ...(message.codeExecution ? { codeExecution: { ...message.codeExecution } } : {}),
     ...(message.attachments
       ? { attachments: message.attachments.map((attachment) => ({ ...attachment })) }
       : {}),
@@ -255,6 +258,7 @@ export function isEmptyAssistantTurn(message: SidePanelChatMessage): boolean {
   if (message.role !== 'assistant' || message.error || message.interrupted) return false;
   if (message.content.trim().length > 0) return false;
   if (message.generatedFiles?.length || message.interactiveCards?.length) return false;
+  if (message.codeExecution) return false;
   const activity = message.agentActivity;
   if (activity?.status === 'cancelled' || activity?.status === 'paused') return false;
   return !activity?.entries.some(

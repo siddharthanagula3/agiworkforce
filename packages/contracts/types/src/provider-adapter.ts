@@ -169,6 +169,11 @@ export interface ChatRequest {
   topP?: number;
   topK?: number;
   stopSequences?: string[];
+  seed?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  logitBias?: Record<string, number>;
+  endUserId?: string;
   thinking?: ThinkingConfig;
   effort?: Effort;
   responseFormat?: ChatResponseFormat;

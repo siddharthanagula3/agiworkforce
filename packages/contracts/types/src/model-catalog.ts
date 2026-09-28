@@ -55,6 +55,7 @@ import {
   type LifecycleStage,
   type ModelCapabilityName,
   type ModelCapabilityValue,
+  type RequestParameter,
   type RouteCommercialStatus,
 } from '@agiworkforce/model-registry';
 
@@ -367,6 +368,7 @@ export interface ModelReasoning {
   supportsManualThinking?: boolean;
   maxEffortWhenThinkingDisabled?: Effort;
   rejectsSamplingParameters?: boolean;
+  unsupportedRequestParameters?: readonly RequestParameter[];
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
   /**
@@ -673,7 +675,8 @@ export interface ModelMetadata {
       endpoint: 'responses';
     };
   };
-  imageInput?: { detailValues: string[] };
+  imageInput?: { detailValues?: string[]; maxImagesPerRequest?: number };
+  documentInput?: { maxPagesPerRequest?: number };
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];
@@ -2759,6 +2762,10 @@ export function getCoreManualModelOptions(): CoreModelOption[] {
 export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
   new Set<string>(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders),
 );
+
+export const US_ONLY_ROUTING_TIERS: readonly string[] = Object.freeze([
+  ...modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers,
+]);
 
 /**
  * Kinds of "default model" requests `getDefaultModelFor` understands.

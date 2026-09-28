@@ -5,6 +5,8 @@ import {
   CloudAgentRunCancellationResponseSchema,
   CloudAgentRunListPageSchema,
   CloudAgentRunSnapshotPageSchema,
+  CloudAgentRunSteerRequestSchema,
+  CloudAgentRunSteerResponseSchema,
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
   MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
   MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
@@ -15,6 +17,7 @@ import {
   type CloudAgentRun,
   type CloudAgentRunListPage,
   type CloudAgentRunSnapshotPage,
+  type CloudAgentRunSteerResponse,
 } from './cloud-agent-runs';
 import {
   ManagedCloudAgentRunReferenceSchema as RunReferenceSchema,
@@ -104,6 +107,11 @@ export interface ManagedCloudAgentRunClient {
     runId: string,
     options?: { signal?: AbortSignal; guidance?: string },
   ): Promise<void>;
+  steerRun(
+    runId: string,
+    message: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<CloudAgentRunSteerResponse>;
   followRun(
     runId: string,
     options?: ManagedCloudAgentRunFollowOptions,
@@ -416,6 +424,17 @@ export function createManagedCloudAgentRunClient(
         throw error;
       }
       await response.body?.cancel().catch(() => undefined);
+    },
+
+    async steerRun(runId, message, options = {}) {
+      const body = CloudAgentRunSteerRequestSchema.parse({ message });
+      const response = await request(`${managedCloudAgentRunPath(runId)}/steer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
+        body: JSON.stringify(body),
+        signal: options.signal,
+      });
+      return parseContract(response, CloudAgentRunSteerResponseSchema, 'steer response');
     },
 
     async followRun(runId, options = {}) {

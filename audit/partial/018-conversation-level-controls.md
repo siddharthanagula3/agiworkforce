@@ -277,6 +277,6 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | CLI sessions stay on this machine: they can move to VS Code here, and /continue-with-cloud only drafts a managed-cloud turn; add opening a CLI session on web/mobile. | ui |
-| vscode | partial | Developer sessions can move between the VS Code sidebar and the local terminal (same machine) only; add continuing them on another device. | ui |
+| vscode | partial | Step 2 of 3 landed (1acc1b329). Before a send, and whenever the chat view is shown or focused, VS Code re-reads the session. If another app added turns, it redraws the transcript with a notice naming that app. If another app holds the writer lease, VS Code asks in a modal before taking it over, and Continue in terminal now releases VS Code's lease. Still needed: the CLI load_agent reload from disk (p-desktop-cli) and VS Code-hosted Remote Control (step 3), so that another device can continue a VS Code session. | ui |
 
-Code: `apps/cli/src/claude_parity.rs:169-176`, `apps/extension-vscode/src/core/commandSetup.ts:1235-1241`
+Code: `apps/cli/src/claude_parity.rs:169-176`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2986-2986`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:3288-3288`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:3302-3302`

@@ -1,6 +1,7 @@
 'use client';
 
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -119,6 +120,10 @@ import {
 } from './turnStartProgress';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import {
+  ATTACHMENTS_TRUNCATED_HEADER,
+  readAttachmentTruncationHeader,
+} from '@/lib/chat-attachment-truncation-notice';
+import {
   PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
   readPastChatSourcesHeaderValue,
@@ -214,6 +219,7 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
+  officeFormat?: ChatOutputFormat;
   thinkingEnabled?: boolean;
   thinkingEffort?: Effort;
   styleMode?: string;
@@ -238,7 +244,7 @@ interface SendMessageOptions {
     connectors?: string[];
   };
   researchResume?: {
-    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    sources: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the server paused for approval. */
     approvedSteps?: ResearchStep[];
@@ -307,6 +313,7 @@ export interface UseChatStreamReturn {
     toolCallId: string,
     inputResponses: Record<string, unknown>,
   ) => Promise<boolean>;
+  steerActiveTurn: (conversationId: string, message: string) => Promise<string | null>;
   isStreaming: boolean;
 }
 
@@ -3433,6 +3440,7 @@ export function useChatStream(): UseChatStreamReturn {
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
         officeCreationEnabled: options.officeCreation,
+        officeOutputFormat: options.officeFormat,
         workMode: options.workMode,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
@@ -3772,7 +3780,15 @@ export function useChatStream(): UseChatStreamReturn {
               research_resume:
                 options.research && options.researchResume
                   ? {
-                      sources: options.researchResume.sources,
+                      sources: options.researchResume.sources.map(({ retrievedAt, ...source }) => {
+                        const retrievedMs = retrievedAt ? Date.parse(retrievedAt) : Number.NaN;
+                        return {
+                          ...source,
+                          ...(Number.isFinite(retrievedMs)
+                            ? { retrieved_at: new Date(retrievedMs).toISOString() }
+                            : {}),
+                        };
+                      }),
                       steps: options.researchResume.steps,
                       ...(options.researchResume.approvedSteps?.length
                         ? { approved_steps: options.researchResume.approvedSteps }
@@ -3787,6 +3803,7 @@ export function useChatStream(): UseChatStreamReturn {
                   : undefined,
               code_execution: options.codeExecution || undefined,
               office_creation: options.officeCreation || undefined,
+              office_format: (options.officeCreation && options.officeFormat) || undefined,
               skill_name: options.skillName,
               disabled_connector_ids: options.disabledConnectorIds?.length
                 ? options.disabledConnectorIds
@@ -3855,6 +3872,12 @@ export function useChatStream(): UseChatStreamReturn {
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
+          }
+          const truncatedAttachments = readAttachmentTruncationHeader(
+            response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
+          );
+          if (truncatedAttachments.length > 0) {
+            updateMessage(userMessageId, { truncatedAttachments }, conversationId);
           }
 
           const outcome = await consumeAssistantStream({
@@ -4316,6 +4339,20 @@ export function useChatStream(): UseChatStreamReturn {
     [getToken, stopStreaming, setLoading, abortConversation],
   );
 
+  const steerActiveTurn = useCallback(
+    async (conversationId: string, message: string): Promise<string | null> => {
+      const activeRun = activeRunsRef.current.get(conversationId);
+      if (!activeRun) return null;
+      const client = createManagedCloudAgentRunClient({
+        getAuthToken: getToken,
+        decorateMutationHeaders: addCsrfHeaders,
+      });
+      const { steer } = await client.steerRun(activeRun.runId, message);
+      return steer.id;
+    },
+    [getToken],
+  );
+
   return {
     sendMessage,
     stopGeneration,
@@ -4323,6 +4360,7 @@ export function useChatStream(): UseChatStreamReturn {
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
     isStreaming,
   };
 }

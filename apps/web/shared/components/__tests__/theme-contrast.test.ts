@@ -311,6 +311,29 @@ describe('destructive tokens carry both roles', () => {
   }
 });
 
+describe('artifact change highlights pair a text role with its own fill', () => {
+  for (const [theme, block, bg] of [
+    ['light', web.light, LIGHT_BG],
+    ['dark', web.dark, DARK_BG],
+  ] as const) {
+    for (const change of ['--diff-added', '--diff-removed']) {
+      it(`${theme}: ${change}-text >= 4.5:1 on ${change}-fill and on --background`, () => {
+        const text = colorToken(block, `${change}-text`);
+        expect(contrastRatio(text, colorToken(block, `${change}-fill`))).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+        expect(contrastRatio(text, bg)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
+    it(`${theme}: added and removed fills differ from each other and from --background`, () => {
+      const added = colorToken(block, '--diff-added-fill');
+      const removed = colorToken(block, '--diff-removed-fill');
+      expect(new Set([added, removed, bg]).size).toBe(3);
+    });
+  }
+});
+
 describe('voice mode tokens', () => {
   // The muted microphone in voice mode is a solid --chat-destructive circle
   // with a mic-slash glyph on it, and a glyph is non-text content: WCAG asks

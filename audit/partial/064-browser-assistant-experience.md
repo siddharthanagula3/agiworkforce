@@ -60,15 +60,13 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 - Done when: The assistant answers questions about a video on the page using its transcript.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Decision needed: no leader page confirms video answers from transcripts in a browser extension (Gemini in Chrome support.google.com/gemini/answer/16283624 and Claude in Chrome pages are silent, help.openai.com refuses fetch); either read YouTube captions for the existing Summarize video chips or remove those chips. | handler |
-
-Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:54-54`
 
 ## S64.10: Open URL.
 

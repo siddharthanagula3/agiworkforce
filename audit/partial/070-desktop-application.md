@@ -21,14 +21,3 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S70.26: Automatic updates.
-
-- Done when: The app finds, downloads and installs new versions by itself (or with one click).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | The app now downloads and installs updates itself through Squirrel, but only once releases carry a .zip per architecture: apps/desktop/electron-builder.yml mac.target needs zip beside dmg, and .github/workflows/release-desktop-cloud.yml must upload apps/desktop/release/*.zip and include them in SHA256SUMS. Until then the feed answers 204 and the installer download stays. | config |
-
-Code: `apps/desktop/electron/desktopAutoUpdate.ts:23-23`, `apps/desktop/electron/desktopAutoUpdate.ts:49-49`, `apps/desktop/electron/main.ts:604-604`, `apps/web/app/api/releases/desktop-cloud/update/[arch]/[version]/route.ts:52-52`

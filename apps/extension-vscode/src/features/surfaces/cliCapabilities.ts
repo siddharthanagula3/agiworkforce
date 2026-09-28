@@ -8,11 +8,21 @@ export const CLI_CAPABILITY_METHODS = {
   skills: 'listSkills',
   skillsSetEnabled: 'setSkillEnabled',
   skillsConsent: 'setProjectSkillConsent',
+  skillsInstall: 'installSkill',
+  skillsRemove: 'removeSkill',
   plugins: 'listPlugins',
   pluginsSetEnabled: 'setPluginEnabled',
+  pluginsInstall: 'installPlugin',
+  pluginsRemove: 'removePlugin',
   mcpServers: 'listMcpServers',
   mcpLogin: 'loginMcpServer',
+  mcpAdd: 'addMcpServer',
+  mcpRemove: 'removeMcpServer',
+  mcpTest: 'testMcpServer',
+  mcpTools: 'listMcpServerTools',
   hooks: 'listHooks',
+  hooksAdd: 'addHook',
+  hooksRemove: 'removeHook',
   instructions: 'contextInstructions',
   commands: 'listCommands',
   runCommand: 'runCommand',
@@ -26,20 +36,39 @@ export const CLI_CAPABILITY_METHODS = {
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
 
-type AdvertisedFamily = keyof Pick<
+export type CliFamily = keyof Pick<
   AppServerCapabilities,
-  'skills' | 'plugins' | 'mcp' | 'hooks' | 'instructions' | 'commands' | 'settings' | 'account'
+  | 'skills'
+  | 'plugins'
+  | 'mcp'
+  | 'hooks'
+  | 'instructions'
+  | 'commands'
+  | 'settings'
+  | 'account'
+  | 'installs'
+  | 'mcpTools'
 >;
 
-const CLI_CAPABILITY_FAMILIES: Record<CliCapability, AdvertisedFamily> = {
+const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   skills: 'skills',
   skillsSetEnabled: 'skills',
   skillsConsent: 'skills',
+  skillsInstall: 'installs',
+  skillsRemove: 'installs',
   plugins: 'plugins',
   pluginsSetEnabled: 'plugins',
+  pluginsInstall: 'installs',
+  pluginsRemove: 'installs',
   mcpServers: 'mcp',
   mcpLogin: 'mcp',
+  mcpAdd: 'installs',
+  mcpRemove: 'installs',
+  mcpTest: 'mcpTools',
+  mcpTools: 'mcpTools',
   hooks: 'hooks',
+  hooksAdd: 'installs',
+  hooksRemove: 'installs',
   instructions: 'instructions',
   commands: 'commands',
   runCommand: 'commands',
@@ -51,7 +80,7 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, AdvertisedFamily> = {
   accountToken: 'account',
 };
 
-const CLI_FAMILY_LABELS: Record<AdvertisedFamily, string> = {
+const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   skills: 'skills',
   plugins: 'plugins',
   mcp: 'MCP servers',
@@ -60,6 +89,8 @@ const CLI_FAMILY_LABELS: Record<AdvertisedFamily, string> = {
   commands: 'commands',
   settings: 'settings',
   account: 'account sign-in',
+  installs: 'installing and removing from VS Code',
+  mcpTools: 'MCP server tool lists',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {
@@ -177,6 +208,16 @@ export class CliCapabilityAdapter {
       return { status: 'ok', value };
     } catch (error) {
       return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  async offers(family: CliFamily): Promise<boolean> {
+    const host = await this.host();
+    if (host === undefined) return false;
+    try {
+      return (await advertisedCapabilities(host))?.[family] === true;
+    } catch {
+      return false;
     }
   }
 

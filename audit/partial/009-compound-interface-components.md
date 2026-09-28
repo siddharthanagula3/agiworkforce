@@ -31,20 +31,6 @@ Code: `apps/extension/src/side_panel.ts:6699-6707`, `apps/extension/src/side_pan
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S9.04: Connected-account picker.
-
-- Done when: When a connector has more than one linked account, the user can pick which account a task or chat uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| desktop | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:158-165`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:785-785`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-158`
-
 ## S9.05: Workspace picker.
 
 - Done when: The user can see their personal and team workspaces in a list and switch the active one.
@@ -115,17 +101,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 - Done when: The user can pick one or more people (workspace members or recipients) by name or email to share with, invite or assign.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
-| desktop | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/shared/components/people/MemberPicker.tsx:99-99`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:282-282`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:288-288`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:124-124`
 
 ## S9.13: File browser.
 
