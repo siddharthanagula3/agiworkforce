@@ -28,9 +28,14 @@ import type {
   AccountStatusResponse,
   AccountTokenResponse,
   ContextInstructionsResponse,
+  HookAddParams,
   HookListResponse,
+  HookRemoveParams,
+  McpAddParams,
   McpLoginResponse,
   McpServerListResponse,
+  McpServerToolsResponse,
+  PluginInstallParams,
   PluginListResponse,
   SettingsReadResponse,
   SettingsWriteParams,
@@ -38,6 +43,7 @@ import type {
   SkillListResponse,
   SlashCommandListResponse,
   SlashCommandRunResponse,
+  ThreadRewindParams,
 } from '@agiworkforce/types/protocol';
 import type {
   DeveloperSessionHandoff,
@@ -62,6 +68,8 @@ const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
 // opens one too, so neither fits the default request timeout.
 const ACCOUNT_LOGIN_WAIT_TIMEOUT_MS = 15 * 60_000;
 const MCP_LOGIN_TIMEOUT_MS = 5 * 60_000;
+const MCP_PROBE_TIMEOUT_MS = 90_000;
+const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
 const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
@@ -137,6 +145,10 @@ const capabilitiesSchema = z.object({
   threadDelete: z.boolean().optional(),
   reconnect: z.boolean().optional(),
   writerLease: z.boolean().optional(),
+  installs: z.boolean().optional(),
+  mcpTools: z.boolean().optional(),
+  approvalNotes: z.boolean().optional(),
+  approvalEdits: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -209,8 +221,39 @@ const threadListResponseSchema = z.object({
   threads: z.array(threadSummarySchema),
   nextCursor: z.string().optional(),
 });
+const developerStepStatusSchema = z.enum([
+  'pending',
+  'in_progress',
+  'done',
+  'blocked',
+  'skipped',
+  'superseded',
+]);
+
 const threadReadResponseSchema = z.object({
   thread: threadSummarySchema,
+  plan: z
+    .array(
+      z.object({
+        description: z.string().max(4_000),
+        status: developerStepStatusSchema,
+        notes: z.string().max(8_000).optional(),
+      }),
+    )
+    .max(200)
+    .optional()
+    .catch(undefined),
+  todos: z
+    .array(
+      z.object({
+        content: z.string().max(4_000),
+        status: developerStepStatusSchema,
+        priority: z.string().max(40),
+      }),
+    )
+    .max(500)
+    .optional()
+    .catch(undefined),
   messages: z
     .array(
       z.object({
@@ -254,6 +297,36 @@ const threadReadResponseSchema = z.object({
     .optional()
     .catch(undefined),
 });
+const threadCheckpointsResponseSchema = z.object({
+  checkpoints: z
+    .array(
+      z.object({
+        checkpointIndex: z.number().int().nonnegative(),
+        createdAt: z.string().max(64),
+        prompt: z.string().max(1_000_000),
+        messageIndex: z.number().int().nonnegative().optional(),
+        trackedFiles: z.number().int().nonnegative(),
+      }),
+    )
+    .max(10_000),
+});
+
+export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
+
+const threadRewindResponseSchema = z.object({
+  thread: threadSummarySchema,
+  prompt: z.string().max(1_000_000),
+  conversationRestored: z.boolean(),
+  restoredFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+  removedFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+  skippedFiles: z
+    .array(z.object({ path: z.string().max(16_384), reason: z.string().max(8_192) }))
+    .max(10_000)
+    .default([]),
+});
+
+export type ThreadRewindOutcome = z.infer<typeof threadRewindResponseSchema>;
+
 const hostModelSummarySchema = z.object({
   id: z.string().min(1),
   provider: z.string().min(1),
@@ -389,10 +462,63 @@ const hookListResponseSchema = z.object({
         scope: z.enum(['user', 'plugin']),
         trusted: z.boolean(),
         source: z.string().max(16_384).optional(),
+        position: z.number().int().positive().optional(),
       }),
     )
     .max(2_000),
 });
+const mcpServerTestResponseSchema = z.object({
+  name: z.string().min(1).max(200),
+  connected: z.boolean(),
+  elapsedMs: z.number().int().nonnegative(),
+  toolCount: z.number().int().nonnegative(),
+  error: z.string().max(8_192).optional(),
+});
+const mcpServerToolsResponseSchema = z.object({
+  name: z.string().min(1).max(200),
+  tools: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(8_192),
+        inputSchema: z.unknown(),
+      }),
+    )
+    .max(2_000),
+  prompts: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(8_192),
+        arguments: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(200),
+              description: z.string().max(4_000),
+              required: z.boolean(),
+            }),
+          )
+          .max(200)
+          .default([]),
+      }),
+    )
+    .max(2_000)
+    .default([]),
+  resources: z
+    .array(
+      z.object({
+        uri: z.string().min(1).max(16_384),
+        name: z.string().min(1).max(400),
+        description: z.string().max(8_192).optional(),
+        mimeType: z.string().max(200).optional(),
+      }),
+    )
+    .max(5_000)
+    .default([]),
+  warnings: z.array(z.string().max(8_192)).max(20).default([]),
+});
+
+export type McpServerProbe = z.infer<typeof mcpServerTestResponseSchema>;
 const settingsReadResponseSchema = z.object({
   defaultModel: z.string().max(200).optional(),
   defaultEffort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -510,6 +636,8 @@ const approvalRequestedEventSchema = z.object({
   // gentler answer.
   riskLevel: z.enum(APPROVAL_RISK_LEVELS).optional().catch(undefined),
   reversible: z.boolean().optional().catch(undefined),
+  proposedContent: z.string().max(1_000_000).optional().catch(undefined),
+  editable: z.boolean().optional().catch(undefined),
 });
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -559,6 +687,21 @@ const progressUpdateSchema = z.object({
   detail: z.string().optional(),
   status: z.enum(['running', 'completed', 'failed']),
 });
+const sourceListSchema = z.object({
+  type: z.literal('source-list'),
+  toolCallId: z.string().max(200).optional(),
+  query: z.string().max(2_000).optional(),
+  sources: z
+    .array(
+      z.object({
+        url: z.string().min(1).max(8_192),
+        title: z.string().max(2_000),
+        snippet: z.string().max(8_000).optional(),
+      }),
+    )
+    .max(500),
+});
+
 const agentEventEnvelopeSchema = z.object({
   schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
   sessionId: z.string().min(1),
@@ -569,6 +712,7 @@ const agentEventEnvelopeSchema = z.object({
     toolExecutionStartSchema,
     toolExecutionEndSchema,
     progressUpdateSchema,
+    sourceListSchema,
   ]),
 });
 
@@ -599,6 +743,11 @@ export type LocalRuntimeEvent =
       sequence: number;
       emittedAtMs: number;
     } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
+  | ({
+      type: 'source_list';
+      threadId: string;
+      turnId: string;
+    } & Omit<z.infer<typeof sourceListSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
@@ -638,6 +787,16 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         category: event.category,
         summary: event.summary,
         input: event.input,
+      };
+    }
+    if (event.type === 'source-list') {
+      return {
+        type: 'source_list',
+        threadId,
+        turnId,
+        sources: event.sources,
+        ...(event.query === undefined ? {} : { query: event.query }),
+        ...(event.toolCallId === undefined ? {} : { toolCallId: event.toolCallId }),
       };
     }
     if (event.type === 'tool-execution-end') {
@@ -971,6 +1130,28 @@ export class LocalRuntimeClient {
     await connection.request('thread/delete', { threadId });
   }
 
+  async offers(capability: keyof AppServerCapabilities): Promise<boolean> {
+    return (await this.initialize()).capabilities[capability] === true;
+  }
+
+  async listCheckpoints(threadId: string): Promise<ThreadCheckpointList> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('checkpoints'))) {
+      throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
+    }
+    return threadCheckpointsResponseSchema.parse(
+      await connection.request('thread/checkpoints', { threadId }),
+    );
+  }
+
+  async rewindThread(params: ThreadRewindParams): Promise<ThreadRewindOutcome> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('checkpoints'))) {
+      throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
+    }
+    return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
+  }
+
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
     const result = await connection.request('turn/start', params);
@@ -1091,6 +1272,76 @@ export class LocalRuntimeClient {
     const connection = await this.readyConnection();
     return hookListResponseSchema.parse(
       await connection.request('hooks/list', {}),
+    ) as HookListResponse;
+  }
+
+  async installSkill(source: string): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/install', { source }, INSTALL_TIMEOUT_MS),
+    ) as SkillListResponse;
+  }
+
+  async removeSkill(name: string): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/remove', { name }),
+    ) as SkillListResponse;
+  }
+
+  async installPlugin(params: PluginInstallParams): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/install', params, INSTALL_TIMEOUT_MS),
+    ) as PluginListResponse;
+  }
+
+  async removePlugin(id: string): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/remove', { id }),
+    ) as PluginListResponse;
+  }
+
+  async addMcpServer(params: McpAddParams): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/add', params),
+    ) as McpServerListResponse;
+  }
+
+  async removeMcpServer(name: string): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/remove', { name }),
+    ) as McpServerListResponse;
+  }
+
+  async testMcpServer(name: string): Promise<McpServerProbe> {
+    const connection = await this.readyConnection();
+    return mcpServerTestResponseSchema.parse(
+      await connection.request('mcp/test', { name }, MCP_PROBE_TIMEOUT_MS),
+    );
+  }
+
+  async listMcpServerTools(name: string): Promise<McpServerToolsResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerToolsResponseSchema.parse(
+      await connection.request('mcp/tools', { name }, MCP_PROBE_TIMEOUT_MS),
+    ) as McpServerToolsResponse;
+  }
+
+  async addHook(params: HookAddParams): Promise<HookListResponse> {
+    const connection = await this.readyConnection();
+    return hookListResponseSchema.parse(
+      await connection.request('hooks/add', params),
+    ) as HookListResponse;
+  }
+
+  async removeHook(params: HookRemoveParams): Promise<HookListResponse> {
+    const connection = await this.readyConnection();
+    return hookListResponseSchema.parse(
+      await connection.request('hooks/remove', params),
     ) as HookListResponse;
   }
 

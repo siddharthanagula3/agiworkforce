@@ -90,6 +90,7 @@ export interface PendingAuthorizationInput
   redirectUri: string;
   requestedScopes: string[];
   returnPath: string;
+  ttlSeconds?: number | undefined;
 }
 
 export interface PendingAuthorization extends DiscoveredAuthorizationFacts, ConnectorAccountFacts {
@@ -103,7 +104,8 @@ export interface PendingAuthorization extends DiscoveredAuthorizationFacts, Conn
 
 export async function createPendingAuthorization(input: PendingAuthorizationInput): Promise<void> {
   const db = getNeonDb();
-  const expiresAt = new Date(Date.now() + PENDING_AUTHORIZATION_TTL_SECONDS * 1000).toISOString();
+  const ttlSeconds = input.ttlSeconds ?? PENDING_AUTHORIZATION_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
   try {
     await db.execute(
       `delete from public.connector_oauth_authorizations

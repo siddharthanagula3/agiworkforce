@@ -184,6 +184,10 @@ set the named variables in production and locally.
   (`messages.attachments.get`, which needs `gmail.readonly`), and
   `create_draft_with_attachments` builds a draft with up to five of the
   account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  Their declared metadata in `tool-metadata.ts` makes `read_attachments` a
+  read, `create_draft_with_attachments` a write into the user's own mailbox,
+  and `send_draft` a non-reversible external send, so it asks under every
+  approval policy.
   The full-mailbox,
   full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
@@ -194,6 +198,27 @@ set the named variables in production and locally.
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_SECRET`. One Google client may serve
   all three descriptors; the names stay separate.
+
+### Google Contacts (`google-contacts`, hosted, read-only)
+
+Looks people up so the assistant can find a recipient's address, as ChatGPT's
+Google Contacts connector does (D-2026-09-28-08). Google hosts the People API
+MCP server at `https://people.googleapis.com/mcp/v1` with three read tools,
+`get_user_profile`, `search_contacts` and `search_directory_people`
+(https://developers.google.com/workspace/guides/configure-mcp-servers, read
+2026-09-28, a Workspace Developer Preview).
+
+- Same Google Cloud project and OAuth client as above. Enable the People API and
+  the People MCP API.
+- Descriptor values: the Google `authorizationUrl`, `tokenUrl`, `revocationUrl`
+  and `authorizationParams` above, `mcpUrl`
+  `https://people.googleapis.com/mcp/v1`.
+- Scopes the allowlist permits: the identity scopes above, `contacts.readonly`
+  and `directory.readonly`. The contacts write scope is not admitted.
+- The three tools are declared reads in `CONNECTOR_TOOL_METADATA`, so they run
+  under the read-only and autonomous approval policies without asking.
+- Variables: `CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID`,
+  `CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_SECRET`.
 
 ### GitHub MCP server (`github-mcp`, hosted, pre-registered)
 
@@ -362,6 +387,75 @@ example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
   need.
 - Variables, optional: `CONNECTOR_OAUTH_AIRTABLE_CLIENT_ID`,
   `CONNECTOR_OAUTH_AIRTABLE_CLIENT_SECRET`.
+
+### HealthEx (`healthex`, health records, owner-gated)
+
+Connects a member's own health records the way Claude's HealthEx connector does
+(D-2026-09-28-08). HealthEx hosts the MCP server at `https://api.healthex.io/mcp`
+and its authorization server at `https://api.healthex.io`
+(https://docs.healthex.io/api-documentation/mcp-server/oauth-flow and
+`/.well-known/oauth-authorization-server`, read 2026-09-28): dynamic client
+registration, PKCE with S256, public or confidential clients, scopes
+`patient/*.read` and `offline_access`.
+
+- Stays unavailable until the owner configures it, deliberately: HealthEx is not
+  in `MCP_ENDPOINTS`, so no member can connect it by self-registration. Before
+  adding the descriptor, sign HealthEx's agreement and have a lawyer confirm
+  whether the FTC Health Breach Notification Rule applies.
+- Register the client once at `https://api.healthex.io/oauth/register` with the
+  redirect URI `<origin>/api/connectors/oauth/callback`, then add the descriptor:
+  `authorizationUrl` `https://api.healthex.io/oauth/authorize`, `tokenUrl`
+  `https://api.healthex.io/oauth/token`, `revocationUrl`
+  `https://api.healthex.io/oauth/revoke`, `mcpUrl` `https://api.healthex.io/mcp`,
+  `scopes` `["patient/*.read","offline_access"]`, and `tokenAuthMethod` `none`
+  for a public client.
+- What the product enforces, from `apps/web/lib/connectors/sensitive-data-connectors.ts`:
+  a member can start the connection only from the United States; only the tools
+  declared as reads in `CONNECTOR_TOOL_METADATA` reach the model, so
+  `update_records` and the deprecated tools do not; the sign-in window is 30
+  minutes because identity verification takes longer than ten; `save_memory` is
+  refused for the rest of any turn in which a health tool returned data, the
+  memory extractor only ever reads the member's own message, and nothing is used
+  for training. Disconnecting revokes the grant at HealthEx and erases the
+  stored tokens.
+- Variables: `CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID`, and
+  `CONNECTOR_OAUTH_HEALTHEX_CLIENT_SECRET` only for a confidential client.
+
+### Bank accounts (`bank-accounts`, Plaid, owner-gated)
+
+Connects a member's own bank accounts read-only, the way ChatGPT's personal
+finance experience does through Plaid (D-2026-09-28-08). There is no MCP
+server: the web app opens Plaid Link, exchanges the public token server-side
+(`/api/connectors/bank-accounts/link` and `/exchange`) and answers two tools
+itself from `apps/web/lib/connectors/bank-accounts.ts`, following Plaid's API
+reference (https://plaid.com/docs/api/, https://plaid.com/docs/link/web/, read
+2026-09-28).
+
+- Stays unavailable until the owner configures it, deliberately. Before setting
+  the variables in production, sign Plaid's agreement, request production
+  access for the `transactions` product, complete the application and company
+  details in the Plaid Dashboard compliance center that OAuth banks require
+  (https://plaid.com/docs/link/oauth/), and have a lawyer confirm whether the
+  GLBA Safeguards Rule applies. `PLAID_ENV=sandbox` works with Plaid's test
+  institutions and costs nothing.
+- No redirect URI is registered, so an OAuth bank opens in a pop-up, which
+  Plaid supports on desktop and mobile web. An in-app browser that blocks
+  pop-ups cannot reach those banks.
+- `get_account_balances` calls `/accounts/balance/get`, which fetches a live
+  balance from the bank and is billed per call by Plaid. `get_transactions`
+  calls `/transactions/get`, at most 500 per call. Neither can move money, and
+  the Link token requests the `transactions` product for United States
+  institutions only.
+- What the product enforces: a member can link an account only from the United
+  States; results are fenced as untrusted data; `save_memory` is refused for
+  the rest of any turn in which a bank tool returned data, and nothing is used
+  for training. Disconnecting, or erasing the account, calls `/item/remove`,
+  which ends Plaid's access and its billing for the item, and erases the stored
+  access token. Linking again replaces the previous item and removes it.
+- The Content Security Policy admits Plaid Link's script, frame and API origin
+  only while `PLAID_ENV` is set.
+- Variables: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV` (`sandbox` or
+  `production`). Set all three or none; a partial set fails production boot.
 
 ### Vendors whose official server needs a pre-registered client
 

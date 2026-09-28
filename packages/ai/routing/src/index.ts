@@ -55,6 +55,7 @@ export {
   canaryBucket,
   canaryRoutingEnabled,
   listProfileModelOrder,
+  modelsPastDeprecationDate,
   observedHealthRankingEnabled,
   observedRouteHealthFromSnapshots,
   observedRoutePenalty,
