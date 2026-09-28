@@ -828,9 +828,10 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'snowflake',
     name: 'Snowflake',
-    capabilitySummary: 'query execution, warehouse management, and data access',
+    capabilitySummary:
+      "Cortex Analyst, Cortex Search, agents and SQL through your account's Snowflake-managed MCP server, added by its URL",
     category: 'Data',
-    authType: 'connection_string',
+    authType: 'oauth',
     phase: 4,
     iconBg: 'from-sky-400 to-blue-600',
     iconText: 'SF',
@@ -850,9 +851,10 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'databricks',
     name: 'Databricks',
-    capabilitySummary: 'notebook runs, cluster management, and Delta table queries',
+    capabilitySummary:
+      "Genie spaces, SQL, AI search and Unity Catalog functions through your workspace's managed MCP servers, added by URL",
     category: 'Data',
-    authType: 'api_key',
+    authType: 'oauth',
     phase: 5,
     iconBg: 'from-red-500 to-orange-600',
     iconText: 'DB',
