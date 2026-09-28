@@ -164,6 +164,7 @@ import {
   getImageAspectOptionsForModel,
   IMAGE_MODEL_DEFAULT,
   IMAGE_MODELS,
+  IMAGE_STYLE_PRESETS,
   isImageAspectRatioSupported,
   readImageFileAsBase64,
   type ImageAspectRatio,
@@ -1033,6 +1034,7 @@ const ChatComposerNewComponent = ({
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
+  const [showImageStyleMenu, setShowImageStyleMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
   /**
    * What an attached image means in image mode. The media route already serves
@@ -1528,6 +1530,7 @@ const ChatComposerNewComponent = ({
   const projectPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const projectPickerMenuRef = useRef<HTMLDivElement>(null);
   const imageAspectTriggerRef = useRef<HTMLButtonElement>(null);
+  const imageStyleTriggerRef = useRef<HTMLButtonElement>(null);
   const imageModelTriggerRef = useRef<HTMLButtonElement>(null);
   const imageOperationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoAspectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -4697,6 +4700,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowImageAspectMenu((p) => !p);
+                          setShowImageStyleMenu(false);
                           setShowImageModelMenu(false);
                         }}
                         className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
@@ -4738,6 +4742,48 @@ const ChatComposerNewComponent = ({
                       </AnchoredComposerMenu>
                     </div>
                   )}
+
+                  <div className="relative">
+                    <button
+                      ref={imageStyleTriggerRef}
+                      type="button"
+                      onClick={() => {
+                        setShowImageStyleMenu((p) => !p);
+                        setShowImageAspectMenu(false);
+                        setShowImageModelMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Add a style to the prompt"
+                    >
+                      Style
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    <AnchoredComposerMenu
+                      anchorRef={imageStyleTriggerRef}
+                      open={showImageStyleMenu}
+                      label="Image style"
+                      onRequestClose={() => setShowImageStyleMenu(false)}
+                      className="w-56 p-1"
+                    >
+                      {IMAGE_STYLE_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            appendComposerMessage(
+                              `${messageRef.current.trim() ? ', ' : ''}${preset.phrase}`,
+                            );
+                            setShowImageStyleMenu(false);
+                            focusComposer();
+                          }}
+                          className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                        >
+                          <span className="font-medium text-foreground">{preset.label}</span>
+                          <span className="text-muted-foreground">{preset.phrase}</span>
+                        </button>
+                      ))}
+                    </AnchoredComposerMenu>
+                  </div>
 
                   {selectedPromotionalImage && (
                     <span className="text-xs text-muted-foreground">
