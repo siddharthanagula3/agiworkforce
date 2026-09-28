@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 import { buildSkillMarkdown, validateSkillDraft } from '@agiworkforce/skills';
+import { PluginMarketplaceDependencySchema } from '@agiworkforce/cloud-contracts';
 
 import { SkillDraftBodySchema } from '@/app/api/skills/skill-draft-schema';
 import type { OwnedPluginSkill } from '@/lib/services/plugin-owned-source-service';
@@ -26,8 +27,11 @@ export const AuthoredPluginBodySchema = z
     name: z.string().trim().min(1),
     description: z.string().trim().min(1),
     skills: z.array(AuthoredSkillSchema).min(1).max(PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
+    dependencies: z.array(PluginMarketplaceDependencySchema).optional(),
   })
   .strict();
+
+export const AuthoredPluginEditBodySchema = AuthoredPluginBodySchema.omit({ dependencies: true });
 
 export type AuthoredPluginBody = z.infer<typeof AuthoredPluginBodySchema>;
 

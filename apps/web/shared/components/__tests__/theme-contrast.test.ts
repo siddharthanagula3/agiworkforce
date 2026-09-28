@@ -1200,6 +1200,33 @@ describe('chat status text roles clear AA on every chat surface and on their own
   }
 });
 
+describe('code syntax colours clear AA on every code ground', () => {
+  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
+  const grounds = {
+    light: [
+      colorToken(chat.light, '--chat-code-bg'),
+      colorToken(coolLight, '--chat-code-bg'),
+      colorToken(webBase.light, '--chat-code-bg'),
+    ],
+    dark: [colorToken(chat.dark, '--chat-code-bg'), colorToken(webBase.dark, '--chat-code-bg')],
+  };
+  const SYNTAX = ['keyword', 'string', 'comment', 'number', 'function', 'type'];
+
+  for (const [theme, block] of [
+    ['light', chat.light],
+    ['dark', chat.dark],
+  ] as const) {
+    for (const role of SYNTAX) {
+      it(`${theme}: --chat-code-syntax-${role} >= 4.5:1 on the code background`, () => {
+        const colour = colorToken(block, `--chat-code-syntax-${role}`);
+        for (const ground of grounds[theme]) {
+          expect(contrastRatio(colour, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      });
+    }
+  }
+});
+
 describe('the Chrome extension map separates fill, text and on-fill roles', () => {
   const STATES = ['danger', 'success', 'warning', 'info'] as const;
 
