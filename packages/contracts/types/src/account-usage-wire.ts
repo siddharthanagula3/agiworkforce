@@ -63,6 +63,11 @@ export interface ManagedTurnSlotReading {
   active: number;
 }
 
+export interface AccountFileStorageMeter {
+  usedBytes: number | null;
+  limitBytes: number | null;
+}
+
 export interface AccountUsageLimitsResponse {
   planTier: string;
   periodStart: string;
@@ -70,6 +75,7 @@ export interface AccountUsageLimitsResponse {
   units: TierUnitUsage[];
   images: MonthlyImageUsage;
   responses: ManagedTurnSlotReading | null;
+  storage: AccountFileStorageMeter;
 }
 
 export interface ManagedUsageTurnCost {
@@ -160,6 +166,7 @@ export function parseAccountUsageLimitsResponse(value: unknown): AccountUsageLim
   const images = value['images'];
   if (typeof value['resetAt'] !== 'string' || !isFiniteNumber(images['images'])) return null;
   const responses = value['responses'];
+  const storage = isRecord(value['storage']) ? value['storage'] : {};
   return {
     planTier: typeof value['planTier'] === 'string' ? value['planTier'] : '',
     periodStart: typeof value['periodStart'] === 'string' ? value['periodStart'] : '',
@@ -189,6 +196,10 @@ export function parseAccountUsageLimitsResponse(value: unknown): AccountUsageLim
       isFiniteNumber(responses['active'])
         ? { limit: responses['limit'], active: responses['active'] }
         : null,
+    storage: {
+      usedBytes: isFiniteNumber(storage['usedBytes']) ? storage['usedBytes'] : null,
+      limitBytes: isFiniteNumber(storage['limitBytes']) ? storage['limitBytes'] : null,
+    },
   };
 }
 

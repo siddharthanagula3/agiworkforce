@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import ReactMarkdown from 'react-markdown';
 
 import { Prose, Stack } from '@/features/marketing/components/system';
@@ -112,9 +112,10 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
         ) : null}
         {state.kind === 'results' ? (
           <Prose size="sm">
-            {state.results.length === 1
-              ? '1 page matches.'
-              : `${state.results.length} pages match.`}
+            {translateUiPlural('common', 'counts.helpPagesMatch', state.results.length, {
+              one: '{{count}} page matches.',
+              other: '{{count}} pages match.',
+            })}
           </Prose>
         ) : null}
         {state.kind === 'empty' ? (

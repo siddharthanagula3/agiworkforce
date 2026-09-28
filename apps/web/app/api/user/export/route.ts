@@ -672,10 +672,25 @@ const developerWebhookEndpointExportSchema = z.object({
   url: z.string(),
   description: z.string().nullable(),
   event_types: z.array(z.string()),
-  secret_prefix: z.string(),
   enabled: z.boolean(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
+});
+
+const developerWebhookDeliveryExportSchema = z.object({
+  id: z.string(),
+  endpoint_id: z.string(),
+  event_id: z.string(),
+  event_type: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  status: z.string(),
+  attempts: z.number(),
+  response_status: z.number().nullable(),
+  error: z.string().nullable(),
+  redelivery_of: z.string().nullable(),
+  last_attempt_at: nullableTimestampSchema,
+  delivered_at: nullableTimestampSchema,
+  created_at: timestampSchema,
 });
 
 const developerProjectExportSchema = z.object({
@@ -1185,6 +1200,29 @@ const githubInstallationExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const slackAccountLinkExportSchema = z.object({
+  id: z.string(),
+  team_id: z.string(),
+  team_name: z.string(),
+  slack_user_id: z.string(),
+  slack_user_name: z.string().nullable(),
+  organization_id: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const slackAssistantRunExportSchema = z.object({
+  id: z.string(),
+  team_id: z.string().nullable(),
+  channel_id: z.string(),
+  surface: z.string(),
+  mode: z.string(),
+  status: z.string(),
+  model: z.string().nullable(),
+  error: z.string().nullable(),
+  created_at: timestampSchema,
+  completed_at: nullableTimestampSchema,
+});
+
 const featureFlagExportSchema = z.object({
   id: z.string(),
   flag_name: z.string(),
@@ -1414,6 +1452,17 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 }> = [
   // Two roles, two sections. Each one carries what this person supplied or was
   // given, and never the other party's account id.
+  {
+    section: 'developer_webhook_deliveries',
+    table: 'developer_webhook_deliveries',
+    sql: `select id, endpoint_id, event_id, event_type, payload, status, attempts, response_status,
+                 error, redelivery_of, last_attempt_at, delivered_at, created_at
+          from developer_webhook_deliveries
+          where user_id = $1
+          order by created_at asc`,
+    schema: developerWebhookDeliveryExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
   {
     section: 'referrals_made',
     table: 'referrals',
@@ -1767,6 +1816,30 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: githubInstallationExportSchema,
+  },
+  {
+    section: 'slack_account_links',
+    table: 'slack_account_links',
+    sql: `select link.id, installation.team_id, installation.team_name, link.slack_user_id,
+                 link.slack_user_name, link.organization_id, link.created_at
+          from slack_account_links as link
+          join slack_installations as installation on installation.id = link.installation_id
+          where link.user_id = $1
+          order by link.created_at asc`,
+    schema: slackAccountLinkExportSchema,
+  },
+  {
+    section: 'slack_assistant_runs',
+    table: 'slack_assistant_runs',
+    sql: `select run.id, installation.team_id, run.channel_id, run.surface, run.mode, run.status,
+                 run.model, run.error, run.created_at, run.completed_at
+          from slack_assistant_runs as run
+          left join slack_installations as installation on installation.id = run.installation_id
+          where run.user_id = $1
+          order by run.created_at desc
+          limit 1000`,
+    schema: slackAssistantRunExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
   },
   {
     section: 'feature_flags',
@@ -2716,7 +2789,7 @@ async function collectUserData(
 
   exportData['developer_webhook_endpoints'] = await queryExportRows({
     db,
-    sql: `select id, url, description, event_types, secret_prefix, enabled, created_at, updated_at
+    sql: `select id, url, description, event_types, enabled, created_at, updated_at
           from developer_webhook_endpoints
           where user_id = $1
           order by created_at asc`,

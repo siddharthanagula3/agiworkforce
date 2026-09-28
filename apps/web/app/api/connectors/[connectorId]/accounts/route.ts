@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CONNECTOR_REF_PATTERN,
+  type ListConnectorAccountsResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -16,11 +20,9 @@ const RATE_LIMIT_BUCKET = 'chat-conversation';
 
 type Params = { params: Promise<{ connectorId: string }> };
 
-const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
-
 async function readConnectorId(context: Params): Promise<string> {
   const { connectorId } = await context.params;
-  if (!CONNECTOR_REF_RE.test(connectorId ?? '')) {
+  if (!CONNECTOR_REF_PATTERN.test(connectorId ?? '')) {
     throw createError.validation('Invalid connector identifier');
   }
   return connectorId;
@@ -34,7 +36,7 @@ async function handleGet(request: NextRequest, context: Params): Promise<NextRes
   const { userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
   const accounts = await listConnectorAccounts(userId, connectorId);
 
-  return NextResponse.json({ connectorId, accounts });
+  return NextResponse.json({ connectorId, accounts } satisfies ListConnectorAccountsResponse);
 }
 
 export const GET = withErrorHandler(handleGet);

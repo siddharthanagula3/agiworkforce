@@ -177,14 +177,14 @@ describe('AuthFlow named states', () => {
     });
   });
 
-  it('points a suspended account at support, and a provider outage nowhere', async () => {
+  it('points a suspended account at an appeal, and a provider outage nowhere', async () => {
     client.startWithEmail.mockResolvedValue(notice('account_suspended'));
     renderFlow();
     await submitEmail();
 
-    expect(await screen.findByRole('link', { name: 'Contact support' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Appeal this suspension' })).toHaveAttribute(
       'href',
-      expect.stringContaining('mailto:'),
+      '/appeal',
     );
   });
 

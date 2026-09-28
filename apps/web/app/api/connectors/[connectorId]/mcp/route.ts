@@ -1,7 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  CONNECTOR_MCP_OPERATION_MAX_BYTES,
+  ConnectorMcpOperationRequestSchema,
+  ConnectorRefSchema,
+  type ConnectorMcpOperationResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -16,39 +21,6 @@ import { bindMcpTask, isMcpTaskBound } from '@/lib/connectors/mcp-state-store';
 
 export const runtime = 'nodejs';
 
-const ConnectorRefSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/);
-const OperationSchema = z.discriminatedUnion('operation', [
-  z
-    .object({
-      operation: z.literal('callTool'),
-      name: z.string().min(1).max(128),
-      arguments: z.record(z.string(), z.unknown()).default({}),
-      approved: z.boolean().optional().default(false),
-      inputResponses: z.record(z.string(), z.unknown()).optional(),
-      requestState: z.string().max(16_384).optional(),
-    })
-    .strict(),
-  z.object({ operation: z.literal('readResource'), uri: z.string().min(1).max(4_096) }).strict(),
-  z
-    .object({
-      operation: z.literal('getPrompt'),
-      name: z.string().min(1).max(128),
-      arguments: z.record(z.string(), z.string().max(8_192)).optional(),
-      inputResponses: z.record(z.string(), z.unknown()).optional(),
-      requestState: z.string().max(16_384).optional(),
-    })
-    .strict(),
-  z.object({ operation: z.literal('taskGet'), taskId: z.string().min(1).max(512) }).strict(),
-  z
-    .object({
-      operation: z.literal('taskUpdate'),
-      taskId: z.string().min(1).max(512),
-      inputResponses: z.record(z.string(), z.unknown()),
-    })
-    .strict(),
-  z.object({ operation: z.literal('taskCancel'), taskId: z.string().min(1).max(512) }).strict(),
-]);
-
 async function handlePost(
   request: NextRequest,
   context: { params: Promise<{ connectorId: string }> },
@@ -59,8 +31,8 @@ async function handlePost(
   if (limited) return limited;
 
   const connectorRef = ConnectorRefSchema.parse((await context.params).connectorId);
-  const body = OperationSchema.parse(await request.json().catch(() => null));
-  if (JSON.stringify(body).length > 128_000) {
+  const body = ConnectorMcpOperationRequestSchema.parse(await request.json().catch(() => null));
+  if (JSON.stringify(body).length > CONNECTOR_MCP_OPERATION_MAX_BYTES) {
     throw createError.validation('MCP operation payload is too large');
   }
 
@@ -146,7 +118,9 @@ async function handlePost(
       },
     });
   }
-  return NextResponse.json(output, { headers: { 'Cache-Control': 'private, no-store' } });
+  return NextResponse.json(output satisfies ConnectorMcpOperationResponse, {
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePost));

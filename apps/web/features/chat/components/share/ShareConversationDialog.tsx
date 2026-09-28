@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  translateUiPlural,
   useConfirmAction,
 } from '@agiworkforce/ui';
 import { Building2, Check, Copy, Globe2, ShieldAlert, Trash2 } from 'lucide-react';
@@ -75,7 +76,10 @@ function ShareConversationDialogImpl({
   );
 
   const workspaceMembers = activeShare?.workspace?.memberCount ?? 0;
-  const memberLabel = `${workspaceMembers} ${workspaceMembers === 1 ? 'member' : 'members'}`;
+  const memberLabel = translateUiPlural('settings', 'counts.members', workspaceMembers, {
+    one: '{{count}} member',
+    other: '{{count}} members',
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) cancelPending();

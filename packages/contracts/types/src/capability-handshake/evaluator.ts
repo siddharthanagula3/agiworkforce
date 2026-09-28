@@ -37,9 +37,10 @@
  * @module capability-handshake/evaluator
  */
 
-import type { PlatformCapability } from '../capabilities';
+import { ALL_PLATFORM_CAPABILITIES, type PlatformCapability } from '../capabilities';
 import {
   capabilityDenialDescriptor,
+  isCapabilityDenialReason,
   type CapabilityDenialReason,
   type CapabilityDenialRemedy,
   type DenialDecider,
@@ -47,6 +48,7 @@ import {
 import {
   CAPABILITY_LAYER_DENIAL_REASONS,
   CAPABILITY_LAYERS,
+  isCapabilityLayer,
   type CapabilityLayer,
   type CapabilityLimit,
   type EffectiveCapabilityDocument,
@@ -97,6 +99,46 @@ export function resolveCapabilityDecision(
     reason,
     decidedBy: reason ? capabilityDenialDescriptor(reason).decidedBy : null,
   };
+}
+
+export interface CapabilityDocumentWireView {
+  readonly granted: readonly string[];
+  readonly deniedBy: Readonly<Record<string, readonly string[]>>;
+  readonly denialReasons?: Readonly<Record<string, string>>;
+  readonly sources: Readonly<Record<CapabilityLayer, string>>;
+  readonly limits?: readonly (Omit<CapabilityLimit, 'capabilityId'> & {
+    readonly capabilityId: string | null;
+  })[];
+}
+
+const KNOWN_PLATFORM_CAPABILITIES: ReadonlySet<string> = new Set(ALL_PLATFORM_CAPABILITIES);
+
+function isKnownPlatformCapability(value: string): value is PlatformCapability {
+  return KNOWN_PLATFORM_CAPABILITIES.has(value);
+}
+
+export function resolveCapabilityDocumentDecision(
+  document: CapabilityDocumentWireView | null | undefined,
+  capabilityId: PlatformCapability,
+): CapabilityDecision | null {
+  if (!document) return null;
+  const denialReason = document.denialReasons?.[capabilityId];
+  return resolveCapabilityDecision(
+    {
+      granted: document.granted.filter(isKnownPlatformCapability),
+      deniedBy: {
+        [capabilityId]: (document.deniedBy[capabilityId] ?? []).filter(isCapabilityLayer),
+      },
+      ...(denialReason !== undefined && isCapabilityDenialReason(denialReason)
+        ? { denialReasons: { [capabilityId]: denialReason } }
+        : {}),
+      sources: document.sources,
+      limits: (document.limits ?? []).flatMap((limit) =>
+        limit.capabilityId === capabilityId ? [{ ...limit, capabilityId }] : [],
+      ),
+    },
+    capabilityId,
+  );
 }
 
 export type CapabilityRequirementStrength = 'mandatory' | 'optional';

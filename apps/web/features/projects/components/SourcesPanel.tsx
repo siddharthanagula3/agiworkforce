@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { HardDrive, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { FilePreviewModal } from './FilePreviewModal';
 import { AddSourcesModal } from './AddSourcesModal';
 import {
@@ -443,7 +443,10 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             {/* Left: file count + "Add sources" */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <span style={{ fontSize: 12, color: 'var(--agi-ink-2)' }}>
-                {files.length} {files.length === 1 ? 'source' : 'sources'}
+                {translateUiPlural('chat', 'counts.sources', files.length, {
+                  one: '{{count}} source',
+                  other: '{{count}} sources',
+                })}
               </span>
               {readOnly ? null : (
                 <button

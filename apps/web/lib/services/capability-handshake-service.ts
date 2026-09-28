@@ -103,6 +103,7 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   if (!policy.allowDeepResearch) granted.delete('canUseDeepResearch');
   if (!policy.allowVoice) granted.delete('canUseVoice');
   if (!policy.allowMCP) granted.delete('canUseConnectors');
+  if (!canUseBillingPlanCapability(tier, 'image_generation')) granted.delete('canUseImages');
   return { layer: 'tier', sourceId: `tier:${policy.tier}`, granted };
 }
 

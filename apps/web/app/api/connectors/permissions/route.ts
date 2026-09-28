@@ -1,7 +1,15 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  UpsertConnectorToolPermissionRequestSchema,
+  connectorCategoryToolName,
+  isConnectorCategoryToolName,
+  type ConnectorToolPermissionLevel,
+  type DeleteConnectorToolPermissionsResponse,
+  type ListConnectorToolPermissionsResponse,
+  type UpsertConnectorToolPermissionResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -10,11 +18,6 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isDestructiveConnectorTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
-import {
-  CONNECTOR_TOOL_CATEGORIES,
-  connectorCategoryToolName,
-  isConnectorCategoryToolName,
-} from '@shared/types/connectorToolCategories';
 
 export const runtime = 'nodejs';
 
@@ -22,34 +25,12 @@ const WIRE_TO_DB = {
   allow: 'always-allow',
   ask: 'needs-approval',
   deny: 'blocked',
-} as const;
-const DB_TO_WIRE: Record<string, 'allow' | 'ask' | 'deny'> = {
+} as const satisfies Record<ConnectorToolPermissionLevel, string>;
+const DB_TO_WIRE: Record<string, ConnectorToolPermissionLevel> = {
   'always-allow': 'allow',
   'needs-approval': 'ask',
   blocked: 'deny',
 };
-
-const MAX_TOOLS_PER_WRITE = 200;
-
-const UpsertSchema = z
-  .object({
-    connectorId: z.string().min(1).max(200),
-    toolName: z.string().min(1).max(200).optional(),
-    toolNames: z.array(z.string().min(1).max(200)).min(1).max(MAX_TOOLS_PER_WRITE).optional(),
-    category: z.enum(CONNECTOR_TOOL_CATEGORIES).optional(),
-    level: z.enum(['allow', 'ask', 'deny']),
-    destructive: z.boolean().optional(),
-  })
-  .refine((body) =>
-    body.category === undefined
-      ? (body.toolName === undefined) !== (body.toolNames === undefined)
-      : body.toolName === undefined,
-  )
-  .refine((body) =>
-    [body.toolName, ...(body.toolNames ?? [])].every(
-      (name) => name === undefined || !isConnectorCategoryToolName(name),
-    ),
-  );
 
 type PermissionRow = {
   connector_id: string;
@@ -73,7 +54,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     toolName: r.tool_name,
     level: DB_TO_WIRE[r.level] ?? 'ask',
   }));
-  return NextResponse.json({ permissions });
+  return NextResponse.json({ permissions } satisfies ListConnectorToolPermissionsResponse);
 }
 
 async function handleUpsert(request: NextRequest): Promise<NextResponse> {
@@ -83,7 +64,9 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const parsed = UpsertSchema.safeParse(await request.json().catch(() => null));
+  const parsed = UpsertConnectorToolPermissionRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     throw createError.validation(
       'connectorId, a category or one of toolName or toolNames, and a valid level are required',
@@ -133,7 +116,10 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
       status: level,
     },
   });
-  return NextResponse.json({ success: true, destructive });
+  return NextResponse.json({
+    success: true,
+    destructive,
+  } satisfies UpsertConnectorToolPermissionResponse);
 }
 
 async function handleDelete(request: NextRequest): Promise<NextResponse> {
@@ -181,7 +167,10 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  return NextResponse.json({ success: true, removed });
+  return NextResponse.json({
+    success: true,
+    removed,
+  } satisfies DeleteConnectorToolPermissionsResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

@@ -100,6 +100,7 @@ pub struct ProviderSpec {
     /// Additional non-secret headers (subscription user-agents, intents,
     /// account ids). NEVER place key material here, values are not redacted.
     pub extra_headers: Vec<(String, String)>,
+    pub extra_body: Vec<(String, serde_json::Value)>,
 }
 
 #[cfg(test)]

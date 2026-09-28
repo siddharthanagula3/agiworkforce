@@ -58,6 +58,14 @@
     {
       "key": "TYPESAFE_INPUT_MICROUSD_PER_MTOK",
       "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
+    },
+    {
+      "key": "AGI_MAINTENANCE_WINDOW",
+      "reason": "read through getOptionalEnv in apps/web/lib/server/service-notices.ts, which this guard's process.env pattern does not see"
+    },
+    {
+      "key": "SUPPORT_AGENT_ENABLED",
+      "reason": "read through getOptionalEnv in apps/web/lib/support/agent/answer/model-route.ts, which this guard's process.env pattern does not see"
     }
   ]
 }

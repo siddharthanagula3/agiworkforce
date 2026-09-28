@@ -47,7 +47,6 @@
     "path::apps/cli/src/tui/terminal_palette.rs::packages/ui/design-tokens/src/tokens.ts",
     "path::apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs::apps/web/lib/llm-providers/openrouter.ts",
     "path::apps/desktop/src-tauri/src/core/llm/stream_engine.rs::docs/plans/rust-engine-extraction-2026-07-09.md",
-    "path::apps/desktop/src-tauri/src/core/mcp/transport.rs::docs/plans/rust-engine-extraction-2026-07-09.md",
     "path::apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs::apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx",
     "path::apps/desktop/src-tauri/tests/live_provider_stream_smoke.rs::docs/plans/rust-engine-extraction-2026-07-09.md",
     "path::apps/desktop/src/features/workflows/WorkflowBuilder.tsx::apps/cli/src/safety.rs",
