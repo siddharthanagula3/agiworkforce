@@ -682,6 +682,23 @@ pub fn render_companion(surface: &str) -> String {
     )
 }
 
+pub fn open_upgrade_page() -> String {
+    let url = format!(
+        "{}/pricing",
+        crate::tier_cache::default_api_base().trim_end_matches('/')
+    );
+    let opened =
+        crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
+    format!(
+        "{} {url}\n`agi plans` compares plans and their credits here in the terminal.",
+        if opened {
+            "Opened plans and upgrades in your browser:"
+        } else {
+            "Plans and upgrades:"
+        }
+    )
+}
+
 pub fn render_upgrade() -> String {
     "Upgrade options\n  Local/BYOK: use your own provider keys.\n  Managed cloud: authenticate with /login.\n  Extra usage: /extra-usage".to_string()
 }

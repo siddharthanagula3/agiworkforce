@@ -580,6 +580,14 @@ impl TuiApp {
         if !crate::is_image_extension(path) {
             return Err(format!("{path} is not an image"));
         }
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
@@ -603,6 +611,14 @@ impl TuiApp {
 
     /// Stage whatever bitmap the system clipboard is holding.
     fn stage_clipboard_image(&mut self) -> Result<String, String> {
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let image = arboard::Clipboard::new()
             .and_then(|mut clipboard| clipboard.get_image())
             .map_err(|error| format!("no image on the clipboard ({error})"))?;
@@ -3004,6 +3020,7 @@ fn open_command_popup(app: &mut TuiApp) {
         ("title", "Configure the terminal window title"),
         ("diff-review", "Review changed files hunk by hunk"),
         ("dictate", "Dictate into the composer without sending"),
+        ("find", "Search this conversation's messages"),
     ] {
         if !cmds.iter().any(|c| c.name == name) {
             cmds.push(PopupCmd::new(name, desc));
@@ -3136,6 +3153,40 @@ fn edit_turn_draft(input: &mut String, cursor: &mut usize, key: KeyEvent) -> Opt
     }
     None
 }
+
+fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
+    let query = query.trim();
+    if query.is_empty() {
+        return "Usage: /find <text>".to_string();
+    }
+    let needle = query.to_lowercase();
+    let mut hits = Vec::new();
+    for (index, message) in messages.iter().enumerate() {
+        let who = match message.role {
+            ChatRole::User => "you",
+            ChatRole::Assistant => "assistant",
+            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+        };
+        for line in message.text.lines() {
+            if line.to_lowercase().contains(&needle) {
+                let snippet: String = line.trim().chars().take(120).collect();
+                hits.push(format!("  #{:<3} {who:<9} {snippet}", index + 1));
+            }
+        }
+    }
+    if hits.is_empty() {
+        return format!("Nothing in this conversation matches '{query}'.");
+    }
+    let total = hits.len();
+    hits.truncate(FIND_RESULT_LIMIT);
+    let mut text = format!("{total} line(s) match '{query}':\n{}", hits.join("\n"));
+    if total > FIND_RESULT_LIMIT {
+        text.push_str(&format!("\n  … {} more", total - FIND_RESULT_LIMIT));
+    }
+    text
+}
+
+const FIND_RESULT_LIMIT: usize = 30;
 
 fn start_side_query(
     config: &crate::config::CliConfig,
@@ -3641,6 +3692,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
+        "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
         "/plan" if matches!(arg, "accept" | "approve") => SlashResult::SystemMessage(
@@ -4099,6 +4152,20 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/init" => {
             SlashResult::SystemMessage(crate::repl::init_project_for_display().plain_message())
+        }
+
+        "/skills" if arg.starts_with("import") => {
+            let path = arg.trim_start_matches("import").trim();
+            SlashResult::SystemMessage(if path.is_empty() {
+                "Usage: /skills import <path to SKILL.md or its folder>".to_string()
+            } else {
+                match crate::skills::import_skill(std::path::Path::new(
+                    &crate::path_security::expand_home(path),
+                )) {
+                    Ok(target) => format!("Imported the skill to {}.", target.display()),
+                    Err(reason) => reason,
+                }
+            })
         }
 
         "/skills" => {
@@ -4820,6 +4887,17 @@ pub async fn run(
     .await;
 
     let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    if let Some(temperature) = config.default.temperature {
+        if crate::model_catalog::model_rejects_sampling_parameters(&app.session.model) {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!(
+                    "{} does not accept a temperature, so your configured {temperature} is not sent to it.",
+                    crate::model_catalog::display_name(&app.session.model)
+                ),
+            });
+        }
+    }
     app.mcp_elicitation_handler = mcp_elicitation_handler;
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
@@ -5896,6 +5974,19 @@ async fn send_message_with_prompt(
     app.session.on_tool_event = None;
     app.session.on_continuation_chunk = None;
     settle_running_tool_cells(&mut tool_cells);
+    let mut changed_files: Vec<String> = tool_cells
+        .iter()
+        .filter(|cell| {
+            cell.state == crate::tui::transcript_cell::TranscriptCellState::Complete
+                && matches!(
+                    cell.name.as_str(),
+                    "write_file" | "edit_file" | "multiedit" | "apply_patch" | "notebook_edit"
+                )
+                && !cell.summary.trim().is_empty()
+        })
+        .map(|cell| cell.summary.clone())
+        .collect();
+    changed_files.dedup();
     app.tool_cells = tool_cells;
 
     // Copy final streamed content into stream_buffer for last render
@@ -5920,6 +6011,16 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if !changed_files.is_empty() {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!(
+                        "Files changed this turn: {}. /diff shows what changed.",
+                        changed_files.join(", ")
+                    ),
+                });
+            }
 
             if app.config.ui.bell_on_finish == Some(true)
                 && turn_started.elapsed() >= BELL_AFTER_TURN_OF
