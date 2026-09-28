@@ -23,6 +23,10 @@ vi.mock('../../components/ToolApprovalDefaultsPanel', () => ({
   ToolApprovalDefaultsPanel: () => null,
 }));
 
+vi.mock('../../components/ApprovalHistoryPanel', () => ({
+  ApprovalHistoryPanel: () => null,
+}));
+
 vi.mock('@/features/settings/components/LockdownModePanel', () => ({
   LockdownModePanel: () => null,
 }));
