@@ -2190,6 +2190,12 @@ impl TurnHost for TurnHostAdapter<'_> {
         // caller's `on_chunk` for the first completion, `continuation_sink()`
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
+        if matches!(phase, TurnPhase::First) {
+            emit_tool_event(
+                self.session.on_tool_event.as_ref(),
+                crate::tui::app_event::TuiAppEvent::ModelRequested,
+            );
+        }
         let routing_profile = self.session.request_routing_profile();
         let completion = match phase {
             TurnPhase::First if self.search_turn => {

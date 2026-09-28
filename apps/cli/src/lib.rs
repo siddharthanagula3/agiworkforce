@@ -930,11 +930,44 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Browse your Library: generated images and videos, uploaded and generated files.
+    Library {
+        #[command(subcommand)]
+        action: Option<LibrarySubcommand>,
+        /// Only this kind: image, video or file (comma-separated for several).
+        #[arg(long)]
+        kind: Option<String>,
+        /// Only items whose name or prompt matches this text.
+        #[arg(long)]
+        search: Option<String>,
+        /// How many items to list.
+        #[arg(long, default_value_t = 24)]
+        limit: u32,
+    },
+    /// List the conversation links you shared, or revoke one.
+    Shares {
+        #[command(subcommand)]
+        action: Option<SharesSubcommand>,
+    },
+    /// List your account's connectors with their state, or disconnect one.
+    Connectors {
+        #[command(subcommand)]
+        action: Option<ConnectorsSubcommand>,
+    },
+    /// Export your account data: request an export, or download the one that is ready.
+    ExportData {
+        /// Directory to save the export in (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
     /// Run local preflight diagnostics.
     Doctor {
         /// Emit the diagnostic report as JSON.
         #[arg(long)]
         json: bool,
+        /// Write a redacted diagnostics file to review and attach to a support request.
+        #[arg(long)]
+        export: bool,
     },
     /// Browse and install marketplace plugins.
     Marketplace {
@@ -1107,9 +1140,56 @@ enum HistorySubcommand {
 }
 
 #[derive(Subcommand, Debug)]
+enum LibrarySubcommand {
+    /// Print a text file from your Library (text, Markdown, code or a table).
+    Show {
+        /// Library item id, as agi library lists it.
+        id: String,
+    },
+    /// Save the original file from your Library.
+    Download {
+        /// Library item id, as agi library lists it.
+        id: String,
+        /// Directory to save into (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SharesSubcommand {
+    /// Turn off a shared link for everyone who has it.
+    Revoke {
+        /// The link's token, as agi shares lists it.
+        token: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConnectorsSubcommand {
+    /// Disconnect a connector from your account.
+    Disconnect {
+        /// Connector id, as agi connectors lists it.
+        connector: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 enum ProjectsSubcommand {
     /// List the account's projects, refreshed from the account.
     List,
+    /// List the folders you worked in most recently, to start a session in one with agi -C.
+    Recent {
+        /// How many to list.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
     /// Create a project in the account.
     Create {
         /// Project name.
@@ -2502,6 +2582,45 @@ async fn handle_projects_command(
                 output,
             )
         }
+        ProjectsSubcommand::Recent { limit } => {
+            let home = config::CliConfig::config_dir()?;
+            let registry = project_registry::ProjectRegistry::load(&home)?;
+            let linked = cloud::load_project_cache(&home);
+            let mut recent: Vec<(&String, &project_registry::ProjectEntry)> = registry
+                .projects
+                .iter()
+                .filter(|(path, _)| std::path::Path::new(path.as_str()).is_dir())
+                .collect();
+            recent.sort_by(|left, right| right.1.last_seen.cmp(&left.1.last_seen));
+            if recent.is_empty() {
+                println!("No recent project folders yet. Run agi inside a project to add it here.");
+                return Ok(());
+            }
+            println!("Recent project folders");
+            for (index, (path, entry)) in recent.iter().take(*limit).enumerate() {
+                let account = entry
+                    .cloud_project_id
+                    .as_deref()
+                    .and_then(|id| linked.find(id))
+                    .map(|project| {
+                        format!(
+                            "  linked to '{}'",
+                            terminal_text::sanitize_terminal_text(&project.name)
+                        )
+                    })
+                    .unwrap_or_default();
+                println!(
+                    "  {}. {}  last used {}{account}",
+                    index + 1,
+                    terminal_text::sanitize_terminal_text(path),
+                    terminal_text::sanitize_terminal_text(
+                        entry.last_seen.get(..10).unwrap_or(&entry.last_seen)
+                    )
+                );
+            }
+            println!("Start a session in one with: agi -C <folder>");
+            Ok(())
+        }
         ProjectsSubcommand::List => {
             let cache = cloud::refresh_projects(privacy)
                 .await
@@ -2980,6 +3099,19 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                         "    {}",
                         terminal_text::sanitize_terminal_text(&entry.content)
                     );
+                    if let Some(conversation) = entry.source_conversation_id.as_deref() {
+                        let title = entry
+                            .source_conversation_title
+                            .as_deref()
+                            .map(|title| {
+                                format!("'{}'", terminal_text::sanitize_terminal_text(title))
+                            })
+                            .unwrap_or_else(|| "a chat".to_string());
+                        println!(
+                            "    learned in {title}; agi resume --cloud {} opens it",
+                            terminal_text::sanitize_terminal_text(conversation)
+                        );
+                    }
                 }
             }
             Ok(())
@@ -5356,6 +5488,145 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Auth Status ---
+            Command::Library {
+                action,
+                kind,
+                search,
+                limit,
+            } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let page = cloud::library::list(
+                            &client,
+                            kind.as_deref(),
+                            search.as_deref(),
+                            *limit,
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::library::render(&page));
+                    }
+                    Some(LibrarySubcommand::Show { id }) => {
+                        let preview = cloud::library::text(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", terminal_text::sanitize_terminal_text(&preview.text));
+                        if preview.truncated {
+                            println!(
+                                "\n(The preview stops here; agi library download {id} saves the whole file.)"
+                            );
+                        }
+                    }
+                    Some(LibrarySubcommand::Download { id, out }) => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::library::download(&client, id, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Saved {}", saved.display());
+                    }
+                }
+                Ok(())
+            }
+            Command::Shares { action } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let links = cloud::shares::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::shares::render(&links));
+                    }
+                    Some(SharesSubcommand::Revoke { token, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Revoke shared link {token}? Anyone who has it can no longer open the conversation. A new share gets a new link."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left the link on.");
+                            return Ok(());
+                        }
+                        cloud::shares::revoke(&client, token)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Revoked shared link {token}.");
+                    }
+                }
+                Ok(())
+            }
+            Command::Connectors { action } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let list = cloud::connectors::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::connectors::render_list(&list));
+                    }
+                    Some(ConnectorsSubcommand::Disconnect { connector, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Disconnect {connector} from your account? Its saved sign-in and tool permissions are removed, and every surface loses it until you connect it again."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left {connector} connected.");
+                            return Ok(());
+                        }
+                        cloud::connectors::disconnect(&client, connector)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Disconnected {connector} from your account.");
+                    }
+                }
+                Ok(())
+            }
+            Command::ExportData { out } => {
+                let client = cloud::CloudClient::connect_managed()
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let archive = cloud::data_export::current(&client)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match archive {
+                    Some(archive) if archive.status == "ready" => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::data_export::download(&client, &archive, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        for path in &saved {
+                            println!("Saved {}", path.display());
+                        }
+                    }
+                    Some(archive) if archive.status == "preparing" => println!(
+                        "Your export requested at {} is still being prepared. Run `agi export-data` again later to download it.",
+                        terminal_text::sanitize_terminal_text(&archive.requested_at)
+                    ),
+                    _ => {
+                        let requested = cloud::data_export::request(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        match requested {
+                            Some(archive) if archive.status == "ready" => println!(
+                                "Your export is ready. Run `agi export-data` again to download it."
+                            ),
+                            _ => println!(
+                                "Your account export is being prepared. Run `agi export-data` again later to download it."
+                            ),
+                        }
+                    }
+                }
+                Ok(())
+            }
             Command::AuthStatus => {
                 let statuses = auth::auth_status()?;
                 if statuses.is_empty() {
@@ -5382,7 +5653,23 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Doctor ---
-            Command::Doctor { json } => doctor::run_doctor(&app_config, *json),
+            Command::Doctor { json, export } => {
+                if !*export {
+                    return doctor::run_doctor(&app_config, *json);
+                }
+                let report = doctor::collect_doctor_report(&app_config);
+                let exported = diagnostics_bundle::export(&report)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let path = std::env::current_dir()?.join(&exported.filename);
+                std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
+                println!(
+                    "{}\nWrote {}. Read it before you attach it to a support request; it holds only what is listed above.",
+                    terminal_text::sanitize_terminal_text(&exported.summary),
+                    path.display()
+                );
+                Ok(())
+            }
 
             // --- Marketplace ---
             Command::Marketplace { action } => {
@@ -6185,16 +6472,19 @@ impl ImageAttachment {
 /// [`read_file_contexts`] it returns the error instead of exiting, because the
 /// interactive paths have to keep the session alive after a bad path.
 pub fn load_image_attachment(path: &str) -> Result<ImageAttachment> {
-    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
+    load_image_attachment_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+}
+
+pub fn load_image_attachment_with(
+    path: &str,
+    mode: agiworkforce_utils_image::PromptImageMode,
+) -> Result<ImageAttachment> {
+    use agiworkforce_utils_image::load_for_prompt_bytes;
     use base64::Engine as _;
 
     let bytes = std::fs::read(path).with_context(|| format!("Failed to read image '{path}'"))?;
-    let encoded = load_for_prompt_bytes(
-        std::path::Path::new(path),
-        bytes,
-        PromptImageMode::ResizeToFit,
-    )
-    .with_context(|| format!("Failed to process image '{path}'"))?;
+    let encoded = load_for_prompt_bytes(std::path::Path::new(path), bytes, mode)
+        .with_context(|| format!("Failed to process image '{path}'"))?;
     Ok(ImageAttachment {
         path: path.to_string(),
         mime: encoded.mime,
