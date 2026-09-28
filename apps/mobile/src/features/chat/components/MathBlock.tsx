@@ -6,10 +6,7 @@ import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
 import { useThemeColors } from '@/src/ui/theme';
 import { colors as darkTokens } from '@/src/ui/theme/tokens';
-
-const KATEX_VERSION = '0.16.21';
-const KATEX_CSS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`;
-const KATEX_JS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.js`;
+import { KATEX_CSS_URL, KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
 
 interface MathBlockProps {
   latex: string;
@@ -51,7 +48,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<link rel="stylesheet" href="${KATEX_CSS}"/>
+<link rel="stylesheet" href="${KATEX_CSS_URL}"/>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -78,7 +75,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 <body>
 <div id="latex-src" style="display:none">${latexEscaped}</div>
 <div id="math-root"></div>
-<script src="${KATEX_JS}"></script>
+<script src="${KATEX_JS_URL}"></script>
 <script>
 (function() {
   var srcEl = document.getElementById('latex-src');
