@@ -134,8 +134,9 @@ describe('creating an API key', () => {
     const response = await POST(createRequest({ name: 'New key', scopes: ['models:read'] }));
 
     expect(response.status).toBe(201);
-    expect(mockQuery.mock.calls[1]?.[1]).toHaveLength(6);
+    expect(mockQuery.mock.calls[1]?.[1]).toHaveLength(7);
     expect((mockQuery.mock.calls[1]?.[1] as unknown[])[5]).toBeNull();
+    expect((mockQuery.mock.calls[1]?.[1] as unknown[])[6]).toBeNull();
   }, 20000);
 
   it('carries the expiry the caller asked for into the insert and the response', async () => {
