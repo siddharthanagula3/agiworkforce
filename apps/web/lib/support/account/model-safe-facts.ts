@@ -1,4 +1,7 @@
-import type { ModelSafeAccountFacts, SupportAccountContext } from './types';
+import type {
+  ModelSafeAccountFacts,
+  SupportAccountContext,
+} from '@agiworkforce/cloud-contracts/support';
 
 export function toModelSafeAccountFacts(context: SupportAccountContext): ModelSafeAccountFacts {
   return {

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -24,17 +23,9 @@ import {
   type SupportActionOption,
 } from '@/lib/support/agent';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
+import { SupportAskRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
-
-const RequestSchema = z.object({
-  message: z.string().trim().min(1).max(2000),
-  surface: z.enum(['marketing', 'app']),
-  history: z
-    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }))
-    .max(50)
-    .optional(),
-});
 
 interface AccountSignals {
   planTier: string | null;
@@ -87,7 +78,7 @@ async function handleAsk(request: NextRequest) {
 
   await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportAsk);
 
-  const parsed = RequestSchema.safeParse(await readJsonBody(request));
+  const parsed = SupportAskRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid support question', parsed.error);
   }

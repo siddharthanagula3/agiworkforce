@@ -9,11 +9,13 @@ import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
 import { openTicket, readTicketForStaff } from './service';
-import { OPEN_TICKET_STATUSES, RECOVERY_FOLLOW_PATH, RECOVERY_TICKET_SUBJECT } from './types';
-
-export const RECOVERY_LOSSES = ['password', 'email', 'factor'] as const;
-
-export type RecoveryLoss = (typeof RECOVERY_LOSSES)[number];
+import {
+  OPEN_TICKET_STATUSES,
+  RECOVERY_FOLLOW_PATH,
+  RECOVERY_TICKET_SUBJECT,
+  type RecoveryAction,
+  type RecoveryLoss,
+} from '@agiworkforce/cloud-contracts/support';
 
 const LOSS_COPY: Readonly<Record<RecoveryLoss, string>> = {
   password: 'The password, and the emailed reset did not work',
@@ -84,10 +86,6 @@ export async function submitAccountRecoveryRequest(input: {
     );
   }
 }
-
-export const RECOVERY_ACTIONS = ['remove_second_factor', 'replace_email'] as const;
-
-export type RecoveryAction = (typeof RECOVERY_ACTIONS)[number];
 
 export class RecoveryTicketError extends Error {
   constructor(message: string) {

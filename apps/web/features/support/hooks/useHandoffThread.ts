@@ -5,7 +5,7 @@ import type {
   SupportHandoffMessageView,
   SupportHandoffSendResult,
   SupportHandoffThreadPage,
-} from '../lib/contract';
+} from '@agiworkforce/cloud-contracts/support';
 
 export interface HandoffThreadState {
   messages: SupportHandoffMessageView[];
