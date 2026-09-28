@@ -165,7 +165,11 @@ describe('VS Code AGI Cloud device authorization', () => {
     });
 
     await expect(
-      revokeDeviceAuthorization('https://api.agiworkforce.com', 'signed-developer-token', post),
+      revokeDeviceAuthorization(
+        'https://api.agiworkforce.com',
+        { token: 'signed-developer-token' },
+        post,
+      ),
     ).resolves.toBe(true);
 
     expect(post).toHaveBeenCalledWith(
@@ -182,7 +186,11 @@ describe('VS Code AGI Cloud device authorization', () => {
     const post = vi.fn<DeviceAuthPost>().mockRejectedValue(new Error('offline'));
 
     await expect(
-      revokeDeviceAuthorization('https://api.agiworkforce.com', 'signed-developer-token', post),
+      revokeDeviceAuthorization(
+        'https://api.agiworkforce.com',
+        { token: 'signed-developer-token' },
+        post,
+      ),
     ).resolves.toBe(false);
   });
 

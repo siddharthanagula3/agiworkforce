@@ -5,6 +5,7 @@ import { URL } from 'url';
 import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkforce/types';
 import {
   clearAccountToken,
+  getAccountRefreshToken,
   getAccountToken,
   getCloudGatewayOrigin,
   getCloudWebOrigin,
@@ -259,15 +260,17 @@ export async function refreshDeviceSession(
 
 export async function revokeDeviceAuthorization(
   gatewayOrigin: string,
-  token: string,
+  credentials: { token?: string; refreshToken?: string },
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
   try {
     const response = await post(
       `${new URL(gatewayOrigin).origin}/api/auth/logout`,
-      {},
+      credentials.refreshToken === undefined ? {} : { refresh_token: credentials.refreshToken },
       {
-        Authorization: `Bearer ${token}`,
+        ...(credentials.token === undefined
+          ? {}
+          : { Authorization: `Bearer ${credentials.token}` }),
         'X-Requested-With': 'XMLHttpRequest',
       },
     );
@@ -395,10 +398,18 @@ export async function signOutOfAgiCloud(
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
   const token = await getAccountToken(secrets, { renew: false });
+  const refreshToken = await getAccountRefreshToken(secrets);
   const revoked =
-    token === undefined
+    token === undefined && refreshToken === undefined
       ? true
-      : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token, post);
+      : await revokeDeviceAuthorization(
+          getCloudGatewayOrigin(),
+          {
+            ...(token === undefined ? {} : { token }),
+            ...(refreshToken === undefined ? {} : { refreshToken }),
+          },
+          post,
+        );
 
   await clearAccountToken(secrets);
 

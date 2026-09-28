@@ -444,6 +444,30 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
     )))
 }
 
+/// Revoke a device session on the server: the access token when it still
+/// verifies, and the refresh family it belongs to either way.
+pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) -> bool {
+    let mut request = reqwest::Client::new()
+        .post(format!("{api_base}/auth/logout"))
+        .header("X-Requested-With", "XMLHttpRequest")
+        .header(
+            "User-Agent",
+            format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+        );
+    if !access.is_empty() {
+        request = request.bearer_auth(access);
+    }
+    let body = if refresh.is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::json!({ "refresh_token": refresh })
+    };
+    match request.json(&body).send().await {
+        Ok(response) => response.status().is_success(),
+        Err(_) => false,
+    }
+}
+
 /// Run the device code login flow for AGI Workforce in a terminal.
 /// 1. Request device code
 /// 2. Show code to user + verification URL
