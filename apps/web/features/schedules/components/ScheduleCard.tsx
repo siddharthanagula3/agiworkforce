@@ -225,7 +225,7 @@ export function ScheduleCard({
             {schedule.description && (
               <p className="break-words text-sm text-muted-foreground">{schedule.description}</p>
             )}
-            <p className="line-clamp-3 break-words text-sm leading-relaxed text-foreground/85">
+            <p className="line-clamp-3 break-words text-sm leading-relaxed text-muted-foreground">
               {schedule.prompt || 'No task instructions are stored.'}
             </p>
 
