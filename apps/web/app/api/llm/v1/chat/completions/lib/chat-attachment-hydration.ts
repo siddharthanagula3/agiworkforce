@@ -22,6 +22,7 @@ import {
 import { untrustedDocumentText } from '@/lib/server/untrusted-document-text';
 import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
+import type { ImageDetailValue } from './image-detail';
 import { mapWithConcurrency } from './tool-loop';
 
 const MAX_REQUEST_ATTACHMENT_COUNT = 20;
@@ -33,7 +34,7 @@ export const MAX_PARALLEL_ATTACHMENT_FETCHES = 4;
 type AttachmentReferencePart = {
   type: string;
   text?: string;
-  image_url?: { url: string; detail?: 'auto' | 'low' | 'high' };
+  image_url?: { url: string; detail?: ImageDetailValue };
   file?: {
     asset_id?: string;
     filename?: string;
