@@ -38,7 +38,7 @@ import type {
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
-import type { CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
+import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
@@ -868,7 +868,7 @@ interface ChatState {
   ) => void;
   setSearchResults: (
     id: string,
-    results: Array<{ url: string; title: string; snippet: string }>,
+    results: Array<AgentEventSource & { snippet: string }>,
     conversationId?: string,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean, conversationId?: string) => void;
