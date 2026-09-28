@@ -15,9 +15,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Workbooks come only from the assistant office-file tool, which drops the title (no document properties); no view to see or edit metadata. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui, handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:620-638`, `apps/web/lib/services/managed-office-file-service.ts:170-174`
 
 ## S29.02: Sheet tabs.
 
@@ -28,9 +25,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Named sheets exist only inside the downloaded .xlsx; the app shows no sheet tabs. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:82-91`, `apps/web/lib/services/managed-workbook-builder.ts:177-187`
 
 ## S29.03: Add, rename, duplicate, and delete sheets.
 
@@ -41,9 +35,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only creation-time sheets via the assistant tool; no rename, duplicate or delete of sheets. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui, handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:202-212`
 
 ## S29.04: Grid selection.
 
@@ -82,14 +73,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 
 - Done when: The user can insert a chart built from sheet data into the workbook.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the assistant office-file tool can add one chart per sheet at creation; no in-app chart insertion. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only the assistant office-file tool can add one chart per sheet at creation; no in-app chart insertion. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:67-80`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
 
@@ -97,29 +87,27 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 - Done when: The user can pick or change a chart type from a selector.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Chart type is chosen by the assistant (bar/line/pie); no user selector. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chart type is chosen by the assistant (bar/line/pie); no user selector. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:221-226`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:221-226`
 
 ## S29.19: Chart data-range editor.
 
 - Done when: The user can view and edit the cell range a chart plots.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Range set only by the assistant in the tool call; no editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Range set only by the assistant in the tool call; no editor. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:227-234`, `apps/web/lib/services/managed-workbook-builder.ts:75-86`
 
@@ -154,31 +142,29 @@ Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps
 
 - Done when: The user can export data or a sheet as a downloadable .xlsx workbook.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | An .xlsx comes only from the assistant tool; no export action on tables. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | An .xlsx comes only from the assistant tool; no export action on tables. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:106-111`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:106-111`
 
 ## S29.35: Export CSV.
 
 - Done when: The user can download tabular data as a CSV file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A CSV exists only if the assistant creates one with the office-file tool; no Download-as-CSV action on tables. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | A CSV exists only if the assistant creates one (tool offered when the prompt names a CSV); no export action on tables. | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:118-123`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:118-123`
 
 ## S29.36: Export chart.
 
@@ -199,14 +185,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 - Done when: From an analysis, the user can get a formatted report document (docx or pdf).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Report only via the assistant office-file tool; no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Report only via the assistant office-file tool; no dedicated action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`
 
@@ -214,13 +199,12 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 - Done when: From an analysis, the user can get a slide deck (pptx).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Deck only via the assistant office-file tool (bullets only); no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Deck only via the assistant office-file tool (bullets only); no dedicated action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-524`, `apps/web/lib/services/managed-office-file-service.ts:59-63`

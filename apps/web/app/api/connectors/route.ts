@@ -66,6 +66,7 @@ import {
   accountUrlConnector,
   ACCOUNT_URL_CONNECTORS,
 } from '@/lib/connectors/account-url-connectors';
+import { describeGrantedConnectorScopes } from '@/lib/connectors/scope-descriptions';
 import {
   SENSITIVE_DATA_CONNECTOR_IDS,
   sensitiveDataRegionRefusal,
@@ -131,6 +132,7 @@ interface ConnectorEntry {
   toolConnectorId?: string;
   directoryId?: string;
   scopes?: string[];
+  grantedPermissions?: { scope: string; sentence: string; access: 'read' | 'write' }[];
   needsReauthorization?: boolean;
   health?: ConnectorHealth;
 }
@@ -290,6 +292,7 @@ async function handleGetConnectors(request: NextRequest) {
       updatedAt: grant.updatedAt,
       source: 'oauth' as const,
       scopes: grant.grantedScopes,
+      grantedPermissions: describeGrantedConnectorScopes(grant.grantedScopes),
       needsReauthorization: grant.needsReauthorization,
     };
     if (

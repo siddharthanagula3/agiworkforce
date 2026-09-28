@@ -95,6 +95,7 @@ import {
   takeOverComputerUse,
 } from './runtime/computerUseSession';
 import { installAppMenu } from './appMenu';
+import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
 import {
   planRendererRecovery,
@@ -1485,6 +1486,7 @@ if (!hasSingleInstanceLock) {
       },
       onNotificationClick: showMainWindow,
     });
+    configureDevicePrompts((open) => sendRuntimeEvent({ kind: 'device-prompt-changed', open }));
     const codeSessionActivity = createCodeSessionActivity({
       sessionTitle: async (rootId, threadId) =>
         (await readDeveloperSession(rootId, threadId)).session.title.slice(

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { logger } from '@/lib/logger';
+import { classifyError } from '@agiworkforce/provider-runtime';
 import {
   handleCorsPreflightRequest,
   getSecurityHeaders,
@@ -195,6 +196,7 @@ async function refundFailedReservation(
   userId: string,
   processed: ProcessedRequest,
   reason: 'streaming_failure' | 'request_failure',
+  errorClass?: string,
 ): Promise<void> {
   if (processed.freeTrial) {
     await settleFreeTrialRequest({
@@ -209,6 +211,7 @@ async function refundFailedReservation(
       await finalizeManagedUsageRequest({
         ...processed.managedUsage,
         outcome: 'failed',
+        attempt: { outcome: 'failed', errorClass },
         actualCostCents: 0,
         // CPST Stage-0 telemetry, MANAGED CLOUD ONLY
         // (docs/architecture/execution-plan-contract.md §4.3).
@@ -250,7 +253,12 @@ async function conversationRunConflictResponse(
   processed: ProcessedRequest,
   activeRun: CloudAgentRun,
 ): Promise<NextResponse> {
-  await refundFailedReservation(userId, processed, 'request_failure');
+  await refundFailedReservation(
+    userId,
+    processed,
+    'request_failure',
+    'conversation_run_in_progress',
+  );
   const conflictHeaders: Record<string, string> = { ...getSecurityHeaders() };
   addAgentRunHeaders(conflictHeaders, activeRun);
   return NextResponse.json(
@@ -312,7 +320,7 @@ async function beginCloudAgentRun(
       { error, userId, requestId: processed.requestId },
       'Cloud agent run could not be durably created',
     );
-    await refundFailedReservation(userId, processed, 'request_failure');
+    await refundFailedReservation(userId, processed, 'request_failure', 'agent_run_unavailable');
     return NextResponse.json(
       {
         error: {
@@ -450,7 +458,7 @@ async function dispatchChatCompletions(
     applySecretHandlingToRequest(userId, request, processed),
   );
   if (secretHandling.action === 'blocked') {
-    await refundFailedReservation(userId, processed, 'request_failure');
+    await refundFailedReservation(userId, processed, 'request_failure', 'secret_detected');
     return NextResponse.json(
       {
         error: {
@@ -471,7 +479,7 @@ async function dispatchChatCompletions(
       processed.researchResume.guidance,
     ]);
     if (guidanceGate.action === 'blocked') {
-      await refundFailedReservation(userId, processed, 'request_failure');
+      await refundFailedReservation(userId, processed, 'request_failure', 'secret_detected');
       return NextResponse.json(
         {
           error: {
@@ -499,7 +507,6 @@ async function dispatchChatCompletions(
         markManagedUsageProviderStarted(managedUsageToMark),
       );
     } catch (error) {
-      await refundFailedReservation(userId, processed, 'request_failure');
       const managedError =
         error instanceof ManagedUsageRequestError
           ? error
@@ -508,6 +515,7 @@ async function dispatchChatCompletions(
               503,
               'billing_unavailable',
             );
+      await refundFailedReservation(userId, processed, 'request_failure', managedError.code);
       return NextResponse.json(
         {
           error: {
@@ -1246,7 +1254,12 @@ async function dispatchChatCompletions(
             attemptAdapterProvider = nextAdapterProvider;
             continue;
           }
-          await refundFailedReservation(userId, attemptProcessed, 'streaming_failure');
+          await refundFailedReservation(
+            userId,
+            attemptProcessed,
+            'streaming_failure',
+            classifyError(error).category,
+          );
           await recordFailedTurn(attemptProcessed, userId, request.signal);
           return buildUpstreamErrorResponse(
             error,
@@ -1286,7 +1299,7 @@ async function dispatchChatCompletions(
     // rather than silently falling through to a removed module, so a future
     // catalog change that somehow produces an unlisted provider id fails
     // loud instead of throwing an unhandled "not a function" at runtime.
-    await refundFailedReservation(userId, processed, 'streaming_failure');
+    await refundFailedReservation(userId, processed, 'streaming_failure', 'unsupported_provider');
     return buildUpstreamErrorResponse(
       new Error(`Provider "${processed.provider}" is not supported.`),
       processed.provider,
@@ -1349,7 +1362,12 @@ async function dispatchChatCompletions(
           attemptAdapterProvider = nextAdapterProvider;
           continue;
         }
-        await refundFailedReservation(userId, attemptProcessed, 'request_failure');
+        await refundFailedReservation(
+          userId,
+          attemptProcessed,
+          'request_failure',
+          classifyError(error).category,
+        );
         await recordFailedTurn(attemptProcessed, userId, request.signal);
         return buildUpstreamErrorResponse(
           error,
@@ -1376,7 +1394,7 @@ async function dispatchChatCompletions(
   // See the streaming branch's identical comment above: `processed.provider`
   // can never fall outside `ADAPTER_PROVIDERS`, so this is an explicit,
   // typed failure guard, not a live dispatch path.
-  await refundFailedReservation(userId, processed, 'request_failure');
+  await refundFailedReservation(userId, processed, 'request_failure', 'unsupported_provider');
   return buildUpstreamErrorResponse(
     new Error(`Provider "${processed.provider}" is not supported.`),
     processed.provider,
