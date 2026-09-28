@@ -18,6 +18,7 @@ export const KNOWN_INTERACTIVE_CARD_KINDS = [
   'map-search.v1',
   'mcp-app.v1',
   'places.v1',
+  'product-comparison.v1',
 ] as const;
 export type KnownInteractiveCardKind = (typeof KNOWN_INTERACTIVE_CARD_KINDS)[number];
 
@@ -35,6 +36,7 @@ export function isKnownInteractiveCardKind(kind: string): kind is KnownInteracti
 export const LEADING_INTERACTIVE_CARD_KINDS: readonly KnownInteractiveCardKind[] = [
   'itinerary.v1',
   'places.v1',
+  'product-comparison.v1',
 ];
 
 export function interactiveCardRendersBeforeProse(kind: string): boolean {
@@ -288,6 +290,42 @@ export interface PlacesCardBody {
   places: PlacesCardPlace[];
 }
 
+export const PRODUCT_COMPARISON_TOOL_NAME = 'compare_products';
+export const PRODUCT_COMPARISON_MIN_PRODUCTS = 2;
+export const PRODUCT_COMPARISON_MAX_PRODUCTS = 4;
+export const PRODUCT_COMPARISON_MAX_SPECS = 8;
+export const PRODUCT_COMPARISON_MAX_SOURCES = 4;
+export const PRODUCT_COMPARISON_TITLE_MAX_LENGTH = 200;
+export const PRODUCT_COMPARISON_NAME_MAX_LENGTH = 160;
+export const PRODUCT_COMPARISON_BEST_FOR_MAX_LENGTH = 120;
+export const PRODUCT_COMPARISON_MERCHANT_MAX_LENGTH = 80;
+export const PRODUCT_COMPARISON_SPEC_LABEL_MAX_LENGTH = 60;
+export const PRODUCT_COMPARISON_SPEC_VALUE_MAX_LENGTH = 160;
+
+export interface ProductComparisonPrice {
+  amount: number;
+  currency: string;
+  sourceUrl: string;
+}
+
+export interface ProductComparisonProduct {
+  id: string;
+  name: string;
+  bestFor?: string;
+  price?: ProductComparisonPrice;
+  merchant?: string;
+  buyUrl?: string;
+  specs: string[];
+  sources: InteractiveCardSource[];
+}
+
+export interface ProductComparisonCardBody {
+  title: string;
+  specLabels: string[];
+  products: ProductComparisonProduct[];
+  checkedAt: string;
+}
+
 export interface ItineraryToolInputStop {
   startTimeLabel: string;
   note: string;
@@ -340,6 +378,11 @@ export type KnownInteractiveCard =
       recognized: true;
       kind: 'places.v1';
       body: PlacesCardBody;
+    })
+  | (InteractiveCardCommon & {
+      recognized: true;
+      kind: 'product-comparison.v1';
+      body: ProductComparisonCardBody;
     });
 
 export interface UnrecognizedInteractiveCard extends InteractiveCardCommon {

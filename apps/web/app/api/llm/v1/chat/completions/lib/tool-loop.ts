@@ -358,6 +358,10 @@ import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import {
+  executeProductComparisonTool,
+  isProductComparisonTool,
+} from '@/lib/services/product-comparison-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   applyFreeTrialProviderBudget,
@@ -767,6 +771,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
     isMapSearchTool(toolName) ||
     isPlacesSearchTool(toolName) ||
     isItineraryTool(toolName) ||
+    isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -833,6 +838,7 @@ function canonicalToolCategory(
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isItineraryTool(toolName)) return 'other';
+  if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
@@ -1944,6 +1950,7 @@ async function runMcpTool(
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
     freeTrialSpend?: FreeTrialToolSpend;
     sourcePositionFor?: (url: string) => number | undefined;
+    isRetrievedSource?: (url: string) => boolean;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -2152,6 +2159,19 @@ async function runMcpTool(
           isError: true,
           ...(outcome.unaffordable ? { unavailable: true } : {}),
         };
+  }
+
+  if (isProductComparisonTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeProductComparisonTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      isRetrievedSource: executionContext?.isRetrievedSource ?? (() => false),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
@@ -2495,6 +2515,7 @@ export function isToolOffered(
     isMapSearchTool(qualifiedName) ||
     isPlacesSearchTool(qualifiedName) ||
     isItineraryTool(qualifiedName) ||
+    isProductComparisonTool(qualifiedName) ||
     isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
@@ -3711,6 +3732,7 @@ export async function* runToolLoop(
   // Whether answer text has reached the reader, which decides whether a later
   // transport failure is an interruption or a model that was never reached.
   let publicTextEmitted = false;
+  const nativeSourceKeys = new Set<string>();
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
@@ -3737,6 +3759,7 @@ export async function* runToolLoop(
       );
     }
     for (const result of entry.serverToolResults ?? []) {
+      for (const source of result.sources) nativeSourceKeys.add(normalizeSourceUrlKey(source.url));
       const enrichedTitleSources = await enrichWebSearchResultTitles(result.sources);
       yield encoder.encode(
         eventStream.emit({
@@ -3797,6 +3820,10 @@ export async function* runToolLoop(
     sourcePositionFor(url);
     deliveredSourceKeys.add(normalizeSourceUrlKey(url));
   }
+  const isRetrievedSource = (url: string): boolean => {
+    const key = normalizeSourceUrlKey(url);
+    return deliveredSourceKeys.has(key) || nativeSourceKeys.has(key);
+  };
   const toolGovernor = createToolTurnGovernor(resolveTurnToolCallCap(agiWorkTurn));
   // Provider-native grounding is the model's own decision, so it is counted per
   // step from what the stream reports rather than from a tool call we made.
@@ -4492,6 +4519,7 @@ export async function* runToolLoop(
               },
               ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
+              isRetrievedSource,
               loadSkillInstallOverrides,
               queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone

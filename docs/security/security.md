@@ -87,6 +87,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `web_search`         | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `search_maps`        | asks                   | runs                           | read, reversible                                                                 |
 | `plan_itinerary`     | asks                   | runs                           | read, reversible                                                                 |
+| `compare_products`   | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`          | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `execute_code`       | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
 | `write_file`         | asks                   | asks                           | write, not reversible                                                            |
