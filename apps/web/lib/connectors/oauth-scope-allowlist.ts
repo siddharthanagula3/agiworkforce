@@ -227,6 +227,7 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   'epic-fhir': SMART_ON_FHIR_PATIENT_SCOPES,
   cerner: SMART_ON_FHIR_PATIENT_SCOPES,
   healthex: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, 'patient/*.read'],
+  'bank-accounts': ['transactions'],
 };
 
 /**
