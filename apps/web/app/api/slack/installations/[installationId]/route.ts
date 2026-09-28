@@ -3,6 +3,8 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { ManagedCloudSlackInstallationRemovedSchema } from '@agiworkforce/cloud-contracts';
+
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -48,7 +50,9 @@ async function handleUninstall(request: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({ removed: removed.id });
+  return NextResponse.json(
+    ManagedCloudSlackInstallationRemovedSchema.parse({ removed: removed.id }),
+  );
 }
 
 export const DELETE = withErrorHandler(handleUninstall);

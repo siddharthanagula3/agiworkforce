@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
 import { ResearchActivity } from './ResearchActivity';
+import {
+  ResearchRunControlsProvider,
+  type ResearchRunActionHandler,
+} from './research-run-controls';
 
 function research(overrides: Partial<MessageResearchState> = {}): MessageResearchState {
   return {
@@ -229,5 +233,47 @@ describe('ResearchActivity plan approval', () => {
     render(<ResearchActivity isStreaming={false} research={paused()} />);
 
     expect(screen.queryByTestId('research-plan-start')).toBeNull();
+  });
+});
+
+describe('ResearchActivity guidance the run never read', () => {
+  it('offers to send guidance a finished run never read as a new message, only on click', async () => {
+    const act = vi.fn<ResearchRunActionHandler>(async () => true);
+    const controls = { act, connectorOptions: [] };
+    const { rerender } = render(
+      <ResearchRunControlsProvider value={controls}>
+        <ResearchActivity messageId="message-1" isStreaming research={research()} />
+      </ResearchRunControlsProvider>,
+    );
+
+    await userEvent.click(screen.getByTestId('research-steer'));
+    await userEvent.type(screen.getByTestId('research-steer-input'), 'Cover the third quarter');
+    await userEvent.click(screen.getByTestId('research-steer-send'));
+    expect(act).toHaveBeenCalledWith('message-1', {
+      kind: 'steer',
+      guidance: 'Cover the third quarter',
+    });
+
+    rerender(
+      <ResearchRunControlsProvider value={controls}>
+        <ResearchActivity
+          messageId="message-1"
+          isStreaming={false}
+          research={research({ phase: 'complete', label: 'Research complete' })}
+        />
+      </ResearchRunControlsProvider>,
+    );
+
+    expect(screen.getByTestId('research-steer-unread')).toHaveTextContent(
+      'Not read before the task finished',
+    );
+    expect(act).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByTestId('research-steer-send-new'));
+    expect(act).toHaveBeenLastCalledWith('message-1', {
+      kind: 'sendAsNew',
+      guidance: 'Cover the third quarter',
+    });
+    expect(screen.queryByTestId('research-steer-unread')).not.toBeInTheDocument();
   });
 });

@@ -3,7 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
-import { ManagedCloudScheduleRunApprovalSchema } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedCloudScheduleRunApprovalSchema,
+  ManagedCloudSlackRunDecisionSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -75,7 +78,13 @@ async function handleDecision(request: NextRequest, context: RouteContext) {
   });
 
   after(resume);
-  return NextResponse.json({ runId, decision: parsed.data.decision, status: 'resuming' });
+  return NextResponse.json(
+    ManagedCloudSlackRunDecisionSchema.parse({
+      runId,
+      decision: parsed.data.decision,
+      status: 'resuming',
+    }),
+  );
 }
 
 export const POST = withErrorHandler(handleDecision);

@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import {
+  ConnectorCredentialStatusResponseSchema,
+  SaveConnectorCredentialResponseSchema,
+  connectorCredentialsPath,
+  connectorErrorMessage,
+  type ConnectorCredentialStatusResponse,
+  type SaveConnectorCredentialRequest,
+  type SaveConnectorCredentialResponse,
+} from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -10,8 +19,6 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 import { invalidateConnectorsCache } from '../hooks/use-connectors';
 
-const CONNECTORS_API_PATH = '/api/connectors';
-const CREDENTIALS_SEGMENT = 'credentials';
 const CSRF_HEADER = 'x-csrf-token';
 const JSON_CONTENT_TYPE = 'application/json';
 const SHOWN_TOOL_NAMES = 6;
@@ -33,37 +40,12 @@ const CONNECTED_PREFIX = 'Connected.';
 const TOOLS_SUFFIX = 'tools discovered';
 const NO_TOOLS_COPY = 'The server answered but lists no tools yet.';
 
-interface CredentialSpecView {
-  connectorId: string;
-  name: string;
-  documentationUrl: string | null;
-  connected: boolean;
-  headerName: string;
-  valuePrefix: string;
-  placement: string;
-  source: string;
-  description: string | null;
-}
+const SaveResultSchema = SaveConnectorCredentialResponseSchema.pick({
+  toolCount: true,
+  toolNames: true,
+});
 
-interface SaveResult {
-  toolCount: number;
-  toolNames: string[];
-}
-
-interface ErrorBody {
-  error?: { message?: string } | string;
-  message?: string;
-}
-
-export function credentialsPath(connectorId: string): string {
-  return `${CONNECTORS_API_PATH}/${encodeURIComponent(connectorId)}/${CREDENTIALS_SEGMENT}`;
-}
-
-function errorMessage(body: ErrorBody | null, fallback: string): string {
-  if (!body) return fallback;
-  if (typeof body.error === 'string') return body.error;
-  return body.error?.message ?? body.message ?? fallback;
-}
+type SaveResult = Pick<SaveConnectorCredentialResponse, 'toolCount' | 'toolNames'>;
 
 export interface ConnectorApiKeyFormProps {
   connectorId: string;
@@ -77,7 +59,7 @@ export function ConnectorApiKeyForm({
   onCancel,
 }: ConnectorApiKeyFormProps) {
   const inputId = useId();
-  const [spec, setSpec] = useState<CredentialSpecView | null>(null);
+  const [spec, setSpec] = useState<ConnectorCredentialStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -90,12 +72,13 @@ export function ConnectorApiKeyForm({
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetch(credentialsPath(connectorId), { credentials: 'include', cache: 'no-store' })
+    fetch(connectorCredentialsPath(connectorId), { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
-        const body = (await response.json().catch(() => null)) as
-          (CredentialSpecView & ErrorBody) | null;
-        if (!response.ok || !body) throw new Error(errorMessage(body, LOAD_FAILED_COPY));
-        if (!cancelled) setSpec(body);
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(connectorErrorMessage(body, LOAD_FAILED_COPY));
+        const parsed = ConnectorCredentialStatusResponseSchema.safeParse(body);
+        if (!parsed.success) throw new Error(LOAD_FAILED_COPY);
+        if (!cancelled) setSpec(parsed.data);
       })
       .catch((reason: unknown) => {
         if (!cancelled) setLoadError(toUserMessage(reason, LOAD_FAILED_COPY));
@@ -117,18 +100,20 @@ export function ConnectorApiKeyForm({
       setSaveError(null);
       try {
         const csrfToken = await getCsrfToken();
-        const response = await fetch(credentialsPath(connectorId), {
+        const request: SaveConnectorCredentialRequest = { apiKey: key };
+        const response = await fetch(connectorCredentialsPath(connectorId), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
-          body: JSON.stringify({ apiKey: key }),
+          body: JSON.stringify(request),
         });
-        const body = (await response.json().catch(() => null)) as (SaveResult & ErrorBody) | null;
-        if (!response.ok || !body) {
-          setSaveError(errorMessage(body, SAVE_FAILED_COPY));
+        const body: unknown = await response.json().catch(() => null);
+        const parsed = response.ok ? SaveResultSchema.safeParse(body) : null;
+        if (!parsed?.success) {
+          setSaveError(connectorErrorMessage(body, SAVE_FAILED_COPY));
           return;
         }
-        const result = { toolCount: body.toolCount, toolNames: body.toolNames ?? [] };
+        const result: SaveResult = parsed.data;
         setSaved(result);
         setApiKey('');
         invalidateConnectorsCache();

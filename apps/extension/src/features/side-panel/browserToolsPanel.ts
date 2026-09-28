@@ -27,7 +27,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
        height; the panel scrolls instead. */
     flex-shrink: 0;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 10px;
+    border-radius: var(--corner-menu);
     background: var(--agi-ext-surface);
     overflow: hidden;
   }
@@ -43,20 +43,20 @@ export const BROWSER_TOOLS_PANEL_CSS = `
   .sp-bt-title {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 600;
     color: var(--agi-ext-text);
   }
 
   .sp-bt-action {
     flex-shrink: 0;
-    min-height: 26px;
+    min-height: var(--control-sm);
     padding: 4px 10px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
-    font-size: 11px;
+    font-size: var(--type-label-size);
     cursor: pointer;
   }
 
@@ -83,7 +83,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     border-bottom: 1px solid var(--agi-ext-border);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
-    font-size: 11px;
+    font-size: var(--type-label-size);
   }
 
   .sp-bt-list {
@@ -100,7 +100,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     gap: 2px;
     padding: 8px 12px;
     border-bottom: 1px solid var(--agi-ext-border);
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
     min-width: 0;
     overflow-wrap: anywhere;
@@ -115,16 +115,16 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     align-items: center;
     gap: 6px;
     color: var(--agi-ext-text-muted);
-    font-size: 10px;
+    font-size: var(--type-caption-size);
   }
 
   .sp-bt-tag {
     flex-shrink: 0;
     padding: 1px 6px;
-    border-radius: 999px;
+    border-radius: var(--corner-pill);
     background: var(--agi-ext-hover);
     color: var(--agi-ext-text-muted);
-    font-size: 10px;
+    font-size: var(--type-caption-size);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -147,8 +147,8 @@ export const BROWSER_TOOLS_PANEL_CSS = `
 
   .sp-bt-empty {
     padding: 12px;
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
     color: var(--agi-ext-text-muted);
   }
 
@@ -159,7 +159,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     border: none;
     background: none;
     color: var(--agi-ext-accent-text);
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     cursor: pointer;
     text-decoration: underline;
   }

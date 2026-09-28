@@ -118,7 +118,7 @@ export const RUNTIME_NOTE_LSP =
 export const RUNTIME_NOTE_STDIO_MCP =
   'This plugin starts a local MCP server process the web app cannot run, so install it from the released CLI.';
 export const RUNTIME_NOTE_NO_SKILLS =
-  'This plugin ships slash commands or agents for the CLI and no skills the web app can load, so install it from the released CLI.';
+  'This plugin ships only agents for the CLI and no skills or commands the web app can load, so install it from the released CLI.';
 
 export const INSTALLS_DISABLED_MESSAGE = 'Plugin installs are not enabled on this deployment yet';
 export const MARKETPLACE_UNAVAILABLE_MESSAGE =
@@ -174,7 +174,7 @@ export const UPLOAD_EMPTY_MESSAGE = 'The zip archive is empty.';
 export const UPLOAD_TOO_MANY_MEMBERS_MESSAGE = `The zip archive holds more than ${PLUGIN_UPLOAD_MAX_MEMBERS} files.`;
 export const UPLOAD_EXPANDS_TOO_FAR_MESSAGE = `The zip archive expands to more than ${PLUGIN_UPLOAD_MAX_TOTAL_BYTES} bytes.`;
 export const UPLOAD_NO_SKILLS_MESSAGE =
-  'This plugin declares no SKILL.md the web app can run, so there is nothing to install. A plugin needs at least one skills/<name>/SKILL.md.';
+  'This plugin has no skill or command the web app can run, so there is nothing to install. A plugin needs at least one skills/<name>/SKILL.md or commands/<name>.md.';
 export const SKILL_UPLOAD_UNREADABLE_MESSAGE = 'Attach a SKILL.md file, or a zip holding one.';
 export const SKILL_UPLOAD_NOT_UTF8_MESSAGE = 'That file is not valid UTF-8 text.';
 export const UPLOAD_NO_SKILL_FILE_MESSAGE =

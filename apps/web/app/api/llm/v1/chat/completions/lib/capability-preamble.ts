@@ -215,6 +215,8 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
     blocks.push(section('no_tools'));
   }
 
+  blocks.push(section('artifact_runtime'));
+
   if (input.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
   if (input.researchUnavailable) blocks.push(section('research_unavailable'));
 

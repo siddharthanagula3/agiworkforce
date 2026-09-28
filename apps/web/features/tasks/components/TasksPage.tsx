@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce/unified-chat';
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 import { createWebCloudTasksClient, setWebCloudTaskArchived } from '../services/cloud-tasks-client';
+import { handOffConversationSend } from '@/features/chat/lib/conversation-send-handoff';
 
 const RUN_QUERY_PARAM = 'run';
 
@@ -43,6 +44,10 @@ export function TasksPage() {
         router.push('/chat');
       },
       setRunArchived: (runId, archived) => setWebCloudTaskArchived(runId, archived),
+      sendAsNewMessage: (conversationId, text) => {
+        handOffConversationSend(conversationId, text);
+        router.push(`/chat/${conversationId}`);
+      },
       rerunWork: (goal) => {
         const store = useChatStore.getState();
         store.setDraftContent(goal.goal, PENDING_CONVERSATION_KEY);

@@ -187,6 +187,12 @@ export interface PluginSourceInstallResponse {
   plugins: PluginSourceInstalledPlugin[];
   omittedFiles?: string[];
   dependencies?: PluginInstalledDependency[];
+  connectors?: PluginConnectorRegistration;
+}
+
+export interface PluginConnectorRegistration {
+  added: Array<{ name: string; signInRequired: boolean }>;
+  failed: Array<{ name: string; reason: string }>;
 }
 
 export interface PluginInstalledDependency {

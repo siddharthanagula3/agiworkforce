@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
 import { isPausedResearchReport, type ResearchReport } from '@agiworkforce/types';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ResearchReportView } from './ResearchReportView';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -70,7 +71,10 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
           <span className="block truncate text-[13px] font-medium text-foreground">{label}</span>
           <span className="mt-0.5 block truncate text-caption text-muted-foreground">
             {formatCreatedAt(report.createdAt)}
-            {` · ${report.sourcesConsulted} ${report.sourcesConsulted === 1 ? 'source' : 'sources'}`}
+            {` · ${translateUiPlural('chat', 'counts.sources', report.sourcesConsulted, {
+              one: '{{count}} source',
+              other: '{{count}} sources',
+            })}`}
             {report.model ? ` · ${report.model}` : ''}
           </span>
         </span>

@@ -1,12 +1,19 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@agiworkforce/ui';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 
 import type { DeveloperRateLimit } from '../types';
 
-const WINDOW_UNITS: Readonly<Record<string, string>> = {
-  s: 'second',
-  m: 'minute',
-  h: 'hour',
-  d: 'day',
+const WINDOW_UNITS: Readonly<Record<string, { key: string; one: string; other: string }>> = {
+  s: { key: 'counts.windowSeconds', one: 'second', other: '{{count}} seconds' },
+  m: { key: 'counts.windowMinutes', one: 'minute', other: '{{count}} minutes' },
+  h: { key: 'counts.windowHours', one: 'hour', other: '{{count}} hours' },
+  d: { key: 'counts.windowDays', one: 'day', other: '{{count}} days' },
 };
 
 function windowLabel(window: string): string {
@@ -14,7 +21,7 @@ function windowLabel(window: string): string {
   const count = match ? Number(match[1]) : Number.NaN;
   const unit = match ? WINDOW_UNITS[match[2] ?? ''] : undefined;
   if (!unit || !Number.isFinite(count)) return window;
-  return count === 1 ? unit : `${count} ${unit}s`;
+  return translateUiPlural('settings', unit.key, count, { one: unit.one, other: unit.other });
 }
 
 export function RateLimitsPanel({ rateLimits }: { rateLimits: readonly DeveloperRateLimit[] }) {

@@ -981,6 +981,18 @@ enum Command {
         #[command(subcommand)]
         action: MemorySubcommand,
     },
+    /// List, show or open your cloud Code sessions by the id every client uses.
+    Code {
+        #[command(subcommand)]
+        action: CodeSubcommand,
+    },
+    /// List the devices signed in to your AGI Workforce account, whether each
+    /// is online, and what each can host.
+    Devices {
+        /// Print the devices as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Generate an image with your AGI Workforce account and save it to a file.
     ///
     /// Runs on the same hosted image route the web and mobile apps use, so the
@@ -1035,6 +1047,32 @@ enum Command {
         /// List the image models this account can generate with, and exit.
         #[arg(long)]
         list_models: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum CodeSubcommand {
+    /// List cloud Code sessions.
+    List {
+        /// Which sessions to list.
+        #[arg(long, default_value = "open", value_parser = clap::builder::PossibleValuesParser::new(cloud::code_sessions::STATUS_FILTERS))]
+        status: String,
+        /// Print the sessions as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show one cloud Code session: where it works and what each turn did.
+    Show {
+        /// Session id, as `agi code list` prints it.
+        id: String,
+        /// Print the session as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Open a cloud Code session in the browser.
+    Open {
+        /// Session id, as `agi code list` prints it.
+        id: String,
     },
 }
 
@@ -2019,6 +2057,64 @@ async fn print_hosted_history(limit: usize) {
     }
 }
 
+async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputFormat>) -> Result<()> {
+    use cloud::code_sessions;
+
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    match action {
+        CodeSubcommand::List { status, json } => {
+            let sessions = code_sessions::list(&client, status)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&sessions)?,
+                code_sessions::render_list(&sessions, status),
+                *json,
+                output,
+            )
+        }
+        CodeSubcommand::Show { id, json } => {
+            let detail = code_sessions::show(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&detail)?,
+                code_sessions::render_detail(&detail, &code_sessions::page_url(client.base(), id)),
+                *json,
+                output,
+            )
+        }
+        CodeSubcommand::Open { id } => {
+            code_sessions::show(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let url = code_sessions::page_url(client.base(), id);
+            if crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated())
+            {
+                println!("Opened {url}");
+            } else {
+                println!("Open this link to continue the session: {url}");
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn handle_devices_command(json: bool, output: Option<OutputFormat>) -> Result<()> {
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let devices = cloud::devices::list(&client)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    render_structured(
+        serde_json::to_value(&devices)?,
+        cloud::devices::render(&devices),
+        json,
+        output,
+    )
+}
+
 /// `agi image "<prompt>"`: one hosted generation, saved where the user asked.
 async fn handle_image_command(
     command: cloud::image::ImageCommand,
@@ -2345,7 +2441,7 @@ async fn handle_projects_command(
             registry.link_cloud_project(&cwd, &found.id)?;
             registry.save(&home)?;
             println!(
-                "{} is linked to the account project '{}'.",
+                "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
                 cwd.display(),
                 found.name
             );
@@ -5152,6 +5248,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Projects { action } => handle_projects_command(action, cli.output).await,
             Command::Artifacts { action } => handle_artifacts_command(action, cli.output).await,
             Command::Memory { action } => handle_memory_command(action).await,
+            Command::Devices { json } => handle_devices_command(*json, cli.output).await,
+            Command::Code { action } => handle_code_command(action, cli.output).await,
             Command::Image {
                 prompt,
                 out,

@@ -5,7 +5,7 @@ import { useReducedMotion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { isAllowedItineraryRouteUrl } from '@agiworkforce/cloud-contracts';
 import { CircleAlert, MapPinned, Navigation } from '@agiworkforce/icons';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import type {
   ItineraryCardBody,
   ItineraryRoute,
@@ -46,9 +46,10 @@ function unresolvedLabel(place: PlaceIdentity | undefined): string {
 function routeUnavailableMessage(route: ItineraryRoute): string | null {
   if (route.status === 'available' || route.reason === 'too_few_stops') return null;
   if (route.reason === 'unresolved_stops') {
-    return route.unresolvedStopCount === 1
-      ? 'No route, because one place is missing from the map.'
-      : `No route, because ${route.unresolvedStopCount} places are missing from the map.`;
+    return translateUiPlural('chat', 'counts.unresolvedStops', route.unresolvedStopCount, {
+      one: 'No route, because one place is missing from the map.',
+      other: 'No route, because {{count}} places are missing from the map.',
+    });
   }
   return 'No route is available for this plan.';
 }

@@ -199,6 +199,10 @@ export const CloudAgentRunSteerResponseSchema = z.object({
   steer: CloudAgentRunSteerSchema,
 });
 
+export const CloudAgentRunSteerWithdrawResponseSchema = z.object({
+  run: CloudAgentRunSchema,
+});
+
 export type CloudAgentOriginSurface = z.infer<typeof CloudAgentOriginSurfaceSchema>;
 export type CloudAgentWorkMode = z.infer<typeof CloudAgentWorkModeSchema>;
 export type CloudAgentRun = z.infer<typeof CloudAgentRunSchema>;

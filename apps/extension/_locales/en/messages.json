@@ -1731,10 +1731,6 @@
       }
     }
   },
-  "spActivityStepNeedsInput": {
-    "message": "A connector asked for details before this step can continue.",
-    "description": "Activity step detail while a connector waits for details from the user"
-  },
   "spActivityRequestHeading": {
     "message": "Request",
     "description": "Heading above the input a tool received"
@@ -3130,5 +3126,131 @@
         "example": "3"
       }
     }
+  },
+  "spAttachmentModelImageLimit_one": {
+    "message": "$MODEL$ accepts one image in a message. Remove the others to send.",
+    "description": "The chosen model accepts fewer images than are attached, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "model": {
+        "content": "$2",
+        "example": "the chosen model"
+      }
+    }
+  },
+  "spAttachmentModelImageLimit_other": {
+    "message": "$MODEL$ accepts up to $COUNT$ images in a message. Remove some to send.",
+    "description": "The chosen model accepts fewer images than are attached, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      },
+      "model": {
+        "content": "$2",
+        "example": "the chosen model"
+      }
+    }
+  },
+  "spConnectorInputHeading": {
+    "message": "$SERVER$ needs your input",
+    "description": "Heading of a connector's request for details in the middle of a reply",
+    "placeholders": {
+      "server": {
+        "content": "$1",
+        "example": "GitHub"
+      }
+    }
+  },
+  "spConnectorInputForTool": {
+    "message": "For $TOOL$",
+    "description": "Names the connector tool that asked for details",
+    "placeholders": {
+      "tool": {
+        "content": "$1",
+        "example": "Create Issue"
+      }
+    }
+  },
+  "spConnectorInputCustomServer": {
+    "message": "Custom connector",
+    "description": "Name shown for a connector the user added themselves"
+  },
+  "spConnectorInputExpired": {
+    "message": "This request is no longer active.",
+    "description": "A connector's request for details can no longer be answered"
+  },
+  "spConnectorInputUnsupported": {
+    "message": "This request can’t be answered here.",
+    "description": "A connector asked for details in a form the side panel cannot show"
+  },
+  "spConnectorInputOptional": {
+    "message": "(optional)",
+    "description": "Marks a connector form field that may be left empty"
+  },
+  "spConnectorInputChooseOne": {
+    "message": "Choose one",
+    "description": "Placeholder of a required connector form choice"
+  },
+  "spConnectorInputNotSet": {
+    "message": "Not set",
+    "description": "Empty option of an optional connector form choice"
+  },
+  "spConnectorInputPunycode": {
+    "message": "This address uses characters that can imitate another site. Check the domain before you open it.",
+    "description": "Warning under a connector link whose domain uses lookalike characters"
+  },
+  "spConnectorInputOpenLink": {
+    "message": "Open $HOST$",
+    "description": "Button that opens the page a connector asked the user to visit",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "github.com"
+      }
+    }
+  },
+  "spConnectorInputLinkOpened": {
+    "message": "Finish in the new tab, then continue here.",
+    "description": "Shown after the user opens a connector's link"
+  },
+  "spConnectorInputLinkUnopenable": {
+    "message": "This link can’t be opened from here.",
+    "description": "A connector's link is not a secure web address the side panel will open"
+  },
+  "spConnectorInputOpenLinkFirst": {
+    "message": "Open the link to continue.",
+    "description": "Continue stays unavailable until the user opens the connector's link"
+  },
+  "spConnectorInputSent": {
+    "message": "Sent. The reply continues once every request in it is answered.",
+    "description": "The user answered this connector request while another in the same reply still waits"
+  },
+  "spConnectorInputSubmit": {
+    "message": "Submit",
+    "description": "Sends the details a connector asked for"
+  },
+  "spConnectorInputContinue": {
+    "message": "Continue",
+    "description": "Tells a connector the user finished the step on its page"
+  },
+  "spConnectorInputSending": {
+    "message": "Sending",
+    "description": "The answer to a connector request is being sent"
+  },
+  "spConnectorInputDecline": {
+    "message": "Decline",
+    "description": "Refuses to give a connector the details it asked for"
+  },
+  "spConnectorInputCancel": {
+    "message": "Cancel",
+    "description": "Dismisses a connector's request for details without answering"
+  },
+  "spConnectorInputSendFailed": {
+    "message": "Your answer could not be sent. Try again.",
+    "description": "The side panel could not hand the answer to a connector request to the background worker"
   }
 }

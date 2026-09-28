@@ -4,6 +4,7 @@ import {
   CLI_NOT_EXECUTABLE_MARKER,
   CLI_NOT_FOUND_MARKER,
   type LocalRuntimeClient,
+  type ThreadSearchResults,
 } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
@@ -60,9 +61,16 @@ export interface ResolvedDeveloperSession {
   cwd: string;
 }
 
-interface SessionListingFailure {
+export interface SessionListingFailure {
   folderName: string;
   reason: string;
+}
+
+export type SessionSearchHit = ThreadSearchResults['hits'][number];
+
+export interface SessionListing<T> {
+  items: T[];
+  failures: SessionListingFailure[];
 }
 
 export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -137,6 +145,77 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     return pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   }
 
+  async getArchivedThreads(): Promise<SessionListing<ThreadSummary>> {
+    const failures: SessionListingFailure[] = [];
+    const pages = await Promise.all(
+      getAllWorkspaceFolders().map(async (folder) => {
+        try {
+          const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
+          const page = await runtime.listThreads({
+            cwd: folder.uri.fsPath,
+            limit: 100,
+            includeArchived: true,
+          });
+          const archived = page.threads.filter(
+            (thread) =>
+              thread.status === 'archived' && isSameWorkspacePath(folder.uri.fsPath, thread.cwd),
+          );
+          for (const thread of archived) {
+            this.runtimeByThread.set(thread.id, { runtime, cwd: folder.uri.fsPath });
+          }
+          return archived;
+        } catch (error) {
+          failures.push({ folderName: folder.name, reason: describeListingFailure(error) });
+          return [];
+        }
+      }),
+    );
+    return {
+      items: pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+      failures,
+    };
+  }
+
+  async searchThreads(query: string): Promise<SessionListing<SessionSearchHit>> {
+    const failures: SessionListingFailure[] = [];
+    const pages = await Promise.all(
+      getAllWorkspaceFolders().map(async (folder) => {
+        try {
+          const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
+          const { hits } = await runtime.searchThreads(query);
+          const owned = hits.filter((hit) =>
+            isSameWorkspacePath(folder.uri.fsPath, hit.thread.cwd),
+          );
+          for (const hit of owned) {
+            this.runtimeByThread.set(hit.thread.id, { runtime, cwd: folder.uri.fsPath });
+          }
+          return owned;
+        } catch (error) {
+          failures.push({ folderName: folder.name, reason: describeListingFailure(error) });
+          return [];
+        }
+      }),
+    );
+    return {
+      items: pages
+        .flat()
+        .sort((a, b) => Date.parse(b.thread.updatedAt) - Date.parse(a.thread.updatedAt)),
+      failures,
+    };
+  }
+
+  async restoreThread(threadId: string): Promise<boolean> {
+    let owner = this.runtimeByThread.get(threadId);
+    if (owner === undefined) {
+      await this.getArchivedThreads();
+      owner = this.runtimeByThread.get(threadId);
+    }
+    if (owner === undefined) return false;
+    await owner.runtime.unarchiveThread(threadId);
+    this.refresh();
+    return true;
+  }
+
   async readThread(threadId: string): Promise<ThreadReadResponse | undefined> {
     return (await this.resolveThread(threadId))?.response;
   }
@@ -163,14 +242,18 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
    * Fork keeps the original where it is, so the owner map is not rewritten:
    * the copy belongs to the same runtime and is picked up by the refresh.
    */
-  async forkThread(threadId: string, title?: string): Promise<string | null> {
+  async forkThread(
+    threadId: string,
+    title?: string,
+    throughMessageIndex?: number,
+  ): Promise<string | null> {
     let owner = this.runtimeByThread.get(threadId);
     if (owner === undefined) {
       await this.getThreads();
       owner = this.runtimeByThread.get(threadId);
     }
     if (owner === undefined) return null;
-    const forked = await owner.runtime.forkThread(threadId, title);
+    const forked = await owner.runtime.forkThread(threadId, title, throughMessageIndex);
     this.runtimeByThread.set(forked.id, owner);
     this.refresh();
     return forked.id;
@@ -193,6 +276,10 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     let owner = this.runtimeByThread.get(threadId);
     if (owner === undefined) {
       await this.getThreads();
+      owner = this.runtimeByThread.get(threadId);
+    }
+    if (owner === undefined) {
+      await this.getArchivedThreads();
       owner = this.runtimeByThread.get(threadId);
     }
     if (owner === undefined) return false;

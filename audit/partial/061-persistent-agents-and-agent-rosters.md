@@ -40,17 +40,15 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`
 
 - Done when: Each agent has a user-set name and avatar shown wherever it appears.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Agents have a name from the file frontmatter but no avatar or other visual identity. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:21-40`, `apps/cli/src/agents.rs:502-510`
 
 ## S61.04: Role description.
 
@@ -98,17 +96,15 @@ Code: `apps/cli/src/agents.rs:21-40`, `apps/cli/src/agents.rs:502-510`
 
 - Done when: Agents can use the account-level Skills, and the user can see which ones.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Agent definitions have no skills field or listing; an agent simply inherits whatever skills the session loads. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:21-40`
 
 ## S61.11: Presence/activity indicator.
 
@@ -144,33 +140,29 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`
 
 - Done when: Several agents can take part in one conversation with the user.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Teams mode exposes send_message/read_messages tools, but nothing ever spawns a teammate (spawn_teammate has no caller and ignores its prompt), so messages fail with "Sender is not a teammate". | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:346-349`, `apps/cli/src/teams.rs:153-168`
 
 ## S61.15: Chief-of-staff/coordinator pattern.
 
 - Done when: A coordinator agent routes work to other agents and reports back to the user.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The main session can call named agents through the agent tool, but there is no persistent coordinator and teams mode cannot spawn teammates. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1868-1879`, `apps/cli/src/teams.rs:153-168`
 
 ## S61.16: Specialist-agent delegation.
 
@@ -190,33 +182,31 @@ Code: `apps/cli/src/agent/chat.rs:1868-1879`, `apps/cli/src/teams.rs:153-168`
 
 - Done when: Agents can send each other messages that the receiving agent acts on, visible to the user.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Teams mode exposes send_message/read_messages tools, but nothing ever spawns a teammate (spawn_teammate has no caller and ignores its prompt), so messages fail with "Sender is not a teammate". | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/tools.rs:8-13`, `apps/cli/src/teams.rs:186-202`, `apps/cli/src/teams.rs:153-168`
 
 ## S61.18: Human escalation.
 
 - Done when: An agent can escalate a decision to the user and wait for the answer.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
-| cli | partial | A named agent can only reach the user through ordinary tool-approval prompts; there is no escalation channel or inbox. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:415-426`, `apps/mobile/stores/connectionStore.ts:614-624`, `apps/cli/src/tui/widgets/approval_overlay.rs:157-167`
+Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:415-426`, `apps/mobile/stores/connectionStore.ts:614-624`
 
 ## S61.19: Agent pause/disable.
 
@@ -238,30 +228,28 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:563-569`
 
 - Done when: The user can set resource limits (turns, spend) per agent and they are enforced.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | F1: the cited apply_to_subagent_session caps max_turns only; the criterion names turns and spend per agent. AgentDefinition (agents.rs:21-40) has no budget field and the only spend cap is the session-level --max-budget-usd (agent/mod.rs:158), which is not per agent. The auditor's own note admits 'no spend cap per agent': partial. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:117-141`, `apps/cli/src/tui/tui_app.rs:2947-2955`
 
 ## S61.22: Agent activity history.
 
 - Done when: The user can review the history of what each agent did.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
-| cli | partial | Subagent runs are appended to an audit log file, but no command shows an agent's activity history. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:233-239`, `apps/mobile/stores/connectionStore.ts:614-624`, `apps/cli/src/subagent.rs:367-373`
+Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:233-239`, `apps/mobile/stores/connectionStore.ts:614-624`
