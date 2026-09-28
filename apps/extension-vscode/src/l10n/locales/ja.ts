@@ -316,6 +316,50 @@ const ja = {
     'このセッションを引き継げませんでした。もう一度送信して再試行してください。',
   'sessionSync.stopBeforeTerminal':
     'ターミナルでこのセッションを続ける前に、実行中の応答を停止してください。',
+  'remote.title': 'リモートコントロール',
+  'remote.intro':
+    'スマートフォンをペアリングすると、このウィンドウのフォルダーにある AGI セッションを追跡できます。ステップの承認、差分・テスト結果・新しいファイルの確認、次のターンの指示ができます。',
+  'remote.howToPair':
+    'スマートフォンで AGI Workforce アプリを開き、「Pair with Desktop」を選んでこのコードをスキャンしてください。コードは 1 回だけ有効で、数分で期限切れになります。',
+  'remote.qrLabel': 'ペアリング用 QR コード',
+  'remote.pairingCode': 'ペアリングコード',
+  'remote.copyLink': 'ペアリングリンクをコピー',
+  'remote.linkCopied':
+    'AGI Workforce: ペアリングリンクをコピーしました。スマートフォンの AGI Workforce アプリに貼り付けてください。',
+  'remote.noPairing':
+    'AGI Workforce: 待機中のペアリングはありません。新しいコードを取得するにはリモートコントロールを開始してください。',
+  'remote.connected': '{phone} に接続しました。',
+  'remote.yourPhone': 'お使いのスマートフォン',
+  'remote.reconnecting':
+    '接続が切れました。スマートフォンが中断したところから再開できるよう再接続しています。',
+  'remote.pair': 'スマートフォンをペアリング',
+  'remote.pairAgain': 'もう一度ペアリング',
+  'remote.cancelPairing': 'ペアリングをキャンセル',
+  'remote.disconnect': 'スマートフォンの接続を解除',
+  'remote.stop': 'リモートコントロールを停止',
+  'remote.disconnectTitle': '{phone} の接続を解除しますか？',
+  'remote.disconnectConsequence':
+    'スマートフォンはこのウィンドウから切断され、セッションの追跡や指示ができなくなります。再接続するには、新しいコードでペアリングしてください。',
+  'remote.starting': 'リモートコントロールを開始しています',
+  'remote.startFailed': 'AGI Workforce: リモートコントロールを開始できませんでした。{reason}',
+  'remote.pairFailed': 'ペアリングを開始できませんでした。',
+  'remote.signInFirst':
+    'AGI Workforce: 先にサインインしてください。リモートコントロールはアカウントを通じてスマートフォンをペアリングします。',
+  'remote.trustFirst':
+    'AGI Workforce: スマートフォンがこのワークスペースでセッションを実行する前に、ワークスペースを信頼してください。',
+  'remote.openFolderFirst':
+    'AGI Workforce: 先にフォルダーを開いてください。リモートコントロールはこのウィンドウのフォルダーでセッションを実行します。',
+  'remote.folderClosed': 'そのフォルダーはこのウィンドウで開かれていません。',
+  'remote.runtimeUnavailable': 'AGI CLI はこのフォルダーのセッションを一覧表示できませんでした。',
+  'remote.runtimeHint':
+    'AGI CLI がインストールされサインイン済みであることを確認してから、スマートフォンで一覧を更新してください。',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'リモートコントロール: スマートフォンを待機中',
+  'remote.statusConnected': 'リモートコントロール: {phone}',
+  'remote.statusReconnecting': 'リモートコントロール: 再接続中',
+  'remote.statusError': 'リモートコントロール: 停止',
+  'remote.statusTooltip': 'リモートコントロールを表示',
+  'remote.attached_other': 'スマートフォンで {count} 件のセッションが開かれています。',
 };
 
 export default ja;

@@ -485,6 +485,52 @@ const fr = {
     'Impossible de prendre le contrôle de cette session. Renvoyez pour réessayer.',
   'sessionSync.stopBeforeTerminal':
     'Arrêtez la réponse en cours avant de poursuivre cette session dans le terminal.',
+  'remote.title': 'Contrôle à distance',
+  'remote.intro':
+    'Associez votre téléphone pour suivre les sessions AGI des dossiers de cette fenêtre : approuvez des étapes, lisez les diffs, les résultats de tests et les nouveaux fichiers, et orientez le tour suivant.',
+  'remote.howToPair':
+    "Ouvrez l'application AGI Workforce sur votre téléphone, choisissez « Pair with Desktop » et scannez ce code. Le code ne fonctionne qu'une fois et expire au bout de quelques minutes.",
+  'remote.qrLabel': "Code QR d'association",
+  'remote.pairingCode': "Code d'association",
+  'remote.copyLink': "Copier le lien d'association",
+  'remote.linkCopied':
+    "AGI Workforce : lien d'association copié. Collez-le dans l'application AGI Workforce de votre téléphone.",
+  'remote.noPairing':
+    "AGI Workforce : aucune association n'est en attente. Lancez le contrôle à distance pour obtenir un nouveau code.",
+  'remote.connected': 'Connecté à {phone}.',
+  'remote.yourPhone': 'votre téléphone',
+  'remote.reconnecting':
+    'Connexion perdue. Reconnexion pour que votre téléphone reprenne là où il en était.',
+  'remote.pair': 'Associer un téléphone',
+  'remote.pairAgain': 'Associer à nouveau',
+  'remote.cancelPairing': "Annuler l'association",
+  'remote.disconnect': 'Déconnecter le téléphone',
+  'remote.stop': 'Arrêter le contrôle à distance',
+  'remote.disconnectTitle': 'Déconnecter {phone} ?',
+  'remote.disconnectConsequence':
+    'Le téléphone est déconnecté de cette fenêtre et ne peut plus suivre ni orienter ses sessions. Pour le reconnecter, associez-le avec un nouveau code.',
+  'remote.starting': 'Démarrage du contrôle à distance',
+  'remote.startFailed': "AGI Workforce : le contrôle à distance n'a pas pu démarrer. {reason}",
+  'remote.pairFailed': "L'association n'a pas pu démarrer.",
+  'remote.signInFirst':
+    "AGI Workforce : connectez-vous d'abord. Le contrôle à distance associe votre téléphone par votre compte.",
+  'remote.trustFirst':
+    "AGI Workforce : faites confiance à cet espace de travail avant qu'un téléphone puisse y exécuter des sessions.",
+  'remote.openFolderFirst':
+    "AGI Workforce : ouvrez d'abord un dossier. Le contrôle à distance exécute les sessions dans les dossiers de cette fenêtre.",
+  'remote.folderClosed': "Ce dossier n'est plus ouvert dans cette fenêtre.",
+  'remote.runtimeUnavailable': "La CLI AGI n'a pas pu lister les sessions de ce dossier.",
+  'remote.runtimeHint':
+    'Vérifiez que la CLI AGI est installée et connectée, puis actualisez la liste sur votre téléphone.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Contrôle à distance : en attente de votre téléphone',
+  'remote.statusConnected': 'Contrôle à distance : {phone}',
+  'remote.statusReconnecting': 'Contrôle à distance : reconnexion',
+  'remote.statusError': 'Contrôle à distance : arrêté',
+  'remote.statusTooltip': 'Afficher le contrôle à distance',
+  'remote.attached_one': '{count} session ouverte sur le téléphone.',
+  'remote.attached_many': '{count} de sessions ouvertes sur le téléphone.',
+  'remote.attached_other': '{count} sessions ouvertes sur le téléphone.',
 };
 
 export default fr;
