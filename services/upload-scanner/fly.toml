@@ -28,6 +28,16 @@ kill_timeout = 20
     method = 'GET'
     path = '/health'
 
+[checks]
+  [checks.signatures]
+    type = 'http'
+    port = 8080
+    grace_period = '180s'
+    interval = '10m'
+    timeout = '5s'
+    method = 'get'
+    path = '/health/signatures'
+
 [[vm]]
   memory = '4gb'
   cpu_kind = 'shared'

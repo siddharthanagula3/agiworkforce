@@ -99,6 +99,21 @@ describe('POST /scan', () => {
     });
   });
 
+  it('answers not safe for a file clamd could not scan to the end', async () => {
+    const clamd = await fakeClamd({
+      answer: () => 'stream: Heuristics.Limits.Exceeded.MaxRecursion FOUND',
+    });
+    const url = await listen(clamd.address);
+
+    const response = await scan(url, randomBytes(64));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      safe: false,
+      detail: 'ClamAV detected Heuristics.Limits.Exceeded.MaxRecursion',
+    });
+  });
+
   it('refuses a request without the bearer token and never reaches clamd', async () => {
     const clamd = await fakeClamd();
     const url = await listen(clamd.address);
@@ -243,16 +258,23 @@ describe('GET /health', () => {
     });
   });
 
-  it('turns unhealthy once the signatures are older than ClamAV warns about', async () => {
+  it('keeps serving on stale signatures and reports them as stale', async () => {
     const clamd = await fakeClamd();
     const url = await listen(clamd.address, {
       now: () => SIGNATURES_PUBLISHED_AT + SIGNATURE_MAX_AGE_MS + HOUR_MS,
     });
 
-    const response = await fetch(`${url}/health`);
+    const health = await fetch(`${url}/health`);
+    const scan = await fetch(`${url}/scan`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}` },
+      body: randomBytes(16),
+    });
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ status: 'stale' });
+    expect(health.status).toBe(200);
+    expect(await health.json()).toMatchObject({ status: 'stale', signatures: { ageHours: 169 } });
+    expect(scan.status).toBe(200);
+    expect(await scan.json()).toEqual({ safe: true });
   });
 
   it('turns unhealthy when clamd is not running', async () => {
@@ -269,6 +291,39 @@ describe('GET /health', () => {
     const url = await listen(clamd.address);
 
     const response = await fetch(`${url}/health`);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('GET /health/signatures', () => {
+  it('passes while the signatures are fresh', async () => {
+    const clamd = await fakeClamd();
+    const url = await listen(clamd.address, { now: () => SIGNATURES_PUBLISHED_AT + HOUR_MS });
+
+    const response = await fetch(`${url}/health/signatures`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: 'ok' });
+  });
+
+  it('fails once the signatures are older than ClamAV warns about', async () => {
+    const clamd = await fakeClamd();
+    const url = await listen(clamd.address, {
+      now: () => SIGNATURES_PUBLISHED_AT + SIGNATURE_MAX_AGE_MS + HOUR_MS,
+    });
+
+    const response = await fetch(`${url}/health/signatures`);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ status: 'stale' });
+  });
+
+  it('fails when clamd is not running', async () => {
+    const url = await listen(await stoppedClamd());
+
+    const response = await fetch(`${url}/health/signatures`);
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ status: 'unavailable' });
