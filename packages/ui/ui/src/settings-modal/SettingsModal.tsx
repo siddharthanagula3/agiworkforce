@@ -459,10 +459,11 @@ function AddCustomConnectorForm({
   adapter?: SettingsDataAdapter;
   onBack: () => void;
 }) {
-  const [name, setName] = useState('');
+  const preset = adapter?.customConnectorPreset ?? null;
+  const [name, setName] = useState(preset?.name ?? '');
   const [url, setUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(preset !== null);
   const [oauthClientId, setOauthClientId] = useState('');
   const [oauthClientSecret, setOauthClientSecret] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -581,6 +582,19 @@ function AddCustomConnectorForm({
             </a>
           )}
         </p>
+        {preset ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {preset.hint}{' '}
+            <a
+              href={preset.documentationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn('text-foreground underline underline-offset-2', FOCUS_RING)}
+            >
+              {preset.name} documentation
+            </a>
+          </p>
+        ) : null}
       </div>
 
       {/*
@@ -694,7 +708,7 @@ function AddCustomConnectorForm({
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/mcp"
+          placeholder={preset?.urlFormat ?? 'https://example.com/mcp'}
           aria-invalid={trimmedUrl.length > 0 && !urlValid}
           aria-describedby={
             trimmedUrl.length > 0 && !urlValid ? 'custom-connector-url-error' : undefined

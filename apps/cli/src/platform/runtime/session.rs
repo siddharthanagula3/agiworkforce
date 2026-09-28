@@ -51,9 +51,15 @@ static SESSION_FINGERPRINTS: std::sync::Mutex<
     Option<std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)>>,
 > = std::sync::Mutex::new(None);
 
-fn fingerprint_of(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+pub(crate) type SessionFingerprint = (u64, std::time::SystemTime);
+
+fn fingerprint_of(path: &Path) -> Option<SessionFingerprint> {
     let meta = fs::metadata(path).ok()?;
     Some((meta.len(), meta.modified().ok()?))
+}
+
+pub(crate) fn session_fingerprint(path: &Path) -> Option<SessionFingerprint> {
+    fingerprint_of(path)
 }
 
 fn remember_fingerprint(path: &Path) {

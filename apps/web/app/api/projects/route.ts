@@ -80,7 +80,8 @@ async function handleGetProjects(request: NextRequest) {
                   where c.project_id = p.id::text
                     and c.user_id = $1
                     and c.organization_id is not distinct from $5::uuid
-                    and c.deleted_at is null) as conversation_count
+                    and c.deleted_at is null
+                    and coalesce(c.is_temporary, false) = false) as conversation_count
            from user_projects p
           where p.deleted_at is null
              and p.organization_id is not distinct from $5::uuid

@@ -119,6 +119,7 @@ export function cloudCodeShareVisibilityFor(
 
 export interface CloudCodeSharedSession {
   visibility: CloudCodeSharedVisibility;
+  ownerName: string | null;
   title: string;
   repositoryUrl: string | null;
   workingBranch: string | null;

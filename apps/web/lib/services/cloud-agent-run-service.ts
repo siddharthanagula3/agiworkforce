@@ -2323,7 +2323,7 @@ export class CloudAgentRunSteerQueueFullError extends Error {
 
 export async function queueCloudAgentRunSteer(
   db: DatabaseAdapter,
-  input: { userId: string; runId: string; text: string },
+  input: { userId: string; organizationId: string | null; runId: string; text: string },
 ): Promise<{ run: CloudAgentRun; steer: CloudAgentRunSteer }> {
   const steerId = randomUUID();
   const rows = await db.query<CloudAgentRunRow>(
@@ -2332,6 +2332,7 @@ export async function queueCloudAgentRunSteer(
               jsonb_build_object('id', $4::text, 'text', $5::text, 'queued_at', now())
             )
       where id = $1 and user_id = $2
+        and organization_id is not distinct from $7::uuid
         and state = any($3::text[])
         and cancellation_requested_at is null
         and pause_requested_at is null
@@ -2350,6 +2351,7 @@ export async function queueCloudAgentRunSteer(
       steerId,
       input.text,
       MAX_CLOUD_AGENT_PENDING_STEERS,
+      input.organizationId,
     ],
   );
   const updated = rows[0] ? mapRun(rows[0]) : null;
@@ -2378,13 +2380,15 @@ export async function queueCloudAgentRunSteer(
 
 export async function takeCloudAgentRunSteers(
   db: DatabaseAdapter,
-  input: { userId: string; runId: string },
+  input: { userId: string; organizationId: string | null; runId: string },
 ): Promise<CloudAgentRunSteer[]> {
   const rows = await db.query<{ pending_steer: unknown }>(
     `with taken as (
        select id, pending_steer
          from public.cloud_agent_runs
-        where id = $1 and user_id = $2 and pending_steer is not null
+        where id = $1 and user_id = $2
+          and organization_id is not distinct from $3::uuid
+          and pending_steer is not null
         for update
      )
      update public.cloud_agent_runs runs
@@ -2392,7 +2396,7 @@ export async function takeCloudAgentRunSteers(
        from taken
       where runs.id = taken.id
       returning taken.pending_steer`,
-    [input.runId, input.userId],
+    [input.runId, input.userId, input.organizationId],
   );
   return mapPendingSteers(rows[0]?.pending_steer);
 }

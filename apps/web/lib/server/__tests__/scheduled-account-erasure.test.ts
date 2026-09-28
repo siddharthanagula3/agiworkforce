@@ -130,6 +130,8 @@ describe('eraseScheduledAccount', () => {
       mediaObjectsFailed: 0,
       backupObjectsFailed: 0,
       knowledgeObjectsFailed: 0,
+      exportObjectsDeleted: 0,
+      exportObjectsFailed: 0,
       avatarObjectsFailed: 0,
       cacheKeysFailed: 0,
     });

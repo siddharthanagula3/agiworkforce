@@ -240,6 +240,22 @@ interface HarnessRecord {
   apiKeyEnv?: string;
   gatewayId?: string;
   requestParameters?: readonly RequestParameter[];
+  mediaInput?: HarnessMediaInput;
+  responseFormats?: readonly HarnessResponseFormat[];
+  features?: Readonly<Record<string, HarnessFeatureRecord>>;
+}
+
+export type HarnessResponseFormat = 'json_object' | 'json_schema';
+
+interface HarnessFeatureRecord {
+  providerSupport: string;
+  implementation: string;
+}
+
+export interface HarnessMediaInput {
+  maxImagesPerRequest?: number;
+  documentMediaTypes?: readonly string[];
+  maxDocumentPagesPerRequest?: number;
 }
 
 export interface ProtocolHarness {
@@ -268,6 +284,22 @@ const harnessRecords = registry.harnesses as unknown as Readonly<Record<string, 
 
 export function getHarnessRequestParameters(harnessId: string): readonly RequestParameter[] {
   return harnessRecords[harnessId]?.requestParameters ?? [];
+}
+
+export function getHarnessMediaInput(harnessId: string): HarnessMediaInput {
+  return harnessRecords[harnessId]?.mediaInput ?? {};
+}
+
+export function getHarnessResponseFormats(harnessId: string): readonly HarnessResponseFormat[] {
+  return harnessRecords[harnessId]?.responseFormats ?? [];
+}
+
+export function harnessFeatureImplemented(harnessId: string, feature: string): boolean {
+  const record = harnessRecords[harnessId]?.features?.[feature];
+  return (
+    record?.implementation === 'implemented' &&
+    (record.providerSupport === 'native' || record.providerSupport === 'compatible')
+  );
 }
 
 function toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {

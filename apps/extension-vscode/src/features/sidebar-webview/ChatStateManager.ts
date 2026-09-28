@@ -29,6 +29,7 @@ import {
   type AgentMode,
   type DeveloperReasoningEffort,
   type LocalModelSummary,
+  type ThreadReadResponse,
   type ThreadSummary,
   type UsageMeter,
   type UserInput,
@@ -45,6 +46,7 @@ import {
   cliAcquisitionHint,
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
+  writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
   type ThreadCheckpointList,
@@ -220,6 +222,7 @@ export type WebviewToExtMessage =
       };
     }
   | { type: 'ready' }
+  | { type: 'viewFocused' }
   | { type: 'getModel' }
   | { type: 'openSettings' }
   | { type: 'openWorkspace' }
@@ -355,6 +358,17 @@ export type ExtToWebviewMessage =
         transcriptTruncated: boolean;
         messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
         plan?: PlanVisualization;
+      };
+    }
+  | {
+      type: 'transcriptRefreshed';
+      payload: {
+        conversation: {
+          transcriptTruncated: boolean;
+          messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
+          plan?: PlanVisualization;
+        };
+        notice: string;
       };
     }
   | {
@@ -678,16 +692,20 @@ export function buildUsageMeterPayload(
   };
 }
 
+interface DeveloperThreadState {
+  id: string;
+  cwd: string;
+  model: string;
+  providerBoundary: string;
+  trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>;
+  provider?: string;
+  runtime: LocalRuntimeClient;
+  updatedAt: string;
+}
+
 export class ChatStateManager {
-  private _thread?: {
-    id: string;
-    cwd: string;
-    model: string;
-    providerBoundary: string;
-    trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>;
-    provider?: string;
-    runtime: LocalRuntimeClient;
-  };
+  private _thread?: DeveloperThreadState;
+  private _transcriptSyncActive = false;
   private _activeTurn?: {
     threadId: string;
     turnId: string;
@@ -880,7 +898,13 @@ export class ChatStateManager {
             this._thread.model,
           );
           this._postSessionBoundary(this._thread.trustMode, this._thread.provider);
+          void this.syncStoredTranscript();
         }
+        break;
+      }
+
+      case 'viewFocused': {
+        await this.syncStoredTranscript();
         break;
       }
 
@@ -1902,27 +1926,14 @@ export class ChatStateManager {
         trustMode: resumed.trustMode,
         ...(resumed.provider === undefined ? {} : { provider: resumed.provider }),
         runtime: resolved.runtime,
+        updatedAt: resolved.response.thread.updatedAt,
       };
 
-      const plan = planFromThread(resolved.response.plan, resolved.response.todos);
-      const messages = normalizeTranscriptMessages(resolved.response.messages).map((message) => {
-        if (message.role !== 'assistant') return message;
-        const rating = rememberedAnswerRating(
-          this._context.globalState,
-          answerRatingId(resumed.id, message.text),
-        );
-        return rating === undefined ? message : { ...message, rating };
-      });
-      this._loadedConversation = {
-        threadId: resumed.id,
-        title: resumed.title,
-        ...(resumed.model === undefined ? {} : { model: resumed.model }),
-        trustMode: resumed.trustMode,
-        ...(resumed.provider === undefined ? {} : { provider: resumed.provider }),
-        transcriptTruncated: resolved.response.transcriptTruncated,
-        messages,
-        ...(plan === undefined ? {} : { plan }),
-      };
+      this._loadedConversation = this._conversationPayload(
+        resumed,
+        resumed.trustMode,
+        resolved.response,
+      );
       this._postLoadedConversation();
       this._post({ type: 'model', payload: { model } });
       this._postProviderBadgeForSession(resumed, model);
@@ -2920,6 +2931,7 @@ export class ChatStateManager {
       const providerBoundaryChanged =
         this._thread !== undefined && this._thread.providerBoundary !== requestedProviderBoundary;
       const samePersistedModel = this._thread?.model === requestedModel;
+      let threadCreated = false;
       if (
         this._thread === undefined ||
         this._thread.cwd !== cwd ||
@@ -2958,7 +2970,9 @@ export class ChatStateManager {
           trustMode: thread.trustMode,
           ...(thread.provider === undefined ? {} : { provider: thread.provider }),
           runtime,
+          updatedAt: thread.updatedAt,
         };
+        threadCreated = true;
         delete this._loadedConversation;
         this._postSessionBoundary(thread.trustMode, thread.provider);
         this._postProviderBadgeForSession(thread, requestedModel);
@@ -2967,6 +2981,11 @@ export class ChatStateManager {
       const thread = this._thread;
       if (thread === undefined) {
         throw new Error('The local runtime did not establish a developer session.');
+      }
+      if (!threadCreated) {
+        const writable = await this._prepareToWrite(thread);
+        if (!writable || conversationEpoch !== this._conversationEpoch) return false;
+        if (this._cancelBeforeTurnStart()) return false;
       }
       let activeTurnId: string | undefined;
       let terminal = false;
@@ -3143,8 +3162,13 @@ export class ChatStateManager {
       }
       return true;
     } catch (error) {
+      const holder = writerConflictHolder(error);
       this._postError(
-        error instanceof Error ? error.message : t('chatNotice.runtimeFailed'),
+        holder !== undefined
+          ? t('sessionSync.notSent', { client: holder })
+          : error instanceof Error
+            ? error.message
+            : t('chatNotice.runtimeFailed'),
         RUNTIME_FAILURE,
       );
       return false;
@@ -3173,17 +3197,137 @@ export class ChatStateManager {
       if (response.thread.provider === undefined) delete current.provider;
       else current.provider = response.thread.provider;
       current.providerBoundary = this._providerBoundaryForSession(response.thread, current.model);
-      this._loadedConversation = {
-        threadId,
-        title: response.thread.title,
-        model: current.model,
-        trustMode: response.thread.trustMode,
-        ...(response.thread.provider === undefined ? {} : { provider: response.thread.provider }),
-        transcriptTruncated: response.transcriptTruncated,
-        messages: normalizeTranscriptMessages(response.messages),
-      };
+      current.updatedAt = response.thread.updatedAt;
+      this._loadedConversation = this._conversationPayload(
+        { ...response.thread, model: current.model },
+        response.thread.trustMode,
+        response,
+      );
     } catch (error) {
       console.warn(`[AGI Workforce] failed to refresh developer session ${threadId}`, error);
+    }
+  }
+
+  private _conversationPayload(
+    summary: Pick<ThreadSummary, 'id' | 'title' | 'model' | 'provider'>,
+    trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>,
+    response: Pick<ThreadReadResponse, 'messages' | 'transcriptTruncated' | 'plan' | 'todos'>,
+  ): ConversationLoadedPayload {
+    const plan = planFromThread(response.plan, response.todos);
+    const messages = normalizeTranscriptMessages(response.messages).map((message) => {
+      if (message.role !== 'assistant') return message;
+      const rating = rememberedAnswerRating(
+        this._context.globalState,
+        answerRatingId(summary.id, message.text),
+      );
+      return rating === undefined ? message : { ...message, rating };
+    });
+    return {
+      threadId: summary.id,
+      title: summary.title,
+      ...(summary.model === undefined ? {} : { model: summary.model }),
+      trustMode,
+      ...(summary.provider === undefined ? {} : { provider: summary.provider }),
+      transcriptTruncated: response.transcriptTruncated,
+      messages,
+      ...(plan === undefined ? {} : { plan }),
+    };
+  }
+
+  public async syncStoredTranscript(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined || this._transcriptSyncActive || this.turnInFlight()) return;
+    this._transcriptSyncActive = true;
+    try {
+      const response = await thread.runtime.readThread(thread.id);
+      if (this._thread === thread && !this.turnInFlight()) {
+        this._adoptStoredTranscript(thread, response);
+      }
+    } catch (error) {
+      console.warn(`[AGI Workforce] failed to re-read developer session ${thread.id}`, error);
+    } finally {
+      this._transcriptSyncActive = false;
+    }
+  }
+
+  private async _prepareToWrite(thread: DeveloperThreadState): Promise<boolean> {
+    let response: ThreadReadResponse;
+    try {
+      response = await thread.runtime.readThread(thread.id);
+    } catch (error) {
+      console.warn(`[AGI Workforce] failed to re-read developer session ${thread.id}`, error);
+      return this._thread === thread;
+    }
+    if (this._thread !== thread) return false;
+    this._adoptStoredTranscript(thread, response);
+    const writer = response.thread.writer;
+    if (writer === undefined || writer.heldByThisHost || writer.stale) return true;
+    return this._takeOverWriter(thread, writer.holderLabel);
+  }
+
+  private _adoptStoredTranscript(thread: DeveloperThreadState, response: ThreadReadResponse): void {
+    if (response.thread.id !== thread.id || response.thread.updatedAt === thread.updatedAt) return;
+    thread.updatedAt = response.thread.updatedAt;
+    if (response.thread.trustMode === 'unknown') return;
+    const shown = this._loadedConversation;
+    const stored = this._conversationPayload(
+      { ...response.thread, model: thread.model },
+      response.thread.trustMode,
+      response,
+    );
+    this._loadedConversation = stored;
+    if (
+      shown === undefined ||
+      shown.threadId !== thread.id ||
+      sameTranscript(shown.messages, stored.messages)
+    ) {
+      return;
+    }
+    const writer = response.thread.writer;
+    this._post({
+      type: 'transcriptRefreshed',
+      payload: {
+        conversation: stored,
+        notice:
+          writer === undefined || writer.heldByThisHost
+            ? t('sessionSync.continuedElsewhere')
+            : t('sessionSync.continuedIn', { client: writer.holderLabel }),
+      },
+    });
+  }
+
+  private async _takeOverWriter(thread: DeveloperThreadState, holder: string): Promise<boolean> {
+    const takeOver = t('sessionSync.takeOver');
+    const choice = await vscode.window.showWarningMessage(
+      t('sessionSync.heldBy', { client: holder }),
+      { modal: true, detail: t('sessionSync.takeOverDetail', { client: holder }) },
+      takeOver,
+    );
+    if (this._thread !== thread) return false;
+    if (choice !== takeOver) {
+      this._postError(t('sessionSync.notSent', { client: holder }), RUNTIME_REFUSAL);
+      return false;
+    }
+    try {
+      await thread.runtime.takeOverWriter(thread.id);
+    } catch (error) {
+      this._postError(
+        error instanceof Error ? error.message : t('sessionSync.takeOverFailed'),
+        RUNTIME_FAILURE,
+      );
+      return false;
+    }
+    return this._thread === thread;
+  }
+
+  public async releaseForTerminal(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) return;
+    if (this.turnInFlight()) throw new Error(t('sessionSync.stopBeforeTerminal'));
+    try {
+      await thread.runtime.releaseWriter(thread.id);
+    } catch (error) {
+      console.warn(`[AGI Workforce] could not hand developer session ${thread.id} over`, error);
     }
   }
 
@@ -3431,6 +3575,19 @@ function normalizeTranscriptMessages(
     normalized.push({ role, text: message.text });
   }
   return normalized;
+}
+
+function sameTranscript(
+  shown: ConversationLoadedPayload['messages'],
+  stored: ConversationLoadedPayload['messages'],
+): boolean {
+  return (
+    shown.length === stored.length &&
+    shown.every(
+      (message, index) =>
+        message.role === stored[index]?.role && message.text === stored[index]?.text,
+    )
+  );
 }
 
 function contextFilesForWorkspace(cwd: string, editorFiles: readonly string[]): string[] {
