@@ -148,17 +148,15 @@ Code: `apps/cli/src/repl/slash_commands.rs:214-230`, `apps/cli/src/subagent.rs:4
 
 - Done when: Tasks or agents that need the user's input are surfaced first.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Runs waiting for approval show an inline card, but they are not sorted or filtered to the top; there is no "needs you" view. | ui |
-| desktop | partial | Same as web. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Runs waiting for approval get their own context value (for Approve/Reject), but are not sorted or grouped first. | ui |
-| chrome | partial | Waiting runs show an approval card, but the list is not ordered by needs-input. | ui |
+| vscode | partial | patches /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-vscode.patch and /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-chrome.patch (files held by p-sessions and p-contrast) | ui |
+| chrome | partial | patches /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-vscode.patch and /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-chrome.patch (files held by p-sessions and p-contrast) | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:727-742`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:59-63`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:34-36`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:676-686`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:104-104`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:802-802`
 
 ## S62.12: Full-transcript drill-down.
 
