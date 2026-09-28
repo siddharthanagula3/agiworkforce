@@ -1,4 +1,10 @@
 import {
+  CONNECTOR_DIRECTORY_PATH,
+  MANAGED_CLOUD_CONNECTORS_PATH,
+  connectorDirectoryEntryPath,
+  connectorDirectoryIconPath,
+} from '@agiworkforce/cloud-contracts';
+import {
   isUnverifiedCustomConnector,
   type ConnectedConnector,
   type DirectoryBadgeKind,
@@ -26,13 +32,10 @@ import type {
 } from '@/lib/connectors/directory/types';
 
 import {
-  CONNECTORS_PATH,
   CONNECTOR_CATEGORY_GROUP_ID,
   CONNECTOR_CATEGORY_GROUP_LABEL,
   CONNECTOR_COUNT_INDEXING_SUFFIX,
   CONNECTOR_COUNT_SUFFIX,
-  CONNECTOR_DIRECTORY_PATH,
-  CONNECTOR_ICON_PATH,
   CONNECTOR_INCLUDE_LOCAL_TOGGLE_ID,
   CONNECTOR_INCLUDE_LOCAL_TOGGLE_LABEL,
   CONNECTOR_REAUTHORIZATION_COPY,
@@ -204,7 +207,7 @@ export interface ConnectedConnectorsSnapshot {
 }
 
 export function connectorIconHref(record: DirectoryRecord): string | null {
-  return record.iconUrl ? `${CONNECTOR_ICON_PATH}?id=${encodeURIComponent(record.id)}` : null;
+  return record.iconUrl ? connectorDirectoryIconPath(record.id) : null;
 }
 
 export function connectorStateLabel(
@@ -753,7 +756,7 @@ export function toConnectorDetail(
 }
 
 export async function fetchConnectedConnectors(): Promise<ConnectedConnectorsSnapshot> {
-  const response = await fetch(CONNECTORS_PATH, { cache: 'no-store' });
+  const response = await fetch(MANAGED_CLOUD_CONNECTORS_PATH, { cache: 'no-store' });
   if (!response.ok)
     return { ids: new Set(), directoryIds: new Set(), setup: {}, pending: new Set() };
   const body = (await response.json()) as ConnectedConnectorsResponse;
@@ -794,11 +797,7 @@ export async function fetchConnectedConnectorIds(): Promise<Set<string>> {
 }
 
 export async function fetchConnectorRecord(id: string): Promise<DirectoryRecord | null> {
-  const path = id
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-  const response = await fetch(`${CONNECTOR_DIRECTORY_PATH}/${path}`, { cache: 'no-store' });
+  const response = await fetch(connectorDirectoryEntryPath(id), { cache: 'no-store' });
   if (!response.ok) return null;
   const body = (await response.json()) as { entry?: DirectoryRecord };
   return body.entry ?? null;

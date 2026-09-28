@@ -73,3 +73,16 @@ describe('every text token is readable on every surface it can sit on', () => {
     }
   }
 });
+
+describe('artifact change highlights keep their text readable on their own fill', () => {
+  for (const [themeName, theme] of Object.entries(THEMES)) {
+    for (const [text, fill] of [
+      ['diffAddedText', 'diffAddedFill'],
+      ['diffRemovedText', 'diffRemovedFill'],
+    ] as const) {
+      it(`${themeName}: ${text} on ${fill}`, () => {
+        expect(ratio(theme[text], theme[fill])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});

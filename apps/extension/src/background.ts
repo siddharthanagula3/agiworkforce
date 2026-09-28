@@ -132,10 +132,13 @@ import {
   createChromeManagedStreamKey,
   createChromeManagedChatDependencies,
   createChromeManagedApprovalDependencies,
+  createChromeManagedToolInputDependencies,
   executeChromeManagedChat,
   executeChromeManagedApproval,
+  executeChromeManagedToolInput,
   normalizeChromeManagedRoutingMetadata,
   type ChromeManagedChatResult,
+  type ChromeManagedResumeCallbacks,
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import {
@@ -3464,6 +3467,19 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'RESOLVE_CHAT_INPUT': {
+      const inputMsg = message as import('./types').ResolveChatInputMessage;
+      const owner = normalizeManagedCloudOwner(inputMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
+      try {
+        createChromeManagedStreamKey(inputMsg.clientInstanceId, inputMsg.id);
+      } catch {
+        return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+      }
+      void handleResolveChatApproval({ ...inputMsg, owner });
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'CANCEL_STREAM': {
       const cancelMsg = message as import('./types').CancelStreamMessage;
       const owner = normalizeManagedCloudOwner(cancelMsg.owner);
@@ -3956,12 +3972,18 @@ async function handleMessageAsync(
     }
 
     case 'LIST_MEMORIES' as ExtensionMessage['type']: {
-      const listed = await memoryList();
+      const listOffset = (message as unknown as { offset?: unknown }).offset;
+      const listed = await memoryList(
+        typeof listOffset === 'number' && Number.isInteger(listOffset) && listOffset > 0
+          ? listOffset
+          : 0,
+      );
       return {
         success: listed.status === 'ready',
         status: listed.status,
         memories: listed.memories,
         fromCache: listed.fromCache,
+        hasMore: listed.hasMore === true,
         error: listed.error,
       } as ExtensionResponse;
     }
@@ -5184,6 +5206,7 @@ async function handleChatMessage(
         previousTaskType: message.previousTaskType,
         conversationId: message.conversationId,
         assistantMessageId: message.assistantMessageId,
+        ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
@@ -5435,7 +5458,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
 }
 
 async function handleResolveChatApproval(
-  message: import('./types').ResolveChatApprovalMessage,
+  message: import('./types').ResolveChatApprovalMessage | import('./types').ResolveChatInputMessage,
 ): Promise<void> {
   const { clientInstanceId, id } = message;
   let streamKey: string;
@@ -5479,73 +5502,87 @@ async function handleResolveChatApproval(
   activeChatStreams.set(streamKey, activeStream);
 
   try {
-    const result = await executeChromeManagedApproval(
-      {
-        id,
-        run: message.cloudRun,
-        toolApprovals: message.toolApprovals,
-        ...(typeof message.guidance === 'string' ? { guidance: message.guidance } : {}),
-        signal: activeStream.controller.signal,
+    const onText = (text: string) =>
+      publishManagedChatChunk(streamKey, activeStream, id, {
+        text,
+        done: false,
+      });
+    const callbacks: ChromeManagedResumeCallbacks = {
+      onCodeExecution: (chunk) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          codeExecution: chunk.execution,
+        }),
+      onAgentEvent: (chunk) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          agentEvent: chunk.envelope,
+          ...(chunk.durableReplay ? { durableReplay: true } : {}),
+        }),
+      onGeneratedFiles: (chunk) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          generatedFiles: chunk.files,
+        }),
+      onInteractiveCard: (chunk) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          interactiveCard: chunk.card,
+        }),
+      onSources: (chunk) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          sources: { citations: chunk.citations, results: chunk.results },
+        }),
+      onRunReference: (cloudRun) => {
+        if (activeChatStreams.get(streamKey) !== activeStream) return;
+        activeStream.cloudRun = { ...cloudRun };
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          cloudRun,
+        });
       },
-      {
-        ...createChromeManagedApprovalDependencies(
-          (text) =>
-            publishManagedChatChunk(streamKey, activeStream, id, {
-              text,
-              done: false,
-            }),
-          {
-            onCodeExecution: (chunk) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                codeExecution: chunk.execution,
-              }),
-            onAgentEvent: (chunk) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                agentEvent: chunk.envelope,
-                ...(chunk.durableReplay ? { durableReplay: true } : {}),
-              }),
-            onGeneratedFiles: (chunk) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                generatedFiles: chunk.files,
-              }),
-            onInteractiveCard: (chunk) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                interactiveCard: chunk.card,
-              }),
-            onSources: (chunk) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                sources: { citations: chunk.citations, results: chunk.results },
-              }),
-            onRunReference: (cloudRun) => {
-              if (activeChatStreams.get(streamKey) !== activeStream) return;
-              activeStream.cloudRun = { ...cloudRun };
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                cloudRun,
-              });
+      onQuotaWarning: (quotaWarning) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          quotaWarning,
+        }),
+    };
+    const getResumeToken = async () => credential.token;
+    const result =
+      message.type === 'RESOLVE_CHAT_INPUT'
+        ? await executeChromeManagedToolInput(
+            {
+              id,
+              run: message.cloudRun,
+              toolInputs: message.toolInputs,
+              signal: activeStream.controller.signal,
             },
-            onQuotaWarning: (quotaWarning) =>
-              publishManagedChatChunk(streamKey, activeStream, id, {
-                text: '',
-                done: false,
-                quotaWarning,
-              }),
-          },
-        ),
-        getAuthToken: async () => credential.token,
-      },
-    );
+            {
+              ...createChromeManagedToolInputDependencies(onText, callbacks),
+              getAuthToken: getResumeToken,
+            },
+          )
+        : await executeChromeManagedApproval(
+            {
+              id,
+              run: message.cloudRun,
+              toolApprovals: message.toolApprovals,
+              ...(typeof message.guidance === 'string' ? { guidance: message.guidance } : {}),
+              signal: activeStream.controller.signal,
+            },
+            {
+              ...createChromeManagedApprovalDependencies(onText, callbacks),
+              getAuthToken: getResumeToken,
+            },
+          );
 
     if (result.status === 'success') {
       publishManagedChatChunk(streamKey, activeStream, id, {

@@ -11,7 +11,8 @@ vi.mock('../../hooks/use-connectors', () => ({
   invalidateConnectorsCache: () => invalidate(),
 }));
 
-import { ConnectorApiKeyForm, credentialsPath } from '../ConnectorApiKeyForm';
+import { connectorCredentialsPath as credentialsPath } from '@agiworkforce/cloud-contracts';
+import { ConnectorApiKeyForm } from '../ConnectorApiKeyForm';
 
 const RECORD_ID = 'ai.keenable/web-search';
 

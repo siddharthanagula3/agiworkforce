@@ -135,10 +135,10 @@ Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Waits on p-desktop-cli: approval/requested must say whether Always allow is saved for that request, ReviewDecision needs an always_allow answer, and the app-server needs permissions/list and permissions/remove over ~/.agiworkforce/permissions.toml and rules/user-approved.rules; VS Code then offers Always allow and a Saved approvals list | persistence, ui |
+| vscode | partial | partials/desktop-cli 6e04a0306: approval/requested carries alwaysAllowSaved, ReviewDecision takes always_allow, permissions/list and permissions/remove cover permissions.toml and rules/user-approved.rules (the TUI also offers Always Allow only where it saves). VS Code's Always allow button and Saved approvals list are p-sessions'. | ui |
 | chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
 
-Code: `apps/extension-vscode/src/features/permissions/approvalScope.ts:35-35`, `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/computer-use/approvalPolicy.ts:209-247`
+Code: `apps/cli/src/app_server/developer_host.rs:3841-3841`, `apps/cli/src/app_server/developer_host.rs:4564-4564`, `apps/cli/src/app_server/surfaces.rs:993-993`, `apps/cli/src/app_server/surfaces.rs:1036-1036`
 
 ## S86.25: Revoke all optional grants.
 

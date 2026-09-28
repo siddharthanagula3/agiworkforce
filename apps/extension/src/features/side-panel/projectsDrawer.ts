@@ -1,10 +1,12 @@
 import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import {
   createChromeProject,
   deleteChromeProject,
   listChromeProjectConversations,
   listChromeProjects,
+  updateChromeProject,
   CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS,
   CHROME_PROJECT_NAME_MAX_CHARS,
   type ChromeProjectConversation,
@@ -14,21 +16,21 @@ import { el } from './dom';
 
 export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-help {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
     margin-bottom: 8px;
   }
   .sp-drawer-projects-new-btn {
     background: var(--agi-ext-surface);
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 12px;
+    font-size: var(--type-label-size);
     padding: 6px 12px;
     cursor: pointer;
     margin-bottom: 8px;
-    transition: color 0.12s, border-color 0.12s;
+    transition: color var(--duration-instant), border-color var(--duration-instant);
   }
   .sp-drawer-projects-new-btn:hover {
     color: var(--agi-ext-accent-text);
@@ -40,16 +42,16 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-textarea {
     background: var(--agi-ext-surface);
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text);
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     padding: 6px 9px;
     outline: none;
     width: 100%;
     box-sizing: border-box;
   }
-  .sp-drawer-projects-textarea { resize: none; height: 60px; line-height: 1.4; }
+  .sp-drawer-projects-textarea { resize: none; height: 60px; line-height: var(--type-caption-height); }
   .sp-drawer-projects-input:focus,
   .sp-drawer-projects-textarea:focus { border-color: var(--agi-ext-focus); }
   .sp-drawer-projects-input::placeholder,
@@ -59,7 +61,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-project {
     background: var(--agi-ext-surface);
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     overflow: hidden;
   }
   .sp-drawer-project[data-active='true'] { border-color: var(--agi-ext-accent); }
@@ -73,7 +75,7 @@ export const PROJECTS_DRAWER_CSS = `
     border: none;
     color: var(--agi-ext-text);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     text-align: left;
     cursor: pointer;
   }
@@ -85,9 +87,9 @@ export const PROJECTS_DRAWER_CSS = `
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .sp-drawer-project-count { font-size: 12px; color: var(--agi-ext-text-muted); flex-shrink: 0; }
+  .sp-drawer-project-count { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
   .sp-drawer-project-active-tag {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-accent-text);
     flex-shrink: 0;
   }
@@ -101,36 +103,41 @@ export const PROJECTS_DRAWER_CSS = `
   }
   .sp-drawer-project-detail[hidden] { display: none; }
   .sp-drawer-project-text {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .sp-drawer-project-subtitle { font-size: 12px; color: var(--agi-ext-text); }
+  .sp-drawer-project-subtitle { font-size: var(--type-caption-size); color: var(--agi-ext-text); }
   .sp-drawer-project-chat {
     background: none;
     border: none;
     color: var(--agi-ext-text-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     text-align: left;
+    min-height: 24px;
     padding: 3px 0;
-    cursor: default;
+    cursor: pointer;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .sp-drawer-project-chat:hover { color: var(--agi-ext-accent-text); text-decoration: underline; }
+  .sp-drawer-project-chat:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+  .sp-drawer-project-meta { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); }
+  .sp-drawer-project-edit { display: flex; flex-direction: column; gap: 6px; }
   .sp-drawer-project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-drawer-project-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 12px;
+    font-size: var(--type-label-size);
     padding: 3px 8px;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
   }
   .sp-drawer-project-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-drawer-project-btn:disabled { cursor: wait; opacity: 0.55; }
@@ -149,16 +156,16 @@ export const PROJECTS_DRAWER_CSS = `
     border-color: var(--agi-ext-danger);
   }
   .sp-drawer-project-warning {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-danger-text);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
   }
   .sp-drawer-project-warning[hidden] { display: none; }
   .sp-drawer-projects-empty,
   .sp-drawer-projects-status {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
     padding: 4px 0;
   }
   .sp-drawer-projects-empty[hidden],
@@ -184,11 +191,13 @@ export interface ActiveProjectSelection {
 export interface ProjectsDrawerDependencies {
   listProjects: typeof listChromeProjects;
   createProject: typeof createChromeProject;
+  updateProject: typeof updateChromeProject;
   deleteProject: typeof deleteChromeProject;
   listConversations: typeof listChromeProjectConversations;
   signIn: typeof openClerkSignIn;
   getActiveProject: () => ActiveProjectSelection | null;
   setActiveProject: (project: ActiveProjectSelection | null) => void;
+  openConversation: (conversationId: string) => void;
 }
 
 export interface ProjectsDrawerAPI {
@@ -200,10 +209,11 @@ const DELETE_CONFIRM_MS = 6000;
 
 const DEFAULT_DEPENDENCIES: Omit<
   ProjectsDrawerDependencies,
-  'getActiveProject' | 'setActiveProject'
+  'getActiveProject' | 'setActiveProject' | 'openConversation'
 > = {
   listProjects: listChromeProjects,
   createProject: createChromeProject,
+  updateProject: updateChromeProject,
   deleteProject: deleteChromeProject,
   listConversations: listChromeProjectConversations,
   signIn: openClerkSignIn,
@@ -215,7 +225,10 @@ function formatChatCount(project: ManagedCloudProject): string {
 }
 
 export function buildProjectsDrawerSection(
-  dependencies: Pick<ProjectsDrawerDependencies, 'getActiveProject' | 'setActiveProject'> &
+  dependencies: Pick<
+    ProjectsDrawerDependencies,
+    'getActiveProject' | 'setActiveProject' | 'openConversation'
+  > &
     Partial<ProjectsDrawerDependencies>,
 ): ProjectsDrawerAPI {
   const deps: ProjectsDrawerDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
@@ -358,16 +371,113 @@ export function buildProjectsDrawerSection(
       return wrapper;
     }
     for (const conversation of loaded) {
-      wrapper.appendChild(el('div', { class: 'sp-drawer-project-chat' }, conversation.title));
+      const open = el(
+        'button',
+        {
+          type: 'button',
+          class: 'sp-drawer-project-chat',
+          title: t('spProjectsOpenChat', [conversation.title]),
+        },
+        conversation.title,
+      );
+      open.addEventListener('click', () => deps.openConversation(conversation.id));
+      wrapper.appendChild(open);
     }
     return wrapper;
   }
 
+  function buildEditForm(project: ManagedCloudProject, detail: HTMLElement): HTMLElement {
+    const editor = el('div', { class: 'sp-drawer-project-edit' });
+    const editName = el('input', {
+      type: 'text',
+      class: 'sp-drawer-projects-input',
+      maxlength: String(CHROME_PROJECT_NAME_MAX_CHARS),
+      'aria-label': t('spProjectsNamePlaceholder'),
+    });
+    editName.value = project.name;
+    const editDescription = el('textarea', {
+      class: 'sp-drawer-projects-textarea',
+      maxlength: String(PROJECT_DESCRIPTION_MAX_LENGTH),
+      placeholder: t('spProjectsDescriptionPlaceholder'),
+      'aria-label': t('spProjectsDescriptionPlaceholder'),
+      rows: '2',
+    });
+    editDescription.value = project.description ?? '';
+    const editInstructions = el('textarea', {
+      class: 'sp-drawer-projects-textarea',
+      maxlength: String(CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS),
+      placeholder: t('spProjectsInstructionsPlaceholder'),
+      'aria-label': t('spProjectsInstructionsPlaceholder'),
+      rows: '3',
+    });
+    editInstructions.value = project.instructions ?? '';
+    const actions = el('div', { class: 'sp-drawer-projects-form-actions' });
+    const save = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsSave'),
+    );
+    const cancel = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsCancel'),
+    );
+    cancel.addEventListener('click', () => {
+      editor.remove();
+      detail.hidden = false;
+    });
+    save.addEventListener('click', () => {
+      if (!editName.value.trim()) {
+        editName.focus();
+        return;
+      }
+      save.disabled = true;
+      void deps
+        .updateProject(project.id, {
+          name: editName.value,
+          description: editDescription.value,
+          instructions: editInstructions.value,
+        })
+        .then(async (result) => {
+          if (result.status === 'error') {
+            reportFailure(result);
+            return;
+          }
+          if (deps.getActiveProject()?.id === project.id) {
+            deps.setActiveProject({ id: project.id, name: result.project.name });
+          }
+          if (await refresh()) setStatus(t('spProjectsSaved'));
+        })
+        .finally(() => {
+          save.disabled = false;
+        });
+    });
+    actions.append(save, cancel);
+    editor.append(editName, editDescription, editInstructions, actions);
+    return editor;
+  }
+
   function buildDetail(project: ManagedCloudProject): HTMLElement {
     const detail = el('div', { class: 'sp-drawer-project-detail' });
-    const described = project.description?.trim() || project.instructions?.trim();
+    const description = project.description?.trim();
+    if (description)
+      detail.appendChild(el('div', { class: 'sp-drawer-project-text' }, description));
     detail.appendChild(
-      el('div', { class: 'sp-drawer-project-text' }, described || t('spProjectsNoInstructions')),
+      el(
+        'div',
+        { class: 'sp-drawer-project-meta' },
+        `${formatChatCount(project)} · ${tPlural('spProjectsFileCount', project.knowledgeFileCount ?? 0)}`,
+      ),
+    );
+    detail.appendChild(
+      el('div', { class: 'sp-drawer-project-subtitle' }, t('spProjectsInstructions')),
+    );
+    detail.appendChild(
+      el(
+        'div',
+        { class: 'sp-drawer-project-text' },
+        project.instructions?.trim() || t('spProjectsNoInstructions'),
+      ),
     );
     detail.appendChild(buildConversationList(project.id));
 
@@ -376,6 +486,17 @@ export function buildProjectsDrawerSection(
     detail.appendChild(warning);
 
     const actions = el('div', { class: 'sp-drawer-project-actions' });
+    const editBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsEdit'),
+    );
+    editBtn.addEventListener('click', () => {
+      if (detail.nextElementSibling?.classList.contains('sp-drawer-project-edit')) return;
+      detail.hidden = true;
+      detail.after(buildEditForm(project, detail));
+    });
+    actions.appendChild(editBtn);
     const active = deps.getActiveProject();
     const isActive = active?.id === project.id;
     const useBtn = el(

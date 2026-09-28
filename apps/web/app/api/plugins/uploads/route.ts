@@ -10,6 +10,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { storeOwnedPluginSource } from '@/lib/services/plugin-owned-source-service';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
+import { registerPluginConnectors } from '@/lib/connectors/plugin-connectors';
 import { readArchiveUpload } from '@/features/plugins/server/directory/archive-upload';
 import { installedDependencies } from '@/features/plugins/server/directory/dependencies';
 import {
@@ -88,12 +89,21 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
         },
       });
     }
+    const connectors = await registerPluginConnectors(
+      request,
+      archive.plugins.map((plugin) => ({
+        pluginKey: plugin.key,
+        pluginName: plugin.name,
+        servers: plugin.mcpServers,
+      })),
+    );
     const omittedFiles = archive.plugins.flatMap((plugin) => plugin.omittedFiles);
     const body: PluginSourceInstallResponse = {
       sourceName,
       kind: SOURCE_KIND_UPLOAD,
       plugins,
       ...(omittedFiles.length > 0 ? { omittedFiles } : {}),
+      ...(connectors.added.length > 0 || connectors.failed.length > 0 ? { connectors } : {}),
       ...(dependencies.length > 0
         ? {
             dependencies: dependencies.map(({ pluginId, name, version, requiredBy }) => ({

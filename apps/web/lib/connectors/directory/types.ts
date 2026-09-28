@@ -1,32 +1,26 @@
-export type DirectoryTransport = 'streamable-http' | 'sse' | 'stdio';
+import type {
+  ConnectorDirectoryAuthMode,
+  ConnectorDirectoryBadge,
+  ConnectorDirectoryConnectableMode,
+  ConnectorDirectoryIconSource,
+  ConnectorDirectoryMonogramHue,
+  ConnectorDirectorySource,
+  ConnectorDirectoryTransport,
+} from '@agiworkforce/cloud-contracts';
 
-export type DirectoryAuthMode = 'none' | 'oauth' | 'api-key' | 'unknown';
+export type DirectoryTransport = ConnectorDirectoryTransport;
 
-export type DirectoryConnectableMode =
-  | 'connect'
-  | 'api-key-form'
-  | 'desktop-and-cli'
-  | 'needs-setup'
-  | 'unavailable';
+export type DirectoryAuthMode = ConnectorDirectoryAuthMode;
 
-export type DirectorySource = 'internal' | 'mcp-registry';
+export type DirectoryConnectableMode = ConnectorDirectoryConnectableMode;
 
-export type DirectoryBadge = 'first-party' | 'official' | 'verified' | 'registry' | 'community';
+export type DirectorySource = ConnectorDirectorySource;
 
-export type DirectoryIconSource = 'brand' | 'registry' | 'site' | 'monogram';
+export type DirectoryBadge = ConnectorDirectoryBadge;
 
-export type DirectoryMonogramHue =
-  | 'code'
-  | 'communication'
-  | 'data'
-  | 'design'
-  | 'financial-services'
-  | 'health'
-  | 'legal'
-  | 'life-sciences'
-  | 'productivity'
-  | 'sales-and-marketing'
-  | 'other';
+export type DirectoryIconSource = ConnectorDirectoryIconSource;
+
+export type DirectoryMonogramHue = ConnectorDirectoryMonogramHue;
 
 export interface DirectoryRemote {
   readonly url: string;

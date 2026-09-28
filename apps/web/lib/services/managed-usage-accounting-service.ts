@@ -14,10 +14,10 @@ import {
 } from '@/lib/services/llm-cost-calculator';
 import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
+import type { GenerationAttempt } from '@/lib/services/generation-attempt';
 import {
   estimateMicrousdOf,
   finalizeManagedUsageRequest,
-  type ManagedUsageAttempt,
   type ManagedUsageFinalization,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
@@ -479,7 +479,7 @@ export interface FinalizeObservedManagedUsageInput {
   reason: string;
   cancelled?: boolean;
   cpst?: CpstUsageFields;
-  attempt?: ManagedUsageAttempt | null;
+  attempt?: GenerationAttempt | null;
 }
 
 export function finalizeObservedManagedUsage(

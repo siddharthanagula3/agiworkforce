@@ -22,6 +22,10 @@ import {
   memoryWriteAdmission,
   workspaceMemoryPredicate,
 } from '@/lib/services/managed-memory-context-service';
+import type {
+  ManagedMemoryImportCommitResponse,
+  ManagedMemoryImportPreviewResponse,
+} from '@agiworkforce/types';
 
 interface ImportRequestBody {
   mode?: string;
@@ -75,7 +79,7 @@ async function handleDryRun(request: NextRequest, body: ImportRequestBody) {
     items,
     totalCandidates: parsed.totalCandidates,
     itemsTruncated: parsed.itemsTruncated,
-  });
+  } satisfies ManagedMemoryImportPreviewResponse);
 }
 
 function readCommitItems(body: ImportRequestBody): string[] {
@@ -157,7 +161,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
-    },
+    } satisfies ManagedMemoryImportCommitResponse,
     { status: 201 },
   );
 }

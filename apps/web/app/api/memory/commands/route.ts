@@ -8,12 +8,16 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { memoryCommandSource, runMemoryCommand } from '@/lib/services/memory-commands';
+import {
+  MANAGED_MEMORY_COMMAND_MAX_CHARS,
+  type ManagedMemoryCommandResponse,
+} from '@agiworkforce/types';
 import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 
 export const runtime = 'nodejs';
 
 const MemoryCommandSchema = z.object({
-  message: z.string().min(1).max(4000),
+  message: z.string().min(1).max(MANAGED_MEMORY_COMMAND_MAX_CHARS),
   /**
    * The user has seen what a forget would delete and said yes. A remember never
    * needs it, and a forget without it only ever reports.
@@ -67,7 +71,7 @@ async function handleMemoryCommand(request: NextRequest): Promise<Response> {
     { message: parsed.data.message, confirmed: parsed.data.confirmed ?? false },
   );
 
-  if (!result) return NextResponse.json({ command: null });
+  if (!result) return NextResponse.json({ command: null } satisfies ManagedMemoryCommandResponse);
 
   if (result.kind === 'forget' && result.outcome.status === 'forgotten') {
     // Ids only. A trail that repeats the memory would outlive the deletion it
@@ -92,7 +96,7 @@ async function handleMemoryCommand(request: NextRequest): Promise<Response> {
           memories: result.outcome.removed,
         }
       : {}),
-  });
+  } satisfies ManagedMemoryCommandResponse);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleMemoryCommand));

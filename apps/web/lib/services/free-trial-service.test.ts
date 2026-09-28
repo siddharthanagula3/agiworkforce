@@ -264,8 +264,21 @@ describe('beginFreeTrialRequest', () => {
       300,
       'openrouter',
       'free-route-model',
+      null,
     ]);
     expect(scopes).toContainEqual({ userId: 'user-1', organizationId: null });
+  });
+
+  it('links the reservation to the conversation the turn answers', async () => {
+    await beginFreeTrialRequest({
+      ...BEGIN,
+      estimatedMicrousd: 4_321,
+      conversationId: '0190a000-0000-7000-8000-0000000000c1',
+    });
+
+    const [insert] = executed('insert into public.free_daily_usage_reservations');
+    expect(insert?.[0]).toContain('conversation_id');
+    expect(insert?.[1]?.[6]).toBe('0190a000-0000-7000-8000-0000000000c1');
   });
 
   it('reserves the smallest remaining window when the call carries no estimate', async () => {
@@ -325,7 +338,7 @@ describe('beginFreeTrialRequest', () => {
     });
   });
 
-  it('starts a free-pool turn unmetered at zero when no window has room', async () => {
+  it('starts a free-pool turn unmetered at zero when no window has room, on a zero-cost row', async () => {
     useWindows({ fiveHour: FIVE_HOUR_BUDGET, weekly: FIVE_HOUR_BUDGET, monthly: FIVE_HOUR_BUDGET });
 
     await expect(
@@ -340,7 +353,9 @@ describe('beginFreeTrialRequest', () => {
         unmetered: true,
       },
     });
-    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
+    const inserts = executed('insert into public.free_daily_usage_reservations');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.[1]?.[2]).toBe(0);
   });
 
   it('still reserves the windows for a free-pool turn so its paid tools are covered', async () => {
@@ -384,7 +399,15 @@ describe('settleFreeTrialRequest', () => {
 
     const [settle] = executed('update public.free_daily_usage_reservations');
     expect(settle?.[0]).toContain('actual_cost_microusd = $3');
-    expect(settle?.[1]).toEqual(['user-1', 'request-1', 3_250, 'completed', expect.any(String)]);
+    expect(settle?.[1]).toEqual([
+      'user-1',
+      'request-1',
+      3_250,
+      'completed',
+      expect.any(String),
+      'completed',
+      null,
+    ]);
     expect(JSON.parse(String(settle?.[1]?.[4]))).toEqual({
       requestId: 'request-1',
       outcome: 'completed',
@@ -456,6 +479,48 @@ describe('settleFreeTrialRequest', () => {
       0,
       'failed',
       expect.any(String),
+      'failed',
+      null,
+    ]);
+  });
+
+  it('records a cancelled attempt as cancelled and a failed one with its class', async () => {
+    storedReservation('request-1', 25_000);
+    storedReservation('request-2', 25_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation(),
+      outcome: 'cancelled',
+      attempt: { outcome: 'cancelled', errorClass: 'aborted' },
+    });
+    await settleFreeTrialRequest({
+      reservation: reservation({ requestId: 'request-2' }),
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'rate_limit' },
+    });
+
+    const updates = executed('update public.free_daily_usage_reservations');
+    expect(updates[0]?.[1]?.slice(3)).toEqual(['cancelled', expect.any(String), 'cancelled', null]);
+    expect(updates[1]?.[1]?.slice(3)).toEqual([
+      'failed',
+      expect.any(String),
+      'failed',
+      'rate_limit',
+    ]);
+  });
+
+  it('leaves the attempt open when the settlement only pauses the turn', async () => {
+    storedReservation('request-1', 25_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation(),
+      outcome: 'completed',
+      attempt: null,
+    });
+
+    expect(executed('update public.free_daily_usage_reservations')[0]?.[1]?.slice(5)).toEqual([
+      null,
+      null,
     ]);
   });
 
@@ -472,7 +537,7 @@ describe('settleFreeTrialRequest', () => {
     expect(executed('website_auto_economy_trial_usage')).toHaveLength(0);
   });
 
-  it('writes nothing for a turn that reserved nothing', async () => {
+  it('records a free-pool turn that reserved nothing without charging it or touching its windows', async () => {
     await settleFreeTrialRequest({
       reservation: reservation({ reservedMicrousd: 0, unmetered: true }),
       outcome: 'completed',
@@ -480,6 +545,12 @@ describe('settleFreeTrialRequest', () => {
     });
 
     expect(db.transaction).not.toHaveBeenCalled();
+    const [sql, params] = db.execute.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('set actual_cost_microusd = 0');
+    expect(sql).toContain('reserved_microusd = 0 and settled_at is null');
+    expect(params).toEqual(['user-1', 'request-1', 'completed', 'completed', null]);
+    expect(executed('website_auto_economy_trial_usage')).toHaveLength(0);
+    expect(executed('usage_events')).toHaveLength(0);
   });
 
   it('logs settlement failures without exposing private policy values', async () => {
@@ -655,6 +726,25 @@ describe('releaseExpiredFreeTrialReservations', () => {
     expect(recordSettledProviderCost).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ provider: 'unknown', model: null, userId: 'user-2' }),
+    );
+  });
+
+  it('closes an expired free-pool row without an event or absorbed cost', async () => {
+    const { db: serviceDb, execute } = sweepDb([
+      { user_id: 'user-1', request_id: 'request-1', reserved_microusd: 0 },
+      { user_id: 'user-2', request_id: 'request-2', reserved_microusd: 20 },
+    ]);
+
+    await expect(releaseExpiredFreeTrialReservations(serviceDb, 500)).resolves.toEqual({
+      released: 2,
+      absorbedMicrousd: 20,
+    });
+
+    const [, params] = execute.mock.calls[0] as [string, unknown[]];
+    expect(params).toEqual([['user-2'], ['request-2']]);
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-2', taskRef: 'request-2' }),
     );
   });
 

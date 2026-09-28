@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Button } from '@agiworkforce/ui';
+import { Button, translateUiPlural } from '@agiworkforce/ui';
 import type { UpgradePromotionSummary } from '../services/stripe-payments';
 import { formatBillingMoney } from '../lib/billing-format';
 
@@ -14,7 +14,13 @@ function describePromotion(promotion: UpgradePromotionSummary): string {
         : 'A discount';
   if (promotion.duration === 'forever') return `${amount} every billing period`;
   if (promotion.duration === 'repeating' && promotion.durationInMonths) {
-    return `${amount} for ${promotion.durationInMonths} ${promotion.durationInMonths === 1 ? 'month' : 'months'}`;
+    return translateUiPlural(
+      'settings',
+      'counts.promotionMonths',
+      promotion.durationInMonths,
+      { one: '{{amount}} for {{count}} month', other: '{{amount}} for {{count}} months' },
+      { amount },
+    );
   }
   return `${amount} this payment`;
 }

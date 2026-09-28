@@ -10,6 +10,7 @@ import {
   getModelCostRates,
   getModelMetadataById,
   getPickerModelTier,
+  isAutoModeModelId,
   normalizeModelId,
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
@@ -87,6 +88,7 @@ function manualModelOptions(
 }
 
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
+  if (isAutoModeModelId(modelId)) return isAutoReachableForTier(modelId, tier);
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
   if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;

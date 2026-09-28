@@ -804,6 +804,7 @@ const ADDITIONAL_ROUTE_FIELDS = [
   'pricing',
   'pricingNote',
   'discount',
+  'responseFormats',
 ];
 
 const ENDPOINT_HOST_MATCHES = new Set(['host', 'hostSuffix', 'domain', 'baseUrl']);
@@ -1150,6 +1151,13 @@ function buildModelRoutes({
       COMMERCIAL_STATUSES.has(additional.commercialStatus),
       `${label}.commercialStatus is not a known status`,
     );
+    assert.ok(
+      additional.responseFormats === undefined ||
+        (Array.isArray(additional.responseFormats) &&
+          additional.responseFormats.every((format) => RESPONSE_FORMATS.includes(format)) &&
+          new Set(additional.responseFormats).size === additional.responseFormats.length),
+      `${label}.responseFormats must be distinct names from ${RESPONSE_FORMATS.join(', ')}`,
+    );
     const additionalHarnessId = additional.harnessId ?? resolveHarnessId(additional);
     const additionalHarness = harnessCatalog.harnesses[additionalHarnessId];
     assert.ok(additionalHarness, `${label} references unknown harness ${additionalHarnessId}`);
@@ -1187,6 +1195,7 @@ function buildModelRoutes({
         dataRetention: declaredDataRetention(governance, additional.provider),
         pricing: priced.pricing,
         discount: priced.discount,
+        responseFormats: additional.responseFormats,
       }),
     ]);
   }

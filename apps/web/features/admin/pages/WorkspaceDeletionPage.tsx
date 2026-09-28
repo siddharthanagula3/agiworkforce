@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 interface WorkspaceSummary {
@@ -54,7 +54,17 @@ function deletionConsequence(workspace: WorkspaceSummary): string {
   const whoLosesAccess =
     others === 0
       ? 'You are the only member, so you are the only one who loses it.'
-      : `All ${workspace.memberCount} members lose it, not only you: ${others} ${others === 1 ? 'colleague' : 'colleagues'} will be signed out of this workspace.`;
+      : translateUiPlural(
+          'settings',
+          'counts.colleaguesSignedOut',
+          others,
+          {
+            one: 'All {{members}} members lose it, not only you: {{count}} colleague will be signed out of this workspace.',
+            other:
+              'All {{members}} members lose it, not only you: {{count}} colleagues will be signed out of this workspace.',
+          },
+          { members: workspace.memberCount },
+        );
   return (
     `Every chat, project, file, connector and API key in ${workspace.name} is scheduled for ` +
     `permanent erasure. The audit trail is kept without its link to the workspace. ` +
@@ -198,8 +208,11 @@ export default function WorkspaceDeletionPage() {
           <section className="rounded-md border border-border bg-card p-5">
             <h2 className="text-h4 text-foreground">{workspace.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {workspace.slug} · {workspace.memberCount}{' '}
-              {workspace.memberCount === 1 ? 'member' : 'members'}
+              {workspace.slug} ·{' '}
+              {translateUiPlural('settings', 'counts.members', workspace.memberCount, {
+                one: '{{count}} member',
+                other: '{{count}} members',
+              })}
             </p>
 
             {deletion.pending ? (
