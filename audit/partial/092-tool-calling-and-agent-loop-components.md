@@ -6,39 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S92.09: Large-result reference service.
-
-- Done when: Oversized tool results are stored once and referenced by id, so the model and user can fetch the full result later.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Hosted results are only truncated (capOutput, a 200k history cap, 16 KB idempotency snapshot); nothing stores the full result or hands back a reference. Only the CLI saves overflow to a file. | handler, persistence |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps/cli/src/features/exec/tools/common/mod.rs:151-157`
-
-## S92.12: Dependency-aware execution.
-
-- Done when: Calls whose inputs depend on other calls' outputs are ordered or scheduled by those dependencies.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Calls are split only into parallel-safe and serial groups in model order; there is no dependency graph between calls, so the model must sequence dependent calls across steps. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3947-3959`
-
-## S92.19: External-outcome reconciliation.
-
-- Done when: When an external action's outcome is unknown (timeout, crash), the runtime checks the external system and records the real outcome before retrying or reporting.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Unknown outcomes are never reconciled against the external system: at_most_once tools are only deduped by key, and automation outcome telemetry records client-side verification checks. Add a post-timeout check for send/pay/post tools. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-idempotency.ts:119-131`, `apps/web/app/api/automation/outcomes/route.ts:37-41`
-
 ## S92.21: Agent definition store.
 
 - Done when: Agent definitions (name, instructions, tools, model) are stored and can be run by the runtime.

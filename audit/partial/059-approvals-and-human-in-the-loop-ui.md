@@ -26,10 +26,10 @@ Code: `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/cli/src/tui/tu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows "Approved for this session" when another client chose it, but offers only Allow/Deny itself. | ui |
+| mobile | partial | Allow for this chat is built as post-codex/chat-gates-s59.03-mobile-after-s59.patch (applies after chat-gates-s59.patch); its handler lives in Codex-held MessageBubble.tsx. | ui |
 | chrome | partial | Approved sites persist and "Ask before acting" is a standing toggle; no allow-for-this-session choice on an approval. | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:205-205`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:307-329`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 ## S59.04: Per-application permission.
 
@@ -157,11 +157,10 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 | vscode | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 | chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
