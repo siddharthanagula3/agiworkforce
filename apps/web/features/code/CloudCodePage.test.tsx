@@ -285,6 +285,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       archivedAt: archived ? '2026-07-30T12:10:00.000Z' : null,
     })),
     deleteSession: vi.fn(async () => undefined),
+    discardChanges: vi.fn(async () => ({ session, discarded: [] })),
     commit: vi.fn(async () => ({
       session,
       push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
