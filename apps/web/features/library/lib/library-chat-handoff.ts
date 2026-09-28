@@ -13,6 +13,7 @@ let stagedAttachments: File[] | null = null;
 const ASPECT_RATIO_TOLERANCE = 0.02;
 
 async function imageAspectRatio(file: File): Promise<ManagedMediaImageAspectRatio | null> {
+  if (typeof createImageBitmap !== 'function') return null;
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) return null;
   const ratio = bitmap.width / bitmap.height;
