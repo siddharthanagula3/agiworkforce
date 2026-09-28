@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import type { ContextSourceClass } from '@agiworkforce/context';
 import {
   createPostgresContextManifestStore,
@@ -9,6 +11,11 @@ import {
 } from '@agiworkforce/context-engine';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  managedMemoryCitationExcerpt,
+  type ManagedMemoryCitation,
+  type ManagedMemoryLocalContextResponse,
+} from '@agiworkforce/types';
 
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
@@ -44,6 +51,7 @@ export interface InteractiveTurnContext {
   readonly pastChatSources: readonly PastChatCitation[];
   readonly memoryPrompt: string | null;
   readonly memories: readonly ManagedMemoryContextItem[];
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
   readonly manifest: ContextManifest | null;
 }
 
@@ -74,6 +82,7 @@ export async function resolveInteractiveTurnContext(
     query: string;
     projectContext: LoadedProjectContext | null;
     projectBlocks: readonly ProjectContextBlock[];
+    recordManifest?: boolean;
   },
 ): Promise<InteractiveTurnContext> {
   const includeMemory =
@@ -93,6 +102,7 @@ export async function resolveInteractiveTurnContext(
       pastChatSources: [],
       memoryPrompt: null,
       memories: [],
+      memoryCitations: [],
       manifest: null,
     };
   }
@@ -146,7 +156,7 @@ export async function resolveInteractiveTurnContext(
     },
   });
 
-  if (!input.temporaryChat) {
+  if (!input.temporaryChat && input.recordManifest !== false) {
     void createPostgresContextManifestStore(db)
       .write(resolution.manifest)
       .catch((error: unknown) => {
@@ -157,12 +167,16 @@ export async function resolveInteractiveTurnContext(
       });
   }
 
-  const memories = memoryLoader
+  const memoryItems = memoryLoader
     ? resolution.itemsOf('account_memory').flatMap((item) => {
         const memory = memoryLoader.itemFor(item.source.id);
-        return memory ? [memory] : [];
+        return memory ? [{ memory, recordId: item.source.provenance.recordId }] : [];
       })
     : [];
+  const memories = memoryItems.map(({ memory }) => memory);
+  const memoryCitations = memoryItems.flatMap(({ memory, recordId }) =>
+    recordId ? [{ id: recordId, excerpt: managedMemoryCitationExcerpt(memory.content) }] : [],
+  );
   const excerpts = pastChatLoader
     ? resolution.itemsOf('past_chat').flatMap((item) => {
         const excerpt = pastChatLoader.excerptFor(item.source.id);
@@ -179,25 +193,37 @@ export async function resolveInteractiveTurnContext(
     pastChatSources: recallDegraded ? [] : excerpts.map(pastChatCitation),
     memoryPrompt: formatManagedMemorySystemPrompt(memories),
     memories,
+    memoryCitations,
     manifest: resolution.manifest,
   };
 }
 
-export async function resolveFreeOfferingPersonalContext(
+interface PersonalContextParts {
+  readonly instructions: string | null;
+  readonly memory: string | null;
+  readonly pastChats: string | null;
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
+}
+
+export interface FreeOfferingPersonalContext {
+  readonly blocks: readonly string[];
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
+}
+
+async function resolvePersonalContextParts(
   db: DatabaseAdapter,
   input: {
     turnId: string;
     userId: string;
     organizationId: string | null;
     projectId: string | null;
-    conversationId: string;
+    conversationId: string | null;
     temporaryChat: boolean;
     memoryEnabled: boolean | undefined;
-    personalization: boolean | undefined;
     query: string;
+    recordManifest?: boolean;
   },
-): Promise<string[]> {
-  if (input.personalization === false) return [];
+): Promise<PersonalContextParts> {
   const [preamble, policy] = await Promise.all([
     buildCustomInstructionsPreamble(db, input.userId, { projectId: input.projectId }).catch(
       (error: unknown) => {
@@ -234,6 +260,7 @@ export async function resolveFreeOfferingPersonalContext(
       query: input.query,
       projectContext: null,
       projectBlocks: [],
+      ...(input.recordManifest === undefined ? {} : { recordManifest: input.recordManifest }),
     });
   } catch (error) {
     logger.error(
@@ -241,7 +268,54 @@ export async function resolveFreeOfferingPersonalContext(
       'Turn context could not be assembled; continuing without account memory or past chats',
     );
   }
-  return [preamble, context?.memoryPrompt ?? null, context?.pastChatPrompt ?? null].filter(
-    (block): block is string => Boolean(block),
-  );
+  return {
+    instructions: preamble || null,
+    memory: context?.memoryPrompt || null,
+    pastChats: context?.pastChatPrompt || null,
+    memoryCitations: context?.memoryPrompt ? context.memoryCitations : [],
+  };
+}
+
+export async function resolveFreeOfferingPersonalContext(
+  db: DatabaseAdapter,
+  input: {
+    turnId: string;
+    userId: string;
+    organizationId: string | null;
+    projectId: string | null;
+    conversationId: string;
+    temporaryChat: boolean;
+    memoryEnabled: boolean | undefined;
+    personalization: boolean | undefined;
+    query: string;
+  },
+): Promise<FreeOfferingPersonalContext> {
+  if (input.personalization === false) return { blocks: [], memoryCitations: [] };
+  const parts = await resolvePersonalContextParts(db, input);
+  return {
+    blocks: [parts.instructions, parts.memory, parts.pastChats].filter(
+      (block): block is string => block !== null,
+    ),
+    memoryCitations: parts.memoryCitations,
+  };
+}
+
+export async function resolveLocalTurnPersonalContext(
+  db: DatabaseAdapter,
+  input: { userId: string; organizationId: string | null; projectId: string | null },
+): Promise<ManagedMemoryLocalContextResponse> {
+  const parts = await resolvePersonalContextParts(db, {
+    ...input,
+    turnId: randomUUID(),
+    conversationId: null,
+    temporaryChat: false,
+    memoryEnabled: true,
+    query: '',
+    recordManifest: false,
+  });
+  return {
+    instructions: parts.instructions,
+    memory: parts.memory,
+    memoryCitations: [...parts.memoryCitations],
+  };
 }

@@ -560,7 +560,15 @@
     "viewSources_few": "Показать {{count}} источника",
     "viewSources_many": "Показать {{count}} источников",
     "viewSources_one": "Показать {{count}} источник",
-    "viewSources_other": "Показать {{count}} источника"
+    "viewSources_other": "Показать {{count}} источника",
+    "savedMemoriesUsed_one": "Использовано {{count}} сохранённое воспоминание",
+    "savedMemoriesUsed_few": "Использовано {{count}} сохранённых воспоминания",
+    "savedMemoriesUsed_many": "Использовано {{count}} сохранённых воспоминаний",
+    "savedMemoriesUsed_other": "Использовано {{count}} сохранённого воспоминания",
+    "moreSavedMemories_one": "И ещё {{count}}",
+    "moreSavedMemories_few": "И ещё {{count}}",
+    "moreSavedMemories_many": "И ещё {{count}}",
+    "moreSavedMemories_other": "И ещё {{count}}"
   },
   "markdownTable": {
     "label": "Таблица",
