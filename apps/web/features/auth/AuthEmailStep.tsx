@@ -6,6 +6,7 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
+import { AuthAgeConfirmation } from './AuthAgeConfirmation';
 import { useAuthCopy } from './authCopy';
 import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
@@ -69,6 +70,7 @@ export function AuthEmailStep({
   const [email, setEmail] = useState('');
   const [passkeysSupported, setPasskeysSupported] = useState(false);
   const [lastUsed, setLastUsed] = useState<AuthLastUsed | null>(null);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   useEffect(() => {
     setPasskeysSupported(browserSupportsPasskeys());
     setLastUsed(readLastUsedAuthMethod());
@@ -76,6 +78,7 @@ export function AuthEmailStep({
   const busy = phase !== 'idle';
   const offerPasskey = passkeySignIn && passkeysSupported && onStartPasskey !== undefined;
   const isSignup = mode === 'signup';
+  const signupBlocked = isSignup && !ageConfirmed;
   const passkeyLastUsed = lastUsed?.kind === 'method' && lastUsed.method === 'passkey';
   const lastUsedLabel = copy.text('flow.lastUsed', 'Last used');
   const fieldMessage =
@@ -95,10 +98,14 @@ export function AuthEmailStep({
       heading={copy.text(HEADING_DEFAULTS[mode].key, HEADING_DEFAULTS[mode].label)}
       footer={<AuthLegalFooter variant={isSignup ? 'signup' : 'links'} />}
     >
+      {isSignup ? (
+        <AuthAgeConfirmation confirmed={ageConfirmed} disabled={busy} onChange={setAgeConfirmed} />
+      ) : null}
+
       <AuthProviderButtons
         providers={providers}
         pending={providerPending}
-        disabled={busy || !ready}
+        disabled={busy || !ready || signupBlocked}
         lastUsed={lastUsed?.kind === 'provider' ? lastUsed.provider : null}
         lastUsedLabel={lastUsedLabel}
         onStart={onStartProvider}
@@ -113,7 +120,7 @@ export function AuthEmailStep({
           <button
             type="button"
             className={AUTH_PROVIDER_BUTTON_CLASS}
-            disabled={busy || !ready || providerPending !== null}
+            disabled={busy || !ready || signupBlocked || providerPending !== null}
             aria-busy={phase === 'passkey_requested' || undefined}
             onClick={onStartPasskey}
           >
@@ -129,6 +136,7 @@ export function AuthEmailStep({
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (signupBlocked) return;
           onSubmit(email.trim());
         }}
       >
@@ -138,7 +146,7 @@ export function AuthEmailStep({
           name="email"
           inputMode="email"
           autoComplete={passkeysSupported ? 'email webauthn' : 'email'}
-          autoFocus
+          autoFocus={!isSignup}
           required
           value={email}
           error={fieldMessage}
@@ -155,7 +163,7 @@ export function AuthEmailStep({
         <AuthSubmitButton
           label={copy.text('flow.continue', 'Continue')}
           busy={busy}
-          disabled={!ready}
+          disabled={!ready || signupBlocked}
         />
       </form>
 

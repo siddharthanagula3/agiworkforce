@@ -481,7 +481,9 @@ describe('developer session runtime', () => {
         },
       ],
       defaultModelId: 'qa-provider/qa-default',
+      defaultAgentMode: null,
       managedSignedIn: true,
+      features: { maxTurns: false, memory: false },
     });
   });
 
@@ -509,7 +511,9 @@ describe('developer session runtime', () => {
       models: [],
       hostModels: [],
       defaultModelId: null,
+      defaultAgentMode: null,
       managedSignedIn: false,
+      features: { maxTurns: false, memory: false },
     });
   });
 

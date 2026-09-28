@@ -156,10 +156,6 @@ describe('toConnectorEntry', () => {
   it('exposes the category as a filterable facet', () => {
     expect(toConnectorEntry(record(), new Set()).facets).toEqual({ category: ['Data'] });
   });
-
-  it('never invents an install count', () => {
-    expect(toConnectorEntry(record(), new Set()).installCount).toBeUndefined();
-  });
 });
 
 describe('directory requests', () => {

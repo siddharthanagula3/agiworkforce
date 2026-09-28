@@ -341,6 +341,22 @@ const projectKnowledgeFileExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const externalResourceReferenceExportSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  provider: z.string(),
+  uri: z.string(),
+  external_id: z.string().nullable(),
+  title: z.string().nullable(),
+  version: z.string().nullable(),
+  version_kind: z.string().nullable(),
+  access: z.string(),
+  connector_id: z.string().nullable(),
+  account_key: z.string().nullable(),
+  first_seen_at: timestampSchema,
+  last_seen_at: timestampSchema,
+});
+
 /**
  * Metadata, not bytes. The export is a JSON download and inlining media would
  * make it unusable. `storage_url` is a private object-storage key that resolves
@@ -638,6 +654,17 @@ const apiKeyExportSchema = z.object({
   expires_at: nullableTimestampSchema,
   revoked_at: nullableTimestampSchema,
   created_at: timestampSchema,
+});
+
+const developerWebhookEndpointExportSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  description: z.string().nullable(),
+  event_types: z.array(z.string()),
+  secret_prefix: z.string(),
+  enabled: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 const developerProjectExportSchema = z.object({
@@ -2240,6 +2267,20 @@ async function collectUserData(
   });
   exportData['project_knowledge_files'] = projectKnowledgeFiles;
 
+  exportData['external_resource_references'] = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
+    sql: `select id, kind, provider, uri, external_id, title, version, version_kind, access,
+                 connector_id, account_key, first_seen_at, last_seen_at
+          from external_resource_references
+          where user_id = $1
+          order by first_seen_at asc`,
+    values: [user.id],
+    schema: externalResourceReferenceExportSchema,
+    section: 'external_resource_references',
+    userId: user.id,
+    ledger,
+  });
   // Files the user uploaded and media generated for them. Absent from this
   // export until 2026-08-21, while account erasure has always deleted them.
   // so the product could destroy this category of personal data on request but
@@ -2567,6 +2608,19 @@ async function collectUserData(
     values: [user.id],
     schema: developerProjectExportSchema,
     section: 'developer_projects',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['developer_webhook_endpoints'] = await queryExportRows({
+    db,
+    sql: `select id, url, description, event_types, secret_prefix, enabled, created_at, updated_at
+          from developer_webhook_endpoints
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: developerWebhookEndpointExportSchema,
+    section: 'developer_webhook_endpoints',
     userId: user.id,
     ledger,
   });

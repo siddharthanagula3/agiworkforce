@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 100 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-27.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 105 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -381,6 +381,16 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Developer webhooks joined the enumerated erasure list, taking it from 103 to 105 user-scoped tables: the endpoints a developer registers and the log of what was delivered to them. Both are deleted with the account.',
+                      },
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Three tables joined the enumerated erasure list, taking it from 100 to 103 user-scoped tables: the links that share a schedule, the files a personal skill bundles, and developer projects. Each is deleted with the account.',
+                      },
                       {
                         label: '2026-09-27',
                         value:

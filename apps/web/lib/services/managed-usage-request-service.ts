@@ -575,6 +575,21 @@ async function attributeToScheduleRun(
   );
 }
 
+async function attributeToApiKey(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+  apiKeyId: string | undefined,
+): Promise<void> {
+  if (!apiKeyId) return;
+  await db.execute(
+    `update public.managed_usage_requests
+        set api_key_id = $3
+      where user_id = $1 and idempotency_key = $2 and api_key_id is null`,
+    [userId, idempotencyKey, apiKeyId],
+  );
+}
+
 export async function reserveManagedUsageRequest(
   input: {
     db: DatabaseAdapter;
@@ -590,6 +605,7 @@ export async function reserveManagedUsageRequest(
     isFlagship: boolean;
     quotaFeature?: string;
     attribution?: UsageAttribution;
+    apiKeyId?: string;
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
@@ -646,6 +662,7 @@ export async function reserveManagedUsageRequest(
     });
   }
   await attributeToScheduleRun(input.db, input.userId, idempotencyKey);
+  await attributeToApiKey(input.db, input.userId, idempotencyKey, input.apiKeyId);
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||

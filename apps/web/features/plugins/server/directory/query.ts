@@ -23,6 +23,7 @@ export interface PluginDirectoryQuery {
   verified?: boolean | undefined;
   worksWith?: PluginWorksWith | undefined;
   category?: string | undefined;
+  publisher?: string | undefined;
   status?: PluginRegistryStatus | undefined;
   source?: PluginSourceFacet | undefined;
   sort?: PluginDirectorySort | undefined;
@@ -49,13 +50,16 @@ export function computeDirectoryStats(
 ): PluginDirectoryStats {
   const bySource = zeroCounts(PLUGIN_SOURCE_FACETS);
   const byWorksWith = zeroCounts(PLUGIN_WORKS_WITH);
+  const byCategory: Record<string, number> = {};
   let verified = 0;
   for (const entry of entries) {
     if (entry.verified) verified += 1;
     bySource[entry.sourceFacet] += 1;
     for (const value of entry.worksWith) byWorksWith[value] += 1;
+    const category = entry.category.trim().toLowerCase();
+    if (category) byCategory[category] = (byCategory[category] ?? 0) + 1;
   }
-  return { totalPlugins: entries.length, verified, bySource, byWorksWith };
+  return { totalPlugins: entries.length, verified, bySource, byWorksWith, byCategory };
 }
 
 type SearchMatcher = (entry: PluginDirectoryEntry, needle: string) => boolean;
@@ -101,10 +105,12 @@ export function filterDirectoryEntries(
   query: PluginDirectoryQuery,
 ): PluginDirectoryEntry[] {
   const category = query.category?.trim().toLowerCase() ?? '';
+  const publisher = query.publisher?.trim().toLowerCase() ?? '';
   return entries.filter((entry) => {
     if (query.verified !== undefined && entry.verified !== query.verified) return false;
     if (query.worksWith && !entry.worksWith.includes(query.worksWith)) return false;
-    if (category && entry.category.toLowerCase() !== category) return false;
+    if (category && entry.category.trim().toLowerCase() !== category) return false;
+    if (publisher && entry.publisher.id.toLowerCase() !== publisher) return false;
     if (query.status && entry.status !== query.status) return false;
     if (query.source && entry.sourceFacet !== query.source) return false;
     return true;

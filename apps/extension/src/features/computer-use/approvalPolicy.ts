@@ -123,7 +123,11 @@ const SENSITIVE_HOST_LABELS: ReadonlyArray<readonly [RegExp, SensitiveSiteClass]
   [/(^|\.)vault\./, 'password_manager'],
 ];
 
-const READ_ONLY_TOOLS: ReadonlySet<string> = new Set(['read_console', 'read_network']);
+const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'read_console',
+  'read_network',
+  'ask_user_to_take_over',
+]);
 
 const FILE_INPUT_SELECTOR = /type\s*=\s*["']?file\b/i;
 

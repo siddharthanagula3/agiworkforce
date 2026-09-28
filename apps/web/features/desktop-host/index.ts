@@ -1,5 +1,10 @@
 export { isDesktopHost, isLocalModeHost, useDesktopHost, useLocalModeHost } from './lib/host';
-export { PRODUCT_HOME_PATH, conversationDeepLink, deepLinkDestination } from './lib/deep-links';
+export {
+  PRODUCT_HOME_PATH,
+  codeDeepLink,
+  conversationDeepLink,
+  deepLinkDestination,
+} from './lib/deep-links';
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
@@ -80,6 +85,8 @@ export { useHostCommands } from './hooks/use-host-commands';
 export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcuts';
 export { useWindowZoom } from './hooks/use-window-zoom';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
+export { usePairedDesktop, type PairedDesktop } from './hooks/use-paired-desktop';
+export { ContinueOnDesktop, type ContinueOnDesktopProps } from './components/ContinueOnDesktop';
 export { DesktopHostMount } from './components/DesktopHostMount';
 export { BrowserPairingSection } from './components/BrowserPairingSection';
 export { RemoteControlSection } from './components/RemoteControlSection';

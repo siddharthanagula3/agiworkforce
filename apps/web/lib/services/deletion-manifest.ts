@@ -86,6 +86,7 @@ const CUSTOMER_CONTENT = [
 
 const DERIVED_CONTENT = [
   'context_manifests',
+  'external_resource_references',
   'file_lineage',
   'retrieval_chunks',
   'retrieval_documents',
@@ -122,6 +123,8 @@ const OPERATIONAL_RECORD = [
   'data_rights_requests',
   'desktop_devices',
   'developer_projects',
+  'developer_webhook_deliveries',
+  'developer_webhook_endpoints',
   'device_authorization_codes',
   'device_installations',
   'device_pairings',

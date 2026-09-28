@@ -72,14 +72,8 @@ export function taskStateTone(state: AgentTaskState): TaskStateTone {
   }
 }
 
-/**
- * The -600 tints read at 2.83:1 against their own /10 background, below the
- * 4.5:1 floor for text this size. Amber needs -800 because its -700 still
- * measured 4.45:1 on the warm tint; the others clear at -700. Dark-mode values
- * are unchanged: they sit on a dark surface where the light tints are correct.
- */
 export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
-  active: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  active: 'border-info-fill/30 bg-info-fill/10 text-info-text',
   attention: 'border-warning-fill/30 bg-warning-fill/10 text-warning-text',
   success: 'border-success-fill/30 bg-success-fill/10 text-success-text',
   danger: 'border-danger-fill/30 bg-danger-fill/10 text-danger-text',

@@ -18,7 +18,8 @@ use agiworkforce_protocol::developer_session::{
     ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
     ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
     ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
+    WorktreeSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
@@ -378,6 +379,24 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: MemoryAddParams,
     ) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
         Err(unsupported(method::MEMORY_ADD))
+    }
+
+    async fn create_worktree(
+        &self,
+        _params: WorktreeCreateParams,
+    ) -> Result<WorktreeSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_CREATE))
+    }
+
+    async fn remove_worktree(
+        &self,
+        _params: WorktreeRemoveParams,
+    ) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_REMOVE))
+    }
+
+    async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_LIST))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1024,6 +1043,32 @@ impl DeveloperSessionProcessor {
                     .run_command(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::WORKTREE_CREATE => {
+                let params = match parse_params::<WorktreeCreateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .create_worktree(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_REMOVE => {
+                let params = match parse_params::<WorktreeRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_worktree(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host.list_worktrees().await.map(serde_json::to_value)
             }
             method::MEMORY_ADD => {
                 let params = match parse_params::<MemoryAddParams>(&request) {

@@ -255,8 +255,13 @@
       "label": "Files",
       "owner": "apps/web/lib/server/media-assets.ts",
       "capabilities": ["canUploadFiles"],
-      "concepts": ["file"],
-      "tables": ["file_lineage", "media_assets", "project_knowledge_files"]
+      "concepts": ["file", "external-reference"],
+      "tables": [
+        "external_resource_references",
+        "file_lineage",
+        "media_assets",
+        "project_knowledge_files"
+      ]
     },
     {
       "name": "library",
@@ -758,7 +763,12 @@
       "owner": "apps/web/app/api/llm/v1",
       "capabilities": [],
       "concepts": [],
-      "tables": ["api_keys", "developer_projects"]
+      "tables": [
+        "api_keys",
+        "developer_projects",
+        "developer_webhook_endpoints",
+        "developer_webhook_deliveries"
+      ]
     },
     {
       "name": "experiments",
