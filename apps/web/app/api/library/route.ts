@@ -10,14 +10,10 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
 import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
-import {
-  listLibraryAssets,
-  sumLibraryStorageBytes,
-  type LibraryAssetRow,
-} from '@/lib/server/media-assets';
+import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
+import { readFileStorageMeter } from '@/lib/server/file-storage';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -90,7 +86,7 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const sp = request.nextUrl.searchParams;
   const parsed = LibraryListQuerySchema.safeParse({
@@ -130,16 +126,12 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     has_more: hasMore,
     next_offset: hasMore ? offset + limit : null,
   };
-  const storageUsedBytes =
-    offset === 0 && !deleted
-      ? await sumLibraryStorageBytes(userId, db).catch((error: unknown) => {
-          logger.warn({ error, userId }, 'Library storage total unavailable');
-          return null;
-        })
-      : null;
+  const storage =
+    offset === 0 && !deleted ? await readFileStorageMeter({ db, userId, organizationId }) : null;
   const response: LibraryListResponse = {
     ...body,
-    ...(storageUsedBytes !== null ? { storage_used_bytes: storageUsedBytes } : {}),
+    ...(storage?.usedBytes != null ? { storage_used_bytes: storage.usedBytes } : {}),
+    ...(storage?.limitBytes != null ? { storage_limit_bytes: storage.limitBytes } : {}),
   };
   return NextResponse.json(response, { headers: headers(request) });
 }

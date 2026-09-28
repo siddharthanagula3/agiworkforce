@@ -102,7 +102,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'video/quicktime': 'mov',
 };
 
-function extForMime(mime: string): string {
+export function extForMime(mime: string): string {
   return EXT_BY_MIME[mime] ?? mime.split('/')[1]?.replace(/[^a-z0-9]/gi, '') ?? 'bin';
 }
 

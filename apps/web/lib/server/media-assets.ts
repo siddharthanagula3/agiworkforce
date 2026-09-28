@@ -459,20 +459,6 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
   };
 }
 
-export async function sumLibraryStorageBytes(userId: string, db: DatabaseAdapter): Promise<number> {
-  const organizationId = await resolveActiveOrganizationId(db, userId);
-  const [row] = await db.query<{ total: string | number | null }>(
-    `select coalesce(sum(byte_size), 0) as total
-       from public.media_assets
-      where user_id = $1
-        and organization_id is not distinct from $2::uuid
-        and not temporary_chat
-        and deleted_at is null`,
-    [userId, organizationId],
-  );
-  return Number(row?.total ?? 0);
-}
-
 export async function listLibraryAssets(
   userId: string,
   opts: ListLibraryAssetsOptions = {},
