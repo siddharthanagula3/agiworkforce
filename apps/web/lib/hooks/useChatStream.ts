@@ -232,6 +232,7 @@ interface SendMessageOptions {
     files?: boolean;
     allowDomains?: string[];
     denyDomains?: string[];
+    connectors?: string[];
   };
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
@@ -3738,6 +3739,9 @@ export function useChatStream(): UseChatStreamReturn {
                         : {}),
                       ...(options.researchSources.denyDomains?.length
                         ? { deny_domains: options.researchSources.denyDomains }
+                        : {}),
+                      ...(options.researchSources.connectors?.length
+                        ? { connectors: options.researchSources.connectors }
                         : {}),
                     }
                   : undefined,

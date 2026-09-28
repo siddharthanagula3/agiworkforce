@@ -98,9 +98,12 @@ import {
 } from './turn-completeness';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import {
+  researchConnectorOutcomeNote,
+  researchConnectorSourcesPrompt,
   researchDomainAllowed,
   researchDomainDirective,
   researchFileSourcesPrompt,
+  type ResearchConnectorRead,
   type ResearchDomainPolicy,
   type ResearchFileSource,
 } from './research-sources';
@@ -311,6 +314,7 @@ export interface ResearchLoopOptions {
   isPauseRequested?: () => Promise<boolean>;
   guidance?: string;
   sources?: ResearchSourceRequest;
+  readConnectorSources?: (queries: readonly string[]) => Promise<readonly ResearchConnectorRead[]>;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -686,10 +690,15 @@ export class SourceAggregator {
    */
   constructor(private readonly domainPolicy: ResearchDomainPolicy | null = null) {}
 
-  add(entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown }): boolean {
+  add(
+    entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown },
+    chosenByReader = false,
+  ): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     if (!url) return false;
-    if (!url.startsWith('/') && !researchDomainAllowed(this.domainPolicy, url)) return false;
+    if (!url.startsWith('/') && !chosenByReader && !researchDomainAllowed(this.domainPolicy, url)) {
+      return false;
+    }
     const key = normalizeSourceUrlKey(url);
     const existing = this.byUrl.get(key);
     if (existing) {
@@ -1183,7 +1192,7 @@ const DELIVERABLE_FORMAT_DIRECTIVE: Record<ResearchDeliverableSpec['format'], st
     ' Write it as bullets, one claim per bullet, each with its citation. No paragraphs.',
 };
 
-export const MAX_REPORT_CHARTS = 3;
+const MAX_REPORT_CHARTS = 3;
 
 const CHART_DIRECTIVE =
   ' Where the sources give comparable figures, such as a trend over time or three or more options measured the same way,' +
@@ -1386,7 +1395,7 @@ export function parseDroppedPlanSteps(
   return [...dropped].map(([id, reason]) => ({ id, reason }));
 }
 
-export function nextPlanStepNumber(plan: readonly ResearchStep[]): number {
+function nextPlanStepNumber(plan: readonly ResearchStep[]): number {
   let highest = 0;
   for (const step of plan) {
     const match = /^plan-(\d+)$/.exec(step.id);
@@ -1395,7 +1404,7 @@ export function nextPlanStepNumber(plan: readonly ResearchStep[]): number {
   return highest + 1;
 }
 
-export function uniqueStepId(plan: readonly ResearchStep[], base: string): string {
+function uniqueStepId(plan: readonly ResearchStep[], base: string): string {
   if (!plan.some((step) => step.id === base)) return base;
   let suffix = 2;
   while (plan.some((step) => step.id === `${base}-${suffix}`)) suffix += 1;
@@ -1743,7 +1752,7 @@ export async function* runResearchLoop(
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
   const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
-  const sensitiveSourceAvailable =
+  let sensitiveSourceAvailable =
     hasPrivateContext(processed, messages) || (options.fileSources?.length ?? 0) > 0;
   let untrustedContentInContext = hasUntrustedContext(processed, messages);
   const approvedQueries = new Set(approvedPlan.map((step) => normalizedQuery(step.description)));
@@ -2150,6 +2159,79 @@ export async function* runResearchLoop(
     return false;
   }
 
+  async function* readConnectedApps(queries: readonly string[]): AsyncGenerator<Uint8Array, void> {
+    if (!options.readConnectorSources) return;
+    const placeholderId = uniqueStepId(plan, 'connected-apps');
+    const firstPending = plan.findIndex((step) => step.status === 'pending');
+    const insertAt = firstPending === -1 ? plan.length : firstPending;
+    plan.splice(insertAt, 0, {
+      id: placeholderId,
+      type: 'read',
+      description: 'Search your connected apps',
+      status: 'pending',
+    });
+    markPlanSteps([placeholderId], 'running');
+    yield planEvent();
+    yield status('searching', 'Searching your connected apps');
+
+    let reads: readonly ResearchConnectorRead[];
+    try {
+      reads = await options.readConnectorSources(queries);
+    } catch (error) {
+      logger.warn(
+        {
+          requestId: processed.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        '[research-loop] connected apps could not be searched; the run continues on the web',
+      );
+      markPlanSteps([placeholderId], 'failed');
+      for (const step of plan) {
+        if (step.id === placeholderId) step.note = 'The connected apps could not be searched.';
+      }
+      messages.push({
+        role: 'user',
+        content:
+          'The connected apps the user chose as sources for this research could not be searched. Say so in the report rather than substituting a web result for them.',
+      });
+      yield planEvent();
+      return;
+    }
+
+    const completedAt = new Date(now()).toISOString();
+    const placeholder = plan.findIndex((step) => step.id === placeholderId);
+    const startedAt = plan[placeholder]?.startedAt ?? completedAt;
+    plan.splice(placeholder, 1);
+    const readSteps: ResearchStep[] = [];
+    for (const read of reads) {
+      let added = 0;
+      for (const source of read.sources) if (sources.add(source, true)) added += 1;
+      const note = researchConnectorOutcomeNote(read);
+      readSteps.push({
+        id: uniqueStepId([...plan, ...readSteps], `connector-${read.connectorId}`),
+        type: 'read',
+        description: `Search ${read.label}`,
+        status: read.outcome === 'read' ? 'completed' : 'failed',
+        startedAt,
+        completedAt,
+        durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
+        sourcesConsulted: added,
+        ...(note ? { note } : {}),
+      });
+    }
+    plan.splice(placeholder, 0, ...readSteps);
+
+    const prompt = researchConnectorSourcesPrompt(reads);
+    if (prompt) messages.push({ role: 'user', content: prompt });
+    if (reads.some((read) => read.sources.length > 0)) {
+      sensitiveSourceAvailable = true;
+      untrustedContentInContext = true;
+    }
+    yield planEvent();
+    const gathered = sources.toSearchResultsEvent(responseModel);
+    if (gathered) yield encoder.encode(gathered);
+  }
+
   async function* applyGuidance(guidance: string): AsyncGenerator<Uint8Array, void> {
     const stamp = new Date(now()).toISOString();
     const firstPending = plan.findIndex((step) => step.status === 'pending');
@@ -2360,6 +2442,11 @@ export async function* runResearchLoop(
     for (let round = 1; round <= maxGatherRounds; round++) {
       if (yield* pauseIfRequested()) return;
       iteration = planningTurnEnabled ? round + 1 : round;
+      if (round === 1 && options.readConnectorSources) {
+        if (yield* flushCancellationIfRequested()) return;
+        const plannedQueries = pendingPlannedQueries().map((step) => step.description);
+        yield* readConnectedApps(plannedQueries.length > 0 ? plannedQueries : [userQuery]);
+      }
       const sourcesBeforeRound = sources.size;
 
       // Plan bookkeeping. Round 1 executes the planned queries as one batch:

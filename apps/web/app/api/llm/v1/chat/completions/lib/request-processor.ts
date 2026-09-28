@@ -298,7 +298,11 @@ import {
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
-import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
+import {
+  createResearchDomainPolicy,
+  MAX_RESEARCH_CONNECTOR_SOURCES,
+  type ResearchDomainPolicy,
+} from './research-sources';
 import {
   IMAGE_DETAIL_VALUES,
   imageDetailRefusalMessage,
@@ -509,6 +513,10 @@ export const ChatCompletionRequestSchema = z
         files: z.boolean().optional(),
         allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
         deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        connectors: z
+          .array(z.string().trim().min(1).max(200))
+          .max(MAX_RESEARCH_CONNECTOR_SOURCES)
+          .optional(),
       })
       .optional(),
     research_resume: z
@@ -1183,6 +1191,7 @@ export type ProcessedRequest = {
     files: boolean;
     allowDomains: string[];
     denyDomains: string[];
+    connectors: string[];
   };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
@@ -5324,6 +5333,7 @@ export async function processRequest(
             files: chatRequest.research_sources.files === true,
             allowDomains: chatRequest.research_sources.allow_domains ?? [],
             denyDomains: chatRequest.research_sources.deny_domains ?? [],
+            connectors: chatRequest.research_sources.connectors ?? [],
           },
         }
       : {}),
