@@ -1,5 +1,6 @@
 pub mod agent_picker;
 pub mod approval_overlay;
+pub mod checkpoint_picker;
 pub mod command_popup;
 pub mod diff_review;
 pub mod effort_picker;

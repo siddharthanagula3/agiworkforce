@@ -818,6 +818,12 @@ impl TuiApp {
                 self.active_overlay = None;
                 resume_session(&reference, self);
             }
+            ViewAction::SideAction(tag) if tag.starts_with("rewind:") => {
+                let arg = tag.trim_start_matches("rewind:").to_string();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                apply_rewind(self, &arg);
+            }
             ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
                 let path = tag.trim_start_matches("mention:").to_string();
                 self.insert_mention(&path);
@@ -2957,6 +2963,56 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
     });
 }
 
+fn open_checkpoint_picker(app: &mut TuiApp) {
+    use crate::tui::widgets::checkpoint_picker::{CheckpointEntry, CheckpointPickerView};
+
+    let summaries = app.session.checkpoint_summaries();
+    let entries: Vec<CheckpointEntry> = summaries
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(offset, summary)| CheckpointEntry {
+            steps: offset + 1,
+            label: sanitize_terminal_text(&format!(
+                "{}  {}  ({})",
+                summary.created_at.format("%H:%M"),
+                crate::repl::checkpoint_prompt_line(&summary.prompt),
+                crate::repl::checkpoint_files_label(summary.tracked_files)
+            ))
+            .into_owned(),
+            tracked_files: summary.tracked_files,
+        })
+        .collect();
+    app.open_overlay(Box::new(CheckpointPickerView::new(entries)));
+}
+
+fn apply_rewind(app: &mut TuiApp, arg: &str) {
+    let (message, rewound) = crate::repl::rewind_session(arg, &mut app.session);
+    let conversation_restored = rewound
+        .as_ref()
+        .is_some_and(|rewound| rewound.conversation_restored);
+    if conversation_restored {
+        rebuild_transcript_from_session(app);
+        app.tool_cells.clear();
+    }
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text: message.plain_message(),
+    });
+    let prompt = rewound
+        .filter(|rewound| rewound.conversation_restored && !rewound.prompt.trim().is_empty())
+        .map(|rewound| rewound.prompt);
+    if let Some(prompt) = prompt {
+        app.input = prompt;
+        app.cursor = app.input.len();
+        app.status_notice = Some((
+            "your prompt from that point is back in the composer".to_string(),
+            Instant::now(),
+        ));
+    }
+    app.sync_stats();
+}
+
 /// Rebuild the visible transcript from the session's own messages, so what the
 /// screen shows and what the model was sent cannot drift apart.
 fn rebuild_transcript_from_session(app: &mut TuiApp) {
@@ -4043,9 +4099,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/rewind" => SlashResult::SystemMessage(
-            crate::repl::rewind_session_for_display(arg, &mut app.session).plain_message(),
-        ),
+        "/rewind" => {
+            if arg.trim().is_empty() {
+                open_checkpoint_picker(app);
+            } else {
+                apply_rewind(app, arg);
+            }
+            SlashResult::SystemMessage(String::new())
+        }
 
         // ── Tools & plugins ──
         "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
