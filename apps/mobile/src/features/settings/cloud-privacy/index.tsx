@@ -167,6 +167,11 @@ export default function CloudPrivacyScreen() {
           onPress={() => void openExternalUrl('https://agiworkforce.com/privacy')}
         />
         <SettingsRow
+          label="Data rights requests"
+          icon={Shield}
+          onPress={() => void openExternalUrl('https://agiworkforce.com/privacy/requests')}
+        />
+        <SettingsRow
           label="Terms of Service"
           icon={ExternalLink}
           onPress={() => void openExternalUrl('https://agiworkforce.com/terms')}

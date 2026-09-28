@@ -70,9 +70,9 @@
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
         },
         {
-          "date": "2026-09-22",
+          "date": "2026-09-27",
           "digest": "f5fa55928ecda09e",
-          "note": "Appeals now point to the in-product appeal and the /appeal form, each with a reference, beside the existing email route; no obligation or effective date changes. Whether to move the date is the founder's decision, reported 2026-09-27."
+          "note": "Appeals point to the in-product appeal and the /appeal form, each with a reference, beside the email route; effective date moved to the day it ships."
         }
       ]
     },
@@ -210,9 +210,9 @@
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
         },
         {
-          "date": "2026-08-05",
+          "date": "2026-09-27",
           "digest": "ad2044fbd196d614",
-          "note": "Adds the in-product Report an accessibility barrier ticket beside the email address; no commitment or effective date changes. Whether to move the date is the founder's decision, reported 2026-09-27."
+          "note": "Adds the in-product Report an accessibility barrier ticket beside the email address; effective date moved to the day it ships."
         }
       ]
     },
@@ -310,9 +310,9 @@
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
         },
         {
-          "date": "2026-08-06",
+          "date": "2026-09-27",
           "digest": "ccab8bac49fdd94a",
-          "note": "Adds an Impersonation section pointing to the report form's impersonation option; the notice, counter-notice and repeat-infringer terms do not change. Whether to move the date is the founder's decision, reported 2026-09-27."
+          "note": "Adds the Impersonation section and the report form's impersonation option; effective date moved to the day it ships."
         }
       ]
     },
