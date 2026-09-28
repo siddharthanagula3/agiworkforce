@@ -252,3 +252,66 @@ export async function getPluginRegistryEntry(
 
   return { entry: rowToEntry(row), manifest: rowToManifest(row) };
 }
+
+interface PluginModerationRow {
+  id: string;
+  name: string;
+  version: string;
+  status: string;
+  publisher_name: string;
+  versions_in_review: number | string;
+  total_count: number | string;
+}
+
+export interface PluginModerationEntry {
+  id: string;
+  name: string;
+  version: string;
+  status: string;
+  publisherName: string;
+  versionsInReview: number;
+}
+
+export interface ListPluginModerationEntriesResult {
+  entries: PluginModerationEntry[];
+  total: number;
+}
+
+export async function listPluginModerationEntries(
+  db: DatabaseAdapter,
+  search: string,
+): Promise<ListPluginModerationEntriesResult> {
+  const needle = search.trim().toLowerCase();
+  const rows = await db.query<PluginModerationRow>(
+    `select entry.id, entry.name, entry.version, entry.status, entry.publisher_name,
+            review.pending as versions_in_review,
+            count(*) over () as total_count
+       from public.plugin_registry_entries entry
+      cross join lateral (
+        select count(*) as pending
+          from public.plugin_registry_versions candidate
+         where candidate.plugin_id = entry.id and candidate.status = 'in_review'
+      ) review
+      where $1::text is null
+         or strpos(entry.id, $1) > 0
+         or strpos(lower(entry.name), $1) > 0
+         or strpos(lower(entry.publisher_name), $1) > 0
+      order by lower(entry.name) asc, entry.id asc
+      limit $2`,
+    [needle.length > 0 ? needle : null, PLUGIN_REGISTRY_MAX_LIMIT],
+  );
+
+  const first = rows[0];
+  const total = first ? Number(first.total_count) : 0;
+  return {
+    entries: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      version: row.version,
+      status: row.status,
+      publisherName: row.publisher_name,
+      versionsInReview: Number(row.versions_in_review),
+    })),
+    total: Number.isFinite(total) ? total : rows.length,
+  };
+}

@@ -10,6 +10,7 @@ import {
 import type { WorkspaceCloudSource } from '../context-handoff';
 import { describeCloudRunFailure } from './cloudRunApproval';
 import { OPEN_CLOUD_CODE_SESSION_COMMAND } from './cloudCodeSessions';
+import { t, tPlural } from '../../l10n';
 
 export const CONTINUE_IN_CLOUD_COMMAND = 'agi-workforce.continueInCloud';
 
@@ -29,35 +30,27 @@ export function describeCloudSourceRefusal(source: WorkspaceCloudSource | null):
   return null;
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 export function describeCloudContinuationReview(
   source: WorkspaceCloudSource & { branch: string },
   modelId: string,
 ): { message: string; detail: string } {
   const lines = [
-    `Repository: ${source.repository}`,
-    `Branch: ${source.branch}, as pushed to ${source.upstream ?? 'GitHub'}`,
-    `Model: ${modelDisplayNameById(modelId) ?? modelId}`,
-    'Network: Trusted hosts, package registries and code hosts only',
+    t('cloud.repository', { repository: source.repository }),
+    t('cloud.branch', { branch: source.branch, upstream: source.upstream ?? 'GitHub' }),
+    t('cloud.model', { model: modelDisplayNameById(modelId) ?? modelId }),
+    t('cloud.network'),
     '',
-    'What moves: the task you typed and the pushed branch.',
-    'What stays here: this chat’s conversation, local tools and servers, and anything not pushed.',
+    t('cloud.whatMoves'),
+    t('cloud.whatStays'),
   ];
   if (source.unpushedCommits > 0) {
-    lines.push(
-      `${plural(source.unpushedCommits, 'commit', 'commits')} on ${source.branch} ${source.unpushedCommits === 1 ? 'is' : 'are'} not pushed and will not be in the cloud.`,
-    );
+    lines.push(tPlural('cloud.unpushedCommits', source.unpushedCommits, { branch: source.branch }));
   }
   if (source.dirtyPaths.length > 0) {
-    lines.push(
-      `${plural(source.dirtyPaths.length, 'file has', 'files have')} uncommitted changes that will not be in the cloud.`,
-    );
+    lines.push(tPlural('cloud.uncommittedFiles', source.dirtyPaths.length));
   }
   return {
-    message: `Continue this work in the cloud on ${source.repository}?`,
+    message: t('cloud.continueQuestion', { repository: source.repository }),
     detail: lines.join('\n'),
   };
 }
