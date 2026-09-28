@@ -196,8 +196,8 @@ export function ScheduleCard({
               </h2>
               {isRunningNow && (
                 <span className="relative flex h-2.5 w-2.5 shrink-0" title="Running now">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75 motion-reduce:animate-none" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-info-fill opacity-75 motion-reduce:animate-none" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-info-fill" />
                   <span className="sr-only">Running now</span>
                 </span>
               )}

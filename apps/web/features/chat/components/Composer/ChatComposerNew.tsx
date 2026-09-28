@@ -4065,14 +4065,14 @@ const ChatComposerNewComponent = ({
       {selectedMcpContext && (
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           {selectedMcpContext.prompt ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-600/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-700 dark:text-sky-300">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-info-fill/30 bg-info-fill/10 px-2.5 py-1 text-xs text-info-text">
               Prompt: {selectedMcpContext.prompt.name}
             </span>
           ) : null}
           {(selectedMcpContext.resources ?? []).map((resource) => (
             <span
               key={`${resource.connectorId}:${resource.uri}`}
-              className="inline-flex max-w-64 items-center gap-1.5 truncate rounded-full border border-sky-600/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-700 dark:text-sky-300"
+              className="inline-flex max-w-64 items-center gap-1.5 truncate rounded-full border border-info-fill/30 bg-info-fill/10 px-2.5 py-1 text-xs text-info-text"
             >
               Resource: {resource.name ?? resource.uri}
             </span>

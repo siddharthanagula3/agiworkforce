@@ -37,7 +37,7 @@ export default function BlogError({
       <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
         <button
           onClick={reset}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white"
+          className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <RefreshCw className="h-4 w-4 me-2" />
           Try Again
