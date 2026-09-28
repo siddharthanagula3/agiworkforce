@@ -105,14 +105,13 @@ Code: `apps/desktop/electron/runtime/dispatcher.ts:421-424`, `apps/web/features/
 
 - Done when: The user grants the agent specific local folders and can revoke them.
 - Wave: 2
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Folders can be granted (workspace_pick_root), but the only review and revoke screen, Local access, mounts only in the internal Tauri shell, so Electron users cannot revoke a granted folder. | ui, mount |
-| cli | partial | /add-dir is a real grant (path_security roots gate validate_workspace_path), but the criterion also needs revoke: there is no /remove-dir or any command that unregisters one directory; unregister_additional_workspace_roots runs only when a privacy handoff resets the session. Remaining: add a /remove-dir that unregisters the root. |  |
 
-Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`, `apps/cli/src/claude_parity.rs:238-246`
+Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`
 
 ## S65.14: Clicking and typing.
 
