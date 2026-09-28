@@ -295,7 +295,7 @@ describe('ComposerFooter · picker rows', () => {
     fireEvent.click(more);
     expect(within(dialog).getByRole('textbox', { name: 'Search models' })).toBeInTheDocument();
     const locked = within(dialog).getByRole('option', { name: new RegExp(lockedFixture.name) });
-    expect(locked).toHaveTextContent(`${lockedFixture.planLabel} and above`);
+    expect(locked).toHaveTextContent(`Upgrade to use · ${lockedFixture.planLabel}`);
     expect(locked.className).toContain('h-12');
   });
 
