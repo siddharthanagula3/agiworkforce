@@ -17,6 +17,7 @@ import {
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { PasskeysPanel } from '@features/settings/components/Settings/PasskeysPanel';
+import { AdvancedAccountSecurityPanel } from '@/features/account-security/components/AdvancedAccountSecurityPanel';
 import { SignInMethodsPanel } from '@features/settings/components/Settings/SignInMethodsPanel';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
@@ -118,7 +119,8 @@ export function SecuritySection() {
           Security
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Sign-in methods, passkeys, two-factor authentication, session timeout, and password.
+          Sign-in methods, passkeys, Advanced Account Security, two-factor authentication, session
+          timeout, and password.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="account-security" label="How account security works" />
@@ -128,6 +130,8 @@ export function SecuritySection() {
       <SignInMethodsPanel />
 
       <PasskeysPanel />
+
+      <AdvancedAccountSecurityPanel />
 
       <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
 
@@ -176,8 +180,8 @@ export function SecuritySection() {
           Current account boundary
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Hardware security keys and SMS MFA are not available in the current account contract, and
-          no device skips the sign-in checks. Devices you linked, such as the CLI, VS Code, the
+          SMS MFA is not available, and no device skips the sign-in checks. Hardware security keys
+          work with Advanced Account Security. Devices you linked, such as the CLI, VS Code, the
           Chrome extension or the desktop app, are listed in Account settings under Linked devices,
           where you can unlink each one. Passkeys sign you in.{' '}
           {authenticatorAvailable

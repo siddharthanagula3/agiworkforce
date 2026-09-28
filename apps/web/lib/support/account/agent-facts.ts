@@ -1,5 +1,5 @@
 import type { SupportAccountFact } from '@/lib/support/agent/types';
-import type { ModelSafeAccountFacts } from './types';
+import type { ModelSafeAccountFacts } from '@agiworkforce/cloud-contracts/support';
 
 interface FactSpec {
   key: keyof ModelSafeAccountFacts;

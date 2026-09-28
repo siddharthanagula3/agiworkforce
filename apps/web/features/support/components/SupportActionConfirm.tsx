@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { SupportActionFollowUp } from '../lib/contract';
+import type { SupportActionFollowUp } from '@agiworkforce/cloud-contracts/support';
 import type { SupportActionFlow } from '../hooks/useSupportSession';
 import { runPostFollowUp } from '../lib/support-client';
 import { SupportRefusalCard } from './SupportRefusalCard';
