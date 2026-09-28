@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { canUseBillingPlanCapability } from '../billing-catalog';
 import {
   TIER_POLICIES,
   getTierPolicy,
@@ -45,7 +46,7 @@ describe('TIER_POLICIES, Free chat tier', () => {
     expect(policy.allowVoice).toBe(true);
     expect(policy.allowedSlots).toContain('voice_transcription');
     expect(policy.allowedSlots).toContain('voice_rewrite');
-    expect(policy.allowDeepResearch).toBe(false);
+    expect(canUseBillingPlanCapability('free', 'deep_research')).toBe(false);
   });
 });
 
@@ -233,7 +234,6 @@ describe('getTierPolicy, public getter', () => {
       allowMCP: 'one_custom_remote',
       allowSearch: true,
       allowVoice: true,
-      allowDeepResearch: false,
       allowComputerUse: false,
       allowManualSelection: false,
       manualModelSelection: false,

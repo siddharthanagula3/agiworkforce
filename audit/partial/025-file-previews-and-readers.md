@@ -26,11 +26,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.03: Markdown reader.
 
@@ -40,11 +39,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.04: Source-code reader.
 
@@ -54,11 +52,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.05: Image viewer.
 

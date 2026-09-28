@@ -1,8 +1,13 @@
-export const MANAGED_MEMORY_MAX_CONTENT_CHARS = 10_000;
+export const MANAGED_MEMORY_MAX_CONTENT_CHARS = 20_000;
 export const MANAGED_MEMORY_MAX_CATEGORY_CHARS = 200;
 export const MANAGED_MEMORY_MAX_PAGE_SIZE = 100;
 export const MANAGED_MEMORY_COMMAND_MAX_CHARS = 4_000;
 export const MANAGED_MEMORY_SEARCH_MAX_QUERY_CHARS = 500;
+
+export const MANAGED_MEMORY_LOCAL_CONTEXT_PATH = '/api/memory/local-context';
+
+export const MANAGED_MEMORY_CITATIONS_HEADER = 'x-agi-memory-citations';
+export const MANAGED_MEMORY_CITATION_EXCERPT_CHARS = 240;
 
 export const MANAGED_MEMORY_SOURCES = ['web', 'mobile', 'desktop', 'auto'] as const;
 export type ManagedMemorySource = (typeof MANAGED_MEMORY_SOURCES)[number];
@@ -149,6 +154,60 @@ export interface ManagedMemoryImportCommitResponse {
   blockedCount: number;
   excludedCount: number;
   memories: ManagedMemoryRecord[];
+}
+
+export interface ManagedMemoryCitation {
+  id: string;
+  excerpt: string;
+}
+
+export interface ManagedMemoryCitations {
+  count: number;
+  memories: ManagedMemoryCitation[];
+}
+
+export function managedMemoryCitationExcerpt(content: string): string {
+  const text = content.replace(/\s+/g, ' ').trim();
+  if (text.length <= MANAGED_MEMORY_CITATION_EXCERPT_CHARS) return text;
+  return `${text.slice(0, MANAGED_MEMORY_CITATION_EXCERPT_CHARS - 1).trimEnd()}\u2026`;
+}
+
+export interface ManagedMemoryLocalContextResponse {
+  instructions: string | null;
+  memory: string | null;
+  memoryCitations: ManagedMemoryCitation[];
+}
+
+export interface ManagedMemoryLocalTurnSettings {
+  temporary: boolean;
+  memoryEnabled: boolean;
+  personalization: boolean;
+}
+
+export function managedMemoryLocalContextUrl(projectId: string | null): string {
+  return projectId
+    ? `${MANAGED_MEMORY_LOCAL_CONTEXT_PATH}?${new URLSearchParams({ projectId }).toString()}`
+    : MANAGED_MEMORY_LOCAL_CONTEXT_PATH;
+}
+
+export interface ManagedMemoryLocalTurnContext {
+  blocks: string[];
+  memoryCitations: ManagedMemoryCitations | null;
+}
+
+export function managedMemoryLocalTurnContext(
+  context: ManagedMemoryLocalContextResponse,
+  settings: ManagedMemoryLocalTurnSettings,
+): ManagedMemoryLocalTurnContext {
+  if (!settings.personalization) return { blocks: [], memoryCitations: null };
+  const memory = settings.temporary || !settings.memoryEnabled ? null : context.memory;
+  return {
+    blocks: [context.instructions, memory].filter((block): block is string => block !== null),
+    memoryCitations:
+      memory && context.memoryCitations.length > 0
+        ? { count: context.memoryCitations.length, memories: context.memoryCitations }
+        : null,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -361,4 +420,39 @@ export function parseManagedMemoryImportCommitResponse(
     excludedCount: countOf(value['excludedCount']),
     memories: parseRecords(value['memories']),
   };
+}
+
+function nonEmptyStringOrNull(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  return value.trim() === '' ? null : value;
+}
+
+export function parseManagedMemoryLocalContextResponse(
+  value: unknown,
+): ManagedMemoryLocalContextResponse | null {
+  if (!isRecord(value)) return null;
+  const instructions = nonEmptyStringOrNull(value['instructions']);
+  const memory = nonEmptyStringOrNull(value['memory']);
+  if (instructions === undefined || memory === undefined) return null;
+  const citations = parseManagedMemoryCitations({
+    count: 0,
+    memories: Array.isArray(value['memoryCitations']) ? value['memoryCitations'] : [],
+  });
+  return { instructions, memory, memoryCitations: memory ? (citations?.memories ?? []) : [] };
+}
+
+export function parseManagedMemoryCitations(value: unknown): ManagedMemoryCitations | null {
+  if (!isRecord(value) || !Array.isArray(value['memories'])) return null;
+  const memories = value['memories'].flatMap((entry) =>
+    isRecord(entry) &&
+    typeof entry['id'] === 'string' &&
+    entry['id'] !== '' &&
+    typeof entry['excerpt'] === 'string' &&
+    entry['excerpt'].trim() !== ''
+      ? [{ id: entry['id'], excerpt: entry['excerpt'] }]
+      : [],
+  );
+  const count = Math.max(Math.floor(countOf(value['count'])), memories.length);
+  return count > 0 ? { count, memories } : null;
 }
