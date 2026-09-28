@@ -12,27 +12,28 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
     AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionApproval,
-    DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
-    DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
-    HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
-    HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse, HookRemoveParams,
-    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpAddParams,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
-    MemoryAddResponse, ModelListParams, PendingApprovalSnapshot, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
-    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
+    DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
+    DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
+    HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
+    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
+    HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
+    LocalModelSummary, McpAddParams, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
+    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
+    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
+    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
+    WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -1132,7 +1133,7 @@ impl CliDeveloperSessionHost {
         }
     }
 
-    fn resolve_thread_model(
+    async fn resolve_thread_model(
         &self,
         requested: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
@@ -1144,7 +1145,13 @@ impl CliDeveloperSessionHost {
             });
         }
 
-        self.resolve_auto_thread_model(requested, DeveloperRoutingTaskType::Coding, None)
+        let account_tier = crate::tier_cache::managed_auto_routing_tier().await;
+        self.resolve_auto_thread_model(
+            requested,
+            DeveloperRoutingTaskType::Coding,
+            None,
+            account_tier,
+        )
     }
 
     fn resolve_auto_thread_model(
@@ -1152,17 +1159,14 @@ impl CliDeveloperSessionHost {
         requested: &str,
         task_type: DeveloperRoutingTaskType,
         previous: Option<&ManagedSessionAutoRouting>,
+        account_tier: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
         let trust_mode = if let Some(previous) = previous {
             previous.trust_mode
         } else {
             self.configured_auto_trust_mode()?
         };
-        let tier = if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
-            "byok"
-        } else {
-            "free"
-        };
+        let tier = auto_routing_tier(trust_mode, account_tier);
         let routing_task_type = registry_task_type(task_type);
         let selection = crate::model_catalog::resolve_auto_model_with_context(
             requested,
@@ -1419,7 +1423,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .unwrap_or_else(|| self.config.default.model.clone());
         let requested_provider = params.provider.map(LocalModelProvider::as_str);
         crate::tier_cache::ensure_plan_models_cached().await;
-        let resolved_model = self.resolve_thread_model(&requested_model)?;
+        let resolved_model = self.resolve_thread_model(&requested_model).await?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);
         let source = source_from_client(&client);
@@ -2256,6 +2260,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.refresh_from_disk(&params.thread_id, &session, taken_over)
             .await?;
         let activity = session.lock().await.session_activity.clone();
+        let routes_automatically = params
+            .model
+            .as_deref()
+            .is_some_and(agiworkforce_model_registry::is_auto_routing_selection)
+            || session.lock().await.managed_auto_routing().is_some();
+        let account_tier = if routes_automatically {
+            crate::tier_cache::managed_auto_routing_tier().await
+        } else {
+            "free"
+        };
 
         let mut refused_turn: Option<anyhow::Error> = None;
         {
@@ -2263,18 +2277,30 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let snapshot = TurnSetupSnapshot::capture(&agent);
             let setup_result = (|| {
                 let previous_auto = agent.managed_auto_routing().cloned();
+                let reroute =
+                    params.routing_task_type.is_some() || params.routing_profile.is_some();
                 let requested_auto = params
                     .model
                     .as_deref()
                     .filter(|model| agiworkforce_model_registry::is_auto_routing_selection(model))
                     .map(str::to_owned)
                     .or_else(|| {
-                        params
-                            .routing_task_type
-                            .and(previous_auto.as_ref().map(|state| state.selection.clone()))
+                        previous_auto
+                            .as_ref()
+                            .filter(|_| reroute)
+                            .map(|state| state.selection.clone())
+                    })
+                    .map(|selection| match params.routing_profile {
+                        Some(profile) => routing_profile_selection(profile).to_string(),
+                        None => selection,
                     });
 
                 if let Some(selection) = requested_auto {
+                    if !agiworkforce_model_registry::is_auto_routing_selection(&selection) {
+                        return Err(DeveloperSessionHostError::invalid_request(format!(
+                            "The routing profile '{selection}' is not available in this model registry"
+                        )));
+                    }
                     let task_type = params
                         .routing_task_type
                         .or_else(|| previous_auto.as_ref().map(|state| state.task_type))
@@ -2283,6 +2309,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         &selection,
                         task_type,
                         previous_auto.as_ref(),
+                        account_tier,
                     )?;
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
@@ -2307,6 +2334,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
                 agent.max_turns = max_turns;
+                if let Some(trust_mode) = agent.managed_auto_routing().map(|state| state.trust_mode)
+                {
+                    agent.auto_routing_tier =
+                        Some(auto_routing_tier(trust_mode, account_tier).to_string());
+                }
                 if !context_files.is_empty() {
                     let report = agent.attach_context_files(
                         context_files
@@ -3585,6 +3617,25 @@ async fn worktree_summary(
             .await
             .map_err(internal_error)?,
     })
+}
+
+fn auto_routing_tier(
+    trust_mode: agiworkforce_model_registry::TrustMode,
+    account_tier: &str,
+) -> &str {
+    if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
+        "byok"
+    } else {
+        account_tier
+    }
+}
+
+fn routing_profile_selection(profile: DeveloperRoutingProfile) -> &'static str {
+    match profile {
+        DeveloperRoutingProfile::Auto => "auto",
+        DeveloperRoutingProfile::Quality => "auto-premium",
+        DeveloperRoutingProfile::Speed | DeveloperRoutingProfile::Cost => "auto-economy",
+    }
 }
 
 fn validated_max_turns(requested: Option<u32>) -> Result<Option<usize>, DeveloperSessionHostError> {
@@ -4965,6 +5016,7 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -5844,7 +5896,12 @@ mod tests {
         )
         .expect("managed host");
         let previous = host
-            .resolve_auto_thread_model("auto-premium", DeveloperRoutingTaskType::General, None)
+            .resolve_auto_thread_model(
+                "auto-premium",
+                DeveloperRoutingTaskType::General,
+                None,
+                "free",
+            )
             .expect("general route")
             .auto_routing
             .expect("persisted general Auto state");
@@ -5854,6 +5911,7 @@ mod tests {
                 "auto-premium",
                 DeveloperRoutingTaskType::Coding,
                 Some(&previous),
+                "free",
             )
             .expect("coding route");
 
@@ -5902,6 +5960,7 @@ mod tests {
                 "auto-economy",
                 DeveloperRoutingTaskType::Coding,
                 Some(&previous),
+                "byok",
             )
             .expect("coding route");
 
@@ -6008,6 +6067,7 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
             })
             .await
             .expect("next Auto turn");
@@ -6174,6 +6234,7 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
             })
             .await;
         if result.is_ok() {
@@ -7160,6 +7221,7 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7390,6 +7452,7 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7505,6 +7568,7 @@ mod tests {
             context_files: None,
             client_turn_id: client_turn_id.map(str::to_string),
             max_turns: None,
+            routing_profile: None,
         };
 
         let replayed = host
