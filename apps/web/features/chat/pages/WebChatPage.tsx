@@ -252,9 +252,12 @@ import type {
   ResearchPlanOptions,
 } from '../components/research/ResearchActivity';
 import {
-  ResearchRunActionProvider,
+  ResearchRunControlsProvider,
   type ResearchRunActionHandler,
+  type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { useConnectors } from '@/features/connectors/hooks/use-connectors';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
@@ -5017,6 +5020,41 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleRetryResearch, pauseResearchRun],
   );
 
+  const {
+    connectedIds: researchConnectedIds,
+    sources: researchConnectorKinds,
+    customNames: researchConnectorNames,
+    toolConnectorIds: researchToolConnectorIds,
+  } = useConnectors();
+  const researchDisabledConnectorIds = useChatStore((s) =>
+    displayedConversationId
+      ? s.disabledConnectorIdsByConversation[displayedConversationId]
+      : undefined,
+  );
+  const researchRunControls = useMemo<ResearchRunControls>(
+    () => ({
+      act: handleResearchRunAction,
+      connectorOptions: Array.from(researchConnectedIds)
+        .map((id) => ({
+          connectorId: researchToolConnectorIds[id] ?? id,
+          label:
+            researchConnectorKinds[id] === 'custom'
+              ? (researchConnectorNames[id] ?? id)
+              : (CONNECTORS.find((connector) => connector.id === id)?.name ?? id),
+        }))
+        .filter((option) => !researchDisabledConnectorIds?.includes(option.connectorId))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    }),
+    [
+      handleResearchRunAction,
+      researchConnectedIds,
+      researchConnectorKinds,
+      researchConnectorNames,
+      researchDisabledConnectorIds,
+      researchToolConnectorIds,
+    ],
+  );
+
   useEffect(() => {
     if (isStreaming) return;
     for (const [id, guidance] of pendingResearchGuidanceRef.current) {
@@ -5109,12 +5147,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ...(options?.deliverable ? { deliverable: options.deliverable } : {}),
             },
             ...(options &&
-            (options.files || options.allowDomains.length > 0 || options.denyDomains.length > 0)
+            (options.files ||
+              options.allowDomains.length > 0 ||
+              options.denyDomains.length > 0 ||
+              options.connectors.length > 0)
               ? {
                   researchSources: {
                     files: options.files,
                     allowDomains: options.allowDomains,
                     denyDomains: options.denyDomains,
+                    connectors: options.connectors,
                   },
                 }
               : {}),
@@ -6249,7 +6291,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <ToolInputProvider value={resolveToolInput}>
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                          <ResearchRunActionProvider value={handleResearchRunAction}>
+                          <ResearchRunControlsProvider value={researchRunControls}>
                             <ChatMessageList
                               messages={chatMessages}
                               transcriptPatch={chatMessageProjection.patch}
@@ -6288,7 +6330,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                               regenerateModelOptions={regenerateModelOptions}
                               turnErrorActive={turnErrorNotice !== null}
                             />
-                          </ResearchRunActionProvider>
+                          </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
                     </ToolInputProvider>

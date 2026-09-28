@@ -86,9 +86,7 @@ describe('page context is never silently missing', () => {
     );
     const capture = sidePanel.slice(
       sidePanel.indexOf('async function capturePageContext()'),
-      sidePanel.indexOf('const PAGE_CONTEXT_MAX_CHARS') > 0
-        ? sidePanel.indexOf('interface SlashCommandMeta')
-        : sidePanel.length,
+      sidePanel.indexOf('function requestStreamCancellation('),
     );
     expect(capture).not.toMatch(/resolve\(null\)/);
     expect(capture).toContain('describePageContextFailure(scriptFailure)');
