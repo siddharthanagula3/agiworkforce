@@ -952,7 +952,7 @@ message -- revise and call `update_plan` again.\n\n",
             callback: self.recorded_approval_callback(),
             require_confirmation: !self.skips_approval(),
         };
-        let (run_result, completion_usage, managed_request_ids, incomplete) = {
+        let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -967,16 +967,18 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let result = models::managed_approvals::with_managed_tool_approval(
-                managed_tool_approval,
-                run_turn(&mut adapter, params, &mut tracker),
-            )
-            .await;
+            let (result, sources) =
+                crate::sources::collect(models::managed_approvals::with_managed_tool_approval(
+                    managed_tool_approval,
+                    run_turn(&mut adapter, params, &mut tracker),
+                ))
+                .await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
                 std::mem::take(&mut adapter.managed_request_ids),
                 adapter.incomplete,
+                sources,
             )
         };
 
@@ -1135,6 +1137,7 @@ message -- revise and call `update_plan` again.\n\n",
             via_subscription,
             incomplete,
             managed_request_ids,
+            sources,
         })
     }
 
