@@ -253,7 +253,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 | web | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
 | desktop | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
 | mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
-| vscode | partial | The VS Code chat sidebar reaches usage limits, but its usage error path offers no switch to an eligible model (p-privacy S110 re-trace); owner p-sessions | ui |
+| vscode | partial | The app-server TurnFailure now carries alternativeModel, resetsAt and recoveryHref (4c78a38deb); VS Code has to offer the switch and reset time from them (p-sessions) | handler |
 | chrome | partial | A disallowed selection falls back to Auto without naming a model, the reset time is only in Usage settings, and the copy states upgrades need the waitlist. | ui |
 | api | partial | Error bodies carry alternative_model only for the flagship and free-trial cases; most exhaustion errors carry no alternative, and checkout recovery links hit the waitlist. | ui |
 
@@ -270,7 +270,7 @@ Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/featu
 | desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
 | cli | partial | agi mcp login reauthorises the user's own MCP servers, but account connectors have no CLI reauth path, and nothing resumes after reconnecting. | states |
-| vscode | partial | The Connectors tree shows a reauth state but reconnecting is a browser link-out and nothing resumes the turn, as for Chrome (p-privacy S110 re-trace); owner p-sessions | ui, states |
+| vscode | partial | An MCP call whose sign-in expired now reaches app-server clients as mcp/authRequired (25fd8a679d); VS Code has to offer reconnect from it (p-sessions) | handler |
 | chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
 | api | partial | API-key calls reach the account's connectors (connector_tools_enabled, documented), and an expired connector answers with the agi_connector_authorization_required payload streamed as x_tool_result content, but openapi.json does not document x_tool_result or that payload, its connectUrl is a path on the app origin, and nothing resumes the interrupted turn after reconnecting. | states |
 
