@@ -363,7 +363,7 @@ export function PrivacySection() {
         : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted. Memories learned from these chats stay until you delete them in Settings > Memory.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Memory.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -497,9 +497,9 @@ export function PrivacySection() {
           </p>
           <p style={{ margin: 'var(--space-2) 0 0' }}>
             How long we keep it: a chat stays in your history until you delete it, and a deleted
-            chat stays in Recently deleted until you restore it. A temporary chat and its
-            attachments are removed after 30 days. When you delete your account, erasure starts 24
-            hours after you confirm, and you can cancel until then.
+            chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat
+            and its attachments are removed after 30 days. When you delete your account, erasure
+            starts 24 hours after you confirm, and you can cancel until then.
           </p>
         </ExpandableSection>
 
@@ -677,7 +677,7 @@ export function PrivacySection() {
               Recently deleted
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Put back a chat you deleted by mistake.
+              Put back a chat you deleted in the last 30 days.
             </div>
           </div>
           <SettingsSectionLink
@@ -748,7 +748,7 @@ export function PrivacySection() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Remove every active and archived conversation in this workspace from history. Restore
-              them from Recently deleted.
+              them from Recently deleted within 30 days.
             </div>
           </div>
           <button
