@@ -289,6 +289,13 @@ export function ChatInput({
     if (canUseAgiWork && activeProjectId) setWorkMode('agiwork');
   }, [activeProjectId, canUseAgiWork]);
 
+  const pendingWorkMode = useChatStore((s) => s.pendingWorkMode);
+  useEffect(() => {
+    if (!pendingWorkMode) return;
+    setWorkMode(canUseAgiWork ? pendingWorkMode : 'chat');
+    useChatStore.getState().setPendingWorkMode(null);
+  }, [pendingWorkMode, canUseAgiWork]);
+
   const prevFolderLabelRef = useRef(currentFolderLabel);
   useEffect(() => {
     const prev = prevFolderLabelRef.current;

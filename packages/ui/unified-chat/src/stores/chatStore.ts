@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Conversation, ChatMessage } from '../lib/types';
+import type { CloudWorkMode } from '@agiworkforce/types';
 import { getTemporalGroup } from '../lib/utils';
 
 const noopStorage: Storage = {
@@ -70,6 +71,7 @@ interface ChatState {
   draftsByConversation: Record<string, string>;
   activeMode: ActiveMode;
   webSearchEnabled: boolean;
+  pendingWorkMode: CloudWorkMode | null;
 
   setActiveConversation: (id: string | null) => void;
   addConversation: (conv: Conversation) => void;
@@ -97,6 +99,7 @@ interface ChatState {
   archiveConversation: (id: string) => void;
   getGroupedConversations: () => Record<string, Conversation[]>;
   setActiveMode: (mode: ActiveMode) => void;
+  setPendingWorkMode: (mode: CloudWorkMode | null) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -115,6 +118,7 @@ export const useChatStore = create<ChatState>()(
       draftsByConversation: {},
       activeMode: null,
       webSearchEnabled: true,
+      pendingWorkMode: null,
 
       setActiveConversation: (id) =>
         set((state) => {
@@ -304,6 +308,8 @@ export const useChatStore = create<ChatState>()(
         }),
 
       setActiveMode: (mode) => set({ activeMode: mode }),
+
+      setPendingWorkMode: (mode) => set({ pendingWorkMode: mode }),
 
       pinConversation: (id, pinned) =>
         set((state) => {

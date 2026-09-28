@@ -45,10 +45,19 @@ export function TasksPage() {
       rerunWork: (goal) => {
         const store = useChatStore.getState();
         store.setDraftContent(goal.goal, PENDING_CONVERSATION_KEY);
-        store.setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
+        store.setComposerToggles(
+          {
+            workMode: 'agiwork',
+            agiWorkScope: {
+              constraints: goal.constraints ?? '',
+              deliverable: goal.deliverable ?? '',
+            },
+          },
+          PENDING_CONVERSATION_KEY,
+        );
         router.push('/chat');
         toast.success(
-          'Loaded this session’s goal into a new AGI Work chat. Review and send to re-run.',
+          'Loaded this session’s goal, constraints and deliverable into a new AGI Work chat. Edit them if you like, then send to run it again.',
         );
       },
     }),
