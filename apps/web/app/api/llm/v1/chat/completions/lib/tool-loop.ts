@@ -79,6 +79,8 @@ import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
   getModelMetadataById,
+  getRegistryRoute,
+  harnessFeatureImplemented,
   isAutoModeModelId,
   isBrowserCommand,
   isImageChatToolName,
@@ -415,6 +417,7 @@ const SENSITIVE_DATA_MEMORY_REFUSAL =
   'Nothing was saved to memory: this turn read health or bank records, and those are never kept in memory. Tell the user it was not saved.';
 
 const MAX_PARALLEL_TOOL_CALLS = 4;
+const PARALLEL_TOOL_CALLS_FEATURE = 'parallelToolCalls';
 
 const MAX_TOOL_RESULT_HISTORY_CHARS = 200_000;
 const KEEP_RECENT_TOOL_RESULTS = 6;
@@ -930,12 +933,16 @@ function egressApprovalSummary(
 ): string {
   if (isUrlFetchTool(toolName)) {
     const host = urlHostOf(args);
-    return `Could send data from this chat to ${host ?? 'a website'}`;
+    return `Could send private data from this chat to ${host ?? 'a website'}`;
   }
-  if (isWebSearchTool(toolName)) return 'Could send data from this chat in a web search';
-  if (toolName === EXECUTE_CODE_TOOL) return 'Could send data from this chat out of the sandbox';
+  if (isWebSearchTool(toolName)) {
+    return 'Could send private data from this chat to a search engine';
+  }
+  if (toolName === EXECUTE_CODE_TOOL) {
+    return 'Could send private data from this chat out of the sandbox';
+  }
   const server = serverLabel ?? mcpServerLabel(toolName);
-  return `Could send data from this chat to ${server ?? 'an outside service'}`;
+  return `Could send private data from this chat to ${server ?? 'an outside service'}`;
 }
 
 function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
@@ -4463,10 +4470,18 @@ export async function* runToolLoop(
     if (calls.length > 0) processed.toolExecutionObserved = true;
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+    const servingHarnessId = getRegistryRoute(
+      servedRouteId ??
+        buildServingRouteId(servingProcessed.provider, servingProcessed.llmRequest.model),
+    )?.harnessId;
+    const readOnlyConcurrency =
+      servingHarnessId && harnessFeatureImplemented(servingHarnessId, PARALLEL_TOOL_CALLS_FEATURE)
+        ? MAX_PARALLEL_TOOL_CALLS
+        : 1;
 
     const toolStartedAt = new Map<string, number>();
     const parallelGroup =
-      readOnly.length > 1
+      readOnly.length > 1 && readOnlyConcurrency > 1
         ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
         : undefined;
     for (const tc of calls) {
@@ -4700,14 +4715,10 @@ export async function* runToolLoop(
       );
     };
 
-    const parallelResults = await mapWithConcurrency(
-      readOnly,
-      MAX_PARALLEL_TOOL_CALLS,
-      async (tc) => {
-        const result = await executeTool(tc);
-        return { tc, ...result };
-      },
-    );
+    const parallelResults = await mapWithConcurrency(readOnly, readOnlyConcurrency, async (tc) => {
+      const result = await executeTool(tc);
+      return { tc, ...result };
+    });
     results.push(...parallelResults);
 
     for (const tc of mutating) {
