@@ -1089,6 +1089,12 @@ enum ArtifactsSubcommand {
         /// artifact's own name; a path with no extension gains one.
         #[arg(long)]
         out: Option<String>,
+        /// Open the written file in this computer's default app for its type.
+        #[arg(long, requires = "out")]
+        open: bool,
+        /// Copy the content to the clipboard.
+        #[arg(long)]
+        copy: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1097,6 +1103,9 @@ enum ArtifactsSubcommand {
     Open {
         /// Artifact id.
         id: String,
+        /// Always open the conversation it came from, even when it is published.
+        #[arg(long)]
+        chat: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1104,6 +1113,22 @@ enum ArtifactsSubcommand {
     Publish {
         /// Artifact id.
         id: String,
+        /// Who can open the link: public (anyone with it) or workspace.
+        #[arg(long, default_value = "public")]
+        audience: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List what this account has published, with each page's audience and link.
+    Published {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change who can open a published artifact: public or workspace.
+    Audience {
+        /// Artifact id.
+        id: String,
+        audience: String,
         #[arg(long)]
         json: bool,
     },
@@ -2231,14 +2256,54 @@ async fn handle_artifacts_command(
             let entries = artifacts::list(&client, *limit, project.as_deref())
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let published = artifacts::published(&client).await.unwrap_or_default();
             render_structured(
                 serde_json::to_value(&entries)?,
-                artifacts::render_index(&entries),
+                artifacts::render_index_marked(&entries, &published),
                 *json,
                 output,
             )
         }
-        ArtifactsSubcommand::Show { id, out, json } => {
+        ArtifactsSubcommand::Published { json } => {
+            let published = artifacts::published(&client)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&published)?,
+                artifacts::render_published(&published),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Audience { id, audience, json } => {
+            let visibility = artifacts::audience_visibility(audience)
+                .with_context(|| format!("Audience must be public or workspace, not {audience}"))?;
+            let Some(published) = artifacts::published_for(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            else {
+                anyhow::bail!("Artifact '{id}' is not published; publish it first")
+            };
+            let updated = artifacts::set_audience(&client, &published.token, visibility)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                updated,
+                format!(
+                    "Artifact {id} can now be opened by {}.",
+                    artifacts::audience_label(visibility)
+                ),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Show {
+            id,
+            out,
+            open,
+            copy,
+            json,
+        } => {
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2250,6 +2315,15 @@ async fn handle_artifacts_command(
                 entry.language.as_deref().or(Some(&block.language)),
             );
 
+            if *copy {
+                arboard::Clipboard::new()
+                    .and_then(|mut clipboard| clipboard.set_text(block.content.clone()))
+                    .map_err(|error| anyhow::anyhow!("Could not copy to the clipboard: {error}"))?;
+                if out.is_none() {
+                    println!("Copied '{}' to the clipboard.", entry.display_title());
+                    return Ok(());
+                }
+            }
             let Some(out) = out else {
                 return render_structured(
                     serde_json::json!({
@@ -2272,21 +2346,30 @@ async fn handle_artifacts_command(
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::write(&path, &block.content)?;
+            let opened = *open && open_with_default_app(&path);
             render_structured(
-                serde_json::json!({ "id": entry.id, "path": path.to_string_lossy() }),
-                format!("{}", path.display()),
+                serde_json::json!({ "id": entry.id, "path": path.to_string_lossy(), "opened": opened }),
+                if *open && !opened {
+                    format!("{} (could not open it automatically)", path.display())
+                } else {
+                    format!("{}", path.display())
+                },
                 *json,
                 output,
             )
         }
-        ArtifactsSubcommand::Open { id, json } => {
+        ArtifactsSubcommand::Open { id, chat, json } => {
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let share_url = artifacts::published_for(&client, &entry.id)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error}"))?
-                .and_then(|published| published.share_url);
+            let share_url = if *chat {
+                None
+            } else {
+                artifacts::published_for(&client, &entry.id)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?
+                    .and_then(|published| published.share_url)
+            };
             let url = artifacts::browse_url(client.base(), &entry, share_url.as_deref());
             let opened = oauth::open_external_url(&url, oauth::UserActionContext::user_initiated());
             render_structured(
@@ -2300,23 +2383,31 @@ async fn handle_artifacts_command(
                 output,
             )
         }
-        ArtifactsSubcommand::Publish { id, json } => {
+        ArtifactsSubcommand::Publish { id, audience, json } => {
+            let visibility = artifacts::audience_visibility(audience)
+                .with_context(|| format!("Audience must be public or workspace, not {audience}"))?;
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let block = artifacts::content(&client, &entry)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let published = artifacts::publish(&client, &entry, &block)
+            let mut published = artifacts::publish(&client, &entry, &block)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if published.visibility != visibility {
+                artifacts::set_audience(&client, &published.token, visibility)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                published.visibility = visibility.to_string();
+            }
             render_structured(
                 serde_json::to_value(&published)?,
                 format!(
-                    "Published '{}' at {} ({}).",
+                    "Published '{}' at {} (opens for {}).",
                     entry.display_title(),
                     published.share_url,
-                    published.visibility
+                    artifacts::audience_label(&published.visibility)
                 ),
                 *json,
                 output,
@@ -2350,6 +2441,24 @@ async fn handle_artifacts_command(
             )
         }
     }
+}
+
+fn open_with_default_app(path: &std::path::Path) -> bool {
+    let mut command = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(target_os = "windows") {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", ""]);
+        command
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    command
+        .arg(path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 async fn handle_history_command(
