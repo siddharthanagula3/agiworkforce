@@ -95,6 +95,8 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
 ///.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
+const MAX_PROPOSED_CONTENT_BYTES: usize = 1_000_000;
+const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
 const DEFAULT_SEARCH_HITS: usize = 20;
 const MAX_SEARCH_HITS: usize = 50;
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
@@ -290,7 +292,24 @@ struct PendingApproval {
     thread_id: String,
     turn_id: String,
     snapshot: PendingApprovalSnapshot,
-    responder: oneshot::Sender<ApprovalDecision>,
+    responder: oneshot::Sender<ApprovalReply>,
+}
+
+#[derive(Debug)]
+struct ApprovalReply {
+    decision: ApprovalDecision,
+    note: Option<String>,
+    edited_content: Option<String>,
+}
+
+impl ApprovalReply {
+    fn decided(decision: ApprovalDecision) -> Self {
+        Self {
+            decision,
+            note: None,
+            edited_content: None,
+        }
+    }
 }
 
 /// Canonical local developer runtime shared by the CLI and VS Code.
@@ -401,6 +420,8 @@ impl CliDeveloperSessionHost {
             max_turns: true,
             memory: true,
             plan: true,
+            approval_notes: true,
+            approval_edits: true,
         }
     }
 
@@ -1049,7 +1070,9 @@ impl CliDeveloperSessionHost {
             .collect();
         for id in ids {
             if let Some(approval) = pending.remove(&id) {
-                let _ = approval.responder.send(ApprovalDecision::Cancel);
+                let _ = approval
+                    .responder
+                    .send(ApprovalReply::decided(ApprovalDecision::Cancel));
             }
         }
     }
@@ -2456,7 +2479,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut pending = task_pending.lock().await;
             for id in pending_ids {
                 if let Some(approval) = pending.remove(&id) {
-                    let _ = approval.responder.send(ApprovalDecision::Cancel);
+                    let _ = approval
+                        .responder
+                        .send(ApprovalReply::decided(ApprovalDecision::Cancel));
                 }
             }
             drop(pending);
@@ -2780,13 +2805,39 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Approval response thread or turn does not match the pending request",
             ));
         }
+        let decision = review_to_approval_decision(params.decision);
+        if params.edited_content.is_some() {
+            if pending.snapshot.proposed_content.is_none() {
+                return Err(DeveloperSessionHostError::invalid_request(
+                    "This approval has no proposed content to edit",
+                ));
+            }
+            if !decision.is_allowing() {
+                return Err(DeveloperSessionHostError::invalid_request(
+                    "Edited content is sent with an approval, not a denial",
+                ));
+            }
+        }
+        if params
+            .note
+            .as_deref()
+            .is_some_and(|note| note.chars().count() > MAX_APPROVAL_NOTE_CHARS)
+        {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "An approval note can be at most {MAX_APPROVAL_NOTE_CHARS} characters"
+            )));
+        }
         let pending = approvals.remove(&params.request_id).ok_or_else(|| {
             DeveloperSessionHostError::not_found("Approval request is no longer pending")
         })?;
         drop(approvals);
         pending
             .responder
-            .send(review_to_approval_decision(params.decision))
+            .send(ApprovalReply {
+                decision,
+                note: params.note,
+                edited_content: params.edited_content,
+            })
             .map_err(|_| {
                 DeveloperSessionHostError::conflict(
                     "Approval request ended before the response was delivered",
@@ -3053,7 +3104,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             std::mem::take(&mut *pending)
         };
         for approval in pending_approvals.into_values() {
-            let _ = approval.responder.send(ApprovalDecision::Cancel);
+            let _ = approval
+                .responder
+                .send(ApprovalReply::decided(ApprovalDecision::Cancel));
         }
 
         let process_owners = running_turns
@@ -3320,6 +3373,10 @@ fn approval_callback(
                 detail: request.detail.join("\n"),
                 risk_level: Some(risk.level),
                 reversible: Some(risk.reversible),
+                proposed_content: request
+                    .proposal
+                    .clone()
+                    .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3350,21 +3407,30 @@ fn approval_callback(
                     "detail": snapshot.detail,
                     "riskLevel": snapshot.risk_level,
                     "reversible": snapshot.reversible,
+                    "proposedContent": snapshot.proposed_content,
+                    "editable": snapshot.proposed_content.is_some(),
                 }),
             ) {
                 let _ = notifications.send(notification);
             }
-            let decision = match tokio::time::timeout(
+            let reply = match tokio::time::timeout(
                 std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECONDS),
                 receiver,
             )
             .await
             {
-                Ok(Ok(decision)) => decision,
-                Ok(Err(_)) => ApprovalDecision::Cancel,
-                Err(_) => ApprovalDecision::Timeout,
+                Ok(Ok(reply)) => reply,
+                Ok(Err(_)) => ApprovalReply::decided(ApprovalDecision::Cancel),
+                Err(_) => ApprovalReply::decided(ApprovalDecision::Timeout),
             };
             pending.lock().await.remove(&request_id);
+            if let Some(note) = reply.note.filter(|note| !note.trim().is_empty()) {
+                crate::tools::record_approval_note(note);
+            }
+            if let Some(content) = reply.edited_content {
+                crate::tools::record_approved_edit(content);
+            }
+            let decision = reply.decision;
             if let Ok(notification) = task_state_notification(
                 turn_id,
                 AgentTaskState::Running,
@@ -5861,7 +5927,7 @@ mod tests {
             .expect("pending approval");
         approval
             .responder
-            .send(ApprovalDecision::AllowOnce)
+            .send(ApprovalReply::decided(ApprovalDecision::AllowOnce))
             .expect("resume approval waiter");
         assert_eq!(
             waiter.await.expect("waiter task"),
@@ -7210,6 +7276,7 @@ mod tests {
                     detail: "cargo test".to_string(),
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(false),
+                    proposed_content: None,
                 },
                 responder,
             },

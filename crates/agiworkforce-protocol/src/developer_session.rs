@@ -352,6 +352,10 @@ pub struct AppServerCapabilities {
     pub memory: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub plan: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub approval_notes: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub approval_edits: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -826,6 +830,9 @@ pub struct PendingApprovalSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub reversible: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub proposed_content: Option<String>,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -1599,6 +1606,12 @@ pub struct ApprovalResponseParams {
     pub turn_id: String,
     pub request_id: String,
     pub decision: ReviewDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub edited_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2943,6 +2956,7 @@ mod tests {
                 detail: "psql -f migrate.sql".to_string(),
                 risk_level: Some(AgentEventApprovalRiskLevel::High),
                 reversible: Some(false),
+                proposed_content: None,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),
