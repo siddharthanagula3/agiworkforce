@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ConsolePage } from '@/features/workspace-console/components/ConsolePage';
 import { WorkspaceDataControls } from '@/features/workspace-console/components/WorkspaceDataControls';
 import { WorkspaceDomainRetention } from '@/features/workspace-console/components/WorkspaceDomainRetention';
+import { WorkspaceDataRegion } from '@/features/workspace-console/components/WorkspaceDataRegion';
 import { WorkspaceEncryptionKey } from '@/features/workspace-console/components/WorkspaceEncryptionKey';
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function WorkspaceDataPage() {
       <div className="flex flex-col gap-6">
         <WorkspaceDataControls />
         <WorkspaceDomainRetention />
+        <WorkspaceDataRegion />
         <WorkspaceEncryptionKey />
       </div>
     </ConsolePage>
