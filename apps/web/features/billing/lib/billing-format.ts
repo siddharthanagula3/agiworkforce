@@ -1,3 +1,7 @@
+import { formatBillingMoney } from '@agiworkforce/types';
+
+export { formatBillingMoney, formatUsdAmount } from '@agiworkforce/types';
+
 const DATE_FORMAT: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
@@ -21,32 +25,6 @@ export function formatBillingDateFromSeconds(seconds: number | null | undefined)
     : null;
 }
 
-function currencyFractionDigits(currency: string): number {
-  return (
-    new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-      .maximumFractionDigits ?? 2
-  );
-}
-
-export function formatBillingMoney(
-  minorUnits: number,
-  currency: string,
-  options?: { trimWholeUnits?: boolean },
-): string {
-  const code = currency.trim().toUpperCase();
-  try {
-    const divisor = 10 ** currencyFractionDigits(code);
-    const whole = options?.trimWholeUnits === true && minorUnits % divisor === 0;
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: code,
-      ...(whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
-    }).format(minorUnits / divisor);
-  } catch {
-    return `${(minorUnits / 100).toFixed(2)} ${code}`;
-  }
-}
-
 export function formatRecurringMoney(
   minorUnits: number,
   currency: string,
@@ -54,15 +32,6 @@ export function formatRecurringMoney(
 ): string {
   const amount = formatBillingMoney(minorUnits, currency, { trimWholeUnits: true });
   return `${amount}/${interval === 'yearly' ? 'year' : 'month'}`;
-}
-
-export function formatUsdAmount(amountUsd: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amountUsd);
 }
 
 export function formatRatio(value: number): string {
