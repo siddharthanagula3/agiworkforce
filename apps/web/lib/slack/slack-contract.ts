@@ -52,10 +52,16 @@ export interface SlackOverview {
   approvals: SlackPendingApprovalView[];
 }
 
+export interface SlackLinkWorkspace {
+  id: string | null;
+  name: string;
+  planAllowed: boolean;
+}
+
 export interface SlackLinkPreview {
   teamName: string;
   expiresAt: string;
-  workspaceName: string | null;
-  planAllowed: boolean;
+  workspaces: SlackLinkWorkspace[];
+  selectedWorkspaceId: string | null;
   requiredPlans: string;
 }
