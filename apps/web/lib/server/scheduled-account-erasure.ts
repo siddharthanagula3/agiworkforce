@@ -43,6 +43,7 @@ function incompleteStores(report: AccountErasureReport): string {
     ['media objects', report.mediaObjectsFailed],
     ['backup objects', report.backupObjectsFailed],
     ['knowledge objects', report.knowledgeObjectsFailed],
+    ['export archive objects', report.exportObjectsFailed],
     ['avatar objects', report.avatarObjectsFailed],
     ['sandbox cache keys', report.cacheKeysFailed],
   ] as const) {
