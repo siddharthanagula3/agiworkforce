@@ -6,6 +6,7 @@ import { createError } from '@/lib/errors';
 import {
   OfficeDocumentUnreadableError,
   extractOfficeDocumentText,
+  extractSpreadsheetTable,
   officeDocumentKind,
 } from '@/lib/server/office-document-text';
 
@@ -47,6 +48,10 @@ export async function renderFileTextPreview(
     const officeKind = officeDocumentKind(fileName, mimeType);
     if (!officeKind) throw createError.notFound('This file has no text preview');
     try {
+      if (officeKind === 'xlsx') {
+        const table = await extractSpreadsheetTable(data, fileName, MAX_FILE_TEXT_CHARS);
+        return { kind: 'table', text: table.csv, truncated: !table.complete };
+      }
       text = await extractOfficeDocumentText(data, fileName, officeKind);
     } catch (error) {
       if (error instanceof OfficeDocumentUnreadableError) {
