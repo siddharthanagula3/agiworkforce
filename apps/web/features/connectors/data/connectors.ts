@@ -1196,6 +1196,18 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconText: 'CN',
     iconEmoji: '🏥',
   },
+  {
+    id: 'healthex',
+    name: 'HealthEx',
+    capabilitySummary:
+      'read-only access to your own health records from your care providers, in the United States',
+    category: 'Healthcare',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-teal-500 to-emerald-700',
+    iconText: 'HX',
+    iconEmoji: '🩺',
+  },
 ];
 
 export const CONNECTORS: Connector[] = CONNECTOR_SEEDS.map((seed) => ({

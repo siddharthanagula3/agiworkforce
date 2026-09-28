@@ -444,6 +444,11 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
+  healthex: {
+    url: 'https://www.google.com/s2/favicons?domain=healthex.io&sz=64',
+    width: 32,
+    height: 32,
+  },
 
   'local-filesystem': {
     url: '/icons/filesystem.svg',

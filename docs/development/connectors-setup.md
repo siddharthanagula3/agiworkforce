@@ -384,6 +384,39 @@ example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
 - Variables, optional: `CONNECTOR_OAUTH_AIRTABLE_CLIENT_ID`,
   `CONNECTOR_OAUTH_AIRTABLE_CLIENT_SECRET`.
 
+### HealthEx (`healthex`, health records, owner-gated)
+
+Connects a member's own health records the way Claude's HealthEx connector does
+(D-2026-09-28-08). HealthEx hosts the MCP server at `https://api.healthex.io/mcp`
+and its authorization server at `https://api.healthex.io`
+(https://docs.healthex.io/api-documentation/mcp-server/oauth-flow and
+`/.well-known/oauth-authorization-server`, read 2026-09-28): dynamic client
+registration, PKCE with S256, public or confidential clients, scopes
+`patient/*.read` and `offline_access`.
+
+- Stays unavailable until the owner configures it, deliberately: HealthEx is not
+  in `MCP_ENDPOINTS`, so no member can connect it by self-registration. Before
+  adding the descriptor, sign HealthEx's agreement and have a lawyer confirm
+  whether the FTC Health Breach Notification Rule applies.
+- Register the client once at `https://api.healthex.io/oauth/register` with the
+  redirect URI `<origin>/api/connectors/oauth/callback`, then add the descriptor:
+  `authorizationUrl` `https://api.healthex.io/oauth/authorize`, `tokenUrl`
+  `https://api.healthex.io/oauth/token`, `revocationUrl`
+  `https://api.healthex.io/oauth/revoke`, `mcpUrl` `https://api.healthex.io/mcp`,
+  `scopes` `["patient/*.read","offline_access"]`, and `tokenAuthMethod` `none`
+  for a public client.
+- What the product enforces, from `apps/web/lib/connectors/sensitive-data-connectors.ts`:
+  a member can start the connection only from the United States; only the tools
+  declared as reads in `CONNECTOR_TOOL_METADATA` reach the model, so
+  `update_records` and the deprecated tools do not; the sign-in window is 30
+  minutes because identity verification takes longer than ten; `save_memory` is
+  refused for the rest of any turn in which a health tool returned data, the
+  memory extractor only ever reads the member's own message, and nothing is used
+  for training. Disconnecting revokes the grant at HealthEx and erases the
+  stored tokens.
+- Variables: `CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID`, and
+  `CONNECTOR_OAUTH_HEALTHEX_CLIENT_SECRET` only for a confidential client.
+
 ### Vendors whose official server needs a pre-registered client
 
 These ids are marked `preregistered` in `apps/web/lib/connectors/mcp-endpoints.ts`

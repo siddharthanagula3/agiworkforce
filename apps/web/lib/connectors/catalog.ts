@@ -246,6 +246,7 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   replicate: mcpConnector('replicate', 'api-key', 'read-write'),
   'epic-fhir': mcpConnector('epic-fhir', 'oauth2', 'high-impact'),
   cerner: mcpConnector('cerner', 'oauth2', 'high-impact'),
+  healthex: mcpConnector('healthex', 'oauth2', 'high-impact'),
 };
 
 export function getConnectorCapability(connectorId: string): ConnectorCapabilityRecord | null {
