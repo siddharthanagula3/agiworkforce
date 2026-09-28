@@ -32,6 +32,14 @@ export const MONTHLY_METERED_UNITS = [
 ] as const;
 export type MonthlyMeteredUnit = (typeof MONTHLY_METERED_UNITS)[number];
 
+export const MONTHLY_METERED_UNIT_COPY: Readonly<
+  Record<MonthlyMeteredUnit, { label: string; one: string; many: string }>
+> = {
+  voice_minutes: { label: 'Voice', one: 'minute', many: 'minutes' },
+  video_seconds: { label: 'Video', one: 'second', many: 'seconds' },
+  computer_use_requests: { label: 'Computer use', one: 'request', many: 'requests' },
+};
+
 export interface AccountUsageAllowanceUnit {
   unit: MonthlyMeteredUnit;
   consumed: number;
