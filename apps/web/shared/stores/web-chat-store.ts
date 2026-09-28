@@ -236,6 +236,7 @@ export interface MessageMetadata {
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
+  localPersonalContextMissing?: boolean;
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */

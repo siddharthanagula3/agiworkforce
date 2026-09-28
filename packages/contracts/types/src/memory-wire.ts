@@ -4,6 +4,8 @@ export const MANAGED_MEMORY_MAX_PAGE_SIZE = 100;
 export const MANAGED_MEMORY_COMMAND_MAX_CHARS = 4_000;
 export const MANAGED_MEMORY_SEARCH_MAX_QUERY_CHARS = 500;
 
+export const MANAGED_MEMORY_LOCAL_CONTEXT_PATH = '/api/memory/local-context';
+
 export const MANAGED_MEMORY_SOURCES = ['web', 'mobile', 'desktop', 'auto'] as const;
 export type ManagedMemorySource = (typeof MANAGED_MEMORY_SOURCES)[number];
 
@@ -149,6 +151,32 @@ export interface ManagedMemoryImportCommitResponse {
   blockedCount: number;
   excludedCount: number;
   memories: ManagedMemoryRecord[];
+}
+
+export interface ManagedMemoryLocalContextResponse {
+  instructions: string | null;
+  memory: string | null;
+}
+
+export interface ManagedMemoryLocalTurnSettings {
+  temporary: boolean;
+  memoryEnabled: boolean;
+  personalization: boolean;
+}
+
+export function managedMemoryLocalContextUrl(projectId: string | null): string {
+  return projectId
+    ? `${MANAGED_MEMORY_LOCAL_CONTEXT_PATH}?${new URLSearchParams({ projectId }).toString()}`
+    : MANAGED_MEMORY_LOCAL_CONTEXT_PATH;
+}
+
+export function managedMemoryLocalContextBlocks(
+  context: ManagedMemoryLocalContextResponse,
+  settings: ManagedMemoryLocalTurnSettings,
+): string[] {
+  if (!settings.personalization) return [];
+  const memory = settings.temporary || !settings.memoryEnabled ? null : context.memory;
+  return [context.instructions, memory].filter((block): block is string => block !== null);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -361,4 +389,20 @@ export function parseManagedMemoryImportCommitResponse(
     excludedCount: countOf(value['excludedCount']),
     memories: parseRecords(value['memories']),
   };
+}
+
+function nonEmptyStringOrNull(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  return value.trim() === '' ? null : value;
+}
+
+export function parseManagedMemoryLocalContextResponse(
+  value: unknown,
+): ManagedMemoryLocalContextResponse | null {
+  if (!isRecord(value)) return null;
+  const instructions = nonEmptyStringOrNull(value['instructions']);
+  const memory = nonEmptyStringOrNull(value['memory']);
+  if (instructions === undefined || memory === undefined) return null;
+  return { instructions, memory };
 }

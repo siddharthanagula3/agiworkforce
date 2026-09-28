@@ -387,7 +387,9 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
 
 const LOCAL_BOUNDARY_LABEL = 'Local';
 const LOCAL_BOUNDARY_TITLE =
-  'Answered by a model running on this device. Nothing in this turn was sent to AGI Cloud or a provider, and it used none of your plan.';
+  'Answered by a model running on this device. Nothing you wrote in this chat was sent to AGI Cloud or a provider, and it used none of your plan.';
+const LOCAL_PERSONAL_CONTEXT_MISSING =
+  'Answered without your instructions and memory: they could not be loaded onto this device.';
 
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
@@ -454,6 +456,7 @@ interface Message {
     /** Trust-boundary labels persisted with the turn (Local/BYOK handoff evidence). */
     privacyMode?: StoreMessageMetadata['privacyMode'];
     providerMode?: StoreMessageMetadata['providerMode'];
+    localPersonalContextMissing?: StoreMessageMetadata['localPersonalContextMissing'];
     finishReason?: StoreMessageMetadata['finishReason'];
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
@@ -3429,6 +3432,16 @@ const MessageBubbleComponent = function MessageBubble({
                   {answeredByChipLabel}
                 </span>
               )}
+              {!isUser &&
+                trustBoundary.privacyMode === 'local' &&
+                message.metadata?.localPersonalContextMissing === true && (
+                  <span
+                    data-testid="message-local-context-missing"
+                    className="basis-full text-xs text-muted-foreground"
+                  >
+                    {LOCAL_PERSONAL_CONTEXT_MISSING}
+                  </span>
+                )}
             </div>
           )}
         </div>
