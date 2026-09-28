@@ -42,14 +42,17 @@ import {
   type SlackOutgoingMessage,
 } from './slack-messages';
 import {
+  SLACK_TASK_STOPPED_ERROR,
   claimSlackRunApproval,
   parkSlackRunForApproval,
   settleSlackRun,
   startSlackRun,
   type SlackRun,
 } from './slack-runs';
+import { findSlackTask, slackTask, slackTaskAvailable, type SlackTask } from './slack-tasks';
 
 const FAILED_ANSWER = 'I could not finish that answer. Please try again.';
+const TASK_STOPPED = 'You stopped this task in AGI Workforce, so it has no answer to post.';
 const RATE_LIMITED =
   'You are sending messages faster than AGI Workforce can answer them. Wait a minute, then try again.';
 const ACCOUNT_UNAVAILABLE =
@@ -116,20 +119,31 @@ async function markWorking(
   }
 }
 
+interface TaskHolder {
+  current: SlackTask | null;
+}
+
 async function publishOutcome(input: {
   scopedDb: DatabaseAdapter;
   installation: SlackInstallationWithToken;
   run: SlackRun;
   outcome: SlackTurnOutcome;
   origin: string;
+  task: TaskHolder;
 }): Promise<void> {
   const { scopedDb, installation, run, outcome, origin } = input;
   const destination = destinationFor(installation, run);
+  const task = input.task.current;
+  const settleTask = () =>
+    task?.settle(outcome).catch((error: unknown) => {
+      logger.error({ error, runId: run.id }, 'Slack task could not be settled');
+    });
 
   if (outcome.kind === 'answered') {
     for (const message of answerMessages(outcome.text, {
       requesterId: run.surface === 'channel' ? run.slackUserId : null,
       model: outcome.model,
+      taskUrl: task?.link(origin) ?? null,
     })) {
       await postSlackMessage(installation.botToken, {
         channel: run.channelId,
@@ -139,9 +153,20 @@ async function publishOutcome(input: {
       });
     }
     await settleSlackRun(scopedDb, run, { status: 'completed', model: outcome.model });
+    await settleTask();
     return;
   }
 
+  await settleTask();
+  if (outcome.kind === 'stopped') {
+    await sendPrivately(destination, noticeMessage(TASK_STOPPED));
+    await settleSlackRun(scopedDb, run, {
+      status: 'cancelled',
+      model: outcome.model,
+      error: SLACK_TASK_STOPPED_ERROR,
+    });
+    return;
+  }
   if (outcome.kind === 'awaiting_approval') {
     const expiresAt = await parkSlackRunForApproval(scopedDb, run, {
       approval: outcome.approval,
@@ -149,12 +174,16 @@ async function publishOutcome(input: {
     });
     if (!expiresAt) return;
     const settingsUrl = slackSettingsUrl(origin);
-    await sendPrivately(destination, approvalMessage(outcome.approval.toolCalls, settingsUrl));
+    const subject = run.mode === 'task' ? 'task' : 'answer';
+    await sendPrivately(
+      destination,
+      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject),
+    );
     await recordNotification(scopedDb, {
       userId: run.userId,
       category: 'agent_run',
       severity: 'warning',
-      title: 'A Slack answer is waiting for your approval',
+      title: `A Slack ${subject} is waiting for your approval`,
       message: outcome.approval.toolCalls
         .map((call) => call.summary || call.name)
         .join('; ')
@@ -185,6 +214,7 @@ async function answerSafely(input: {
   installation: SlackInstallationWithToken;
   run: SlackRun;
   origin: string;
+  task: TaskHolder;
   produce: (signal: AbortSignal) => Promise<SlackTurnOutcome>;
 }): Promise<void> {
   const { scopedDb, installation, run } = input;
@@ -197,6 +227,9 @@ async function answerSafely(input: {
       { error, runId: run.id, surface: run.surface },
       'Slack answer failed; the person was told',
     );
+    await input.task.current?.settle({ kind: 'failed' }).catch((taskError: unknown) => {
+      logger.error({ error: taskError, runId: run.id }, 'Slack task could not be settled');
+    });
     await settleSlackRun(scopedDb, run, {
       status: 'failed',
       error: error instanceof Error ? error.message : String(error),
@@ -302,6 +335,14 @@ async function answerMessage(
     userId: link.userId,
     organizationId: link.organizationId,
   });
+  const mode =
+    event.surface === 'channel' &&
+    (await slackTaskAvailable(scopedDb, {
+      userId: link.userId,
+      organizationId: link.organizationId,
+    }))
+      ? 'task'
+      : 'answer';
   const run = await startSlackRun(scopedDb, {
     userId: link.userId,
     organizationId: link.organizationId,
@@ -312,15 +353,17 @@ async function answerMessage(
     messageTs: event.ts,
     threadTs: event.threadTs,
     surface: event.surface,
-    mode: 'answer',
+    mode,
   });
   if (!run) return;
 
+  const task: TaskHolder = { current: null };
   await answerSafely({
     scopedDb,
     installation,
     run,
     origin,
+    task,
     produce: async (signal) => {
       const context = await buildSlackTurnContext(installation.botToken, {
         surface: event.surface,
@@ -333,12 +376,16 @@ async function answerMessage(
         threadTs: event.threadTs,
         fileNames: event.fileNames,
       });
+      const instruction = context.conversation.at(-1)?.content ?? '';
+      task.current = run.mode === 'task' ? slackTask({ db: scopedDb, run, instruction }) : null;
       return runSlackAssistantTurn({
         db: scopedDb,
         userId: link.userId,
         organizationId: link.organizationId,
         runId: run.id,
         surface: event.surface,
+        mode: run.mode,
+        ...(task.current ? { observer: task.current.observer } : {}),
         conversation: context.conversation,
         channelContext: context.channelContext,
         timeZone: context.timeZone,
@@ -414,12 +461,17 @@ export async function claimSlackApproval(input: {
       'This Slack workspace is no longer connected, so the answer cannot continue.',
     );
   }
+  const opened = run.mode === 'task' ? await findSlackTask(runScope, run) : null;
+  const task: TaskHolder = {
+    current: opened ? slackTask({ db: runScope, run, instruction: '', opened }) : null,
+  };
   return () =>
     answerSafely({
       scopedDb: runScope,
       installation,
       run,
       origin,
+      task,
       produce: (signal) =>
         runSlackAssistantTurn({
           db: runScope,
@@ -427,6 +479,8 @@ export async function claimSlackApproval(input: {
           organizationId: run.organizationId,
           runId: run.id,
           surface: run.surface,
+          mode: run.mode,
+          ...(task.current ? { observer: task.current.observer } : {}),
           conversation: [],
           channelContext: null,
           timeZone: null,

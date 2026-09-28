@@ -140,7 +140,7 @@ function section(text: string): Record<string, unknown> {
 
 export function answerMessages(
   answer: string,
-  footer: { requesterId: string | null; model: string },
+  footer: { requesterId: string | null; model: string; taskUrl?: string | null },
 ): SlackOutgoingMessage[] {
   const sections = chunkMrkdwn(markdownToMrkdwn(answer), SECTION_TEXT_LIMIT);
   const model = modelDisplayNameById(footer.model) ?? footer.model;
@@ -156,6 +156,9 @@ export function answerMessages(
       blocks: [
         ...group.map(section),
         ...(last ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: context }] }] : []),
+        ...(last && footer.taskUrl
+          ? [linkButton('View task', footer.taskUrl, 'slack_view_task')]
+          : []),
       ],
     });
   }
@@ -213,12 +216,13 @@ export function linkedMessage(settingsUrl: string): SlackOutgoingMessage {
 export function approvalMessage(
   toolCalls: readonly ManagedCloudScheduleRunApprovalToolCall[],
   settingsUrl: string,
+  subject: 'answer' | 'task',
 ): SlackOutgoingMessage {
   const shown = toolCalls.slice(0, APPROVAL_SUMMARY_LIMIT);
   const lines = shown.map((call) => `• ${escapeMrkdwn(call.summary || call.name)}`);
   if (toolCalls.length > shown.length) lines.push(`• and ${toolCalls.length - shown.length} more`);
   const text =
-    'This answer needs your approval before it can continue. Review it in AGI Workforce on ' +
+    `This ${subject} needs your approval before it can continue. Review it in AGI Workforce on ` +
     'the web or desktop app; nothing runs until you decide.';
   return {
     text,
