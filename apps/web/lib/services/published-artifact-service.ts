@@ -326,7 +326,7 @@ export async function publishArtifactRecord(
        token, user_id, artifact_id, conversation_id, title, kind, language, content
      ) values ($1, $2, $3, $4, $5, $6, $7, $8)
      on conflict (user_id, artifact_id) do update set
-       conversation_id = excluded.conversation_id,
+       conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
        title = excluded.title,
        kind = excluded.kind,
        language = excluded.language,
