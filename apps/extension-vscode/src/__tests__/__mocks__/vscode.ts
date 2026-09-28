@@ -534,6 +534,7 @@ export const workspace = {
   workspaceFolders: undefined as unknown,
   name: undefined as string | undefined,
   isTrusted: true,
+  registerFileSystemProvider: vi.fn(() => ({ dispose: vi.fn() })),
   getConfiguration: vi.fn((_section?: string) => ({
     get: vi.fn(<T>(_key: string, defaultValue?: T): T | undefined => defaultValue),
     update: vi.fn().mockResolvedValue(undefined),

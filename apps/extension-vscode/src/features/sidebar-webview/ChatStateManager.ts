@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   formatRelativeTime,
@@ -46,6 +47,8 @@ import {
   LocalRuntimeProtocolError,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
+  type ThreadCheckpointList,
+  type ThreadRewindOutcome,
 } from '../../integrations/localRuntimeClient';
 import {
   assertRunnableStartedThread,
@@ -105,7 +108,16 @@ import {
 } from '../../data/composerContext';
 import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
-import { approvalToolIdentity, approvalToolLabel } from '../permissions/approvalScope';
+import {
+  approvalFilePath,
+  approvalToolIdentity,
+  approvalToolLabel,
+} from '../permissions/approvalScope';
+import {
+  discardProposedChange,
+  finishProposedChange,
+  openProposedChange,
+} from '../permissions/proposedChangeReview';
 import {
   answerRatingId,
   applyAnswerRating,
@@ -127,6 +139,7 @@ import {
 } from '../chat-participant/promptReferences';
 import {
   parsePlanVisualization,
+  planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
 import { getTokenCounter } from '../../data/tokenCounter';
@@ -167,6 +180,32 @@ const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
+const REWIND = 'Rewind';
+
+const REWIND_CHOICES = [
+  {
+    label: 'Restore code and conversation',
+    restore: 'both',
+    consequence:
+      'Files the agent changed after this point go back to how they were, and every later message is removed from the session. This cannot be undone.',
+  },
+  {
+    label: 'Restore conversation',
+    restore: 'conversation',
+    consequence:
+      'Every later message is removed from the session. Files stay as they are now. This cannot be undone.',
+  },
+  {
+    label: 'Restore code',
+    restore: 'code',
+    consequence:
+      'Files the agent changed after this point go back to how they were. The conversation stays as it is.',
+  },
+] as const;
+
+function checkpointLabel(prompt: string): string {
+  return prompt.split('\n')[0]?.trim() || 'Checkpoint';
+}
 
 export type WebviewToExtMessage =
   | {
@@ -256,7 +295,8 @@ export type WebviewToExtMessage =
   | { type: 'cancelQueuedMessage'; payload: { clientMessageId: string } }
   | { type: 'openSuggestedProject'; payload: { projectId: string } }
   | { type: 'runSlashCommand'; payload: { name: string } }
-  | { type: 'rateAnswer'; payload: { key: string; text: string; rating: AnswerRating | null } };
+  | { type: 'rateAnswer'; payload: { key: string; text: string; rating: AnswerRating | null } }
+  | { type: 'reviewApprovalChange'; payload: { requestId: string } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -314,6 +354,7 @@ export type ExtToWebviewMessage =
         provider?: string;
         transcriptTruncated: boolean;
         messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
+        plan?: PlanVisualization;
       };
     }
   | {
@@ -375,6 +416,7 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'planUpdate'; payload: PlanVisualization }
+  | { type: 'sourceList'; payload: { sources: Array<{ url: string; title: string }> } }
   | {
       type: 'toolCallStart';
       payload: {
@@ -428,6 +470,7 @@ export type ExtToWebviewMessage =
         sessionApproved: boolean;
         riskLevel?: AgentEventApprovalRiskLevel;
         reversible?: boolean;
+        reviewable?: true;
       };
     }
   | {
@@ -694,6 +737,7 @@ export class ChatStateManager {
       runtime: LocalRuntimeClient;
       identity: string;
       label: string;
+      proposed?: { filePath: string; content: string };
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
@@ -964,7 +1008,7 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
-        this._pendingApprovals.clear();
+        this._clearPendingApprovals();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
@@ -1003,7 +1047,7 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
-        this._pendingApprovals.clear();
+        this._clearPendingApprovals();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
@@ -1118,10 +1162,24 @@ export class ChatStateManager {
       }
 
       case 'respondToApproval': {
-        await this._resolveApproval(msg.payload.requestId, msg.payload.decision, false);
-        if (msg.payload.decision === 'deny' && msg.payload.guidance !== undefined) {
-          await this._handleSendMessage(msg.payload.guidance);
+        const { requestId, decision, guidance } = msg.payload;
+        const pending = this._pendingApprovals.get(requestId);
+        const noted =
+          decision === 'deny' &&
+          guidance !== undefined &&
+          pending !== undefined &&
+          (await pending.runtime.offers('approvalNotes'));
+        await this._resolveApproval(requestId, decision, false, noted ? guidance : undefined);
+        if (decision === 'deny' && guidance !== undefined && !noted) {
+          await this._handleSendMessage(guidance);
         }
+        break;
+      }
+
+      case 'reviewApprovalChange': {
+        const proposed = this._pendingApprovals.get(msg.payload.requestId)?.proposed;
+        if (proposed === undefined) break;
+        await openProposedChange(msg.payload.requestId, proposed.filePath, proposed.content);
         break;
       }
 
@@ -1846,6 +1904,7 @@ export class ChatStateManager {
         runtime: resolved.runtime,
       };
 
+      const plan = planFromThread(resolved.response.plan, resolved.response.todos);
       const messages = normalizeTranscriptMessages(resolved.response.messages).map((message) => {
         if (message.role !== 'assistant') return message;
         const rating = rememberedAnswerRating(
@@ -1862,6 +1921,7 @@ export class ChatStateManager {
         ...(resumed.provider === undefined ? {} : { provider: resumed.provider }),
         transcriptTruncated: resolved.response.transcriptTruncated,
         messages,
+        ...(plan === undefined ? {} : { plan }),
       };
       this._postLoadedConversation();
       this._post({ type: 'model', payload: { model } });
@@ -2019,10 +2079,18 @@ export class ChatStateManager {
     requestId: string,
     decision: ApprovalDecision,
     automatic: boolean,
+    note?: string,
   ): Promise<void> {
     const pending = this._pendingApprovals.get(requestId);
     if (pending === undefined) return;
     this._pendingApprovals.delete(requestId);
+    const allowing = decision === 'once' || decision === 'session';
+    const editedContent =
+      pending.proposed === undefined
+        ? undefined
+        : allowing
+          ? await finishProposedChange(requestId)
+          : await discardProposedChange(requestId).then(() => undefined);
 
     if (decision === 'session') this._sessionApprovals.add(pending.identity);
     this._post({
@@ -2046,6 +2114,8 @@ export class ChatStateManager {
             : decision === 'session'
               ? 'approved_for_session'
               : 'approved',
+        ...(note === undefined ? {} : { note }),
+        ...(editedContent === undefined ? {} : { editedContent }),
       });
     } catch (error) {
       const current = this._activeTurn;
@@ -2079,9 +2149,17 @@ export class ChatStateManager {
     );
   }
 
+  private _clearPendingApprovals(): void {
+    for (const [requestId, pending] of this._pendingApprovals) {
+      if (pending.proposed !== undefined) void discardProposedChange(requestId);
+    }
+    this._pendingApprovals.clear();
+  }
+
   private _expirePendingApprovals(turnId: string): void {
     for (const [requestId, pending] of [...this._pendingApprovals]) {
       if (pending.turnId !== turnId) continue;
+      if (pending.proposed !== undefined) void discardProposedChange(requestId);
       this._pendingApprovals.delete(requestId);
       this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
     }
@@ -2122,6 +2200,109 @@ export class ChatStateManager {
     return this._thread?.id;
   }
 
+  async checkpointsAvailable(): Promise<boolean> {
+    const thread = this._thread;
+    if (thread === undefined) return false;
+    try {
+      return await thread.runtime.offers('checkpoints');
+    } catch {
+      return false;
+    }
+  }
+
+  async showCheckpoints(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: open a developer session to see its checkpoints.',
+      );
+      return;
+    }
+    let listed: ThreadCheckpointList;
+    try {
+      listed = await thread.runtime.listCheckpoints(thread.id);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (listed.checkpoints.length === 0) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: this session has no checkpoints yet. One is saved with each prompt.',
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      [...listed.checkpoints].reverse().map((checkpoint) => ({
+        label: checkpointLabel(checkpoint.prompt),
+        description: new Date(checkpoint.createdAt).toLocaleString(),
+        detail: tPlural('checkpoints.trackedFiles', checkpoint.trackedFiles),
+        checkpoint,
+      })),
+      { title: 'AGI Workforce, Checkpoints', placeHolder: 'Pick the prompt to go back to' },
+    );
+    if (picked === undefined) return;
+    const hasConversation = picked.checkpoint.messageIndex !== undefined;
+    const hasCode = picked.checkpoint.trackedFiles > 0;
+    const choices = REWIND_CHOICES.filter(
+      (candidate) =>
+        (candidate.restore === 'code' || hasConversation) &&
+        (candidate.restore === 'conversation' || hasCode),
+    );
+    if (choices.length === 0) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: this checkpoint has nothing left to restore. Its conversation was compacted and it tracked no files.',
+      );
+      return;
+    }
+    const choice = await vscode.window.showQuickPick(choices, {
+      title: `AGI Workforce, Rewind to “${picked.label}”`,
+      placeHolder: 'What goes back to this point',
+    });
+    if (choice === undefined) return;
+    const confirmed = await vscode.window.showWarningMessage(
+      `Rewind to “${picked.label}”?`,
+      { modal: true, detail: choice.consequence },
+      REWIND,
+    );
+    if (confirmed !== REWIND || this._thread !== thread) return;
+    if (this._activeTurn?.threadId === thread.id) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: stop the current response before rewinding this session.',
+      );
+      return;
+    }
+    let outcome: ThreadRewindOutcome;
+    try {
+      outcome = await thread.runtime.rewindThread({
+        threadId: thread.id,
+        checkpointIndex: picked.checkpoint.checkpointIndex,
+        restore: choice.restore,
+      });
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (outcome.conversationRestored && (await this.resumeConversation(thread.id))) {
+      this._post({ type: 'composerDraft', payload: { text: outcome.prompt, references: [] } });
+    }
+    if (outcome.skippedFiles.length > 0) {
+      void vscode.window.showWarningMessage(
+        tPlural('checkpoints.skippedFiles', outcome.skippedFiles.length, {
+          files: outcome.skippedFiles.map((file) => `${file.path} (${file.reason})`).join(', '),
+        }),
+      );
+      return;
+    }
+    const changed = outcome.restoredFiles.length + outcome.removedFiles.length;
+    if (changed > 0) {
+      void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', changed));
+    }
+  }
+
   async activeThreadReceipt(): Promise<SessionReceipt | undefined> {
     const thread = this._thread;
     if (thread === undefined) return undefined;
@@ -2159,7 +2340,7 @@ export class ChatStateManager {
     this._startNewEpoch();
     this._dismissedEditorContext.clear();
     this._sessionApprovals.clear();
-    this._pendingApprovals.clear();
+    this._clearPendingApprovals();
     this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
@@ -3031,6 +3212,13 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'source_list') {
+      this._post({
+        type: 'sourceList',
+        payload: { sources: event.sources.map(({ url, title }) => ({ url, title })) },
+      });
+      return;
+    }
     if (event.type === 'progress_update') {
       this._post({
         type: 'progressUpdate',
@@ -3085,12 +3273,22 @@ export class ChatStateManager {
       }
       const identity = approvalToolIdentity(event.kind);
       const label = approvalToolLabel(event.kind);
+      const filePath = approvalFilePath(event.kind);
+      const proposed =
+        event.editable === true &&
+        event.proposedContent !== undefined &&
+        filePath !== undefined &&
+        this._thread !== undefined &&
+        (await runtime.offers('approvalEdits'))
+          ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
+          : undefined;
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
         runtime,
         identity,
         label,
+        ...(proposed === undefined ? {} : { proposed }),
       });
       if (this._sessionApprovals.has(identity)) {
         await this._resolveApproval(event.requestId, 'once', true);
@@ -3106,6 +3304,7 @@ export class ChatStateManager {
           sessionApproved: false,
           ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
+          ...(proposed === undefined ? {} : { reviewable: true as const }),
         },
       });
       return;

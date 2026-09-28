@@ -232,6 +232,7 @@ import {
   observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   speedFirstSlots,
   taskFamilyRoutingStageEnabled,
@@ -331,6 +332,11 @@ import {
   imageDetailRefusalMessage,
   unsupportedImageDetail,
 } from './image-detail';
+import {
+  requestedParameters,
+  unsupportedRequestParameter,
+  type RequestedParameters,
+} from './request-parameters';
 import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
@@ -1309,6 +1315,7 @@ export type ProcessedRequest = {
     effort?: string;
     usePromptCache?: boolean;
     responseFormat?: ChatResponseFormat;
+    requestParameters?: RequestedParameters;
     /**
      * Who this turn belongs to, for the prompt cache. Carried on the request
      * rather than re-derived per adapter so one turn cannot be scoped two ways,
@@ -2043,6 +2050,7 @@ export function buildWebCloudAutoRoutingRequest(
     subscriptionTier,
     trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
     ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
@@ -2532,6 +2540,23 @@ export function applyWorkspaceDefaultModel(
   const defaultModelId = controls?.defaultModelId;
   if (!defaultModelId || isAutoModeModelId(defaultModelId)) return;
   if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
+}
+
+function unsupportedParameterResponse(param: string, message: string): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message,
+          type: 'invalid_request_error',
+          code: 'unsupported_parameter',
+          param,
+        },
+      },
+      { status: 400 },
+    ),
+  };
 }
 
 function noTrainingModelUnavailable(): ProcessFailure {
@@ -4013,6 +4038,24 @@ export async function processRequest(
       ),
     };
   }
+  if (chatRequest.n !== undefined && chatRequest.n > 1) {
+    return unsupportedParameterResponse(
+      'n',
+      'This API returns one completion per request. Send one request for each completion instead.',
+    );
+  }
+  const requestParameters = requestedParameters(chatRequest);
+  const unsupportedParameter = unsupportedRequestParameter(
+    requestParameters,
+    chatRequest.model,
+    routeDecision.harnessId,
+  );
+  if (unsupportedParameter) {
+    return unsupportedParameterResponse(
+      unsupportedParameter,
+      `The selected model does not accept ${unsupportedParameter}. Remove it or choose a model that does.`,
+    );
+  }
 
   if (wantsJsonObject(chatRequest.response_format)) {
     applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
@@ -5182,6 +5225,7 @@ export async function processRequest(
     thinking: thinkingConfig,
     effort: effectiveEffort,
     ...(responseFormat ? { responseFormat } : {}),
+    ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
       temporaryChat: conversationIsTemporary,

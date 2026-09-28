@@ -345,6 +345,18 @@ const hi = {
   'webview.answerTokens_other': '{model} · {count} टोकन ({input} इनपुट, {output} आउटपुट)',
   'webview.moreLinesHidden_one': '{count} और पंक्ति नहीं दिखाई गई',
   'webview.moreLinesHidden_other': '{count} और पंक्तियाँ नहीं दिखाई गईं',
+  'mcp.connected_one': 'AGI Workforce: {name} {ms} ms में कनेक्ट हुआ और {count} टूल देता है।',
+  'mcp.connected_other': 'AGI Workforce: {name} {ms} ms में कनेक्ट हुआ और {count} टूल देता है।',
+  'checkpoints.trackedFiles_one': '{count} फ़ाइल ट्रैक की गई',
+  'checkpoints.trackedFiles_other': '{count} फ़ाइलें ट्रैक की गईं',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce: {count} फ़ाइल पुनर्स्थापित नहीं की जा सकी: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} फ़ाइलें पुनर्स्थापित नहीं की जा सकीं: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} फ़ाइल चेकपॉइंट पर वापस लाई गई।',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} फ़ाइलें चेकपॉइंट पर वापस लाई गईं।',
+  'webview.sources_one': '{count} स्रोत',
+  'webview.sources_other': '{count} स्रोत',
 };
 
 export default hi;
