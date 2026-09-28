@@ -26,6 +26,9 @@ describe('device tool offering', () => {
       'device_find_files',
       'device_search_text',
       'device_run_command',
+      'device_start_command',
+      'device_command_output',
+      'device_command_stop',
     ]);
     expect(names).not.toContain('device_write_file');
     expect(names).not.toContain('device_edit_file');

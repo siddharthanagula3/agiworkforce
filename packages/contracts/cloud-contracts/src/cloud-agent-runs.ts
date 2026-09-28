@@ -212,6 +212,9 @@ export type CloudAgentPendingDeviceStep = z.infer<typeof CloudAgentPendingDevice
 export type CloudAgentRunUsage = z.infer<typeof CloudAgentRunUsageSchema>;
 export type CloudAgentRunSteer = z.infer<typeof CloudAgentRunSteerSchema>;
 export type CloudAgentRunSteerResponse = z.infer<typeof CloudAgentRunSteerResponseSchema>;
+export type CloudAgentRunSteerWithdrawResponse = z.infer<
+  typeof CloudAgentRunSteerWithdrawResponseSchema
+>;
 
 export interface CloudAgentRunSnapshotPage {
   run: CloudAgentRun;

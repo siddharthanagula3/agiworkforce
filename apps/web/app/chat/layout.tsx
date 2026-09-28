@@ -49,7 +49,9 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
         );
       }
       const signIn = getIdentityProvider().middleware.signInRoute();
-      return redirect(`${signIn.path}?${signIn.redirectParam}=${encodeURIComponent(redirectTo)}`);
+      return redirect(
+        `${signIn.path}?${new URLSearchParams({ [signIn.redirectParam]: redirectTo })}`,
+      );
     }
     return redirect(sessionExpiredRedirect(redirectTo));
   }

@@ -156,6 +156,8 @@ const capabilitiesSchema = z.object({
   maxTurns: z.boolean().optional(),
   memory: z.boolean().optional(),
   plan: z.boolean().optional(),
+  savedPermissions: z.boolean().optional(),
+  mcpInspect: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -353,6 +355,37 @@ const threadSearchResponseSchema = z.object({
 });
 
 export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
+
+const savedPermissionsResponseSchema = z.object({
+  permissions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(512),
+        kind: z.enum(['command', 'file', 'exec_policy']),
+        label: z.string().max(4_000),
+        decision: z.enum(['allow', 'deny']),
+      }),
+    )
+    .max(5_000),
+});
+
+export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
+
+const mcpServerInspectionSchema = z.object({
+  name: z.string().min(1).max(512),
+  connected: z.boolean(),
+  live: z.boolean(),
+  responding: z.boolean(),
+  protocolVersion: z.string().max(200).optional(),
+  serverName: z.string().max(512).optional(),
+  serverVersion: z.string().max(200).optional(),
+  capabilities: z.array(z.string().max(200)).max(100).default([]),
+  instructions: z.string().max(100_000).optional(),
+  logs: z.array(z.string().max(10_000)).max(1_000).default([]),
+  error: z.string().max(10_000).optional(),
+});
+
+export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>;
 
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
@@ -713,6 +746,7 @@ const approvalRequestedEventSchema = z.object({
   reversible: z.boolean().optional().catch(undefined),
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
+  alwaysAllowSaved: z.boolean().optional().catch(undefined),
 });
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1210,6 +1244,25 @@ export class LocalRuntimeClient {
     }
     return threadSearchResponseSchema.parse(
       await connection.request('thread/search', { query, includeArchived }),
+    );
+  }
+
+  async inspectMcpServer(name: string): Promise<McpServerInspection> {
+    const connection = await this.readyConnection();
+    return mcpServerInspectionSchema.parse(
+      await connection.request('mcp/inspect', { name }, MCP_PROBE_TIMEOUT_MS),
+    );
+  }
+
+  async listSavedPermissions(): Promise<SavedPermissionList> {
+    const connection = await this.readyConnection();
+    return savedPermissionsResponseSchema.parse(await connection.request('permissions/list', {}));
+  }
+
+  async removeSavedPermission(id: string): Promise<SavedPermissionList> {
+    const connection = await this.readyConnection();
+    return savedPermissionsResponseSchema.parse(
+      await connection.request('permissions/remove', { id }),
     );
   }
 
