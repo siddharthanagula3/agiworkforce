@@ -16,6 +16,11 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { ERASED_TABLE_COUNT, measureRouteIsolation } from '@/lib/legal/published-counts';
+
+export const dynamic = 'force-static';
+
+const ROUTE_ISOLATION = measureRouteIsolation();
 
 export const metadata = buildMetadata({
   title: 'Trust: a dated posture ledger',
@@ -105,8 +110,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   },
   {
     label: 'GDPR: data subject rights',
-    value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 113 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
+    value: `Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across ${ERASED_TABLE_COUNT} user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is read from the erasure list when this page is built, so a change to the list cannot leave this claim behind.`,
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -198,8 +202,7 @@ const POSTURE: { label: string; value: string }[] = [
   },
   {
     label: 'Database row-level isolation',
-    value:
-      'Partial: 249 of 383 database-backed hosted API route files. Counted against the 383 route files that reach the database; the other 129 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 134 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-28.',
+    value: `Partial: ${ROUTE_ISOLATION.rlsScoped} of ${ROUTE_ISOLATION.databaseBacked} database-backed hosted API route files. Counted against the ${ROUTE_ISOLATION.databaseBacked} route files that reach the database; the other ${ROUTE_ISOLATION.noDatabase} hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining ${ROUTE_ISOLATION.ownerConnection} connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. Each figure is measured from the route files when this page is built.`,
   },
   {
     label: 'Authentication and CSRF',
