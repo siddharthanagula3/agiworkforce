@@ -21,6 +21,7 @@ import {
   getImageAspectOptionsForModel,
   getImageModelLabel,
   normalizeImageAspectRatioForModel,
+  buildReframeEdit,
   readImageFileAsBase64,
   readImageUrlAsBase64,
   type ImageAspectRatio,
@@ -503,9 +504,23 @@ function EditPanel({
     async (newAspect: ImageAspectRatio) => {
       setShowAspectMenu(false);
       setCurrentAspect(newAspect);
-      await runRevision({ prompt: currentPrompt, aspectRatio: newAspect, modelId });
+      let edit: ImageEditRequest | null = null;
+      if (supportsEdit && newAspect !== 'auto') {
+        try {
+          edit = await buildReframeEdit(currentUrl, newAspect);
+        } catch (err) {
+          setGenError(toUserMessage(err, 'Could not prepare this image for reframing. Try again.'));
+          return;
+        }
+      }
+      await runRevision({
+        prompt: currentPrompt,
+        aspectRatio: newAspect,
+        modelId,
+        ...(edit ? { edit } : {}),
+      });
     },
-    [runRevision, currentPrompt, modelId],
+    [runRevision, currentPrompt, modelId, supportsEdit, currentUrl],
   );
 
   const handleDescribeEdit = useCallback(async () => {
@@ -737,7 +752,7 @@ function EditPanel({
             {supportsEdit
               ? selecting
                 ? 'Paint over the part to change, then describe the change. Only that part is redrawn.'
-                : 'Describing a change edits the image above. Select an area to redraw only part of it.'
+                : 'Describing a change edits the image above. Select an area to redraw only part of it, or pick a new shape to extend it.'
               : 'Describing a change generates a new image from the updated description. The image above is not modified.'}
           </p>
 
