@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomBytes } from 'node:crypto';
 
+import type { CustomConnectorTransport } from '@agiworkforce/cloud-contracts';
 import { connectMcpServer } from '@agiworkforce/mcp';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getBillingPlanPricing, getPlanMaxConnectorTools } from '@agiworkforce/types';
@@ -22,8 +23,6 @@ import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-conne
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { McpSuppliedOAuthClient } from '@/lib/connectors/mcp-oauth-provider';
-
-export type CustomConnectorTransport = 'sse' | 'streamable-http';
 
 export const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 const SSE_PATH_SUFFIX = '/sse';
@@ -86,7 +85,7 @@ export interface CustomConnectorRow {
   short_id: string;
   name: string;
   url: string;
-  transport: string;
+  transport: CustomConnectorTransport;
   created_at: string;
   updated_at: string;
 }
@@ -97,7 +96,7 @@ export interface CustomConnectorView {
   connectorId: string;
   name: string;
   url: string;
-  transport: string;
+  transport: CustomConnectorTransport;
   createdAt: string;
   updatedAt: string;
 }

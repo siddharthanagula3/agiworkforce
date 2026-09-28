@@ -246,3 +246,13 @@ and deep research pages refused the fetch on 2026-09-28, so Claude's page
 decides until ChatGPT's can be read. Research is therefore offered on Pro,
 Max, Team and Enterprise, every surface reads that from the capability
 document, and the server refuses a research request the document denies.
+
+## D-2026-09-28-12 Voice transcripts and voices follow Claude
+
+Claude saves voice conversations as ordinary chat history, so their export and
+deletion follow the chat (support.claude.com/en/articles/11101966, checked
+2026-09-28); voice transcripts here are chat messages too, so S49.25 and S49.27
+are at parity. Claude offers preset voices only, to prevent voice cloning and
+impersonation, and no download of spoken replies; with D-2026-09-28-04 keeping
+OpenAI's preset voices, custom voice creation (S50.31) and downloading
+generated speech (S50.04) are not built. help.openai.com refused the fetch.

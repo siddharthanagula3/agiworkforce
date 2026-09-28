@@ -42,7 +42,7 @@ import {
 import { installedVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import { isDirectoryMarketplaceRepository, type DirectoryFetch } from './official-marketplace';
-import { fetchPluginSkillFiles } from './skill-files';
+import { fetchPluginSkillFiles, pluginContentPaths } from './skill-files';
 import { installedSkillsCacheParams, writeInstalledSkills } from './snapshot-cache';
 import type { InstalledDirectorySkill, PluginDirectoryEntry } from './types';
 
@@ -319,7 +319,7 @@ export async function installDirectoryPlugin(
 
   const skills = await fetchPluginSkillFiles(
     { ...root.location, sha: root.sha },
-    record.runtime.components.skillPaths,
+    pluginContentPaths(record.runtime.components),
     context.fetchImpl,
   );
   if (skills.length === 0) {
@@ -479,13 +479,14 @@ interface RemovedInstallationRow {
   entry_id: string;
   source_id: string;
   repository_url: string;
+  plugin_key: string;
 }
 
 export async function uninstallDirectoryInstallation(
   db: DatabaseAdapter,
   userId: string,
   installationId: string,
-): Promise<boolean> {
+): Promise<string | null> {
   return db.transaction(async (tx) => {
     const removed = await tx.query<RemovedInstallationRow>(
       `with removed as (
@@ -493,15 +494,15 @@ export async function uninstallDirectoryInstallation(
           where id = $1 and user_id = $2
           returning entry_id
        )
-       select removed.entry_id, entries.source_id, sources.repository_url
+       select removed.entry_id, entries.source_id, sources.repository_url, entries.plugin_key
          from removed
          join public.plugin_marketplace_entries entries on entries.id = removed.entry_id
          join public.plugin_marketplace_sources sources on sources.id = entries.source_id`,
       [installationId, userId],
     );
     const row = removed[0];
-    if (!row) return false;
-    if (!isDirectoryMarketplaceRepository(row.repository_url)) return true;
+    if (!row) return null;
+    if (!isDirectoryMarketplaceRepository(row.repository_url)) return row.plugin_key;
     await tx.execute(
       `delete from public.plugin_marketplace_entries entries
         using public.plugin_marketplace_sources sources
@@ -523,6 +524,6 @@ export async function uninstallDirectoryInstallation(
           )`,
       [row.source_id, userId],
     );
-    return true;
+    return row.plugin_key;
   });
 }

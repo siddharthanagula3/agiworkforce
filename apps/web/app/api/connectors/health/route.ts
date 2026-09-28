@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ConnectorHealthResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -25,7 +26,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     connectors: requested
       ? connectors.filter((entry) => entry.connectorId === requested)
       : connectors,
-  });
+  } satisfies ConnectorHealthResponse);
 }
 
 export const GET = withErrorHandler(handleGet);

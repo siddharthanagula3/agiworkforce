@@ -4,6 +4,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { ManagedMemoryRestoreResponse } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
@@ -70,7 +71,10 @@ async function handleRestoreMemory(request: NextRequest, context: RouteContext) 
     throw createError.notFound('That memory is no longer waiting to be restored');
   }
 
-  return NextResponse.json({ restoredId: swap.restored, replacedId: swap.replaced });
+  return NextResponse.json({
+    restoredId: swap.restored,
+    replacedId: swap.replaced,
+  } satisfies ManagedMemoryRestoreResponse);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleRestoreMemory));

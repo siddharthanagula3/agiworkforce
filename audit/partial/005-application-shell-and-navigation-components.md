@@ -59,18 +59,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S5.13: Conversation row.
-
-- Done when: Each conversation row shows its title, indicates the active one, and opens the conversation.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | History rows show the title and open on click, but nothing marks the active conversation: the cited lines (side_panel.ts:6729-6755) set no aria-current or active class, and _ctx.conversationId is only compared when deleting (6785). The criterion's "indicates the active one" is absent. partial, miss ui; remaining: mark the open conversation in the history list. |  |
-
-Code: `apps/extension/src/side_panel.ts:6726-6755`, `apps/extension/src/side_panel.ts:6833-6836`
-
 ## S5.16: Resource-type icon.
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
