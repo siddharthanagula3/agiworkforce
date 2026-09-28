@@ -20,6 +20,7 @@ pub mod memory;
 pub mod personalization;
 pub mod projects;
 pub mod referrals;
+pub mod shares;
 pub mod state;
 pub mod workspace_policy;
 

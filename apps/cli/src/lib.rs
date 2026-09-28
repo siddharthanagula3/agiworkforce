@@ -931,6 +931,11 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// List the conversation links you shared, or revoke one.
+    Shares {
+        #[command(subcommand)]
+        action: Option<SharesSubcommand>,
+    },
     /// List your account's connectors with their state, or disconnect one.
     Connectors {
         #[command(subcommand)]
@@ -1101,6 +1106,18 @@ enum HistorySubcommand {
         yes: bool,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SharesSubcommand {
+    /// Turn off a shared link for everyone who has it.
+    Revoke {
+        /// The link's token, as agi shares lists it.
+        token: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 }
 
@@ -5185,6 +5202,34 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Auth Status ---
+            Command::Shares { action } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let links = cloud::shares::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::shares::render(&links));
+                    }
+                    Some(SharesSubcommand::Revoke { token, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Revoke shared link {token}? Anyone who has it can no longer open the conversation. A new share gets a new link."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left the link on.");
+                            return Ok(());
+                        }
+                        cloud::shares::revoke(&client, token)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Revoked shared link {token}.");
+                    }
+                }
+                Ok(())
+            }
             Command::Connectors { action } => {
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
