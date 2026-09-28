@@ -452,19 +452,19 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
       'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
   },
   developer_session_changes: {
-    capability: 'filesystem.read',
+    capability: 'git.read',
     reason: 'Showing what a coding session changed reads the changed files in this folder.',
   },
   developer_session_discard: {
-    capability: 'filesystem.write',
+    capability: 'git.destructive',
     reason: 'Discarding a change puts files in this folder back to their last committed version.',
   },
   developer_branches_list: {
-    capability: 'filesystem.read',
+    capability: 'git.read',
     reason: "Listing branches reads this folder's git repository.",
   },
   developer_branch_switch: {
-    capability: 'filesystem.write',
+    capability: 'git.write',
     reason: 'Switching branches changes the files in this folder to that branch.',
   },
   developer_skills_list: {
