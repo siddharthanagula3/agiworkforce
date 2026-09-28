@@ -1477,6 +1477,19 @@ export async function claimCloudAgentApprovalCheckpoint(
         [input.runId, input.userId],
       );
       if (expiredRows[0]) throw new CloudAgentApprovalCheckpointExpiredError();
+      const decidedRows = await tx.query<{ state: string }>(
+        `select state from public.cloud_agent_approval_checkpoints
+          where run_id = $1 and user_id = $2 and checkpoint_kind = 'approval'
+          order by version desc
+          limit 1`,
+        [input.runId, input.userId],
+      );
+      const latestState = decidedRows[0]?.state;
+      if (latestState === 'resuming' || latestState === 'resolved') {
+        throw new CloudAgentApprovalCheckpointConflictError(
+          'This approval was already answered on another device',
+        );
+      }
     }
     const checkpoint = requireApprovalCheckpoint(rows);
     const pendingIds = new Set(checkpoint.pendingToolCalls.map((call) => call.id));
