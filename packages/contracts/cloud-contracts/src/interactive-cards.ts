@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { ManagedMediaImageAspectRatioSchema } from './managed-media';
 import {
   CLARIFY_HEADER_MAX_LENGTH,
   CLARIFY_MAX_OPTIONS,
   CLARIFY_MAX_QUESTIONS,
   CLARIFY_MIN_OPTIONS,
   CLARIFY_OTHER_MAX_LENGTH,
+  IMAGE_CARD_MAX_IMAGES,
+  IMAGE_TOOL_PROMPT_MAX_LENGTH,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   INTERACTIVE_CARDS_METADATA_KEY,
   INTERACTIVE_CARD_MAX_SERIALIZED_LENGTH,
@@ -246,6 +249,28 @@ const MediaRefSchema = z
   .strict();
 
 const SourceSchema = z.object({ url: HttpsUrlSchema, title: z.string().min(1).max(120) }).strict();
+
+const IMAGE_CARD_URL_PATTERN =
+  /^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+const ImageCardImageSchema = z
+  .object({ assetId: z.string().uuid(), url: z.string().regex(IMAGE_CARD_URL_PATTERN) })
+  .strict()
+  .refine(
+    (image) =>
+      IMAGE_CARD_URL_PATTERN.exec(image.url)?.[1]?.toLowerCase() === image.assetId.toLowerCase(),
+    { message: 'url does not name the asset' },
+  );
+
+export const ImageCardBodySchema = z
+  .object({
+    operation: z.enum(['generate', 'edit']),
+    prompt: z.string().min(1).max(IMAGE_TOOL_PROMPT_MAX_LENGTH),
+    images: z.array(ImageCardImageSchema).min(1).max(IMAGE_CARD_MAX_IMAGES),
+    aspectRatio: ManagedMediaImageAspectRatioSchema.optional(),
+    model: z.string().min(1).max(200).optional(),
+  })
+  .strict();
 
 export function isAllowedItineraryRouteUrl(value: string): boolean {
   try {
@@ -577,15 +602,17 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
   const parsed =
     kind === 'clarify.v1'
       ? ClarifyCardBodySchema.safeParse(rawBody)
-      : kind === 'itinerary.v1'
-        ? ItineraryCardBodySchema.safeParse(rawBody)
-        : kind === 'map-search.v1'
-          ? MapSearchCardBodySchema.safeParse(rawBody)
-          : kind === 'places.v1'
-            ? PlacesCardBodySchema.safeParse(rawBody)
-            : kind === 'product-comparison.v1'
-              ? ProductComparisonCardBodySchema.safeParse(rawBody)
-              : McpAppCardBodySchema.safeParse(rawBody);
+      : kind === 'image.v1'
+        ? ImageCardBodySchema.safeParse(rawBody)
+        : kind === 'itinerary.v1'
+          ? ItineraryCardBodySchema.safeParse(rawBody)
+          : kind === 'map-search.v1'
+            ? MapSearchCardBodySchema.safeParse(rawBody)
+            : kind === 'places.v1'
+              ? PlacesCardBodySchema.safeParse(rawBody)
+              : kind === 'product-comparison.v1'
+                ? ProductComparisonCardBodySchema.safeParse(rawBody)
+                : McpAppCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;
