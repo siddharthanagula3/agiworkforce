@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -44,6 +45,7 @@ type OpenAiCompatibleModel = {
   context_window: number;
   max_output: number;
   capabilities: Record<string, boolean | null>;
+  deprecation_date: string | null;
 };
 
 const PUBLISHED_CAPABILITIES = {
@@ -96,6 +98,7 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     context_window: contextWindow,
     max_output: resolveMaxOutputTokens(model.id),
     capabilities: publishedCapabilities(model.id),
+    deprecation_date: model.deprecatedOn,
   };
 }
 
@@ -227,7 +230,7 @@ async function handleListModels(request: NextRequest) {
   );
 }
 
-export const GET = withErrorHandler(handleListModels);
+export const GET = withAdmittedRateLimitHeaders(withErrorHandler(handleListModels));
 
 export function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: getCorsHeaders(request) });
