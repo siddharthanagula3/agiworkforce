@@ -98,6 +98,13 @@ pub mod voice {
              Install a build with the `voice` feature enabled to use /voice."
         )
     }
+
+    pub async fn dictate(_session: &AgentSession, _voice_lang: &str) -> Result<Option<String>> {
+        bail!(
+            "This build was compiled without voice support, so audio capture is unavailable. \
+             Install a build with the `voice` feature enabled to use /dictate."
+        )
+    }
 }
 
 // Extended CLI modules, used by subcommand handlers

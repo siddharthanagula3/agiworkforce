@@ -983,6 +983,33 @@ pub fn invoke_skill_tool(
     }
 }
 
+pub fn skill_command_prompt(
+    name: &str,
+    request: &str,
+) -> Option<std::result::Result<String, String>> {
+    let skills = discover_skills();
+    skills
+        .iter()
+        .any(|skill| skill.name.eq_ignore_ascii_case(name))
+        .then(|| {
+            let available_tools: Vec<String> =
+                crate::runtime::tool_catalog::all_builtin_tool_definitions()
+                    .into_iter()
+                    .chain(crate::runtime::tool_catalog::team_tool_definitions())
+                    .map(|definition| definition.name)
+                    .collect();
+            invoke_skill_tool(&skills, "load", Some(name), &available_tools).map(|loaded| {
+                let request = request.trim();
+                let request = if request.is_empty() {
+                    "Apply this skill to the current work."
+                } else {
+                    request
+                };
+                format!("{loaded}\n\nThe user invoked the /{name} skill. {request}")
+            })
+        })
+}
+
 /// Format all skills for display (`/skills` command), grouped by category.
 ///
 /// Skills without a category are listed under *"Uncategorized"*.

@@ -1138,38 +1138,75 @@ message -- revise and call `update_plan` again.\n\n",
     }
 
     /// Send a side query (/btw), runs in a temporary fork, doesn't affect main history.
-    #[allow(dead_code)]
     pub async fn send_btw(
         &self,
         config: &crate::config::CliConfig,
         question: &str,
         on_chunk: StreamCallback,
     ) -> Result<String> {
+        self.side_query(config)?
+            .ask(config, question, on_chunk)
+            .await
+    }
+
+    pub fn side_query(&self, config: &crate::config::CliConfig) -> Result<SideQuery> {
         // Trust boundary: a /btw side-query must honor the same Local→cloud guard
         // as send(), a Local session must never silently egress to cloud here.
         self.validate_privacy_boundary()?;
+        let mut messages: Vec<Message> = self.messages.first().cloned().into_iter().collect();
+        messages.extend(
+            self.messages
+                .iter()
+                .skip(1)
+                .filter(|message| matches!(message.role.as_str(), "user" | "assistant"))
+                .filter_map(|message| {
+                    let text = message.text_content();
+                    (!text.trim().is_empty()).then(|| Message::text(&message.role, text))
+                }),
+        );
+        Ok(SideQuery {
+            provider: self.provider.clone(),
+            model: self.model.clone(),
+            max_tokens: config.effective_max_tokens(&self.model),
+            messages,
+        })
+    }
+}
 
-        let mut fork_messages = Vec::new();
-        if let Some(sys) = self.messages.first() {
-            fork_messages.push(sys.clone());
-        }
-        fork_messages.push(Message::text("user", question));
+#[derive(Clone)]
+pub struct SideQuery {
+    provider: models::Provider,
+    model: String,
+    max_tokens: u32,
+    messages: Vec<Message>,
+}
 
-        let max_tokens = config.effective_max_tokens(&self.model);
-
+impl SideQuery {
+    pub async fn ask(
+        self,
+        config: &crate::config::CliConfig,
+        question: &str,
+        on_chunk: StreamCallback,
+    ) -> Result<String> {
+        let mut messages = self.messages;
+        messages.push(Message::text(
+            "user",
+            format!(
+                "Side question. Answer only from this conversation so far, without tools, and keep it short: {question}"
+            ),
+        ));
         let result = models::stream_completion(
             config,
             &self.provider,
             &self.model,
-            &fork_messages,
-            max_tokens,
+            &messages,
+            self.max_tokens,
             None,
             on_chunk,
-            None, // send_btw never uses extended thinking,
+            None,
             None,
         )
         .await?;
-
         Ok(result.text)
     }
 }

@@ -868,31 +868,112 @@ pub fn render_mcp(session: &AgentSession) -> String {
 }
 
 pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
-    if arg.trim().is_empty() {
-        let mut lines = vec![
-            format!("Active output style: {}", session.output_style),
-            "Available styles:".to_string(),
-        ];
-        for style in crate::output_styles::load_all() {
-            let marker = if style.name == session.output_style {
-                "*"
-            } else {
-                " "
-            };
-            lines.push(format!(
-                "  {marker} {:<14} {}",
-                style.name, style.description
-            ));
+    let arg = arg.trim();
+    let (action, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    match action {
+        "" => output_style_overview(session),
+        "new" | "create" => {
+            let (name, instructions) = rest
+                .trim()
+                .split_once(char::is_whitespace)
+                .unwrap_or((rest.trim(), ""));
+            let description = instructions.lines().next().unwrap_or_default();
+            match crate::output_styles::create(name, description, instructions) {
+                Ok(path) => format!(
+                    "Created output style {name} at {}. Switch with /output-style {name}; edit the file to refine it.",
+                    path.display()
+                ),
+                Err(reason) => reason,
+            }
         }
-        lines.push("Switch with: /output-style <name>".to_string());
-        return lines.join("\n");
+        "delete" | "remove" => {
+            let name = rest.trim();
+            match crate::output_styles::delete(name) {
+                Ok(path) => {
+                    let mut message = format!("Deleted output style {name} ({}).", path.display());
+                    if session.output_style == name {
+                        session.apply_output_style("default");
+                        message.push_str(" This session is back on the default style.");
+                    }
+                    message
+                }
+                Err(reason) => reason,
+            }
+        }
+        name => {
+            let session_only = rest.trim() == "--session";
+            session.apply_output_style(name);
+            if session_only {
+                format!(
+                    "Output style: {} for this session only; your saved default is unchanged.",
+                    session.output_style
+                )
+            } else {
+                format!(
+                    "Output style: {} (applies on next turn)",
+                    session.output_style
+                )
+            }
+        }
     }
+}
 
-    session.apply_output_style(arg.trim());
-    format!(
-        "Output style: {} (applies on next turn)",
-        session.output_style
+pub fn output_style_arg_persists(arg: &str) -> bool {
+    let mut words = arg.split_whitespace();
+    matches!(
+        (words.next(), words.next()),
+        (Some(name), None) if !matches!(name, "new" | "create" | "delete" | "remove")
     )
+}
+
+fn output_style_overview(session: &AgentSession) -> String {
+    let styles = crate::output_styles::load_all();
+    let active = styles
+        .iter()
+        .find(|style| style.name == session.output_style);
+    let mut lines = vec!["In effect for this session:".to_string()];
+    lines.push(format!(
+        "  Output style   {} ({})",
+        session.output_style,
+        active
+            .map(|style| style.origin.as_str())
+            .unwrap_or("built-in")
+    ));
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd).list() {
+        if exists {
+            lines.push(format!("  Instructions   {tier}: {}", path.display()));
+        }
+    }
+    if let Some(tools) = session.allowed_tools.as_ref() {
+        lines.push(format!("  Tool allowlist {}", tools.join(", ")));
+    }
+    lines.push(if session.privacy_mode == PrivacyMode::Managed {
+        "  Account        your personalization and custom instructions (see /personalize)".to_string()
+    } else {
+        format!(
+            "  Account        not applied: this session is {}, account preferences reach Managed Cloud turns only",
+            session.privacy_mode.label()
+        )
+    });
+    lines.push(String::new());
+    lines.push("Available styles:".to_string());
+    for style in &styles {
+        let marker = if style.name == session.output_style {
+            "*"
+        } else {
+            " "
+        };
+        lines.push(format!(
+            "  {marker} {:<14} {}",
+            style.name, style.description
+        ));
+    }
+    lines.push(
+        "Switch with /output-style <name> (add --session to leave your default alone) · /output-style new <name> <instructions> · /output-style delete <name>"
+            .to_string(),
+    );
+    lines.join("\n")
 }
 
 pub fn render_fallback(session: &AgentSession) -> String {
