@@ -1,46 +1,40 @@
-import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
+import {
+  CONNECTOR_OAUTH_START_PATH,
+  CUSTOM_CONNECTORS_PATH,
+  ConnectConflictResponseSchema,
+  ConnectorConnectionSchema,
+  ConnectorGrantedPermissionSchema,
+  CreatedCustomConnectorSchema,
+  CustomConnectorSchema,
+  ListConnectorsResponseSchema,
+  ListCustomConnectorsResponseSchema,
+  MANAGED_CLOUD_CONNECTORS_PATH,
+  connectorErrorMessage,
+  type ConnectRequest,
+  type ConnectorConnection,
+  type ConnectorGrantedPermission,
+  type CreateCustomConnectorRequest,
+} from '@agiworkforce/cloud-contracts';
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import { WEB_APP_URL } from './config';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
-export interface CloudConnectorGrantedPermission {
-  scope: string;
-  sentence: string;
-  access: 'read' | 'write';
-}
-
-export interface CloudConnectorEntry {
-  id: string;
-  connectorId: string;
-  authType: string;
-  connectedAt: string;
-  updatedAt: string;
-  source: 'user' | 'github-app' | 'custom' | 'oauth';
-  name?: string;
-  toolConnectorId?: string;
-  needsReauthorization?: boolean;
-  grantedPermissions?: CloudConnectorGrantedPermission[];
-}
-
 export interface ListConnectorsResult {
-  connectors: CloudConnectorEntry[];
+  connectors: ConnectorConnection[];
   available: string[];
 }
 
 export type ConnectConnectorResult =
-  | { status: 'connected'; connector: CloudConnectorEntry }
+  | { status: 'connected'; connector: ConnectorConnection }
   /** GitHub (and future install-flow connectors): open `installUrl` in an owned app webview. */
   | { status: 'install-required'; installUrl: string }
   /** Server does not support connecting this id yet (501). */
   | { status: 'unsupported'; message: string };
 
-export interface CreateCustomConnectorInput {
-  name: string;
-  url: string;
-  authToken?: string;
-  oauthClientId?: string;
-  oauthClientSecret?: string;
-}
+export type CreateCustomConnectorInput = Pick<
+  CreateCustomConnectorRequest,
+  'name' | 'url' | 'authToken' | 'oauthClientId' | 'oauthClientSecret'
+>;
 
 export interface CreatedCustomConnector {
   id: string | null;
@@ -50,68 +44,60 @@ export interface CreatedCustomConnector {
 
 const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 
-function readApiError(body: unknown, fallback: string): string {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return fallback;
-  const record = body as Record<string, unknown>;
-  if (typeof record['error'] === 'string') return record['error'];
-  const nested = record['error'];
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    const message = (nested as Record<string, unknown>)['message'];
-    if (typeof message === 'string') return message;
-  }
-  if (typeof record['message'] === 'string') return record['message'];
-  return fallback;
+const ConnectorRowSchema = ConnectorConnectionSchema.pick({
+  id: true,
+  connectorId: true,
+  authType: true,
+  connectedAt: true,
+  updatedAt: true,
+  source: true,
+  name: true,
+  toolConnectorId: true,
+  needsReauthorization: true,
+});
+
+const AvailableConnectorIdSchema = ListConnectorsResponseSchema.shape.available.element;
+
+const OAuthRedirectUriSchema = ListCustomConnectorsResponseSchema.pick({ oauthRedirectUri: true });
+
+const CreatedSchema = CreatedCustomConnectorSchema.pick({ signInRequired: true }).extend({
+  connector: CustomConnectorSchema.pick({ id: true, shortId: true }),
+});
+
+function readGrantedPermissions(value: unknown): ConnectorGrantedPermission[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((permission: unknown) => {
+    const parsed = ConnectorGrantedPermissionSchema.safeParse(permission);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
-function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record['id'] !== 'string' ||
-    typeof record['connectorId'] !== 'string' ||
-    typeof record['authType'] !== 'string' ||
-    typeof record['connectedAt'] !== 'string' ||
-    typeof record['updatedAt'] !== 'string' ||
-    (record['source'] !== 'user' &&
-      record['source'] !== 'github-app' &&
-      record['source'] !== 'custom' &&
-      record['source'] !== 'oauth')
-  ) {
-    return null;
-  }
-  const grantedPermissions = Array.isArray(record['grantedPermissions'])
-    ? record['grantedPermissions'].flatMap((permission: unknown) => {
-        const candidate = permission as Record<string, unknown> | null;
-        return typeof candidate?.['scope'] === 'string' &&
-          typeof candidate['sentence'] === 'string' &&
-          (candidate['access'] === 'read' || candidate['access'] === 'write')
-          ? [
-              {
-                scope: candidate['scope'],
-                sentence: candidate['sentence'],
-                access: candidate['access'],
-              },
-            ]
-          : [];
-      })
-    : [];
+function parseConnectorEntry(value: unknown): ConnectorConnection | null {
+  const parsed = ConnectorRowSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const grantedPermissions = readGrantedPermissions(
+    (value as Record<string, unknown>)['grantedPermissions'],
+  );
   return {
-    id: record['id'],
-    connectorId: record['connectorId'],
-    authType: record['authType'],
-    connectedAt: record['connectedAt'],
-    updatedAt: record['updatedAt'],
-    source: record['source'],
-    ...(typeof record['name'] === 'string' ? { name: record['name'] } : {}),
-    ...(typeof record['toolConnectorId'] === 'string'
-      ? { toolConnectorId: record['toolConnectorId'] }
-      : {}),
-    ...(record['needsReauthorization'] === true ? { needsReauthorization: true } : {}),
+    ...parsed.data,
     ...(grantedPermissions.length > 0 ? { grantedPermissions } : {}),
   };
 }
 
-export function customConnectorShortId(entry: CloudConnectorEntry): string | null {
+function readRows<Row>(values: unknown, parse: (value: unknown) => Row | null): Row[] {
+  if (!Array.isArray(values)) return [];
+  return values.flatMap((value: unknown) => {
+    const row = parse(value);
+    return row === null ? [] : [row];
+  });
+}
+
+function readAvailableId(value: unknown): string | null {
+  const parsed = AvailableConnectorIdSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export function customConnectorShortId(entry: ConnectorConnection): string | null {
   const toolId = entry.toolConnectorId;
   return toolId?.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)
     ? toolId.slice(CUSTOM_CONNECTOR_ID_PREFIX.length)
@@ -126,23 +112,22 @@ export function customConnectorSignInUrl(shortId: string): string {
 export async function getCustomConnectorOAuthRedirectUri(): Promise<string | null> {
   const request = createManagedCloudRequestContext('Custom Cloud connector settings');
   const headers = await request.getHeaders();
-  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}${CUSTOM_CONNECTORS_PATH}`, {
     method: 'GET',
     headers,
   });
   if (!res.ok) return null;
   const data: unknown = await res.json().catch(() => null);
   request.assertBoundary();
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const uri = (data as Record<string, unknown>)['oauthRedirectUri'];
-  return typeof uri === 'string' && uri.length > 0 ? uri : null;
+  const parsed = OAuthRedirectUriSchema.safeParse(data);
+  return parsed.success ? (parsed.data.oauthRedirectUri ?? null) : null;
 }
 
 export async function listConnectors(): Promise<ListConnectorsResult> {
   const request = createManagedCloudRequestContext('Cloud connectors');
   const headers = await request.getHeaders();
 
-  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}${MANAGED_CLOUD_CONNECTORS_PATH}`, {
     method: 'GET',
     headers,
   });
@@ -151,19 +136,16 @@ export async function listConnectors(): Promise<ListConnectorsResult> {
     throw new Error(`Failed to list connectors: HTTP ${res.status}`);
   }
 
-  const data = await res.json();
+  const data: unknown = await res.json();
   request.assertBoundary();
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('The cloud connector service returned an invalid response.');
   }
   const record = data as Record<string, unknown>;
-  const connectors = Array.isArray(record['connectors'])
-    ? record['connectors'].map(parseConnectorEntry).filter((entry) => entry !== null)
-    : [];
-  const available = Array.isArray(record['available'])
-    ? record['available'].filter((id): id is string => typeof id === 'string')
-    : [];
-  return { connectors, available };
+  return {
+    connectors: readRows(record['connectors'], parseConnectorEntry),
+    available: readRows(record['available'], readAvailableId),
+  };
 }
 
 export async function connectConnector(
@@ -173,20 +155,20 @@ export async function connectConnector(
   const request = createManagedCloudRequestContext('Cloud connector connection');
   const headers = await request.getHeaders();
 
-  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const connectRequest: ConnectRequest = { connectorId, ...(authType ? { authType } : {}) };
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}${MANAGED_CLOUD_CONNECTORS_PATH}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ connectorId, ...(authType ? { authType } : {}) }),
+    body: JSON.stringify(connectRequest),
   });
 
   if (res.status === 201) {
     const payload: unknown = await res.json();
     request.assertBoundary();
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throw new Error('The cloud connector service returned an invalid connection.');
-    }
-    const data = payload as Record<string, unknown>;
-    const connector = parseConnectorEntry(data['connector']);
+    const connector =
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? parseConnectorEntry((payload as Record<string, unknown>)['connector'])
+        : null;
     if (!connector) {
       throw new Error('The cloud connector service returned an invalid connection.');
     }
@@ -196,11 +178,9 @@ export async function connectConnector(
   if (res.status === 409) {
     const payload: unknown = await res.json().catch(() => null);
     request.assertBoundary();
-    const installStartPath =
-      payload && typeof payload === 'object' && !Array.isArray(payload)
-        ? (payload as Record<string, unknown>)['installStartPath']
-        : undefined;
-    if (typeof installStartPath === 'string') {
+    const conflict = ConnectConflictResponseSchema.safeParse(payload);
+    const installStartPath = conflict.success ? conflict.data.installStartPath : undefined;
+    if (installStartPath) {
       return {
         status: 'install-required',
         installUrl: `${CLOUD_API_BASE_URL}${installStartPath}`,
@@ -216,13 +196,13 @@ export async function connectConnector(
     request.assertBoundary();
     return {
       status: 'unsupported',
-      message: readApiError(payload, 'This connector is not available yet.'),
+      message: connectorErrorMessage(payload, 'This connector is not available yet.'),
     };
   }
 
-  const body = await res.json().catch(() => null);
+  const body: unknown = await res.json().catch(() => null);
   request.assertBoundary();
-  throw new Error(readApiError(body, `Failed to connect connector: HTTP ${res.status}`));
+  throw new Error(connectorErrorMessage(body, `Failed to connect connector: HTTP ${res.status}`));
 }
 
 export async function disconnectConnector(connectorId: string): Promise<void> {
@@ -230,7 +210,7 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
   const headers = await request.getHeaders();
 
   const res = await request.fetch(
-    `${CLOUD_API_BASE_URL}/api/connectors?connectorId=${encodeURIComponent(connectorId)}`,
+    `${CLOUD_API_BASE_URL}${MANAGED_CLOUD_CONNECTORS_PATH}?connectorId=${encodeURIComponent(connectorId)}`,
     {
       method: 'DELETE',
       headers,
@@ -238,9 +218,11 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
   );
 
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
+    const body: unknown = await res.json().catch(() => null);
     request.assertBoundary();
-    throw new Error(readApiError(body, `Failed to disconnect connector: HTTP ${res.status}`));
+    throw new Error(
+      connectorErrorMessage(body, `Failed to disconnect connector: HTTP ${res.status}`),
+    );
   }
   request.assertBoundary();
 }
@@ -253,36 +235,31 @@ export async function createCustomConnector(
   const authToken = input.authToken?.trim();
   const oauthClientId = input.oauthClientId?.trim();
   const oauthClientSecret = input.oauthClientSecret?.trim();
-  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
+  const createRequest: CreateCustomConnectorRequest = {
+    name: input.name,
+    url: input.url,
+    ...(authToken ? { authToken } : {}),
+    ...(oauthClientId ? { oauthClientId } : {}),
+    ...(oauthClientId && oauthClientSecret ? { oauthClientSecret } : {}),
+  };
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}${CUSTOM_CONNECTORS_PATH}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      name: input.name,
-      url: input.url,
-      ...(authToken ? { authToken } : {}),
-      ...(oauthClientId ? { oauthClientId } : {}),
-      ...(oauthClientId && oauthClientSecret ? { oauthClientSecret } : {}),
-    }),
+    body: JSON.stringify(createRequest),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
+    const body: unknown = await res.json().catch(() => null);
     request.assertBoundary();
-    throw new Error(readApiError(body, `Failed to add connector: HTTP ${res.status}`));
+    throw new Error(connectorErrorMessage(body, `Failed to add connector: HTTP ${res.status}`));
   }
   const payload: unknown = await res.json().catch(() => null);
   request.assertBoundary();
-  const record =
-    payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : {};
-  const connector =
-    record['connector'] && typeof record['connector'] === 'object'
-      ? (record['connector'] as Record<string, unknown>)
-      : {};
+  const created = CreatedSchema.safeParse(payload);
+  if (!created.success) return { id: null, shortId: null, signInRequired: false };
   return {
-    id: typeof connector['id'] === 'string' ? connector['id'] : null,
-    shortId: typeof connector['shortId'] === 'string' ? connector['shortId'] : null,
-    signInRequired: record['signInRequired'] === true,
+    id: created.data.connector.id,
+    shortId: created.data.connector.shortId,
+    signInRequired: created.data.signInRequired === true,
   };
 }
 
@@ -290,16 +267,16 @@ export async function deleteCustomConnector(id: string): Promise<void> {
   const request = createManagedCloudRequestContext('Custom Cloud connector deletion');
   const headers = await request.getHeaders();
   const res = await request.fetch(
-    `${CLOUD_API_BASE_URL}/api/connectors/custom?id=${encodeURIComponent(id)}`,
+    `${CLOUD_API_BASE_URL}${CUSTOM_CONNECTORS_PATH}?id=${encodeURIComponent(id)}`,
     {
       method: 'DELETE',
       headers,
     },
   );
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
+    const body: unknown = await res.json().catch(() => null);
     request.assertBoundary();
-    throw new Error(readApiError(body, `Failed to remove connector: HTTP ${res.status}`));
+    throw new Error(connectorErrorMessage(body, `Failed to remove connector: HTTP ${res.status}`));
   }
   request.assertBoundary();
 }
