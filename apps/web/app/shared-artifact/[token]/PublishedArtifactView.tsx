@@ -35,6 +35,17 @@ export interface PublishedArtifactViewProps {
   token?: string;
 }
 
+function connectorList(connectors: readonly string[]): string {
+  const names = connectors.map((id) =>
+    id
+      .split(/[_.-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' '),
+  );
+  return new Intl.ListFormat(undefined, { type: 'conjunction' }).format(names);
+}
+
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -124,10 +135,16 @@ export function PublishedArtifactView({
           data-testid="artifact-runtime-consent"
         >
           <p className="min-w-0 flex-1">
-            {t(
-              'artifactPublish.runtimeConsent',
-              "This app wants to use AI with your account. Each request counts toward your plan's usage.",
-            )}
+            {runtime.askingForAi.connectors.length > 0
+              ? t(
+                  'artifactPublish.runtimeConsentConnectors',
+                  "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
+                  { apps: connectorList(runtime.askingForAi.connectors) },
+                )
+              : t(
+                  'artifactPublish.runtimeConsent',
+                  "This app wants to use AI with your account. Each request counts toward your plan's usage.",
+                )}
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button size="sm" onClick={() => runtime.answerAiRequest(true)}>

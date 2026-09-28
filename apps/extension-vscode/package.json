@@ -210,6 +210,16 @@
         "icon": "$(debug-step-back)"
       },
       {
+        "command": "agi-workforce.showSavedApprovals",
+        "title": "AGI Workforce: Saved Approvals",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.showArchivedSessions",
+        "title": "AGI Workforce: Archived Sessions",
+        "icon": "$(archive)"
+      },
+      {
         "command": "agi-workforce.remoteControl",
         "title": "AGI Workforce: Remote Control",
         "icon": "$(broadcast)"

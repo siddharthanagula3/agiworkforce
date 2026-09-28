@@ -107,7 +107,7 @@ function fakeDb(options: {
       if (asks("and state = 'pending'") && approval.state !== 'pending') return [];
       if (asks('and expires_at > now()') && approval.expired) return [];
       approval.state = String(params?.[2] ?? 'decided');
-      return [{ command: COMMAND }];
+      return [{ command: COMMAND, tool_name: 'run_command', tool_args: {} }];
     }
 
     if (text.startsWith('select state, expires_at <= now() as is_expired')) {
@@ -235,7 +235,7 @@ describe('POST refuses an undecidable approval and does not leave it pending', (
     expect(mockExecute).toHaveBeenCalledTimes(1);
     expect(mockExecute.mock.calls[0]?.[0]).toMatchObject({
       turnId: TURN_ID,
-      preApproved: { command: COMMAND, approved: true },
+      preApproved: { toolName: 'run_command', args: { command: COMMAND }, approved: true },
     });
     expect(harness.turn.state).toBe('running');
   });

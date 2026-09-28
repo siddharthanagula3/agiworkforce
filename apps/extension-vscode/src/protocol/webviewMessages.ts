@@ -58,6 +58,19 @@ const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
+const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') });
+const messageAction = z.object({
+  type: z.literal('messageAction'),
+  payload: z.object({
+    action: z.enum(['resend', 'branch']),
+    text: z.string().min(1).max(1_000_000),
+    occurrence: z.number().int().nonnegative().max(10_000),
+  }),
+});
+const searchSessions = z.object({
+  type: z.literal('searchSessions'),
+  payload: z.object({ query: z.string().trim().min(2).max(200) }),
+});
 const openAccount = z.object({ type: z.literal('openAccount') });
 const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
@@ -205,7 +218,7 @@ const rateAnswer = z.object({
   }),
 });
 
-export const APPROVAL_DECISIONS = ['once', 'session', 'deny', 'abort'] as const;
+export const APPROVAL_DECISIONS = ['once', 'session', 'always', 'deny', 'abort'] as const;
 export const ApprovalDecisionSchema = z.enum(APPROVAL_DECISIONS);
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
 
@@ -282,6 +295,9 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openFilePicker,
   openHistory,
   newChat,
+  openArchivedSessions,
+  searchSessions,
+  messageAction,
   openAccount,
   completeOnboarding,
   openPermissionDocs,

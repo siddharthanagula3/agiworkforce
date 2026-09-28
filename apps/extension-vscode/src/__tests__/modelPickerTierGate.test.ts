@@ -4,6 +4,7 @@ import {
   getCoreManualModelOptions,
   getProviderDisplayLabel,
   getSurfaceManualModelOptions,
+  isAutoModeModelId,
   isModelSelectable,
   PROVIDER_DISPLAY,
   PROVIDERS_IN_ORDER,
@@ -52,6 +53,11 @@ describe('isModelReachableForTier', () => {
 
   it('allows a flagship model on max', () => {
     expect(isModelReachableForTier(CLOUD_MODEL, 'max')).toBe(true);
+  });
+
+  it('admits Auto on a paid plan and keeps it off Free', () => {
+    expect(isModelReachableForTier('auto', 'pro')).toBe(true);
+    expect(isModelReachableForTier('auto', 'free')).toBe(false);
   });
 });
 
@@ -122,7 +128,7 @@ describe('buildGroupedQuickPickItems, the owner decides the managed universe', (
   function listedModelIds(tier?: string): string[] {
     return buildGroupedQuickPickItems(tier)
       .map((item) => item.modelId)
-      .filter((modelId): modelId is string => modelId !== undefined && modelId !== 'auto');
+      .filter((modelId): modelId is string => modelId !== undefined && !isAutoModeModelId(modelId));
   }
 
   it('offers exactly what the shared owner admits on a managed plan', () => {

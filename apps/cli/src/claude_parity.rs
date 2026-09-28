@@ -103,6 +103,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "debug",
         "tui",
         "powerup",
+        "control",
+        "route",
     ]
 }
 
@@ -134,6 +136,8 @@ pub fn handle_shared_command(
                 .to_string(),
         ),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
+        "/control" => ParityCommandResult::SystemMessage(session.session_control(arg)),
+        "/route" => ParityCommandResult::SystemMessage(session.routing_profile(arg)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
         "/feedback" | "/bug" => ParityCommandResult::SystemMessage(

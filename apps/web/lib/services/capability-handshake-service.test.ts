@@ -64,13 +64,13 @@ describe('buildMeCapabilityHandshake, tier-layer honesty (the required property)
     expect(document.granted).toContain('canUseVoice');
     expect(document.granted).toContain('canUseConnectors');
     expect(document.deniedBy.canUseDeepResearch).toEqual(['tier']);
+    expect(document.deniedBy.canUseImages).toEqual(['tier']);
   });
 
   it('free tier still grants universal capabilities no tier field restricts (free users can chat)', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' });
     expect(document.granted).toContain('canChat');
     expect(document.granted).toContain('canUploadFiles');
-    expect(document.granted).toContain('canUseImages');
     expect(document.granted).toContain('canUseMarketplace');
     expect(document.granted).toContain('canUseBilling');
     expect(document.granted).toContain('canUseCloudModels');

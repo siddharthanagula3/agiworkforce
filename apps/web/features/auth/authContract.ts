@@ -21,7 +21,8 @@ export type AuthPhase =
   | 'verifying'
   | 'passkey_requested'
   | 'redirecting'
-  | 'enterprise_redirecting';
+  | 'enterprise_redirecting'
+  | 'enterprise_browser';
 
 export interface AuthSecondFactor {
   kind: AuthSecondFactorKind;
@@ -52,7 +53,10 @@ export interface AuthFailure {
 
 export type AuthResult =
   | { status: 'complete' }
-  | { status: 'redirecting'; phase?: Extract<AuthPhase, 'enterprise_redirecting'> }
+  | {
+      status: 'redirecting';
+      phase?: Extract<AuthPhase, 'enterprise_redirecting' | 'enterprise_browser'>;
+    }
   | { status: 'next'; step: AuthStep }
   | AuthFailure;
 

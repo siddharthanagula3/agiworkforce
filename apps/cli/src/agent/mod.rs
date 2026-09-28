@@ -222,6 +222,7 @@ pub struct AgentSession {
     /// `task` spawning via `SubagentManager`.
     pub(crate) subagent_depth: usize,
     pub(crate) team_manager: Option<teams::TeamManager>,
+    pub(crate) team_identity: Option<String>,
     /// Post-turn memory consolidation work owned by this session.
     ///
     /// The app-server drains these handles during interrupt/shutdown so an old
@@ -247,6 +248,7 @@ pub struct AgentSession {
     /// re-resolution falls back conservatively (byok trust → "byok", else
     /// "free"), matching the app-server host's semantics.
     pub(crate) auto_routing_tier: Option<String>,
+    pub(crate) cloud_project: Option<String>,
     /// Image blocks queued for the next `send()` call.  They are prepended to
     /// the user message as `ContentBlock::Image` parts so the model receives
     /// both the images and the text prompt in a single multipart user turn.
@@ -701,6 +703,7 @@ impl AgentSession {
             subagent_manager: None,
             subagent_depth: 0,
             team_manager: None,
+            team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
@@ -710,6 +713,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            cloud_project: None,
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
@@ -809,8 +813,38 @@ impl AgentSession {
                 })
             });
         }
+        if self.team_identity.is_some() {
+            tool_definitions.retain(|tool_definition| tool_definition.name != "spawn_teammate");
+        }
 
         tool_definitions
+    }
+
+    pub(crate) fn callable_tool_definitions(
+        &self,
+        offered: &[ToolDefinition],
+    ) -> Vec<ToolDefinition> {
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+        let planning_locked = self.plan_mode && !self.plan_approved;
+        let mut callable = offered.to_vec();
+        callable.extend(
+            crate::runtime::tool_catalog::deferred_executable_tool_definitions(
+                planning_locked,
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            )
+            .into_iter()
+            .filter(|definition| !offered.iter().any(|tool| tool.name == definition.name))
+            .filter(|definition| {
+                !self.disallowed_tools.iter().any(|spec| {
+                    crate::tool_filters::spec_blocks_entire_tool_for_schema(spec, &definition.name)
+                })
+            }),
+        );
+        callable
     }
 
     /// Ask the desktop shell, once per session, whether a browser is paired.
@@ -1657,31 +1691,228 @@ impl AgentSession {
     /// check on save keeps both writers' turns.
     pub(crate) fn claim_writer_lease(&self) {
         use crate::runtime::writer_lease::{self, LeaseClaim};
+        static LAST_WARNED_HOLDER: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
         if !self.session_persistence {
             return;
         }
         let Some(path) = self.managed_session_path.as_deref() else {
             return;
         };
-        let warning = match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
-            Ok(LeaseClaim::HeldBy(holder)) => format!(
-                "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again.",
-                holder.holder_label
-            ),
-            Ok(LeaseClaim::StaleTakeover { previous, .. }) => format!(
-                "{} stopped writing this session without handing it over; this process has taken it over.",
-                previous.holder_label
-            ),
-            Ok(_) => return,
-            Err(error) => {
-                tracing::warn!(%error, "session writer lease unavailable");
+        let (holder_id, warning) =
+            match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
+                Ok(LeaseClaim::HeldBy(holder)) => (
+                    holder.holder_id.clone(),
+                    format!(
+                        "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again. /control take makes this terminal the writer.",
+                        holder.holder_label
+                    ),
+                ),
+                Ok(LeaseClaim::StaleTakeover { previous, .. }) => (
+                    previous.holder_id.clone(),
+                    format!(
+                        "{} stopped writing this session without handing it over; this process has taken it over.",
+                        previous.holder_label
+                    ),
+                ),
+                Ok(_) => {
+                    if let Ok(mut last) = LAST_WARNED_HOLDER.lock() {
+                        *last = None;
+                    }
+                    return;
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "session writer lease unavailable");
+                    return;
+                }
+            };
+        if let Ok(mut last) = LAST_WARNED_HOLDER.lock() {
+            if last.as_deref() == Some(holder_id.as_str()) {
                 return;
             }
-        };
+            *last = Some(holder_id);
+        }
         if self.quiet {
             tracing::warn!("{warning}");
         } else {
             crate::output::print_warn(&warning);
+        }
+    }
+
+    pub(crate) fn session_status_lines(&self) -> Vec<String> {
+        use crate::runtime::writer_lease;
+        let Some(managed) = self
+            .managed_session
+            .as_ref()
+            .filter(|_| self.session_persistence)
+        else {
+            return vec!["Session: not saved, so no other client can open it".to_string()];
+        };
+        let mut lines = vec![format!("Session: {}", managed.session_id)];
+        if let Some(state) = managed.auto_routing.as_ref() {
+            lines.push(format!("Routing: {}", state.selection));
+        }
+        if let Some(path) = self.managed_session_path.as_deref() {
+            lines.push(format!(
+                "Writing: {}",
+                writer_lease::holder_summary(
+                    writer_lease::read(path).as_ref(),
+                    writer_lease::process_writer("AGI CLI"),
+                    chrono::Utc::now(),
+                )
+            ));
+        }
+        if let Some(branch) = managed.git_branch.as_deref() {
+            lines.push(format!("Branch: {branch}"));
+        }
+        if let Some(root) = managed
+            .worktree_root
+            .as_ref()
+            .or(managed.workspace_root.as_ref())
+        {
+            let here = std::env::current_dir().ok();
+            if here.as_deref() == Some(root.as_path()) {
+                lines.push(format!("Worktree: {}", root.display()));
+            } else {
+                lines.push(format!(
+                    "Worktree: {} (this terminal is in {}, so tools run there instead)",
+                    root.display(),
+                    here.map(|path| path.display().to_string())
+                        .unwrap_or_else(|| "an unknown directory".to_string())
+                ));
+            }
+        }
+        lines
+    }
+
+    pub(crate) fn routing_profile(&mut self, arg: &str) -> String {
+        use agiworkforce_model_registry::{RoutingTaskType, TrustMode};
+        let options = crate::models::gateway_models::cached_routing_profiles();
+        let describe = |id: &str| {
+            options
+                .iter()
+                .find(|option| option.id == id)
+                .map(|option| format!("{} ({id}): {}", option.label, option.description))
+                .unwrap_or_else(|| id.to_string())
+        };
+        let arg = arg.trim();
+        if arg.is_empty() {
+            let mut lines = vec![match self.managed_auto_routing() {
+                Some(state) => format!(
+                    "Routing: {} is choosing the model for each message; now {}.",
+                    state.selection,
+                    crate::model_catalog::display_name(&self.model)
+                ),
+                None => format!(
+                    "Routing: off. Every message goes to {}.",
+                    crate::model_catalog::display_name(&self.model)
+                ),
+            }];
+            lines.push("Profiles:".to_string());
+            for id in crate::routing::profile::PROFILE_IDS {
+                lines.push(format!("  {}", describe(id)));
+            }
+            lines.push("Choose one with /route <profile>.".to_string());
+            return lines.join("\n");
+        }
+        let Some(profile) = crate::routing::profile::parse(arg) else {
+            return format!(
+                "Unknown routing profile `{arg}`. Profiles: {}.",
+                crate::routing::profile::PROFILE_IDS.join(", ")
+            );
+        };
+        if self.privacy_mode != PrivacyMode::Managed
+            || !matches!(self.provider, models::Provider::ManagedCloud)
+        {
+            return format!(
+                "Routing profiles choose among your plan's cloud models, and this session runs {}. Switch to Managed with /model first.",
+                self.privacy_mode.trust_word()
+            );
+        }
+        if self.managed_session.is_none() || !self.session_persistence {
+            return "Routing profiles are kept with the saved session, and session saving is off for this run.".to_string();
+        }
+        let selection = crate::routing::profile::auto_selection(profile);
+        let tier = self
+            .auto_routing_tier
+            .clone()
+            .or_else(|| {
+                crate::tier_cache::read_tier_cache()
+                    .map(|cached| cached.tier.managed_auto_routing_tier().to_string())
+            })
+            .unwrap_or_else(|| "free".to_string());
+        let task_type = self
+            .managed_auto_routing()
+            .map(|state| crate::routing::classify::registry_task_type(state.task_type))
+            .unwrap_or(RoutingTaskType::SimpleChat);
+        match crate::model_catalog::resolve_auto_model(
+            selection,
+            task_type,
+            &tier,
+            TrustMode::ManagedCloud,
+        ) {
+            Ok(route) => {
+                self.model = route.provider_model_id.clone();
+                self.fallback_chain = None;
+                self.auto_routing_tier = Some(tier);
+                self.set_managed_auto_routing(Some(
+                    crate::runtime::session::ManagedSessionAutoRouting {
+                        selection: selection.to_string(),
+                        model_key: route.model_key,
+                        task_type: crate::routing::classify::developer_task_type(task_type),
+                        trust_mode: TrustMode::ManagedCloud,
+                    },
+                ));
+                format!(
+                    "Routing set to {}. The next message goes to {}, and each later one is routed again for its task.",
+                    describe(crate::routing::profile::id(profile)),
+                    crate::model_catalog::display_name(&self.model)
+                )
+            }
+            Err(error) => format!("That routing profile cannot run on your plan: {error}"),
+        }
+    }
+
+    pub(crate) fn session_control(&self, arg: &str) -> String {
+        use crate::runtime::writer_lease::{self, LeaseClaim};
+        let (Some(managed), Some(path)) = (
+            self.managed_session
+                .as_ref()
+                .filter(|_| self.session_persistence),
+            self.managed_session_path.as_deref(),
+        ) else {
+            return "This conversation is not saved as a session, so there is nothing to hand to another client.".to_string();
+        };
+        let id = managed.session_id.as_str();
+        let own = writer_lease::process_writer("AGI CLI");
+        let holder = || {
+            writer_lease::holder_summary(writer_lease::read(path).as_ref(), own, chrono::Utc::now())
+        };
+        match arg.trim() {
+            "" | "status" => format!(
+                "Session {id} is being written by {}.\n/control release hands it to another client; /control take takes it from whoever is writing it.",
+                holder()
+            ),
+            "release" | "handoff" | "hand-off" => match writer_lease::release(path, own) {
+                Ok(Some(_)) => format!(
+                    "This terminal stopped writing session {id}. Continue it in the desktop app or VS Code, or with `agi resume {id}` in another terminal. Sending a message here takes it back."
+                ),
+                Ok(None) => format!(
+                    "This terminal was not writing session {id}; it is being written by {}.",
+                    holder()
+                ),
+                Err(error) => format!("Could not release session {id}: {error:#}"),
+            },
+            "take" | "takeover" | "take-over" => match writer_lease::take_over(path, own) {
+                Ok(LeaseClaim::TakenOver { previous, .. }) => format!(
+                    "This terminal now writes session {id}. {} stopped writing it and will say so on its next turn.",
+                    previous.holder_label
+                ),
+                Ok(_) => format!("This terminal now writes session {id}."),
+                Err(error) => format!("Could not take session {id}: {error:#}"),
+            },
+            other => format!(
+                "Unknown /control option `{other}`. Use /control, /control release or /control take."
+            ),
         }
     }
 
@@ -1780,7 +2011,7 @@ impl AgentSession {
             title,
             model: Some(self.model.clone()),
             provider: Some(models::provider_persistence_name(&self.provider)),
-            project_id: linked_cloud_project(),
+            project_id: self.cloud_project_id(),
             messages: self
                 .messages
                 .iter()
@@ -1805,6 +2036,10 @@ impl AgentSession {
                 "this turn is saved on this device but not yet in your account: {error}"
             )),
         }
+    }
+
+    pub(crate) fn cloud_project_id(&self) -> Option<String> {
+        self.cloud_project.clone().or_else(linked_cloud_project)
     }
 
     pub fn managed_session_id(&self) -> Option<&str> {
@@ -2209,7 +2444,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 62);
+        assert_eq!(defs.len(), 65);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
@@ -2227,7 +2462,7 @@ mod tests {
     #[test]
     fn test_build_team_tool_definitions_count() {
         let defs = build_team_tool_definitions();
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), 5);
     }
 
     #[test]

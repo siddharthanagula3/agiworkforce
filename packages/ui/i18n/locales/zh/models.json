@@ -83,5 +83,9 @@
     "thinkingState": "思考：{{state}}",
     "unavailable": "不可用",
     "visionCapability": "视觉"
+  },
+  "counts": {
+    "concurrentAnswers_one": "您的套餐一次运行 {{count}} 个回答，其余的会在每个完成后依次开始。",
+    "concurrentAnswers_other": "您的套餐一次运行 {{count}} 个回答，其余的会在每个完成后依次开始。"
   }
 }

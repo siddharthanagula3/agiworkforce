@@ -171,6 +171,7 @@ struct ToolCell {
     output_preview: Option<String>,
     timing: ToolTiming,
     full_output: Option<String>,
+    accent: Option<Color>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -261,6 +262,11 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             (
                 format!("  $ {}", cell.summary),
                 Style::default().fg(ui_accent()),
+            )
+        } else if let Some(accent) = cell.accent {
+            (
+                format!("  {}", cell.summary),
+                Style::default().fg(accent).add_modifier(Modifier::BOLD),
             )
         } else {
             (
@@ -762,6 +768,30 @@ impl TuiApp {
         loading_verb_for(self.session.turn_count)
     }
 
+    fn model_reasons(&self) -> bool {
+        crate::model_catalog::catalog()
+            .find(&self.session.model)
+            .is_none_or(|model| model.supports_reasoning)
+    }
+
+    fn visible_effort_label(&self) -> &'static str {
+        if self.model_reasons() {
+            self.effort.label()
+        } else {
+            ""
+        }
+    }
+
+    fn command_applies_here(&self, name: &str) -> bool {
+        let managed = self.session.privacy_mode == crate::agent::PrivacyMode::Managed;
+        match name {
+            "effort" => self.model_reasons(),
+            "image" | "imagine" | "artifacts" | "personalize" | "route" => managed,
+            "team" | "teams" => self.session.team_manager.is_some(),
+            _ => true,
+        }
+    }
+
     fn context_percent(&self) -> u8 {
         let usage = self
             .session
@@ -1039,6 +1069,7 @@ fn approval_overlay_for(
             .map(|line| sanitize_terminal_text(line).into_owned())
             .collect(),
     );
+    overlay.always_allow_unavailable = !request.saves_always_allow;
     overlay
 }
 
@@ -1560,7 +1591,7 @@ impl<'a> FrameCtx<'a> {
             access_mode: provider_access_mode(&app.session.provider),
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
-            effort_label: app.effort.label(),
+            effort_label: app.visible_effort_label(),
             cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
         }
@@ -2272,15 +2303,17 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ctx_indicator(tier),
             Style::default().fg(ctx_color),
         ));
-        spans.push(Span::raw(gap));
-        spans.push(Span::styled(
-            match tier {
-                0 => format!("effort:{}", ctx.effort_label),
-                1 => format!("eff:{}", ctx.effort_label),
-                _ => format!("e:{}", clip_cols(ctx.effort_label, 1)),
-            },
-            Style::default().fg(ui_muted()),
-        ));
+        if !ctx.effort_label.is_empty() {
+            spans.push(Span::raw(gap));
+            spans.push(Span::styled(
+                match tier {
+                    0 => format!("effort:{}", ctx.effort_label),
+                    1 => format!("eff:{}", ctx.effort_label),
+                    _ => format!("e:{}", clip_cols(ctx.effort_label, 1)),
+                },
+                Style::default().fg(ui_muted()),
+            ));
+        }
         spans
     };
 
@@ -3159,6 +3192,7 @@ fn open_command_popup(app: &mut TuiApp) {
         }
     }
 
+    cmds.retain(|command| app.command_applies_here(&command.name));
     app.open_overlay(Box::new(CommandPopup::new(cmds)));
 }
 
@@ -3500,7 +3534,10 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             };
             let text = match switched {
                 Ok(()) => banner,
-                Err(err) => format!("Model switch failed: {err}"),
+                Err(err) => format!(
+                    "Model switch failed: {}",
+                    crate::errors::terminal_text(&err)
+                ),
             };
             app.sync_stats();
             app.chat_messages.push(ChatMessage {
@@ -3737,6 +3774,7 @@ enum SlashResult {
     /// Read the account's artifact index, or open one of its artifacts.
     RunArtifacts(String),
     RunTasks(String),
+    RunTeam(String),
     RunWorktree(String),
     RunMcp(String),
     RunAttachUrl(String),
@@ -3845,6 +3883,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/team" | "/teams" => SlashResult::RunTeam(arg.to_string()),
         "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
         "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
@@ -4013,7 +4052,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.total_output_tokens,
                 app.context_percent(),
             );
-            SlashResult::SystemMessage(msg)
+            SlashResult::SystemMessage(format!(
+                "{msg}\n{}",
+                app.session.session_status_lines().join("\n")
+            ))
         }
 
         "/context" | "/ctx" => SlashResult::SystemMessage(
@@ -5601,6 +5643,17 @@ async fn run_event_loop(
                                     text: outcome.plain_message(),
                                 });
                             }
+                            SlashResult::RunTeam(argument) => {
+                                let text = crate::teams::team_command(
+                                    app.session.team_manager.as_ref(),
+                                    &argument,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
                             SlashResult::RunCompact(focus) => {
                                 let focus = (!focus.trim().is_empty()).then_some(focus.as_str());
                                 let result = app.session.compact_now(&app.config, focus).await;
@@ -5750,8 +5803,21 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             call_id,
             name,
             summary,
-            ..
+            input,
         } => {
+            let accent = if name == "agent" {
+                input
+                    .get("name")
+                    .and_then(|value| value.as_str())
+                    .and_then(crate::agents::find_agent_exact)
+                    .and_then(|agent| {
+                        agent
+                            .color_name()
+                            .and_then(crate::tui::terminal_palette::ui_agent)
+                    })
+            } else {
+                None
+            };
             cells.push(ToolCell {
                 call_id,
                 name,
@@ -5760,6 +5826,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 output_preview: None,
                 timing: ToolTiming::Running(Instant::now()),
                 full_output: None,
+                accent,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -5946,6 +6013,7 @@ async fn send_message_with_prompt(
     // them while the rest of `FrameCtx` is built from disjoint `app` fields.
     let turn_access_mode = provider_access_mode(&app.session.provider);
     let turn_privacy_mode = app.session.privacy_mode;
+    let turn_effort_label = app.visible_effort_label();
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
@@ -6002,7 +6070,7 @@ async fn send_message_with_prompt(
                             access_mode: turn_access_mode,
                             privacy_mode: turn_privacy_mode,
                             mode: app.mode,
-                            effort_label: app.effort.label(),
+                            effort_label: turn_effort_label,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
@@ -6139,7 +6207,7 @@ async fn send_message_with_prompt(
                         access_mode: turn_access_mode,
                         privacy_mode: turn_privacy_mode,
                         mode: app.mode,
-                        effort_label: app.effort.label(),
+                        effort_label: turn_effort_label,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
                     };
@@ -6407,6 +6475,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         let t = line0(&edit);
         assert!(
@@ -6423,6 +6492,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -6439,6 +6509,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -7796,6 +7867,8 @@ mod tests {
             "context",
             "tasks",
             "task",
+            "team",
+            "teams",
             "personalize",
             "tools",
             "budget",
@@ -8516,6 +8589,7 @@ mod tests {
             output_preview: compact_tool_output_preview(&format!("out {ESCAPE_PAYLOAD}ok")),
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();

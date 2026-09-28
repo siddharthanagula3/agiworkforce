@@ -925,7 +925,11 @@ describe('/api/connectors directory record response bodies, exact', () => {
       error: requirement.message,
       message: requirement.message,
       connectorId: 'notion',
-      setup: requirement,
+      setup: {
+        kind: requirement.kind,
+        missingEnv: requirement.missingEnv,
+        message: requirement.message,
+      },
     });
   });
 });

@@ -237,3 +237,30 @@ sign-in in the system browser and hand the session back to the app, so the
 desktop app does the same (S3.09, S3.10). ChatGPT's voice mode steers a coding
 task, so voice control of a /code session is built (S48.40). Checked
 2026-09-28.
+
+## D-2026-09-28-11 Research is a paid-plan feature, as in Claude
+
+Claude offers Research on Pro, Max, Team and Enterprise and not on Free
+(support.claude.com/en/articles/11088861, updated 2026-06-02). OpenAI's plan
+and deep research pages refused the fetch on 2026-09-28, so Claude's page
+decides until ChatGPT's can be read. Research is therefore offered on Pro,
+Max, Team and Enterprise, every surface reads that from the capability
+document, and the server refuses a research request the document denies.
+
+## D-2026-09-28-12 Voice transcripts and voices follow Claude
+
+Claude saves voice conversations as ordinary chat history, so their export and
+deletion follow the chat (support.claude.com/en/articles/11101966, checked
+2026-09-28); voice transcripts here are chat messages too, so S49.25 and S49.27
+are at parity. Claude offers preset voices only, to prevent voice cloning and
+impersonation, and no download of spoken replies; with D-2026-09-28-04 keeping
+OpenAI's preset voices, custom voice creation (S50.31) and downloading
+generated speech (S50.04) are not built. help.openai.com refused the fetch.
+
+## D-2026-09-28-13 Full-screen code blocks stay off the phone
+
+Neither leader's iOS app opens an ordinary code block full screen: ChatGPT's
+full-screen writing and code blocks are listed for the web
+(help.openai.com/en/articles/6825453, 2026-06-08) and Claude opens only
+artifacts full screen. The mobile app therefore keeps code blocks inline
+(S21.08 mobile). Checked 2026-09-28.

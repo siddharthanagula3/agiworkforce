@@ -24,44 +24,40 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 - Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-| cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
-| vscode | partial | Waits on p-desktop-cli: turn/start needs routing_profile (auto, speed, quality, cost) and managed Auto must resolve with the account's plan instead of tier free; VS Code then adds Instant, Best and Economy under Auto | ui |
+| vscode | partial | The CLI maps routingProfile speed to the same economy band as cost (developer_host.rs routing_profile_selection), so a Fastest row would be Economy under another name. It needs p-desktop-cli's fastest-slot preference (model speed in the Rust registry and preferred slots on AutoRoutingRequest); the VS Code row is then one entry in ROUTING_PROFILE_BY_AUTO_PROFILE. | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1385-1385`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:442-442`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:3241-3241`
 
 ## S79.06: Quality-first profile.
 
 - Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
-| cli | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-| vscode | partial | Same as S79.05: needs routing_profile on the CLI app-server's turn/start and plan-aware managed Auto | ui |
 | chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:32-32`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `packages/ai/routing/src/auto.ts:32-32`
 
 ## S79.07: Cost-first profile.
 
 - Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
-| vscode | partial | Same as S79.05: needs routing_profile on the CLI app-server's turn/start and plan-aware managed Auto | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1385-1385`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.08: Privacy-first profile.
 
@@ -126,15 +122,14 @@ Code: `apps/cli/src/routing/classify.rs:1-9`
 
 - Done when: When another model would work better, the user is offered an explicit one-click switch.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A one-tap 'Use <model>' switch to the first edit-capable image model the registry lists is in post-codex/chat-gates-s79.21-mobile-image-model-switch.patch; both chat screens that raise the blocked alert are Codex-held. | ui |
-| cli | partial | The CLI tells the user to pick another model with `agi models list` but offers no switch action. | ui |
 | chrome | partial | Chrome falls back to Auto silently and only suggests choosing another model after an outage; no switch action. | ui |
 
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`, `apps/cli/src/errors.rs:475-479`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
+Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S79.23: Specialist worker selection.
 
@@ -191,7 +186,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
+| cli | partial | The compiled Rust registry omits the release ledger's policyVersion, so a CLI routing decision cannot record which version made it; needs packages/ai/model-registry to compile it in. | handler |
 | chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
-Code: `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`, `apps/extension/src/side_panel.ts:6168-6173`
+Code: `apps/cli/src/routing/profile.rs:18-18`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`

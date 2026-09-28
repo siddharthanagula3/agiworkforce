@@ -35,6 +35,7 @@ import {
   File,
   FileText,
   Flag,
+  FolderOpen,
   GitFork,
   ImageOff,
   MoreHorizontal,
@@ -72,6 +73,8 @@ import { VariantPager } from './VariantPager';
 import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
+import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
   getModelMetadataById,
@@ -1015,6 +1018,20 @@ const MessageBubbleComponent = function MessageBubble({
   );
 
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const projectAnswerSave = useProjectAnswerSave();
+  const [savingToProject, setSavingToProject] = useState(false);
+  const saveToProject = useCallback(async () => {
+    if (!projectAnswerSave || savingToProject) return;
+    setSavingToProject(true);
+    try {
+      await projectAnswerSave.save(message.content ?? '');
+      toast.success(`Saved to ${projectAnswerSave.projectName}`);
+    } catch (error) {
+      toast.error(toUserMessage(error, 'That answer could not be saved to the project'));
+    } finally {
+      setSavingToProject(false);
+    }
+  }, [message.content, projectAnswerSave, savingToProject]);
   const [ratingState, setRatingState] = useState<'idle' | 'up' | 'down'>('idle');
 
   /**
@@ -3336,6 +3353,15 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
                             {isBranching ? 'Creating branch…' : 'Branch conversation from here'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && hasReadableTurn && projectAnswerSave && (
+                          <DropdownMenuItem
+                            disabled={savingToProject}
+                            onClick={() => void saveToProject()}
+                          >
+                            <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {savingToProject ? 'Saving to project…' : 'Save to project'}
                           </DropdownMenuItem>
                         )}
                         {!isUser && (

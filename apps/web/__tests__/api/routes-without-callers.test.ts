@@ -106,10 +106,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'authenticated GitHub integration API for issue readers and comment clients',
   },
   {
-    url: '/api/media/image/retry',
-    why: 'cross-surface durable image-job protocol retries the existing billed reservation',
-  },
-  {
     url: '/api/completion',
     why: 'retired managed-execution endpoint kept so an old client gets one fixed refusal; only registries name it',
   },

@@ -113,12 +113,12 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
         }
       ).content;
       if (inner && (typeof inner.stdout === 'string' || typeof inner.stderr === 'string')) {
-        const text = [inner.stdout, inner.stderr]
-          .filter((s): s is string => typeof s === 'string' && s.length > 0)
-          .join('\n');
-        if (text) t.output = text;
-        if (typeof inner.return_code === 'number' && inner.return_code !== 0) {
-          t.status = 'failed';
+        if (inner.stdout) t.output = inner.stdout;
+        else delete t.output;
+        if (inner.stderr) t.stderr = inner.stderr;
+        if (typeof inner.return_code === 'number') {
+          t.exitCode = inner.return_code;
+          if (inner.return_code !== 0) t.status = 'failed';
         }
       }
     }

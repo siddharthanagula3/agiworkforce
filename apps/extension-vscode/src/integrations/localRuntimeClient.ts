@@ -149,6 +149,15 @@ const capabilitiesSchema = z.object({
   mcpTools: z.boolean().optional(),
   approvalNotes: z.boolean().optional(),
   approvalEdits: z.boolean().optional(),
+  threadUnarchive: z.boolean().optional(),
+  threadSearch: z.boolean().optional(),
+  forkAtMessage: z.boolean().optional(),
+  promptCommands: z.boolean().optional(),
+  maxTurns: z.boolean().optional(),
+  memory: z.boolean().optional(),
+  plan: z.boolean().optional(),
+  savedPermissions: z.boolean().optional(),
+  mcpInspect: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -269,6 +278,7 @@ const threadReadResponseSchema = z.object({
       z.object({
         role: z.string().min(1).max(40),
         text: z.string().max(1_000_000),
+        index: z.number().int().nonnegative().optional(),
       }),
     )
     .max(10_000),
@@ -322,6 +332,60 @@ const threadCheckpointsResponseSchema = z.object({
 });
 
 export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
+
+const threadSearchResponseSchema = z.object({
+  hits: z
+    .array(
+      z.object({
+        thread: threadSummarySchema,
+        titleMatched: z.boolean(),
+        matches: z
+          .array(
+            z.object({
+              messageIndex: z.number().int().nonnegative(),
+              role: z.string().max(40),
+              snippet: z.string().max(4_000),
+            }),
+          )
+          .max(200)
+          .default([]),
+      }),
+    )
+    .max(1_000),
+});
+
+export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
+
+const savedPermissionsResponseSchema = z.object({
+  permissions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(512),
+        kind: z.enum(['command', 'file', 'exec_policy']),
+        label: z.string().max(4_000),
+        decision: z.enum(['allow', 'deny']),
+      }),
+    )
+    .max(5_000),
+});
+
+export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
+
+const mcpServerInspectionSchema = z.object({
+  name: z.string().min(1).max(512),
+  connected: z.boolean(),
+  live: z.boolean(),
+  responding: z.boolean(),
+  protocolVersion: z.string().max(200).optional(),
+  serverName: z.string().max(512).optional(),
+  serverVersion: z.string().max(200).optional(),
+  capabilities: z.array(z.string().max(200)).max(100).default([]),
+  instructions: z.string().max(100_000).optional(),
+  logs: z.array(z.string().max(10_000)).max(1_000).default([]),
+  error: z.string().max(10_000).optional(),
+});
+
+export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>;
 
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
@@ -388,6 +452,18 @@ const localModelListResponseSchema = z.object({
     }),
   ),
   hostModels: z.array(hostModelSummarySchema).optional(),
+  localServers: z
+    .array(
+      z.object({
+        provider: z.enum(['ollama', 'lmstudio']),
+        health: z.enum(['running', 'not_running', 'unhealthy', 'blocked']),
+        modelCount: z.number().int().nonnegative(),
+        message: z.string().max(2_000).optional(),
+      }),
+    )
+    .max(20)
+    .optional()
+    .catch(undefined),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -670,6 +746,7 @@ const approvalRequestedEventSchema = z.object({
   reversible: z.boolean().optional().catch(undefined),
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
+  alwaysAllowSaved: z.boolean().optional().catch(undefined),
 });
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1139,13 +1216,64 @@ export class LocalRuntimeClient {
     ) as ThreadReadResponse;
   }
 
-  async forkThread(threadId: string, title?: string): Promise<ThreadSummary> {
+  async forkThread(
+    threadId: string,
+    title?: string,
+    throughMessageIndex?: number,
+  ): Promise<ThreadSummary> {
     const connection = await this.readyConnection();
+    if (throughMessageIndex !== undefined && !(await this.offers('forkAtMessage'))) {
+      throw new Error(
+        'The installed AGI CLI can only fork a whole session. Update the AGI CLI to branch from a message.',
+      );
+    }
     const result = await connection.request('thread/fork', {
       threadId,
       ...(title !== undefined ? { title } : {}),
+      ...(throughMessageIndex === undefined ? {} : { throughMessageIndex }),
     });
     return threadStartResponseSchema.parse(result).thread as ThreadSummary;
+  }
+
+  async searchThreads(query: string, includeArchived = false): Promise<ThreadSearchResults> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('threadSearch'))) {
+      throw new Error(
+        'The installed AGI CLI cannot search session transcripts. Update the AGI CLI to search them.',
+      );
+    }
+    return threadSearchResponseSchema.parse(
+      await connection.request('thread/search', { query, includeArchived }),
+    );
+  }
+
+  async inspectMcpServer(name: string): Promise<McpServerInspection> {
+    const connection = await this.readyConnection();
+    return mcpServerInspectionSchema.parse(
+      await connection.request('mcp/inspect', { name }, MCP_PROBE_TIMEOUT_MS),
+    );
+  }
+
+  async listSavedPermissions(): Promise<SavedPermissionList> {
+    const connection = await this.readyConnection();
+    return savedPermissionsResponseSchema.parse(await connection.request('permissions/list', {}));
+  }
+
+  async removeSavedPermission(id: string): Promise<SavedPermissionList> {
+    const connection = await this.readyConnection();
+    return savedPermissionsResponseSchema.parse(
+      await connection.request('permissions/remove', { id }),
+    );
+  }
+
+  async unarchiveThread(threadId: string): Promise<void> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('threadUnarchive'))) {
+      throw new Error(
+        'The installed AGI CLI cannot restore archived sessions. Update the AGI CLI to restore them.',
+      );
+    }
+    await connection.request('thread/unarchive', { threadId });
   }
 
   async handOffThread(
