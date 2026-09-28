@@ -23,6 +23,7 @@ describe('classifyToolLoopInputs', () => {
     expect(classifyToolLoopInputs([], [webSearchToolDef()], ASK_EVERY_TIME)).toEqual({
       hasMcpTools: false,
       hasExecutionTools: false,
+      hasImageTools: false,
       hasUrlFetchTools: false,
       hasWebSearchTools: true,
       hasSkillTools: false,

@@ -2,6 +2,7 @@ import type {
   ManagedCloudProject,
   ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
+import { t, tPlural } from '../../l10n';
 
 const PROJECT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -11,10 +12,6 @@ export function projectTitle(project: ManagedCloudProject): string {
 
 export function projectIcon(project: ManagedCloudProject): string {
   return project.isArchived === true ? 'archive' : 'folder';
-}
-
-export function countLabel(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`;
 }
 
 export function byteLabel(byteCount: number): string {
@@ -32,11 +29,11 @@ export function formatTimestamp(iso: string): string {
 
 export function projectDescription(project: ManagedCloudProject): string {
   const parts: string[] = [];
-  if (project.isArchived === true) parts.push('Archived');
-  parts.push(countLabel(project.knowledgeFileCount ?? 0, 'file'));
-  parts.push(countLabel(project.conversationCount ?? 0, 'chat'));
+  if (project.isArchived === true) parts.push(t('project.archived'));
+  parts.push(tPlural('project.files', project.knowledgeFileCount ?? 0));
+  parts.push(tPlural('project.chats', project.conversationCount ?? 0));
   if (project.lastUsedAt !== null && project.lastUsedAt !== undefined) {
-    parts.push(`last used ${formatTimestamp(project.lastUsedAt)}`);
+    parts.push(t('project.lastUsed', { date: formatTimestamp(project.lastUsedAt) }));
   }
   return parts.join(' · ');
 }
@@ -72,9 +69,9 @@ export function knowledgeFileDetail(file: ManagedCloudProjectKnowledgeFile): str
 
 export function projectDeleteConsequence(project: ManagedCloudProject): string {
   return [
-    `"${projectTitle(project)}" disappears from the web app, the CLI, mobile and every other client.`,
-    `Its ${countLabel(project.knowledgeFileCount ?? 0, 'knowledge file')} are deleted with it and cannot be recovered.`,
-    `Its ${countLabel(project.conversationCount ?? 0, 'conversation')} are kept, but they leave the project and lose its instructions and knowledge.`,
+    t('project.deleteEverywhere', { title: projectTitle(project) }),
+    tPlural('project.deleteKnowledge', project.knowledgeFileCount ?? 0),
+    tPlural('project.keepConversations', project.conversationCount ?? 0),
   ].join('\n');
 }
 

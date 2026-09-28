@@ -77,7 +77,7 @@ vi.mock('electron', () => {
     contextBridge: { exposeInMainWorld: vi.fn() },
     desktopCapturer: { getSources: vi.fn(async () => []) },
     dialog: { showMessageBox: vi.fn(), showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
-    globalShortcut: { register: vi.fn(() => true), unregisterAll: vi.fn() },
+    globalShortcut: { register: vi.fn(() => true), unregister: vi.fn(), unregisterAll: vi.fn() },
     ipcMain: { handle: vi.fn() },
     nativeImage: {
       createFromPath: vi.fn(() => ({ setTemplateImage: vi.fn(), isEmpty: () => true })),
@@ -103,12 +103,14 @@ vi.mock('../shortcuts', () => ({
   unregisterGarnishShortcuts: vi.fn(),
 }));
 vi.mock('../quickAsk', () => ({
+  configureQuickAskBridge: vi.fn(),
   destroyQuickAsk: vi.fn(),
   toggleQuickAsk: vi.fn(),
   warmUpQuickAsk: vi.fn(),
 }));
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
+  captureWindowToChat: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../windowPolicy', () => ({ applyRemoteWindowPolicy: vi.fn() }));

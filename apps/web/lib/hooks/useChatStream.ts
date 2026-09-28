@@ -141,6 +141,7 @@ import {
   parseResearchPlanEvent,
   parseResearchRunConfig,
   rendersResearchPlan,
+  researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
@@ -234,6 +235,7 @@ interface SendMessageOptions {
     files?: boolean;
     allowDomains?: string[];
     denyDomains?: string[];
+    connectors?: string[];
   };
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
@@ -934,6 +936,7 @@ export interface InteractiveCardResponseBinding {
 
 export const WEB_INTERACTIVE_CARD_KINDS = [
   'clarify.v1',
+  'image.v1',
   'itinerary.v1',
   'map-search.v1',
   'mcp-app.v1',
@@ -3037,6 +3040,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
           if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+            const receivedAt = new Date().toISOString();
             const results = (searchResultsBlock.content as Record<string, unknown>[])
               .filter((r) => r['type'] === 'web_search_result' && r['url'])
               .map((r) => ({
@@ -3046,6 +3050,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 ...(typeof r['page_age'] === 'string' && r['page_age']
                   ? { publishedDate: r['page_age'] }
                   : {}),
+                retrievedAt:
+                  typeof r['retrieved_at'] === 'string' && r['retrieved_at']
+                    ? r['retrieved_at']
+                    : receivedAt,
               }));
             if (results.length > 0) {
               const spans = readCitationSpans(searchResultsBlock.citation_spans);
@@ -3663,7 +3671,10 @@ export function useChatStream(): UseChatStreamReturn {
           const apiMessages: ApiMessage[] = currentMessages
             .filter((m) => m.id !== assistantMessageId)
             .flatMap((m) => {
-              const turn: ApiMessage = { role: m.role, content: buildApiMessageContent(m) };
+              const turn: ApiMessage = {
+                role: m.role,
+                content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
+              };
               const settled = settledInteractiveCardTurn(m);
               return settled ? [turn, settled] : [turn];
             });
@@ -3752,6 +3763,9 @@ export function useChatStream(): UseChatStreamReturn {
                         : {}),
                       ...(options.researchSources.denyDomains?.length
                         ? { deny_domains: options.researchSources.denyDomains }
+                        : {}),
+                      ...(options.researchSources.connectors?.length
+                        ? { connectors: options.researchSources.connectors }
                         : {}),
                     }
                   : undefined,

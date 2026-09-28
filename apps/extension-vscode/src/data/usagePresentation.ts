@@ -1,7 +1,6 @@
 import {
   MANAGED_USAGE_BUCKET_ORDER,
   formatCreditWindowUsage,
-  formatCredits,
   formatUsageResetIn,
   managedUsageBucketLabel,
   usageWorkloadLabel,
@@ -11,6 +10,7 @@ import {
 } from '@agiworkforce/types';
 import type { UsageHistory } from '../protocol/apiResponses';
 import { modelDisplayLabel } from '../features/model-picker/modelConstants';
+import { tPlural } from '../l10n';
 
 export interface CreditWindowRow {
   bucket: ManagedUsageBucket;
@@ -76,15 +76,20 @@ export function creditWindowRows(
   });
 }
 
-function requestCount(requests: number): string {
-  return `${requests.toLocaleString()} ${requests === 1 ? 'request' : 'requests'}`;
+export function formatCreditAmount(credits: number, fractionDigits = 2): string {
+  const scale = 10 ** fractionDigits;
+  return tPlural('billing.credits', Math.round(credits * scale) / scale);
+}
+
+export function formatUnsettledRequests(count: number): string {
+  return tPlural('billing.unsettledRequests', count);
 }
 
 function historyRow(label: string, requests: number, credits: number): UsageHistoryRow {
   return {
     label,
-    credits: formatCredits(credits),
-    requests: requestCount(requests),
+    credits: formatCreditAmount(credits, 1),
+    requests: tPlural('usage.requests', requests),
   };
 }
 
@@ -114,9 +119,9 @@ export function summarizeUsageHistory(history: UsageHistory): UsageHistorySummar
   );
   const unsettled = history.freshness.unsettledRequests;
   return {
-    rangeLabel: `last ${days} ${days === 1 ? 'day' : 'days'}`,
-    total: formatCredits(history.totals.credits),
-    totalRequests: requestCount(history.totals.requests),
+    rangeLabel: tPlural('usage.lastDays', days),
+    total: formatCreditAmount(history.totals.credits, 1),
+    totalRequests: tPlural('usage.requests', history.totals.requests),
     byWorkload: history.byWorkload.map((row) =>
       historyRow(row.label ?? usageWorkloadLabel(row.key), row.requests, row.credits),
     ),
@@ -130,9 +135,6 @@ export function summarizeUsageHistory(history: UsageHistory): UsageHistorySummar
       .map((row) =>
         historyRow(periodLabel(row.start, history.granularity), row.requests, row.credits),
       ),
-    unsettled:
-      unsettled > 0
-        ? `${unsettled.toLocaleString()} ${unsettled === 1 ? 'turn is' : 'turns are'} still settling and not counted yet`
-        : null,
+    unsettled: unsettled > 0 ? tPlural('usage.unsettledTurns', unsettled) : null,
   };
 }

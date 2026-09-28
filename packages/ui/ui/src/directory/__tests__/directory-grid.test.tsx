@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { INSTALL_COUNT_FLOOR } from '../constants';
 import { DirectoryGrid } from '../DirectoryGrid';
 import type { DirectoryEntry } from '../types';
 
@@ -13,7 +12,6 @@ const skill: DirectoryEntry = {
   slashName: true,
   publisher: 'AGI',
   description: 'Create visual art',
-  installCount: 2_400_000,
 };
 
 function renderGrid(props: Partial<Parameters<typeof DirectoryGrid>[0]> = {}) {
@@ -21,16 +19,10 @@ function renderGrid(props: Partial<Parameters<typeof DirectoryGrid>[0]> = {}) {
 }
 
 describe('DirectoryGrid', () => {
-  it('renders a skill card with a slash name and a formatted count', () => {
+  it('renders a skill card with a slash name and its publisher', () => {
     renderGrid();
     expect(screen.getByRole('button', { name: '/canvas-design' })).toBeTruthy();
     expect(screen.getByText('AGI')).toBeTruthy();
-    expect(screen.getByText('2.4M')).toBeTruthy();
-  });
-
-  it('hides an install count below the floor', () => {
-    renderGrid({ entries: [{ ...skill, installCount: INSTALL_COUNT_FLOOR - 1 }] });
-    expect(screen.queryByText(String(INSTALL_COUNT_FLOOR - 1))).toBeNull();
   });
 
   it('renders an add control for an entry that is not installed', () => {
@@ -263,7 +255,7 @@ describe('DirectoryGrid', () => {
     expect(onOpen).toHaveBeenCalledWith('superpowers');
   });
 
-  it('writes a plugin install count as a sentence with the publisher and verified glyph', () => {
+  it('shows a plugin with its publisher and verified glyph and no install count', () => {
     renderGrid({
       section: 'plugins',
       entries: [
@@ -273,7 +265,6 @@ describe('DirectoryGrid', () => {
           publisher: 'Anthropic',
           description: 'Design',
           badges: ['verified'],
-          installCount: 1_134_112,
           statusLabel: 'Desktop and CLI',
           installable: false,
         },
@@ -281,8 +272,7 @@ describe('DirectoryGrid', () => {
       onInstall: vi.fn(),
     });
     expect(screen.getByText('Anthropic')).toBeTruthy();
-    expect(screen.getByText('1.1M')).toBeTruthy();
-    expect(screen.getByText('installs')).toBeTruthy();
+    expect(screen.queryByText('installs')).toBeNull();
     expect(screen.getByRole('img', { name: 'Verified' })).toBeTruthy();
     expect(screen.getByText('Desktop and CLI')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Install Frontend Design' })).toBeNull();

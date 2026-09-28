@@ -97,6 +97,38 @@ export interface CloudCodeSession {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  shareVisibility?: CloudCodeShareVisibility;
+  shareAudience?: CloudCodeSharedVisibility;
+  shareToken?: string | null;
+}
+
+export const CLOUD_CODE_SHARE_VISIBILITIES = ['private', 'team', 'public'] as const;
+export type CloudCodeShareVisibility = (typeof CLOUD_CODE_SHARE_VISIBILITIES)[number];
+export type CloudCodeSharedVisibility = Exclude<CloudCodeShareVisibility, 'private'>;
+export const CLOUD_CODE_SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
+
+export function isCloudCodeShareVisibility(value: unknown): value is CloudCodeShareVisibility {
+  return (CLOUD_CODE_SHARE_VISIBILITIES as readonly unknown[]).includes(value);
+}
+
+export function cloudCodeShareVisibilityFor(
+  organizationId: string | null,
+): CloudCodeSharedVisibility {
+  return organizationId === null ? 'public' : 'team';
+}
+
+export interface CloudCodeSharedSession {
+  visibility: CloudCodeSharedVisibility;
+  title: string;
+  repositoryUrl: string | null;
+  workingBranch: string | null;
+  baseBranch: string | null;
+  pullRequestUrl: string | null;
+  pullRequestNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+  terminalEntries: CloudCodeTerminalEntry[];
+  turns: CloudCodeAgentTurnRecord[];
 }
 
 export function cloudCodeSessionIsBusy(session: Pick<CloudCodeSession, 'state'>): boolean {
@@ -250,6 +282,12 @@ export const CLOUD_CODE_PAGE_ROUTE = '/code';
 
 export function cloudCodeSessionPagePath(sessionId: string): string {
   return `${CLOUD_CODE_PAGE_ROUTE}/${encodeURIComponent(sessionId)}`;
+}
+
+export const CLOUD_CODE_SHARED_PAGE_ROUTE = `${CLOUD_CODE_PAGE_ROUTE}/shared`;
+
+export function cloudCodeSharedSessionPagePath(token: string): string {
+  return `${CLOUD_CODE_SHARED_PAGE_ROUTE}/${encodeURIComponent(token)}`;
 }
 
 export const CLOUD_CODE_GOAL_COMMANDS = ['/review', '/security-review'] as const;
