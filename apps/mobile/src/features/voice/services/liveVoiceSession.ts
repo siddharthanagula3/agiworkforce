@@ -272,6 +272,15 @@ export class LiveVoiceSession {
     return LiveVoiceToolCallResponseSchema.parse(await response.json());
   }
 
+  cancelBackendWork(): void {
+    for (const delegationId of [...this.pendingDelegations]) {
+      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
+    }
+    this.pendingDelegations.clear();
+    this.toolBridge.cancel();
+    this.publishBackendBusy();
+  }
+
   private publishBackendBusy(): void {
     this.callbacks.onBackendBusy(this.pendingDelegations.size > 0 || this.toolBridge.busy);
   }

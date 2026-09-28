@@ -42,6 +42,7 @@ export function LiveVoiceComposer({
       approvals={controller.approvals}
       onDecideApproval={controller.decideToolApproval}
       onToggleMute={controller.toggleMute}
+      onStopTask={controller.cancelBackendWork}
       onSwitchToText={onSwitchToText}
       onRetry={controller.retry}
       onExit={handleExit}
