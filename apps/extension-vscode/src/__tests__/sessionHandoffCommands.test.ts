@@ -43,6 +43,7 @@ describe('taking a session somewhere else', () => {
       resetConversation: vi.fn(),
       prefillComposer: vi.fn(),
       pushActiveProject: vi.fn(),
+      releaseForTerminal: vi.fn().mockResolvedValue(undefined),
     };
     vscode.window.activeTextEditor = undefined;
 

@@ -1,19 +1,25 @@
 import { View } from 'react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
+import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/src/ui/theme';
 
-export function StreamingIndicator() {
+export function StreamingIndicator({ label }: { label?: string }) {
+  const colors = useThemeColors();
   return (
     <View
       style={{
         marginLeft: 2,
-        width: 20,
-        height: 20,
+        minHeight: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
       }}
       accessible={true}
-      accessibilityLabel="Generating response"
+      accessibilityLabel={label ?? 'Generating response'}
       accessibilityRole="progressbar"
     >
       <AgiMark size={16} spinning={true} />
+      {label ? <Text style={{ fontSize: 13, color: colors.textMuted }}>{label}</Text> : null}
     </View>
   );
 }

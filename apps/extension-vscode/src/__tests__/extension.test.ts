@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  getAutoRoutingProfileTiers,
+  getModelMetadataById,
+  isAutoModeModelId,
+} from '@agiworkforce/types';
 import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
 import { buildExtensionStatusBarText } from '../core/statusBar';
 import { commandLabel } from '../core/runInlineCommand';
@@ -118,9 +122,15 @@ describe('model selection', () => {
     expect(providers.size).toBeGreaterThanOrEqual(6);
   });
 
-  it('exposes one shared self-routing Auto option', () => {
-    const autoModels = MODELS.filter((m) => m.startsWith('auto'));
-    expect(autoModels).toEqual(['auto']);
+  it('exposes the shared self-routing Auto option first, then its Economy and Best profiles', () => {
+    const autoModels = MODELS.filter((m) => isAutoModeModelId(m));
+    expect(autoModels[0]).toBe('auto');
+    expect(autoModels.slice(1).sort()).toEqual(
+      getAutoRoutingProfileTiers()
+        .filter((tier) => tier.profile !== 'balanced')
+        .map((tier) => tier.id)
+        .sort(),
+    );
   });
 
   it('marks current model as picked', () => {

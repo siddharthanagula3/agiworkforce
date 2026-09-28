@@ -453,6 +453,38 @@ const ja = {
   'mcpDetails.expired':
     'この詳細はもう保持されていません。{name} をもう一度確認するには、AGI Workforce: Show MCP Servers を実行して「サーバーの詳細」を選んでください。',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'このセッションでは Web 検索を利用できません。{reason} 検索なしで送信するには Browse the web をオフにしてください。',
+  'webSearchSetup.title': 'Web 検索を設定',
+  'webSearchSetup.placeholder': 'API キーを持っている検索サービスを選んでください',
+  'webSearchSetup.detail':
+    'ターミナルでその API キーを入力します。自分のキーのセッションとローカル セッションはこのキーで検索します。マネージド セッションには不要です。',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: この AGI CLI は保存できる検索キーを示していません。VS Code から Web 検索を設定するには AGI CLI を更新してください。',
+  'pluginUpdate.action': '更新',
+  'pluginUpdate.progress': 'AGI Workforce: {name} を更新しています',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} はすでに最新です。',
+  'pluginUpdate.updated': 'AGI Workforce: {name} を更新しました。',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} を {to} に更新しました。',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} を {from} から {to} に更新しました。',
+  'chatError.usageLimitResetsAt': 'アカウントの使用上限に達しました。{time} にリセットされます。',
+  'chatError.continueWith': '{model} で続ける',
+  'chatError.addCredits': 'クレジットを追加',
+  'chatError.comparePlans': 'プランを比較',
+  'chatError.seeUsage': '使用状況を見る',
+  'chatError.seeOptions': '選択肢を見る',
+  'webview.mcpAuthRequired':
+    '{server} への再サインインが必要です。AGI はこの手順でそれを使えませんでした。',
+  'webview.mcpReconnect': 'サインインして続ける',
+  'webview.mcpReconnecting': 'サインインしています…',
+  'webview.mcpReconnected': '{server} にサインインしました。AGI が続行しています。',
+  'mcpReconnect.progress': 'AGI Workforce: {server} にサインインしています',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} へのサインインが完了しなかったため、AGI は続行していません。準備ができたらもう一度お試しください。',
+  'mcpReconnect.failed': 'AGI Workforce: {server} へのサインインに失敗しました: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server} にサインインした後に続けるセッションがここにありません。',
+  'mcpReconnect.continue': '続けて',
 };
 
 export default ja;

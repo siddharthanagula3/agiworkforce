@@ -48,6 +48,7 @@ export { Textarea, type TextareaProps } from './Textarea';
 export { EmptyState } from './EmptyState';
 export { Badge, badgeVariants, type BadgeProps } from './Badge';
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './Collapsible';
+export { PortalContainerProvider, usePortalContainer } from './PortalContainer';
 export {
   DropdownMenu,
   DropdownMenuTrigger,

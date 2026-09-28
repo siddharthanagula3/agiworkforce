@@ -15,6 +15,15 @@ pub fn id(profile: DeveloperRoutingProfile) -> &'static str {
     }
 }
 
+pub fn gateway_request(selection: &str, speed_first: bool) -> (&str, Option<&'static str>) {
+    match selection {
+        "auto-premium" => ("auto", Some("quality")),
+        "auto-economy" if speed_first => ("auto", Some("speed")),
+        "auto-economy" => ("auto", Some("cost")),
+        other => (other, None),
+    }
+}
+
 pub fn auto_selection(profile: DeveloperRoutingProfile) -> &'static str {
     match profile {
         DeveloperRoutingProfile::Auto => "auto",

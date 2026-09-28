@@ -106,7 +106,20 @@ const DETACHED_FILE_WINDOW: BrowserWindowConstructorOptions = {
   webPreferences: { ...DETACHED_PAGE_WINDOW.webPreferences, plugins: true },
 };
 
+const DETACHED_PANEL_WINDOW: BrowserWindowConstructorOptions = {
+  ...DETACHED_PAGE_WINDOW,
+  width: 440,
+  height: 760,
+  minWidth: 320,
+  minHeight: 360,
+};
+
 const APP_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+$/;
+const PANEL_WINDOW_NAME = /^agi-panel-[a-z]{1,32}$/;
+
+function isPanelWindowRequest(url: string, frameName: string): boolean {
+  return url === 'about:blank' && PANEL_WINDOW_NAME.test(frameName);
+}
 
 export function isAppBlobUrl(url: string, appOrigin: string): boolean {
   if (!url.startsWith('blob:')) return false;
@@ -140,6 +153,14 @@ function closeWhenDownloaded(child: BrowserWindow): void {
   child.once('closed', () => session.removeListener('will-download', onDownload));
 }
 
+function closeWithOpener(child: BrowserWindow, opener: BrowserWindow): void {
+  const close = () => {
+    if (!child.isDestroyed()) child.close();
+  };
+  opener.once('closed', close);
+  child.once('closed', () => opener.removeListener('closed', close));
+}
+
 function lockDetachedPage(child: BrowserWindow): void {
   child.webContents.setWindowOpenHandler(({ url }) => {
     openExternally(url);
@@ -162,7 +183,16 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
       .replace(/\sElectron\/[\d.]+/i, '');
   }
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (isPanelWindowRequest(url, frameName)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          ...DETACHED_PANEL_WINDOW,
+          backgroundColor: win.getBackgroundColor(),
+        },
+      };
+    }
     if (isAppBlobUrl(url, appOrigin)) {
       return { action: 'allow', overrideBrowserWindowOptions: DETACHED_PAGE_WINDOW };
     }
@@ -172,9 +202,10 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
     openExternally(url);
     return { action: 'deny' };
   });
-  win.webContents.on('did-create-window', (child, { url }) => {
+  win.webContents.on('did-create-window', (child, { url, frameName }) => {
     lockDetachedPage(child);
     if (isAppFileUrl(url, appOrigin)) closeWhenDownloaded(child);
+    if (isPanelWindowRequest(url, frameName)) closeWithOpener(child, win);
   });
 
   win.webContents.on('will-navigate', (event, url) => {
