@@ -1166,6 +1166,47 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Change a schedule's name, description, prompt, model, cron expression or time zone.
+    Edit {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        /// New 5-field cron expression.
+        #[arg(long)]
+        schedule: Option<String>,
+        #[arg(long)]
+        timezone: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a schedule from firing until it is resumed.
+    Pause {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused schedule fire again.
+    Resume {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule once now and wait for its result.
+    Run {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
     /// Show a schedule's run history.
     Runs {
         /// Schedule id, or its exact name.
@@ -2281,6 +2322,72 @@ async fn handle_schedules_command(
             }
             Err(error) => Err(anyhow::anyhow!("{error}")),
         },
+        SchedulesSubcommand::Edit {
+            id,
+            name,
+            description,
+            prompt,
+            model,
+            schedule,
+            timezone,
+            json,
+        } => {
+            let patch = schedules::schedule_patch(
+                name.as_deref(),
+                description.as_deref(),
+                prompt.as_deref(),
+                model.as_deref(),
+                schedule.as_deref(),
+                timezone.as_deref(),
+            );
+            if patch.as_object().is_some_and(serde_json::Map::is_empty) {
+                return schedules_command_failure(
+                    "Nothing to change: pass --name, --description, --prompt, --model, --schedule or --timezone."
+                        .to_string(),
+                );
+            }
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.update(&resolved, &patch).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Pause { id, json } | SchedulesSubcommand::Resume { id, json } => {
+            let active = matches!(action, SchedulesSubcommand::Resume { .. });
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.set_active(&resolved, active).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Run { id, json } => {
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.run_now(&resolved).await {
+                Ok(run) => render(
+                    serde_json::to_value(&run)?,
+                    schedules::render_runs(&resolved, std::slice::from_ref(&run)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
         SchedulesSubcommand::Runs {
             id,
             limit,
