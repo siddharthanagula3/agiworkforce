@@ -3417,7 +3417,7 @@
         {
           "kind": "copy",
           "file": "apps/web/lib/server/account-security/service.ts",
-          "text": "revokeEveryOtherSession(getIdentityProvider(), caller.userId, caller.sessionId)"
+          "text": "const sweep = await revokeEveryOtherSession("
         },
         {
           "kind": "copy",
