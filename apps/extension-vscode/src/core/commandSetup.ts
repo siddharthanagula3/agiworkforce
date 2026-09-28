@@ -101,6 +101,7 @@ import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
 import { submitFeedback, type FeedbackKind } from '../features/feedback/submitFeedback';
+import { t, tPlural, type PluralKey } from '../l10n';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -271,21 +272,26 @@ function warnNoDiffUnderCursor(verb: 'accept' | 'dismiss'): void {
   );
 }
 
-const DIFF_ACCEPT_ACTION = 'Write changes';
-const DIFF_REJECT_ACTION = 'Discard changes';
-const DIFF_RESTORE_ACTION = 'Restore discarded';
-const DIFF_REVIEW_ACTION = 'Review first';
-
 function diffSessionLabel(session: DiffSession): string {
   return session.filePath ?? vscode.workspace.asRelativePath(session.uri);
 }
 
-function describeDiffScope(sessions: readonly DiffSession[]): string {
-  const changes = `${sessions.length} pending change${sessions.length === 1 ? '' : 's'}`;
+const DIFF_SCOPE_MESSAGES = {
+  confirmWrite: { inFile: 'diff.confirmWriteInFile', anyFiles: 'diff.confirmWrite' },
+  confirmDiscard: { inFile: 'diff.confirmDiscardInFile', anyFiles: 'diff.confirmDiscard' },
+  discarded: { inFile: 'diff.discardedInFile', anyFiles: 'diff.discarded' },
+  restored: { inFile: 'diff.restoredInFile', anyFiles: 'diff.restored' },
+} as const satisfies Record<string, { inFile: PluralKey; anyFiles: PluralKey }>;
+
+function describeDiffScope(
+  sessions: readonly DiffSession[],
+  message: keyof typeof DIFF_SCOPE_MESSAGES,
+): string {
   const files = [...new Set(sessions.map(diffSessionLabel))];
-  const first = files[0];
-  if (files.length === 1 && first !== undefined) return `${changes} in ${first}`;
-  return `${changes} across ${files.length} files`;
+  const only = files.length === 1 ? files[0] : undefined;
+  return only === undefined
+    ? tPlural(DIFF_SCOPE_MESSAGES[message].anyFiles, sessions.length)
+    : tPlural(DIFF_SCOPE_MESSAGES[message].inFile, sessions.length, { file: only });
 }
 
 function listDiffScopeFiles(sessions: readonly DiffSession[]): string {
@@ -299,7 +305,7 @@ function listDiffScopeFiles(sessions: readonly DiffSession[]): string {
     .slice(0, MAX_LISTED_FILES)
     .map(([label, count]) => `• ${label} (${count})`);
   const hidden = counts.size - listed.length;
-  if (hidden > 0) listed.push(`• …and ${hidden} more file${hidden === 1 ? '' : 's'}`);
+  if (hidden > 0) listed.push(tPlural('diff.moreFiles', hidden));
   return listed.join('\n');
 }
 
@@ -308,24 +314,21 @@ async function confirmDiffBulkAction(
   intent: 'accept' | 'reject',
 ): Promise<boolean> {
   if (sessions.length === 0) {
-    vscode.window.showWarningMessage('AGI Workforce: there are no pending changes to review.');
+    vscode.window.showWarningMessage(t('diff.nothingPending'));
     return false;
   }
   const accepting = intent === 'accept';
-  const action = accepting ? DIFF_ACCEPT_ACTION : DIFF_REJECT_ACTION;
-  const headline = accepting
-    ? `Write ${describeDiffScope(sessions)} to disk?`
-    : `Discard ${describeDiffScope(sessions)} without writing them?`;
-  const consequence = accepting
-    ? 'These edits are applied to your working tree. Nothing else reviews them first.'
-    : 'The proposals are dropped. Run "AGI Workforce: Restore Discarded Changes" to bring them back in this session.';
+  const action = accepting ? t('diff.writeChanges') : t('diff.discardChanges');
+  const review = t('diff.reviewFirst');
+  const headline = describeDiffScope(sessions, accepting ? 'confirmWrite' : 'confirmDiscard');
+  const consequence = accepting ? t('diff.writeConsequence') : t('diff.discardConsequence');
   const choice = await vscode.window.showWarningMessage(
-    `AGI Workforce: ${headline}`,
+    headline,
     { modal: true, detail: `${listDiffScopeFiles(sessions)}\n\n${consequence}` },
     action,
-    DIFF_REVIEW_ACTION,
+    review,
   );
-  if (choice === DIFF_REVIEW_ACTION) {
+  if (choice === review) {
     const first = sessions[0];
     if (first !== undefined) {
       await vscode.window.showTextDocument(first.uri, { selection: first.range });
@@ -358,13 +361,11 @@ function announceRejected(
   diffDecorationProvider: DiffDecorationProvider,
   sessions: readonly DiffSession[],
 ): void {
+  const restore = t('diff.restoreDiscarded');
   void vscode.window
-    .showInformationMessage(
-      `AGI Workforce: discarded ${describeDiffScope(sessions)}.`,
-      DIFF_RESTORE_ACTION,
-    )
+    .showInformationMessage(describeDiffScope(sessions, 'discarded'), restore)
     .then((choice) => {
-      if (choice === DIFF_RESTORE_ACTION) {
+      if (choice === restore) {
         void vscode.commands.executeCommand('agi-workforce.restoreRejectedDiffs');
       }
     });
@@ -783,8 +784,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         conversationTreeProvider.refresh();
         const message =
           result.restartedWorkspaces === 0
-            ? 'AGI Workforce: Runtime configuration reloaded. Re-checking the workspace developer runtime.'
-            : `AGI Workforce: Local runtime restarted in ${result.restartedWorkspaces} workspace${result.restartedWorkspaces === 1 ? '' : 's'}.`;
+            ? t('runtime.reloaded')
+            : tPlural('runtime.restarted', result.restartedWorkspaces);
         vscode.window.showInformationMessage(message);
         return { ok: true as const, restartedWorkspaces: result.restartedWorkspaces };
       } catch (error) {
@@ -962,9 +963,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
         return;
       }
-      vscode.window.showInformationMessage(
-        `AGI Workforce: restored ${describeDiffScope(restored)}.`,
-      );
+      vscode.window.showInformationMessage(describeDiffScope(restored, 'restored'));
     }),
     register('agi-workforce.showOriginalContext', async (sessionId: string) => {
       const session = diffDecorationProvider.getSession(sessionId);
@@ -1056,12 +1055,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             cancelSource.dispose();
 
             if (result.diagnosticCount === 0) {
-              vscode.window.showInformationMessage(
-                'AGI Workforce: Code looks good! No issues found.',
-              );
+              vscode.window.showInformationMessage(t('review.noIssues'));
             } else {
               vscode.window.showInformationMessage(
-                `AGI Workforce: Found ${result.diagnosticCount} issue(s). Check the Problems panel.`,
+                tPlural('review.issuesFound', result.diagnosticCount),
               );
             }
             return undefined;
@@ -1927,20 +1924,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
         const facts = (await store.refresh()).facts;
         if (facts.length === 0) {
-          vscode.window.showInformationMessage('No memory facts to forget.');
+          vscode.window.showInformationMessage(t('memory.nothingToForget'));
           return;
         }
+        const forgetEverything = t('memory.forgetEverything');
         const confirm = await vscode.window.showWarningMessage(
-          `Delete all ${facts.length} memory ${facts.length === 1 ? 'fact' : 'facts'} from your AGI Cloud account? They disappear from the web app, the CLI and mobile too, and this cannot be undone.`,
+          tPlural('memory.confirmForgetAll', facts.length),
           { modal: true },
-          'Forget everything',
+          forgetEverything,
         );
-        if (confirm === 'Forget everything') {
+        if (confirm === forgetEverything) {
           const cleared = await store.clear();
           vscode.window.showInformationMessage(
             cleared.applied
-              ? 'All memory facts deleted from your account.'
-              : `Some facts were kept. ${cleared.refusals.join(' ')}`,
+              ? t('memory.allForgotten')
+              : t('memory.someKept', { reasons: cleared.refusals.join(' ') }),
           );
         }
       }
@@ -2613,8 +2611,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       `[AGI Workforce] ${failedCommandIds.length} command registration(s) failed: ${failedCommandIds.join(', ')}`,
     );
     vscode.window.showErrorMessage(
-      `AGI Workforce: ${failedCommandIds.length} command(s) failed to register (${failedCommandIds.join(', ')}). ` +
-        'Check the AGI subsystem-health status bar item for details.',
+      tPlural('commands.registrationFailed', failedCommandIds.length, {
+        commands: failedCommandIds.join(', '),
+      }),
     );
   }
 }
