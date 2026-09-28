@@ -23,6 +23,7 @@ mod prompt;
 mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
+pub use chat::SideQuery;
 pub use executor::ToolCall;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
