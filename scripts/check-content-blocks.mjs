@@ -6,14 +6,81 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const VOCABULARY = 'packages/contracts/types/src/conversation.ts';
+const AGENT_EVENT_UNION = 'packages/contracts/types/src/generated/protocol/AgentEvent.ts';
+const KIND_MAPPING = 'packages/contracts/types/src/message-block-kinds.ts';
+const KIND_MAPPING_READ = /\b(?:messageKindForAgentEvent|AGENT_EVENT_MESSAGE_KINDS)\b/;
+const CLIENT_ROOTS = Object.freeze([
+  'apps/web/app',
+  'apps/web/features',
+  'apps/web/shared',
+  'apps/web/components',
+  'apps/web/lib',
+  'apps/mobile',
+  'apps/extension/src',
+  'apps/extension-vscode/src',
+  'apps/desktop/src',
+  'apps/desktop/electron',
+  'packages/ui',
+]);
+const SERVER_PREFIXES = Object.freeze([
+  'apps/web/app/api/',
+  'apps/web/lib/services/',
+  'apps/web/lib/e2b/',
+  'apps/web/lib/workflows/',
+  'apps/web/lib/server/',
+]);
+const MIN_EVENT_TYPES_DECIDED = 3;
 const COMPATIBILITY = 'packages/contracts/types/src/client-capability-manifest.ts';
 const DEGRADATION_TEST =
   'packages/ui/unified-chat/src/lib/__tests__/contentBlockDegradation.test.ts';
 const SCANNED_ROOTS = Object.freeze([
-  'packages/contracts/types/src',
-  'packages/ui/unified-chat/src',
+  'packages',
+  'apps/web/app',
+  'apps/web/features',
+  'apps/web/shared',
+  'apps/web/components',
+  'apps/web/lib',
+  'apps/mobile',
+  'apps/extension/src',
+  'apps/extension-vscode/src',
+  'apps/desktop/src',
+  'apps/desktop/electron',
 ]);
-const SKIPPED_DIRS = new Set(['node_modules', 'dist', '.turbo']);
+const SKIPPED_DIRS = new Set([
+  'node_modules',
+  'dist',
+  '.turbo',
+  '.next',
+  'build',
+  'coverage',
+  '__tests__',
+  '__mocks__',
+  '__fixtures__',
+]);
+const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
+
+const WEB_FIX =
+  'classify each event with messageKindForAgentEvent and keep per-type branches only for payload details';
+
+export const BLOCK_KIND_READERS_PENDING = Object.freeze({
+  'apps/web/features/code/hooks/use-local-session.ts': `p-sessions: ${WEB_FIX}`,
+  'apps/web/lib/hooks/useChatStream.ts': `p-mcp-web: ${WEB_FIX}`,
+  'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${WEB_FIX}`,
+  'apps/mobile/src/features/tasks/runPresentation.ts': `mobile, post-codex patch: ${WEB_FIX}`,
+  'apps/extension/src/features/side-panel/chat-state.ts': `p-chrome: ${WEB_FIX}`,
+  'apps/extension/src/features/side-panel/cloudRunsPanel.ts': `p-chrome: ${WEB_FIX}`,
+  'apps/extension/src/side_panel.ts': `p-chrome: ${WEB_FIX}`,
+  'apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts': `p-sessions: ${WEB_FIX}`,
+  'apps/extension-vscode/src/integrations/localRuntimeClient.ts': `p-sessions: ${WEB_FIX}`,
+  'apps/desktop/src/runtime/CloudRuntime.ts': `p-electron: ${WEB_FIX}`,
+  'apps/desktop/electron/runtime/developerSessionService.ts': `p-electron: ${WEB_FIX}`,
+  'apps/desktop/electron/runtime/localInferenceService.ts': `p-electron: ${WEB_FIX}`,
+});
+
+export const SEPARATE_VOCABULARIES = Object.freeze({
+  'packages/contracts/cloud-contracts/src/library.ts':
+    'Library item kinds (image, video, file) name what a stored file is, not a block in a message, and happen to share three words with MESSAGE_KINDS.',
+});
 
 // Reading a kind out of the vocabulary and acting on it, rather than restating
 // the list, is what keeps a newly declared block from reaching a build blind.
@@ -34,7 +101,7 @@ function* sourceFiles(root, relative) {
     if (entry.name.startsWith('.') || SKIPPED_DIRS.has(entry.name)) continue;
     const child = `${relative}/${entry.name}`;
     if (entry.isDirectory()) yield* sourceFiles(root, child);
-    else if (/\.tsx?$/.test(entry.name)) yield child;
+    else if (/\.tsx?$/.test(entry.name) && !TEST_FILE.test(entry.name)) yield child;
   }
 }
 
@@ -57,7 +124,56 @@ function arrayLiteralsRestatingTheVocabulary(source, kinds) {
   return found;
 }
 
-export function runContentBlocksGuard(root = process.cwd()) {
+/** The event types the Rust-generated union declares, in order. */
+export function agentEventTypes(source) {
+  return [...source.matchAll(/\{ type: '([a-z][a-z-]*)' \}/g)].map((match) => match[1]);
+}
+
+export function eventTypesDecided(source, eventTypes) {
+  return eventTypes.filter((type) =>
+    new RegExp(`(?:case\\s+|[!=]==\\s*)['"\`]${type}['"\`]`).test(source),
+  );
+}
+
+function findBlockKindReaders(root, eventTypes, pending, findings) {
+  const pendingSeen = new Set();
+  let readers = 0;
+  for (const rootDir of CLIENT_ROOTS) {
+    for (const relative of sourceFiles(root, rootDir)) {
+      if (SERVER_PREFIXES.some((prefix) => relative.startsWith(prefix))) continue;
+      const source = read(root, relative);
+      const decided = eventTypesDecided(source, eventTypes);
+      if (decided.length < MIN_EVENT_TYPES_DECIDED) continue;
+      if (KIND_MAPPING_READ.test(source)) {
+        readers += 1;
+        continue;
+      }
+      if (pending[relative] !== undefined) {
+        pendingSeen.add(relative);
+        continue;
+      }
+      findings.push(
+        `${relative}: decides blocks from agent event types (${decided.slice(0, 5).join(', ')}) without reading the kind through messageKindForAgentEvent in ${KIND_MAPPING}`,
+      );
+    }
+  }
+  for (const [relative, fix] of Object.entries(pending)) {
+    if (typeof fix !== 'string' || fix.trim().length < 20) {
+      findings.push(`${relative}: recorded as pending without an owner and a fix`);
+    }
+    if (!pendingSeen.has(relative)) {
+      findings.push(
+        `${relative}: now reads block kinds through the mapping or no longer decides them. Delete its pending entry; the list only shrinks.`,
+      );
+    }
+  }
+  return readers;
+}
+
+export function runContentBlocksGuard(
+  root = process.cwd(),
+  { pending = BLOCK_KIND_READERS_PENDING } = {},
+) {
   const findings = [];
   const kinds = messageKinds(read(root, VOCABULARY));
 
@@ -98,21 +214,52 @@ export function runContentBlocksGuard(root = process.cwd()) {
   }
 
   let scanned = 0;
+  const separateSeen = new Set();
   for (const rootDir of SCANNED_ROOTS) {
     for (const relative of sourceFiles(root, rootDir)) {
-      if (relative.endsWith(VOCABULARY.slice(VOCABULARY.lastIndexOf('/') + 1))) continue;
+      if (relative === VOCABULARY) continue;
       scanned += 1;
-      for (const restatement of arrayLiteralsRestatingTheVocabulary(read(root, relative), kinds)) {
+      const restatements = arrayLiteralsRestatingTheVocabulary(read(root, relative), kinds);
+      if (restatements.length > 0 && SEPARATE_VOCABULARIES[relative] !== undefined) {
+        separateSeen.add(relative);
+        continue;
+      }
+      for (const restatement of restatements) {
         findings.push(
           `${relative}: restates the block vocabulary (${restatement}) instead of reading MESSAGE_KINDS`,
         );
       }
     }
   }
+  for (const relative of Object.keys(SEPARATE_VOCABULARIES)) {
+    if (!separateSeen.has(relative)) {
+      findings.push(
+        `${relative}: no longer shares block kinds with MESSAGE_KINDS. Delete its entry from SEPARATE_VOCABULARIES; the list only shrinks.`,
+      );
+    }
+  }
+
+  let readers = 0;
+  if (existsSync(path.join(root, AGENT_EVENT_UNION))) {
+    const eventTypes = agentEventTypes(read(root, AGENT_EVENT_UNION));
+    if (eventTypes.length === 0) {
+      findings.push(`${AGENT_EVENT_UNION}: declares no event types this guard can read`);
+    } else if (!existsSync(path.join(root, KIND_MAPPING))) {
+      findings.push(`${KIND_MAPPING} is missing, so no client can read a block kind from an event`);
+    } else {
+      const mapping = read(root, KIND_MAPPING);
+      for (const type of eventTypes) {
+        if (!new RegExp(`['"\`]?${type}['"\`]?\\s*:`).test(mapping)) {
+          findings.push(`${KIND_MAPPING}: maps no block kind for the event type '${type}'`);
+        }
+      }
+      readers = findBlockKindReaders(root, eventTypes, pending, findings);
+    }
+  }
 
   const summary =
     findings.length === 0
-      ? `content blocks: ${kinds.length} kinds declared once and degraded under test, ${scanned} files carry no second copy`
+      ? `content blocks: ${kinds.length} kinds declared once and degraded under test, ${scanned} files carry no second copy, ${readers} client module(s) read block kinds through the mapping, ${Object.keys(pending).length} pending`
       : findings.join('\n');
   return { findings, summary };
 }

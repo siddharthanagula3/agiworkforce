@@ -1,4 +1,20 @@
 import { z } from 'zod';
+import {
+  CONNECTOR_HEALTH_STATES,
+  CONNECTOR_SOURCES,
+  CONNECTOR_TOOL_PERMISSION_LEVELS,
+} from '@agiworkforce/types';
+
+export {
+  CONNECTOR_HEALTH_STATES,
+  CONNECTOR_SOURCES,
+  CONNECTOR_TOOL_PERMISSION_LEVELS,
+} from '@agiworkforce/types';
+export type {
+  ConnectorHealthState,
+  ConnectorSource,
+  ConnectorToolPermissionLevel,
+} from '@agiworkforce/types';
 
 // The shape the connector list is written against, so a client that meets a
 // newer one can say so instead of dropping rows it does not understand.
@@ -34,23 +50,6 @@ export function connectorCredentialsPath(connectorId: string): string {
 export function connectorMcpPath(connectorId: string): string {
   return connectorScopedPath(connectorId, 'mcp');
 }
-
-export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom', 'oauth'] as const;
-export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number];
-
-/**
- * Every state `GET /api/connectors` can put on a row. Omitting one makes a
- * validating consumer reject the whole list over a single connector.
- */
-export const CONNECTOR_HEALTH_STATES = [
-  'connected',
-  'connectable',
-  'needs-reauthorization',
-  'not-responding',
-  'not-configured',
-  'unsupported-here',
-] as const;
-export type ConnectorHealthState = (typeof CONNECTOR_HEALTH_STATES)[number];
 
 export const CONNECTOR_PERMISSION_ACCESS_LEVELS = ['read', 'write'] as const;
 export type ConnectorPermissionAccess = (typeof CONNECTOR_PERMISSION_ACCESS_LEVELS)[number];
@@ -473,9 +472,6 @@ export const ConnectorMcpOperationResponseSchema = z.object({
 });
 export type ConnectorMcpOperationResponse = z.infer<typeof ConnectorMcpOperationResponseSchema>;
 
-export const CONNECTOR_TOOL_PERMISSION_LEVELS = ['allow', 'ask', 'deny'] as const;
-export type ConnectorToolPermissionLevel = (typeof CONNECTOR_TOOL_PERMISSION_LEVELS)[number];
-
 export const CONNECTOR_TOOL_CATEGORIES = ['read_only', 'write'] as const;
 export type ConnectorToolCategory = (typeof CONNECTOR_TOOL_CATEGORIES)[number];
 
@@ -494,8 +490,8 @@ export const CONNECTOR_TOOL_PERMISSIONS_MAX_TOOLS_PER_WRITE = 200;
 const PermissionNameSchema = z.string().min(1).max(200);
 
 export const ConnectorToolPermissionSchema = z.object({
-  connectorId: z.string(),
-  toolName: z.string(),
+  connectorId: z.string().min(1),
+  toolName: z.string().min(1),
   level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
 });
 export type ConnectorToolPermission = z.infer<typeof ConnectorToolPermissionSchema>;
@@ -520,15 +516,21 @@ export const UpsertConnectorToolPermissionRequestSchema = z
     level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
     destructive: z.boolean().optional(),
   })
-  .refine((body) =>
-    body.category === undefined
-      ? (body.toolName === undefined) !== (body.toolNames === undefined)
-      : body.toolName === undefined,
+  .refine(
+    (body) =>
+      body.category === undefined
+        ? (body.toolName === undefined) !== (body.toolNames === undefined)
+        : body.toolName === undefined,
+    {
+      message: 'Name exactly one of toolName or toolNames, or a category with optional toolNames.',
+    },
   )
-  .refine((body) =>
-    [body.toolName, ...(body.toolNames ?? [])].every(
-      (name) => name === undefined || !isConnectorCategoryToolName(name),
-    ),
+  .refine(
+    (body) =>
+      [body.toolName, ...(body.toolNames ?? [])].every(
+        (name) => name === undefined || !isConnectorCategoryToolName(name),
+      ),
+    { message: 'Category entries are written through category, not as a tool name.' },
   );
 export type UpsertConnectorToolPermissionRequest = z.infer<
   typeof UpsertConnectorToolPermissionRequestSchema

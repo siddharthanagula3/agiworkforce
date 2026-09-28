@@ -552,7 +552,7 @@ impl AgentSession {
             }
         });
 
-        let selection = match crate::model_catalog::resolve_auto_model_with_context(
+        let selection = match crate::model_catalog::resolve_auto_model_with_speed(
             &previous.selection,
             task_type,
             &tier,
@@ -561,6 +561,7 @@ impl AgentSession {
             Some(crate::routing::classify::registry_task_type(
                 previous.task_type,
             )),
+            previous.speed_first,
         ) {
             Ok(selection) => selection,
             Err(error) => {
@@ -608,7 +609,107 @@ impl AgentSession {
             model_key: selection.model_key,
             task_type: crate::routing::classify::developer_task_type(task_type),
             trust_mode: previous.trust_mode,
+            speed_first: previous.speed_first,
         }));
+    }
+
+    fn serving_harness_id(&self) -> Option<String> {
+        let trust_mode = match self.privacy_mode {
+            super::PrivacyMode::Managed => agiworkforce_model_registry::TrustMode::ManagedCloud,
+            super::PrivacyMode::Byok => agiworkforce_model_registry::TrustMode::Byok,
+            super::PrivacyMode::Local => agiworkforce_model_registry::TrustMode::Local,
+        };
+        agiworkforce_model_registry::serving_harness_id(
+            trust_mode,
+            models::provider_name(&self.provider),
+            &self.model,
+        )
+        .ok()
+        .flatten()
+    }
+
+    fn parallel_tool_calls_supported(&self) -> bool {
+        self.serving_harness_id().is_some_and(|harness| {
+            agiworkforce_model_registry::harness_feature_implemented(&harness, "parallelToolCalls")
+                .unwrap_or(false)
+        })
+    }
+
+    fn image_limit_refusal(&self) -> Option<String> {
+        let is_image = |block: &&ContentBlock| matches!(block, ContentBlock::Image { .. });
+        let attached = self.pending_image_blocks.iter().filter(is_image).count() as u64;
+        let held = self
+            .messages
+            .iter()
+            .map(|message| match &message.content {
+                models::MessageContent::Blocks(blocks) => blocks.iter().filter(is_image).count(),
+                models::MessageContent::Text(_) => 0,
+            })
+            .sum::<usize>() as u64;
+        if attached + held == 0 {
+            return None;
+        }
+        let limit = crate::model_catalog::max_images_per_request(&self.model).or_else(|| {
+            self.serving_harness_id().and_then(|harness| {
+                agiworkforce_model_registry::harness_max_images_per_request(&harness)
+                    .ok()
+                    .flatten()
+            })
+        })?;
+        let excess = (attached + held)
+            .checked_sub(limit)
+            .filter(|excess| *excess > 0)?;
+        let images = |count: u64| {
+            if count == 1 {
+                "1 image".to_string()
+            } else {
+                format!("{count} images")
+            }
+        };
+        let model = crate::model_catalog::display_name(&self.model);
+        Some(if held == 0 {
+            format!(
+                "{model} can read up to {limit} images in one message. Remove {} to send it.",
+                images(excess)
+            )
+        } else if excess <= attached {
+            format!(
+                "{model} can read up to {limit} images in one request, and this conversation already holds {}. Remove {} to send it.",
+                images(held),
+                images(excess)
+            )
+        } else {
+            format!(
+                "{model} can read up to {limit} images in one request, and this conversation holds {}. Start a new conversation or choose a model that reads more images.",
+                images(held)
+            )
+        })
+    }
+
+    fn search_refusal(&self) -> Option<String> {
+        if self.privacy_mode == super::PrivacyMode::Managed {
+            if crate::tier_cache::capability_allowed(crate::tier_cache::WEB_SEARCH_CAPABILITY)
+                == Some(false)
+            {
+                return Some("Web search is not available on this account right now.".to_string());
+            }
+            return (!crate::model_catalog::supports_web_search(&self.model)).then(|| {
+                "/search needs a model that can search the web. Switch to Auto or a search-capable model, then try again.".to_string()
+            });
+        }
+        if !self
+            .effective_tool_definitions()
+            .iter()
+            .any(|tool| tool.name == models::WEB_SEARCH_TOOL)
+        {
+            return Some(
+                "/search needs the web_search tool, and this session does not offer it."
+                    .to_string(),
+            );
+        }
+        crate::tools::search_key_provider().is_none().then(|| {
+            "/search needs a web search key in this session. Save a Brave Search or Tavily key with `agi login brave` or `agi login tavily`, or set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY.".to_string()
+        })
     }
 
     async fn project_conversation(&self) -> Option<String> {
@@ -737,6 +838,7 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        let search_turn = std::mem::take(&mut self.search_next_turn);
         // Whether the paired browser is reachable decides whether the browser
         // family is in this turn's schema list, and it is resolved here
         // because this is the one place every surface passes through.
@@ -748,11 +850,23 @@ impl AgentSession {
         self.complete_pending_privacy_handoff(user_input)?;
         self.validate_privacy_boundary()?;
         self.claim_writer_lease();
+        if self.privacy_mode == super::PrivacyMode::Managed {
+            crate::cloud::workspace_policy::refresh_when_due().await;
+        }
 
         // Auto sessions: classify this turn and re-resolve the route before
         // anything downstream reads `self.model` (compaction limits, request
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
+
+        if let Some(refusal) = self.image_limit_refusal() {
+            self.pending_image_blocks.clear();
+            anyhow::bail!(refusal);
+        }
+        if let Some(refusal) = search_turn.then(|| self.search_refusal()).flatten() {
+            self.pending_image_blocks.clear();
+            anyhow::bail!(refusal);
+        }
 
         self.fire_turn_hook(hooks::HookEvent::TurnStart, Some(user_input.to_string()))
             .await;
@@ -949,15 +1063,19 @@ message -- revise and call `update_plan` again.\n\n",
         // 200k is a provider 400, not a longer answer.
         let max_tokens = config.effective_max_tokens(&self.model);
 
-        let tool_defs = self.effective_tool_definitions();
+        let mut tool_defs = self.effective_tool_definitions();
+        if search_turn && self.privacy_mode == super::PrivacyMode::Managed {
+            tool_defs.retain(|tool| tool.name != models::WEB_SEARCH_TOOL);
+        }
         let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
         let available_tool_names = callable_tool_defs
             .iter()
             .map(|tool_definition| tool_definition.name.clone())
             .collect::<HashSet<_>>();
+        let parallel_tool_calls = self.parallel_tool_calls_supported();
         let concurrency_safe_names: HashSet<String> = callable_tool_defs
             .iter()
-            .filter(|t| t.is_concurrency_safe)
+            .filter(|t| parallel_tool_calls && t.is_concurrency_safe)
             .map(|t| t.name.clone())
             .collect();
         let plan_mode_mutating_names: HashSet<String> = callable_tool_defs
@@ -1030,6 +1148,7 @@ message -- revise and call `update_plan` again.\n\n",
                 concurrency_safe_names,
                 plan_mode_mutating_names,
                 max_tokens,
+                search_turn,
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
@@ -1339,6 +1458,7 @@ struct TurnHostAdapter<'a> {
     concurrency_safe_names: HashSet<String>,
     plan_mode_mutating_names: HashSet<String>,
     max_tokens: u32,
+    search_turn: bool,
     /// The caller's stream callback, used for the first completion only (the
     /// continuation turns use `continuation_sink()`), matching the historical
     /// first-vs-continuation text routing.
@@ -2059,6 +2179,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
         let completion = match phase {
+            TurnPhase::First if self.search_turn => models::searching(self.complete_first()).await,
             TurnPhase::First => self.complete_first().await,
             TurnPhase::Continuation => self.complete_continuation().await,
         };
@@ -3258,6 +3379,7 @@ mod tests {
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+                speed_first: false,
             },
         ));
         session
@@ -3386,6 +3508,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3418,6 +3541,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3632,6 +3756,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 1_024,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -3941,6 +4066,7 @@ mod tests {
                 plan_mode_mutating_names: name_set(tools.plan_mode_mutating),
                 max_tokens: 1_024,
                 first_on_chunk: None,
+                search_turn: false,
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
@@ -4496,6 +4622,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4631,6 +4758,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4677,6 +4805,7 @@ mod tests {
             plan_mode_mutating_names: HashSet::new(),
             max_tokens: 64,
             first_on_chunk: None,
+            search_turn: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),

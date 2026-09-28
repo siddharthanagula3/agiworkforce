@@ -30,6 +30,7 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -153,6 +154,53 @@ struct TierCacheEnvelope {
     tier: String,
     /// Unix timestamp (seconds) when the cache was written.
     cached_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    capability_handshake: Option<CapabilityDocumentWire>,
+}
+
+pub const CLOUD_MODELS_CAPABILITY: &str = "canUseCloudModels";
+pub const IMAGES_CAPABILITY: &str = "canUseImages";
+pub const WEB_SEARCH_CAPABILITY: &str = "canUseWebSearch";
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CapabilityDocumentWire {
+    #[serde(default)]
+    pub granted: Vec<String>,
+    #[serde(default, rename = "deniedBy")]
+    pub denied_by: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub sources: HashMap<String, String>,
+    #[serde(default)]
+    pub limits: Vec<CapabilityLimitWire>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityLimitWire {
+    pub id: String,
+    #[serde(default)]
+    pub capability_id: Option<String>,
+    #[serde(default)]
+    pub limit: Option<f64>,
+    pub unit: String,
+    pub window: String,
+    #[serde(default)]
+    pub resets_at: Option<String>,
+    pub policy_source: String,
+}
+
+impl CapabilityDocumentWire {
+    pub fn allows(&self, capability: &str) -> bool {
+        self.granted.iter().any(|granted| granted == capability)
+            && self.denied_by.get(capability).is_none_or(Vec::is_empty)
+    }
+
+    pub fn denying_layer(&self, capability: &str) -> Option<&str> {
+        self.denied_by
+            .get(capability)
+            .and_then(|layers| layers.first())
+            .map(String::as_str)
+    }
 }
 
 fn tier_cache_path() -> PathBuf {
@@ -173,23 +221,29 @@ fn cache_is_fresh(cached_at: u64, now: u64) -> bool {
     now.saturating_sub(cached_at) <= TIER_CACHE_TTL.as_secs()
 }
 
+fn read_fresh_envelope() -> Option<TierCacheEnvelope> {
+    let content = std::fs::read_to_string(tier_cache_path()).ok()?;
+    let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
+    cache_is_fresh(envelope.cached_at, now_secs()).then_some(envelope)
+}
+
 /// Read the cached tier from disk, returning `None` if absent or expired.
 pub fn read_tier_cache() -> Option<CachedTier> {
-    let path = tier_cache_path();
-    let content = std::fs::read_to_string(&path).ok()?;
-    let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
-
-    if !cache_is_fresh(envelope.cached_at, now_secs()) {
-        return None;
-    }
-
-    let tier = parse_tier_str(&envelope.tier)?;
+    let tier = parse_tier_str(&read_fresh_envelope()?.tier)?;
     Some(CachedTier { tier })
+}
+
+pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
+    read_fresh_envelope()?.capability_handshake
+}
+
+pub fn capability_allowed(capability: &str) -> Option<bool> {
+    cached_capabilities().map(|document| document.allows(capability))
 }
 
 /// Write a fresh tier to the disk cache.  Errors are silently swallowed, a
 /// failed cache write is never fatal.
-pub fn write_tier_cache(tier: &UserTier) {
+pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumentWire>) {
     let path = tier_cache_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -197,6 +251,7 @@ pub fn write_tier_cache(tier: &UserTier) {
     let envelope = TierCacheEnvelope {
         tier: tier_to_str(tier),
         cached_at: now_secs(),
+        capability_handshake: capabilities.cloned(),
     };
     if let Ok(content) = toml::to_string(&envelope) {
         // Atomic write: temp file → rename
@@ -293,7 +348,7 @@ pub fn adopt_server_plan(plan_tier: &str) -> bool {
     match tier_to_adopt(plan_tier, cached.as_ref()) {
         Some(server_tier) => {
             invalidate_tier_cache();
-            write_tier_cache(&server_tier);
+            write_tier_cache(&server_tier, None);
             true
         }
         None => false,
@@ -325,6 +380,8 @@ pub fn status_invalidates_tier(status: u16) -> bool {
 #[derive(Debug, Deserialize)]
 struct MeApiResponse {
     plan: Option<MePlan>,
+    #[serde(default)]
+    capability_handshake: Option<CapabilityDocumentWire>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -559,7 +616,8 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
             // cache was expired/absent, so no live cached tier to protect.
             // We still run reconcile in case a stale-but-readable entry exists.
             let existing_cache = read_tier_cache();
-            let resolved = match (fetched_tier, existing_cache) {
+            let fetched_is_resolved = |resolved: &UserTier| fetched_tier.as_ref() == Some(resolved);
+            let resolved = match (fetched_tier.clone(), existing_cache) {
                 (Some(fetched), Some(existing)) => reconcile_fetched_tier(&fetched, &existing.tier),
                 (Some(fetched), None) => fetched,
                 (None, Some(existing)) => existing.tier, // unknown string → keep cache
@@ -573,7 +631,12 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
                 }
             };
 
-            write_tier_cache(&resolved);
+            let capabilities = if fetched_is_resolved(&resolved) {
+                resp.capability_handshake
+            } else {
+                cached_capabilities()
+            };
+            write_tier_cache(&resolved, capabilities.as_ref());
             refresh_plan_models_cache().await;
             TierResolution {
                 cached: Some(CachedTier { tier: resolved }),
@@ -1082,6 +1145,7 @@ mod tests {
         let envelope = TierCacheEnvelope {
             tier: "pro".to_string(),
             cached_at: 1_746_000_000,
+            capability_handshake: None,
         };
         let serialized = toml::to_string(&envelope).expect("should serialize");
         let back: TierCacheEnvelope = toml::from_str(&serialized).expect("should deserialize");

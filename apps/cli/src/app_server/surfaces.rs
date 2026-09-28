@@ -15,9 +15,9 @@ use agiworkforce_protocol::developer_session::{
     McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
     PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginScope, PluginSummary, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
-    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    PluginScope, PluginSummary, PluginUpdateResponse, SavedPermission, SavedPermissionDecision,
+    SavedPermissionKind, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
     SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
@@ -165,6 +165,7 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
     if manager.load_all(Some(workspace_root)).is_err() {
         return PluginListResponse {
             plugins: Vec::new(),
+            notices: Vec::new(),
         };
     }
     let installed = crate::marketplace::InstalledPlugins::load(manager.global_dir());
@@ -193,7 +194,10 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
         })
         .collect();
     plugins.sort_by(|left, right| left.id.cmp(&right.id));
-    PluginListResponse { plugins }
+    PluginListResponse {
+        plugins,
+        notices: Vec::new(),
+    }
 }
 
 pub fn set_plugin_enabled(
@@ -503,6 +507,7 @@ pub fn list_commands(workspace_root: &Path) -> SlashCommandListResponse {
                 runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
                 prompt: source == CommandSourceKind::Skill
                     || custom.contains(&command.name.to_ascii_lowercase())
+                    || command.name == SEARCH_COMMAND
                     || BUILTIN_PROMPTS
                         .iter()
                         .any(|(name, _)| *name == command.name.as_str()),
@@ -866,6 +871,43 @@ pub fn install_plugin(
     }
 }
 
+pub fn update_plugin(
+    workspace_root: &Path,
+    params: PluginRemoveParams,
+) -> Result<PluginUpdateResponse, DeveloperSessionHostError> {
+    let plugin = list_plugins(workspace_root)
+        .plugins
+        .into_iter()
+        .find(|plugin| plugin.id == params.id)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!("No plugin '{}' is installed", params.id))
+        })?;
+    if plugin.source == PluginScope::Project {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{}' comes from this workspace's plugin folder; update it in the repository instead",
+            plugin.id
+        )));
+    }
+    let updated = crate::installs::update_plugin(&plugin.id)
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    let (was_updated, version, changed_files) = match updated.update {
+        crate::marketplace::PluginCheckoutUpdate::UpToDate => (false, plugin.version, Vec::new()),
+        crate::marketplace::PluginCheckoutUpdate::Updated {
+            version,
+            changed_files,
+            ..
+        } => (true, Some(version), changed_files),
+    };
+    Ok(PluginUpdateResponse {
+        id: plugin.id,
+        updated: was_updated,
+        previous_version: updated.previous_version,
+        version,
+        changed_files,
+        plugins: list_plugins(workspace_root).plugins,
+    })
+}
+
 pub fn remove_plugin(
     workspace_root: &Path,
     params: PluginRemoveParams,
@@ -1090,6 +1132,23 @@ fn file_operation_label(operation: &str) -> &str {
         "patch" => "Patch",
         other => other,
     }
+}
+
+pub const SEARCH_COMMAND: &str = "search";
+
+pub fn search_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {
+    let invocation = text.trim_start();
+    let (command, question) = invocation
+        .split_once(char::is_whitespace)
+        .unwrap_or((invocation, ""));
+    if command.strip_prefix('/') != Some(SEARCH_COMMAND) {
+        return Ok(None);
+    }
+    let question = question.trim();
+    if question.is_empty() {
+        return Err(invalid("Usage: /search <question>"));
+    }
+    Ok(Some(question.to_string()))
 }
 
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {

@@ -90,7 +90,7 @@ describe('version helpers', () => {
 });
 
 describe('marketplaceDirectoryEntry', () => {
-  it('builds a verified, web-installable entry from manifest, inspection and card', () => {
+  it('builds a community, web-installable entry from manifest, inspection and card', () => {
     const entry = marketplaceDirectoryEntry({
       plugin: PLUGIN,
       marketplace: fetchedMarketplace([PLUGIN]),
@@ -117,11 +117,11 @@ describe('marketplaceDirectoryEntry', () => {
       createdAt: FIRST_SEEN,
       updatedAt: NOW,
       sourceFacet: 'marketplace',
-      verified: true,
+      verified: false,
       installs: 1200,
       worksWith: ['claude-code', 'web'],
       repositoryUrl: 'https://github.com/adobe/skills',
-      installCommand: 'claude plugin install adobe-for-creativity@claude-plugins-official',
+      installCommand: 'agi plugin install adobe-for-creativity@claude-plugins-official',
       runtime: { webInstallable: true, inspected: true, note: null },
       sourceLocation: LOCATION,
     });
@@ -195,7 +195,7 @@ describe('publicOnlyDirectoryEntry', () => {
     expect(entry).toMatchObject({
       id: 'sales',
       sourceFacet: 'partner',
-      verified: true,
+      verified: false,
       worksWith: ['cowork'],
       webInstallable: false,
       installCommand: null,
@@ -219,7 +219,7 @@ describe('publicOnlyDirectoryEntry', () => {
     });
     expect(entry).toMatchObject({
       sourceFacet: 'marketplace',
-      installCommand: 'claude plugin install searchfit-seo@claude-plugins-official',
+      installCommand: 'agi plugin install searchfit-seo@claude-plugins-official',
       repositoryUrl: 'https://github.com/searchfit/seo',
       homepageUrl: 'https://github.com/searchfit/seo',
       installCount: 1200,

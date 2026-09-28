@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { formatSourcePublishedDate } from '@/src/features/chat/utils/sourcePublishedDate';
 
 const MAX_PREVIEW_SNIPPET_LENGTH = 300;
 
@@ -20,11 +21,13 @@ interface CitationChipProps {
   title: string;
   url?: string;
   snippet?: string;
+  publishedDate?: string;
 }
 
-export function CitationChip({ index, title, url, snippet }: CitationChipProps) {
+export function CitationChip({ index, title, url, snippet, publishedDate }: CitationChipProps) {
   const colors = useThemeColors();
   const canOpen = Boolean(url && isValidExternalHttpUrl(url));
+  const published = formatSourcePublishedDate(publishedDate);
   const openSource = async () => {
     if (!canOpen || !url) return;
     const opened = await openUntrustedUrlInAppBrowser(url);
@@ -34,7 +37,7 @@ export function CitationChip({ index, title, url, snippet }: CitationChipProps) 
   };
   const handlePress = () => {
     if (!canOpen || !url) return;
-    const site = hostnameOf(url);
+    const site = published ? `${hostnameOf(url)} · Published ${published}` : hostnameOf(url);
     const preview = previewSnippet(snippet);
     Alert.alert(title, preview ? `${site}\n\n${preview}` : site, [
       { text: 'Cancel', style: 'cancel' },
@@ -49,7 +52,7 @@ export function CitationChip({ index, title, url, snippet }: CitationChipProps) 
       style={({ pressed }) => ({
         backgroundColor: pressed ? colors.surfaceHover : colors.accentSurface,
       })}
-      accessibilityLabel={`Citation ${index}: ${title}`}
+      accessibilityLabel={`Citation ${index}: ${title}${published ? `, published ${published}` : ''}`}
       accessibilityRole={canOpen ? 'link' : undefined}
       accessibilityHint={canOpen ? 'Shows the source, then opens it in the browser' : undefined}
     >

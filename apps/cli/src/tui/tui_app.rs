@@ -4458,14 +4458,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/plugin" | "/plugins"
-            if matches!(
-                arg.split_whitespace().next(),
-                Some("enable" | "disable" | "remove" | "uninstall")
-            ) =>
+        "/plugin" | "/plugins" if crate::installs::is_plugin_action(arg) =>
         {
             SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
-                "Usage: /plugins enable|disable|remove <name>".to_string()
+                "Usage: /plugins enable|disable|update|remove <name>".to_string()
             }))
         }
 
@@ -4556,6 +4552,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
             } else {
                 SlashResult::RunBtw(arg.to_string())
+            }
+        }
+
+        "/search" => {
+            if arg.is_empty() {
+                SlashResult::SystemMessage(
+                    "Usage: /search <question>, answer from a web search".to_string(),
+                )
+            } else {
+                app.session.search_next_turn = true;
+                SlashResult::SendPrompt(arg.to_string())
             }
         }
 
@@ -4914,6 +4921,7 @@ pub async fn run(
         let Ok(release) = crate::update_check::fetch_latest_release().await else {
             return;
         };
+        crate::update_check::remember_latest_release(&release);
         if crate::update_check::compare_versions(
             crate::update_check::running_version(),
             &release.version,
@@ -4924,6 +4932,8 @@ pub async fn run(
                 release.version,
                 crate::update_check::running_version()
             ));
+        } else if let Some(lines) = crate::update_check::unseen_release_notes(&release) {
+            crate::tui::push_tui_notice(lines.join("\n"));
         }
     });
     let effective_provider_override = crate::models::plan_first_provider_override(
@@ -7918,6 +7928,7 @@ mod tests {
             "imagine",
             "theme",
             "btw",
+            "search",
             "ctx",
             "review",
             "effort",

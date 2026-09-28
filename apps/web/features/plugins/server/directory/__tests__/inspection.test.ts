@@ -82,7 +82,7 @@ describe('metadata parsers', () => {
       description: 'Desc',
       skills: ['./skills/a'],
       hooks: true,
-      mcpServers: [{ name: 'remote', transport: 'http' }],
+      mcpServers: [{ name: 'remote', transport: 'http', url: 'https://mcp.example.com' }],
       lspServers: ['ts'],
     });
     expect(parsePluginMetadata(null).hooks).toBe(false);
@@ -100,8 +100,8 @@ describe('metadata parsers', () => {
       }),
     ).toEqual([
       { name: 'local', transport: 'stdio' },
-      { name: 'typed', transport: 'sse' },
-      { name: 'streamable', transport: 'http' },
+      { name: 'typed', transport: 'sse', url: 'https://x' },
+      { name: 'streamable', transport: 'http', url: 'https://x' },
       { name: 'bare', transport: 'unknown' },
     ]);
   });
@@ -246,9 +246,10 @@ describe('inspectPluginSource', () => {
         skills: ['background-removal', 'vectorize'],
         skillPaths: ['skills/background-removal/SKILL.md', 'skills/vectorize/SKILL.md'],
         commands: 1,
+        commandPaths: ['commands/retouch.md'],
         agents: ['reviewer'],
         hooks: false,
-        mcpServers: [{ name: 'adobe', transport: 'http' }],
+        mcpServers: [{ name: 'adobe', transport: 'http', url: 'https://mcp.adobe.com' }],
         lspServers: [],
       },
     });

@@ -841,10 +841,11 @@ const AGENT_RUN_ID_HEADER: &str = "x-agi-agent-run-id";
 pub const AGENT_RUN_ID_EVENT: &str = "agent_run_id";
 const RESOLVED_MODEL_HEADER: &str = "x-agi-resolved-model";
 pub const RESOLVED_MODEL_EVENT: &str = "resolved_model";
-pub const FORWARDED_DELTA_EXTENSIONS: [&str; 3] = [
+pub const FORWARDED_DELTA_EXTENSIONS: [&str; 4] = [
     "x_tool_approval_request",
     "x_agent_event",
     "x_search_results",
+    "x_tool_result",
 ];
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
