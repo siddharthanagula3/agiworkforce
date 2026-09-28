@@ -4264,7 +4264,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             .persist_effort_project(&e.label().to_ascii_lowercase())
                             .map(|_| " and saved as this project's default")
                             .unwrap_or("");
-                        SlashResult::SystemMessage(format!("Effort set to {}{saved}", e.label()))
+                        let note = if matches!(
+                            crate::model_catalog::effort_support(&app.session.model),
+                            crate::model_catalog::EffortSupport::Unsupported
+                        ) {
+                            ". This model has no effort control, so it applies once you switch to one that does"
+                        } else {
+                            ""
+                        };
+                        SlashResult::SystemMessage(format!(
+                            "Effort set to {}{saved}{note}",
+                            e.label()
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"
