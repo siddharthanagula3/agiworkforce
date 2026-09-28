@@ -647,6 +647,7 @@ const slashCommandListResponseSchema = z.object({
         source: z.enum(['builtin', 'skill', 'prompt', 'plugin', 'mcp']),
         aliases: z.array(z.string().max(200)).max(50),
         runnable: z.boolean(),
+        prompt: z.boolean().optional(),
       }),
     )
     .max(5_000),
