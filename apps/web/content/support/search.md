@@ -4,7 +4,7 @@ title: Search: the web, your chats and the help centre
 path: /chat
 category: search
 tags: search, web search, find a conversation, search messages, search history, search past chats, deep research, sources, citations, help search
-updated: 2026-09-17
+updated: 2026-09-28
 scope: public
 ---
 
@@ -18,6 +18,11 @@ a single message.
 
 Managed cloud search follows the chat and usage policy for your plan. In Local
 and BYOK the behaviour depends on the runtime and provider you selected.
+
+In a Team or Enterprise workspace, an owner or admin can limit which websites
+web search and page fetching read, on the workspace Connectors page. Results
+from other sites are left out, and a page outside the allowed sites is not
+fetched.
 
 ## Deep Research
 

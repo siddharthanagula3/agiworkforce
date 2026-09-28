@@ -2312,10 +2312,10 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const outcome = await executeUrlFetch(
-      toolCall.args,
-      executionContext?.signal ? { signal: executionContext.signal } : {},
-    );
+    const outcome = await executeUrlFetch(toolCall.args, {
+      domainPolicy: executionContext?.webSearchDomainPolicy ?? null,
+      ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
+    });
     if (!outcome.ok) {
       return { content: `Fetch failed (${outcome.errorCode}): ${outcome.error}`, isError: true };
     }
