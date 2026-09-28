@@ -47,6 +47,8 @@ import {
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isVideoStorageConfigured } from '@/lib/server/media-storage';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
@@ -822,6 +824,18 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       },
     );
   }
+
+  await assertCapabilityAvailable(
+    buildFlagSubject(request, {
+      userId,
+      workspaceId: (await callerScope()).organizationId ?? null,
+      role: null,
+      plan: userTier,
+      surface: resolveCloudChatSurface(request),
+    }),
+    'canUseVideoGeneration',
+    'Video generation',
+  );
 
   let body: unknown;
   try {
