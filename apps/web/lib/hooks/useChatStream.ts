@@ -3717,6 +3717,10 @@ export function useChatStream(): UseChatStreamReturn {
                 : undefined,
               connector_tools_enabled: options.connectorToolsEnabled,
               memory_enabled: options.memoryEnabled === false ? false : undefined,
+              personalized:
+                isTemporaryConversation && !useChatStore.getState().temporaryChatPersonalized
+                  ? false
+                  : undefined,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),
