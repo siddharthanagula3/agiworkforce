@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0329: remember which plugin added a custom connector
+-- Migration 0330: remember which plugin added a custom connector
 --
 -- Why    : a plugin's remote MCP servers were listed on its page and never
 --          run on the web. Installing a plugin now adds each of its remote
