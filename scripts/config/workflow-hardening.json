@@ -132,10 +132,6 @@
       "reason": "OIDC signs the release assets without a stored key"
     },
     {
-      "id": "release-cli.yml:publish-npm:id-token",
-      "reason": "npm trusted publishing authenticates over OIDC"
-    },
-    {
       "id": "release-cli.yml:github-release:contents",
       "reason": "it creates the GitHub release and uploads the binaries"
     },
@@ -220,11 +216,6 @@
       {
         "id": "release-cli.yml:sign-release-assets",
         "reason": "signing reaches an external OIDC issuer that can stall",
-        "fix": "timeout-minutes: 20"
-      },
-      {
-        "id": "release-cli.yml:publish-npm",
-        "reason": "the publish reaches the npm registry, which can stall on a trusted publishing exchange",
         "fix": "timeout-minutes: 20"
       },
       {
