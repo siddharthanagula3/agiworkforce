@@ -15,4 +15,5 @@ export type SlashCommandSummary = {
    * terminal. A client must not offer the others as buttons.
    */
   runnable: boolean;
+  prompt?: boolean;
 };
