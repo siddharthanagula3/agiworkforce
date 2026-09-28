@@ -18,6 +18,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
+import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
@@ -1433,7 +1434,7 @@ export function useApprovalHistory(
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
       const params = new URLSearchParams({ limit: String(limit + 1), offset: String(offset) });
-      const res = await fetch(`/api/settings/approvals?${params.toString()}`, {
+      const res = await fetch(`${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(statusMessage(res.status));
