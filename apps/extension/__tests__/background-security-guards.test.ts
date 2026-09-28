@@ -286,7 +286,7 @@ describe('background service worker security guards', () => {
       putStorage(CONSENT_KEY, []);
 
       expect(options.signal.aborted).toBe(true);
-      await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+      await expect(options.assertOwnership()).rejects.toThrow(/site access withdrawn/);
     });
 
     it('fails closed when the browser-control record cannot be read mid-run', async () => {
@@ -383,7 +383,7 @@ describe('background service worker security guards', () => {
       await putAdminPolicy({ version: 1, blocklist: [{ pattern: `https://*.example` }] });
 
       expect(options.signal.aborted).toBe(true);
-      await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+      await expect(options.assertOwnership()).rejects.toThrow(/site access withdrawn/);
     });
 
     it('stops navigation to an approved origin the org blocked', async () => {

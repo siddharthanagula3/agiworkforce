@@ -51,6 +51,7 @@ export function SecuritySection() {
   });
 
   const authoritativeTwoFactor = useRef<boolean | null>(null);
+  const [authenticatorAvailable, setAuthenticatorAvailable] = useState(false);
 
   useEffect(() => {
     if (serverSettings) {
@@ -74,6 +75,7 @@ export function SecuritySection() {
   const handleTwoFactorStatus = useCallback(
     (status: TwoFactorStatus) => {
       authoritativeTwoFactor.current = status.enabled;
+      setAuthenticatorAvailable(status.enrollmentAvailable);
       securityForm.setValue('two_factor_enabled', status.enabled, { shouldDirty: false });
     },
     [securityForm],
@@ -175,9 +177,11 @@ export function SecuritySection() {
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
           Hardware security keys, SMS MFA, and trusted-device lists are not available in the current
-          account contract. Passkeys sign you in, and authenticator app codes (TOTP) with recovery
-          backup codes are the supported second factor. To review active sessions or sign out other
-          devices, use Account settings.
+          account contract. Passkeys sign you in.{' '}
+          {authenticatorAvailable
+            ? 'Authenticator app codes (TOTP) with recovery backup codes are the supported second factor.'
+            : 'Authenticator app codes (TOTP) and backup codes are temporarily unavailable.'}{' '}
+          To review active sessions or sign out other devices, use Account settings.
         </p>
       </section>
 

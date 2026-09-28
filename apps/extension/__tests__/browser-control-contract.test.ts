@@ -118,6 +118,7 @@ describe('every way a run can end has something that ends it', () => {
     'account_changed',
     'debugger_detached',
     'panel_closed',
+    'site_access_withdrawn',
     'superseded',
     'tab_intent_changed',
     'tab_removed',

@@ -2,6 +2,12 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
+import {
+  BROWSER_SUPPORT_SCRIPT,
+  JAVASCRIPT_REQUIRED_NOTICE,
+  UNSUPPORTED_BROWSER_NOTICE,
+  UNSUPPORTED_BROWSER_NOTICE_ID,
+} from '@/lib/browser-support';
 import './globals.css';
 import '@/features/marketing/components/legacy-pages.css';
 import Providers from './providers';
@@ -144,6 +150,22 @@ export default async function RootLayout({
             request-derived input, and a <script> body cannot be text-rendered.
             llm-guardrail-allow: constant script body, nonce-gated by the CSP. */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <div
+          id={UNSUPPORTED_BROWSER_NOTICE_ID}
+          role="alert"
+          hidden
+          suppressHydrationWarning
+          className="border-b border-border bg-background px-4 py-3 text-center text-sm text-foreground"
+        >
+          {UNSUPPORTED_BROWSER_NOTICE}
+        </div>
+        {/* llm-guardrail-allow: constant script body, nonce-gated by the CSP. */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: BROWSER_SUPPORT_SCRIPT }} />
+        <noscript>
+          <p className="border-b border-border bg-background px-4 py-3 text-center text-sm text-foreground">
+            {JAVASCRIPT_REQUIRED_NOTICE}
+          </p>
+        </noscript>
         {/* Site-wide structured data: Organization, WebSite (no SearchAction),
             and SoftwareApplication. Nonce-carried for the strict CSP. */}
         <JsonLd data={[organizationSchema(), webSiteSchema(), softwareApplicationSchema()]} />

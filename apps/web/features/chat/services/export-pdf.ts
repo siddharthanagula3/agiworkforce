@@ -1,9 +1,12 @@
 import jsPDF from 'jspdf';
-import type {
-  DocumentAlign,
-  DocumentBlock,
-  DocumentInline,
-  DocumentListItem,
+import {
+  RIGHT_TO_LEFT_TEXT,
+  documentDirection,
+  type DocumentAlign,
+  type DocumentBlock,
+  type DocumentDirection,
+  type DocumentInline,
+  type DocumentListItem,
 } from '@agiworkforce/unified-chat/markdown-document';
 import { texToLinearMath, type LinearMathPiece } from './export-math';
 
@@ -215,7 +218,7 @@ const DINGBAT_CODES: Readonly<Record<string, number>> = {
 
 const CHECKMARK_DINGBAT = String.fromCharCode(DINGBAT_CODES['✔'] ?? 0x34);
 const BREAK_ANYWHERE = /[ᄀ-ᇿ⺀-鿿가-힯豈-﫿＀-￯]/u;
-const RIGHT_TO_LEFT = /[֐-ࣿיִ-﷿ﹰ-ﻼ]/u;
+const LEFT_TO_RIGHT_TEXT = /[\p{L}\p{N}]/u;
 const WHITESPACE = /\s/u;
 const UNRENDERABLE = '?';
 const RASTER_SCALE = 3;
@@ -269,6 +272,8 @@ type Marker =
 interface PendingMarker {
   readonly marker: Marker;
   readonly x: number;
+  readonly width: number;
+  readonly direction: DocumentDirection;
 }
 
 interface BlockContext {
@@ -277,6 +282,11 @@ interface BlockContext {
   readonly bars: readonly number[];
   readonly color: Rgb;
   readonly listDepth: number;
+  readonly direction: DocumentDirection;
+}
+
+function startAlign(context: BlockContext): LineAlign {
+  return context.direction === 'rtl' ? 'right' : 'left';
 }
 
 function baseStyle(size: number, color: Rgb): RunStyle {
@@ -321,15 +331,21 @@ function mergeRuns(glyphs: readonly Glyphs[]): Glyphs[] {
 }
 
 function isRightToLeft(token: Token): boolean {
-  return token.glyphs.some((entry) => entry.raster && RIGHT_TO_LEFT.test(entry.text));
+  return token.glyphs.some((entry) => entry.raster && RIGHT_TO_LEFT_TEXT.test(entry.text));
 }
 
-function visualOrder(tokens: readonly Token[]): Token[] {
+function isLeftToRight(token: Token): boolean {
+  return token.glyphs.some(
+    (entry) => LEFT_TO_RIGHT_TEXT.test(entry.text) && !RIGHT_TO_LEFT_TEXT.test(entry.text),
+  );
+}
+
+function reverseRuns(tokens: readonly Token[], inRun: (token: Token) => boolean): Token[] {
   const ordered: Token[] = [];
   let index = 0;
   while (index < tokens.length) {
     const token = tokens[index];
-    if (!token || !isRightToLeft(token)) {
+    if (!token || !inRun(token)) {
       if (token) ordered.push(token);
       index += 1;
       continue;
@@ -338,9 +354,9 @@ function visualOrder(tokens: readonly Token[]): Token[] {
     while (end < tokens.length) {
       const next = tokens[end];
       const after = tokens[end + 1];
-      if (next && isRightToLeft(next)) {
+      if (next && inRun(next)) {
         end += 1;
-      } else if (next?.space && after && isRightToLeft(after)) {
+      } else if (next?.space && after && inRun(after)) {
         end += 2;
       } else {
         break;
@@ -350,6 +366,25 @@ function visualOrder(tokens: readonly Token[]): Token[] {
     index = end;
   }
   return ordered;
+}
+
+function visualOrder(tokens: readonly Token[], direction: DocumentDirection): Token[] {
+  if (direction === 'ltr') return reverseRuns(tokens, isRightToLeft);
+  return reverseRuns(tokens, isLeftToRight).reverse();
+}
+
+function quoteContext(context: BlockContext): BlockContext {
+  const rightToLeft = context.direction === 'rtl';
+  return {
+    ...context,
+    x: rightToLeft ? context.x : context.x + QUOTE_INDENT,
+    width: context.width - QUOTE_INDENT,
+    bars: [
+      ...context.bars,
+      rightToLeft ? context.x + context.width - 1 - QUOTE_BAR_WIDTH : context.x + 1,
+    ],
+    color: MUTED_COLOR,
+  };
 }
 
 function textColumnWidths(
@@ -633,14 +668,24 @@ class PdfDocumentRenderer {
   private y = PAGE_MARGIN;
   private pendingMarker: PendingMarker | null = null;
 
-  constructor(private readonly pdf: jsPDF) {
+  constructor(
+    private readonly pdf: jsPDF,
+    private readonly direction: DocumentDirection,
+  ) {
     this.kit = new PdfTextKit(pdf);
     this.bottom = pdf.internal.pageSize.getHeight() - PAGE_MARGIN;
     this.contentWidth = pdf.internal.pageSize.getWidth() - PAGE_MARGIN * 2;
   }
 
   private rootContext(): BlockContext {
-    return { x: PAGE_MARGIN, width: this.contentWidth, bars: [], color: TEXT_COLOR, listDepth: 0 };
+    return {
+      x: PAGE_MARGIN,
+      width: this.contentWidth,
+      bars: [],
+      color: TEXT_COLOR,
+      listDepth: 0,
+      direction: this.direction,
+    };
   }
 
   private newPage(): void {
@@ -668,9 +713,11 @@ class PdfDocumentRenderer {
   }
 
   private drawMarker(pending: PendingMarker, baseline: number, size: number): void {
-    const { marker, x } = pending;
+    const { marker, x, width, direction } = pending;
+    const trailingSlot = x + width - LIST_INDENT + MARKER_GAP;
     if (marker.kind === 'checkbox') {
-      const boxX = x + LIST_INDENT - MARKER_GAP - CHECKBOX_SIZE;
+      const boxX =
+        direction === 'rtl' ? trailingSlot : x + LIST_INDENT - MARKER_GAP - CHECKBOX_SIZE;
       const boxY = baseline - CHECKBOX_SIZE;
       this.pdf.setDrawColor(MUTED_COLOR[0], MUTED_COLOR[1], MUTED_COLOR[2]);
       this.pdf.setLineWidth(0.6);
@@ -686,7 +733,12 @@ class PdfDocumentRenderer {
     const style = baseStyle(size, TEXT_COLOR);
     const [token] = this.kit.tokenize([{ text: marker.text, style }], false);
     if (!token) return;
-    this.drawGlyphs(token.glyphs, x + LIST_INDENT - MARKER_GAP - token.width, baseline, 0);
+    this.drawGlyphs(
+      token.glyphs,
+      direction === 'rtl' ? trailingSlot : x + LIST_INDENT - MARKER_GAP - token.width,
+      baseline,
+      0,
+    );
   }
 
   private drawGlyphs(
@@ -766,7 +818,7 @@ class PdfDocumentRenderer {
     const slack = Math.max(0, width - line.width);
     const start = x + (align === 'center' ? slack / 2 : align === 'right' ? slack : 0);
     this.drawGlyphs(
-      visualOrder(line.tokens).flatMap((token) => token.glyphs),
+      visualOrder(line.tokens, context.direction).flatMap((token) => token.glyphs),
       start,
       baseline,
       top,
@@ -802,7 +854,7 @@ class PdfDocumentRenderer {
       this.flowTexts(
         [{ text: header.title, style: { ...baseStyle(TITLE_SIZE, TEXT_COLOR), bold: true } }],
         context,
-        'left',
+        startAlign(context),
         TITLE_SIZE,
       );
       this.y += 4;
@@ -813,7 +865,7 @@ class PdfDocumentRenderer {
     this.flowTexts(
       [{ text: meta, style: baseStyle(META_SIZE, MUTED_COLOR) }],
       context,
-      'left',
+      startAlign(context),
       META_SIZE,
     );
     this.y += BLOCK_GAP * 2;
@@ -842,7 +894,7 @@ class PdfDocumentRenderer {
         this.flowTexts(
           inlineTexts(block.inlines, baseStyle(BODY_SIZE, context.color)),
           context,
-          'left',
+          startAlign(context),
           BODY_SIZE,
         );
         return;
@@ -853,17 +905,7 @@ class PdfDocumentRenderer {
         this.renderCode(block.text, context);
         return;
       case 'quote':
-        this.renderBlocks(
-          block.blocks,
-          {
-            ...context,
-            x: context.x + QUOTE_INDENT,
-            width: context.width - QUOTE_INDENT,
-            bars: [...context.bars, context.x + 1],
-            color: MUTED_COLOR,
-          },
-          BLOCK_GAP,
-        );
+        this.renderBlocks(block.blocks, quoteContext(context), BLOCK_GAP);
         return;
       case 'table':
         this.renderTable(block.align, block.rows, context);
@@ -872,7 +914,7 @@ class PdfDocumentRenderer {
         for (const line of texToLinearMath(block.tex, true)) {
           this.flowTexts(
             mathTexts(line, baseStyle(BODY_SIZE * DISPLAY_MATH_SCALE, context.color)),
-            context,
+            { ...context, direction: 'ltr' },
             'center',
             BODY_SIZE,
           );
@@ -901,7 +943,7 @@ class PdfDocumentRenderer {
     const height = lines.reduce((sum, line) => sum + line.height, 0);
     if (this.y > PAGE_MARGIN) this.y += HEADING_GAP;
     this.ensureSpace(height + BODY_SIZE * LINE_HEIGHT * 2);
-    this.flowLines(lines, context, 'left');
+    this.flowLines(lines, context, startAlign(context));
   }
 
   private renderList(
@@ -916,10 +958,15 @@ class PdfDocumentRenderer {
         item.checked !== null
           ? { kind: 'checkbox', checked: item.checked }
           : { kind: 'text', text: ordered ? `${start + index}.` : bullet };
-      this.pendingMarker = { marker, x: context.x };
+      this.pendingMarker = {
+        marker,
+        x: context.x,
+        width: context.width,
+        direction: context.direction,
+      };
       const itemContext: BlockContext = {
         ...context,
-        x: context.x + LIST_INDENT,
+        x: context.direction === 'rtl' ? context.x : context.x + LIST_INDENT,
         width: context.width - LIST_INDENT,
         listDepth: context.listDepth + 1,
       };
@@ -927,7 +974,7 @@ class PdfDocumentRenderer {
         this.flowTexts(
           [{ text: ' ', style: baseStyle(BODY_SIZE, context.color) }],
           itemContext,
-          'left',
+          startAlign(itemContext),
           BODY_SIZE,
         );
       } else {
@@ -954,7 +1001,7 @@ class PdfDocumentRenderer {
       this.fill(CODE_BACKGROUND, context.x, this.y, context.width, line.height);
       this.drawLine(
         line,
-        context,
+        { ...context, direction: 'ltr' },
         context.x + CODE_PADDING,
         context.width - CODE_PADDING * 2,
         'left',
@@ -1014,7 +1061,7 @@ class PdfDocumentRenderer {
     );
     const aligns = Array.from(
       { length: columnCount },
-      (_, column): LineAlign => align[column] ?? 'left',
+      (_, column): LineAlign => align[column] ?? startAlign(context),
     );
     const header = layouts[0];
     layouts.forEach((cells, rowIndex) => {
@@ -1058,9 +1105,13 @@ class PdfDocumentRenderer {
       const sliceHeight = Math.min(needed, available);
       const top = this.y;
       this.drawBars(context, top, sliceHeight);
-      let x = context.x;
+      let offset = 0;
       cells.forEach((cell, index) => {
         const width = widths[index] ?? 0;
+        const x =
+          context.direction === 'rtl'
+            ? context.x + context.width - offset - width
+            : context.x + offset;
         if (header) this.fill(TABLE_HEADER_BACKGROUND, x, top, width, sliceHeight);
         this.pdf.setDrawColor(TABLE_BORDER[0], TABLE_BORDER[1], TABLE_BORDER[2]);
         this.pdf.setLineWidth(0.6);
@@ -1083,13 +1134,13 @@ class PdfDocumentRenderer {
             { ...context, bars: [] },
             x + CELL_PADDING,
             width - CELL_PADDING * 2,
-            aligns[index] ?? 'left',
+            aligns[index] ?? startAlign(context),
           );
           lineTop += line.height;
           cursor += 1;
         }
         cursors[index] = cursor;
-        x += width;
+        offset += width;
       });
       this.y = top + sliceHeight;
       if (cells.some((cell, index) => (cursors[index] ?? 0) < cell.length)) {
@@ -1103,7 +1154,7 @@ class PdfDocumentRenderer {
 
 export function renderPdfDocument(blocks: readonly DocumentBlock[], header: PdfHeader): jsPDF {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-  const renderer = new PdfDocumentRenderer(pdf);
+  const renderer = new PdfDocumentRenderer(pdf, documentDirection(blocks, header.title));
   renderer.renderHeader(header);
   renderer.renderDocument(blocks);
   return pdf;

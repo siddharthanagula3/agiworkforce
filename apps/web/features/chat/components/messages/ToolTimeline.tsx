@@ -37,6 +37,8 @@ import {
   type ConnectorConnectRequest,
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
+import { PluginDraftCard } from '../PluginDraftCard';
+import { readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
 
 function getFileName(args?: string): string | null {
@@ -422,6 +424,10 @@ function TimelineStepRow({
   const hasSources = isWebSearch && searchSources && searchSources.length > 0;
 
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
+  const pluginDraft = useMemo(
+    () => (tool.status === 'completed' ? readPluginDraftToolResult(tool.name, tool.result) : null),
+    [tool],
+  );
 
   const humanLabel =
     tool.summary ?? humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
@@ -481,6 +487,11 @@ function TimelineStepRow({
           />
         </div>
       )}
+      {pluginDraft ? (
+        <div className="pl-7 mt-1.5">
+          <PluginDraftCard draft={pluginDraft} />
+        </div>
+      ) : null}
       {hasSources && (
         <div className="pl-7 mt-1 text-xs text-muted-foreground">
           {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
@@ -765,13 +776,11 @@ function ToolTimeline({
                       return (
                         <div
                           key={group.parallelGroup ?? gi}
-                          className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
+                          className="border-l-2 border-info-fill/30 pl-2 py-0.5 space-y-3 ml-2"
                         >
                           <div className="flex items-center gap-1 mb-0.5">
-                            <GitBranch className="w-2.5 h-2.5 text-blue-700 dark:text-blue-400 shrink-0" />
-                            <span className="text-caption text-blue-700 dark:text-blue-400 font-mono">
-                              parallel
-                            </span>
+                            <GitBranch className="w-2.5 h-2.5 text-info-text shrink-0" />
+                            <span className="text-caption text-info-text font-mono">parallel</span>
                           </div>
                           {group.entries.map((tool, ti) => {
                             const id = stableId(tool, gi * 100 + ti);
