@@ -17,7 +17,7 @@ import { cn } from '@shared/lib/utils';
 import {
   connectorCategoryToolName,
   type ConnectorToolCategory,
-} from '@shared/types/connectorToolCategories';
+} from '@agiworkforce/cloud-contracts';
 import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
 import { describeConnectorActions } from '../data/connectors';
 import { ConnectorCallLog } from './ConnectorCallLog';

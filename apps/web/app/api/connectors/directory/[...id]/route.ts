@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ConnectorDirectoryEntryResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -51,7 +52,7 @@ async function handleGet(
   }
 
   return NextResponse.json(
-    { entry: toDirectoryEntryView(record) },
+    { entry: toDirectoryEntryView(record) } satisfies ConnectorDirectoryEntryResponse,
     { status: 200, headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' } },
   );
 }

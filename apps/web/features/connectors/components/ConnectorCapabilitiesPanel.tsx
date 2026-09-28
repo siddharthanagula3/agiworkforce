@@ -3,12 +3,10 @@
 import { useState } from 'react';
 import { AlertTriangle, Boxes, FileText, MessageSquareText, Wrench } from 'lucide-react';
 
+import type { ConnectorCapabilityCatalog } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
-import {
-  useConnectorCapabilities,
-  type ConnectorCapabilityCatalog,
-} from '../hooks/use-connector-capabilities';
+import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
 import { publishMcpContextSelection } from '../lib/mcp-context-selection';
 
 const CAPABILITY_DISCOVERY_COPY = 'Discovering live MCP capabilities…';
