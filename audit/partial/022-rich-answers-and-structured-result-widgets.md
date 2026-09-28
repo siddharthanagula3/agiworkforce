@@ -49,14 +49,14 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:181-181`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A lightbox pages through a message's own images and place photos page inside place cards; there is no image-results carousel in answers. | ui |
-| desktop | partial | A lightbox pages through a message's own images and place photos page inside place cards; there is no image-results carousel in answers. | ui |
+| web | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
+| desktop | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1370-1370`, `apps/web/features/chat/components/messages/cards/map/PlacePhotoCarousel.tsx:13-13`
+Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1513-1513`
 
 ## S22.08: Interactive charts.
 
@@ -95,11 +95,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| web | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
+| desktop | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Map-search cards list the places with Open in maps buttons, but no map is drawn in the side panel. | ui |
 
-Code: `apps/extension/src/features/side-panel/bubbles.ts:94-94`, `apps/extension/src/features/side-panel/bubbles.ts:76-76`
+Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`, `apps/web/lib/maps/map-tile-provider.ts:5-5`, `apps/extension/src/features/side-panel/bubbles.ts:94-94`, `apps/extension/src/features/side-panel/bubbles.ts:76-76`
 
 ## S22.11: Place and business cards.
 
@@ -108,10 +110,14 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:94-94`, `apps/extension
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| web | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
+| desktop | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+Code: `apps/web/features/chat/components/messages/cards/map/PlaceDetailPopup.tsx:94-94`, `apps/web/lib/config/optional-features.ts:118-118`
 
 ## S22.17: Product comparison cards.
 
