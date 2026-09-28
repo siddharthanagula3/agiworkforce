@@ -8,6 +8,7 @@ import {
   INSPECTIONS_TTL_MS,
   INSTALLED_SKILLS_CACHE_METHOD,
   INSTALLED_SKILLS_TTL_MS,
+  SKILL_COMPANIONS_CACHE_METHOD,
   SNAPSHOT_CACHE_METHOD,
   SNAPSHOT_TTL_MS,
   SYNC_STATE_CACHE_METHOD,
@@ -17,6 +18,7 @@ import type {
   InstalledDirectorySkill,
   PluginDirectoryEntry,
   PluginInspectionRecord,
+  SkillCompanionFile,
 } from './types';
 
 const cacheStore = new NeonMcpResponseCacheStore();
@@ -159,6 +161,33 @@ export async function writeInstalledSkills(
 ): Promise<void> {
   await cacheStore.set(key(INSTALLED_SKILLS_CACHE_METHOD, params), {
     value: JSON.stringify(skills),
+    expiresAt: Date.now() + INSTALLED_SKILLS_TTL_MS,
+    scope: 'public',
+  });
+}
+
+export function skillCompanionsCacheParams(
+  repositoryUrl: string,
+  revision: string,
+  skillDirectory: string,
+): string {
+  return [CACHE_PARAMS_VERSION, repositoryUrl.toLowerCase(), revision, skillDirectory].join('|');
+}
+
+export async function readSkillCompanions(
+  params: string,
+): Promise<readonly SkillCompanionFile[] | null> {
+  const entry = await cacheStore.get(key(SKILL_COMPANIONS_CACHE_METHOD, params));
+  const parsed = parseJson<SkillCompanionFile[]>(entry?.value);
+  return Array.isArray(parsed) ? parsed : null;
+}
+
+export async function writeSkillCompanions(
+  params: string,
+  files: readonly SkillCompanionFile[],
+): Promise<void> {
+  await cacheStore.set(key(SKILL_COMPANIONS_CACHE_METHOD, params), {
+    value: JSON.stringify(files),
     expiresAt: Date.now() + INSTALLED_SKILLS_TTL_MS,
     scope: 'public',
   });

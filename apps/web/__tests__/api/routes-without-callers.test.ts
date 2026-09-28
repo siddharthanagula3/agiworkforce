@@ -102,14 +102,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   // Authenticated protocol endpoints support API and cross-surface clients.
   // A first-party web screen is not their only valid consumer.
   {
-    url: '/api/files/uploads',
-    why: 'cross-surface resumable video-upload protocol creates a multipart upload',
-  },
-  {
-    url: '/api/files/uploads/[uploadId]',
-    why: 'cross-surface resumable video-upload protocol signs, completes and aborts parts',
-  },
-  {
     url: '/api/github/issues',
     why: 'authenticated GitHub integration API for issue readers and comment clients',
   },

@@ -320,7 +320,7 @@ export interface DirectoryAdapter {
   queryEntries?: (section: DirectorySectionKey, query: DirectoryQuery) => Promise<void> | void;
   loadMore?: (section: DirectorySectionKey) => Promise<void> | void;
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
-  install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  install?: (section: DirectorySectionKey, id: string) => Promise<string | void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   deleteEntry?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
@@ -340,8 +340,14 @@ export interface DirectoryAdapter {
   removeMarketplace?: (id: string) => Promise<void>;
   refreshMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;
-  uploadPluginArchive?: (file: File) => Promise<DirectoryUploadResult>;
-  uploadSkillFile?: (file: File) => Promise<DirectoryUploadResult>;
+  uploadPluginArchive?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
+  uploadSkillFile?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
   createPlugin?: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;

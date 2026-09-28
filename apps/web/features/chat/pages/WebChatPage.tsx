@@ -22,6 +22,7 @@ import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  createManagedCloudAgentRunClient,
   managedCloudConversationPath,
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
@@ -250,6 +251,10 @@ import type {
   ResearchPlanDecision,
   ResearchPlanOptions,
 } from '../components/research/ResearchActivity';
+import {
+  ResearchRunActionProvider,
+  type ResearchRunActionHandler,
+} from '../components/research/research-run-controls';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
@@ -266,7 +271,11 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
-import { approvedResearchSteps, completedResearchSteps } from '../utils/research-plan';
+import {
+  approvedResearchSteps,
+  completedResearchSteps,
+  researchResumeSources,
+} from '../utils/research-plan';
 import { notifyJobComplete, useLocalModelSelection } from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
@@ -4896,13 +4905,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
   const handleRetryResearch = useCallback(
-    async (id: string) => {
+    async (id: string, guidance?: string) => {
       if (!displayedConversationId || isStreaming) return;
       const assistantMsg = displayedMessages.find((m) => m.id === id);
       const research = assistantMsg?.metadata?.research;
       // Only an ended, unsuccessful run is retryable; anything else has no
       // Retry control rendered and must not be startable from here either.
-      if (!research || (research.phase !== 'error' && research.phase !== 'interrupted')) return;
+      if (
+        !research ||
+        (research.phase !== 'error' &&
+          research.phase !== 'interrupted' &&
+          research.phase !== 'paused')
+      ) {
+        return;
+      }
       const plan = planRegenerateRollback(displayedMessages, id);
       if (!plan) return;
       const userMsg = displayedMessages[plan.userIndex];
@@ -4930,12 +4946,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             attachments: userMsg.attachments,
             research: true,
             researchResume: {
-              sources: research.sourcesForRetry ?? [],
+              sources: researchResumeSources(
+                research.sourcesForRetry,
+                assistantMsg?.metadata?.searchResults,
+              ),
               steps: completedResearchSteps(research.steps),
               // Steps the failed run never reached are already approved, so the
               // retry resumes them instead of asking for the same plan twice.
               approvedSteps: approvedResearchSteps(research.steps),
+              ...(research.runConfig ? { deliverable: research.runConfig.deliverable } : {}),
+              ...(guidance ? { guidance } : {}),
             },
+            ...(research.runConfig ? { researchSources: research.runConfig.sources } : {}),
             onTurnCommitted,
           }),
         );
@@ -4956,6 +4978,64 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       setChatError,
     ],
   );
+
+  const pauseResearchRun = useCallback(
+    async (id: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      if (!runId) {
+        toast.error('This research cannot be paused. Stop it instead to keep what it found.');
+        return false;
+      }
+      try {
+        await createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        }).pauseRun(runId);
+        return true;
+      } catch {
+        toast.error('Could not pause this research. It is still running.');
+        return false;
+      }
+    },
+    [displayedMessages, getToken],
+  );
+
+  const pendingResearchGuidanceRef = useRef(new Map<string, string>());
+
+  const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
+    async (id, action) => {
+      if (action.kind === 'pause') return pauseResearchRun(id);
+      if (action.kind === 'steer') {
+        pendingResearchGuidanceRef.current.set(id, action.guidance);
+        if (await pauseResearchRun(id)) return true;
+        pendingResearchGuidanceRef.current.delete(id);
+        return false;
+      }
+      await handleRetryResearch(id, action.guidance);
+      return true;
+    },
+    [handleRetryResearch, pauseResearchRun],
+  );
+
+  useEffect(() => {
+    if (isStreaming) return;
+    for (const [id, guidance] of pendingResearchGuidanceRef.current) {
+      const phase = displayedMessages.find((m) => m.id === id)?.metadata?.research?.phase;
+      if (phase === 'paused') {
+        pendingResearchGuidanceRef.current.delete(id);
+        void handleRetryResearch(id, guidance);
+        return;
+      }
+      if (phase !== 'planning' && phase !== 'searching' && phase !== 'synthesizing') {
+        pendingResearchGuidanceRef.current.delete(id);
+        if (phase === 'complete') {
+          toast.info(
+            'The research finished before your guidance could be applied. Ask a follow-up to take it further.',
+          );
+        }
+      }
+    }
+  }, [displayedMessages, handleRetryResearch, isStreaming]);
 
   /**
    * Send a follow-up question about a saved research report as an ordinary
@@ -6169,44 +6249,46 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <ToolInputProvider value={resolveToolInput}>
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                          <ChatMessageList
-                            messages={chatMessages}
-                            transcriptPatch={chatMessageProjection.patch}
-                            currentTier={currentTier}
-                            conversationId={displayedConversationId}
-                            isLoading={isLoading && !isStreaming}
-                            isUserTyping={isUserTyping}
-                            onRegenerate={handleRegenerateMessage}
-                            onRetryResearch={handleRetryResearch}
-                            onResearchPlanDecision={handleResearchPlanDecision}
-                            onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                            retryingResearchMessageId={retryingResearchMessageId}
-                            onContinue={handleContinueMessage}
-                            onEdit={handleEditMessage}
-                            onDelete={handleDeleteMessage}
-                            onDeleteVariant={handleDeleteVariant}
-                            countVariantFollowers={countVariantFollowers}
-                            onReact={handleReactMessage}
-                            onPin={handlePinMessage}
-                            branchGroupsByMessageId={branchGroupsByMessageId}
-                            branchingMessageId={branchingMessageId}
-                            onBranch={createBranch}
-                            onSwitchBranch={switchBranch}
-                            variantInfoByMessageId={variantInfoByMessageId}
-                            onSelectVariant={handleSelectVariant}
-                            activeLeafId={activeLeafId}
-                            variantAnchorMessageId={variantAnchorMessageId}
-                            isConversationStreaming={isStreaming}
-                            onRegenerateImage={handleRegenerateImageInPlace}
-                            onResumeVideo={handleResumeVideo}
-                            onRetryVideo={handleRetryVideo}
-                            onSendMessage={setComposerPrefill}
-                            onPaywallUpgrade={handlePaywallRecovery}
-                            onPaywallDismiss={handlePaywallDismiss}
-                            onRegenerateWithModel={handleRegenerateWithModel}
-                            regenerateModelOptions={regenerateModelOptions}
-                            turnErrorActive={turnErrorNotice !== null}
-                          />
+                          <ResearchRunActionProvider value={handleResearchRunAction}>
+                            <ChatMessageList
+                              messages={chatMessages}
+                              transcriptPatch={chatMessageProjection.patch}
+                              currentTier={currentTier}
+                              conversationId={displayedConversationId}
+                              isLoading={isLoading && !isStreaming}
+                              isUserTyping={isUserTyping}
+                              onRegenerate={handleRegenerateMessage}
+                              onRetryResearch={handleRetryResearch}
+                              onResearchPlanDecision={handleResearchPlanDecision}
+                              onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                              retryingResearchMessageId={retryingResearchMessageId}
+                              onContinue={handleContinueMessage}
+                              onEdit={handleEditMessage}
+                              onDelete={handleDeleteMessage}
+                              onDeleteVariant={handleDeleteVariant}
+                              countVariantFollowers={countVariantFollowers}
+                              onReact={handleReactMessage}
+                              onPin={handlePinMessage}
+                              branchGroupsByMessageId={branchGroupsByMessageId}
+                              branchingMessageId={branchingMessageId}
+                              onBranch={createBranch}
+                              onSwitchBranch={switchBranch}
+                              variantInfoByMessageId={variantInfoByMessageId}
+                              onSelectVariant={handleSelectVariant}
+                              activeLeafId={activeLeafId}
+                              variantAnchorMessageId={variantAnchorMessageId}
+                              isConversationStreaming={isStreaming}
+                              onRegenerateImage={handleRegenerateImageInPlace}
+                              onResumeVideo={handleResumeVideo}
+                              onRetryVideo={handleRetryVideo}
+                              onSendMessage={setComposerPrefill}
+                              onPaywallUpgrade={handlePaywallRecovery}
+                              onPaywallDismiss={handlePaywallDismiss}
+                              onRegenerateWithModel={handleRegenerateWithModel}
+                              regenerateModelOptions={regenerateModelOptions}
+                              turnErrorActive={turnErrorNotice !== null}
+                            />
+                          </ResearchRunActionProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
                     </ToolInputProvider>

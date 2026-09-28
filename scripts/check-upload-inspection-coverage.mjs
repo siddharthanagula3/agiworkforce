@@ -20,17 +20,25 @@ const MODULE = 'apps/web/lib/security/upload-scan.ts';
 const API_ROOT = 'apps/web/app/api';
 
 /**
- * Routes that stage bytes for a second step. Each names the file that finishes
- * the upload, and the guard reads that file rather than trusting the claim.
+ * Routes that stage bytes for a second step. Each names every file that can
+ * finish the upload, and the guard reads each one rather than trusting the
+ * claim: one finishing path that skips inspection is enough to let bytes in.
  */
 const DEFERRED = [
   {
+    route: 'apps/web/app/api/files/uploads/[uploadId]/route.ts',
+    completedBy: [
+      'apps/web/lib/server/chat-attachment-completion.ts',
+      'apps/web/lib/server/project-knowledge-extraction.ts',
+    ],
+  },
+  {
     route: 'apps/web/app/api/uploads/chat-attachment/put/route.ts',
-    completedBy: 'apps/web/app/api/uploads/chat-attachment/complete/route.ts',
+    completedBy: ['apps/web/lib/server/chat-attachment-completion.ts'],
   },
   {
     route: 'apps/web/app/api/uploads/knowledge-file/put/route.ts',
-    completedBy: 'apps/web/lib/server/project-knowledge-extraction.ts',
+    completedBy: ['apps/web/lib/server/project-knowledge-extraction.ts'],
   },
 ];
 
@@ -75,16 +83,19 @@ for (const file of routeFiles(path.join(scanRoot, API_ROOT), fs, path)) {
 
   const deferred = deferredByRoute.get(route);
   if (deferred) {
-    const completing = path.join(scanRoot, deferred.completedBy);
-    const completingSource = fs.existsSync(completing) ? fs.readFileSync(completing, 'utf8') : null;
-    if (!deferralIsHonoured(completingSource)) {
+    const unhonoured = deferred.completedBy.filter((completedBy) => {
+      const completing = path.join(scanRoot, completedBy);
+      return !deferralIsHonoured(
+        fs.existsSync(completing) ? fs.readFileSync(completing, 'utf8') : null,
+      );
+    });
+    for (const completedBy of unhonoured) {
       failures.push(
-        `${route} defers inspection to ${deferred.completedBy}, which does not inspect the ` +
+        `${route} defers inspection to ${completedBy}, which does not inspect the ` +
           `bytes, so nothing on that path ever does`,
       );
-    } else {
-      inspected += 1;
     }
+    if (unhonoured.length === 0) inspected += 1;
     continue;
   }
 

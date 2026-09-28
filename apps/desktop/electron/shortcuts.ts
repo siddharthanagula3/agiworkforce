@@ -109,7 +109,9 @@ export function shortcutRegistrations(): ShortcutRegistration[] {
 }
 
 export function unregisterGarnishShortcuts(): void {
-  globalShortcut.unregisterAll();
+  for (const registration of registrations) {
+    if (registration.status === 'registered') globalShortcut.unregister(registration.accelerator);
+  }
   registrations = [];
   warnedAboutConflict = false;
 }

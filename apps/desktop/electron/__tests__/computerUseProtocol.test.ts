@@ -28,7 +28,10 @@ describe('frameHelperLines', () => {
 
 describe('readHelperReply', () => {
   it('reads a success and a failure', () => {
-    expect(readHelperReply('{"id":3,"ok":true}')).toEqual({ ok: true });
+    expect(readHelperReply('{"id":3,"ok":true}')).toEqual({
+      ok: true,
+      payload: { id: 3, ok: true },
+    });
     expect(readHelperReply('{"ok":false,"error":"Accessibility is off."}')).toEqual({
       ok: false,
       error: 'Accessibility is off.',

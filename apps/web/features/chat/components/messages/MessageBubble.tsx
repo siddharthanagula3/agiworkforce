@@ -1665,8 +1665,12 @@ const MessageBubbleComponent = function MessageBubble({
    */
   const formatCardType = useMemo(() => {
     if (isUser || message.isStreaming) return null;
-    return detectCardType(cleanedContent);
-  }, [isUser, message.isStreaming, cleanedContent]);
+    const detected = detectCardType(cleanedContent);
+    return detected === 'comparison' &&
+      interactiveCards?.some((card) => card.kind === 'product-comparison.v1')
+      ? null
+      : detected;
+  }, [isUser, message.isStreaming, cleanedContent, interactiveCards]);
 
   /**
    * A finished assistant turn that rendered NOTHING.
@@ -2020,6 +2024,7 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && message.metadata?.research && (
             <ResearchActivity
               research={message.metadata.research}
+              messageId={message.id}
               isStreaming={message.isStreaming ?? false}
               isRetrying={isRetryingResearch}
               {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}

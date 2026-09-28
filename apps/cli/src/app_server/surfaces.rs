@@ -9,9 +9,10 @@ use agiworkforce_command_registry::{CommandSource, RegistryCommand};
 use agiworkforce_protocol::developer_session::{
     CommandSourceKind, ContextInstructionsResponse, DeveloperAgentMode, DeveloperReasoningEffort,
     HookConfigScope, HookListResponse, HookSummary, InstructionFile, InstructionFileKind,
-    McpServerConfiguredStatus, McpServerListResponse, McpServerScope, McpServerSummary,
-    PluginListResponse, PluginScope, PluginSummary, SettingsReadResponse, SettingsWriteParams,
-    SkillCatalogScope, SkillConsentResponse, SkillListResponse, SkillSummary,
+    LocalModelProvider, LocalServerHealth, LocalServerStatus, McpServerConfiguredStatus,
+    McpServerListResponse, McpServerScope, McpServerSummary, MemoryAddParams, MemoryAddResponse,
+    MemoryScope, PluginListResponse, PluginScope, PluginSummary, SettingsReadResponse,
+    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillListResponse, SkillSummary,
     SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
@@ -19,7 +20,9 @@ use std::path::{Path, PathBuf};
 use crate::command_registry::registry_from_builtins_skills_and_prompts;
 use crate::config::CliConfig;
 use crate::features::hooks::hooks;
+use crate::local_models::{LocalProbeHealth, LocalProviderProbe};
 use crate::mcp::{McpCredentialState, McpServerOrigin};
+use crate::memory::{MemoryManager, MemoryTier};
 use crate::plugins::PluginsManager;
 use crate::skills::{self, SkillOrigin};
 
@@ -28,6 +31,8 @@ use crate::skills::{self, SkillOrigin};
 /// Every other command needs a live TUI or a thread, so it is listed with
 /// `runnable: false` rather than offered as a control that does nothing.
 const RUNNABLE_COMMANDS: [&str; 6] = ["skills", "plugins", "mcp", "hooks", "settings", "model"];
+
+const MAX_MEMORY_TEXT_CHARS: usize = 4_000;
 
 fn invalid(message: impl Into<String>) -> DeveloperSessionHostError {
     DeveloperSessionHostError::invalid_request(message)
@@ -567,6 +572,102 @@ pub fn run_command(
             "'{other}' needs a terminal or a thread; call the typed method for it, or run it in `agi`"
         ))),
     }
+}
+
+pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {
+    let invocation = text.trim_start();
+    if !invocation.starts_with('/') {
+        return Ok(None);
+    }
+    if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(invocation) {
+        return Ok(Some(prompt));
+    }
+    let (command, args) = invocation
+        .split_once(char::is_whitespace)
+        .unwrap_or((invocation, ""));
+    match skills::skill_command_prompt(command.trim_start_matches('/'), args) {
+        Some(Ok(prompt)) => Ok(Some(prompt)),
+        Some(Err(reason)) => Err(invalid(reason)),
+        None => Ok(None),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Local model servers
+// ---------------------------------------------------------------------------
+
+pub fn local_server_status(probe: &LocalProviderProbe) -> Option<LocalServerStatus> {
+    let (provider, name) = match probe.provider.as_str() {
+        "ollama" => (LocalModelProvider::Ollama, "Ollama"),
+        "lmstudio" => (LocalModelProvider::Lmstudio, "LM Studio"),
+        _ => return None,
+    };
+    let model_count = u32::try_from(probe.models.len()).unwrap_or(u32::MAX);
+    let (health, message) = match probe.health {
+        LocalProbeHealth::Running if model_count == 0 => (
+            LocalServerHealth::Running,
+            Some(format!(
+                "{name} is running but has no model yet. Download or load one, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Running => (LocalServerHealth::Running, None),
+        LocalProbeHealth::Unreachable => (
+            LocalServerHealth::NotRunning,
+            Some(format!(
+                "{name} is not running on this computer. Start it, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Faulty => (
+            LocalServerHealth::Unhealthy,
+            Some(format!(
+                "{name} answered but could not list its models. Restart it, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Blocked => (
+            LocalServerHealth::Blocked,
+            Some(format!(
+                "{name} is set to an address that is not on this computer, so the CLI does not contact it."
+            )),
+        ),
+    };
+    Some(LocalServerStatus {
+        provider,
+        health,
+        model_count,
+        message,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Memory
+// ---------------------------------------------------------------------------
+
+pub fn add_memory(
+    workspace_root: &Path,
+    params: MemoryAddParams,
+) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
+    let text = params.text.trim();
+    if text.is_empty() {
+        return Err(invalid("memory/add needs the text to remember"));
+    }
+    if text.chars().count() > MAX_MEMORY_TEXT_CHARS {
+        return Err(invalid(format!(
+            "A memory can be at most {MAX_MEMORY_TEXT_CHARS} characters"
+        )));
+    }
+    let scope = params.scope.unwrap_or(MemoryScope::Project);
+    let tier = match scope {
+        MemoryScope::User => MemoryTier::Global,
+        MemoryScope::Project => MemoryTier::Project,
+        MemoryScope::Local => MemoryTier::Local,
+    };
+    let path = MemoryManager::new(workspace_root)
+        .save(&tier, text)
+        .map_err(invalid)?;
+    Ok(MemoryAddResponse {
+        scope,
+        path: display(&path),
+    })
 }
 
 #[cfg(test)]
