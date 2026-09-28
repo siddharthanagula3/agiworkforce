@@ -42,7 +42,7 @@ import {
   accountUsageBlockEqual,
   type AccountUsageBlock,
 } from '@/features/chat/stores/account-usage-block';
-import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
+import type { AgiWorkExcludableTool, AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
 import {
   resolveLeafForSibling,
   resolveVisibleThread,
@@ -91,6 +91,7 @@ export interface ComposerToggleState {
 export interface AgiWorkComposerScope {
   constraints: string;
   deliverable: string;
+  excludedTools: AgiWorkExcludableTool[];
 }
 
 /**

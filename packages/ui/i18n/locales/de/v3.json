@@ -381,6 +381,9 @@
       "constraintsPlaceholder": "Grenzen, zu Vermeidendes, bevorzugte Quellen…",
       "deliverableLabel": "Ergebnis",
       "deliverablePlaceholder": "Das konkrete erwartete Ergebnis (eine Datei, eine Tabelle, eine Zusammenfassung…)",
+      "toolsLabel": "Werkzeuge für diese Aufgabe",
+      "toolWebSearch": "Websuche und Browsen",
+      "toolCodeExecution": "Codeausführung",
       "palette": {
         "label": "AGI Work-Werkzeuge",
         "searchPlaceholder": "Plugins, Ordner und Skills suchen",
