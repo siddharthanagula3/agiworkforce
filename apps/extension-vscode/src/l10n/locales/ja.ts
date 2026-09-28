@@ -461,6 +461,12 @@ const ja = {
     'ターミナルでその API キーを入力します。自分のキーのセッションとローカル セッションはこのキーで検索します。マネージド セッションには不要です。',
   'webSearchSetup.unavailable':
     'AGI Workforce: この AGI CLI は保存できる検索キーを示していません。VS Code から Web 検索を設定するには AGI CLI を更新してください。',
+  'pluginUpdate.action': '更新',
+  'pluginUpdate.progress': 'AGI Workforce: {name} を更新しています',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} はすでに最新です。',
+  'pluginUpdate.updated': 'AGI Workforce: {name} を更新しました。',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} を {to} に更新しました。',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} を {from} から {to} に更新しました。',
 };
 
 export default ja;

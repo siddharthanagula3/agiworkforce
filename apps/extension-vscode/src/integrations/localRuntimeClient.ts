@@ -158,6 +158,7 @@ const capabilitiesSchema = z.object({
   plan: z.boolean().optional(),
   savedPermissions: z.boolean().optional(),
   mcpInspect: z.boolean().optional(),
+  pluginUpdates: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -545,6 +546,16 @@ const pluginListResponseSchema = z.object({
     )
     .max(2_000),
 });
+const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
+  id: z.string().min(1).max(200),
+  updated: z.boolean(),
+  previousVersion: z.string().max(200).optional(),
+  version: z.string().max(200).optional(),
+  changedFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+});
+
+export type PluginUpdate = z.infer<typeof pluginUpdateResponseSchema>;
+
 const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth']);
 const mcpServerListResponseSchema = z.object({
   servers: z
@@ -1500,6 +1511,13 @@ export class LocalRuntimeClient {
     return pluginListResponseSchema.parse(
       await connection.request('plugins/install', params, INSTALL_TIMEOUT_MS),
     ) as PluginListResponse;
+  }
+
+  async updatePlugin(id: string): Promise<PluginUpdate> {
+    const connection = await this.readyConnection();
+    return pluginUpdateResponseSchema.parse(
+      await connection.request('plugins/update', { id }, INSTALL_TIMEOUT_MS),
+    );
   }
 
   async removePlugin(id: string): Promise<PluginListResponse> {
