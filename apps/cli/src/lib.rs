@@ -424,6 +424,12 @@ pub struct Cli {
     #[arg(long = "add-dir", value_name = "DIR")]
     add_dir: Vec<String>,
 
+    /// Run this session in its own git worktree, .agiworkforce/worktrees/<NAME> on branch
+    /// worktree-<NAME>, so parallel sessions never edit the same files. Without a NAME one is made
+    /// up; a clean worktree with a made-up name is removed when the session ends.
+    #[arg(long = "worktree", short = 'w', value_name = "NAME", num_args = 0..=1, default_missing_value = "")]
+    worktree: Option<String>,
+
     /// Operate on this repository instead of the current directory, the way
     /// `git -C` does. Applied before config, trust and workspace roots resolve.
     #[arg(long = "repo", short = 'C', value_name = "PATH", global = true)]
@@ -3831,6 +3837,62 @@ pub async fn run_main() -> Result<()> {
         enter_repo_directory(repo)?;
     }
 
+    let interactive = cli.prompt.is_none() && cli.command.is_none() && !cli.stdin;
+    let session_worktree = match cli.worktree.as_deref() {
+        Some(requested) => Some(enter_session_worktree(requested).await?),
+        None => None,
+    };
+    let outcome = run_cli(cli).await;
+    if let Some(worktree) = session_worktree.filter(|_| interactive) {
+        settle_session_worktree(&worktree).await;
+    }
+    outcome
+}
+
+async fn enter_session_worktree(requested: &str) -> Result<runtime::worktree::SessionWorktree> {
+    let start = std::env::current_dir()?;
+    let worktree = runtime::worktree::open_session_worktree(&start, Some(requested))
+        .await
+        .map_err(|error| anyhow::anyhow!("--worktree: {error:#}"))?;
+    std::env::set_current_dir(&worktree.path).map_err(|error| {
+        anyhow::anyhow!(
+            "--worktree: cannot enter {}: {error}",
+            worktree.path.display()
+        )
+    })?;
+    eprintln!(
+        "{} {} on branch {}",
+        if worktree.created {
+            "Working in the new worktree"
+        } else {
+            "Working in the worktree"
+        },
+        worktree.path.display(),
+        worktree.branch
+    );
+    Ok(worktree)
+}
+
+async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) {
+    let path = worktree.path.display();
+    match runtime::worktree::session_worktree_has_work(worktree).await {
+        Ok(false) if worktree.generated => {
+            match runtime::worktree::remove_session_worktree(worktree, false).await {
+                Ok(()) => eprintln!("Removed the worktree {path}: nothing changed in it."),
+                Err(error) => eprintln!("Kept the worktree {path}: {error:#}"),
+            }
+        }
+        Ok(_) => eprintln!(
+            "Kept the worktree {path} on branch {}. Return to it with: agi --worktree {} --continue. Remove it with: git worktree remove {path}",
+            worktree.branch, worktree.name
+        ),
+        Err(error) => eprintln!(
+            "Kept the worktree {path} because its state could not be checked: {error:#}"
+        ),
+    }
+}
+
+async fn run_cli(cli: Cli) -> Result<()> {
     // Install the single logging owner before anything else runs so `-v/--verbose`
     // and `--debug[=categories]` actually change what `tracing` emits. Without
     // this, every `tracing::{debug,info,warn}` call in the crate went nowhere and

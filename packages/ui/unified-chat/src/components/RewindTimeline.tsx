@@ -229,7 +229,7 @@ export function RewindTimeline({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <span className="text-xs font-mono text-foreground/80 font-medium">
+                        <span className="text-xs font-mono text-foreground font-medium">
                           {storeLabel ?? checkpoint.toolName}
                         </span>
                         {/* Show toolName as sub-label when a store label is present */}
