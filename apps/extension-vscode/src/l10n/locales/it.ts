@@ -442,6 +442,16 @@ const it = {
     'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} di strumenti.',
   'mcp.connected_other':
     'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumenti.',
+  'checkpoints.trackedFiles_one': '{count} file tracciato',
+  'checkpoints.trackedFiles_many': '{count} di file tracciati',
+  'checkpoints.trackedFiles_other': '{count} file tracciati',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: impossibile ripristinare {count} di file: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} file è tornato al checkpoint.',
+  'checkpoints.filesRestored_many': 'AGI Workforce: {count} di file sono tornati al checkpoint.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} file sono tornati al checkpoint.',
 };
 
 export default it;

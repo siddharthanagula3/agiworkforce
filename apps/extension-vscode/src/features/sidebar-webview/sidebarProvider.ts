@@ -270,6 +270,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.activeRoute();
   }
 
+  public checkpointsAvailable(): Promise<boolean> {
+    return this._stateManager.checkpointsAvailable();
+  }
+
+  public showCheckpoints(): Promise<void> {
+    return this._stateManager.showCheckpoints();
+  }
+
   public refreshRuntimeStatus(): void {
     void this._stateManager.refreshRuntimeStatus();
   }

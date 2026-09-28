@@ -254,6 +254,9 @@ const zh = {
   'webview.answerTokens_other': '{model} · {count} 个令牌（输入 {input}，输出 {output}）',
   'webview.moreLinesHidden_other': '另有 {count} 行未显示',
   'mcp.connected_other': 'AGI Workforce：{name} 已在 {ms} 毫秒内连接，提供 {count} 个工具。',
+  'checkpoints.trackedFiles_other': '已跟踪 {count} 个文件',
+  'checkpoints.skippedFiles_other': 'AGI Workforce：有 {count} 个文件无法还原：{files}',
+  'checkpoints.filesRestored_other': 'AGI Workforce：已将 {count} 个文件还原到检查点。',
 };
 
 export default zh;

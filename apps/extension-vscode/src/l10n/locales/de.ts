@@ -383,6 +383,16 @@ const de = {
     'AGI Workforce: {name} hat sich in {ms} ms verbunden und bietet {count} Tool.',
   'mcp.connected_other':
     'AGI Workforce: {name} hat sich in {ms} ms verbunden und bietet {count} Tools.',
+  'checkpoints.trackedFiles_one': '{count} Datei erfasst',
+  'checkpoints.trackedFiles_other': '{count} Dateien erfasst',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce: {count} Datei konnte nicht wiederhergestellt werden: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} Dateien konnten nicht wiederhergestellt werden: {files}',
+  'checkpoints.filesRestored_one':
+    'AGI Workforce: {count} Datei wurde auf den Prüfpunkt zurückgesetzt.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} Dateien wurden auf den Prüfpunkt zurückgesetzt.',
 };
 
 export default de;

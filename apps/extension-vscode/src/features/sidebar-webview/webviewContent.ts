@@ -6012,6 +6012,7 @@ export function getWebviewContent(
             addMessage('user', historyMessage.text || '');
           }
         }
+        if (msg.payload.plan) upsertPlanCard(msg.payload.plan);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.

@@ -440,6 +440,20 @@ const pt = {
     'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} de ferramentas.',
   'mcp.connected_other':
     'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} ferramentas.',
+  'checkpoints.trackedFiles_one': '{count} arquivo rastreado',
+  'checkpoints.trackedFiles_many': '{count} de arquivos rastreados',
+  'checkpoints.trackedFiles_other': '{count} arquivos rastreados',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce: não foi possível restaurar {count} arquivo: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: não foi possível restaurar {count} de arquivos: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: não foi possível restaurar {count} arquivos: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} arquivo voltou ao ponto de verificação.',
+  'checkpoints.filesRestored_many':
+    'AGI Workforce: {count} de arquivos voltaram ao ponto de verificação.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} arquivos voltaram ao ponto de verificação.',
 };
 
 export default pt;
