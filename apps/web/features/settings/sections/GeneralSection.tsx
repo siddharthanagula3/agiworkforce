@@ -12,6 +12,11 @@ import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
 import { useStyleStore } from '@/features/chat/stores/style-store';
 import { useModelStore } from '@shared/stores/model-store';
+import {
+  isModelOnPlan,
+  useDefaultModelPreference,
+  useKnownPlanTier,
+} from '@features/chat/lib/default-model-preference';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
@@ -251,7 +256,11 @@ export function GeneralSection() {
 
     try {
       const stored = await fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE);
-      setPreferredName(storedText(stored.preferredName) ?? fallbackPreferredName);
+      setPreferredName(
+        typeof stored.preferredName === 'string'
+          ? stored.preferredName.trim()
+          : fallbackPreferredName,
+      );
       setWorkDescription(
         (storedText(stored.workDescription) as WorkDescription | undefined) ??
           (serverProfile?.work_description as WorkDescription | null) ??
@@ -471,7 +480,7 @@ export function GeneralSection() {
     if (!profilePreferencesReady) return;
     const trimmedFull = displayName.trim();
     if (!trimmedFull) return;
-    const trimmedPreferred = preferredName.trim() || (trimmedFull.split(' ')[0] ?? trimmedFull);
+    const trimmedPreferred = preferredName.trim();
     setSaving(true);
     setSaveError(null);
     try {
@@ -587,7 +596,7 @@ export function GeneralSection() {
           {/* What should AGI call you */}
           <FieldRow
             label="What should AGI call you?"
-            helper="The assistant uses this in greetings and follow-ups."
+            helper="The assistant uses this in greetings and follow-ups. Leave it empty to be greeted without a name."
             htmlFor="general-preferred-name"
           >
             <input
@@ -1008,28 +1017,67 @@ function PreferenceSyncNotice() {
   );
 }
 
-function DefaultModelRow() {
-  const selectedModelId = useModelStore((state) => state.selectedModelId);
-  const setSelectedModel = useModelStore((state) => state.setSelectedModel);
-  const availableModels = useModelStore((state) => state.availableModels);
+const LAST_USED_MODEL_VALUE = '';
 
-  const selectable = availableModels.filter((model) => model.availability !== 'coming_soon');
-  if (selectable.length === 0) return null;
+function DefaultModelRow() {
+  const availableModels = useModelStore((state) => state.availableModels);
+  const tier = useKnownPlanTier();
+  const preference = useDefaultModelPreference(availableModels.length > 0);
+  const options = useMemo(
+    () => (tier === null ? [] : availableModels.filter((model) => isModelOnPlan(model, tier))),
+    [availableModels, tier],
+  );
+  if (availableModels.length === 0) return null;
+
+  const savedDefault = preference.modelId
+    ? options.find((model) => model.id === preference.modelId)
+    : undefined;
+  const savedDefaultOffPlan =
+    preference.status === 'ready' && preference.modelId !== null && tier !== null && !savedDefault;
 
   return (
-    <Row label="Default model">
-      <select
-        value={selectedModelId}
-        onChange={(event) => setSelectedModel(event.target.value)}
-        aria-label="Default model"
-        className={`${SELECT_CLASS} max-w-[220px]`}
-      >
-        {selectable.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.name}
-          </option>
-        ))}
-      </select>
+    <Row
+      label="Default model"
+      hint={
+        savedDefaultOffPlan
+          ? 'Your saved default is not on your current plan, so new chats start with the model you used last.'
+          : 'New chats start with this model. Only models your plan includes are listed.'
+      }
+    >
+      <div className="flex flex-col items-stretch gap-1 sm:items-end">
+        <select
+          value={savedDefault?.id ?? LAST_USED_MODEL_VALUE}
+          disabled={tier === null || preference.status !== 'ready' || preference.saving}
+          onChange={(event) => {
+            void preference
+              .save(event.target.value || null)
+              .catch((error: unknown) =>
+                toast.error(toUserMessage(error, 'Your default model was not saved. Try again.')),
+              );
+          }}
+          aria-label="Default model"
+          className={`${SELECT_CLASS} max-w-[220px]`}
+        >
+          <option value={LAST_USED_MODEL_VALUE}>Last used</option>
+          {options.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name}
+            </option>
+          ))}
+        </select>
+        {preference.status === 'error' && (
+          <p role="alert" className="flex items-center gap-2 text-xs text-danger">
+            {preference.error}
+            <button
+              type="button"
+              onClick={preference.retry}
+              className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+            >
+              Try again
+            </button>
+          </p>
+        )}
+      </div>
     </Row>
   );
 }
