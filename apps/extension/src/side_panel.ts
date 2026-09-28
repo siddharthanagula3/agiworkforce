@@ -8,6 +8,7 @@ import {
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   resolveChatAttachmentMimeType,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
   type ManagedCloudChatAttachment,
@@ -2604,6 +2605,35 @@ function injectStyles(): void {
     .sp-agent-approval__recorded { color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-agent-approval__error { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-agent-approval__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-agent-approval__stakes {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px 10px;
+      margin: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-agent-approval__stakes dt { color: var(--agi-ext-text-muted); }
+    .sp-agent-approval__stakes dd { margin: 0; color: var(--agi-ext-text); font-weight: 600; overflow-wrap: anywhere; }
+    .sp-agent-approval__guidance {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 52px;
+      padding: 6px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      resize: vertical;
+    }
+    .sp-agent-approval__guidance::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-agent-approval__guidance:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-agent-approval__button {
       border: 1px solid var(--agi-ext-border);
       border-radius: var(--corner-control);
@@ -5419,6 +5449,44 @@ function scrollToBottom(): void {
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
+const toolsAllowedForChat = new Map<string, Set<string>>();
+const approvalGuidanceDrafts = new Map<string, string>();
+
+function setApprovalGuidanceDraft(toolCallId: string, guidance: string): void {
+  if (guidance.trim()) approvalGuidanceDrafts.set(toolCallId, guidance);
+  else approvalGuidanceDrafts.delete(toolCallId);
+}
+
+function approveToolsAllowedForChat(assistantMessageId: string): void {
+  const allowed = toolsAllowedForChat.get(_ctx.conversationId);
+  if (!allowed?.size) return;
+  const assistant = _ctx.messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  for (const entry of assistant?.agentActivity?.entries ?? []) {
+    if (
+      entry.kind !== 'tool' ||
+      entry.status !== 'awaiting-approval' ||
+      !entry.approval ||
+      entry.approval.decision ||
+      entry.approval.riskLevel === 'high' ||
+      entry.inputRequest ||
+      !allowed.has(entry.name) ||
+      assistant?.cloudApprovalDecisions?.[entry.toolCallId]
+    ) {
+      continue;
+    }
+    resolveManagedToolApproval(assistantMessageId, entry.toolCallId, 'approved');
+  }
+}
+
+function approveToolForChat(assistantMessageId: string, toolName: string): void {
+  const allowed = toolsAllowedForChat.get(_ctx.conversationId) ?? new Set<string>();
+  allowed.add(toolName);
+  toolsAllowedForChat.set(_ctx.conversationId, allowed);
+  approveToolsAllowedForChat(assistantMessageId);
+}
+
 function resolveManagedToolApproval(
   assistantMessageId: string,
   toolCallId: string,
@@ -5466,6 +5534,14 @@ function resolveManagedToolApproval(
     tool_call_id: entry.toolCallId,
     decision: assistant.cloudApprovalDecisions?.[entry.toolCallId] ?? ('rejected' as const),
   }));
+  const guidance = pendingCalls
+    .flatMap((entry) => {
+      const draft = approvalGuidanceDrafts.get(entry.toolCallId)?.trim();
+      approvalGuidanceDrafts.delete(entry.toolCallId);
+      return draft ? [draft] : [];
+    })
+    .join('\n\n')
+    .slice(0, TOOL_APPROVAL_GUIDANCE_MAX_LENGTH);
   assistant.streaming = true;
   _ctx.currentStreamId = assistant.id;
   ownerByStreamId.set(assistant.id, { ...owner });
@@ -5484,6 +5560,7 @@ function resolveManagedToolApproval(
       id: assistant.id,
       cloudRun: run,
       toolApprovals,
+      ...(guidance ? { guidance } : {}),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (_ctx.currentStreamId !== assistant.id) return;
@@ -5620,8 +5697,11 @@ function renderMessages(): void {
         buildBubbleWithTools(msg, {
           approvalDecisions: msg.cloudApprovalDecisions,
           approvalError: msg.cloudApprovalError,
+          approvalGuidance: Object.fromEntries(approvalGuidanceDrafts),
           onResolveApproval: (toolCallId, decision) =>
             resolveManagedToolApproval(msg.id, toolCallId, decision),
+          onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
+          onApprovalGuidanceChange: setApprovalGuidanceDraft,
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -13480,6 +13560,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
+    approveToolsAllowedForChat(chunk.id);
     sendNextFollowUp();
   }
 });

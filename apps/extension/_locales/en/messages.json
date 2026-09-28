@@ -2456,5 +2456,33 @@
   "spShortcutDelete": {
     "message": "Delete",
     "description": "Accessible name of the delete button on a saved shortcut or recorded workflow"
+  },
+  "spApprovalAllowForChat": {
+    "message": "Allow for this chat",
+    "description": "Button that approves a tool call and answers later approvals for the same tool in this chat"
+  },
+  "spApprovalAllowForChatNamed": {
+    "message": "Allow $NAME$ for this chat",
+    "description": "Accessible name of the allow-for-this-chat button for a named tool",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "send_email"
+      }
+    }
+  },
+  "spApprovalGuidancePlaceholder": {
+    "message": "Add guidance to steer the run (optional)",
+    "description": "Placeholder of the optional note sent with an approval decision"
+  },
+  "spApprovalGuidanceNamed": {
+    "message": "Guidance for $NAME$",
+    "description": "Accessible name of the optional note sent with an approval decision for a named tool",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "send_email"
+      }
+    }
   }
 }

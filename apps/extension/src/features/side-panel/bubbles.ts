@@ -4,11 +4,15 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
+import {
+  isAllowedMapSearchProviderUrl,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 import {
   agentTaskStateLabel,
   getModelMetadataById,
   resolveInteractiveCardRenderer,
+  toolApprovalStakes,
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
@@ -65,7 +69,10 @@ export interface RegenerateModelOption {
 export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
   approvalError?: string;
+  approvalGuidance?: Readonly<Record<string, string>>;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
+  onApproveForChat?: (toolCallId: string, toolName: string) => void;
+  onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -688,6 +695,49 @@ function appendArtifactAction(parent: HTMLElement, entry: AgentActivityArtifactE
   parent.appendChild(link);
 }
 
+function approvalArguments(input: unknown): Record<string, unknown> | undefined {
+  let value = input;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function buildApprovalStakes(entry: AgentActivityToolEntry): HTMLElement | null {
+  const stakes = toolApprovalStakes(entry.name, approvalArguments(entry.input));
+  if (stakes.length === 0) return null;
+  const list = el('dl', { class: 'sp-agent-approval__stakes' });
+  for (const stake of stakes) {
+    list.appendChild(el('dt', {}, stake.label));
+    list.appendChild(el('dd', {}, stake.value));
+  }
+  return list;
+}
+
+function buildApprovalGuidance(
+  entry: AgentActivityToolEntry,
+  options: BubbleInteractionOptions,
+): HTMLElement | null {
+  const onChange = options.onApprovalGuidanceChange;
+  if (!onChange) return null;
+  const guidance = el('textarea', {
+    class: 'sp-agent-approval__guidance',
+    rows: '2',
+    maxlength: String(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH),
+    placeholder: t('spApprovalGuidancePlaceholder'),
+    'aria-label': t('spApprovalGuidanceNamed', [entry.name]),
+  });
+  guidance.value = options.approvalGuidance?.[entry.toolCallId] ?? '';
+  guidance.addEventListener('input', () => onChange(entry.toolCallId, guidance.value));
+  return guidance;
+}
+
 function appendApprovalActions(
   parent: HTMLElement,
   entry: AgentActivityToolEntry,
@@ -705,6 +755,8 @@ function appendApprovalActions(
         : t('spApprovalRequired'),
     ),
   );
+  const stakes = buildApprovalStakes(entry);
+  if (stakes) approval.appendChild(stakes);
   if (options.approvalError) {
     approval.appendChild(
       el('div', { class: 'sp-agent-approval__error', role: 'alert' }, options.approvalError),
@@ -719,6 +771,8 @@ function appendApprovalActions(
       ),
     );
   } else if (options.onResolveApproval) {
+    const guidance = buildApprovalGuidance(entry, options);
+    if (guidance) approval.appendChild(guidance);
     const actions = el('div', { class: 'sp-agent-approval__actions' });
     const approve = el(
       'button',
@@ -732,6 +786,23 @@ function appendApprovalActions(
     approve.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'approved'),
     );
+    actions.appendChild(approve);
+    const onApproveForChat = options.onApproveForChat;
+    if (onApproveForChat && entry.approval.riskLevel !== 'high') {
+      const approveForChat = el(
+        'button',
+        {
+          class: 'sp-agent-approval__button',
+          type: 'button',
+          'aria-label': t('spApprovalAllowForChatNamed', [entry.name]),
+        },
+        t('spApprovalAllowForChat'),
+      );
+      approveForChat.addEventListener('click', () =>
+        onApproveForChat(entry.toolCallId, entry.name),
+      );
+      actions.appendChild(approveForChat);
+    }
     const decline = el(
       'button',
       {
@@ -744,7 +815,6 @@ function appendApprovalActions(
     decline.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'rejected'),
     );
-    actions.appendChild(approve);
     actions.appendChild(decline);
     approval.appendChild(actions);
   } else {

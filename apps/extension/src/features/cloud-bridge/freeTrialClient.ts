@@ -1534,13 +1534,19 @@ export function streamManagedChatApproval(
   runId: string,
   toolApprovals: ToolApprovalDecisionWire[],
   token: string,
-  options: Omit<ManagedChatStreamOptions, 'approvalResume' | 'model' | 'workMode'> = {},
+  {
+    guidance,
+    ...options
+  }: Omit<ManagedChatStreamOptions, 'approvalResume' | 'model' | 'workMode'> & {
+    guidance?: string;
+  } = {},
 ): AsyncGenerator<FreeTrialChunk> {
   return streamFreeChat([], token, {
     ...options,
     approvalResume: {
       run_id: runId,
       tool_approvals: toolApprovals,
+      ...(guidance ? { guidance } : {}),
     },
   });
 }
