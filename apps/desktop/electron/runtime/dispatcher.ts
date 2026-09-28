@@ -41,7 +41,11 @@ import {
   type DeveloperAgentMode,
   normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
-import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isBrowserCommand,
+  isCloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   BrowserBridgeError,
   installHostForPairedExtension,
@@ -135,6 +139,7 @@ import {
 } from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
+  addDeveloperMemory,
   answerDeveloperApproval,
   interruptDeveloperTurn,
   listDeveloperPlugins,
@@ -831,13 +836,7 @@ function declareDeviceHost(): DesktopHostDeclaration {
   };
 }
 
-async function localModelsAvailable(): Promise<boolean> {
-  if (getPermissionState('local.inference', { kind: 'global' }) === 'denied') return false;
-  const servers = await listLocalServers();
-  return servers.some((server) => server.reachable && server.modelCount > 0);
-}
-
-async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
+function describeDeviceForRegistry(): DeviceRegistryProfile {
   const identity = deviceIdentity();
   return {
     installId: identity.deviceId,
@@ -849,7 +848,7 @@ async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
     capabilities: {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
-      localModels: await localModelsAvailable(),
+      localModels: !localInferenceCommands.has('local_chat_start'),
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },
@@ -1116,13 +1115,27 @@ async function execute(
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
       const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
+      const maxTurns = optionalNumber(args, 'maxTurns');
+      if (maxTurns !== undefined && !isCloudCodeTurnStepBound(maxTurns)) {
+        throw new InvalidArguments(
+          `"maxTurns" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}.`,
+        );
+      }
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
         ...(agentMode ? { agentMode } : {}),
+        ...(maxTurns === undefined ? {} : { maxTurns }),
       });
+    }
+    case 'developer_memory_add': {
+      const scope = requireString(args, 'scope');
+      if (scope !== 'project' && scope !== 'user') {
+        throw new InvalidArguments('"scope" must be project or user.');
+      }
+      return addDeveloperMemory(requireString(args, 'rootId'), requireString(args, 'text'), scope);
     }
     case 'developer_turn_interrupt':
       return interruptDeveloperTurn(

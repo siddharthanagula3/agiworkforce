@@ -10,7 +10,7 @@ export const TEMPORARY_CHAT_NOT_SAVED = 'Messages in a temporary chat are not sa
  * it. Every clause is kept by code, not by this string: history by
  * `persistConversationMessage` refusing a temporary conversation, search by
  * the `is_temporary` filters in `/api/search`, the retrieval index and the sync
- * pull, memory by `enrichManagedMemoryContext` returning early on `isTemporary`,
+ * pull, memory by `resolveInteractiveTurnContext` leaving it out of a temporary turn,
  * the Library by `media_assets.temporary_chat` and the purge cron behind it, and
  * connectors by `withoutStandingApprovals` on a temporary turn. Change a clause
  * here only with the code that keeps it.

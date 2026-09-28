@@ -58,6 +58,85 @@ export function takeCaptureBackFromClipboard(priorText: string): void {
   clipboard.clear();
 }
 
+async function pasteIntoChat(
+  mainWindow: BrowserWindow | null,
+  image: Electron.NativeImage,
+): Promise<boolean> {
+  await clipboard.write([
+    new ClipboardItem({
+      'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }),
+    }),
+  ]);
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    notify('Screenshot copied', 'The chat window is closed, so the image is on your clipboard.');
+    return false;
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+
+  await delay(PASTE_DELAY_MS);
+  if (mainWindow.isDestroyed()) return true;
+
+  if (await focusPageComposer(mainWindow)) {
+    mainWindow.webContents.paste();
+    return true;
+  }
+  notify(
+    'Screenshot copied to clipboard',
+    'The chat composer was not ready, so the image was not attached. Press paste in the composer to add it.',
+  );
+  return false;
+}
+
+export async function captureWindowToChat(
+  mainWindow: BrowserWindow | null,
+  frontWindowId: () => Promise<number | null>,
+): Promise<void> {
+  if (capturing) return;
+  capturing = true;
+
+  const priorText = await clipboard.readText();
+  let captureOnClipboard = false;
+  let leftForTheUserToPaste = false;
+
+  try {
+    warnIfScreenCaptureBlocked();
+    const windowId = await frontWindowId();
+    if (windowId === null) {
+      notify('Window capture failed', 'No other app window is in front to capture.');
+      return;
+    }
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      thumbnailSize: physicalCaptureSize(display),
+    });
+    const source = sources.find((candidate) => candidate.id.startsWith(`window:${windowId}:`));
+    if (!source || source.thumbnail.isEmpty()) {
+      notify(
+        'Window capture failed',
+        'That window could not be captured. Check Screen & System Audio Recording permission for AGI Cloud, then relaunch.',
+      );
+      return;
+    }
+    captureOnClipboard = true;
+    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, source.thumbnail));
+  } catch (error) {
+    console.error('[screenshot] window capture failed:', error);
+    notify('Window capture failed', 'The window in front could not be captured.');
+  } finally {
+    if (captureOnClipboard && !leftForTheUserToPaste) {
+      await delay(CLIPBOARD_RESTORE_MS);
+      takeCaptureBackFromClipboard(priorText);
+    }
+    capturing = false;
+  }
+}
+
 export async function captureToChat(mainWindow: BrowserWindow | null): Promise<void> {
   if (capturing) return;
   capturing = true;
@@ -92,37 +171,8 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
       return;
     }
 
-    await clipboard.write([
-      new ClipboardItem({
-        'image/png': new Blob([new Uint8Array(source.thumbnail.toPNG())], { type: 'image/png' }),
-      }),
-    ]);
     captureOnClipboard = true;
-
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      leftForTheUserToPaste = true;
-      notify('Screenshot copied', 'The chat window is closed, so the image is on your clipboard.');
-      return;
-    }
-
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-    mainWindow.webContents.focus();
-
-    await delay(PASTE_DELAY_MS);
-    if (mainWindow.isDestroyed()) return;
-
-    if (await focusPageComposer(mainWindow)) {
-      mainWindow.webContents.paste();
-    } else {
-      leftForTheUserToPaste = true;
-      notify(
-        'Screenshot copied to clipboard',
-        'The chat composer was not ready, so the image was not attached. Press paste in the composer to add it.',
-      );
-      return;
-    }
+    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, source.thumbnail));
   } catch (error) {
     console.error('[screenshot] capture failed:', error);
     notify('Screenshot failed', 'The screen could not be captured.');

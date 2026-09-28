@@ -652,7 +652,7 @@ describe('device registry and remote control commands', () => {
         capabilities: {
           browser: true,
           computerUse: true,
-          localModels: true,
+          localModels: false,
           localMcp: false,
           remoteControl: true,
         },

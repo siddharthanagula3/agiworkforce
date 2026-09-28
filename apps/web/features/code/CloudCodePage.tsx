@@ -15,6 +15,7 @@ import type {
   CloudCodeAvailability,
   CloudCodeRuntime,
   CloudCodeSession,
+  CloudCodeShareVisibility,
   CloudCodeTerminalEntry,
   CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
@@ -82,6 +83,7 @@ import {
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
+import { CodeShareDialog } from './components/CodeShareDialog';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -134,6 +136,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const [shareOpen, setShareOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -765,6 +768,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     [api, replaceSession, selectedSession],
   );
 
+  const handleChangeSharing = useCallback(
+    async (visibility: CloudCodeShareVisibility) => {
+      const session = selectedSession;
+      if (!session) return;
+      replaceSession(await api.setSharing(session.id, visibility));
+    },
+    [api, replaceSession, selectedSession],
+  );
+
   const requestDelete = useCallback(() => {
     const session = selectedSession;
     if (!session) return;
@@ -1103,9 +1115,16 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                             setTitleDraft(selectedSession.title);
                             setRenaming(true);
                           }}
+                          onShare={() => setShareOpen(true)}
                           onSetArchived={(next) => void handleSetArchived(next)}
                           onDeleteSession={requestDelete}
                           onCloseSession={requestClose}
+                        />
+                        <CodeShareDialog
+                          session={selectedSession}
+                          open={shareOpen}
+                          onOpenChange={setShareOpen}
+                          onChangeVisibility={handleChangeSharing}
                         />
                       </div>
                     </>

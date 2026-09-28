@@ -30,10 +30,10 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
 | cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
-| vscode | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
+| vscode | partial | Waits on p-desktop-cli: turn/start needs routing_profile (auto, speed, quality, cost) and managed Auto must resolve with the account's plan instead of tier free; VS Code then adds Instant, Best and Economy under Auto | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1385-1385`
 
 ## S79.06: Quality-first profile.
 
@@ -45,7 +45,7 @@ Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/ty
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
 | cli | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-| vscode | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
+| vscode | partial | Same as S79.05: needs routing_profile on the CLI app-server's turn/start and plan-aware managed Auto | ui |
 | chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 
 Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:32-32`
@@ -59,9 +59,9 @@ Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
-| vscode | partial | VS Code offers only Auto; the economy profile is applied by plan, not chosen. | ui |
+| vscode | partial | Same as S79.05: needs routing_profile on the CLI app-server's turn/start and plan-aware managed Auto | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:32-32`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1385-1385`
 
 ## S79.08: Privacy-first profile.
 
