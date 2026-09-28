@@ -578,11 +578,16 @@ impl CliError {
                      `agi plans` to see what each plan includes. {PAID_UPGRADES_ARE_STAGED}"
                 ),
             },
-            CliError::ModelUnavailable { .. } => {
-                "Choose another model, or try again shortly; `agi models list` shows what is \
-                 available now."
-                    .to_string()
-            }
+            CliError::ModelUnavailable { model } => match plan_alternative(model) {
+                Some(alternative) => format!(
+                    "Switch to {} with `/model {alternative}` (or `--model {alternative}`), or try \
+                     again shortly; `agi models list` shows what is available now.",
+                    crate::model_catalog::display_name(&alternative)
+                ),
+                None => "Choose another model, or try again shortly; `agi models list` shows \
+                         what is available now."
+                    .to_string(),
+            },
             CliError::Paywall { .. } => format!(
                 "Run `agi usage` to see when the limit resets, or switch to your own provider \
                  key with `--provider <name>`. Run `agi plans` to see what each plan includes. \
@@ -600,6 +605,18 @@ impl CliError {
             ),
         }
     }
+}
+
+fn plan_alternative(unavailable: &str) -> Option<String> {
+    crate::models::gateway_models::cached_picker_models()
+        .into_iter()
+        .map(|model| model.id)
+        .find(|id| id != unavailable)
+        .or_else(|| {
+            crate::tier_cache::read_tier_cache()
+                .and_then(|cached| crate::model_catalog::standard_model_for_tier(&cached.tier))
+                .filter(|id| id != unavailable)
+        })
 }
 
 fn usage_limit_hint(

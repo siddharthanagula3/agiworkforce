@@ -578,7 +578,7 @@ describe('installPlugin', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(
       installPlugin({ kind: 'directory', pluginId: 'frontend-design' }, 'token'),
-    ).resolves.toEqual({ status: 'installed' });
+    ).resolves.toEqual({ status: 'installed', dependencies: [], connectors: null });
     expect(fetchMock).toHaveBeenCalledWith('/api/plugins/marketplace-installations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'token' },

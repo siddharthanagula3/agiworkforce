@@ -6,13 +6,23 @@ import { useThemeColors } from '@/src/ui/theme';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
+const MAX_PREVIEW_SNIPPET_LENGTH = 300;
+
+function previewSnippet(snippet: string | undefined): string {
+  const text = snippet?.trim() ?? '';
+  return text.length > MAX_PREVIEW_SNIPPET_LENGTH
+    ? `${text.slice(0, MAX_PREVIEW_SNIPPET_LENGTH).trimEnd()}…`
+    : text;
+}
+
 interface CitationChipProps {
   index: number;
   title: string;
   url?: string;
+  snippet?: string;
 }
 
-export function CitationChip({ index, title, url }: CitationChipProps) {
+export function CitationChip({ index, title, url, snippet }: CitationChipProps) {
   const colors = useThemeColors();
   const canOpen = Boolean(url && isValidExternalHttpUrl(url));
   const openSource = async () => {
@@ -24,7 +34,9 @@ export function CitationChip({ index, title, url }: CitationChipProps) {
   };
   const handlePress = () => {
     if (!canOpen || !url) return;
-    Alert.alert(title, hostnameOf(url), [
+    const site = hostnameOf(url);
+    const preview = previewSnippet(snippet);
+    Alert.alert(title, preview ? `${site}\n\n${preview}` : site, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Open page', onPress: () => void openSource() },
     ]);

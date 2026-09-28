@@ -1,5 +1,6 @@
 import { AuthFlow } from '@/features/auth/AuthFlow';
 import { AuthLayout } from '@/features/auth/AuthLayout';
+import { DesktopBrowserSignIn } from '@/features/desktop-host/components/DesktopBrowserSignIn';
 import {
   configuredAuthProviders,
   configuredMfaEmailFallback,
@@ -61,6 +62,7 @@ export default async function LoginPage({
           ssoCallbackUrl: buildSsoCallbackUrl(context),
         }}
       />
+      <DesktopBrowserSignIn />
     </AuthLayout>
   );
 }

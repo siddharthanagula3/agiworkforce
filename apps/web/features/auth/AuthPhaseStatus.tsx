@@ -15,6 +15,10 @@ const PHASE_COPY: Readonly<Record<AuthPhase, { key: string; label: string } | nu
     key: 'flow.phase.enterpriseRedirecting',
     label: 'This address belongs to an organization. Taking you to its sign-in',
   },
+  enterprise_browser: {
+    key: 'flow.phase.enterpriseBrowser',
+    label: 'This address belongs to an organization. Finish signing in with it in your browser',
+  },
 };
 
 // The region is always in the tree: an aria-live node added at the same moment
