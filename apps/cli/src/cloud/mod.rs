@@ -229,6 +229,7 @@ pub async fn create_project(
         id: request.projects[0].id.clone(),
         name: request.projects[0].name.clone(),
         description: request.projects[0].description.clone(),
+        instructions: None,
         is_archived: false,
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
@@ -280,6 +281,42 @@ pub async fn delete_project(privacy: PrivacyMode, project_id: &str) -> Result<()
     if let Err(error) = save_project_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the project list: {error}"));
     }
+    Ok(())
+}
+
+pub async fn project_detail(
+    privacy: PrivacyMode,
+    project_id: &str,
+) -> Result<(serde_json::Value, Vec<serde_json::Value>), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let project: serde_json::Value = session.client.get(&project_path(project_id), &[]).await?;
+    let files: serde_json::Value = session
+        .client
+        .get(
+            &format!("{}/knowledge-files", project_path(project_id)),
+            &[],
+        )
+        .await?;
+    Ok((
+        project.get("project").cloned().unwrap_or(project),
+        files
+            .get("files")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
+    ))
+}
+
+pub async fn update_project(
+    privacy: PrivacyMode,
+    project_id: &str,
+    patch: &serde_json::Value,
+) -> Result<(), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let _: serde_json::Value = session
+        .client
+        .call(&Route::put(project_path(project_id)), &[], Some(patch))
+        .await?;
     Ok(())
 }
 
@@ -549,6 +586,35 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
     load_memory_cache(config_dir).context_prompt()
 }
 
+pub fn project_instructions_context(
+    privacy: PrivacyMode,
+    config_dir: &Path,
+    project_id: Option<&str>,
+) -> String {
+    if privacy != PrivacyMode::Managed {
+        return String::new();
+    }
+    let Some(project_id) = project_id else {
+        return String::new();
+    };
+    let cache = load_project_cache(config_dir);
+    let Some(project) = cache
+        .projects
+        .iter()
+        .find(|project| project.id == project_id)
+    else {
+        return String::new();
+    };
+    match project.instructions.as_deref().map(str::trim) {
+        Some(instructions) if !instructions.is_empty() => format!(
+            "\n<project_instructions project=\"{}\">\nInstructions the user set for this account project:\n{}\n</project_instructions>\n",
+            project.name.replace(['"', '<', '>'], ""),
+            instructions
+        ),
+        _ => String::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -602,6 +668,7 @@ mod tests {
             id: "p1".to_string(),
             name: "Launch".to_string(),
             description: None,
+            instructions: None,
             is_archived: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
         });
