@@ -125,7 +125,9 @@ describe('PluginDetailView', () => {
     expect(screen.getByText('design-review')).toBeTruthy();
     expect(screen.getByText('Commands').nextElementSibling?.textContent).toBe('2');
     expect(screen.getByText('github via http')).toBeTruthy();
-    expect(screen.getByText('Hooks').nextElementSibling?.textContent).toBe('Included');
+    expect(screen.getByText('Hooks').nextElementSibling?.textContent).toBe(
+      'Included. Hooks run in the agi CLI, not in chat.',
+    );
     expect(screen.queryByText('Agents')).toBeNull();
     expect(screen.queryByText('Language servers')).toBeNull();
   });
@@ -274,7 +276,9 @@ describe('PluginDetailView installed controls', () => {
     renderDetail({ installed: true }, { settings });
     expect(screen.getByRole('heading', { name: 'Includes' })).toBeTruthy();
     expect(screen.getByText('Commands').nextElementSibling?.textContent).toBe('2');
-    expect(screen.getByText('Hooks').nextElementSibling?.textContent).toBe('Included');
+    expect(screen.getByText('Hooks').nextElementSibling?.textContent).toBe(
+      'Included. Hooks run in the agi CLI, not in chat.',
+    );
     expect(screen.queryByText('frontend-design')).toBeNull();
     expect(screen.getByText('/frontend-design')).toBeTruthy();
   });

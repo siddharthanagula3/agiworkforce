@@ -387,6 +387,7 @@ export function describeRefusals(
       const preview = item.content.slice(0, 60);
       const rejected = response.rejected.find((row) => row.id === item.id);
       if (rejected !== undefined) {
+        if (rejected.message) return `"${preview}": ${rejected.message}`;
         return rejected.term !== undefined && rejected.term !== null
           ? `"${preview}" was refused by your account's memory policy (${rejected.term}).`
           : `"${preview}" was refused by your account's memory policy.`;

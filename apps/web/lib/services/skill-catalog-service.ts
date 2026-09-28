@@ -535,6 +535,7 @@ export interface SelectableSkillCatalogParams {
   loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
   loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
   includeNetworkBackedDirectorySkills?: boolean;
+  pluginsAllowed?: boolean;
 }
 
 const EMPTY_PLUGIN_IDS: ReadonlySet<string> = new Set();
@@ -568,7 +569,7 @@ export async function loadSelectableSkillCatalog(
       readOptionalSkillSource('user-skills', NO_SKILLS, () =>
         listUserSkillsAsManagedSkills(params.db, params.userId),
       ),
-      params.includeNetworkBackedDirectorySkills === false
+      params.includeNetworkBackedDirectorySkills === false || params.pluginsAllowed === false
         ? Promise.resolve(NO_SKILLS)
         : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
             listInstalledDirectorySkills(params.db, params.userId),
@@ -586,6 +587,7 @@ export interface SkillDetailLookupParams {
   userId: string;
   name: string;
   loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
+  pluginsAllowed?: boolean;
 }
 
 export async function findSelectableSkillByName(
@@ -601,9 +603,12 @@ export async function findSelectableSkillByName(
   );
   if (managed) return managed;
 
-  const directorySkills = await readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
-    listInstalledDirectorySkills(params.db, params.userId),
-  );
+  const directorySkills =
+    params.pluginsAllowed === false
+      ? NO_SKILLS
+      : await readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
+          listInstalledDirectorySkills(params.db, params.userId),
+        );
   const installed = directorySkills.find((skill) => skill.name === params.name);
   if (installed) return installed;
 
@@ -630,9 +635,11 @@ export async function findSelectableSkillWithFiles(
   );
   if (managed) return { skill: managed, access: managedSkillFileAccess, managed: true };
   const owned =
-    (await readOptionalSkillSource('directory-skills', null, () =>
-      findInstalledDirectorySkillWithFiles(params.db, params.userId, params.name),
-    )) ??
+    (params.pluginsAllowed === false
+      ? null
+      : await readOptionalSkillSource('directory-skills', null, () =>
+          findInstalledDirectorySkillWithFiles(params.db, params.userId, params.name),
+        )) ??
     (await readOptionalSkillSource('user-skills', null, () =>
       findUserSkillWithFiles(params.db, params.userId, params.name),
     ));

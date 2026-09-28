@@ -37,7 +37,6 @@ async function selectReadableProject(
       where id = $1
         and user_id = $2
         and organization_id is not distinct from $3::uuid
-        and is_archived = false
         and deleted_at is null
       limit 1`,
     [projectId, userId, organizationId],
@@ -55,7 +54,6 @@ async function selectReadableProject(
       where id = $1
         and id = any($2::uuid[])
         and organization_id is not distinct from $3::uuid
-        and is_archived = false
         and deleted_at is null
       limit 1`,
     [projectId, sharedScope.projectIds, organizationId],
