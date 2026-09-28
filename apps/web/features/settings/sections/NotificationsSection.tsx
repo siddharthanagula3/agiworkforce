@@ -12,7 +12,8 @@ import { SaveStatusLine } from '../components/SaveStatusLine';
 
 const NAMESPACE = 'notifications';
 
-export type NotifKey = 'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone';
+export type NotifKey =
+  'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone' | 'emailSecurityAlerts';
 
 interface ChannelSpec {
   id: NotifKey;
@@ -40,6 +41,12 @@ const EVENTS: ReadonlyArray<EventSpec> = [
       { id: 'emailScheduleDone', channel: 'Email', defaultValue: false },
       { id: 'mobilePushScheduleDone', channel: 'Mobile push', defaultValue: false },
     ],
+  },
+  {
+    heading: 'Security alerts',
+    subheading:
+      'A new sign-in, a password, email or two-factor change, or a new device. Always shown in the app and sent even during quiet hours; choose whether they are also emailed.',
+    channels: [{ id: 'emailSecurityAlerts', channel: 'Email', defaultValue: true }],
   },
 ];
 
