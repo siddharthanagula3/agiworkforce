@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0324: the AGI Workforce app in Slack
+-- Migration 0330: the AGI Workforce app in Slack
 --
 -- Why    : a Slack event could only start a saved routine, nothing answered in
 --          Slack, and the product's own Slack app had no install path. Claude
