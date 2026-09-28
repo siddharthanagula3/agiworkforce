@@ -40,7 +40,12 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
+import {
+  getFreshClerkAuthContext,
+  getFreshClerkToken,
+  revokeSyncedWebSession,
+  signOutClerk,
+} from './clerkAuth';
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
@@ -408,6 +413,21 @@ export async function clearAuthToken(): Promise<void> {
     // ignore
   }
   await clearAutofillProfile();
+}
+
+const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
+
+export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
+  let webSessionEnded = true;
+  try {
+    await revokeSyncedWebSession();
+  } catch (error) {
+    console.warn('[AGI] Ending the web session failed:', error);
+    webSessionEnded = false;
+  }
+  await clearAuthToken();
+  await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
+  return { webSessionEnded };
 }
 
 export type FreeTrialContentPart =
