@@ -28,6 +28,8 @@ import {
   installRefusalResponse,
   installsDisabledResponse,
 } from '@/features/plugins/server/directory/install-responses';
+import { findPluginDirectoryRecord } from '@/features/plugins/server/directory/memory-cache';
+import { registerPluginConnectors } from '@/lib/connectors/plugin-connectors';
 import type {
   PluginInstalledDependency,
   PluginMarketplaceInstallationsResponse,
@@ -99,8 +101,35 @@ async function respondToInstall(
       const dependencies: PluginInstalledDependency[] = result.dependencies.map(
         ({ pluginId, name, version, requiredBy }) => ({ pluginId, name, version, requiredBy }),
       );
+      const records =
+        source === 'directory'
+          ? await Promise.all(
+              [result.installation.pluginKey, ...dependencies.map((item) => item.pluginId)].map(
+                (pluginId) => findPluginDirectoryRecord(pluginId),
+              ),
+            )
+          : [];
+      const connectors = await registerPluginConnectors(
+        request,
+        records.flatMap((record) =>
+          record
+            ? [
+                {
+                  pluginKey: record.id,
+                  pluginName: record.name,
+                  servers: record.runtime.components.mcpServers,
+                },
+              ]
+            : [],
+        ),
+      );
       return NextResponse.json(
-        { installation: result.installation, skills: result.skills, dependencies },
+        {
+          installation: result.installation,
+          skills: result.skills,
+          dependencies,
+          ...(connectors.added.length > 0 || connectors.failed.length > 0 ? { connectors } : {}),
+        },
         { status: 201 },
       );
     }

@@ -1,35 +1,33 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getCsrfToken } from '@/lib/client/csrf';
 import {
+  CONNECTOR_TOOL_PERMISSIONS_MAX_TOOLS_PER_WRITE,
+  CONNECTOR_TOOL_PERMISSIONS_PATH,
+  ListConnectorToolPermissionsResponseSchema,
   connectorCategoryToolName,
   type ConnectorToolCategory,
-} from '@shared/types/connectorToolCategories';
+  type ConnectorToolPermission,
+  type ConnectorToolPermissionLevel,
+  type UpsertConnectorToolPermissionRequest,
+} from '@agiworkforce/cloud-contracts';
+import { getCsrfToken } from '@/lib/client/csrf';
 import { logger } from '@shared/lib/logger';
 import { queryClient, queryKeys } from '@shared/stores/query-client';
 
-export type PermissionLevel = 'allow' | 'ask' | 'deny';
+export type PermissionLevel = ConnectorToolPermissionLevel;
 
 export type ToolPermissionsMap = Record<string, Record<string, PermissionLevel>>;
 
 export const DEFAULT_PERMISSION_LEVEL: PermissionLevel = 'ask';
 
-const PERMISSIONS_PATH = '/api/connectors/permissions';
 const CSRF_HEADER = 'x-csrf-token';
 const JSON_CONTENT_TYPE = 'application/json';
 const SAME_ORIGIN: RequestCredentials = 'same-origin';
-const MAX_TOOLS_PER_WRITE = 200;
 
 export const PERMISSION_SAVE_FAILED_COPY =
   'That permission was not saved, so the assistant still follows the level shown here. Try again.';
 export const PERMISSION_RESET_FAILED_COPY =
   'These permissions were not reset, so the assistant still follows the levels shown here. Try again.';
-
-interface ServerPermission {
-  connectorId: string;
-  toolName: string;
-  level: PermissionLevel;
-}
 
 interface ToolPermissionsState {
   permissions: ToolPermissionsMap;
@@ -73,19 +71,27 @@ async function writePermissionToServer(
   category?: ConnectorToolCategory,
 ): Promise<void> {
   const csrf = await getCsrfToken();
-  const put = async (body: Record<string, unknown>) => {
-    const response = await fetch(PERMISSIONS_PATH, {
+  const put = async (body: UpsertConnectorToolPermissionRequest) => {
+    const response = await fetch(CONNECTOR_TOOL_PERMISSIONS_PATH, {
       method: 'PUT',
       credentials: SAME_ORIGIN,
       headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrf },
-      body: JSON.stringify({ connectorId, level, ...body }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) throw new PermissionWriteError(response.status);
   };
-  if (category) await put({ category });
-  for (let start = 0; start < toolNames.length; start += MAX_TOOLS_PER_WRITE) {
-    const chunk = toolNames.slice(start, start + MAX_TOOLS_PER_WRITE);
-    await put(chunk.length === 1 ? { toolName: chunk[0] } : { toolNames: chunk });
+  if (category) await put({ connectorId, level, category });
+  for (
+    let start = 0;
+    start < toolNames.length;
+    start += CONNECTOR_TOOL_PERMISSIONS_MAX_TOOLS_PER_WRITE
+  ) {
+    const chunk = toolNames.slice(start, start + CONNECTOR_TOOL_PERMISSIONS_MAX_TOOLS_PER_WRITE);
+    await put(
+      chunk.length === 1
+        ? { connectorId, level, toolName: chunk[0] }
+        : { connectorId, level, toolNames: chunk },
+    );
   }
   await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
@@ -99,7 +105,7 @@ async function writePermissionToServer(
 async function clearConnectorPermissionsOnServer(connectorId: string): Promise<void> {
   const csrf = await getCsrfToken();
   const response = await fetch(
-    `${PERMISSIONS_PATH}?connectorId=${encodeURIComponent(connectorId)}`,
+    `${CONNECTOR_TOOL_PERMISSIONS_PATH}?connectorId=${encodeURIComponent(connectorId)}`,
     {
       method: 'DELETE',
       credentials: SAME_ORIGIN,
@@ -110,15 +116,16 @@ async function clearConnectorPermissionsOnServer(connectorId: string): Promise<v
   await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
 
-async function fetchPermissionsFromServer(): Promise<ServerPermission[]> {
-  const res = await fetch(PERMISSIONS_PATH, { credentials: SAME_ORIGIN });
+async function fetchPermissionsFromServer(): Promise<ConnectorToolPermission[]> {
+  const res = await fetch(CONNECTOR_TOOL_PERMISSIONS_PATH, { credentials: SAME_ORIGIN });
   if (!res.ok) {
     throw Object.assign(new Error(`connector permissions fetch failed: HTTP ${res.status}`), {
       status: res.status,
     });
   }
-  const data = (await res.json()) as { permissions?: ServerPermission[] };
-  return data.permissions ?? [];
+  const parsed = ListConnectorToolPermissionsResponseSchema.safeParse(await res.json());
+  if (!parsed.success) throw new Error('connector permissions response was not readable');
+  return parsed.data.permissions;
 }
 
 function withoutConnector(map: ToolPermissionsMap, connectorId: string): ToolPermissionsMap {

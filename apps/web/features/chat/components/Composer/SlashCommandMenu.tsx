@@ -26,7 +26,6 @@ import {
   Undo2,
 } from '@agiworkforce/icons';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { isCapabilityEnabled } from '@agiworkforce/types';
 import {
   loadInstalledPlugins,
   type InstalledPlugin,
@@ -35,7 +34,7 @@ import {
   BUILT_IN_SLASH_COMMANDS,
   SlashCommandMenu as SharedSlashCommandMenu,
   filterSlashCommandsByCapability,
-  usePlatform,
+  useCapabilities,
   type CommandSuggestion,
   type SlashCommandIconName,
 } from '@agiworkforce/unified-chat';
@@ -128,7 +127,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     ref,
   ) {
     const customCommands = useSettingsStore((state) => state.customCommands);
-    const platform = usePlatform();
+    const capabilities = useCapabilities();
     const [activeIndex, setActiveIndex] = useState(0);
     const previousQueryRef = useRef(query);
     const [installedPlugins, setInstalledPlugins] = useState<readonly InstalledPlugin[]>([]);
@@ -144,8 +143,9 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     }, []);
 
     const suggestions = useMemo<CommandSuggestion[]>(() => {
-      const builtIns = filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
-        isCapabilityEnabled(platform, capability),
+      const builtIns = filterSlashCommandsByCapability(
+        BUILT_IN_SLASH_COMMANDS,
+        (capability) => capabilities[capability],
       )
         .filter((command) => command.id !== 'image' || imageCommandAvailable)
         .filter((command) => command.id !== 'code' || codeCommandAvailable)
@@ -229,7 +229,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
       customCommands,
       imageCommandAvailable,
       installedPlugins,
-      platform,
+      capabilities,
       query,
       skills,
     ]);

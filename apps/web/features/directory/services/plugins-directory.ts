@@ -8,6 +8,7 @@ import {
   type MemberOrganizationPlugin,
   type MemberOrganizationPluginPatch,
   type MemberOrganizationPluginsResponse,
+  type PluginConnectorRegistration,
   type PluginInstalledDependency,
   type PluginMarketplaceEntry,
   type PluginMarketplaceInstallation,
@@ -1242,7 +1243,11 @@ export type PluginInstallTarget =
   | { kind: 'user'; entryId: string };
 
 export type PluginInstallOutcome =
-  | { status: 'installed'; dependencies: PluginInstalledDependency[] }
+  | {
+      status: 'installed';
+      dependencies: PluginInstalledDependency[];
+      connectors: PluginConnectorRegistration | null;
+    }
   | { status: 'disabled'; message: string }
   | { status: 'blocked'; message: string; installCommand: string | null };
 
@@ -1251,11 +1256,18 @@ function messageFor(status: number, body: ErrorBody, fallback: string): string {
   return PLUGIN_MESSAGE_STATUSES.includes(status) && message ? message : fallback;
 }
 
-async function readInstalledDependencies(response: Response): Promise<PluginInstalledDependency[]> {
+async function readInstalledOutcome(
+  response: Response,
+): Promise<Extract<PluginInstallOutcome, { status: 'installed' }>> {
   const body = (await response.json().catch(() => ({}))) as {
     dependencies?: PluginInstalledDependency[];
+    connectors?: PluginConnectorRegistration;
   };
-  return Array.isArray(body.dependencies) ? body.dependencies : [];
+  return {
+    status: 'installed',
+    dependencies: Array.isArray(body.dependencies) ? body.dependencies : [],
+    connectors: body.connectors ?? null,
+  };
 }
 
 export async function installPlugin(
@@ -1270,9 +1282,7 @@ export async function installPlugin(
     headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
     body: JSON.stringify(body),
   });
-  if (response.ok) {
-    return { status: 'installed', dependencies: await readInstalledDependencies(response) };
-  }
+  if (response.ok) return readInstalledOutcome(response);
   const payload = await readErrorBody(response);
   const code = payload.error?.code;
   if (

@@ -7,6 +7,7 @@ import {
   CloudAgentRunSnapshotPageSchema,
   CloudAgentRunSteerRequestSchema,
   CloudAgentRunSteerResponseSchema,
+  CloudAgentRunSteerWithdrawResponseSchema,
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
   MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
   MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
@@ -31,6 +32,7 @@ import {
 import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
+export const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
 
 export type ManagedCloudAgentRunHeaders = Record<string, string>;
 export type ManagedCloudAgentRunFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -112,6 +114,11 @@ export interface ManagedCloudAgentRunClient {
     message: string,
     options?: { signal?: AbortSignal },
   ): Promise<CloudAgentRunSteerResponse>;
+  withdrawSteer(
+    runId: string,
+    steerId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<CloudAgentRun>;
   followRun(
     runId: string,
     options?: ManagedCloudAgentRunFollowOptions,
@@ -435,6 +442,20 @@ export function createManagedCloudAgentRunClient(
         signal: options.signal,
       });
       return parseContract(response, CloudAgentRunSteerResponseSchema, 'steer response');
+    },
+
+    async withdrawSteer(runId, steerId, options = {}) {
+      const parsedSteerId = z.string().uuid().parse(steerId);
+      const response = await request(
+        `${managedCloudAgentRunPath(runId)}/steer/${encodeURIComponent(parsedSteerId)}`,
+        { method: 'DELETE', headers: await mutationHeaders(), signal: options.signal },
+      );
+      const body = await parseContract(
+        response,
+        CloudAgentRunSteerWithdrawResponseSchema,
+        'withdraw steer response',
+      );
+      return body.run;
     },
 
     async followRun(runId, options = {}) {

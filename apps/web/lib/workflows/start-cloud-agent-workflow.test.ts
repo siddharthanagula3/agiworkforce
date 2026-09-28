@@ -42,7 +42,9 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-agent-stream', () => ({
   buildManagedAgentStream: workflowMocks.buildStream,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-failover', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/managed-failover')>()),
+  ...(await importOriginal<
+    typeof import('@/app/api/llm/v1/chat/completions/lib/managed-failover')
+  >()),
   createFailoverPlan: () => ({ next: () => null }),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', () => ({
@@ -52,6 +54,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request', () 
   buildApprovalCheckpointRequest: (request: unknown) => request,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvent: vi.fn(),
   completeCloudAgentApprovalCheckpoint: workflowMocks.completeCheckpoint,
   getCloudAgentRun: vi.fn(),

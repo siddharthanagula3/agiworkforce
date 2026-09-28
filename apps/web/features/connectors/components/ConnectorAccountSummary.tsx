@@ -2,15 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
+import {
+  ConnectorAccountSchema,
+  connectorAccountsPath,
+  connectorErrorMessage,
+} from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const AccountSchema = z.object({
-  accountKey: z.string(),
-  accountLabel: z.string().nullable(),
-  needsReauthorization: z.boolean(),
+const AccountSchema = ConnectorAccountSchema.pick({
+  accountKey: true,
+  accountLabel: true,
+  needsReauthorization: true,
 });
 
 const AccountsSchema = z.object({
@@ -25,22 +30,18 @@ const FAILED_COPY = 'The connected account could not be read.';
 const UNNAMED_COPY = 'The provider did not share the account name.';
 const RECONNECT_NEEDED = 'Needs reconnecting';
 
-function accountsPath(connectorId: string): string {
-  return `/api/connectors/${encodeURIComponent(connectorId)}/accounts`;
-}
-
 async function fetchAccounts(
   connectorId: string,
   signal: AbortSignal,
 ): Promise<ConnectedAccount[]> {
-  const response = await fetch(accountsPath(connectorId), {
+  const response = await fetch(connectorAccountsPath(connectorId), {
     credentials: 'include',
     cache: 'no-store',
     signal,
   });
-  const body = await response.json().catch(() => null);
+  const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+    throw new Error(connectorErrorMessage(body, `Request failed (${response.status})`));
   }
   const parsed = AccountsSchema.safeParse(body);
   if (!parsed.success) {

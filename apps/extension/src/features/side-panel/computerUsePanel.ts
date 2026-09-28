@@ -28,7 +28,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     padding: 10px 14px;
     background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
     flex-shrink: 0;
   }
@@ -38,14 +38,14 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-banner-icon {
-    font-size: 16px;
+    font-size: var(--type-h3-size);
     flex-shrink: 0;
     margin-top: 1px;
   }
 
   .sp-cu-banner-text {
     flex: 1;
-    line-height: 1.45;
+    line-height: var(--type-body-height);
     /* min-width:0 is required for a flex child to shrink below its min-content
        width. Without it a long unbroken error string (a URL, a stack frame, a
        selector) held the banner wider than the ~320px side panel and the text
@@ -62,7 +62,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-banner-sub {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
   }
 
@@ -98,7 +98,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-controls-label {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     flex: 1;
   }
@@ -107,7 +107,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--type-label-size);
     color: var(--agi-ext-text-muted);
     cursor: pointer;
     user-select: none;
@@ -123,12 +123,12 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-clear-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 11px;
+    font-size: var(--type-label-size);
     padding: 3px 10px;
     cursor: pointer;
-    transition: border-color 0.12s, color 0.12s;
+    transition: border-color var(--duration-instant), color var(--duration-instant);
   }
 
   .sp-cu-clear-btn:hover {
@@ -139,9 +139,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-takeover-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text);
-    font-size: 11px;
+    font-size: var(--type-label-size);
     padding: 3px 10px;
     cursor: pointer;
   }
@@ -159,12 +159,12 @@ export const COMPUTER_USE_PANEL_CSS = `
     background: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
     border: none;
-    border-radius: 5px;
-    font-size: 11px;
+    border-radius: var(--corner-control);
+    font-size: var(--type-label-size);
     font-weight: 500;
     padding: 4px 12px;
     cursor: pointer;
-    transition: background 0.12s;
+    transition: background var(--duration-instant);
     flex-shrink: 0;
   }
 
@@ -182,8 +182,8 @@ export const COMPUTER_USE_PANEL_CSS = `
     background: var(--agi-ext-danger-bg);
     color: var(--agi-ext-danger-text);
     border: 1px solid var(--agi-ext-danger-border);
-    border-radius: 5px;
-    font-size: 11px;
+    border-radius: var(--corner-control);
+    font-size: var(--type-label-size);
     font-weight: 600;
     padding: 3px 11px;
     cursor: pointer;
@@ -213,9 +213,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-empty {
     padding: 32px 20px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.6;
+    line-height: var(--type-caption-height);
   }
 
   .sp-cu-step {
@@ -224,7 +224,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     padding: 7px 14px;
     border-bottom: 1px solid var(--agi-ext-border);
     align-items: flex-start;
-    transition: background 0.1s;
+    transition: background var(--duration-instant);
   }
 
   .sp-cu-step:last-child {
@@ -236,7 +236,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-step-icon {
-    font-size: 14px;
+    font-size: var(--type-body-large-size);
     flex-shrink: 0;
     width: 18px;
     text-align: center;
@@ -249,7 +249,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-step-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 500;
     color: var(--agi-ext-text);
     white-space: nowrap;
@@ -258,7 +258,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-step-detail {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     margin-top: 2px;
     white-space: pre-wrap;
@@ -272,7 +272,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-step-time {
-    font-size: 10px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     flex-shrink: 0;
     margin-top: 3px;
@@ -289,7 +289,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-task-label {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     font-weight: 600;
     color: var(--agi-ext-text-muted);
   }
@@ -301,12 +301,12 @@ export const COMPUTER_USE_PANEL_CSS = `
     resize: vertical;
     padding: 7px 9px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
     font: inherit;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
   }
 
   #sp-cu-goal:focus-visible {
@@ -325,7 +325,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     min-width: 0;
     overflow: hidden;
     color: var(--agi-ext-text-muted);
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -337,7 +337,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     margin: 10px 14px 0;
     padding: 10px 12px;
     border: 1px solid var(--agi-ext-warning-border);
-    border-radius: 8px;
+    border-radius: var(--corner-field);
     background: var(--agi-ext-warning-bg);
     flex-shrink: 0;
   }
@@ -347,21 +347,21 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-setup-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 600;
     color: var(--agi-ext-text);
   }
 
   .sp-cu-setup-headline {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     font-weight: 600;
     color: var(--agi-ext-warning-text);
   }
 
   .sp-cu-setup-body {
     margin: 0;
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
     color: var(--agi-ext-text-muted);
   }
 
@@ -380,10 +380,10 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-screenshot {
     margin: 6px 14px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.12s;
+    transition: border-color var(--duration-instant);
     max-width: 100%;
   }
 
@@ -395,7 +395,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     width: 100%;
     height: auto;
     display: block;
-    border-radius: 5px;
+    border-radius: var(--corner-control);
   }
 
   /* Step kind colours */
@@ -412,7 +412,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     gap: 8px;
     padding: 5px 14px;
     border-bottom: 1px solid var(--agi-ext-border);
-    font-size: 10px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     flex-shrink: 0;
   }
@@ -427,15 +427,15 @@ export const COMPUTER_USE_PANEL_CSS = `
     width: 60px;
     height: 4px;
     background: var(--agi-ext-border);
-    border-radius: 2px;
+    border-radius: var(--corner-detail);
     overflow: hidden;
   }
 
   .sp-cu-usage-bar-fill {
     height: 100%;
     background: var(--agi-ext-accent);
-    border-radius: 2px;
-    transition: width 0.2s;
+    border-radius: var(--corner-detail);
+    transition: width var(--duration-quick);
     width: 0%;
   }
 
@@ -450,8 +450,8 @@ export const COMPUTER_USE_PANEL_CSS = `
     padding: 10px 12px;
     background: color-mix(in srgb, var(--agi-ext-warning) 10%, transparent);
     border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
-    border-radius: 8px;
-    font-size: 12px;
+    border-radius: var(--corner-field);
+    font-size: var(--type-caption-size);
   }
 
   /* Timed out and auto-denied. Drops the warning tint so it reads as settled
@@ -477,7 +477,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-approval-desc {
     color: var(--agi-ext-text-muted);
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     margin-bottom: 8px;
     /* Same content shape as .sp-cu-step-detail (tool args and URLs), so it needs
        the same guards. Without word-break an approval prompt for a long URL
@@ -500,9 +500,9 @@ export const COMPUTER_USE_PANEL_CSS = `
     background: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
     border: none;
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     padding: 4px 14px;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     font-weight: 500;
     cursor: pointer;
   }
@@ -512,9 +512,9 @@ export const COMPUTER_USE_PANEL_CSS = `
     background: none;
     border: 1px solid var(--agi-ext-border);
     color: var(--agi-ext-text-muted);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     padding: 4px 14px;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     cursor: pointer;
   }
 
@@ -538,8 +538,8 @@ export const COMPUTER_USE_PANEL_CSS = `
     align-items: center;
     gap: 5px;
     padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 10px;
+    border-radius: var(--corner-menu);
+    font-size: var(--type-label-size);
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -560,7 +560,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-auth-dot {
     width: 5px;
     height: 5px;
-    border-radius: 50%;
+    border-radius: var(--corner-pill);
     flex-shrink: 0;
   }
 
