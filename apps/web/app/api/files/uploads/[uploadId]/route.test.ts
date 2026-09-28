@@ -6,11 +6,28 @@ const mocks = vi.hoisted(() => ({
     uploadPart: vi.fn(),
     listUploadedParts: vi.fn(),
     completeMultipartUpload: vi.fn(),
-    abortMultipartUpload: vi.fn(),
-    get: vi.fn(),
-    delete: vi.fn(),
+    listPendingMultipartUploads: vi.fn(),
+    head: vi.fn(),
   },
-  upsertVideoMediaAsset: vi.fn(),
+  completeChatAttachmentUpload: vi.fn(),
+  registerProjectKnowledgeFile: vi.fn(),
+  deleteProjectKnowledgeObject: vi.fn(),
+  session: {
+    v: 1,
+    userId: 'user-1',
+    organizationId: null,
+    kind: 'chat-attachment',
+    key: 'chat-attachments/user-1/1_abc.pdf',
+    uploadId: 'upload-1',
+    fileName: 'report.pdf',
+    mimeType: 'application/pdf',
+    byteCount: 12,
+    partBytes: 8,
+    checksumSha256: 'a'.repeat(64),
+    projectId: null as string | null,
+    sourceSurface: null as string | null,
+    expiresAt: Number.MAX_SAFE_INTEGER,
+  },
 }));
 
 vi.mock('server-only', () => ({}));
@@ -22,34 +39,42 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
-vi.mock('@/lib/server/media-assets', () => ({
-  upsertVideoMediaAsset: (...args: unknown[]) => mocks.upsertVideoMediaAsset(...(args as [])),
+vi.mock('@/lib/server/product-analytics', () => ({
+  resolveProductAnalyticsSurface: () => 'web',
+  trackProductAnalyticsEvent: vi.fn(),
 }));
-vi.mock('@/lib/server/media-storage', () => ({
-  authenticatedMediaUrl: (id: string) => `/api/files/${id}`,
-  deleteStoredMedia: vi.fn(),
-  videoStoragePathname: () => 'videos/a.mp4',
+vi.mock('@/lib/server/chat-attachment-completion', () => ({
+  completeChatAttachmentUpload: (...args: unknown[]) =>
+    mocks.completeChatAttachmentUpload(...(args as [])),
+  findCompletedChatAttachment: vi.fn(async () => null),
+  resolveTemporaryChatUpload: vi.fn(async () => false),
+  resolveUploadSourceSurface: () => 'web',
+}));
+vi.mock('@/lib/server/project-knowledge-files', () => ({
+  findProjectKnowledgeFileByChecksum: vi.fn(async () => null),
+  registerProjectKnowledgeFile: (...args: unknown[]) =>
+    mocks.registerProjectKnowledgeFile(...(args as [])),
+}));
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: (...args: unknown[]) =>
+    mocks.deleteProjectKnowledgeObject(...(args as [])),
+  sealProjectKnowledgeObject: vi.fn(),
 }));
 vi.mock('../resumable-upload', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
-    resumableUploadTarget: () => ({ store: mocks.store, bucket: 'private', key: 'videos/a.mp4' }),
+    readResumableUploadSession: vi.fn(async () => mocks.session),
+    resumableUploadTarget: () => ({ store: mocks.store, bucket: 'private' }),
   };
 });
 
 import { POST, PUT } from './route';
 
-const ASSET_ID = '3f1c0c9e-7b6a-4a2e-8f1d-2b9c6a5e4d31';
-const MIME = 'video/mp4';
-const MP4 = Uint8Array.from([
-  0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
-]);
-const MZ = Uint8Array.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
 const context = { params: Promise.resolve({ uploadId: 'upload-1' }) };
 
 function partRequest(partNumber: number, body: Uint8Array): NextRequest {
-  const url = `http://localhost/api/files/uploads/upload-1?assetId=${ASSET_ID}&mimeType=${MIME}&partNumber=${partNumber}`;
+  const url = `http://localhost/api/files/uploads/upload-1?session=token&partNumber=${partNumber}`;
   return new NextRequest(url, { method: 'PUT', body: body as BodyInit }) as never;
 }
 
@@ -57,63 +82,59 @@ function completeRequest(): NextRequest {
   return new NextRequest('http://localhost/api/files/uploads/upload-1', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ assetId: ASSET_ID, mimeType: MIME, fileName: 'clip.mp4' }),
+    body: JSON.stringify({ session: 'token' }),
   }) as never;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.store.uploadPart.mockImplementation(async ({ partNumber }: { partNumber: number }) => ({
-    partNumber,
-    etag: `etag-${partNumber}`,
-    sizeBytes: 8,
-  }));
+  mocks.session.kind = 'chat-attachment';
+  mocks.session.projectId = null;
+  mocks.session.sourceSurface = null;
+  mocks.store.uploadPart.mockImplementation(
+    async ({ partNumber, body }: { partNumber: number; body: Uint8Array }) => ({
+      partNumber,
+      etag: `etag-${partNumber}`,
+      size: body.byteLength,
+      checksumSha256: '',
+    }),
+  );
   mocks.store.listUploadedParts.mockResolvedValue([
-    { partNumber: 1, etag: 'etag-1', sizeBytes: 8 },
-    { partNumber: 2, etag: 'etag-2', sizeBytes: 8 },
+    { partNumber: 1, etag: 'etag-1', size: 8, checksumSha256: '' },
+    { partNumber: 2, etag: 'etag-2', size: 4, checksumSha256: '' },
   ]);
   mocks.store.completeMultipartUpload.mockResolvedValue(undefined);
-  mocks.store.get.mockResolvedValue({ data: MP4 });
-  mocks.store.delete.mockResolvedValue(undefined);
-  mocks.upsertVideoMediaAsset.mockResolvedValue(ASSET_ID);
+  mocks.store.listPendingMultipartUploads.mockResolvedValue([
+    { key: mocks.session.key, uploadId: 'upload-1', initiatedAtMs: 0 },
+  ]);
+  mocks.completeChatAttachmentUpload.mockResolvedValue({
+    id: '3f1c0c9e-7b6a-4a2e-8f1d-2b9c6a5e4d31',
+    name: 'report.pdf',
+    mimeType: 'application/pdf',
+    byteCount: 12,
+    type: 'file',
+    url: '/api/files/3f1c0c9e-7b6a-4a2e-8f1d-2b9c6a5e4d31',
+  });
+  mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 });
 
-describe('PUT a part', () => {
-  it('accepts a three-part upload whose continuations carry no signature', async () => {
-    const parts = [MP4, Uint8Array.from([0x11, 0x22, 0x33, 0x44]), MZ];
+describe('PUT a relayed part', () => {
+  it('stores every part at the size the session assigned it', async () => {
+    const parts = [new Uint8Array(8).fill(1), new Uint8Array(4).fill(2)];
 
     for (const [index, body] of parts.entries()) {
       const response = await PUT(partRequest(index + 1, body), context);
       expect(response.status, `part ${index + 1} was refused`).toBe(200);
     }
 
-    expect(mocks.store.uploadPart).toHaveBeenCalledTimes(3);
-  });
-
-  it('sends a stored part to the configured malware scanner', async () => {
-    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL) =>
-        new Response(JSON.stringify({ safe: true }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+    expect(mocks.store.uploadPart).toHaveBeenCalledTimes(2);
+    expect(mocks.store.uploadPart).toHaveBeenCalledWith(
+      expect.objectContaining({ key: mocks.session.key, uploadId: 'upload-1', partNumber: 2 }),
     );
-    vi.stubGlobal('fetch', fetchMock);
-    try {
-      const response = await PUT(partRequest(1, MP4), context);
-
-      expect(response.status).toBe(200);
-      expect(fetchMock).toHaveBeenCalledOnce();
-      expect(String(fetchMock.mock.calls[0]?.[0])).toContain('scanner.example.test');
-    } finally {
-      vi.unstubAllEnvs();
-      vi.unstubAllGlobals();
-    }
   });
 
-  it('refuses a first part that is an executable wearing the video type', async () => {
-    const response = await PUT(partRequest(1, MZ), context);
+  it('refuses a part whose size would break the assembled file', async () => {
+    const response = await PUT(partRequest(1, new Uint8Array(4)), context);
 
     expect(response.status).toBe(400);
     expect(mocks.store.uploadPart).not.toHaveBeenCalled();
@@ -121,25 +142,35 @@ describe('PUT a part', () => {
 });
 
 describe('POST to complete', () => {
-  it('inspects the object the parts assembled into, then records the asset', async () => {
+  it('joins the parts before the chat attachment pipeline reads them', async () => {
     const response = await POST(completeRequest(), context);
 
     expect(response.status).toBe(200);
-    expect(mocks.store.get).toHaveBeenCalledWith('private', 'videos/a.mp4');
-    expect(mocks.store.get.mock.invocationCallOrder[0]).toBeGreaterThan(
+    expect(await response.json()).toMatchObject({ kind: 'chat-attachment' });
+    expect(mocks.completeChatAttachmentUpload.mock.invocationCallOrder[0]).toBeGreaterThan(
       mocks.store.completeMultipartUpload.mock.invocationCallOrder[0]!,
     );
-    expect(mocks.upsertVideoMediaAsset).toHaveBeenCalled();
-    expect(mocks.store.delete).not.toHaveBeenCalled();
+    expect(mocks.completeChatAttachmentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storageKey: mocks.session.key,
+        checksumSha256: mocks.session.checksumSha256,
+      }),
+    );
   });
 
-  it('purges the completed object and records nothing when the assembled bytes are refused', async () => {
-    mocks.store.get.mockResolvedValue({ data: MZ });
+  it('deletes an assembled project source its project refuses, and records nothing', async () => {
+    const { createError } = await import('@/lib/errors');
+    mocks.session.kind = 'knowledge-file';
+    mocks.session.projectId = 'project-1';
+    mocks.session.sourceSurface = 'web';
+    mocks.registerProjectKnowledgeFile.mockRejectedValue(
+      createError.validation('Project storage is full.'),
+    );
 
     const response = await POST(completeRequest(), context);
 
     expect(response.status).toBe(400);
-    expect(mocks.store.delete).toHaveBeenCalledWith('private', 'videos/a.mp4');
-    expect(mocks.upsertVideoMediaAsset).not.toHaveBeenCalled();
+    expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledWith(mocks.session.key);
+    expect(mocks.completeChatAttachmentUpload).not.toHaveBeenCalled();
   });
 });

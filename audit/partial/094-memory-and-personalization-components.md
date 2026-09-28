@@ -6,39 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S94.02: Explicit Memory write handler.
-
-- Done when: A handler performs explicit remember/forget commands and reports the result.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Call /api/memory/commands from chat on some surface (no caller exists), and ship pending migration 0285 that its remember path writes through. | mount |
-
-Code: `apps/web/lib/services/memory-commands.ts:155-160`, `apps/web/lib/services/memory-commands.ts:94-98`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
-
-## S94.06: Memory relevance ranking.
-
-- Done when: Retrieved memories are ranked by relevance to the current request.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Rank by relevance; memories are ordered pinned-first then most recently updated (first 30), and the relevance model only runs in shadow mode without affecting the prompt. | handler |
-
-Code: `apps/web/lib/services/managed-memory-context-service.ts:873-882`, `apps/web/lib/services/semantic-decisions/consumers/memory-relevance.ts:99-101`
-
-## S94.15: Background Memory maintenance.
-
-- Done when: Background jobs maintain memory (expiry, consolidation) without user action.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Add server-side background consolidation (merge, decay, stale-fact review); the server runs only a nightly expiry sweep, and only the CLI consolidates its local learned memory. | handler |
-
-Code: `apps/web/app/api/cron/expire-memories/route.ts:12-19`, `vercel.json:69-71`, `apps/cli/src/memory_pipeline.rs:335-352`
-
 ## S94.18: Personalization attribution.
 
 - Done when: Replies record which memories or past chats shaped them, so the product can show attribution.

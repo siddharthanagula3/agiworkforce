@@ -31,24 +31,21 @@ Code: `apps/web/lib/connectors/accounts.ts:76-96`, `apps/web/app/api/connectors/
 ## S98.19: Plugin dependency resolver.
 
 - Done when: Installing a plugin resolves and installs the plugins it depends on.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | A dependency resolver exists in the CLI registry module but nothing calls it, and web installs ignore dependencies. | mount |
+| platform | partial | partials/mcp-web 3d89fbc1d: web installs of built-in packs, directory plugins and registered-marketplace entries now resolve, gate, install or re-enable their declared dependencies (same marketplace, or another one the root marketplace allowlists in allowCrossMarketplaceDependenciesOn or that is already installed and enabled) in one step, and the directory notice lists them. Left: the CLI resolver resolve_with_dependencies (apps/cli/src/features/plugins/registry.rs:538) is still uncalled by agi plugin install (p-desktop-cli file); a dependency with a version range is refused on web because apps/web has no semver dependency; uploaded and authored plugins install without resolving dependencies (archive.ts, plugin-owned-source-service.ts, uploads route, p-routines-voice files). | cli |
 
-Code: `apps/cli/src/features/plugins/registry.rs:538-563`
+Code: `apps/web/lib/services/plugin-dependencies.ts:106-106`, `apps/web/lib/services/plugin-installation-service.ts:235-235`, `apps/web/lib/services/plugin-installation-service.ts:337-337`, `apps/web/app/api/plugins/installations/route.ts:120-120`
 
 ## S98.26: Publisher identity service.
 
 - Done when: Publishers have verified identities and installs check a package came from its publisher.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Signatures are checked only against one operator-supplied key set (PLUGIN_SIGNING_PUBLIC_KEYS, refuses when unset); publishers have no individual verified identity. | handler, flag-off |
-
-Code: `apps/web/lib/services/plugin-marketplace-service.ts:74-74`, `apps/web/lib/services/plugin-marketplace-service.ts:80-90`
 
 ## S98.27: Organization distribution service.
 

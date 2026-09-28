@@ -118,6 +118,7 @@
     "restore": "복원",
     "running": "실행 중",
     "unread": "읽지 않음",
+    "needsYou": "확인 필요",
     "searchConversations": "대화 검색",
     "searchConversationsDescription": "대화 기록을 검색하고 일치하는 대화를 엽니다.",
     "share": "공유",

@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S95.02: Multipart/resumable-upload service.
-
-- Done when: Large uploads can be sent in resumable parts and resumed after interruption.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The multipart/resumable API (/api/files/uploads, 8 MB parts up to 256 MB) accepts only video types and no client calls it; chat and project uploads are single presigned PUTs. | ui |
-
-Code: `apps/web/app/api/files/uploads/resumable-upload.ts:14-30`, `apps/web/app/api/files/uploads/route.ts:38-48`
-
 ## S95.08: OCR worker.
 
 - Done when: Scanned (image-only) pages are OCR-ed.
@@ -71,25 +60,3 @@ Code: `apps/web/features/chat/services/document-export-service.ts:467-470`, `app
 | platform | partial | Only project knowledge storage is summed against a cap, and the cap reads the uploader's own subscription row (Free/Team seats resolve to 0 bytes, live E034); Library media has no storage accounting at all. | handler |
 
 Code: `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-402`
-
-## S95.26: Derivative-resource cleanup.
-
-- Done when: Derived resources (indexes, jobs, lineage, thumbnails) are cleaned up with their source.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Retrieval documents and generation-job rows follow a purged media asset, but file_lineage rows (0257) are not in any deletion policy, so lineage survives purged files until account erasure. | handler |
-
-Code: `apps/web/lib/resources/deletion-policies.ts:208-234`
-
-## S95.28: Source-deletion propagation.
-
-- Done when: Deleting a source file withdraws everything derived from it (index chunks, context).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Knowledge-file delete/supersede triggers retrieval_forget_document (0202), but a project deleted from mobile via /api/projects/sync is only tombstoned: its knowledge files are not deleted, so their index rows are never withdrawn. | handler |
-
-Code: `apps/web/db/neon/0202_retrieval_index.sql:349-362`, `apps/web/app/api/projects/sync/route.ts:116-128`

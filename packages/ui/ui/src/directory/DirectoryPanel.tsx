@@ -279,14 +279,16 @@ function DirectorySectionPanel({
   const runAction = useCallback(
     async (
       id: string,
-      action: ((key: DirectorySectionKey, entry: string) => Promise<void> | void) | undefined,
+      action:
+        ((key: DirectorySectionKey, entry: string) => Promise<string | void> | void) | undefined,
     ) => {
       if (!action) return;
       setBusyId(id);
       setActionError(null);
       setActionNotice(null);
       try {
-        await action(section, id);
+        const notice = await action(section, id);
+        if (notice) setActionNotice(notice);
       } catch (caught: unknown) {
         if (isDirectoryActionNotice(caught))
           setActionNotice(toUserMessage(caught, GENERIC_ERROR_COPY));
@@ -457,6 +459,7 @@ function DirectorySectionPanel({
               {...(adapter.trySkillInChat
                 ? { onTryInChat: () => adapter.trySkillInChat?.(detail.id) }
                 : {})}
+              {...(adapter.openConnector ? { onOpenConnector: adapter.openConnector } : {})}
               busy={busy}
             />
           </>

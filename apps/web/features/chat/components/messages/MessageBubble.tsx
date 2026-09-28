@@ -2015,6 +2015,7 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && message.metadata?.research && (
             <ResearchActivity
               research={message.metadata.research}
+              messageId={message.id}
               isStreaming={message.isStreaming ?? false}
               isRetrying={isRetryingResearch}
               {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}

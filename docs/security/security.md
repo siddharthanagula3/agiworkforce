@@ -86,6 +86,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | -------------------- | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
 | `web_search`         | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `search_maps`        | asks                   | runs                           | read, reversible                                                                 |
+| `plan_itinerary`     | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`          | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `execute_code`       | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
 | `write_file`         | asks                   | asks                           | write, not reversible                                                            |
@@ -107,7 +108,11 @@ undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
 egress, which no policy auto-approves, so it asks under every policy. The three
 GitHub built-ins are declared, so `get_pull_request_diff` runs under
 `auto_approve_read_only` while `post_issue_comment` and
-`post_pull_request_review` ask under every policy.
+`post_pull_request_review` ask under every policy. The three Gmail actions AGI adds
+beside Google's Gmail server are declared the same way: `read_attachments`
+reads, `create_draft_with_attachments` writes a draft into the user's own
+mailbox from files the account owns, and `send_draft` is a non-reversible
+external send, so it asks under every policy.
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. The

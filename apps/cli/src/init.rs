@@ -80,18 +80,18 @@ fn write_default_config(home: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Generate `~/.agiworkforce/INSTRUCTIONS.md` if it doesn't exist.
+/// Generate `~/.agiworkforce/instructions.md` if it doesn't exist.
 fn write_default_instructions(home: &Path) -> Result<()> {
-    let path = home.join("INSTRUCTIONS.md");
-    if path.exists() {
+    let path = home.join("instructions.md");
+    if path.exists() || home.join("INSTRUCTIONS.md").exists() {
         return Ok(());
     }
 
     let contents = r#"# AGI Instructions
 
 Add custom instructions here. These are loaded into every agent session.
-The CLI loads this file from ~/.agiworkforce/INSTRUCTIONS.md (global)
-and .agiworkforce/INSTRUCTIONS.md (project-level).
+The CLI loads this file from ~/.agiworkforce/instructions.md (global)
+and .agiworkforce/instructions.md (project-level).
 
 ## Examples
 - "Always use TypeScript strict mode"

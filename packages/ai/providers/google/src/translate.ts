@@ -20,6 +20,8 @@ import type {
   GeminiToolConfig,
 } from './types';
 
+const JSON_MIME_TYPE = 'application/json';
+
 function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
 }
@@ -165,6 +167,12 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
   if (req.topK !== undefined) generationConfig.topK = req.topK;
   if (req.maxOutputTokens !== undefined) generationConfig.maxOutputTokens = req.maxOutputTokens;
   if (req.stopSequences) generationConfig.stopSequences = req.stopSequences;
+  if (req.responseFormat && !tools) {
+    generationConfig.responseMimeType = JSON_MIME_TYPE;
+    if (req.responseFormat.type === 'json_schema') {
+      generationConfig.responseJsonSchema = req.responseFormat.schema;
+    }
+  }
 
   if (req.thinking?.type === 'enabled') {
     const includeThoughts = req.thinking.includeThoughts ?? true;

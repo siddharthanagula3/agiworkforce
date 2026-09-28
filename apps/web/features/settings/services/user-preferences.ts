@@ -64,6 +64,7 @@ export interface APIKey {
   scopes: ApiKeyScope[];
   created_at: string;
   last_used_at?: string;
+  expires_at?: string | null;
 }
 
 function encodeBase32(buffer: Uint8Array): string {

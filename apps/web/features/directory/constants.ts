@@ -16,7 +16,35 @@ export const DIRECTORY_SOURCE_LABEL_PARTNERS = 'Partners';
 export const SKILL_PUBLISHER_AGI = 'Made by AGI';
 export const SKILL_PUBLISHER_YOU = 'Yours';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
+export const SKILL_PUBLISHER_PLUGIN = 'From a plugin';
 export const SKILL_LICENSE_PREFIX = 'Complete terms in';
+
+export const SKILL_ORIGIN_PERSONAL = 'Created by you';
+export const SKILL_ORIGIN_BUNDLED = 'Included with AGI Workforce';
+export const SKILL_ORIGIN_MANAGED = 'Managed for this workspace';
+export const SKILL_ORIGIN_UNKNOWN_PLUGIN = 'Part of a plugin';
+
+export function skillPluginPublisher(pluginName: string): string {
+  return `From ${pluginName}`;
+}
+
+export function skillCatalogPluginOrigin(pluginName: string): string {
+  return `Part of the ${pluginName} plugin, included with AGI Workforce`;
+}
+
+export function skillRepositoryPluginOrigin(pluginName: string, marketplace?: string): string {
+  return marketplace
+    ? `Part of the ${pluginName} plugin from the ${marketplace} marketplace`
+    : `Part of the ${pluginName} plugin`;
+}
+
+export function skillUploadedPluginOrigin(pluginName: string): string {
+  return `Part of ${pluginName}, a plugin you uploaded`;
+}
+
+export function skillAuthoredPluginOrigin(pluginName: string): string {
+  return `Part of ${pluginName}, a plugin you created`;
+}
 
 export const SKILL_STATUS_GROUP_ID = 'status';
 export const SKILL_STATUS_GROUP_LABEL = 'Status';
@@ -91,7 +119,7 @@ export const PLUGIN_INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 export const PLUGIN_NOT_INSTALLABLE_CODE = 'PLUGIN_NOT_INSTALLABLE';
 export const PLUGIN_INSTALLS_DISABLED_STATUS = 503;
 export const PLUGIN_CONFLICT_STATUS = 409;
-export const PLUGIN_MESSAGE_STATUSES: readonly number[] = [404, 409, 502, 503];
+export const PLUGIN_MESSAGE_STATUSES: readonly number[] = [403, 404, 409, 502, 503];
 
 export const DIRECTORY_PAGE_SIZE = 100;
 export const DIRECTORY_SORT_POPULAR = 'popular';
@@ -210,6 +238,15 @@ export function uploadSkillCountLine(count: number): string {
   return count === 1
     ? '1 skill is now available in chat.'
     : `${count} skills are now available in chat.`;
+}
+
+const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
+export function pluginDependenciesInstalledLine(
+  pluginName: string,
+  dependencyNames: readonly string[],
+): string {
+  return `Installed ${pluginName} and the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
 }
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;

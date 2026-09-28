@@ -112,9 +112,6 @@ Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/featur
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the cited contextPanelProvider tree lists Instructions/Pinned/Auto context files (contextPanelProvider.ts:183-196), not the repository; addToContext is contributed only in editor/context (package.json:813), there is no explorer/context menu, so no product flow runs through the host Explorer. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:789-799`, `apps/extension-vscode/src/features/trees/contextPanelProvider.ts:183-188`
 
 ## S66.09: File search.
 
@@ -169,24 +166,18 @@ Code: `apps/web/features/code/components/LocalSessionPanel.tsx:199-204`, `apps/d
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the cited lines read the active editor for Add to Context; nothing shows several files open. The product opens files only as preview editors (path-links/index.ts:68 and :97 pass preview: true, so each open replaces the last) and proposeDiff needs a file the user already opened (ChatStateManager.ts:1328-1331). Keeping several tabs open is purely host behaviour. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:808-811`, `apps/extension-vscode/src/core/commandSetup.ts:789-793`
 
 ## S66.13: Selected-code context.
 
 - Done when: The user selects code in the workspace and sends that selection to the agent as context.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | @file mentions attach whole files; there is no way to pass a selected line range. | ui |
-
-Code: `apps/cli/src/tui/widgets/mention_popup.rs:1-7`, `apps/cli/src/mentions.rs:137-143`
 
 ## S66.14: Diagnostics panel.
 
@@ -228,9 +219,6 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/we
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the product keeps one reused "AGI Workforce" terminal (terminalProvider.ts:90-95 finds the existing one by name) plus a fresh "AGI Tests" terminal per run; the agent's own commands run inside the app-server, not in any terminal. Several terminals side by side is host behaviour the product never drives. |  |
-
-Code: `apps/extension-vscode/src/providers/terminalProvider.ts:98-101`, `apps/extension-vscode/src/core/commandSetup.ts:1475-1477`
 
 ## S66.17: Command-history view.
 
@@ -292,31 +280,27 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 
 - Done when: The user sees a list of checkpoints (saved states of code and conversation) for the session.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Checkpoints are conversation-only snapshots; /stats shows just their count and there is no list to pick from. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/history.rs:14-16`, `apps/cli/src/claude_parity.rs:586-586`
 
 ## S66.23: Restore checkpoint.
 
 - Done when: The user restores the session's code and conversation to an earlier checkpoint.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /rewind restores only the conversation; files the agent edited are not rolled back. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3591-3593`, `apps/cli/src/agent/history.rs:20-26`
 
 ## S66.24: Plan mode.
 
@@ -395,9 +379,6 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | L1/F1: the cited CloudTasksTreeProvider lists account-level AGI Cloud runs (cloudTasksTree.ts:88-100, "Cloud tasks belong to your AGI Cloud account"), not this session's background commands or spawned jobs; the local runtime has no background shell and nothing lists its jobs. A related list exists, so partial rather than missing. |  |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2196-2196`
 
 ## S66.30: Subagent panel.
 
@@ -437,9 +418,6 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:307-332`, `apps/we
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | AGI: Run Tests opens a terminal running the detected test command; results are raw terminal output, with no pass/fail summary. | ui |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1449-1454`, `apps/extension-vscode/src/core/commandSetup.ts:1475-1477`
 
 ## S66.39: Session recap.
 
