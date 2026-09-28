@@ -3539,6 +3539,7 @@ enum SlashResult {
     RunArtifacts(String),
     RunTasks(String),
     RunWorktree(String),
+    RunMcp(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3992,36 +3993,65 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         ),
 
         // ── Tools & plugins ──
+        "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
+
         "/mcp" => {
             use crate::tui::widgets::screen_renderers::{
                 McpScope, McpServerSummary, McpStatus, render_mcp_list,
             };
-            let scopes = if let Some(tools) = app.session.mcp_info() {
-                // Group tools by server name into a single scope.
-                let mut server_names: Vec<String> =
-                    tools.iter().map(|t| t.server_name.clone()).collect();
-                server_names.sort();
-                server_names.dedup();
-                let servers: Vec<McpServerSummary> = server_names
-                    .iter()
-                    .map(|name| {
-                        let tool_count =
-                            tools.iter().filter(|t| &t.server_name == name).count();
-                        McpServerSummary {
-                            name: name.clone(),
-                            status: McpStatus::Connected,
-                            tool_count: Some(tool_count),
+            let tools = app.session.mcp_info().unwrap_or_default();
+            let registry = crate::mcp::registry::McpRegistry::load()
+                .map(|registry| registry.list())
+                .unwrap_or_default();
+            let configured = crate::mcp::McpManager::load_configs().unwrap_or_default();
+            let tokens = crate::mcp::McpOAuthStore::load().unwrap_or_default();
+            let mut names: Vec<String> = configured
+                .keys()
+                .cloned()
+                .chain(registry.iter().map(|row| row.name.clone()))
+                .chain(tools.iter().map(|tool| tool.server_name.clone()))
+                .collect();
+            names.sort();
+            names.dedup();
+            let servers: Vec<McpServerSummary> = names
+                .iter()
+                .map(|name| {
+                    let tool_count = tools.iter().filter(|tool| &tool.server_name == name).count();
+                    let disabled = registry.iter().any(|row| &row.name == name && !row.enabled);
+                    let signed_out_remote = configured.get(name).is_some_and(|config| {
+                        match config.as_transport() {
+                            crate::mcp::McpTransport::Http { url, .. }
+                            | crate::mcp::McpTransport::Sse { url, .. } => {
+                                tokens.get(&url).is_none()
+                                    && tokens.get(url.trim_end_matches('/')).is_none()
+                            }
+                            crate::mcp::McpTransport::Stdio { .. } => false,
                         }
-                    })
-                    .collect();
-                vec![McpScope {
-                    label: "Connected servers".to_string(),
-                    servers,
-                }]
-            } else {
-                vec![]
-            };
-            SlashResult::SystemMessage(render_mcp_list(&scopes))
+                    });
+                    let status = if disabled {
+                        McpStatus::Disabled
+                    } else if tool_count > 0 {
+                        McpStatus::Connected
+                    } else if signed_out_remote {
+                        McpStatus::NeedsAuth
+                    } else {
+                        McpStatus::Failed
+                    };
+                    McpServerSummary {
+                        name: name.clone(),
+                        status,
+                        tool_count: Some(tool_count),
+                    }
+                })
+                .collect();
+            let mut text = render_mcp_list(&[McpScope {
+                label: "Configured servers".to_string(),
+                servers,
+            }]);
+            text.push_str(
+                "\n/mcp tools [server] lists tools · /mcp restart reconnects · agi mcp login <name> signs in to a remote server · /mcp enable|disable <name>",
+            );
+            SlashResult::SystemMessage(text)
         }
 
         "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
@@ -5274,6 +5304,14 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
+                                });
+                            }
+                            SlashResult::RunMcp(argument) => {
+                                let outcome =
+                                    crate::repl::mcp_for_display(&argument, &mut app.session).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: outcome.plain_message(),
                                 });
                             }
                             SlashResult::RunWorktree(argument) => {
