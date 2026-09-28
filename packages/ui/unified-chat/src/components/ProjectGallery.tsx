@@ -1,6 +1,13 @@
 import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Plus, Search, Smile } from 'lucide-react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { Plus, Search } from 'lucide-react';
+import {
+  DEFAULT_PROJECT_ICON_ID,
+  PROJECT_ACCENT_REGISTRY,
+  PROJECT_ICON_REGISTRY,
+  resolveProjectAccentHex,
+  resolveProjectIcon,
+  useMenuKeyboard,
+} from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 import { useProjectStore } from '../stores/projectStore';
@@ -8,31 +15,16 @@ import { ProjectCard } from './ProjectCard';
 import type { Project } from '../lib/types';
 
 interface ProjectPreset {
-  emoji: string;
+  icon: string;
   label: string;
   accentColor: 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'zinc';
 }
 
 const PROJECT_PRESETS: readonly ProjectPreset[] = [
-  { emoji: '💻', label: 'Coding', accentColor: 'sky' },
-  { emoji: '📝', label: 'Writing', accentColor: 'amber' },
-  { emoji: '🔬', label: 'Research', accentColor: 'emerald' },
-  { emoji: '📚', label: 'Learning', accentColor: 'violet' },
-];
-
-const EMOJI_OPTIONS: readonly string[] = [
-  '📁',
-  '💻',
-  '📝',
-  '🔬',
-  '📚',
-  '🎨',
-  '💼',
-  '🏠',
-  '🚀',
-  '⭐️',
-  '🛠️',
-  '🌱',
+  { icon: 'code', label: 'Coding', accentColor: 'sky' },
+  { icon: 'file-text', label: 'Writing', accentColor: 'amber' },
+  { icon: 'brain', label: 'Research', accentColor: 'emerald' },
+  { icon: 'book-open', label: 'Learning', accentColor: 'violet' },
 ];
 
 export interface ProjectGalleryProps {
@@ -56,6 +48,11 @@ export interface ProjectGalleryCreateInput {
   name: string;
   iconEmoji: string;
   accentColor: ProjectPreset['accentColor'];
+}
+
+function NewProjectIcon({ iconId }: { iconId: string }) {
+  const Icon = resolveProjectIcon(iconId);
+  return <Icon className="h-3.5 w-3.5" aria-hidden="true" />;
 }
 
 function generateLocalId(): string {
@@ -90,26 +87,26 @@ export function ProjectGallery({
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newEmoji, setNewEmoji] = useState<string>('📁');
+  const [newIcon, setNewIcon] = useState<string>(DEFAULT_PROJECT_ICON_ID);
   const [newAccent, setNewAccent] = useState<ProjectPreset['accentColor']>('zinc');
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
-  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeEmojiPicker = useCallback(() => setEmojiPickerOpen(false), []);
+  const iconPickerRef = useRef<HTMLDivElement | null>(null);
+  const iconTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeIconPicker = useCallback(() => setIconPickerOpen(false), []);
   useMenuKeyboard({
-    open: emojiPickerOpen,
-    onClose: closeEmojiPicker,
-    panelRef: emojiPickerRef,
-    triggerRef: emojiTriggerRef,
+    open: iconPickerOpen,
+    onClose: closeIconPicker,
+    panelRef: iconPickerRef,
+    triggerRef: iconTriggerRef,
     itemSelector: '[role="option"]',
   });
 
   const applyPreset = useCallback((preset: ProjectPreset) => {
     setNewName(preset.label);
-    setNewEmoji(preset.emoji);
+    setNewIcon(preset.icon);
     setNewAccent(preset.accentColor);
   }, []);
 
@@ -168,12 +165,12 @@ export function ProjectGallery({
         if (onCreate) {
           project = await onCreate({
             name: trimmed,
-            iconEmoji: newEmoji,
+            iconEmoji: newIcon,
             accentColor: newAccent,
           });
           project = {
             ...project,
-            iconEmoji: project.iconEmoji ?? newEmoji,
+            iconEmoji: project.iconEmoji ?? newIcon,
             accentColor: project.accentColor ?? newAccent,
           };
         } else {
@@ -181,7 +178,7 @@ export function ProjectGallery({
           project = {
             id: generateLocalId(),
             name: trimmed,
-            iconEmoji: newEmoji,
+            iconEmoji: newIcon,
             accentColor: newAccent,
             createdAt: now,
             updatedAt: now,
@@ -189,9 +186,9 @@ export function ProjectGallery({
         }
         addProject(project);
         setNewName('');
-        setNewEmoji('📁');
+        setNewIcon(DEFAULT_PROJECT_ICON_ID);
         setNewAccent('zinc');
-        setEmojiPickerOpen(false);
+        setIconPickerOpen(false);
         setCreating(false);
         handleSelect(project);
       } catch (error) {
@@ -200,7 +197,7 @@ export function ProjectGallery({
         setSubmitting(false);
       }
     },
-    [newName, newEmoji, newAccent, onCreate, addProject, handleSelect],
+    [newName, newIcon, newAccent, onCreate, addProject, handleSelect],
   );
 
   return (
@@ -256,21 +253,20 @@ export function ProjectGallery({
         >
           <div className="flex items-center gap-2">
             <button
-              ref={emojiTriggerRef}
+              ref={iconTriggerRef}
               type="button"
-              onClick={() => setEmojiPickerOpen((v) => !v)}
-              aria-label="Choose project emoji"
-              aria-expanded={emojiPickerOpen}
+              onClick={() => setIconPickerOpen((v) => !v)}
+              aria-label="Choose project icon"
+              aria-expanded={iconPickerOpen}
               aria-haspopup="listbox"
               data-testid="project-create-emoji-trigger"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-[var(--chat-surface-elevated)] text-lg hover:bg-[var(--chat-surface-hover)]"
-              style={{ borderColor: 'var(--chat-border)' }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)]"
+              style={{
+                borderColor: 'var(--chat-border)',
+                color: resolveProjectAccentHex(newAccent),
+              }}
             >
-              {newEmoji ? (
-                <span>{newEmoji}</span>
-              ) : (
-                <Smile size={14} className="text-[var(--chat-text-muted)]" />
-              )}
+              <NewProjectIcon iconId={newIcon} />
             </button>
             <input
               autoFocus
@@ -283,35 +279,64 @@ export function ProjectGallery({
             />
           </div>
 
-          {emojiPickerOpen && (
+          {iconPickerOpen && (
             <div
-              ref={emojiPickerRef}
+              ref={iconPickerRef}
               role="listbox"
-              aria-label="Project emoji"
+              aria-label="Project icon"
               data-testid="project-create-emoji-picker"
               className="flex flex-wrap gap-1 rounded-md border bg-[var(--chat-surface-elevated)] p-2"
               style={{ borderColor: 'var(--chat-border)' }}
             >
-              {EMOJI_OPTIONS.map((emoji) => (
+              {PROJECT_ICON_REGISTRY.map(({ id, label, Icon }) => (
                 <button
-                  key={emoji}
+                  key={id}
                   type="button"
                   role="option"
-                  aria-selected={emoji === newEmoji}
+                  aria-label={label}
+                  aria-selected={id === newIcon}
                   onClick={() => {
-                    setNewEmoji(emoji);
-                    setEmojiPickerOpen(false);
+                    setNewIcon(id);
+                    setIconPickerOpen(false);
                   }}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-compact text-base hover:bg-[var(--chat-surface-hover)]',
-                    emoji === newEmoji && 'bg-[var(--chat-surface-hover)]',
+                    'flex h-8 w-8 items-center justify-center rounded-compact text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+                    id === newIcon && 'bg-[var(--chat-surface-hover)]',
                   )}
                 >
-                  {emoji}
+                  <Icon className="h-4 w-4" aria-hidden="true" />
                 </button>
               ))}
             </div>
           )}
+
+          <div
+            role="radiogroup"
+            aria-label="Project colour"
+            data-testid="project-create-accents"
+            className="flex flex-wrap items-center gap-1.5"
+          >
+            {PROJECT_ACCENT_REGISTRY.map((accent) => (
+              <button
+                key={accent.id}
+                type="button"
+                role="radio"
+                aria-checked={accent.id === newAccent}
+                aria-label={accent.label}
+                onClick={() => setNewAccent(accent.id as ProjectPreset['accentColor'])}
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+                  accent.id === newAccent && 'ring-2 ring-[var(--chat-border-strong)]',
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 rounded-full"
+                  style={{ backgroundColor: accent.hex }}
+                />
+              </button>
+            ))}
+          </div>
 
           <div
             data-testid="project-create-presets"
@@ -329,7 +354,7 @@ export function ProjectGallery({
                 className="inline-flex items-center gap-1 rounded-full border bg-[var(--chat-surface-elevated)] px-2.5 py-0.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
                 style={{ borderColor: 'var(--chat-border)' }}
               >
-                <span>{preset.emoji}</span>
+                <NewProjectIcon iconId={preset.icon} />
                 <span>{preset.label}</span>
               </button>
             ))}
@@ -347,9 +372,9 @@ export function ProjectGallery({
               onClick={() => {
                 setCreating(false);
                 setNewName('');
-                setNewEmoji('📁');
+                setNewIcon(DEFAULT_PROJECT_ICON_ID);
                 setNewAccent('zinc');
-                setEmojiPickerOpen(false);
+                setIconPickerOpen(false);
                 setCreateError(null);
               }}
               className="rounded-compact px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
