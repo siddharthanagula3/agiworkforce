@@ -294,6 +294,7 @@ export interface GarnishPreferences {
   cliPath: string;
   sessionCompletionAlerts: SessionCompletionAlerts;
   sessionApprovalAlerts: boolean;
+  computerUseEnabled: boolean;
   /**
    * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
    * 0 is actual size. Held here so the window opens at the size the user last
@@ -322,6 +323,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   cliPath: '',
   sessionCompletionAlerts: DEFAULT_SESSION_COMPLETION_ALERTS,
   sessionApprovalAlerts: true,
+  computerUseEnabled: false,
   zoomLevel: 0,
   appearance: 'system',
   windowFrame: null,
@@ -363,6 +365,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['sessionApprovalAlerts'] === 'boolean'
         ? source['sessionApprovalAlerts']
         : DEFAULT_PREFERENCES.sessionApprovalAlerts,
+    computerUseEnabled:
+      typeof source['computerUseEnabled'] === 'boolean'
+        ? source['computerUseEnabled']
+        : DEFAULT_PREFERENCES.computerUseEnabled,
     zoomLevel:
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])

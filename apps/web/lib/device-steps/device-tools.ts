@@ -3,6 +3,7 @@ import {
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
+  MAX_DEVICE_REVIEW_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
@@ -37,6 +38,13 @@ function rootChoices(declaration: DesktopHostDeclaration): {
 }
 
 const COORDINATE_RANGE = { type: 'integer', minimum: 0, maximum: MAX_DEVICE_COORDINATE } as const;
+
+const REVIEW = {
+  type: 'string',
+  maxLength: MAX_DEVICE_REVIEW_LENGTH,
+  description:
+    'Set this when the step pays or buys something, sends a message or a post, submits personal or account details, deletes something, changes a security or privacy setting, or enters a password: one short sentence saying what it will do. The user is asked before the step runs.',
+} as const;
 
 function coordinate(axis: 'x' | 'y', what: string): Record<string, unknown> {
   return {
@@ -158,6 +166,7 @@ function parametersFor(
             maximum: MAX_DEVICE_CLICK_COUNT,
             description: '1 for a single click, 2 to open something, 3 to select a line.',
           },
+          review: REVIEW,
         },
         required: ['x', 'y'],
       };
@@ -169,6 +178,7 @@ function parametersFor(
           y: coordinate('y', 'where the drag starts'),
           toX: coordinate('x', 'where the drag ends'),
           toY: coordinate('y', 'where the drag ends'),
+          review: REVIEW,
         },
         required: ['x', 'y', 'toX', 'toY'],
       };
@@ -202,6 +212,7 @@ function parametersFor(
             maxLength: MAX_DEVICE_TYPE_LENGTH,
             description: 'The text to type where the keyboard focus already is.',
           },
+          review: REVIEW,
         },
         required: ['text'],
       };
@@ -218,6 +229,7 @@ function parametersFor(
             items: { type: 'string', enum: [...DEVICE_KEY_MODIFIERS] },
             description: 'Modifiers held while the key is pressed.',
           },
+          review: REVIEW,
         },
         required: ['key'],
       };

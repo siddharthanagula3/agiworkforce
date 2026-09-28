@@ -2,10 +2,12 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:chil
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { app, desktopCapturer, screen, systemPreferences } from 'electron';
-import type {
-  DeviceKeyModifier,
-  DeviceMouseButton,
-  DeviceStepRegion,
+import {
+  readDeviceFrontWindow,
+  type DeviceFrontWindow,
+  type DeviceKeyModifier,
+  type DeviceMouseButton,
+  type DeviceStepRegion,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeviceScreenDisplay } from '@agiworkforce/local-runtime-contract';
 import {
@@ -16,7 +18,6 @@ import {
   readHelperReply,
 } from './computerUseProtocol';
 import { FRAME_SAMPLE_WIDTH, frameDiffers, frameLuma } from './computerUseLoop';
-import { recordDesktopEvent } from './desktopTelemetryService';
 
 /**
  * Desktop computer use: what is on the screen, and the mouse and keyboard.
@@ -46,6 +47,12 @@ export interface ScreenCapture {
   displayName: string;
   displayId: number;
   displays: DeviceScreenDisplay[];
+  front: DeviceFrontWindow | null;
+}
+
+export interface FrontWindowReading {
+  front: DeviceFrontWindow | null;
+  secureInput: boolean;
 }
 
 export class ComputerUseRefused extends Error {
@@ -132,7 +139,10 @@ function resolveHelper(): { path: string } | ComputerUseUnsupported {
 }
 
 let helper: ChildProcessWithoutNullStreams | null = null;
-let pending: Array<{ resolve: (value: void) => void; reject: (error: Error) => void }> = [];
+let pending: Array<{
+  resolve: (payload: Record<string, unknown>) => void;
+  reject: (error: Error) => void;
+}> = [];
 let buffer = '';
 
 function settleAllPending(error: Error): void {
@@ -145,7 +155,7 @@ function readHelperLine(line: string): void {
   const entry = pending.shift();
   if (!entry) return;
   const reply = readHelperReply(line);
-  if (reply.ok) entry.resolve();
+  if (reply.ok) entry.resolve(reply.payload);
   else entry.reject(new ComputerUseRefused('failed', reply.error));
 }
 
@@ -174,24 +184,8 @@ function startHelper(): ChildProcessWithoutNullStreams | ComputerUseUnsupported 
   return child;
 }
 
-let takenOver = false;
-
-export function isComputerUseTakenOver(): boolean {
-  return takenOver;
-}
-
-export function takeOverComputerUse(): { takenOver: true } {
-  takenOver = true;
-  stopComputerUseHelper();
-  recordDesktopEvent({ domain: 'desktop_control', outcome: 'refused', cause: 'cancelled' });
-  return { takenOver: true };
-}
-
-export function handBackComputerUse(): { takenOver: false } {
-  takenOver = false;
+export function forgetLastFrame(): void {
   lastFrame = null;
-  recordDesktopEvent({ domain: 'desktop_control', outcome: 'ok' });
-  return { takenOver: false };
 }
 
 export function stopComputerUseHelper(): void {
@@ -200,19 +194,19 @@ export function stopComputerUseHelper(): void {
   settleAllPending(new ComputerUseRefused('failed', 'The input helper was stopped.'));
 }
 
-function sendToHelper(request: Record<string, unknown>): Promise<void> {
+function sendToHelper(request: Record<string, unknown>): Promise<Record<string, unknown>> {
   const started = startHelper();
   if ('supported' in started) {
     return Promise.reject(new ComputerUseRefused('unsupported', started.reason));
   }
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new ComputerUseRefused('failed', 'The input helper did not answer.'));
     }, HELPER_REPLY_TIMEOUT_MS);
     pending.push({
-      resolve: () => {
+      resolve: (payload) => {
         clearTimeout(timer);
-        resolve();
+        resolve(payload);
       },
       reject: (error) => {
         clearTimeout(timer);
@@ -229,6 +223,17 @@ export function screenCaptureAllowed(): boolean {
   return status !== 'denied' && status !== 'restricted';
 }
 
+export function computerUseSupport(): ComputerUseAvailability {
+  if (process.platform !== 'darwin') {
+    return {
+      supported: false,
+      reason: `Controlling the mouse and keyboard is supported on macOS only; this device runs ${process.platform}.`,
+    };
+  }
+  const resolved = resolveHelper();
+  return 'supported' in resolved ? resolved : { supported: true };
+}
+
 /**
  * Whether this machine can be driven at all, and why not when it cannot.
  *
@@ -238,14 +243,8 @@ export function screenCaptureAllowed(): boolean {
  * sends on every chat request.
  */
 export function computerUseAvailability(prompt = false): ComputerUseAvailability {
-  if (process.platform !== 'darwin') {
-    return {
-      supported: false,
-      reason: `Controlling the mouse and keyboard is supported on macOS only; this device runs ${process.platform}.`,
-    };
-  }
-  const resolved = resolveHelper();
-  if ('supported' in resolved) return resolved;
+  const support = computerUseSupport();
+  if (!support.supported) return support;
   if (!screenCaptureAllowed()) {
     return {
       supported: false,
@@ -269,12 +268,6 @@ export function computerUseAvailability(prompt = false): ComputerUseAvailability
  * opens is the answer to something they just asked for.
  */
 function requireAvailable(): void {
-  if (takenOver) {
-    throw new ComputerUseRefused(
-      'paused',
-      'The user has taken over the screen. Do not try another screen step; tell them what you were about to do and wait for them to hand control back.',
-    );
-  }
   const availability = computerUseAvailability(true);
   if (!availability.supported) {
     throw new ComputerUseRefused(
@@ -329,6 +322,27 @@ async function captureDisplay(display: Electron.Display): Promise<Electron.Nativ
   return source.thumbnail;
 }
 
+export async function readFrontWindow(): Promise<FrontWindowReading> {
+  requireAvailable();
+  const payload = await sendToHelper({ action: 'front' });
+  const raw = payload['front'];
+  return {
+    front: readDeviceFrontWindow(raw),
+    secureInput:
+      typeof raw === 'object' &&
+      raw !== null &&
+      (raw as Record<string, unknown>)['secureInput'] === true,
+  };
+}
+
+async function frontOrNull(): Promise<DeviceFrontWindow | null> {
+  try {
+    return (await readFrontWindow()).front;
+  } catch {
+    return null;
+  }
+}
+
 export async function captureScreen(displayId?: number): Promise<ScreenCapture> {
   requireAvailable();
   const display = targetDisplay(displayId);
@@ -354,6 +368,7 @@ export async function captureScreen(displayId?: number): Promise<ScreenCapture> 
     displayName: display.label || 'the main screen',
     displayId: display.id,
     displays: connectedDisplays(),
+    front: await frontOrNull(),
   };
 }
 
@@ -390,6 +405,7 @@ export async function captureRegion(region: DeviceStepRegion): Promise<ScreenCap
     displayName: display.label || 'the main screen',
     displayId: display.id,
     displays: connectedDisplays(),
+    front: await frontOrNull(),
   };
 }
 

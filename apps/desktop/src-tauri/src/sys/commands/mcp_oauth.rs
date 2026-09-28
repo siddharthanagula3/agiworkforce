@@ -47,9 +47,6 @@ enum ConnectorCredentialSource {
     // Used by: public MCP servers that require no authentication
     #[allow(dead_code)]
     None,
-    /// Remote MCP server that signs the user in through the MCP authorization
-    /// flow. `client` names a pre-registered OAuth app for servers without
-    /// dynamic registration, and `token_url` pins where its secret may go.
     Remote {
         url: &'static str,
         client: Option<McpOAuthProvider>,
