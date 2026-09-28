@@ -33,6 +33,7 @@ export function LiveVoiceComposer({
     <LiveVoiceBar
       visible={visible}
       status={controller.status}
+      reconnecting={controller.reconnecting}
       muted={controller.muted}
       assistantSpeaking={controller.assistantSpeaking}
       backendBusy={controller.backendBusy}
