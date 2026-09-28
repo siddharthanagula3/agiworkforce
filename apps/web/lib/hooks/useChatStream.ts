@@ -80,6 +80,7 @@ import {
   CloudToolApprovalProjectionSchema,
   DEVICE_STEP_RESUME_PATH,
   TOOL_APPROVAL_RESUME_PATH,
+  TOOL_INPUT_RESUME_PATH,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
@@ -699,8 +700,6 @@ interface PendingInputTurn {
 }
 
 const pendingInputTurns = new Map<string, PendingInputTurn>();
-
-const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
 
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
