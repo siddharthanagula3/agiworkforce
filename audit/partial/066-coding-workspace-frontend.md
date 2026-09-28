@@ -112,9 +112,6 @@ Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/featur
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the cited contextPanelProvider tree lists Instructions/Pinned/Auto context files (contextPanelProvider.ts:183-196), not the repository; addToContext is contributed only in editor/context (package.json:813), there is no explorer/context menu, so no product flow runs through the host Explorer. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:789-799`, `apps/extension-vscode/src/features/trees/contextPanelProvider.ts:183-188`
 
 ## S66.09: File search.
 
@@ -169,9 +166,6 @@ Code: `apps/web/features/code/components/LocalSessionPanel.tsx:199-204`, `apps/d
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the cited lines read the active editor for Add to Context; nothing shows several files open. The product opens files only as preview editors (path-links/index.ts:68 and :97 pass preview: true, so each open replaces the last) and proposeDiff needs a file the user already opened (ChatStateManager.ts:1328-1331). Keeping several tabs open is purely host behaviour. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:808-811`, `apps/extension-vscode/src/core/commandSetup.ts:789-793`
 
 ## S66.13: Selected-code context.
 
@@ -228,9 +222,6 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/we
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | F1 (R-q): the product keeps one reused "AGI Workforce" terminal (terminalProvider.ts:90-95 finds the existing one by name) plus a fresh "AGI Tests" terminal per run; the agent's own commands run inside the app-server, not in any terminal. Several terminals side by side is host behaviour the product never drives. |  |
-
-Code: `apps/extension-vscode/src/providers/terminalProvider.ts:98-101`, `apps/extension-vscode/src/core/commandSetup.ts:1475-1477`
 
 ## S66.17: Command-history view.
 
@@ -395,9 +386,6 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | L1/F1: the cited CloudTasksTreeProvider lists account-level AGI Cloud runs (cloudTasksTree.ts:88-100, "Cloud tasks belong to your AGI Cloud account"), not this session's background commands or spawned jobs; the local runtime has no background shell and nothing lists its jobs. A related list exists, so partial rather than missing. |  |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2196-2196`
 
 ## S66.30: Subagent panel.
 
@@ -437,9 +425,6 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:307-332`, `apps/we
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | AGI: Run Tests opens a terminal running the detected test command; results are raw terminal output, with no pass/fail summary. | ui |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1449-1454`, `apps/extension-vscode/src/core/commandSetup.ts:1475-1477`
 
 ## S66.39: Session recap.
 

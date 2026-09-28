@@ -10,62 +10,52 @@ nothing is left.
 
 - Done when: A Study entry point starts a tutoring session that changes how the model teaches.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat. | handler |
-| desktop | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The CLI's 'learning' output style (/output-style learning) only adds an optional learning exercise to coding answers; there is no study mode for a subject. | surface-only |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/components/layout/app-nav-items.ts:131-131`, `apps/web/app/chat/study/page.tsx:15-15`, `apps/web/features/study/components/StudyPage.tsx:50-50`, `apps/web/features/study/components/StudyPage.tsx:87-90`
+Code: `apps/cli/src/tui/tui_app.rs:4137-4137`, `apps/cli/src/output_styles.rs:53-53`
 
 ## S38.02: Learning-goal setup.
 
 - Done when: The user states what they want to learn before a session starts.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat. | handler |
-| desktop | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/shared/components/layout/app-nav-items.ts:131-131`, `apps/web/features/study/components/StudyPage.tsx:130-130`, `apps/web/features/study/components/StudyPage.tsx:143-143`, `apps/web/features/study/components/StudyPage.tsx:87-90`
 
 ## S38.03: Subject selection.
 
 - Done when: The user picks the subject to study.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat (the subject is a free-text topic, no subject catalogue). | handler |
-| desktop | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat (the subject is a free-text topic, no subject catalogue). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/shared/components/layout/app-nav-items.ts:131-131`, `apps/web/features/study/components/StudyPage.tsx:135-135`, `apps/web/features/study/components/StudyPage.tsx:87-90`, `apps/web/features/study/components/StudyPage.tsx:37-42`
 
 ## S38.04: Level or background selection.
 
 - Done when: The user sets their level or background and the tutor adapts to it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat; the level is stored but never reaches the model. | handler |
-| desktop | partial | Start studying always fails: StudyPage creates the conversation with a bare fetch that sends no CSRF token, so /api/chat/conversations answers 403 and the page shows 'The study conversation could not be created'. Even with that fixed, no chat path reads study_sessions or sends the study instruction to the model, so the session would be an ordinary chat; the level is stored but never reaches the model. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/shared/components/layout/app-nav-items.ts:131-131`, `apps/web/features/study/components/StudyPage.tsx:166-166`, `apps/web/features/study/components/StudyPage.tsx:183-183`, `apps/web/features/study/server/study-session-store.ts:83-83`

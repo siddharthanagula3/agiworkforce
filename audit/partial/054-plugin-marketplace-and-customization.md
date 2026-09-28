@@ -219,13 +219,7 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows only a count/flag for hooks; web installs only a plugin's skills, so its hooks never run. | handler |
-| desktop | partial | Same as web: hooks shown, never run. | handler |
-| mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/features/plugins/server/directory/install.ts:155-204`
 
 ## S54.19: Required permissions.
 
