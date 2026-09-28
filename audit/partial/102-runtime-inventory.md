@@ -28,17 +28,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:351-353`, `
 
 Code: `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/lib/e2b/runtime.ts:889-893`
 
-## S102.14: Local shell/PTY runtime.
-
-- Done when: Local commands run in a shell/PTY runtime that supports interactive and long-running programs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The CLI and its app-server now run interactive and long-running programs in a pseudo-terminal (partials/desktop-cli 9d9e7f5f0). Electron's own shellService (apps/desktop/electron/runtime/shellService.ts) still spawns one-shot piped processes; that side is p-electron's. | handler |
-
-Code: `apps/cli/src/terminals.rs:173-173`, `apps/cli/src/features/exec/tools/bash/mod.rs:228-228`
-
 ## S102.32: Generated-application hosting runtime.
 
 - Done when: Generated applications are hosted at a public URL with the runtime they need.
