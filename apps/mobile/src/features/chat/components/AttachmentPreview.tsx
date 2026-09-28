@@ -21,6 +21,8 @@ import {
   uploadStatusLabel,
   useUploadLifecycleStore,
 } from '@/src/features/chat/upload/uploadLifecycle';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 
 export interface Attachment {
   id: string;
@@ -106,6 +108,22 @@ function documentIcon(attachment: Attachment): typeof FileIcon {
   return FileIcon;
 }
 
+function AttachmentImage({ attachment }: { attachment: Attachment }) {
+  const stored = resolveGeneratedImageUri(attachment.uri) !== null;
+  const { source } = useGeneratedImageSource(attachment.uri, false);
+  const imageSource = stored ? source : { uri: attachment.uri };
+  if (!imageSource) return null;
+  return (
+    <Image
+      source={imageSource}
+      style={{ width: 72, height: 72 }}
+      contentFit="cover"
+      transition={200}
+      recyclingKey={attachment.id}
+    />
+  );
+}
+
 function AttachmentThumbnail({
   attachment,
   onRemove,
@@ -170,13 +188,7 @@ function AttachmentThumbnail({
               : attachment.fileName
           }
         >
-          <Image
-            source={{ uri: attachment.uri }}
-            style={{ width: 72, height: 72 }}
-            contentFit="cover"
-            transition={200}
-            recyclingKey={attachment.id}
-          />
+          <AttachmentImage attachment={attachment} />
         </View>
       ) : isPastedText ? (
         <Pressable
