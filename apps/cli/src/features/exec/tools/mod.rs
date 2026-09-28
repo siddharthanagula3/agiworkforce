@@ -28,7 +28,7 @@ pub mod registry;
 mod task_registry;
 mod web;
 
-use bash::execute_run_command;
+use bash::{execute_command_output, execute_command_stop, execute_run_command};
 pub(crate) use common::format_size;
 pub(crate) use common::generate_simple_diff;
 pub(crate) use common::COMMAND_TIMEOUT;
@@ -619,6 +619,11 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "run_command" => {
             execute_run_command(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
+        "command_output" => {
+            execute_command_output(&call.args, require_confirm, opts.approval_callback.as_ref())
+                .await
+        }
+        "command_stop" => execute_command_stop(&call.args).await,
         // read_file / search_files / list_directory / glob / grep_files are
         // resolved earlier via the C1 read-only registry.
         "edit_file" => {
@@ -985,6 +990,8 @@ async fn execute_resolve_conflict(
 fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> String {
     let preferred_keys: &[&str] = match tool_name {
         "run_command" | "powershell" => &["command"],
+        "command_output" => &["input", "id"],
+        "command_stop" => &["id"],
         "write_file" | "edit_file" | "notebook_edit" | "read_file" | "resolve_conflict" => {
             &["path", "file_path"]
         }
@@ -1032,14 +1039,15 @@ async fn untrusted_shell_refusal(
     approval_callback: Option<&ApprovalCallback>,
     already_approved: bool,
 ) -> Option<ToolResult> {
-    if !matches!(canonical_name, "run_command" | "powershell") {
-        return None;
-    }
+    let command = match canonical_name {
+        "run_command" | "powershell" => args.get("command").cloned().unwrap_or_default(),
+        "command_output" => args.get("input").filter(|input| !input.is_empty())?.clone(),
+        _ => return None,
+    };
     let status = crate::trust::status_for(workspace_root);
     if status.restrictions().unrestricted_shell || already_approved {
         return None;
     }
-    let command = args.get("command").cloned().unwrap_or_default();
     let request = ApprovalRequest::new(
         ApprovalRequestKind::Exec {
             command: command.clone(),

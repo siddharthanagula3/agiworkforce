@@ -79,6 +79,31 @@ export const CloudAgentPendingDeviceStepSchema = z.object({
 
 export const MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH = 200;
 
+export const MAX_CLOUD_AGENT_RUN_STEER_LENGTH = 4_000;
+export const MAX_CLOUD_AGENT_PENDING_STEERS = 10;
+
+const STEER_PROGRESS_ID_PREFIX = 'steer:';
+
+export function cloudAgentRunSteerProgressId(steerId: string): string {
+  return `${STEER_PROGRESS_ID_PREFIX}${steerId}`;
+}
+
+export function isCloudAgentRunSteerProgressId(progressId: string): boolean {
+  return progressId.startsWith(STEER_PROGRESS_ID_PREFIX);
+}
+
+export const CloudAgentRunSteerSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().min(1).max(MAX_CLOUD_AGENT_RUN_STEER_LENGTH),
+  queuedAt: z.string().datetime(),
+});
+
+export const CloudAgentRunSteerRequestSchema = z
+  .object({
+    message: z.string().trim().min(1).max(MAX_CLOUD_AGENT_RUN_STEER_LENGTH),
+  })
+  .strict();
+
 export const CloudAgentRunUsageSchema = z.object({
   providerCalls: z.number().int().min(0),
   inputTokens: z.number().int().min(0),
@@ -150,6 +175,7 @@ export const CloudAgentRunSchema = z.object({
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
   pendingInput: CloudAgentPendingInputSchema.optional(),
   pendingDeviceStep: CloudAgentPendingDeviceStepSchema.optional(),
+  pendingSteers: z.array(CloudAgentRunSteerSchema).max(MAX_CLOUD_AGENT_PENDING_STEERS).optional(),
   usage: CloudAgentRunUsageSchema.optional(),
 });
 
@@ -168,6 +194,11 @@ export const CloudAgentRunCancellationResponseSchema = z.object({
   run: CloudAgentRunSchema,
 });
 
+export const CloudAgentRunSteerResponseSchema = z.object({
+  run: CloudAgentRunSchema,
+  steer: CloudAgentRunSteerSchema,
+});
+
 export type CloudAgentOriginSurface = z.infer<typeof CloudAgentOriginSurfaceSchema>;
 export type CloudAgentWorkMode = z.infer<typeof CloudAgentWorkModeSchema>;
 export type CloudAgentRun = z.infer<typeof CloudAgentRunSchema>;
@@ -175,6 +206,8 @@ export type CloudAgentPendingApproval = z.infer<typeof CloudAgentPendingApproval
 export type CloudAgentPendingInput = z.infer<typeof CloudAgentPendingInputSchema>;
 export type CloudAgentPendingDeviceStep = z.infer<typeof CloudAgentPendingDeviceStepSchema>;
 export type CloudAgentRunUsage = z.infer<typeof CloudAgentRunUsageSchema>;
+export type CloudAgentRunSteer = z.infer<typeof CloudAgentRunSteerSchema>;
+export type CloudAgentRunSteerResponse = z.infer<typeof CloudAgentRunSteerResponseSchema>;
 
 export interface CloudAgentRunSnapshotPage {
   run: CloudAgentRun;
@@ -190,6 +223,23 @@ export interface CloudAgentRunListPage {
 export function managedCloudAgentRunPath(runId: string): string {
   const parsed = z.string().uuid().parse(runId);
   return `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}/${encodeURIComponent(parsed)}`;
+}
+
+const STEERABLE_RUN_STATES: ReadonlySet<AgentTaskState> = new Set<AgentTaskState>([
+  'queued',
+  'planning',
+  'running',
+  'resuming',
+]);
+
+export function isCloudAgentRunSteerable(
+  run: Pick<CloudAgentRun, 'state' | 'workState' | 'pauseRequestedAt' | 'cancellationRequestedAt'>,
+): boolean {
+  return (
+    STEERABLE_RUN_STATES.has(run.workState ?? run.state) &&
+    !run.pauseRequestedAt &&
+    !run.cancellationRequestedAt
+  );
 }
 
 export function isCloudAgentRunFollowBoundary(state: AgentTaskState): boolean {

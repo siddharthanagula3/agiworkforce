@@ -1,5 +1,11 @@
 import { getExtensionTokensCssAuto } from './tokens';
-import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
+import {
+  clearAuthToken,
+  FREE_TRIAL_GATEWAY,
+  getAuthToken,
+} from './features/cloud-bridge/freeTrialClient';
+import { createApprovalHistorySection } from './features/options/approval-history-section';
+import { platformRequestHeaders } from './platformHeaders';
 import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
 import { beginOptionsAccountRefresh } from './features/options/account-state';
 import {
@@ -340,6 +346,76 @@ function injectStyles(): void {
     .opt-btn-danger:hover {
       background: color-mix(in srgb, var(--agi-ext-danger) 10%, transparent);
     }
+
+    .opt-btn-secondary {
+      background: none;
+      border: 1px solid var(--agi-ext-border);
+      color: var(--agi-ext-text);
+      border-radius: 6px;
+      padding: 5px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .opt-btn-secondary:hover { background: var(--agi-ext-hover); }
+    .opt-btn-secondary:disabled { opacity: 0.55; cursor: default; }
+
+    .opt-approval-history {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+
+    .opt-approval-history-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 8px;
+    }
+
+    .opt-approval-history-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 12px;
+      padding: 8px 12px;
+    }
+
+    .opt-approval-history-item + .opt-approval-history-item { border-top: 1px solid var(--agi-ext-border); }
+    .opt-approval-history-item .opt-row-hint { margin-top: 0; }
+
+    .opt-approval-history-summary {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--agi-ext-text);
+    }
+
+    .opt-approval-history-decision { font-weight: 600; }
+    .opt-approval-history-decision--rejected { color: var(--agi-ext-danger-text); }
+    .opt-approval-history-tool { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .opt-approval-history-open {
+      min-height: 24px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--agi-ext-accent-text);
+      font-size: 12px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .opt-approval-history-pager { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .opt-btn-secondary:focus-visible,
+    .opt-approval-history-open:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* Shortcuts table */
     .opt-shortcuts-table {
@@ -1347,6 +1423,14 @@ function buildPage(): void {
   });
 
   permSection.appendChild(allowlistBody);
+  permSection.appendChild(
+    createApprovalHistorySection({
+      gateway: FREE_TRIAL_GATEWAY,
+      getAuthToken,
+      headers: platformRequestHeaders,
+      openTab: (url) => void chrome.tabs.create({ url }),
+    }).element,
+  );
   page.appendChild(permSection);
 
   page.appendChild(

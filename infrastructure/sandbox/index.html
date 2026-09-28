@@ -236,6 +236,134 @@
         const idleEl = document.getElementById('idle');
         const rootEl = document.getElementById('root');
 
+        const RUNTIME_UNAVAILABLE_MESSAGE =
+          'AI and saved data are available once this app is published and opened by a signed-in viewer.';
+        const MAX_PENDING_RUNTIME_REQUESTS = 8;
+        let runtimeEnabled = false;
+        let runtimeSequence = 0;
+        const pendingRuntime = new Map();
+
+        function runtimeFailure(message) {
+          const error = new Error(message);
+          error.name = 'AgiRuntimeError';
+          return error;
+        }
+
+        function installAgiRuntime(scope) {
+          if (scope.agi) return;
+          function bridge(request) {
+            let relay = null;
+            try {
+              relay =
+                scope.__agiRuntimeBridge ||
+                (scope.parent !== scope ? scope.parent.__agiRuntimeBridge : null) ||
+                null;
+            } catch (error) {
+              relay = null;
+            }
+            return new Promise(function (resolve, reject) {
+              if (!relay) {
+                const error = new Error('AI and saved data are not available here.');
+                error.name = 'AgiRuntimeError';
+                reject(error);
+                return;
+              }
+              relay(request).then(resolve, reject);
+            });
+          }
+          function key(value) {
+            return String(value);
+          }
+          function isShared(value) {
+            return value === true;
+          }
+          const storage = Object.freeze({
+            get: function (name, shared) {
+              return bridge({ op: 'storage.get', key: key(name), shared: isShared(shared) });
+            },
+            set: function (name, value, shared) {
+              if (typeof value !== 'string') {
+                return Promise.reject(
+                  new TypeError(
+                    'storage.set saves text: pass JSON.stringify(value) for other data.',
+                  ),
+                );
+              }
+              return bridge({
+                op: 'storage.set',
+                key: key(name),
+                value: value,
+                shared: isShared(shared),
+              });
+            },
+            delete: function (name, shared) {
+              return bridge({ op: 'storage.delete', key: key(name), shared: isShared(shared) });
+            },
+            list: function (prefix, shared) {
+              return bridge({
+                op: 'storage.list',
+                prefix: prefix === undefined || prefix === null ? null : String(prefix),
+                shared: isShared(shared),
+              });
+            },
+          });
+          Object.defineProperty(scope, 'agi', {
+            value: Object.freeze({
+              complete: function (prompt) {
+                return bridge({ op: 'complete', prompt: String(prompt) });
+              },
+              storage: storage,
+            }),
+            writable: false,
+            configurable: false,
+          });
+        }
+
+        const AGI_RUNTIME_SHIM =
+          '<script>(' + installAgiRuntime.toString() + ')(window);<' + '/script>';
+
+        function withRuntimeShim(html) {
+          if (/<head\b[^>]*>/i.test(html)) {
+            return html.replace(/<head\b[^>]*>/i, function (match) {
+              return match + AGI_RUNTIME_SHIM;
+            });
+          }
+          if (/<html\b[^>]*>/i.test(html)) {
+            return html.replace(/<html\b[^>]*>/i, function (match) {
+              return match + '<head>' + AGI_RUNTIME_SHIM + '</head>';
+            });
+          }
+          return AGI_RUNTIME_SHIM + html;
+        }
+
+        function rejectPendingRuntime(message) {
+          pendingRuntime.forEach(function (pending) {
+            pending.reject(runtimeFailure(message));
+          });
+          pendingRuntime.clear();
+        }
+
+        window.__agiRuntimeBridge = function (request) {
+          return new Promise(function (resolve, reject) {
+            if (!runtimeEnabled || !parentOrigin) {
+              reject(runtimeFailure(RUNTIME_UNAVAILABLE_MESSAGE));
+              return;
+            }
+            if (pendingRuntime.size >= MAX_PENDING_RUNTIME_REQUESTS) {
+              reject(
+                runtimeFailure('Too many requests are waiting. Wait for one to finish first.'),
+              );
+              return;
+            }
+            runtimeSequence += 1;
+            const id = 'runtime-' + runtimeSequence;
+            pendingRuntime.set(id, { resolve: resolve, reject: reject });
+            postToParent({ type: 'runtime-request', id: id, request: request });
+          });
+        };
+
+        installAgiRuntime(window);
+
         function showError(msg) {
           rootEl.hidden = false;
           rootEl.innerHTML = '';
@@ -353,7 +481,7 @@
             }
           });
 
-          frame.srcdoc = html;
+          frame.srcdoc = withRuntimeShim(html);
           rootEl.appendChild(frame);
         }
 
@@ -458,6 +586,8 @@
 
         function dispatchRender(payload) {
           const kind = String(payload.kind || '').toLowerCase();
+          rejectPendingRuntime('The app reloaded before this request finished.');
+          runtimeEnabled = payload.runtime === true;
           showRoot();
           try {
             switch (kind) {
@@ -503,6 +633,7 @@
         });
         window.addEventListener('unhandledrejection', function (event) {
           const reason = event.reason;
+          if (reason && reason.name === 'AgiRuntimeError') return;
           reportRenderError(reason && reason.message ? reason.message : String(reason));
         });
 
@@ -527,6 +658,17 @@
           if (!data || typeof data !== 'object') return;
           if (data.type === 'render') {
             dispatchRender(data);
+          } else if (data.type === 'runtime-response' && typeof data.id === 'string') {
+            const pending = pendingRuntime.get(data.id);
+            if (!pending) return;
+            pendingRuntime.delete(data.id);
+            if (data.ok === true) {
+              pending.resolve(data.value === undefined ? null : data.value);
+            } else {
+              pending.reject(
+                runtimeFailure(String(data.error || 'The request failed. Try again.')),
+              );
+            }
           }
         });
 

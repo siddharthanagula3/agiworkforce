@@ -7,12 +7,15 @@ import {
   AgentEventEnvelopeSchema,
   AgentTaskStateSchema,
   CloudAgentRunSchema,
+  CloudAgentRunSteerSchema,
   ManagedCloudAgentRunRequestIdSchema,
   MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH,
   MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
+  MAX_CLOUD_AGENT_PENDING_STEERS,
   readPersistedInteractiveCards,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
+  type CloudAgentRunSteer,
   type CloudAgentRunUsage,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
@@ -101,6 +104,7 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   pending_device_tool_calls?: unknown;
   pending_device_step?: unknown;
   settled_usage?: unknown;
+  pending_steer?: unknown;
   /** Pre-update state, returned only by the two statements that move `state`. */
   previous_state?: string | null;
 }
@@ -543,6 +547,29 @@ function mapSettledUsage(row: CloudAgentRunRow): CloudAgentRun['usage'] {
   };
 }
 
+const StoredSteerSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  queued_at: z.string(),
+});
+
+function mapPendingSteers(value: unknown): CloudAgentRunSteer[] {
+  const stored = z.array(z.unknown()).safeParse(value);
+  if (!stored.success) return [];
+  return stored.data.flatMap((entry) => {
+    const parsedEntry = StoredSteerSchema.safeParse(entry);
+    if (!parsedEntry.success) return [];
+    const queuedAt = new Date(parsedEntry.data.queued_at);
+    if (Number.isNaN(queuedAt.getTime())) return [];
+    const steer = CloudAgentRunSteerSchema.safeParse({
+      id: parsedEntry.data.id,
+      text: parsedEntry.data.text,
+      queuedAt: queuedAt.toISOString(),
+    });
+    return steer.success ? [steer.data] : [];
+  });
+}
+
 function workStateOf(
   row: CloudAgentRunRow,
   pendingApproval: CloudAgentRun['pendingApproval'],
@@ -556,11 +583,16 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
   const pendingInput = mapPendingInput(row);
   const pendingDeviceStep = mapPendingDeviceStep(row);
   const usage = mapSettledUsage(row);
+  const pendingSteers = mapPendingSteers(row.pending_steer).slice(
+    0,
+    MAX_CLOUD_AGENT_PENDING_STEERS,
+  );
   const workState = workStateOf(row, pendingApproval);
   return CloudAgentRunSchema.parse({
     ...(pendingApproval ? { pendingApproval } : {}),
     ...(pendingInput ? { pendingInput } : {}),
     ...(pendingDeviceStep ? { pendingDeviceStep } : {}),
+    ...(pendingSteers.length > 0 ? { pendingSteers } : {}),
     ...(usage ? { usage } : {}),
     id: row.id,
     userId: row.user_id,
@@ -2266,6 +2298,107 @@ export async function isCloudAgentRunPauseRequested(
   const row = rows[0];
   if (!row) throw new CloudAgentRunNotFoundError();
   return row.pause_requested;
+}
+
+export class CloudAgentRunNotSteerableError extends Error {
+  constructor(readonly state: string) {
+    super(`A ${state} task cannot take a message`);
+    this.name = 'CloudAgentRunNotSteerableError';
+  }
+}
+
+export class CloudAgentCodeRunNotSteerableError extends Error {
+  constructor() {
+    super('A Code task takes messages in its Code session');
+    this.name = 'CloudAgentCodeRunNotSteerableError';
+  }
+}
+
+export class CloudAgentRunSteerQueueFullError extends Error {
+  constructor() {
+    super('This task already has the most messages it can hold waiting');
+    this.name = 'CloudAgentRunSteerQueueFullError';
+  }
+}
+
+export async function queueCloudAgentRunSteer(
+  db: DatabaseAdapter,
+  input: { userId: string; organizationId: string | null; runId: string; text: string },
+): Promise<{ run: CloudAgentRun; steer: CloudAgentRunSteer }> {
+  const steerId = randomUUID();
+  const rows = await db.query<CloudAgentRunRow>(
+    `update public.cloud_agent_runs
+        set pending_steer = coalesce(pending_steer, '[]'::jsonb) || jsonb_build_array(
+              jsonb_build_object('id', $4::text, 'text', $5::text, 'queued_at', now())
+            )
+      where id = $1 and user_id = $2
+        and organization_id is not distinct from $7::uuid
+        and state = any($3::text[])
+        and cancellation_requested_at is null
+        and pause_requested_at is null
+        and jsonb_array_length(coalesce(pending_steer, '[]'::jsonb)) < $6
+        and not exists (
+          select 1
+            from public.cloud_code_agent_turns code_turns
+           where code_turns.user_id = cloud_agent_runs.user_id
+             and code_turns.idempotency_key = cloud_agent_runs.request_id
+        )
+      returning *`,
+    [
+      input.runId,
+      input.userId,
+      EXECUTOR_HELD_STATE_VALUES,
+      steerId,
+      input.text,
+      MAX_CLOUD_AGENT_PENDING_STEERS,
+      input.organizationId,
+    ],
+  );
+  const updated = rows[0] ? mapRun(rows[0]) : null;
+  const steer = updated?.pendingSteers?.find((entry) => entry.id === steerId);
+  if (updated && steer) return { run: updated, steer };
+  const row = await readRunState(db, input);
+  const codeTurns = await db.query<{ id: string }>(
+    `select id
+       from public.cloud_code_agent_turns
+      where user_id = $1 and idempotency_key = $2
+      limit 1`,
+    [input.userId, row.request_id],
+  );
+  if (codeTurns[0]) throw new CloudAgentCodeRunNotSteerableError();
+  const run = mapRun(row);
+  if (
+    EXECUTOR_HELD_STATE_VALUES.includes(row.state) &&
+    !row.cancellation_requested_at &&
+    !row.pause_requested_at &&
+    mapPendingSteers(row.pending_steer).length >= MAX_CLOUD_AGENT_PENDING_STEERS
+  ) {
+    throw new CloudAgentRunSteerQueueFullError();
+  }
+  throw new CloudAgentRunNotSteerableError(run.workState ?? run.state);
+}
+
+export async function takeCloudAgentRunSteers(
+  db: DatabaseAdapter,
+  input: { userId: string; organizationId: string | null; runId: string },
+): Promise<CloudAgentRunSteer[]> {
+  const rows = await db.query<{ pending_steer: unknown }>(
+    `with taken as (
+       select id, pending_steer
+         from public.cloud_agent_runs
+        where id = $1 and user_id = $2
+          and organization_id is not distinct from $3::uuid
+          and pending_steer is not null
+        for update
+     )
+     update public.cloud_agent_runs runs
+        set pending_steer = null
+       from taken
+      where runs.id = taken.id
+      returning taken.pending_steer`,
+    [input.runId, input.userId, input.organizationId],
+  );
+  return mapPendingSteers(rows[0]?.pending_steer);
 }
 
 /**

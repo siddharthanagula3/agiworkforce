@@ -3256,6 +3256,22 @@ fn handle_paste_text(app: &mut TuiApp, text: &str) {
     insert_str_at_cursor(&mut app.input, &mut app.cursor, &inserted);
 }
 
+async fn image_stop_keys() {
+    loop {
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        while event::poll(Duration::ZERO).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.code == KeyCode::Esc
+                    || (key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    return;
+                }
+            }
+        }
+    }
+}
+
 fn edit_turn_draft(input: &mut String, cursor: &mut usize, key: KeyEvent) -> Option<String> {
     let control = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
@@ -3790,10 +3806,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/image" => match arg {
             "" => SlashResult::SystemMessage(
-                "/image <prompt> draws an image on your account and saves it here. \
-                 /image open views the last one, /image clear dismisses the chip."
+                "/image <prompt> draws an image on your account and saves it here; Esc stops it. \
+                 Put --aspect 16:9, --quality hd, --transparent, --model or -n before the prompt \
+                 to change settings, and add --save-defaults to keep them. /image again reuses \
+                 your last prompt and settings, /image retry tries a failed or stopped image \
+                 again, /image last shows what the last one used. /image open views the last \
+                 one, /image clear dismisses the chip."
                     .to_string(),
             ),
+            "last" => SlashResult::SystemMessage(crate::cloud::image::describe_last()),
             "clear" => {
                 let count = app.generated_images.len();
                 app.generated_images.clear();
@@ -5475,46 +5496,27 @@ async fn run_event_loop(
                                     },
                                 });
                             }
-                            SlashResult::RunImage(prompt) => {
+                            SlashResult::RunImage(argument) => {
                                 let privacy = app.session.privacy_mode;
-                                let options = crate::cloud::image::ImageRequestOptions {
-                                    prompt: prompt.clone(),
-                                    count: 1,
-                                    size: None,
-                                    quality: None,
-                                    model: None,
-                                    out: None,
-                                };
                                 let cwd = app.workspace_root();
+                                if crate::cloud::image::slash_generates(&argument) {
+                                    app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: "Generating the image. Esc stops it.".to_string(),
+                                    });
+                                    render(terminal, app)?;
+                                }
+                                let outcome = crate::cloud::image::run_slash(
+                                    privacy,
+                                    &argument,
+                                    &cwd,
+                                    image_stop_keys(),
+                                )
+                                .await;
+                                app.generated_images.extend(outcome.paths);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: "Generating the image...".to_string(),
-                                });
-                                render(terminal, app)?;
-                                let text =
-                                    match crate::cloud::image::generate(privacy, &options, &cwd)
-                                        .await
-                                    {
-                                        Ok(generation) => {
-                                            app.generated_images
-                                                .extend(generation.paths.iter().cloned());
-                                            format!(
-                                                "Generated with {} ({}): {}",
-                                                generation.model,
-                                                generation.provider,
-                                                generation
-                                                    .paths
-                                                    .iter()
-                                                    .map(|path| path.display().to_string())
-                                                    .collect::<Vec<_>>()
-                                                    .join(", ")
-                                            )
-                                        }
-                                        Err(error) => format!("Image generation failed: {error}"),
-                                    };
-                                app.chat_messages.push(ChatMessage {
-                                    role: ChatRole::System,
-                                    text,
+                                    text: outcome.text,
                                 });
                             }
                             SlashResult::RunArtifacts(argument) => {
@@ -5834,6 +5836,23 @@ async fn send_message_with_prompt(
     )
     .await;
 
+    match app.session.reload_if_changed_on_disk() {
+        Ok(true) => {
+            rebuild_transcript_from_session(app);
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "This conversation continued in another app, so it now shows the saved version and your message continues from there.".to_string(),
+            });
+        }
+        Ok(false) => {}
+        Err(error) => app.chat_messages.push(ChatMessage {
+            role: ChatRole::System,
+            text: format!(
+                "This conversation changed in another app and could not be reloaded: {}",
+                sanitize_terminal_text(&format!("{error:#}"))
+            ),
+        }),
+    }
     let attachments = if app.staged_images.is_empty() {
         String::new()
     } else {

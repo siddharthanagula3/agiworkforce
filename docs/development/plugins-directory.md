@@ -239,9 +239,12 @@ them in the install notice.
   marketplace entry and in its own `.claude-plugin/plugin.json`, which the install
   reads at the pinned sha. An entry in an account's registered marketplace
   declares them in that marketplace's manifest; sync keeps them in
-  `plugin_marketplace_entries.dependencies` (migration 0326). A declaration is a
-  name, `name@marketplace`, or an object with `name`, `marketplace` and `version`.
-  A manifest whose declarations cannot be read is refused at registration.
+  `plugin_marketplace_entries.dependencies` (migration 0317). A declaration is a
+  name, `name@marketplace`, or an object with `name`, `marketplace` and `version`,
+  where `version` is an npm semantic-version range such as `~2.1.0` or `^2.0`
+  (https://code.claude.com/docs/en/plugin-dependencies, read 2026-09-28). A
+  manifest whose declarations cannot be read, including a range `semver` cannot
+  parse, is refused at registration.
 - **Resolution.** Breadth first from the plugin being installed, with the CLI's
   limits (eight levels, thirty-two plugins including that one). A plugin is
   identified as `name@marketplace`, and one seen twice resolves once, so a cycle
@@ -271,11 +274,25 @@ them in the install notice.
   dependencies in one transaction. A dependency already installed and enabled is
   left alone; one installed but turned off is turned back on, unless it was turned
   off for a permission review, which refuses the install until that review is done.
-- **What stays different.** A dependency with a `version` range refuses the web
-  install, because the web app installs the version its marketplace lists and
-  does not evaluate ranges. Uninstalling a plugin leaves the dependencies it
-  pulled in, as Claude Code does until `claude plugin prune`. A plugin uploaded as
-  an archive or authored in the product installs without resolving dependencies.
+- **Version ranges.** Every range any plugin in the install declares for a
+  dependency is collected. Two that cannot overlap refuse the install with Claude
+  Code's `has conflicting version requirements` wording. A dependency already
+  installed and enabled must satisfy every range at its installed version, or
+  the install is refused naming both versions, which is the check Claude Code
+  makes when the dependent loads. Otherwise the version its marketplace lists
+  must satisfy them; as in Claude Code, a range never matches a pre-release
+  unless it opts in, and a plugin that declares no version satisfies no range.
+- **What stays different.** Claude Code installs a git-backed dependency at the
+  highest `<name>--v<version>` release tag that satisfies its ranges. The web
+  app installs only the version the marketplace lists, because that is the
+  commit the directory inspected and the scan passed. When the listed version is
+  out of range, a directory dependency's release tags are read through the
+  GitHub API: with none that satisfies, the refusal is Claude Code's
+  `has no git tag satisfying`; with one, it names the tag and points at the
+  released CLI, which installs it. Uninstalling a plugin leaves the dependencies
+  it pulled in, as Claude Code does until `claude plugin prune`. A plugin
+  uploaded as an archive or authored in the product installs without resolving
+  dependencies.
 
 ## Which table an install goes through
 

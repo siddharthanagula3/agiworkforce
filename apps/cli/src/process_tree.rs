@@ -85,7 +85,10 @@ struct ActiveProcessTreeGuard {
 
 impl ActiveProcessTreeGuard {
     fn register(process_id: Option<u32>) -> Self {
-        let owner = PROCESS_TREE_OWNER.try_with(|owner| *owner).ok();
+        Self::register_for(PROCESS_TREE_OWNER.try_with(|owner| *owner).ok(), process_id)
+    }
+
+    fn register_for(owner: Option<ProcessTreeOwner>, process_id: Option<u32>) -> Self {
         let mut registry = active_process_trees()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -347,6 +350,24 @@ impl Drop for ProcessTreeChild {
         }
         // Without a live Tokio runtime, dropping a kill-on-drop child still
         // invokes Tokio's best-effort reaper after the synchronous tree signal.
+    }
+}
+
+pub(crate) struct DetachedProcessTree {
+    process_id: Option<u32>,
+    _registration: ActiveProcessTreeGuard,
+}
+
+impl DetachedProcessTree {
+    pub(crate) fn track(process_id: Option<u32>) -> Self {
+        Self {
+            process_id,
+            _registration: ActiveProcessTreeGuard::register_for(None, process_id),
+        }
+    }
+
+    pub(crate) fn kill(&self) {
+        signal_process_tree_on_drop(self.process_id);
     }
 }
 

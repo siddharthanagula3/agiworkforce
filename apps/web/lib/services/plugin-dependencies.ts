@@ -1,4 +1,5 @@
 import { isPluginId } from '@agiworkforce/types';
+import { intersects, satisfies, valid, validRange } from 'semver';
 
 import { AppError, ErrorCode } from '@/lib/errors';
 
@@ -23,10 +24,16 @@ export interface PluginDependencyNode<T> extends PluginDependencyDeclarer {
   plugin: T;
 }
 
+export interface PluginVersionConstraint {
+  range: string;
+  requiredBy: string;
+}
+
 export interface ResolvedPluginDependency<T> {
   plugin: T;
   label: string;
   requiredBy: string;
+  constraints: PluginVersionConstraint[];
 }
 
 export class PluginDependencyError extends AppError {
@@ -45,7 +52,7 @@ function dependencyRef(
 ): PluginDependencyRef | null {
   if (!isPluginId(name)) return null;
   if (marketplace !== null && !MARKETPLACE_NAME_PATTERN.test(marketplace)) return null;
-  if (version !== null && version.length === 0) return null;
+  if (version !== null && validRange(version) === null) return null;
   return { name, marketplace, version };
 }
 
@@ -117,15 +124,19 @@ export async function resolvePluginDependencies<T>(
 ): Promise<ResolvedPluginDependency<T>[]> {
   const rootLabel = pluginLabel(root.name, root.marketplace);
   const seen = new Set<string>([rootLabel]);
+  const constraints = new Map<string, PluginVersionConstraint[]>();
   const resolved: ResolvedPluginDependency<T>[] = [];
   const queue = root.dependencies.map((reference) => ({ reference, declaredBy: root, depth: 1 }));
 
   for (let next = queue.shift(); next; next = queue.shift()) {
     const { reference, declaredBy, depth } = next;
     const label = pluginLabel(reference.name, reference.marketplace ?? declaredBy.marketplace);
+    const requiredBy = pluginLabel(declaredBy.name, declaredBy.marketplace);
+    const labelConstraints = constraints.get(label) ?? [];
+    constraints.set(label, labelConstraints);
+    if (reference.version !== null) labelConstraints.push({ range: reference.version, requiredBy });
     if (seen.has(label)) continue;
     seen.add(label);
-    const requiredBy = pluginLabel(declaredBy.name, declaredBy.marketplace);
     if (depth > MAX_PLUGIN_DEPENDENCY_DEPTH) {
       throw new PluginDependencyError(
         `Dependency "${label}" (required by ${requiredBy}) sits more than ${MAX_PLUGIN_DEPENDENCY_DEPTH} levels below ${rootLabel}, so ${rootLabel} was not installed.`,
@@ -138,10 +149,58 @@ export async function resolvePluginDependencies<T>(
     }
     const node = await lookup(reference, declaredBy);
     if (!node) continue;
-    resolved.push({ plugin: node.plugin, label, requiredBy });
+    resolved.push({ plugin: node.plugin, label, requiredBy, constraints: labelConstraints });
     for (const dependency of node.dependencies) {
       queue.push({ reference: dependency, declaredBy: node, depth: depth + 1 });
     }
   }
   return resolved;
+}
+
+export function conflictingConstraints(
+  constraints: readonly PluginVersionConstraint[],
+): [PluginVersionConstraint, PluginVersionConstraint] | null {
+  for (const [index, first] of constraints.entries()) {
+    for (const second of constraints.slice(index + 1)) {
+      if (!intersects(first.range, second.range)) return [first, second];
+    }
+  }
+  return null;
+}
+
+export function unmetConstraint(
+  version: string | null,
+  constraints: readonly PluginVersionConstraint[],
+): PluginVersionConstraint | null {
+  const parsed = version === null ? null : valid(version);
+  return (
+    constraints.find((constraint) => parsed === null || !satisfies(parsed, constraint.range)) ??
+    null
+  );
+}
+
+export function conflictingConstraintsMessage(
+  label: string,
+  [first, second]: [PluginVersionConstraint, PluginVersionConstraint],
+  rootLabel: string,
+): string {
+  return `Dependency "${label}" has conflicting version requirements: ${first.requiredBy} requires ${first.range} and ${second.requiredBy} requires ${second.range}, so ${rootLabel} was not installed.`;
+}
+
+export function installedOutsideRangeMessage(
+  label: string,
+  constraint: PluginVersionConstraint,
+  installed: string,
+  rootLabel: string,
+): string {
+  return `Dependency "${label}" (required by ${constraint.requiredBy}) requires ${constraint.range}, and ${installed} is installed, so ${rootLabel} was not installed. Update ${label} or uninstall it, then install ${rootLabel} again.`;
+}
+
+export function listedOutsideRangeMessage(
+  label: string,
+  constraint: PluginVersionConstraint,
+  listed: string,
+  rootLabel: string,
+): string {
+  return `Dependency "${label}" (required by ${constraint.requiredBy}) requires ${constraint.range}, and its marketplace lists ${listed}, so ${rootLabel} was not installed.`;
 }

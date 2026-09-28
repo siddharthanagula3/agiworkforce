@@ -37,6 +37,7 @@ import type {
   ResearchStep,
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
@@ -92,6 +93,7 @@ export interface ComposerToggleState {
   researchEnabled: boolean;
   codeExecutionEnabled: boolean;
   officeCreationEnabled: boolean;
+  officeOutputFormat: ChatOutputFormat | null;
   /** Image-generation composer mode (routes to the media harness, not chat). */
   imageMode: boolean;
   /** Video-generation composer mode. Mutually exclusive with `imageMode`. */
@@ -129,6 +131,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   researchEnabled: false,
   codeExecutionEnabled: false,
   officeCreationEnabled: false,
+  officeOutputFormat: null,
   imageMode: false,
   videoMode: false,
   selectedSkillName: null,
@@ -550,6 +553,7 @@ export interface Message {
    */
   turnDetachable?: boolean;
   secretRedactionCount?: number;
+  truncatedAttachments?: string[];
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
    * `output_tokens`), written by the server's assistant-turn persistence and

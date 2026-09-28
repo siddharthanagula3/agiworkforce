@@ -232,6 +232,7 @@ pub struct AgentSession {
     memory_extracted_at: std::time::Instant,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
+    pub(crate) loaded_fingerprint: Option<crate::runtime::session::SessionFingerprint>,
     pub(crate) session_activity: crate::runtime::session_activity::SharedSessionActivity,
     /// When false this session must never write managed-session state, not the
     /// session file under `~/.agiworkforce/managed_sessions/`, and not the
@@ -705,6 +706,7 @@ impl AgentSession {
             memory_extracted_at: std::time::Instant::now(),
             managed_session: None,
             managed_session_path: None,
+            loaded_fingerprint: None,
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
@@ -1597,9 +1599,56 @@ impl AgentSession {
             checkpoints::CheckpointLog::in_memory()
         };
         self.checkpoint_captures.clear();
+        self.loaded_fingerprint = crate::runtime::session::session_fingerprint(&path);
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
         Ok(())
+    }
+
+    pub(crate) fn reload_if_changed_on_disk(&mut self) -> Result<bool> {
+        if !self.session_persistence {
+            return Ok(false);
+        }
+        let Some(path) = self.managed_session_path.clone() else {
+            return Ok(false);
+        };
+        let current = crate::runtime::session::session_fingerprint(&path);
+        if current.is_none() || current == self.loaded_fingerprint {
+            return Ok(false);
+        }
+        let managed = ManagedSession::load_from_path(&path)?;
+        self.load_managed_conversation(managed, path)?;
+        self.loaded_fingerprint = current;
+        Ok(true)
+    }
+
+    pub(crate) fn load_managed_conversation(
+        &mut self,
+        managed_session: ManagedSession,
+        path: PathBuf,
+    ) -> Result<()> {
+        if !managed_session.messages.is_empty() {
+            let fresh_system_message = self
+                .messages
+                .first()
+                .filter(|message| message.role == "system")
+                .cloned();
+            self.messages = managed_session.messages.clone();
+            if !self.memory_enabled {
+                if let (Some(fresh), Some(stored)) =
+                    (fresh_system_message, self.messages.first_mut())
+                {
+                    if stored.role == "system" {
+                        *stored = fresh;
+                    }
+                }
+            }
+        }
+        self.context_usage_anchor = None;
+        self.recent_tool_calls.clear();
+        self.loop_strike_count = 0;
+        self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
+        self.adopt_managed_session(managed_session, path)
     }
 
     /// Claim, or renew, this process's writer lease on the backing session.
@@ -1712,6 +1761,7 @@ impl AgentSession {
         managed_session.version = crate::runtime::session::MANAGED_SESSION_VERSION;
         managed_session.touch();
         managed_session.save_to_path(path)?;
+        self.loaded_fingerprint = crate::runtime::session::session_fingerprint(path);
         self.claim_writer_lease();
         self.sync_managed_session_metadata()
     }

@@ -28,7 +28,10 @@ interface AnthropicTranslatedRequest {
   stop_sequences?: string[];
   thinking?:
     { type: 'enabled'; budget_tokens: number } | { type: 'disabled' } | { type: 'adaptive' };
-  output_config?: { effort: string };
+  output_config?: {
+    effort?: string;
+    format?: { type: 'json_schema'; schema: Record<string, unknown> };
+  };
   metadata?: Record<string, unknown>;
 }
 
@@ -263,6 +266,44 @@ function applyPromptCachePlan(
   }
 }
 
+const UNSUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minLength',
+  'maxLength',
+  'maxItems',
+  '$ref',
+]);
+const MAX_SCHEMA_DEPTH = 32;
+
+function schemaFitsStructuredOutputs(schema: unknown, depth = 0): boolean {
+  if (depth > MAX_SCHEMA_DEPTH) return false;
+  if (Array.isArray(schema)) {
+    return schema.every((item) => schemaFitsStructuredOutputs(item, depth + 1));
+  }
+  if (!schema || typeof schema !== 'object') return true;
+  const record = schema as Record<string, unknown>;
+  if (record['type'] === 'object' && record['additionalProperties'] !== false) return false;
+  return Object.entries(record).every(([key, value]) => {
+    if (UNSUPPORTED_SCHEMA_KEYWORDS.has(key)) return false;
+    if (key === 'minItems' && typeof value === 'number' && value > 1) return false;
+    return schemaFitsStructuredOutputs(value, depth + 1);
+  });
+}
+
+function outputFormatFor(
+  req: ChatRequest,
+): { type: 'json_schema'; schema: Record<string, unknown> } | undefined {
+  const format = req.responseFormat;
+  if (format?.type !== 'json_schema' || !schemaFitsStructuredOutputs(format.schema)) {
+    return undefined;
+  }
+  return { type: 'json_schema', schema: format.schema };
+}
+
 export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
   const metadata = getModelMetadataById(req.model);
   const reasoning = metadata?.reasoning;
@@ -306,6 +347,10 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
             : undefined;
 
   const rejectsSamplingParameters = reasoning?.rejectsSamplingParameters === true;
+  const requestMetadata = req.endUserId
+    ? { ...req.metadata, user_id: req.endUserId }
+    : req.metadata;
+  const outputFormat = outputFormatFor(req);
 
   return {
     model: req.model,
@@ -321,8 +366,15 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(!rejectsSamplingParameters && req.topK !== undefined ? { top_k: req.topK } : {}),
     ...(req.stopSequences ? { stop_sequences: req.stopSequences } : {}),
     ...(thinking ? { thinking } : {}),
-    ...(req.effort ? { output_config: { effort: req.effort } } : {}),
-    ...(req.metadata ? { metadata: req.metadata } : {}),
+    ...(req.effort || outputFormat
+      ? {
+          output_config: {
+            ...(req.effort ? { effort: req.effort } : {}),
+            ...(outputFormat ? { format: outputFormat } : {}),
+          },
+        }
+      : {}),
+    ...(requestMetadata ? { metadata: requestMetadata } : {}),
   };
 }
 

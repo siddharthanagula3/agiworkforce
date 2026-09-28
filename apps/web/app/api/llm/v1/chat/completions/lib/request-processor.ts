@@ -232,6 +232,7 @@ import {
   observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   speedFirstSlots,
   taskFamilyRoutingStageEnabled,
@@ -332,6 +333,12 @@ import {
   unsupportedImageDetail,
 } from './image-detail';
 import {
+  requestedParameters,
+  unsupportedRequestParameter,
+  type RequestedParameters,
+} from './request-parameters';
+import { countImageParts, maxImagesPerRequest } from './media-input';
+import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
   jsonSchemaFormatProblem,
@@ -366,6 +373,12 @@ import {
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { CHAT_OUTPUT_FORMATS, chatOutputFormatInstruction } from '@/lib/chat-output-format';
+import {
+  forcedFunctionToolChoice,
+  hasGenericFunctionTool,
+  modelAcceptsForcedToolChoice,
+} from '@/lib/required-tool-call';
 import { buildCapabilityPreamble } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
@@ -581,6 +594,7 @@ export const ChatCompletionRequestSchema = z
       .optional(),
     code_execution: z.boolean().optional(),
     office_creation: z.boolean().optional(),
+    office_format: z.enum(CHAT_OUTPUT_FORMATS).optional(),
     /**
      * Connector ids the client has switched off for THIS conversation. The
      * tool catalog builder drops any tool whose server id is in this set, so
@@ -917,7 +931,7 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
   if (!request.office_creation) return;
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
-    createManagedOfficeFileToolDefinition(),
+    createManagedOfficeFileToolDefinition(request.office_format),
   ];
 }
 
@@ -1249,6 +1263,7 @@ export type ProcessedRequest = {
    * instead of leaving the model to copy an attachment back in with write_file.
    */
   turnAttachments?: readonly TurnAttachment[];
+  truncatedAttachments?: readonly string[];
   /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
@@ -1309,6 +1324,7 @@ export type ProcessedRequest = {
     effort?: string;
     usePromptCache?: boolean;
     responseFormat?: ChatResponseFormat;
+    requestParameters?: RequestedParameters;
     /**
      * Who this turn belongs to, for the prompt cache. Carried on the request
      * rather than re-derived per adapter so one turn cannot be scoped two ways,
@@ -2043,6 +2059,7 @@ export function buildWebCloudAutoRoutingRequest(
     subscriptionTier,
     trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
     ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
@@ -2532,6 +2549,23 @@ export function applyWorkspaceDefaultModel(
   const defaultModelId = controls?.defaultModelId;
   if (!defaultModelId || isAutoModeModelId(defaultModelId)) return;
   if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
+}
+
+function unsupportedParameterResponse(param: string, message: string): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message,
+          type: 'invalid_request_error',
+          code: 'unsupported_parameter',
+          param,
+        },
+      },
+      { status: 400 },
+    ),
+  };
 }
 
 function noTrainingModelUnavailable(): ProcessFailure {
@@ -3139,11 +3173,14 @@ export async function processRequest(
         return DISABLED_MANAGED_MEMORY_POLICY;
       });
 
+  const truncatedAttachments: string[] = [];
   const [hydration, managedMemoryPolicy] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
       Promise.all([
-        hydrateChatAttachments(chatRequest.messages, userId).then(
+        hydrateChatAttachments(chatRequest.messages, userId, (filename) =>
+          truncatedAttachments.push(filename),
+        ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),
         ),
@@ -4012,6 +4049,40 @@ export async function processRequest(
         { status: 400 },
       ),
     };
+  }
+  const imageLimit = maxImagesPerRequest(chatRequest.model, routeDecision.harnessId);
+  if (imageLimit !== null && countImageParts(chatRequest.messages) > imageLimit) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `The selected model takes up to ${imageLimit.toLocaleString('en-US')} images in one request. Remove some images or split the request.`,
+            type: 'invalid_request_error',
+            code: 'too_many_images',
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
+  if (chatRequest.n !== undefined && chatRequest.n > 1) {
+    return unsupportedParameterResponse(
+      'n',
+      'This API returns one completion per request. Send one request for each completion instead.',
+    );
+  }
+  const requestParameters = requestedParameters(chatRequest);
+  const unsupportedParameter = unsupportedRequestParameter(
+    requestParameters,
+    chatRequest.model,
+    routeDecision.harnessId,
+  );
+  if (unsupportedParameter) {
+    return unsupportedParameterResponse(
+      unsupportedParameter,
+      `The selected model does not accept ${unsupportedParameter}. Remove it or choose a model that does.`,
+    );
   }
 
   if (wantsJsonObject(chatRequest.response_format)) {
@@ -5165,6 +5236,23 @@ export async function processRequest(
       tool_call_id: undefined,
     });
   }
+  const officeOutputFormat = chatRequest.office_creation ? chatRequest.office_format : undefined;
+  const officeOutputToolChoice =
+    officeOutputFormat &&
+    chatRequest.tool_choice === undefined &&
+    modelAcceptsForcedToolChoice(chatRequest.model) &&
+    hasGenericFunctionTool(resolvedTools, MANAGED_OFFICE_FILE_TOOL_NAME)
+      ? forcedFunctionToolChoice(MANAGED_OFFICE_FILE_TOOL_NAME)
+      : undefined;
+  if (officeOutputFormat) {
+    internalMessages.unshift({
+      role: 'system',
+      content: chatOutputFormatInstruction(officeOutputFormat),
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  }
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest = {
     model: chatRequest.model,
@@ -5177,11 +5265,13 @@ export async function processRequest(
       executionEnforcement.toolChoice ??
       placesEnforcement.toolChoice ??
       searchEnforcement.toolChoice ??
+      officeOutputToolChoice ??
       chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
     ...(responseFormat ? { responseFormat } : {}),
+    ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
       temporaryChat: conversationIsTemporary,
@@ -5338,6 +5428,7 @@ export async function processRequest(
     executionRequirement,
     executionEnforcement,
     turnAttachments,
+    truncatedAttachments,
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,
