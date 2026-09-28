@@ -85,6 +85,13 @@ export {
 export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
 export { MODEL_ESCALATION_PREFIX, resolveModelEscalation } from './lib/modelEscalation';
 export type { ModelEscalation, ModelEscalationSource } from './lib/modelEscalation';
+export {
+  artifactLineChange,
+  describeArtifactVersionChange,
+  formatArtifactVersionTime,
+  summarizeArtifactVersions,
+} from './lib/artifactVersionSummary';
+export type { ArtifactVersionSummary, VersionedContent } from './lib/artifactVersionSummary';
 export { matchMentionQuery } from './lib/mentionQuery';
 export type { MentionMatch } from './lib/mentionQuery';
 export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';
