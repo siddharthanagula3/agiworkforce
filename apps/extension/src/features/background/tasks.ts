@@ -5,6 +5,7 @@ import type {
   UpdateScheduledTaskMessage,
   DeleteScheduledTaskMessage,
 } from '../../types';
+import { ManagedCloudScheduleMutationSchema } from '@agiworkforce/cloud-contracts';
 import { logger } from '../../utils';
 import {
   ORIGIN_EXTENSION_PAGE,
@@ -16,6 +17,9 @@ const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
 const MAX_TASKS = 50;
 const TASK_ALARM_PREFIX = 'agi_task_';
 export const TASK_PROMPT_MAX_CHARS = 10_000;
+const TASK_NAME_MAX_CHARS = ManagedCloudScheduleMutationSchema.shape.name.maxLength;
+const TASK_DESCRIPTION_MAX_CHARS =
+  ManagedCloudScheduleMutationSchema.shape.description.unwrap().maxLength;
 let taskMutationQueue: Promise<void> = Promise.resolve();
 
 export type AuthorizedScheduledTaskMutation = (task: ScheduledTask) => void | Promise<void>;
@@ -41,6 +45,33 @@ function validateScheduledTaskPrompt(
     return { success: false, error: 'Scheduled task prompt cannot be empty.' };
   }
   return { success: true, prompt };
+}
+
+type TaskTextField = 'name' | 'description';
+
+function applyScheduledTaskText(
+  task: Record<string, unknown>,
+  field: TaskTextField,
+): { success: true } | { success: false; error: string } {
+  if (!Object.prototype.hasOwnProperty.call(task, field)) return { success: true };
+  const value = task[field];
+  const limit = field === 'name' ? TASK_NAME_MAX_CHARS : TASK_DESCRIPTION_MAX_CHARS;
+  if (value !== undefined && typeof value !== 'string') {
+    return { success: false, error: `Scheduled task ${field} must be text.` };
+  }
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (limit !== null && text.length > limit) {
+    return {
+      success: false,
+      error: `Scheduled task ${field} must be at most ${limit} characters.`,
+    };
+  }
+  if (field === 'name' && !text) {
+    return { success: false, error: 'Scheduled task name cannot be empty.' };
+  }
+  if (text) task[field] = text;
+  else delete task[field];
+  return { success: true };
 }
 
 function isSafeManagedCloudAccountId(value: unknown): value is string {
@@ -182,6 +213,13 @@ export async function handleCreateScheduledTask(
     }
     const safeTask = { ...(message.task as Record<string, unknown>) };
     delete safeTask['managedCloudAccountId'];
+    for (const field of ['name', 'description'] as const) {
+      const text = applyScheduledTaskText(safeTask, field);
+      if (!text.success) return { success: false, error: text.error } as ExtensionResponse;
+    }
+    if (typeof safeTask['name'] !== 'string') {
+      return { success: false, error: 'Scheduled task name cannot be empty.' } as ExtensionResponse;
+    }
     if (Object.prototype.hasOwnProperty.call(safeTask, 'prompt')) {
       const validation = validateScheduledTaskPrompt(safeTask['prompt']);
       if (!validation.success) {
@@ -248,6 +286,13 @@ export async function handleUpdateScheduledTask(
     const safeUpdates: Record<string, unknown> = {
       ...(message.updates as Record<string, unknown>),
     };
+    for (const field of ['name', 'description'] as const) {
+      const text = applyScheduledTaskText(safeUpdates, field);
+      if (!text.success) return { success: false, error: text.error } as ExtensionResponse;
+    }
+    const clearsDescription =
+      Object.prototype.hasOwnProperty.call(message.updates, 'description') &&
+      !Object.prototype.hasOwnProperty.call(safeUpdates, 'description');
     if (Object.prototype.hasOwnProperty.call(safeUpdates, 'prompt')) {
       const validation = validateScheduledTaskPrompt(safeUpdates['prompt']);
       if (!validation.success) {
@@ -267,6 +312,7 @@ export async function handleUpdateScheduledTask(
     delete safeUpdates['createdByOrigin'];
     delete safeUpdates['managedCloudAccountId'];
     const updated = { ...tasks[idx]!, ...safeUpdates } as (typeof tasks)[number];
+    if (clearsDescription) delete updated.description;
     if (requiresManagedCloud === true || updated.prompt) {
       if (!isSafeManagedCloudAccountId(managedCloudAccountId)) {
         return {
