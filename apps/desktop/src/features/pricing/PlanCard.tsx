@@ -132,8 +132,8 @@ export function PlanCard({
         'relative flex flex-col rounded-xl border p-5 gap-4',
         'transition-shadow duration-150',
         isCurrentPlan
-          ? 'border-blue-500/50 bg-blue-500/5 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]'
-          : 'border-border bg-card hover:border-border/80 hover:shadow-sm',
+          ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/30'
+          : 'border-border bg-card hover:border-border/80 hover:shadow-e1',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -143,12 +143,12 @@ export function PlanCard({
         </div>
         <div className="flex flex-col items-end gap-1">
           {isCurrentPlan && (
-            <span className="inline-flex items-center rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-400">
+            <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
               Current plan
             </span>
           )}
           {isFree && (
-            <span className="inline-flex items-center rounded-full bg-green-500/12 px-2 py-0.5 text-[10px] font-semibold text-green-400">
+            <span className="inline-flex items-center rounded-full bg-success-fill/10 px-2 py-0.5 text-[10px] font-semibold text-success-text">
               Always free
             </span>
           )}
@@ -165,7 +165,7 @@ export function PlanCard({
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (
           <li key={bullet} className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Check size={12} className="mt-0.5 shrink-0 text-green-500" aria-hidden="true" />
+            <Check size={12} className="mt-0.5 shrink-0 text-success-text" aria-hidden="true" />
             {bullet}
           </li>
         ))}
@@ -235,7 +235,7 @@ function PlanCardCta({
         disabled && 'cursor-not-allowed opacity-55',
         isLowerPaidTier
           ? 'border border-border bg-card text-foreground hover:bg-muted'
-          : 'bg-blue-600 text-white hover:bg-blue-700',
+          : 'bg-primary text-primary-foreground hover:bg-primary/90',
       )}
     >
       {!isLowerPaidTier && !disabled ? <Zap size={12} aria-hidden="true" /> : null}

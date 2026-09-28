@@ -41,22 +41,6 @@ Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/ex
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 
-## S32.32: Export to PDF.
-
-- Done when: The user can export the design as a PDF.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| desktop | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:220-228`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:554-556`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:660-676`, `apps/web/features/chat/services/document-export-service.ts:479-481`
-
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.

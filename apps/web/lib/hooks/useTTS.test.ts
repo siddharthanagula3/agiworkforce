@@ -89,6 +89,7 @@ describe('useTTS, speech content and state', () => {
     act(() =>
       result.current.speak(
         '## Result\n**Done** [here](https://example.com)\n```ts\nsecret();\n```',
+        { deviceVoice: true },
       ),
     );
 
@@ -98,7 +99,7 @@ describe('useTTS, speech content and state', () => {
   it('tracks start and completion from the active utterance', () => {
     const { result } = renderHook(() => useTTS());
 
-    act(() => result.current.speak('Hello'));
+    act(() => result.current.speak('Hello', { deviceVoice: true }));
     const utterance = spoken[0]!;
     act(() => utterance.onstart?.(undefined as never));
     expect(result.current.isSpeaking).toBe(true);
@@ -110,11 +111,11 @@ describe('useTTS, speech content and state', () => {
   it('switches directly to another response and ignores stale completion events', () => {
     const { result } = renderHook(() => useTTS());
 
-    act(() => result.current.speak('First'));
+    act(() => result.current.speak('First', { deviceVoice: true }));
     const first = spoken[0]!;
     act(() => first.onstart?.(undefined as never));
 
-    act(() => result.current.speak('Second'));
+    act(() => result.current.speak('Second', { deviceVoice: true }));
     const second = spoken[1]!;
     expect(second.text).toBe('Second');
     act(() => second.onstart?.(undefined as never));
@@ -148,7 +149,7 @@ describe('useTTS, voice selection', () => {
     emitVoicesChanged([ALICE, BRUNO]);
 
     act(() => result.current.setVoiceUri(BRUNO.voiceURI));
-    act(() => result.current.speak('hallo'));
+    act(() => result.current.speak('hallo', { deviceVoice: true }));
 
     expect(spoken).toHaveLength(1);
     expect(spoken[0]!.voice).toBe(BRUNO);
@@ -159,7 +160,7 @@ describe('useTTS, voice selection', () => {
     const { result } = renderHook(() => useTTS());
     emitVoicesChanged([ALICE]);
 
-    act(() => result.current.speak('hello'));
+    act(() => result.current.speak('hello', { deviceVoice: true }));
 
     expect(spoken[0]!.voice).toBeNull();
   });
@@ -183,7 +184,7 @@ describe('useTTS, voice selection', () => {
     act(() => settings.result.current.setVoiceUri(BRUNO.voiceURI));
 
     expect(chat.result.current.voiceUri).toBe(BRUNO.voiceURI);
-    act(() => chat.result.current.speak('hallo'));
+    act(() => chat.result.current.speak('hallo', { deviceVoice: true }));
     expect(spoken[0]!.voice).toBe(BRUNO);
   });
 
@@ -193,7 +194,7 @@ describe('useTTS, voice selection', () => {
 
     act(() => result.current.setVoiceUri(ALICE.voiceURI));
     act(() => result.current.setVoiceUri(null));
-    act(() => result.current.speak('hello'));
+    act(() => result.current.speak('hello', { deviceVoice: true }));
 
     expect(result.current.voiceUri).toBeNull();
     expect(spoken[0]!.voice).toBeNull();
@@ -206,7 +207,7 @@ describe('useTTS, missing voice', () => {
     available = [ALICE];
 
     const { result } = renderHook(() => useTTS());
-    act(() => result.current.speak('hello'));
+    act(() => result.current.speak('hello', { deviceVoice: true }));
 
     expect(spoken).toHaveLength(1);
     expect(spoken[0]!.voice).toBeNull();

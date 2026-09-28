@@ -123,9 +123,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <DialogTitle className="text-lg font-semibold text-foreground">
-                  Plans &amp; Pricing
-                </DialogTitle>
+                <DialogTitle className="text-h3 text-foreground">Plans &amp; Pricing</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
                   AGI Workforce, Beyond one model. Beyond one surface.{' '}
                   <span className="font-medium">Local and BYOK are always free.</span>
@@ -171,7 +169,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
             </div>
 
             {billingError ? (
-              <p className="mt-4 text-center text-xs text-red-500">{billingError}</p>
+              <p className="mt-4 text-center text-xs text-danger-text">{billingError}</p>
             ) : null}
             {!currentTier ? (
               <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
