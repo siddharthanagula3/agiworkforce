@@ -171,6 +171,7 @@ struct ToolCell {
     output_preview: Option<String>,
     timing: ToolTiming,
     full_output: Option<String>,
+    accent: Option<Color>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -261,6 +262,11 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             (
                 format!("  $ {}", cell.summary),
                 Style::default().fg(ui_accent()),
+            )
+        } else if let Some(accent) = cell.accent {
+            (
+                format!("  {}", cell.summary),
+                Style::default().fg(accent).add_modifier(Modifier::BOLD),
             )
         } else {
             (
@@ -3737,6 +3743,7 @@ enum SlashResult {
     /// Read the account's artifact index, or open one of its artifacts.
     RunArtifacts(String),
     RunTasks(String),
+    RunTeam(String),
     RunWorktree(String),
     RunMcp(String),
     RunAttachUrl(String),
@@ -3845,6 +3852,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/team" | "/teams" => SlashResult::RunTeam(arg.to_string()),
         "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
         "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
@@ -5601,6 +5609,17 @@ async fn run_event_loop(
                                     text: outcome.plain_message(),
                                 });
                             }
+                            SlashResult::RunTeam(argument) => {
+                                let text = crate::teams::team_command(
+                                    app.session.team_manager.as_ref(),
+                                    &argument,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
                             SlashResult::RunCompact(focus) => {
                                 let focus = (!focus.trim().is_empty()).then_some(focus.as_str());
                                 let result = app.session.compact_now(&app.config, focus).await;
@@ -5750,8 +5769,21 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             call_id,
             name,
             summary,
-            ..
+            input,
         } => {
+            let accent = if name == "agent" {
+                input
+                    .get("name")
+                    .and_then(|value| value.as_str())
+                    .and_then(crate::agents::find_agent_exact)
+                    .and_then(|agent| {
+                        agent
+                            .color_name()
+                            .and_then(crate::tui::terminal_palette::ui_agent)
+                    })
+            } else {
+                None
+            };
             cells.push(ToolCell {
                 call_id,
                 name,
@@ -5760,6 +5792,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 output_preview: None,
                 timing: ToolTiming::Running(Instant::now()),
                 full_output: None,
+                accent,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -6390,6 +6423,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         let t = line0(&edit);
         assert!(
@@ -6406,6 +6440,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -6422,6 +6457,7 @@ mod tests {
             output_preview: None,
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -8499,6 +8535,7 @@ mod tests {
             output_preview: compact_tool_output_preview(&format!("out {ESCAPE_PAYLOAD}ok")),
             timing: ToolTiming::default(),
             full_output: None,
+            accent: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();

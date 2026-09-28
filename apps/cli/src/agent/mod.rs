@@ -222,6 +222,7 @@ pub struct AgentSession {
     /// `task` spawning via `SubagentManager`.
     pub(crate) subagent_depth: usize,
     pub(crate) team_manager: Option<teams::TeamManager>,
+    pub(crate) team_identity: Option<String>,
     /// Post-turn memory consolidation work owned by this session.
     ///
     /// The app-server drains these handles during interrupt/shutdown so an old
@@ -700,6 +701,7 @@ impl AgentSession {
             subagent_manager: None,
             subagent_depth: 0,
             team_manager: None,
+            team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
@@ -806,6 +808,9 @@ impl AgentSession {
                     )
                 })
             });
+        }
+        if self.team_identity.is_some() {
+            tool_definitions.retain(|tool_definition| tool_definition.name != "spawn_teammate");
         }
 
         tool_definitions
@@ -2177,7 +2182,7 @@ mod tests {
     #[test]
     fn test_build_team_tool_definitions_count() {
         let defs = build_team_tool_definitions();
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), 5);
     }
 
     #[test]
