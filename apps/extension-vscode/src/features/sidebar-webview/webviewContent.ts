@@ -4357,7 +4357,7 @@ export function getWebviewContent(
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\n\n' + '\u0060\u0060\u0060' + language + '\n' + text + '\n' + '\u0060\u0060\u0060');
+            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             sendMessage();
             return;
           }
