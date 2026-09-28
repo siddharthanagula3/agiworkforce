@@ -46,6 +46,6 @@ Code: `apps/cli/src/terminals.rs:173-173`, `apps/cli/src/features/exec/tools/bas
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Claude does offer a runtime for published artifacts (support.claude.com/en/articles/9487310, fetched 2026-09-28): AI-powered artifacts that make Claude calls counted against each viewer's own plan and require the viewer to sign in, per-artifact storage of 20 MB text in personal and shared scopes, and access to the viewer's connected apps. Matching it is exactly the missing items S28.22 (brokered AI API), S28.23 and S96.17 (artifact data store) and S33.20 (model-call allowance), which are outside this run's scope, so published artifacts stay static single files under connect-src 'none' | handler |
+| platform | partial | billing/no-yearly fe4c6faae and 8b22ed468 build the runtime Claude documents for published artifacts: window.agi.complete billed to the signed-in viewer (never the author) and window.agi.storage with 20 MB of personal and 20 MB of shared text per artifact, relayed by postMessage with the sandbox CSP still connect-src 'none'. Left: the viewer's connected apps inside a published app (Claude allows them), and telling models that window.agi exists, which needs a new chat system prompt version for the lead to pin | handler |
 
-Code: `apps/web/app/shared-artifact/[token]/page.tsx:54-54`, `packages/contracts/types/src/artifact-csp.ts:37-37`
+Code: `infrastructure/sandbox/index.html:346-346`, `infrastructure/sandbox/index.html:484-484`, `apps/web/features/chat/components/SandboxedIframe.tsx:183-183`, `apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx:150-150`

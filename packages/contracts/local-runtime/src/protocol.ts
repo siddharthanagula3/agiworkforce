@@ -121,4 +121,5 @@ export type DesktopRuntimeEvent =
   | { kind: 'computer-use-changed'; status: ComputerUseStatus }
   | { kind: 'update-ready'; version: string }
   | { kind: 'dispatch-task'; task: DispatchTaskAssignment }
-  | { kind: 'dispatch-task-cancel'; requestId: string };
+  | { kind: 'dispatch-task-cancel'; requestId: string }
+  | { kind: 'device-prompt-changed'; open: boolean };

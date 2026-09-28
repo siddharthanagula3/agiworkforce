@@ -11,6 +11,7 @@ export const BOT_CHALLENGED_ENDPOINTS = {
   supportHandoffMessage: { path: '/api/support/handoff/*/messages', method: 'POST' },
   supportAppeal: { path: '/api/support/appeal', method: 'POST' },
   supportRecovery: { path: '/api/support/recovery', method: 'POST' },
+  guestChat: { path: '/api/llm/v1/chat/completions/guest', method: 'POST' },
 } as const satisfies Record<string, BotChallengedEndpoint>;
 
 export const BOT_CHALLENGED_ROUTES: BotChallengedEndpoint[] =

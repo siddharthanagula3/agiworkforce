@@ -69,6 +69,7 @@ import {
   reconcileAgentControlConsent,
 } from './features/permissions/agentModeConsent';
 import { registerProposedChangeReview } from './features/permissions/proposedChangeReview';
+import { registerRemoteControl } from './features/remote-control';
 
 let activeLocalRuntimes: LocalRuntimePool | undefined;
 
@@ -135,6 +136,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   activeLocalRuntimes = localRuntimes;
   context.subscriptions.push(localRuntimes, registerProposedChangeReview());
+  runBoot('remote-control', () => {
+    context.subscriptions.push(registerRemoteControl(context, localRuntimes));
+  });
 
   let chatState: ChatState | undefined;
   try {

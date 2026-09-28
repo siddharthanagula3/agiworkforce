@@ -149,21 +149,36 @@ export function DirectoryDetailHeader({
             ) : null}
           </>
         ) : onPrimary ? (
-          <button
-            type="button"
-            onClick={onPrimary}
-            disabled={busy}
-            className={cn(
-              'inline-flex min-h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors motion-reduce:transition-none disabled:opacity-50',
-              primarySecondary
-                ? 'border border-border text-foreground hover:bg-muted'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90',
-              DIRECTORY_FOCUS_RING,
-            )}
-          >
-            {busy ? <Spinner size="sm" aria-label={primaryLabel} /> : null}
-            {primaryLabel}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onPrimary}
+              disabled={busy}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors motion-reduce:transition-none disabled:opacity-50',
+                primarySecondary
+                  ? 'border border-border text-foreground hover:bg-muted'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                DIRECTORY_FOCUS_RING,
+              )}
+            >
+              {busy ? <Spinner size="sm" aria-label={primaryLabel} /> : null}
+              {primaryLabel}
+            </button>
+            {onRemove ? (
+              <button
+                type="button"
+                onClick={onRemove}
+                disabled={busy}
+                className={cn(
+                  'inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm text-foreground transition-colors motion-reduce:transition-none hover:bg-muted disabled:opacity-50',
+                  DIRECTORY_FOCUS_RING,
+                )}
+              >
+                {removeLabel ?? REMOVE_LABEL}
+              </button>
+            ) : null}
+          </>
         ) : statusNote ? (
           <span className="text-sm text-muted-foreground">{statusNote}</span>
         ) : null}

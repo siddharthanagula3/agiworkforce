@@ -1099,6 +1099,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         const extras = {
           pending: connectorPending.current,
           requiredBy: connectorsRequiredByPlugins(installedPluginRequirements()),
+          reauthorization: new Set(
+            connectedRef.current
+              .filter((connector) => connector.needsReauthorization === true)
+              .map((connector) => connector.connectorId),
+          ),
         };
         const curated = curatedRef.current.find((entry) => entry.id === id);
         if (curated) {
