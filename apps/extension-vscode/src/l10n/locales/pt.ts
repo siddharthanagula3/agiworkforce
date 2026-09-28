@@ -454,6 +454,9 @@ const pt = {
     'AGI Workforce: {count} de arquivos voltaram ao ponto de verificação.',
   'checkpoints.filesRestored_other':
     'AGI Workforce: {count} arquivos voltaram ao ponto de verificação.',
+  'webview.sources_one': '{count} fonte',
+  'webview.sources_many': '{count} de fontes',
+  'webview.sources_other': '{count} fontes',
 };
 
 export default pt;

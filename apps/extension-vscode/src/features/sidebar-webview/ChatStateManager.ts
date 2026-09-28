@@ -416,6 +416,7 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'planUpdate'; payload: PlanVisualization }
+  | { type: 'sourceList'; payload: { sources: Array<{ url: string; title: string }> } }
   | {
       type: 'toolCallStart';
       payload: {
@@ -3196,6 +3197,13 @@ export class ChatStateManager {
     }
     if (event.type === 'output_delta') {
       this._post({ type: 'token', payload: { text: event.delta } });
+      return;
+    }
+    if (event.type === 'source_list') {
+      this._post({
+        type: 'sourceList',
+        payload: { sources: event.sources.map(({ url, title }) => ({ url, title })) },
+      });
       return;
     }
     if (event.type === 'progress_update') {

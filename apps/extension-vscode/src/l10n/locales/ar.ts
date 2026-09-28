@@ -597,6 +597,12 @@ const ar = {
   'checkpoints.filesRestored_few': 'AGI Workforce: أُعيدت {count} ملفات إلى نقطة التحقق.',
   'checkpoints.filesRestored_many': 'AGI Workforce: أُعيد {count} ملفًا إلى نقطة التحقق.',
   'checkpoints.filesRestored_other': 'AGI Workforce: أُعيد {count} ملف إلى نقطة التحقق.',
+  'webview.sources_zero': 'لا مصادر',
+  'webview.sources_one': 'مصدر واحد',
+  'webview.sources_two': 'مصدران',
+  'webview.sources_few': '{count} مصادر',
+  'webview.sources_many': '{count} مصدرًا',
+  'webview.sources_other': '{count} مصدر',
 };
 
 export default ar;

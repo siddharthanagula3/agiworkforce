@@ -348,6 +348,8 @@ const en = {
   'checkpoints.skippedFiles_other': 'AGI Workforce: {count} files could not be restored: {files}',
   'checkpoints.filesRestored_one': 'AGI Workforce: {count} file went back to the checkpoint.',
   'checkpoints.filesRestored_other': 'AGI Workforce: {count} files went back to the checkpoint.',
+  'webview.sources_one': '{count} source',
+  'webview.sources_other': '{count} sources',
 };
 
 export default en;

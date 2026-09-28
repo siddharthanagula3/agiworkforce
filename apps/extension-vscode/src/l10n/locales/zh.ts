@@ -257,6 +257,7 @@ const zh = {
   'checkpoints.trackedFiles_other': '已跟踪 {count} 个文件',
   'checkpoints.skippedFiles_other': 'AGI Workforce：有 {count} 个文件无法还原：{files}',
   'checkpoints.filesRestored_other': 'AGI Workforce：已将 {count} 个文件还原到检查点。',
+  'webview.sources_other': '{count} 个来源',
 };
 
 export default zh;

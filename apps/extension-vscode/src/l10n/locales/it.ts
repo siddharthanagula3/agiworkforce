@@ -452,6 +452,9 @@ const it = {
   'checkpoints.filesRestored_one': 'AGI Workforce: {count} file è tornato al checkpoint.',
   'checkpoints.filesRestored_many': 'AGI Workforce: {count} di file sono tornati al checkpoint.',
   'checkpoints.filesRestored_other': 'AGI Workforce: {count} file sono tornati al checkpoint.',
+  'webview.sources_one': '{count} fonte',
+  'webview.sources_many': '{count} di fonti',
+  'webview.sources_other': '{count} fonti',
 };
 
 export default it;

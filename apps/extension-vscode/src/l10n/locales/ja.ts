@@ -301,6 +301,7 @@ const ja = {
     'AGI Workforce: {count} 個のファイルを復元できませんでした: {files}',
   'checkpoints.filesRestored_other':
     'AGI Workforce: {count} 個のファイルをチェックポイントの状態に戻しました。',
+  'webview.sources_other': '{count} 件のソース',
 };
 
 export default ja;

@@ -687,6 +687,21 @@ const progressUpdateSchema = z.object({
   detail: z.string().optional(),
   status: z.enum(['running', 'completed', 'failed']),
 });
+const sourceListSchema = z.object({
+  type: z.literal('source-list'),
+  toolCallId: z.string().max(200).optional(),
+  query: z.string().max(2_000).optional(),
+  sources: z
+    .array(
+      z.object({
+        url: z.string().min(1).max(8_192),
+        title: z.string().max(2_000),
+        snippet: z.string().max(8_000).optional(),
+      }),
+    )
+    .max(500),
+});
+
 const agentEventEnvelopeSchema = z.object({
   schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
   sessionId: z.string().min(1),
@@ -697,6 +712,7 @@ const agentEventEnvelopeSchema = z.object({
     toolExecutionStartSchema,
     toolExecutionEndSchema,
     progressUpdateSchema,
+    sourceListSchema,
   ]),
 });
 
@@ -727,6 +743,11 @@ export type LocalRuntimeEvent =
       sequence: number;
       emittedAtMs: number;
     } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
+  | ({
+      type: 'source_list';
+      threadId: string;
+      turnId: string;
+    } & Omit<z.infer<typeof sourceListSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
@@ -766,6 +787,16 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         category: event.category,
         summary: event.summary,
         input: event.input,
+      };
+    }
+    if (event.type === 'source-list') {
+      return {
+        type: 'source_list',
+        threadId,
+        turnId,
+        sources: event.sources,
+        ...(event.query === undefined ? {} : { query: event.query }),
+        ...(event.toolCallId === undefined ? {} : { toolCallId: event.toolCallId }),
       };
     }
     if (event.type === 'tool-execution-end') {
