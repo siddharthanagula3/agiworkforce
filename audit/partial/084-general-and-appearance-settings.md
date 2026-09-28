@@ -20,18 +20,6 @@ nothing is left.
 
 Code: `apps/extension/src/side_panel.ts:8120-8122`
 
-## S84.03: Theme.
-
-- Done when: The user can choose light, dark or system theme and it applies and persists.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The side panel follows the system/Chrome color scheme (prefers-color-scheme); no theme choice. | ui |
-
-Code: `apps/extension/src/side_panel.ts:3673-3673`
-
 ## S84.04: Accent color where offered.
 
 - Done when: Where offered, the user can pick an accent colour that recolours the interface.
@@ -53,18 +41,6 @@ Code: `apps/extension/src/side_panel.ts:3673-3673`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
-
-## S84.07: Reduced motion.
-
-- Done when: The user can reduce animation (in-app setting or honouring the OS reduce-motion preference).
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The side panel honours prefers-reduced-motion in CSS; no in-extension toggle. | ui |
-
-Code: `apps/extension/src/side_panel.ts:3111-3111`
 
 ## S84.09: Code line wrapping.
 
@@ -93,15 +69,12 @@ Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`
 
 - Done when: The user can choose the default mode new conversations start in (e.g. chat vs agent/work, ask vs auto).
 - Wave: 3
-- Already works on: mobile, cli, vscode
+- Already works on: mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The autonomy level is chosen per session from the composer chip and is not saved as a default. | ui |
-
-Code: `apps/extension/src/side_panel.ts:9979-9983`
 
 ## S84.18: Notification channels.
 

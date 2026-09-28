@@ -35,18 +35,6 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 
 Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/cli/src/features/exec/tools/mod.rs:365-372`
 
-## S57.04: File-search tool.
-
-- Done when: The assistant can call a tool that searches the user's files (by name or content) and returns matching paths or snippets.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`, `apps/web/lib/services/memory-commands.ts:32-32`
-
 ## S57.05: File-read tool.
 
 - Done when: The assistant can call a tool that reads the contents of a file it names (in a sandbox or on the user's machine).
@@ -216,14 +204,13 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586
 
 - Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`
 
 ## S57.22: Calendar tool.
 
@@ -238,18 +225,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-30
 | mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
-
-## S57.24: Scheduling tool.
-
-- Done when: The assistant can call a tool that creates, lists or deletes a scheduled task for the user.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`, `apps/web/lib/services/memory-commands.ts:32-32`
 
 ## S57.26: Clarification/input tool.
 
