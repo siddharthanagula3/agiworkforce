@@ -45,6 +45,7 @@
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@clerk/chrome-extension": "^3.1.82",
     "dompurify": "^3.4.15",
