@@ -15,7 +15,6 @@ const detail: DirectoryPluginDetail = {
   publisher: 'Anthropic',
   description: 'Create distinctive frontend interfaces.',
   verified: true,
-  installCount: 1_134_112,
   examplePrompts: ['Design a pricing page'],
   components: {
     skills: ['frontend-design', 'design-review'],
@@ -80,12 +79,11 @@ describe('WEB-WEB-SETTINGS-MODAL-INSTALLED-PLUGIN-01', () => {
 });
 
 describe('PluginDetailView', () => {
-  it('leads with the name, publisher, install count, verified glyph and Install', () => {
+  it('leads with the name, publisher, verified glyph and Install', () => {
     const onInstall = vi.fn();
     renderDetail({}, { onInstall });
     expect(screen.getByRole('heading', { name: 'Frontend Design' })).toBeTruthy();
     expect(screen.getByText('Anthropic')).toBeTruthy();
-    expect(screen.getByText('1.1M')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Verified' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
     expect(onInstall).toHaveBeenCalled();

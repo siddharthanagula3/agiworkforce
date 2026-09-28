@@ -8,6 +8,7 @@ import {
   type ApplicationOpenResult,
   type BackgroundActivity,
   type BackgroundWorkKind,
+  type BrowserActivityEntry,
   type BrowserPairingState,
   type ClipboardSnapshot,
   type ComputerUseStatus,
@@ -323,6 +324,14 @@ export function revokeDesktopPermission(
     capability: decision.capability,
     scope: decision.scope,
   });
+}
+
+export function readBrowserActivity(): Promise<BrowserActivityEntry[]> {
+  return invoke<BrowserActivityEntry[]>('browser_activity');
+}
+
+export function openDownloadsFolder(): Promise<boolean> {
+  return invoke<boolean>('browser_downloads_open');
 }
 
 export function readBackgroundActivity(): Promise<BackgroundActivity> {

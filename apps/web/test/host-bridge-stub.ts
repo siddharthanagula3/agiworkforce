@@ -15,6 +15,7 @@ export function hostPreferencesStub(
       launchAtLogin: false,
       quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk[0] ?? '',
       screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot[0] ?? '',
+      windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot[0] ?? '',
       voiceShortcut: HOST_SHORTCUT_CHOICES.voice[0] ?? '',
       showInMenuBar: true,
       cliPath: '',
@@ -25,6 +26,7 @@ export function hostPreferencesStub(
     shortcutStatus: {
       quickAsk: HOST_SHORTCUT_STATUSES[0],
       screenshot: HOST_SHORTCUT_STATUSES[0],
+      windowShot: HOST_SHORTCUT_STATUSES[0],
       voice: HOST_SHORTCUT_STATUSES[0],
     },
   };

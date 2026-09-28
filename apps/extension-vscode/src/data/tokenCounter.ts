@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
-import { MICROUSD_PER_USD, creditsFromMicrousd, formatCredits } from '@agiworkforce/types';
+import { MICROUSD_PER_USD, creditsFromMicrousd } from '@agiworkforce/types';
 import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { isAutoRoutingModel } from '../integrations/routingTask';
 import { fetchBilledCredits, onDidCompleteManagedRequest } from '../utils/api';
+import { t, tPlural } from '../l10n';
+import { formatCreditAmount, formatUnsettledRequests } from './usagePresentation';
 
 const MAX_QUEUED_BILLING_REQUESTS = 200;
 const BILLING_SETTLEMENT_BATCH = 10;
@@ -269,17 +271,23 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
 
 export function formatBilledCredits(counter: TokenCounter): string {
   const unsettled = counter.unsettledRequests;
-  const unsettledLabel = `${unsettled} ${unsettled === 1 ? 'request' : 'requests'} not settled yet`;
-  if (counter.billedRequests === 0) return unsettled === 0 ? 'none yet' : unsettledLabel;
-  const billed = formatCredits(counter.billedCredits, { maximumFractionDigits: 2 });
-  return unsettled === 0 ? billed : `${billed} (${unsettledLabel})`;
+  if (counter.billedRequests === 0) {
+    return unsettled === 0 ? t('billing.noneYet') : formatUnsettledRequests(unsettled);
+  }
+  const billed = formatCreditAmount(counter.billedCredits);
+  return unsettled === 0
+    ? billed
+    : t('billing.withUnsettled', {
+        credits: billed,
+        unsettled: formatUnsettledRequests(unsettled),
+      });
 }
 
 export function formatSessionCreditEstimate(counter: TokenCounter): string {
-  if (counter.requestCount === 0) return 'none yet';
-  if (counter.unpricedRequestCount === counter.requestCount) return 'no published rate';
-  const amount = formatCredits(counter.estimatedCredits, { maximumFractionDigits: 2 });
+  if (counter.requestCount === 0) return t('billing.noneYet');
+  if (counter.unpricedRequestCount === counter.requestCount) return t('billing.noPublishedRate');
+  const amount = formatCreditAmount(counter.estimatedCredits);
   return counter.unpricedRequestCount === 0
     ? amount
-    : `${amount} (excludes ${counter.unpricedRequestCount} turn(s) with no published rate)`;
+    : tPlural('billing.excludesUnpriced', counter.unpricedRequestCount, { credits: amount });
 }

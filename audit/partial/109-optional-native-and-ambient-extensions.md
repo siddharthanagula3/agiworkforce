@@ -33,14 +33,14 @@ Code: `apps/extension/src/background.ts:4526-4533`, `apps/extension/src/backgrou
 
 - Done when: Dictation to AGI can be started from anywhere on the device (global shortcut or system voice command) without first opening the app.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The voice shortcut works while the main window is open; with it hidden or closed the press goes to Quick Ask, which has no desktop bridge, so dictation never starts. | handler |
 | mobile | partial | Siri "Ask/Talk to AGI" takes a spoken prompt from anywhere, but it opens the prompt for review in chat instead of starting dictation or voice mode; Android has no voice entry. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/desktop/electron/voiceDictation.ts:32-43`, `apps/desktop/electron/quickAsk.ts:27-32`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1653-1656`, `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`
+Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/app/_layout.tsx:529-544`
 
 ## S109.08: Selected-text rewrite shortcut.
 
@@ -66,17 +66,6 @@ Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGISh
 | mobile | partial | A screenshot can reach chat only by sharing it to AGI from the share sheet; no shortcut captures the screen into a chat. | ui |
 
 Code: `apps/mobile/app.config.js:166-176`
-
-## S109.10: Window-to-chat shortcut.
-
-- Done when: A shortcut captures one chosen window (not the whole screen) into an AGI chat.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | The composer screenshot button lets the user pick a single window, but the global shortcut always captures the whole display under the cursor; no shortcut targets a window. | ui |
-
-Code: `apps/desktop/electron/screenshot.ts:78-84`, `apps/desktop/electron/main.ts:641-662`
 
 ## S109.11: Hardware shortcut/macropad integration.
 

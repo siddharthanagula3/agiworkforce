@@ -19,6 +19,7 @@ export interface HostShortcutRow {
 const CONFIGURABLE_DESCRIPTIONS: Record<(typeof HOST_SHORTCUT_KEYS)[number], string> = {
   quickAsk: 'Quick Ask',
   screenshot: 'Screenshot to chat',
+  windowShot: 'Window to chat',
   voice: 'Dictate',
 };
 
