@@ -166,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} arquivo",
+    "fileCount_other": "{{count}} arquivos",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +407,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Por enquanto os rascunhos duram só a sessão, fechar o app limpa o quadro."
+    "sessionOnlyNotice": "Por enquanto os rascunhos duram só a sessão, fechar o app limpa o quadro.",
+    "elementCount_one": "{{count}} elemento",
+    "elementCount_other": "{{count}} elementos"
   }
 }

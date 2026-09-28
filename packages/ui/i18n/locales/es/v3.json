@@ -407,6 +407,8 @@
     "weeksAgo": "hace {{count}} semanas"
   },
   "canvas": {
-    "sessionOnlyNotice": "Por ahora los bocetos solo duran la sesión: al cerrar la app se borra el lienzo."
+    "sessionOnlyNotice": "Por ahora los bocetos solo duran la sesión: al cerrar la app se borra el lienzo.",
+    "elementCount_one": "{{count}} elemento",
+    "elementCount_other": "{{count}} elementos"
   }
 }

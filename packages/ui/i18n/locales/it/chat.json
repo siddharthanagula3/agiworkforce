@@ -304,5 +304,33 @@
     "morningNamed": "Buongiorno, {{name}}",
     "afternoonNamed": "Buon pomeriggio, {{name}}",
     "eveningNamed": "Buonasera, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} scorciatoia disattivata",
+    "shortcutsOff_other": "{{count}} scorciatoie disattivate",
+    "searchHistoryCleared_one": "{{count}} ricerca eliminata dalla cronologia",
+    "searchHistoryCleared_other": "{{count}} ricerche eliminate dalla cronologia",
+    "searches_one": "{{count}} ricerca",
+    "searches_other": "{{count}} ricerche",
+    "searchesOf_one": "{{count}} di {{max}} ricerche",
+    "searchesOf_other": "{{count}} di {{max}} ricerche",
+    "sources_one": "{{count}} fonte",
+    "sources_other": "{{count}} fonti",
+    "intermediateSteps_one": "{{count}} passaggio intermedio",
+    "intermediateSteps_other": "{{count}} passaggi intermedi",
+    "conversations_one": "{{count}} conversazione",
+    "conversations_other": "{{count}} conversazioni",
+    "tools_one": "{{count}} strumento",
+    "tools_other": "{{count}} strumenti",
+    "citations_one": "{{count}} citazione",
+    "citations_other": "{{count}} citazioni",
+    "checkpoints_one": "{{count}} checkpoint",
+    "checkpoints_other": "{{count}} checkpoint",
+    "usedTools_one": "{{count}} strumento usato",
+    "usedTools_other": "{{count}} strumenti usati",
+    "runningTools_one": "Esecuzione di {{count}} strumento",
+    "runningTools_other": "Esecuzione di {{count}} strumenti",
+    "runningToolsOf_one": "Esecuzione di {{running}}/{{count}} strumento: {{name}}",
+    "runningToolsOf_other": "Esecuzione di {{running}}/{{count}} strumenti: {{name}}"
   }
 }

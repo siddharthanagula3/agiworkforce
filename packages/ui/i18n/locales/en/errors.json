@@ -215,5 +215,156 @@
       "Check the error logs for details",
       "Report this issue if it persists"
     ]
+  },
+  "network": {
+    "offline": "You appear to be offline. Check your connection.",
+    "unreachable": "Could not reach the server."
+  },
+  "http": {
+    "sessionExpired": "Your session has expired. Sign in again to continue.",
+    "forbidden": "You do not have access to this.",
+    "notFound": "That is no longer available.",
+    "timeout": "The server took too long to answer. Try again.",
+    "rateLimited": "You are going a little fast. Wait a moment and try again.",
+    "server": "Something went wrong on our side. Try again shortly."
+  },
+  "boundary": {
+    "title": "Something went wrong",
+    "message": "We're sorry, but something unexpected happened.",
+    "sectionFailed": "{{name}} failed to load",
+    "tryAgain": "Try again",
+    "goHome": "Go home",
+    "goToChat": "Go to chat",
+    "signIn": "Sign in",
+    "supportReference": "Reference for support: {{reference}}",
+    "errorId": "Error ID: {{reference}}",
+    "errorIdLabel": "Error ID:",
+    "includeId": "Please include this ID when contacting support.",
+    "keepsHappening": "If this keeps happening,",
+    "contactSupport": "contact support",
+    "reload": "Reload page",
+    "reloadLabel": "Reload the entire page",
+    "desktopMessage": "The application encountered an unexpected error. You can try reloading the page or resetting the view.",
+    "reportSent": "Error report sent successfully. Thank you for helping us improve!",
+    "recoveryActions": "Error recovery actions",
+    "resetView": "Reset view",
+    "resetViewLabel": "Reset the current view to recover from the error",
+    "copy": "Copy error",
+    "copied": "Copied",
+    "copyLabel": "Copy error details to clipboard",
+    "copiedLabel": "Error details copied to clipboard",
+    "report": "Report error",
+    "reportLabel": "Send an error report to help improve the application",
+    "chatTitle": "Chat error",
+    "chatMessage": "The chat interface encountered an error. Your conversation history is safe. Restart the chat to continue.",
+    "restartChat": "Restart chat"
+  },
+  "chatFailure": {
+    "offlineTitle": "You are offline",
+    "title": "Chat could not be displayed",
+    "offlineDescription": "This conversation cannot load while your connection is down. Your messages are saved, reconnect and try again.",
+    "networkDescription": "{{network}} Your messages are saved, try again, or open a different conversation.",
+    "description": "Something went wrong while rendering this conversation. Your messages are saved, try again, or open a different conversation.",
+    "backToChat": "Back to chat"
+  },
+  "toast": {
+    "dismiss": "Dismiss",
+    "retry": "Retry",
+    "learnMore": "Learn more",
+    "showDetails": "Show details (development only)"
+  },
+  "turn": {
+    "cause": {
+      "rateLimit": "This model is receiving too many requests right now. Wait a moment and retry, or switch to another model if your plan has one.",
+      "providerOutage": "The model provider is temporarily unreachable. Retry, or switch to another model if your plan has one.",
+      "timeout": "The model took too long to respond. Retry, or pick a faster model from the model picker.",
+      "modelRestriction": "The selected model could not complete this request. Retry, or choose a different model.",
+      "contextLength": "This conversation is too long for the selected model. Start a new chat, remove some attachments, or choose a model with a larger context window.",
+      "outputLimit": "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.",
+      "attachment": "This model could not read one of the attachments. Remove it, or choose a model that accepts that kind of file.",
+      "toolCall": "The model produced a tool call this request could not accept. Retry, or turn off the tools this turn does not need.",
+      "contentFiltered": "The safety system stopped this response. Rephrase the request, or try a different model.",
+      "planRestriction": "The selected model is not part of your plan. Choose a model your plan includes.",
+      "workspacePolicy": "Your workspace administrator has turned this off for your account. Ask an administrator if you need it.",
+      "twoFactorRequired": "Your workspace requires two-factor authentication. Turn it on in Settings, then retry.",
+      "sessionExpired": "Your session ended before this turn finished. Sign in again, then retry.",
+      "accountLimit": "You have reached a usage limit on your account. Open Usage to see when it resets, then retry.",
+      "sharedFreeAllowance": "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule. Try again later, or use your own provider key.",
+      "interrupted": "The response stopped part way through. The part that arrived is kept above. Retry to get a complete answer.",
+      "emptyResponse": "The model returned no response for this turn. Retry, or rephrase your message."
+    },
+    "rateLimitWait": "This model is receiving too many requests right now. Try again in {{wait}}, or switch to another model if your plan has one.",
+    "incomplete": "This turn didn't complete. No response was received.",
+    "reference": "{{text}} Reference: {{reference}}",
+    "reason": {
+      "connection": "the connection to the model was interrupted.",
+      "rateLimit": "this model is receiving too many requests right now.",
+      "providerOutage": "this model is unavailable right now for a reason on our side.",
+      "timeout": "the model took too long to respond.",
+      "modelRestriction": "the selected model could not complete this request.",
+      "contextLength": "this conversation is too long for the selected model.",
+      "outputLimit": "the answer reached this model's maximum length and stopped there.",
+      "attachment": "this model could not read one of the attachments.",
+      "toolCall": "the model produced a tool call this request could not accept.",
+      "contentFiltered": "the safety system stopped this response.",
+      "planRestriction": "the selected model is not part of your plan.",
+      "workspacePolicy": "your workspace administrator has turned this off for your account.",
+      "twoFactorRequired": "your workspace requires two-factor authentication.",
+      "sessionExpired": "your session ended before this turn finished.",
+      "accountLimit": "you have reached a usage limit on your account.",
+      "interrupted": "the response stopped part way through; the part that arrived is kept above.",
+      "sharedFreeAllowance": "the free model has used up the allowance everyone on the Free plan shares, which is not a limit on your account.",
+      "emptyResponse": "no response was returned."
+    },
+    "wait": {
+      "seconds_one": "about {{count}} second",
+      "seconds_other": "about {{count}} seconds",
+      "minutes_one": "about {{count}} minute",
+      "minutes_other": "about {{count}} minutes",
+      "hours_one": "about {{count}} hour",
+      "hours_other": "about {{count}} hours"
+    }
+  },
+  "friendly": {
+    "server": {
+      "title": "Something Went Wrong",
+      "message": "We're experiencing technical difficulties.",
+      "suggestion": "Our team has been notified. Please try again in a few minutes."
+    },
+    "rateLimit": {
+      "title": "Slow Down",
+      "message": "You're sending requests too quickly.",
+      "suggestion": "Please wait a moment before trying again."
+    },
+    "fallback": {
+      "title": "Something Went Wrong",
+      "message": "We weren't able to complete your request.",
+      "suggestion": "Please try again. If this keeps happening, contact support."
+    },
+    "apiKey": {
+      "title": "API Key Issue",
+      "message": "There is a problem with your API key configuration.",
+      "suggestion": "Please check your API key in Settings and try again."
+    },
+    "network": {
+      "title": "Connection Issue",
+      "message": "Could not reach the server.",
+      "suggestion": "Please check your internet connection and try again."
+    },
+    "timeout": {
+      "title": "Taking Too Long",
+      "message": "The request is taking longer than expected.",
+      "suggestion": "Please try again in a moment. If the problem continues, contact support."
+    },
+    "accessDenied": {
+      "title": "Access Denied",
+      "message": "Your account does not have permission for this. Nothing was changed.",
+      "suggestion": "Ask a workspace admin for access. Retrying will not help."
+    },
+    "signIn": {
+      "title": "Sign In Required",
+      "message": "Your session has expired. Your saved work is unaffected.",
+      "suggestion": "Sign in again to continue."
+    }
   }
 }

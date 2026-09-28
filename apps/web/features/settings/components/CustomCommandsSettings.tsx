@@ -14,6 +14,7 @@ import {
   DialogDescription,
   Input,
   Textarea,
+  useUiTranslation,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
@@ -261,6 +262,7 @@ function DeleteConfirmDialog({ open, commandName, onConfirm, onCancel }: DeleteC
 }
 
 export function CustomCommandsSettings() {
+  const { plural } = useUiTranslation('settings');
   const { customCommands, deleteCustomCommand } = useSettingsStore();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -276,7 +278,10 @@ export function CustomCommandsSettings() {
         <p className="text-sm text-muted-foreground">
           {customCommands.length === 0
             ? 'No custom commands yet. Create one to get started.'
-            : `${customCommands.length} custom command${customCommands.length === 1 ? '' : 's'}`}
+            : plural('counts.customCommands', customCommands.length, {
+                one: '{{count}} custom command',
+                other: '{{count}} custom commands',
+              })}
         </p>
         <Button size="sm" onClick={() => setIsCreating(true)} className="gap-2">
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />

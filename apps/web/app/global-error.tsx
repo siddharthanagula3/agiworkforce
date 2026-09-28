@@ -2,6 +2,10 @@
 
 import { type CSSProperties, useEffect } from 'react';
 import { getFriendlyError } from '@agiworkforce/utils';
+import { useUiTranslation } from '@agiworkforce/ui/i18n';
+import { languageFor } from '@agiworkforce/i18n/languages';
+import i18n from '@/app/i18n/index';
+import { useFriendlyErrorCopy } from '@/shared/hooks/use-friendly-error-copy';
 
 export default function GlobalError({
   error,
@@ -14,7 +18,9 @@ export default function GlobalError({
     console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
   }, [error]);
 
-  const friendly = getFriendlyError(error);
+  const { t } = useUiTranslation('errors');
+  const friendly = useFriendlyErrorCopy(getFriendlyError(error));
+  const language = i18n.resolvedLanguage ?? i18n.language;
 
   const errorTheme = {
     '--global-error-bg': 'black',
@@ -30,7 +36,7 @@ export default function GlobalError({
   } as CSSProperties;
 
   return (
-    <html lang="en">
+    <html lang={language} dir={languageFor(language)?.rtl ? 'rtl' : 'ltr'}>
       <body
         style={{
           ...errorTheme,
@@ -119,7 +125,7 @@ export default function GlobalError({
                 marginBottom: '1.5rem',
               }}
             >
-              Error ID: {error.digest}
+              {t('boundary.errorId', 'Error ID: {{reference}}', { reference: error.digest })}
             </p>
           )}
 
@@ -149,7 +155,7 @@ export default function GlobalError({
                 cursor: 'pointer',
               }}
             >
-              Try again
+              {t('boundary.tryAgain', 'Try again')}
             </button>
             <a
               href="/"
@@ -168,7 +174,7 @@ export default function GlobalError({
                 textDecoration: 'none',
               }}
             >
-              Go home
+              {t('boundary.goHome', 'Go home')}
             </a>
           </div>
 
@@ -180,9 +186,9 @@ export default function GlobalError({
             }}
           >
             <p style={{ color: 'var(--global-error-quiet)', fontSize: '0.875rem' }}>
-              If this keeps happening,{' '}
+              {t('boundary.keepsHappening', 'If this keeps happening,')}{' '}
               <a href="/contact" style={{ color: 'var(--global-error-link)' }}>
-                contact support
+                {t('boundary.contactSupport', 'contact support')}
               </a>
               .
             </p>

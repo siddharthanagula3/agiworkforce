@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { FolderOpen, MoreHorizontal, Share2, Star } from 'lucide-react';
-import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
+import { useConfirmAction, useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../lib/types';
@@ -54,6 +54,7 @@ export function ProjectCard({
   formatRelativeDate = defaultFormatRelativeDate,
   className,
 }: ProjectCardProps) {
+  const { plural } = useUiTranslation('chat');
   const toggleStar = useProjectStore((s) => s.toggleStar);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -336,7 +337,10 @@ export function ProjectCard({
           <span>
             {conversationCount === 0
               ? 'No conversations yet'
-              : `${conversationCount} conversation${conversationCount === 1 ? '' : 's'}`}
+              : plural('counts.conversations', conversationCount, {
+                  one: '{{count}} conversation',
+                  other: '{{count}} conversations',
+                })}
           </span>
           <span>Updated {formatRelativeDate(project.updatedAt)}</span>
         </div>
