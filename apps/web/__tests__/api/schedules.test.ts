@@ -175,7 +175,7 @@ describe('/api/schedules', () => {
         message: 'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.',
       },
     });
-    expect(getNeonDb).not.toHaveBeenCalled();
+    expect(assertScheduleQuota).toHaveBeenCalledWith(db, 'user-1', 'free');
     expect(createSchedule).not.toHaveBeenCalled();
   });
 
