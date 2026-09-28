@@ -7,6 +7,7 @@ import {
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 
 export interface LiveVoiceToolOutcome {
@@ -14,6 +15,7 @@ export interface LiveVoiceToolOutcome {
   label: string;
   output: string;
   isError: boolean;
+  files: readonly LiveVoiceToolFile[];
 }
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -304,6 +306,7 @@ export class LiveVoiceSession {
           label: this.describeTool(result.name).label,
           output: result.output,
           isError: result.isError,
+          files: result.files,
         }),
     });
   }
