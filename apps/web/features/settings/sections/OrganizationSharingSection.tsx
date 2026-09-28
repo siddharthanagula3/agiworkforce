@@ -312,7 +312,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                             htmlFor={controlId}
                             style={{ flex: 1, color: 'var(--text-2)', wordBreak: 'break-all' }}
                           >
-                            {member.userId} ({member.role})
+                            {member.displayName ?? member.email ?? member.userId} ({member.role})
                           </label>
                           <select
                             id={controlId}

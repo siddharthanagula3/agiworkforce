@@ -64,6 +64,7 @@ import {
   withTurnErrorReference,
   type IncompleteTurnCause,
 } from '../../lib/turn-error-notice';
+import { translateUi } from '@agiworkforce/ui/translate';
 
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
@@ -121,7 +122,9 @@ function streamErrorReason(message: ChatMessage): string {
   const code = streamErrorCode(message);
   const cause = code ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] : undefined;
   return withTurnErrorReference(
-    cause ? STREAM_ERROR_REASON_BY_CAUSE[cause] : STREAM_ERROR_CONNECTION_DETAIL,
+    cause
+      ? translateUi('errors', `turn.reason.${cause}`, STREAM_ERROR_REASON_BY_CAUSE[cause])
+      : translateUi('errors', 'turn.reason.connection', STREAM_ERROR_CONNECTION_DETAIL),
     message,
   );
 }

@@ -307,5 +307,33 @@
     "morningNamed": "Good morning, {{name}}",
     "afternoonNamed": "Good afternoon, {{name}}",
     "eveningNamed": "Good evening, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} shortcut turned off",
+    "shortcutsOff_other": "{{count}} shortcuts turned off",
+    "searchHistoryCleared_one": "Cleared {{count}} search from history",
+    "searchHistoryCleared_other": "Cleared {{count}} searches from history",
+    "searches_one": "{{count}} search",
+    "searches_other": "{{count}} searches",
+    "searchesOf_one": "{{count}} of {{max}} search",
+    "searchesOf_other": "{{count}} of {{max}} searches",
+    "sources_one": "{{count}} source",
+    "sources_other": "{{count}} sources",
+    "intermediateSteps_one": "{{count}} intermediate step",
+    "intermediateSteps_other": "{{count}} intermediate steps",
+    "conversations_one": "{{count}} conversation",
+    "conversations_other": "{{count}} conversations",
+    "tools_one": "{{count}} tool",
+    "tools_other": "{{count}} tools",
+    "citations_one": "{{count}} citation",
+    "citations_other": "{{count}} citations",
+    "checkpoints_one": "{{count}} checkpoint",
+    "checkpoints_other": "{{count}} checkpoints",
+    "usedTools_one": "Used {{count}} tool",
+    "usedTools_other": "Used {{count}} tools",
+    "runningTools_one": "Running {{count}} tool",
+    "runningTools_other": "Running {{count}} tools",
+    "runningToolsOf_one": "Running {{running}}/{{count}} tool: {{name}}",
+    "runningToolsOf_other": "Running {{running}}/{{count}} tools: {{name}}"
   }
 }

@@ -307,5 +307,33 @@
     "morningNamed": "{{name}}さん、おはようございます",
     "afternoonNamed": "{{name}}さん、こんにちは",
     "eveningNamed": "{{name}}さん、こんばんは"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} 件のショートカットがオフ",
+    "shortcutsOff_other": "{{count}} 件のショートカットがオフ",
+    "searchHistoryCleared_one": "履歴から {{count}} 件の検索を削除しました",
+    "searchHistoryCleared_other": "履歴から {{count}} 件の検索を削除しました",
+    "searches_one": "{{count}} 件の検索",
+    "searches_other": "{{count}} 件の検索",
+    "searchesOf_one": "{{max}} 件中 {{count}} 件の検索",
+    "searchesOf_other": "{{max}} 件中 {{count}} 件の検索",
+    "sources_one": "{{count}} 件のソース",
+    "sources_other": "{{count}} 件のソース",
+    "intermediateSteps_one": "{{count}} 件の途中計算",
+    "intermediateSteps_other": "{{count}} 件の途中計算",
+    "conversations_one": "{{count}} 件の会話",
+    "conversations_other": "{{count}} 件の会話",
+    "tools_one": "{{count}} 個のツール",
+    "tools_other": "{{count}} 個のツール",
+    "citations_one": "{{count}} 件の引用",
+    "citations_other": "{{count}} 件の引用",
+    "checkpoints_one": "{{count}} 個のチェックポイント",
+    "checkpoints_other": "{{count}} 個のチェックポイント",
+    "usedTools_one": "{{count}} 個のツールを使用",
+    "usedTools_other": "{{count}} 個のツールを使用",
+    "runningTools_one": "{{count}} 個のツールを実行中",
+    "runningTools_other": "{{count}} 個のツールを実行中",
+    "runningToolsOf_one": "ツールを実行中 {{running}}/{{count}}: {{name}}",
+    "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}"
   }
 }

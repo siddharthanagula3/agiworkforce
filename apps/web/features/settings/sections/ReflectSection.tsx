@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from '@agiworkforce/ui';
+import { Button, translateUiPlural } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_REFLECT_PATH,
   ManagedCloudReflectRecapSchema,
@@ -38,7 +38,10 @@ function describeOngoingWork(item: {
   lastActiveAt: string;
 }): string {
   const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
-  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const followUps = translateUiPlural('settings', 'counts.followUps', item.followUps, {
+    one: '{{count}} follow-up',
+    other: '{{count}} follow-ups',
+  });
   const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',

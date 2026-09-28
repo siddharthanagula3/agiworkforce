@@ -42,6 +42,7 @@ export {
 } from './surfaceMenu';
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
+export { manageMcpServers, managePlugins, manageSkills } from './capabilityManagement';
 export type {
   SessionListSource,
   SessionOrigin,
@@ -357,21 +358,6 @@ export function openContextSurface(provider: TreeSource): Promise<void> {
 }
 
 const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; empty: string }> = {
-  skills: {
-    title: 'AGI Workforce, Skills',
-    placeholder: 'Skills the AGI CLI loads…',
-    empty: 'No skills are loaded in this workspace',
-  },
-  plugins: {
-    title: 'AGI Workforce, Plugins',
-    placeholder: 'Installed plugins…',
-    empty: 'No plugins are installed',
-  },
-  mcpServers: {
-    title: 'AGI Workforce, MCP servers',
-    placeholder: 'Configured MCP servers…',
-    empty: 'No MCP servers are configured',
-  },
   hooks: {
     title: 'AGI Workforce, Hooks',
     placeholder: 'Hooks the AGI CLI runs…',
@@ -386,10 +372,7 @@ const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; em
 
 export async function openCapabilitySurface(
   adapter: CliCapabilityAdapter,
-  capability: Extract<
-    CliCapability,
-    'skills' | 'plugins' | 'mcpServers' | 'hooks' | 'instructions'
-  >,
+  capability: Extract<CliCapability, 'hooks' | 'instructions'>,
 ): Promise<void> {
   const copy = CAPABILITY_TITLES[capability];
   if (copy === undefined) return;

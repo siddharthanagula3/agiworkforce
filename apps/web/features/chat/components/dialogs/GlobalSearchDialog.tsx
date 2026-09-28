@@ -13,6 +13,7 @@ import {
   ScrollArea,
   Spinner,
   useConfirmAction,
+  useUiTranslation,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
@@ -76,6 +77,7 @@ const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
 };
 
 function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps) {
+  const { plural } = useUiTranslation('chat');
   // Radix hides a modal dialog's siblings, but which nodes that reaches depends
   // on where the Dialog root sits, and here it does not reach the app's main
   // region: measured with this dialog open, #main-content kept 90 focusable
@@ -151,12 +153,17 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     try {
       const deletedCount = await globalSearchService.clearSearchHistory(user.id);
       setRecentSearches([]);
-      toast.success(`Cleared ${deletedCount} search${deletedCount !== 1 ? 'es' : ''} from history`);
+      toast.success(
+        plural('counts.searchHistoryCleared', deletedCount, {
+          one: 'Cleared {{count}} search from history',
+          other: 'Cleared {{count}} searches from history',
+        }),
+      );
     } catch (error) {
       console.error('[GlobalSearch] Failed to clear history:', error);
       toast.error('Failed to clear search history');
     }
-  }, [user?.id]);
+  }, [plural, user?.id]);
 
   const requestClearHistory = useCallback(() => {
     confirmClearHistory({

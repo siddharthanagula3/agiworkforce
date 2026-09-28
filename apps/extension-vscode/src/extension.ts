@@ -35,6 +35,7 @@ import {
   type ProviderState,
 } from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
+import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostNotices';
 import { markInUse, whenInUse } from './core/startupWork';
 import * as telemetry from './core/telemetry';
 import { installGlobalErrorReporting } from './core/errorReporting';
@@ -304,6 +305,10 @@ export function activate(context: vscode.ExtensionContext): void {
       recordFailure('agent-mode-consent', error);
     });
   void validateAdvancedFeatureFlags(context);
+  void announceExtensionUpdate(context.globalState);
+  if (chatState !== undefined && !chatState.nativeChatAvailable) {
+    void announceMissingNativeChat(context.globalState);
+  }
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {

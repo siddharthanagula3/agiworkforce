@@ -203,7 +203,11 @@ export type {
   ComposerVoiceState,
 } from './components/ChatInput';
 export { VoiceOrb, VoiceOrbCanvas } from './components/VoiceOrb';
-export type { VoiceOrbProps, VoiceOrbCanvasProps } from './components/VoiceOrb';
+export type {
+  VoiceOrbProps,
+  VoiceOrbCanvasProps,
+  VoiceOrbLevelSource,
+} from './components/VoiceOrb';
 export {
   advanceBargeIn,
   advanceSpeechWindow,

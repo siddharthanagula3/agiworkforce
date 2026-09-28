@@ -9,7 +9,7 @@ import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 // The drawer reads its copy from the extension catalogue, which only
 // `chrome.i18n` can serve, so without this it cannot be built here at all.
 (globalThis as unknown as Record<string, unknown>).chrome = {
-  i18n: { getMessage: (key: string) => key },
+  i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
 };
 
 /**

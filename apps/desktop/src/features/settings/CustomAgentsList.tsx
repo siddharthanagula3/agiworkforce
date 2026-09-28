@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/ui/AlertDialog';
 import { CustomAgentEditor } from './CustomAgentEditor';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 interface AgentCardProps {
   agent: CustomAgentConfig;
@@ -159,6 +160,7 @@ type EditorMode =
   { kind: 'closed' } | { kind: 'create' } | { kind: 'edit'; agent: CustomAgentConfig };
 
 export function CustomAgentsList() {
+  const { plural } = useUiTranslation('common');
   const { agents, isLoading, error, fetchAgents, deleteAgent } = useCustomAgentsStore(
     useShallow((s) => ({
       agents: s.agents,
@@ -224,7 +226,10 @@ export function CustomAgentsList() {
           <p className="text-xs text-muted-foreground mt-0.5">
             {agents.length === 0
               ? 'No agents configured'
-              : `${agents.length} agent${agents.length === 1 ? '' : 's'} configured`}
+              : plural('counts.agentsConfigured', agents.length, {
+                  one: '{{count}} agent configured',
+                  other: '{{count}} agents configured',
+                })}
           </p>
         </div>
         <div className="flex gap-2">

@@ -166,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "파일 {{count}}개",
+    "fileCount_other": "파일 {{count}}개",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -410,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "현재 스케치는 세션 동안에만 유지됩니다. 앱을 닫으면 보드가 지워집니다."
+    "sessionOnlyNotice": "현재 스케치는 세션 동안에만 유지됩니다. 앱을 닫으면 보드가 지워집니다.",
+    "elementCount_one": "요소 {{count}}개",
+    "elementCount_other": "요소 {{count}}개"
   }
 }

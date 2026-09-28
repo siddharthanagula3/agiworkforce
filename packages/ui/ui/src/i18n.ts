@@ -4,15 +4,15 @@ import { useCallback, useMemo } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
-export type UiNamespace =
-  | 'common'
-  | 'chat'
-  | 'settings'
-  | 'auth'
-  | 'errors'
-  | 'models'
-  | 'pricing'
-  | 'v3';
+import {
+  englishPlural,
+  interpolate,
+  pluralOptions,
+  type PluralCopy,
+  type UiNamespace,
+} from './lib/translate';
+
+export type { PluralCopy, UiNamespace };
 
 export interface UiTranslate {
   /**
@@ -24,15 +24,13 @@ export interface UiTranslate {
   (key: string, english: string, values?: Record<string, unknown>): string;
 }
 
-export interface UiTranslation {
-  t: UiTranslate;
+export interface UiTranslatePlural {
+  (key: string, count: number, english: PluralCopy, values?: Record<string, unknown>): string;
 }
 
-function interpolate(template: string, values: Record<string, unknown> | undefined): string {
-  if (!values) return template;
-  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, name: string) =>
-    name in values ? String(values[name]) : match,
-  );
+export interface UiTranslation {
+  t: UiTranslate;
+  plural: UiTranslatePlural;
 }
 
 export function useUiTranslation(namespace: UiNamespace): UiTranslation {
@@ -47,5 +45,13 @@ export function useUiTranslation(namespace: UiNamespace): UiTranslation {
     [t, hasInstance],
   );
 
-  return useMemo(() => ({ t: translate }), [translate]);
+  const plural = useCallback<UiTranslatePlural>(
+    (key, count, english, values) => {
+      if (!hasInstance) return englishPlural(count, english, values);
+      return t(key, pluralOptions(count, english, values)) as string;
+    },
+    [t, hasInstance],
+  );
+
+  return useMemo(() => ({ t: translate, plural }), [translate, plural]);
 }

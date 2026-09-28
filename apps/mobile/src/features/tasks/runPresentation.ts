@@ -259,3 +259,54 @@ export function summarizeCloudRunEvent(envelope: AgentEventEnvelope): CloudRunAc
       return null;
   }
 }
+
+const PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
+const PLAN_STEP_PROGRESS_PREFIX = 'agiwork:plan:agiwork-plan-';
+const PLAN_OVERVIEW_LINE = /^(\d+)\.\s*(.+)$/;
+
+export type CloudRunPlanStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface CloudRunPlanStep {
+  ordinal: number;
+  description: string;
+  status: CloudRunPlanStepStatus;
+}
+
+export const CLOUD_RUN_PLAN_STATUS_LABELS: Record<CloudRunPlanStepStatus | 'stopped', string> = {
+  pending: 'Not started',
+  running: 'In progress',
+  completed: 'Done',
+  failed: 'Failed',
+  stopped: 'Stopped',
+};
+
+export function isCloudRunPlanOverview(envelope: AgentEventEnvelope): boolean {
+  return (
+    envelope.event.type === 'progress-update' &&
+    envelope.event.progressId === PLAN_OVERVIEW_PROGRESS_ID
+  );
+}
+
+export function applyCloudRunPlanEvent(
+  plan: readonly CloudRunPlanStep[],
+  envelope: AgentEventEnvelope,
+): CloudRunPlanStep[] {
+  const event = envelope.event;
+  if (event.type !== 'progress-update') return [...plan];
+  if (event.progressId === PLAN_OVERVIEW_PROGRESS_ID) {
+    return (event.detail ?? '').split('\n').flatMap((line): CloudRunPlanStep[] => {
+      const match = PLAN_OVERVIEW_LINE.exec(line.trim());
+      if (!match) return [];
+      const ordinal = Number(match[1]);
+      const existing = plan.find((step) => step.ordinal === ordinal);
+      return [{ ordinal, description: match[2]!, status: existing?.status ?? 'pending' }];
+    });
+  }
+  if (!event.progressId.startsWith(PLAN_STEP_PROGRESS_PREFIX)) return [...plan];
+  const ordinal = Number(event.progressId.slice(PLAN_STEP_PROGRESS_PREFIX.length));
+  const description = event.summary.replace(/^\s*\d+\.\s*/, '');
+  const status: CloudRunPlanStepStatus = event.status;
+  return plan.some((step) => step.ordinal === ordinal)
+    ? plan.map((step) => (step.ordinal === ordinal ? { ...step, status } : step))
+    : [...plan, { ordinal, description, status }].sort((a, b) => a.ordinal - b.ordinal);
+}
