@@ -753,6 +753,38 @@ const ar = {
   'mcpDetails.expired':
     'لم تعد هذه التفاصيل محفوظة. شغّل AGI Workforce: Show MCP Servers واختر تفاصيل الخادم لفحص {name} مرة أخرى.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'البحث على الويب غير متاح في هذه الجلسة. {reason} أوقف Browse the web للإرسال من دونه.',
+  'webSearchSetup.title': 'إعداد البحث على الويب',
+  'webSearchSetup.placeholder': 'اختر خدمة البحث التي لديك مفتاح API لها',
+  'webSearchSetup.detail':
+    'أدخل مفتاح API الخاص بها في الطرفية. تبحث به جلسات مفتاحك والجلسات المحلية، ولا تحتاج الجلسات المُدارة إليه.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: لا يذكر AGI CLI هذا مفاتيح البحث التي يمكنه حفظها. حدّث AGI CLI لإعداد البحث على الويب من VS Code.',
+  'pluginUpdate.action': 'تحديث',
+  'pluginUpdate.progress': 'AGI Workforce: جارٍ تحديث {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} محدّث بالفعل.',
+  'pluginUpdate.updated': 'AGI Workforce: تم تحديث {name}.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: تم تحديث {name} إلى {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: تم تحديث {name} من {from} إلى {to}.',
+  'chatError.usageLimitResetsAt': 'لقد بلغت حدًا للاستخدام في حسابك. يُعاد ضبطه في {time}.',
+  'chatError.continueWith': 'المتابعة باستخدام {model}',
+  'chatError.addCredits': 'إضافة أرصدة',
+  'chatError.comparePlans': 'مقارنة الخطط',
+  'chatError.seeUsage': 'عرض استخدامك',
+  'chatError.seeOptions': 'عرض الخيارات',
+  'webview.mcpAuthRequired':
+    'يطلب {server} تسجيل الدخول مرة أخرى. لم يتمكن AGI من استخدامه في هذه الخطوة.',
+  'webview.mcpReconnect': 'تسجيل الدخول والمتابعة',
+  'webview.mcpReconnecting': 'جارٍ تسجيل الدخول…',
+  'webview.mcpReconnected': 'تم تسجيل الدخول إلى {server}. يتابع AGI العمل.',
+  'mcpReconnect.progress': 'AGI Workforce: جارٍ تسجيل الدخول إلى {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: لم يكتمل تسجيل الدخول إلى {server}، لذلك لم يتابع AGI. حاول مرة أخرى عندما تكون مستعدًا.',
+  'mcpReconnect.failed': 'AGI Workforce: تعذر تسجيل الدخول إلى {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: لا توجد جلسة هنا لمتابعتها بعد تسجيل الدخول إلى {server}.',
+  'mcpReconnect.continue': 'تابع',
 };
 
 export default ar;

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use agiworkforce_llm::{
     stream_chat, Auth, ChatOutcome, ChatRequest, Dialect, LlmError, OpenAiOpts, ProviderSpec,
-    StreamEvent,
+    StreamEvent, ToolChoice,
 };
 
 use crate::config::CliConfig;
@@ -32,9 +32,63 @@ use crate::errors::CliError;
 use super::managed_approvals::{self, ManagedApprovalPause};
 use super::{
     provider_dispatch::{resolve_key, try_subscription_auth},
-    CompletionResult, Message, OllamaMode, Provider, StreamCallback, ToolDefinition,
-    STREAM_IDLE_TIMEOUT,
+    CompletionResult, ContentBlock, Message, MessageContent, OllamaMode, Provider, StreamCallback,
+    ToolDefinition, STREAM_IDLE_TIMEOUT,
 };
+
+pub const WEB_SEARCH_TOOL: &str = "web_search";
+
+const REQUIRED_SEARCH_NUDGE: &str = "This turn requires live web results. Call the web search tool before you answer, base the answer on what it returns, and cite the pages you used. Do not answer from memory alone, and do not tell the user to search for themselves. If a search returns nothing usable, say so plainly instead of substituting your own recollection.";
+
+tokio::task_local! {
+    static SEARCH_TURN: ();
+}
+
+pub(crate) async fn searching<F: std::future::Future>(future: F) -> F::Output {
+    SEARCH_TURN.scope((), future).await
+}
+
+fn search_turn() -> bool {
+    SEARCH_TURN.try_with(|_| ()).is_ok()
+}
+
+tokio::task_local! {
+    static ROUTING_PROFILE: &'static str;
+}
+
+pub(crate) async fn routed<F: std::future::Future>(
+    profile: Option<&'static str>,
+    future: F,
+) -> F::Output {
+    match profile {
+        Some(profile) => ROUTING_PROFILE.scope(profile, future).await,
+        None => future.await,
+    }
+}
+
+fn routing_profile() -> Option<&'static str> {
+    ROUTING_PROFILE.try_with(|profile| *profile).ok()
+}
+
+fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
+    let mut nudged = messages.to_vec();
+    if let Some(last_user) = nudged
+        .iter_mut()
+        .rev()
+        .find(|message| message.role == "user")
+    {
+        match &mut last_user.content {
+            MessageContent::Text(text) => {
+                text.push_str("\n\n");
+                text.push_str(REQUIRED_SEARCH_NUDGE);
+            }
+            MessageContent::Blocks(blocks) => blocks.push(ContentBlock::Text {
+                text: REQUIRED_SEARCH_NUDGE.to_string(),
+            }),
+        }
+    }
+    nudged
+}
 
 /// Deadline for establishing a provider connection.
 ///
@@ -262,6 +316,7 @@ fn completion_result_from(outcome: ChatOutcome) -> CompletionResult {
         stop: outcome.stop,
         reasoning_output_tokens: outcome.usage.reasoning_output_tokens,
         managed_request_id: None,
+        resolved_model: None,
     }
 }
 
@@ -384,12 +439,33 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
             .collect(),
         extra_body: crate::cloud::bound_conversation()
             .map(|conversation_id| {
-                vec![(
+                (
                     "conversation_id".to_string(),
                     serde_json::Value::String(conversation_id),
-                )]
+                )
             })
-            .unwrap_or_default(),
+            .into_iter()
+            .chain(
+                search_turn()
+                    .then(|| {
+                        [
+                            ("web_search".to_string(), serde_json::Value::Bool(true)),
+                            (
+                                "search_requested".to_string(),
+                                serde_json::Value::Bool(true),
+                            ),
+                        ]
+                    })
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(routing_profile().map(|profile| {
+                (
+                    "routing_profile".to_string(),
+                    serde_json::Value::String(profile.to_string()),
+                )
+            }))
+            .collect(),
     })
 }
 
@@ -509,6 +585,19 @@ async fn run_spec_observing(
         }
         (_, effort) => effort.map(|e| e.openai_effort_str()),
     };
+    let searching = search_turn()
+        && spec.id != super::provider_name(&Provider::ManagedCloud)
+        && tools.is_some_and(|tools| tools.iter().any(|tool| tool.name == WEB_SEARCH_TOOL));
+    let forced_search = searching
+        && crate::model_catalog::accepts_forced_tool_choice(model)
+        && !(matches!(spec.dialect, Dialect::Anthropic) && thinking_budget.is_some());
+    let nudged;
+    let messages = if searching && !forced_search {
+        nudged = with_search_nudge(messages);
+        nudged.as_slice()
+    } else {
+        messages
+    };
     let req = ChatRequest {
         model: &wire_model,
         messages,
@@ -516,7 +605,7 @@ async fn run_spec_observing(
         temperature: effective_temperature(model, temperature),
         tools,
         thinking_budget,
-        tool_choice: None,
+        tool_choice: forced_search.then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
         anthropic_thinking: None,
         effort: None,
         top_p: None,
@@ -532,9 +621,15 @@ async fn run_spec_observing(
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
-    let mut on_event = stream_event_handler(on_chunk, pause);
-    match stream_chat(client, spec, &req, &mut on_event).await {
-        Ok(outcome) => Ok(completion_result_from(outcome)),
+    let mut resolved_model = None;
+    let mut on_event = stream_event_handler(on_chunk, pause, &mut resolved_model);
+    let outcome = stream_chat(client, spec, &req, &mut on_event).await;
+    drop(on_event);
+    match outcome {
+        Ok(outcome) => Ok(CompletionResult {
+            resolved_model,
+            ..completion_result_from(outcome)
+        }),
         Err(err) => Err(map_llm_error(err)),
     }
 }
@@ -542,14 +637,28 @@ async fn run_spec_observing(
 fn stream_event_handler<'a>(
     on_chunk: &'a mut StreamCallback,
     mut pause: Option<&'a mut ManagedApprovalPause>,
+    resolved_model: &'a mut Option<String>,
 ) -> impl FnMut(StreamEvent) + Send + 'a {
     move |event| match event {
         StreamEvent::TextDelta { text } => on_chunk(&text),
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
+        StreamEvent::Vendor { event, data } if event == agiworkforce_llm::RESOLVED_MODEL_EVENT => {
+            *resolved_model = data
+                .get("value")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+                .map(str::to_string);
+        }
         StreamEvent::Vendor { event, data } if event == crate::sources::SEARCH_RESULTS_EVENT => {
             crate::sources::record(crate::sources::from_search_results_delta(&data))
+        }
+        StreamEvent::Vendor { event, data }
+            if event == crate::cloud::connectors::TOOL_RESULT_EVENT =>
+        {
+            crate::cloud::connectors::observe_tool_result(&data)
         }
         StreamEvent::Vendor { event, data } => {
             if let Some(pause) = pause.as_deref_mut() {
@@ -588,6 +697,9 @@ fn absorb_continuation(completed: &mut CompletionResult, next: CompletionResult)
     completed.reasoning_output_tokens += next.reasoning_output_tokens;
     completed.stop_reason = next.stop_reason;
     completed.stop = next.stop;
+    if next.resolved_model.is_some() {
+        completed.resolved_model = next.resolved_model;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -620,12 +732,18 @@ async fn run_managed_cloud(
     )
     .await
     {
-        Err(error) if !spec.extra_body.is_empty() && hosted_conversation_missing(&error) => {
+        Err(error)
+            if spec
+                .extra_body
+                .iter()
+                .any(|(key, _)| key == "conversation_id")
+                && hosted_conversation_missing(&error) =>
+        {
             if let Some(conversation_id) = crate::cloud::bound_conversation() {
                 crate::cloud::forget_hosted_conversation(&conversation_id);
             }
             spec = managed_cloud_spec(jwt)?;
-            spec.extra_body.clear();
+            spec.extra_body.retain(|(key, _)| key != "conversation_id");
             run_spec_observing(
                 client,
                 &spec,
@@ -647,7 +765,8 @@ async fn run_managed_cloud(
     while let Some((run_id, calls)) = pause.take_pending()? {
         let decisions = managed_approvals::decide(&calls).await;
         let body = serde_json::json!({ "run_id": run_id, "tool_approvals": decisions });
-        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause));
+        let mut resolved_model = None;
+        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause), &mut resolved_model);
         let next = agiworkforce_llm::post_openai_compat_stream(
             client,
             &managed_approval_resume_spec(jwt)?,
@@ -656,9 +775,16 @@ async fn run_managed_cloud(
             STREAM_IDLE_TIMEOUT,
             &mut on_event,
         )
-        .await
-        .map_err(map_llm_error)?;
-        absorb_continuation(&mut completed, completion_result_from(next));
+        .await;
+        drop(on_event);
+        let next = next.map_err(map_llm_error)?;
+        absorb_continuation(
+            &mut completed,
+            CompletionResult {
+                resolved_model,
+                ..completion_result_from(next)
+            },
+        );
     }
     Ok(completed)
 }

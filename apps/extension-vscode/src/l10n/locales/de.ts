@@ -550,6 +550,39 @@ const de = {
   'mcpDetails.expired':
     'Diese Details liegen nicht mehr vor. Führen Sie AGI Workforce: Show MCP Servers aus und wählen Sie Serverdetails, um {name} erneut zu prüfen.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'Die Websuche ist in dieser Sitzung nicht verfügbar. {reason} Deaktivieren Sie Browse the web, um ohne sie zu senden.',
+  'webSearchSetup.title': 'Websuche einrichten',
+  'webSearchSetup.placeholder': 'Wählen Sie den Suchdienst, für den Sie einen API-Schlüssel haben',
+  'webSearchSetup.detail':
+    'Geben Sie den API-Schlüssel im Terminal ein. Sitzungen mit Ihrem Schlüssel und lokale Sitzungen suchen damit; verwaltete Sitzungen brauchen keinen.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: Diese AGI CLI gibt nicht an, welche Suchschlüssel sie speichern kann. Aktualisieren Sie die AGI CLI, um die Websuche in VS Code einzurichten.',
+  'pluginUpdate.action': 'Aktualisieren',
+  'pluginUpdate.progress': 'AGI Workforce: {name} wird aktualisiert',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} ist bereits auf dem neuesten Stand.',
+  'pluginUpdate.updated': 'AGI Workforce: {name} wurde aktualisiert.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} wurde auf {to} aktualisiert.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} wurde von {from} auf {to} aktualisiert.',
+  'chatError.usageLimitResetsAt':
+    'Sie haben ein Nutzungslimit Ihres Kontos erreicht. Es wird am {time} zurückgesetzt.',
+  'chatError.continueWith': 'Mit {model} fortfahren',
+  'chatError.addCredits': 'Guthaben hinzufügen',
+  'chatError.comparePlans': 'Tarife vergleichen',
+  'chatError.seeUsage': 'Nutzung ansehen',
+  'chatError.seeOptions': 'Optionen ansehen',
+  'webview.mcpAuthRequired':
+    '{server} verlangt, dass Sie sich erneut anmelden. AGI konnte den Server für diesen Schritt nicht nutzen.',
+  'webview.mcpReconnect': 'Anmelden und fortfahren',
+  'webview.mcpReconnecting': 'Anmeldung läuft…',
+  'webview.mcpReconnected': 'Bei {server} angemeldet. AGI macht weiter.',
+  'mcpReconnect.progress': 'AGI Workforce: Anmeldung bei {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: Die Anmeldung bei {server} wurde nicht abgeschlossen, daher hat AGI nicht weitergemacht. Versuchen Sie es erneut, wenn Sie bereit sind.',
+  'mcpReconnect.failed': 'AGI Workforce: Die Anmeldung bei {server} ist fehlgeschlagen: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: Hier gibt es keine Sitzung, die nach der Anmeldung bei {server} fortgesetzt werden kann.',
+  'mcpReconnect.continue': 'weiter',
 };
 
 export default de;

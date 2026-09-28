@@ -38,8 +38,9 @@ vi.mock('@/lib/user-connector-tools', () => ({
   getOperatorMappedConnectorIds: () => new Set(['fixture-alpha', 'fixture-beta']),
 }));
 
+import type { ConnectorPolicyResponse } from '@agiworkforce/cloud-contracts';
+
 import { GET, PUT } from '../route';
-import type { ConnectorPolicyResponse } from '../route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -52,6 +53,8 @@ function row(over: Record<string, unknown> = {}) {
     allowed_plugins: [],
     blocked_plugins: [],
     allowed_mcp_hosts: [],
+    allowed_web_domains: [],
+    blocked_web_domains: [],
     updated_by_user_id: 'user-1',
     updated_at: '2026-08-23T00:00:00.000Z',
     ...over,
@@ -92,6 +95,8 @@ const BASE = {
   allowedPlugins: [],
   blockedPlugins: [],
   allowedMcpHosts: [],
+  allowedWebDomains: [],
+  blockedWebDomains: [],
 };
 
 beforeEach(() => {
@@ -193,6 +198,8 @@ describe('connector policy', () => {
       ['acme-review'],
       [],
       ['*.corp.example'],
+      [],
+      [],
       'user-1',
     ]);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(

@@ -141,18 +141,6 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S4.18: Routine details.
-
-- Done when: Opening one routine/schedule shows its configuration (prompt, cadence, next run) and its run history.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Each schedule row shows cadence, next and last run with pause/resume/run-now, but there is no per-schedule detail or run-history view. | ui |
-
-Code: `apps/extension/src/features/side-panel/schedulesSection.ts:220-230`, `apps/extension/src/features/side-panel/schedulesSection.ts:303-306`
-
 ## S4.19: Coding-session home.
 
 - Done when: A coding home lists the user's coding sessions and starts a new one on a repository or runtime.
@@ -354,15 +342,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 - Done when: A plugins manager lists installed and available plugins and lets the user install, configure, update and remove them.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | plugins/update now exists in the app-server (4caea04838); VS Code has to call it from its plugin manager (p-sessions) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `crates/agiworkforce-protocol/src/developer_session.rs:95-95`, `crates/agiworkforce-app-server/src/developer_sessions.rs:999-999`, `apps/cli/src/app_server/developer_host.rs:3312-3312`, `apps/cli/src/installs.rs:329-329`
 
 ## S4.37: Connected accounts.
 

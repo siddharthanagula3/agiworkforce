@@ -296,6 +296,7 @@ function buildProcessedRequest(input: {
     quotaWarningHeader: null,
     isFlagshipRequest: input.isFlagship,
     indicResult: detectIndicScript(promptText),
+    ...(input.plan.webDomainPolicy ? { webSearchDomainPolicy: input.plan.webDomainPolicy } : {}),
     llmRequest: {
       model: input.route.modelKey,
       messages: input.messages,

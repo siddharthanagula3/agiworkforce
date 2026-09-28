@@ -1,4 +1,5 @@
 import { Alert, View, Pressable } from 'react-native';
+import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
@@ -41,7 +42,9 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
     <Pressable
       onPress={handlePress}
       accessibilityRole="link"
-      accessibilityLabel={[result.title, hostname, published].filter(Boolean).join(', ')}
+      accessibilityLabel={[result.title, `web page on ${hostname}`, published]
+        .filter(Boolean)
+        .join(', ')}
     >
       {({ pressed }) => (
         <View
@@ -83,9 +86,12 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
             ) : null}
           </View>
           <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-            <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
-              {hostname}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Globe size={11} color={colors.textMuted} />
+              <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
+                {hostname}
+              </Text>
+            </View>
             {published ? (
               <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
                 {published}
