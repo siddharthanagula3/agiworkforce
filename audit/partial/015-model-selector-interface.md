@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Group models by family; the sheet groups cloud models by routing tier and puts on-device models in their own section. | ui |
+| mobile | partial | buildModelPickerShortList, which gives family rows and the recommended short list, moved from unified-chat into @agiworkforce/routing/model-picker (6c257b11db), which mobile already depends on. What remains is the mobile sheet grouping by familySlot. | ui |
 | cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
+Code: `packages/ai/routing/src/model-picker.ts:261-261`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
 
 ## S15.04: Searchable model list.
 
@@ -61,10 +61,10 @@ Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mark recommended models; the sheet leads with Auto profiles but labels no model as recommended. | ui |
+| mobile | partial | The recommended list is now importable from @agiworkforce/routing/model-picker. What remains is the mobile sheet labelling those rows as recommended. | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`
+Code: `packages/ai/routing/src/model-picker.ts:261-261`
 
 ## S15.09: Default-profile option.
 

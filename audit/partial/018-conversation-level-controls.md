@@ -33,11 +33,14 @@ nothing is left.
 
 - Done when: A conversation can be archived (hidden, kept) and later restored.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| mobile | partial | A chat archived on web stays in the mobile Chats list. A chat archived on the phone comes back on the next sync pull, because the mobile store port drops the archived flag the sync delta carries. The fix is in post-codex/chat-gates-chat-lifecycle-mobile-archive-and-delete.patch: the port keeps archived chats out of the local list, and unarchiving brings them back (cloudSyncEngine.ts is held). | handler |
 | chrome | missing | Not built on this surface. |  |
+
+Code: `packages/client/sync/src/conversations.ts:67-67`, `apps/mobile/services/cloudSyncEngine.ts:100-100`
 
 ## S18.06: Duplicate.
 

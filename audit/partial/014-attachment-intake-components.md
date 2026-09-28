@@ -150,9 +150,9 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tell the user when a document was cut to 100,000 characters or could not be read on the device; today only the model sees "[truncated]" or "could not be extracted". | ui |
+| mobile | partial | The truncation header and its copy moved into cloud-contracts (b9343c110f, with a fallback where Intl.ListFormat is missing, as on Hermes). What remains is the mobile stream reading X-AGI-Attachments-Truncated and showing describeAttachmentTruncation. | ui |
 
-Code: `apps/mobile/services/attachmentContext.ts:15-29`
+Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-50`
 
 ## S14.25: Password-protected-file notice.
 
