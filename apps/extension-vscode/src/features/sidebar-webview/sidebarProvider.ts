@@ -146,7 +146,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._attention.record('turn-finished');
     }
     this._refreshBadge();
-    alertSessionActivity(message, () => this.reveal());
+    alertSessionActivity(message, {
+      reveal: () => this.reveal(),
+      respond: (requestId, decision) =>
+        void this._stateManager.handleMessage({
+          type: 'respondToApproval',
+          payload: { requestId, decision },
+        }),
+    });
     return this._view?.webview.postMessage(message);
   }
 
@@ -181,6 +188,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public activeThreadId(): string | undefined {
     return this._stateManager.activeThreadId();
+  }
+
+  public activeThreadReceipt(): ReturnType<ChatStateManager['activeThreadReceipt']> {
+    return this._stateManager.activeThreadReceipt();
   }
 
   public chatTranscript(): readonly ChatTurn[] {

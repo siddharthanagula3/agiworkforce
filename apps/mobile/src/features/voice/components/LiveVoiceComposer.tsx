@@ -33,6 +33,7 @@ export function LiveVoiceComposer({
     <LiveVoiceBar
       visible={visible}
       status={controller.status}
+      reconnecting={controller.reconnecting}
       muted={controller.muted}
       assistantSpeaking={controller.assistantSpeaking}
       backendBusy={controller.backendBusy}
@@ -42,6 +43,7 @@ export function LiveVoiceComposer({
       approvals={controller.approvals}
       onDecideApproval={controller.decideToolApproval}
       onToggleMute={controller.toggleMute}
+      onStopTask={controller.cancelBackendWork}
       onSwitchToText={onSwitchToText}
       onRetry={controller.retry}
       onExit={handleExit}

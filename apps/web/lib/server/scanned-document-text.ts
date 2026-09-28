@@ -29,6 +29,9 @@ import {
  * it, an answer, a citation, an export, is downstream of a reading that can be
  * wrong, and the row has to say so where a reader will see it.
  */
+export const SCANNED_PAGES_OCR_NOTE =
+  '[Some pages of this document had no text layer, so their text was read from the scan by a model and may contain mistakes.]';
+
 export const SCANNED_DOCUMENT_OCR_NOTE =
   '[Recognised from page images. This document had no text layer, so the text below was read from the scan by a model and may contain mistakes.]';
 

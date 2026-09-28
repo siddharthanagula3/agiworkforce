@@ -31,6 +31,7 @@ import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import {
   createWebCloudPublisher,
+  fetchArtifactPublication,
   setPublishedArtifactAudience,
   type PublishedArtifactAudience,
   type WebPublishDetails,
@@ -119,6 +120,7 @@ function ArtifactViewer({
   onClose,
   publishArtifact,
   artifactAudience,
+  publishedLink,
   projectLink,
   projectSave,
 }: {
@@ -127,6 +129,7 @@ function ArtifactViewer({
   onClose: () => void;
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
+  publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
 }) {
@@ -140,6 +143,7 @@ function ArtifactViewer({
         onClose={onClose}
         {...(publishArtifact ? { publishArtifact } : {})}
         {...(artifactAudience ? { artifactAudience } : {})}
+        {...(publishedLink ? { publishedLink } : {})}
         {...(projectLink ? { projectLink } : {})}
         {...(projectSave ? { projectSave } : {})}
       />
@@ -350,6 +354,25 @@ export function ArtifactsPanel() {
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
 
   const selectedConflict = selectedArtifact ? artifactConflicts[selectedArtifact.id] : undefined;
+  const selectedArtifactKey =
+    selectedArtifact &&
+    resolveArtifactOriginPrivacyMode(selectedArtifact, conversationMessages, activeConversation) ===
+      'managed'
+      ? selectedArtifact.id
+      : null;
+  useEffect(() => {
+    setPublishDetails(null);
+    if (!selectedArtifactKey) return;
+    let cancelled = false;
+    void fetchArtifactPublication(selectedArtifactKey)
+      .then((details) => {
+        if (!cancelled && details) setPublishDetails(details);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedArtifactKey]);
 
   const streamingArtifact =
     streaming &&
@@ -590,6 +613,7 @@ export function ArtifactsPanel() {
                   onClose={() => setPanelOpen(false)}
                   publishArtifact={makePublishHandler(selectedArtifact)}
                   {...(artifactAudience ? { artifactAudience } : {})}
+                  {...(publishDetails ? { publishedLink: publishDetails.shareUrl } : {})}
                   {...(projectLink ? { projectLink } : {})}
                   projectSave={projectSave}
                 />

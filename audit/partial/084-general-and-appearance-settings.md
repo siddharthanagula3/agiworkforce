@@ -82,15 +82,14 @@ Code: `apps/extension/src/side_panel.ts:3111-3111`
 
 - Done when: The user can set a default reasoning effort used for new turns.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Effort is picked per turn from the composer model chip; there is no saved default. | ui |
-| cli | partial | TUI /effort changes effort for the session only; a default needs reasoning_effort in config.toml. | ui |
 | chrome | partial | Only an extended-thinking on/off toggle is saved; no effort levels. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `apps/cli/src/tui/tui_app.rs:3871-3890`, `apps/cli/src/config.rs:74-120`, `apps/extension/src/side_panel.ts:6195-6198`
+Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `apps/extension/src/side_panel.ts:6195-6198`
 
 ## S84.12: Default mode.
 

@@ -69,13 +69,12 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:854-867`,
 
 - Done when: The new-chat screen offers shortcuts to the user's recent projects that open the project or start a chat in it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The drawer lists up to six projects as one-tap shortcuts, but in Cloud mode they come in sync order, not most-recent first, and the new-chat screen itself has no recent-project row. | ui |
 | cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
-| vscode | partial | Surface recent projects in the chat view; today they are listed only in the Projects surface ("Use this project in the chat"), while the empty chat shows recent chats. | ui |
 | chrome | partial | Offer recent projects on the empty side panel; today projects are chosen only from the Projects drawer. | ui |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx:328-337`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
@@ -98,6 +97,7 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5312-5316`
 
 - Done when: The new-chat screen recommends Skills relevant to the user, which can be applied to the next message.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -105,7 +105,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5312-5316`
 | desktop | partial | Same as web: skills are listed, never recommended. | handler, ui |
 | mobile | partial | Recommend skills on the new-chat screen; today a skill is chosen on the Skills screen and shown as a chip in the composer. | handler, ui |
 | cli | partial | Recommend a skill for a new session; today /skills only browses the installed list. | handler, ui |
-| vscode | partial | Recommend skills in the chat view; today they are browsable only from the Skills surface. | handler, ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:889-928`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2607-2626`, `apps/mobile/src/features/chat/components/ChatInput.tsx:735-771`, `crates/agiworkforce-command-registry/src/lib.rs:248-248`
@@ -114,6 +113,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:889-928`,
 
 - Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -121,9 +121,8 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:889-928`,
 | desktop | partial | Same as web: connected connectors are listed, none recommended. | handler, ui |
 | mobile | partial | Recommend connectors on the new-chat screen; the "+" sheet's Connectors row only opens the Connectors screen. | handler, ui |
 | cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
-| vscode | partial | Recommend connectors in the chat view; today they are listed only in the Connectors surface. | handler, ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:942-980`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`, `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:28-28`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:942-980`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`
 
 ## S12.10: Search entry.
 
@@ -178,16 +177,16 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:36-36`, `apps/mobi
 ## S12.14: Voice entry.
 
 - Done when: From the new-chat screen the user can start a spoken (voice-mode) conversation.
-- Wave: 3
+- Wave: 2
 - Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Give /voice a transcription path that works with an AGI account; today it needs the user's own OPENAI_API_KEY or a locally installed whisper binary and aborts otherwise. | api |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Add a voice-conversation mode; the side panel's mic only dictates into the text box. | ui, handler |
 
-Code: `crates/agiworkforce-command-registry/src/lib.rs:386-392`, `apps/cli/src/tui/tui_app.rs:4654-4665`, `apps/cli/src/voice.rs:300-330`, `apps/extension/src/side_panel.ts:9531-9535`
+Code: `apps/cli/src/voice.rs:354-354`, `apps/extension/src/side_panel.ts:9531-9535`, `apps/extension/src/side_panel.ts:10170-10170`
 
 ## S12.15: Agentic-work entry.
 

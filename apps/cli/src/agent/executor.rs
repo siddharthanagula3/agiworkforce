@@ -28,7 +28,7 @@ pub(super) fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
 
 /// Convert a JSON args object into the flat HashMap<String, String> shape
 /// that `tools::execute_tool_with_opts` expects.
-pub(super) fn value_to_legacy_args(
+pub(crate) fn value_to_legacy_args(
     args: &serde_json::Value,
 ) -> std::collections::HashMap<String, String> {
     let mut out = std::collections::HashMap::new();

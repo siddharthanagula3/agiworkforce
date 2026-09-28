@@ -27,11 +27,12 @@ import { artifactDownloadFile } from '../lib/artifact-download';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { toUserMessage } from '../lib/network-error';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
-import { Button, useMenuKeyboard } from '@agiworkforce/ui';
+import { Button, useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { ArtifactSandboxFrame } from './artifact-components/ArtifactSandboxFrame';
+import { ArtifactVersionHistory } from './artifact-components/ArtifactVersionHistory';
 import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
 
 async function writeToClipboard(text: string): Promise<boolean> {
@@ -84,15 +85,8 @@ export interface ArtifactPanelProps {
   onClose: () => void;
   versions?: Artifact[];
   onSelectVersion?: (artifact: Artifact) => void;
+  onRestoreVersion?: (version: Artifact) => Promise<void>;
   onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
-  /**
-   * Optional publish callback. Injected by the host (e.g. Desktop adapter
-   * using @agiworkforce/artifacts publishArtifact). When omitted the panel
-   * falls back to the clipboard markdown snapshot.
-   *
-   * R20 lane 2: artifact-publish service wiring. Versioning + inline editor
-   * deferred (TODO: EXEC-SUMMARY-r2 hours).
-   */
   publishArtifact?: () => Promise<ArtifactPublishResult>;
 }
 
@@ -323,9 +317,14 @@ export function ArtifactPanel({
   onClose,
   versions,
   onSelectVersion,
+  onRestoreVersion,
   onSaveEdit,
   publishArtifact: publishArtifactProp,
 }: ArtifactPanelProps) {
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const historyToggleRef = useRef<HTMLButtonElement | null>(null);
   const [headerCopied, setHeaderCopied] = useState(false);
   const [htmlPreviewRunning, setHtmlPreviewRunning] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -360,6 +359,12 @@ export function ArtifactPanel({
     setCopyError(null);
   }, [artifact?.id]);
 
+  const artifactRealId = artifact ? artifact.id.split('::v')[0] : null;
+  useEffect(() => {
+    setHistoryOpen(false);
+    setRestoreError(null);
+  }, [artifactRealId]);
+
   useEffect(() => {
     return () => {
       if (shareUrlCopiedTimerRef.current) clearTimeout(shareUrlCopiedTimerRef.current);
@@ -384,6 +389,37 @@ export function ArtifactPanel({
     if (index < 0 || index >= sortedVersions.length) return;
     const next = sortedVersions[index];
     if (next) onSelectVersion?.(next);
+  }
+
+  const closeHistory = useCallback(() => {
+    setHistoryOpen(false);
+    historyToggleRef.current?.focus();
+  }, []);
+
+  function requestRestore(index: number): void {
+    const target = sortedVersions[index];
+    if (!target || !onRestoreVersion) return;
+    const unsavedEdit = isEditing && editDraft !== target.content;
+    const summary = `This replaces the current content with version ${
+      index + 1
+    }, added as the new latest so the versions in between survive.`;
+    confirmAction({
+      title: `Restore version ${index + 1}?`,
+      description: unsavedEdit ? `${summary} Your unsaved edits are discarded.` : summary,
+      confirmLabel: 'Restore',
+      destructive: unsavedEdit,
+      onConfirm: async () => {
+        setRestoreError(null);
+        try {
+          await onRestoreVersion(target);
+          setIsEditing(false);
+          setEditDraft('');
+          closeHistory();
+        } catch (err) {
+          setRestoreError(toUserMessage(err, `Could not restore version ${index + 1}. Try again.`));
+        }
+      },
+    });
   }
 
   async function handleCopyContent() {
@@ -608,9 +644,26 @@ export function ArtifactPanel({
             >
               <ChevronLeft size={13} />
             </Button>
-            <span className="px-1 text-caption font-mono tabular-nums text-[var(--chat-text-secondary)]">
-              v{currentVersionIndex + 1}/{sortedVersions.length}
-            </span>
+            <button
+              ref={historyToggleRef}
+              type="button"
+              onClick={() => (historyOpen ? closeHistory() : setHistoryOpen(true))}
+              aria-expanded={historyOpen}
+              aria-controls={historyOpen ? `artifact-version-history-${artifactRealId}` : undefined}
+              aria-label={`Version ${currentVersionIndex + 1} of ${sortedVersions.length}. Show version history`}
+              title="Version history"
+              className={cn(
+                'rounded-compact px-1 text-caption font-mono tabular-nums transition-colors hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+                historyOpen
+                  ? 'text-[var(--chat-text-primary)]'
+                  : 'text-[var(--chat-text-secondary)]',
+              )}
+              data-testid="artifact-version-history-toggle"
+            >
+              <span aria-live="polite">
+                v{currentVersionIndex + 1}/{sortedVersions.length}
+              </span>
+            </button>
             <Button
               variant="ghost"
               size="icon"
@@ -712,6 +765,17 @@ export function ArtifactPanel({
           </Button>
         </div>
       </div>
+
+      {historyOpen && sortedVersions.length > 1 && artifact ? (
+        <ArtifactVersionHistory
+          id={`artifact-version-history-${artifactRealId}`}
+          versions={sortedVersions}
+          shownIndex={currentVersionIndex}
+          onOpen={goToVersion}
+          onRestore={onRestoreVersion ? requestRestore : undefined}
+          onClose={closeHistory}
+        />
+      ) : null}
 
       {/* Body */}
       <div className="flex-1 overflow-hidden">
@@ -874,7 +938,7 @@ export function ArtifactPanel({
       </div>
 
       {/* Publish / clipboard notification bar, shown after an action resolves */}
-      {(isPublishing || publishResult || publishError || copyError) && (
+      {(isPublishing || publishResult || publishError || copyError || restoreError) && (
         <div
           className={cn(
             'shrink-0 border-t border-[var(--chat-border)] px-3 py-2',
@@ -948,7 +1012,24 @@ export function ArtifactPanel({
 
           {/* AUDIT-FIX ART-24: clipboard failures were swallowed by three empty
               catch blocks; the user pressed Copy and nothing at all happened. */}
-          {!isPublishing && !publishError && copyError && (
+          {!isPublishing && !publishError && restoreError && (
+            <>
+              <span className="text-[var(--chat-destructive-text)]" role="status">
+                {restoreError}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss restore error"
+                onClick={() => setRestoreError(null)}
+                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+              >
+                <X size={11} />
+              </Button>
+            </>
+          )}
+
+          {!isPublishing && !publishError && !restoreError && copyError && (
             <>
               <span className="text-[var(--chat-destructive-text)]" role="status">
                 {copyError}
@@ -966,6 +1047,7 @@ export function ArtifactPanel({
           )}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

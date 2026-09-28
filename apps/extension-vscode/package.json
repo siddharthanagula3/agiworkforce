@@ -503,6 +503,26 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.reviewPullRequest",
+        "title": "AGI Workforce: Review a Pull Request",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "agi-workforce.securityReview",
+        "title": "AGI Workforce: Security Review of Pending Changes",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.showApprovalHistory",
+        "title": "AGI Workforce: Show Approval History",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "agi-workforce.showSessionActivity",
+        "title": "AGI Workforce: Show Session Activity",
+        "icon": "$(history)"
+      },
+      {
         "command": "agi-workforce.continueInCloud",
         "title": "AGI Workforce: Continue in the Cloud",
         "icon": "$(cloud-upload)"

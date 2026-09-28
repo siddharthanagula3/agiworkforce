@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { describeDiagnostics } from '@/lib/support/diagnostics/types';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   OPEN_TICKET_STATUSES,
+  RECOVERY_TICKET_SUBJECT,
   TICKET_STATUS_LABEL,
   severityForPriority,
   type StaffSupportTicket,
@@ -28,7 +29,108 @@ const QUEUE_UNREADABLE = 'The ticket queue could not be loaded.';
 const REPLY_SAVED_UNSHOWN =
   'The reply was saved, but the ticket could not be shown again. Go back to the queue and open it.';
 const REPLY_SAVED_NOTICE =
-  'Reply saved on the ticket. The customer reads it in Settings, Help; it is not emailed to them.';
+  'Reply saved on the ticket and emailed to the contact address. Signed in, the customer also reads it in Settings, Help.';
+
+function RecoveryActions({ ticketId }: { ticketId: string }) {
+  const { confirm, dialog } = useConfirmAction();
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const run = async (body: {
+    action: 'remove_second_factor' | 'replace_email';
+    email?: string;
+  }) => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      const result = (await requestJson(
+        `${ticketPath(ticketId)}/recovery`,
+        {
+          method: 'POST',
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(body),
+        },
+        'Access was not restored.',
+      )) as { sessionsEnded?: number };
+      setDone(
+        `Done. ${result.sessionsEnded ?? 0} signed-in session(s) were ended. Reply to tell the customer how to sign in.`,
+      );
+    } catch (recoveryError) {
+      setError(toUserMessage(recoveryError, 'Access was not restored.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={CARD_CLASS}>
+      {dialog}
+      <h4 className="text-sm font-medium">Restore access</h4>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Only after you have verified the requester owns this account. Each action ends every session
+        signed in to it.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={ACTION_CLASS}
+          disabled={busy}
+          onClick={() =>
+            confirm({
+              title: 'Remove two-factor authentication?',
+              description:
+                'The account signs in with its password or email code alone until the owner sets two-factor up again. Every signed-in session ends.',
+              confirmLabel: 'Remove two-factor',
+              destructive: true,
+              onConfirm: () => run({ action: 'remove_second_factor' }),
+            })
+          }
+        >
+          Remove two-factor
+        </button>
+        <input
+          type="email"
+          aria-label="New sign-in email"
+          placeholder="New sign-in email"
+          value={email}
+          disabled={busy}
+          onChange={(event) => setEmail(event.target.value)}
+          className={`${FIELD_CLASS} max-w-xs`}
+        />
+        <button
+          type="button"
+          className={ACTION_CLASS}
+          disabled={busy || !email.trim()}
+          onClick={() =>
+            confirm({
+              title: `Make ${email.trim()} the sign-in email?`,
+              description:
+                'The account signs in with this address from now on and every signed-in session ends. The old address stays on the account until the owner removes it.',
+              confirmLabel: 'Replace email',
+              destructive: true,
+              onConfirm: () => run({ action: 'replace_email', email: email.trim() }),
+            })
+          }
+        >
+          Replace sign-in email
+        </button>
+      </div>
+      {done ? (
+        <p role="status" className="mt-2 text-xs text-muted-foreground">
+          {done}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-danger-text">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 async function requestJson(path: string, init: RequestInit, fallback: string): Promise<unknown> {
   const response = await fetch(path, { ...init, cache: 'no-store' });
@@ -154,6 +256,10 @@ function StaffTicketThreadView({
           </p>
         )}
       </div>
+
+      {ticket.subject === RECOVERY_TICKET_SUBJECT && canReply ? (
+        <RecoveryActions ticketId={ticket.id} />
+      ) : null}
 
       {replies.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nobody has replied on this ticket yet.</p>

@@ -1,4 +1,4 @@
-import { modelRegistry } from '@agiworkforce/model-registry';
+import { modelRegistry, providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import type { RoutingTrustMode } from '@agiworkforce/routing';
 import type { PrivacyMode } from '@agiworkforce/types';
 
@@ -68,6 +68,10 @@ function transportServesRegion(region: string): boolean {
 
 export function evaluateDecisionEligibility(facts: DecisionEligibilityFacts): DecisionEligibility {
   if (facts.privacyMode !== 'managed') return { eligible: false, reason: 'trust_mode' };
+
+  if (!providerKeepsInputsOutOfTraining(DECISION_TRANSPORT_ID)) {
+    return { eligible: false, reason: 'provider_not_permitted' };
+  }
 
   if (facts.zeroDataRetentionOnly && !transportProvesZeroRetention()) {
     return { eligible: false, reason: 'zero_data_retention' };

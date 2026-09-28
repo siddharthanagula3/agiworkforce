@@ -45,31 +45,18 @@ Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`,
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S26.10: Full-screen artifact.
-
-- Done when: The user can expand any open artifact to fill the screen and return from it.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Fullscreen is offered only for HTML, React, SVG and Mermaid artifacts; documents, code, spreadsheets, slides, charts, PDFs and images have no fullscreen control. | ui |
-| desktop | partial | Same as web (hosted): fullscreen only for HTML, React, SVG and Mermaid artifacts. | ui |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1610-1616`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:938-955`
-
 ## S26.11: Detached artifact window where supported.
 
 - Done when: Where the platform allows it, the artifact can be popped out into its own window or tab that shows the rendered artifact.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | 'Open source in new tab' shows the artifact as plain text, not rendered; the only way to see it rendered in its own tab is to publish it. | ui |
-| desktop | partial | In the desktop app the 'Open source in new tab' button does nothing: its blob: URL hits setWindowOpenHandler, which only opens http(s) links (windowPolicy.ts), and the shell's window_open command is never called for an artifact. | handler |
+| desktop | partial | The desktop window policy (apps/desktop/electron windowPolicy.ts, p-sessions) opens only http(s) links, so the blob: tab the web now builds is still dropped; allow blob: URLs created by the app window, or open the page in an in-app window. | handler |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:890-900`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1596-1602`, `apps/desktop/electron/windowPolicy.ts:84-87`, `apps/desktop/electron/windowPolicy.ts:36-41`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1142-1142`
 
 ## S26.12: Multiple-artifact switching.
 
@@ -122,16 +109,15 @@ Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 - Done when: The viewer shows which version of the artifact is displayed and lets the user pick any other version directly.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The 'v2/5' chip only steps one version at a time with previous/next; there is no list or menu to jump to a specific version or see when each was made. | ui |
-| desktop | partial | Same as web (hosted): step-only 'vN/M' chip, no version list. | ui |
 | mobile | partial | The 'vN/M' chip appears only when there are two or more versions and steps one at a time; no list of versions to jump to. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1255-1281`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:444-454`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
 
 ## S26.21: Previous/next version.
 
@@ -177,16 +163,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`,
 
 - Done when: The user can save an artifact into their Library so it lives with their other files outside the chat.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only tool-generated files reach Library (they are stored as media assets); an artifact written in a reply has no Save to Library action and never appears there. The panel's Save to project is the only filing action. | ui |
-| desktop | partial | Same as web (hosted): only tool-generated files are in Library; reply artifacts cannot be saved there. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/artifacts/page.tsx:22-22`, `apps/web/app/gallery/GalleryClient.tsx:1150-1157`
 
 ## S26.27: Associate with Project.
 
@@ -206,16 +189,13 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 - Done when: The user can take an existing artifact into a different (e.g. new) chat and keep working on it there.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only tool-generated files in Library can be added to a new chat. An artifact written in a reply cannot be carried into another chat; the panel's Start Work only drafts a text reference (artifacts/<id>) in the current chat. | ui |
-| desktop | partial | Same as web (hosted): only Library files can be added to a new chat; reply artifacts cannot be carried into another chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1598-1606`, `apps/web/features/library/components/LibraryView.tsx:195-198`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1500-1512`
 
 ## S26.29: Export menu.
 
@@ -235,15 +215,14 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 - Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No clipboard copy for a saved artifact: `agi artifacts show` prints it for piping, and TUI `/copy code` copies only the last reply's code block. | ui |
 | vscode | partial | No Copy command on an artifact; its content can only be copied by selecting it in the read-only editor it opens in. | ui |
 | chrome | partial | Copy puts the whole assistant message on the clipboard, not just the artifact: readChromeArtifactSource returns the message content without deriving the artifact block (VS Code derives it with deriveArtifacts). | handler |
 
-Code: `apps/cli/src/tui/tui_app.rs:3492-3508`, `apps/cli/src/cloud/artifacts.rs:488-494`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`
+Code: `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
 
 ## S26.31: Share controls.
 
@@ -262,58 +241,47 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The viewer shows the link and audience only right after publishing in that session; reopening a published artifact shows no published state, and Settings lists published pages without their audience. | states |
-| desktop | partial | Same as web (hosted): published state is only shown right after a publish in that session. | states |
 | mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
-| cli | partial | Visibility is printed only once when publishing; `agi artifacts list` does not mark published artifacts and render_published has no command that calls it. | ui |
 | vscode | partial | The tree marks an artifact "published" and says it "has a public link" even when its audience is the workspace only; the published row's visibility is ignored. | states |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:247-251`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:466-471`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1704-1722`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1675-1680`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`, `apps/extension-vscode/src/features/artifacts/artifactPresentation.ts:107-130`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:137-145`
 
 ## S26.35: Runtime error panel.
 
 - Done when: When an artifact fails while rendering or running, the viewer replaces it with an error panel that explains the failure and offers source/retry.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The panel (View source / Retry) appears only when the sandbox's own render step throws. A React artifact that throws shows raw error text inside the frame, and errors after the first render are never reported. | states |
-| desktop | partial | Same as web (hosted): only sandbox render-step failures reach the error panel. | states |
 | mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1776-1799`, `apps/web/features/chat/components/SandboxedIframe.tsx:160-168`, `infrastructure/sandbox/index.html:376-383`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`
+Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
 
 ## S26.36: Dependency-loading state.
 
 - Done when: While an artifact's runtime or libraries load, the viewer shows a loading state, and a failed load is reported.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | PDF ("Loading PDF…") and Word ("Converting document...") show loading, but HTML/React previews hide the idle message before React/Babel load from the CDN, so the frame is blank while loading and a failed CDN load is not reported. | states |
-| desktop | partial | Same as web (hosted): no loading state while React/Babel load in the sandbox. | states |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1076-1081`, `infrastructure/sandbox/index.html:455-459`, `infrastructure/sandbox/index.html:368-370`
 
 ## S26.38: Open originating session.
 
 - Done when: From an artifact seen outside its chat (gallery, list, library), the user can jump to the conversation that produced it.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /gallery "Yours" tab opens the source chat only for artifacts this device has not loaded; one it has loaded opens a preview drawer with no link back to its conversation, and Library items have no "open chat" action. | ui |
-| desktop | partial | Same as web (hosted): only index-only gallery cards open their source chat. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts open` goes to the conversation only while the artifact is unpublished; a published one opens its public page and no command always opens the source chat. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/gallery/GalleryClient.tsx:1476-1490`, `apps/web/app/gallery/GalleryClient.tsx:1136-1147`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.39: Live updates from ongoing work.
 

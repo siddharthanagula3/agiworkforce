@@ -194,6 +194,8 @@ pub struct ScheduleRun {
     pub attempt_count: i64,
     #[serde(default)]
     pub pending_approval: Option<PendingApproval>,
+    #[serde(default)]
+    pub result: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -288,6 +290,45 @@ impl SchedulesClient {
         Ok(body.schedule)
     }
 
+    pub async fn update(
+        &self,
+        schedule_id: &str,
+        patch: &serde_json::Value,
+    ) -> Result<Schedule, ScheduleError> {
+        let body: ScheduleBody = Self::send(
+            self.request(reqwest::Method::PUT, &schedule_path(schedule_id))
+                .json(patch),
+        )
+        .await?;
+        Ok(body.schedule)
+    }
+
+    pub async fn set_active(
+        &self,
+        schedule_id: &str,
+        active: bool,
+    ) -> Result<Schedule, ScheduleError> {
+        let body: ScheduleBody = Self::send(
+            self.request(reqwest::Method::PATCH, &schedule_path(schedule_id))
+                .json(&serde_json::json!({ "isActive": active })),
+        )
+        .await?;
+        Ok(body.schedule)
+    }
+
+    pub async fn run_now(&self, schedule_id: &str) -> Result<ScheduleRun, ScheduleError> {
+        let body: RunBody = Self::send(
+            self.request(reqwest::Method::POST, &runs_path(schedule_id))
+                .header(
+                    "Idempotency-Key",
+                    format!("agi.cli.schedule-run.{}", uuid::Uuid::new_v4()),
+                )
+                .timeout(MANUAL_RUN_TIMEOUT),
+        )
+        .await?;
+        Ok(body.run)
+    }
+
     pub async fn delete(&self, schedule_id: &str) -> Result<(), ScheduleError> {
         let _: serde_json::Value =
             Self::send(self.request(reqwest::Method::DELETE, &schedule_path(schedule_id))).await?;
@@ -372,6 +413,73 @@ impl SchedulesClient {
             })
     }
 }
+
+const MANUAL_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
+
+pub fn schedule_patch(
+    name: Option<&str>,
+    description: Option<&str>,
+    prompt: Option<&str>,
+    model: Option<&str>,
+    cron_expression: Option<&str>,
+    timezone: Option<&str>,
+) -> serde_json::Value {
+    let mut patch = serde_json::Map::new();
+    let mut put = |key: &str, value: Option<&str>| {
+        if let Some(value) = value {
+            patch.insert(
+                key.to_string(),
+                serde_json::Value::String(value.to_string()),
+            );
+        }
+    };
+    put("name", name);
+    put("description", description);
+    put("prompt", prompt);
+    put("model", model);
+    put("timezone", timezone);
+    if let Some(cron) = cron_expression {
+        put("recurrence", Some("custom"));
+        put("cronExpression", Some(cron));
+    }
+    serde_json::Value::Object(patch)
+}
+
+fn run_outcome_lines(result: &serde_json::Value) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(scheduled_for) = result
+        .pointer("/missedExecution/scheduledFor")
+        .and_then(serde_json::Value::as_str)
+    {
+        if result.get("skipped").and_then(serde_json::Value::as_bool) != Some(true) {
+            lines.push(format!("  ran late for the occurrence due {scheduled_for}"));
+        }
+    }
+    if let Some(text) = result
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
+        let shown: Vec<&str> = text.lines().take(RUN_OUTPUT_LINES).collect();
+        lines.push("  output:".to_string());
+        lines.extend(
+            shown
+                .iter()
+                .map(|line| format!("    {}", crate::terminal_text::sanitize_terminal_text(line))),
+        );
+        let total = text.lines().count();
+        if total > RUN_OUTPUT_LINES {
+            lines.push(format!(
+                "    … {} more lines (--json has the full output)",
+                total - RUN_OUTPUT_LINES
+            ));
+        }
+    }
+    lines
+}
+
+const RUN_OUTPUT_LINES: usize = 8;
 
 fn schedule_path(schedule_id: &str) -> String {
     format!("{SCHEDULES_PATH}/{}", urlencoding::encode(schedule_id))
@@ -499,6 +607,15 @@ pub fn render_runs(schedule_id: &str, runs: &[ScheduleRun]) -> String {
             }
             if let Some(error) = run.error.as_deref() {
                 line.push_str(&format!("\n  error: {error}"));
+            }
+            for outcome in run
+                .result
+                .as_ref()
+                .map(run_outcome_lines)
+                .unwrap_or_default()
+            {
+                line.push('\n');
+                line.push_str(&outcome);
             }
             line
         })

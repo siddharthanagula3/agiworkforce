@@ -83,7 +83,7 @@ import {
   isModelAllowedForTier,
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
-import type { ModelReasoning } from '@agiworkforce/types';
+import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import {
   resolveFreeLaneUiBuildEnabled,
@@ -482,6 +482,47 @@ function AutoRow({
         {auto.continuity && (
           <span className={PICKER_ROW_WRAPPED_GUIDANCE_CLASS}>{auto.continuity}</span>
         )}
+      </span>
+      {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
+    </button>
+  );
+}
+
+function RoutingProfileRow({
+  label,
+  description,
+  isSelected,
+  onSelect,
+}: {
+  label: string;
+  description: string;
+  isSelected: boolean;
+  onSelect?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      {...{ [PICKER_ROW_ATTR]: '' }}
+      className={[
+        PICKER_ROW_CLASS,
+        'h-auto min-h-12 py-2',
+        'cursor-pointer hover:bg-muted/60 focus-visible:bg-muted/60',
+      ].join(' ')}
+      onClick={onSelect}
+      aria-pressed={isSelected}
+      aria-label={`Auto: ${label}`}
+    >
+      <ProviderLogo providerKey={MANAGED_CLOUD_PROVIDER_KEY} size={PICKER_ICON_SIZE} />
+      <span className="min-w-0 flex-1">
+        <span
+          className={[
+            PICKER_ROW_NAME_CLASS,
+            isSelected ? 'font-medium text-foreground' : 'text-foreground/85',
+          ].join(' ')}
+        >
+          {label}
+        </span>
+        <span className={PICKER_ROW_WRAPPED_GUIDANCE_CLASS}>{description}</span>
       </span>
       {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
     </button>
@@ -905,6 +946,12 @@ export function ComposerFooter({
 
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+  const routingProfile = useModelStore((s) => s.routingProfile);
+  const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
+  const routingProfileLabel =
+    isAutoModeModelId(selectedModelId) && routingProfile !== 'auto'
+      ? ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === routingProfile)?.label
+      : undefined;
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
@@ -1323,7 +1370,9 @@ export function ComposerFooter({
                       keep this selector visible, tappable, and clear of Send down to
                       ~320px. */}
                   <span className="min-w-[3.5rem] max-w-[6rem] shrink truncate font-medium sm:max-w-[140px]">
-                    {modelChangePending ? 'Saving…' : (localSelection?.name ?? selectedModel.name)}
+                    {modelChangePending
+                      ? 'Saving…'
+                      : (localSelection?.name ?? routingProfileLabel ?? selectedModel.name)}
                   </span>
                   {freeQuotaSelection(selectedModelId) && !localSelection && (
                     <span className={PICKER_BADGE_CLASS}>Free</span>
@@ -1435,7 +1484,9 @@ export function ComposerFooter({
                           {!freePlan && shortList.auto && (
                             <AutoRow
                               auto={shortList.auto}
-                              isSelected={shortList.auto.id === selectedModelId}
+                              isSelected={
+                                shortList.auto.id === selectedModelId && routingProfile === 'auto'
+                              }
                               onSelect={
                                 modelChangePending
                                   ? undefined
@@ -1443,11 +1494,41 @@ export function ComposerFooter({
                                       const autoModel = AVAILABLE_MODELS.find(
                                         (model) => model.id === shortList.auto?.id,
                                       );
-                                      if (autoModel) handleSelectModel(autoModel);
+                                      if (!autoModel) return;
+                                      setRoutingProfile('auto');
+                                      handleSelectModel(autoModel);
                                     }
                               }
                             />
                           )}
+
+                          {!freePlan &&
+                            shortList.auto &&
+                            ROUTING_PROFILE_CHOICE_OPTIONS.filter(
+                              (option) => option.choice !== 'auto',
+                            ).map((option) => (
+                              <RoutingProfileRow
+                                key={option.choice}
+                                label={option.label}
+                                description={option.description}
+                                isSelected={
+                                  shortList.auto?.id === selectedModelId &&
+                                  routingProfile === option.choice
+                                }
+                                onSelect={
+                                  modelChangePending
+                                    ? undefined
+                                    : () => {
+                                        const autoModel = AVAILABLE_MODELS.find(
+                                          (model) => model.id === shortList.auto?.id,
+                                        );
+                                        if (!autoModel) return;
+                                        setRoutingProfile(option.choice);
+                                        handleSelectModel(autoModel);
+                                      }
+                                }
+                              />
+                            ))}
 
                           {!freePlan &&
                             shortList.current &&

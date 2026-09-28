@@ -72,9 +72,9 @@ export async function submitAccountAppeal(userId: string, message: string): Prom
 export async function submitSignedOutAppeal(input: {
   email: string;
   message: string;
-}): Promise<void> {
+}): Promise<{ userId: string; ticketId: string } | null> {
   const profile = await readSuspendedProfile('email', input.email);
-  if (!profile?.email) return;
+  if (!profile?.email) return null;
   const { ticket } = await appendToAppeal({ ...profile, email: profile.email }, input.message);
 
   const sent = await sendCustomerTicketEmail({
@@ -91,4 +91,5 @@ export async function submitSignedOutAppeal(input: {
       '[support-appeal] appellant was not emailed a receipt',
     );
   }
+  return { userId: profile.id, ticketId: ticket.id };
 }
