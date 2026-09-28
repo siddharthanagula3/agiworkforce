@@ -270,6 +270,12 @@ import {
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
+  JsonSchemaResponseFormatSchema,
+  jsonSchemaDirective,
+  jsonSchemaFormatProblem,
+  wantsJsonSchema,
+} from './json-schema-mode';
+import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
   formatManagedMemorySystemPrompt,
@@ -420,15 +426,26 @@ export const ChatCompletionRequestSchema = z
     response_format: z
       .object({
         type: z.enum(['text', 'json_object', 'json_schema']).optional(),
-        json_schema: z.unknown().optional(),
+        json_schema: JsonSchemaResponseFormatSchema.optional(),
       })
-      .refine((value) => value.type !== 'json_schema', {
-        message:
-          "response_format type 'json_schema' is not enforced on this endpoint, and " +
-          'returning unvalidated output for a schema request would be silently wrong. ' +
-          "Use type 'json_object' for a guaranteed JSON object, or `tools` with " +
-          '`tool_choice` for a schema-shaped payload.',
-        path: ['type'],
+      .superRefine((value, ctx) => {
+        if (value.type !== 'json_schema') return;
+        if (!value.json_schema) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['json_schema'],
+            message: "response_format type 'json_schema' requires a json_schema object.",
+          });
+          return;
+        }
+        const problem = jsonSchemaFormatProblem(value.json_schema);
+        if (problem) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['json_schema', 'schema'],
+            message: `This schema cannot be enforced: ${problem}.`,
+          });
+        }
       })
       .optional(),
     seed: z.number().int().optional(),
@@ -560,12 +577,16 @@ export const ChatCompletionRequestSchema = z
         message: 'user_message requires conversation_id',
       });
     }
-    if (value.response_format?.type === 'json_object' && value.stream) {
+    if (
+      (value.response_format?.type === 'json_object' ||
+        value.response_format?.type === 'json_schema') &&
+      value.stream
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['response_format', 'type'],
         message:
-          "response_format type 'json_object' requires stream: false. A streamed " +
+          `response_format type '${value.response_format.type}' requires stream: false. A streamed ` +
           'response is delivered before it can be validated as JSON, so the guarantee ' +
           'could not be kept.',
       });
@@ -3256,7 +3277,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
             ?.responseBudgetFloorTokens,
@@ -3428,7 +3453,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
             ?.responseBudgetFloorTokens,
@@ -3762,6 +3791,30 @@ export async function processRequest(
 
   if (wantsJsonObject(chatRequest.response_format)) {
     applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
+  }
+  if (wantsJsonSchema(chatRequest.response_format) && chatRequest.response_format?.json_schema) {
+    if (resolvedModelCaps?.json !== true) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message:
+                'The selected model does not support structured output. Choose a model that does, or use response_format json_object.',
+              type: 'invalid_request_error',
+              code: 'model_no_structured_output',
+            },
+          },
+          { status: 400 },
+        ),
+      };
+    }
+    applyStaticSystemDirective(
+      chatRequest,
+      dynamicSystemMessageRefs,
+      jsonSchemaDirective(chatRequest.response_format.json_schema),
+      (existing, directive) => `${existing}\n\n${directive}`,
+    );
   }
 
   const researchMode = researchModeAllowed(
@@ -4243,7 +4296,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMaxOutputTokens: resolveMaxOutputTokens(chatRequest.model),
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
