@@ -24,12 +24,19 @@ import {
 } from '@/lib/code-review/pipeline';
 import { ingestTriggerEvent } from '@/lib/triggers/trigger-ingest';
 import { toGitHubTriggerEvent } from '@/lib/triggers/github-events';
+import {
+  githubMentionTask,
+  isGitHubReviewRequest,
+  runGitHubCodeTask,
+  type GitHubCodeTaskRequest,
+} from '@/lib/services/cloud-code-github-task';
 import { routeGitHubWebhookEvent } from './webhook-router';
 import { recordDeliveryOnce } from './delivery-dedup';
 import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 
+export const maxDuration = 800;
+
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
-const BOT_MENTION = '@agi-workforce';
 
 /**
  * GitHub's own statement of the commenter's standing on the repository. OWNER,
@@ -190,7 +197,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const commentBody: string =
     ((payload['comment'] as Record<string, unknown>)?.['body'] as string) ?? '';
-  if (!commentBody.toLowerCase().includes(BOT_MENTION.toLowerCase())) {
+  if (githubMentionTask(commentBody) === null) {
     return NextResponse.json({ received: true });
   }
 
@@ -214,7 +221,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const issue = payload['issue'] as Record<string, unknown> | undefined;
-  if (!issue?.['pull_request']) {
+  const isPullRequest = Boolean(issue?.['pull_request']);
+  const task = githubMentionTask(commentBody) ?? '';
+  const reviewRequested = isGitHubReviewRequest(task);
+  if (!isPullRequest && reviewRequested) {
     return NextResponse.json({ received: true });
   }
 
@@ -222,9 +232,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const repository = payload['repository'] as Record<string, unknown> | undefined;
   const installationId = installation?.['id'] as number | undefined;
   const fullName = repository?.['full_name'] as string | undefined;
-  const prNumber = issue?.['number'] as number | undefined;
+  const number = issue?.['number'] as number | undefined;
+  const commentId = comment?.['id'] as number | undefined;
 
-  if (!installationId || !fullName || !prNumber) {
+  if (!installationId || !fullName || !number) {
     return NextResponse.json({ received: true });
   }
 
@@ -233,9 +244,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true });
   }
 
-  after(scheduleReview({ installationId, owner, repo, prNumber, trigger: 'mention' }));
+  if (reviewRequested) {
+    after(scheduleReview({ installationId, owner, repo, prNumber: number, trigger: 'mention' }));
+    return NextResponse.json({ received: true, review: 'queued' });
+  }
 
-  return NextResponse.json({ received: true, review: 'queued' });
+  if (!commentId) return NextResponse.json({ received: true });
+  after(scheduleCodeTask({ installationId, owner, repo, number, isPullRequest, task, commentId }));
+  return NextResponse.json({ received: true, task: 'queued' });
+}
+
+function scheduleCodeTask(request: GitHubCodeTaskRequest): Promise<void> {
+  return runGitHubCodeTask(request).catch((error: unknown) => {
+    logger.error({ error, ...request }, 'GitHub coding task background error');
+  });
 }
 
 const AUTO_REVIEW_ACTIONS: ReadonlySet<string> = new Set([

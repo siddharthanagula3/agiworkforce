@@ -28,12 +28,12 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Picker rows and the on-device selection mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch (ModelPickerSheet.tsx and chatExecutionStore.ts are Codex-held). | ui |
+| mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
 | cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
 | vscode | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`
 
 ## S79.06: Quality-first profile.
 
@@ -130,11 +130,11 @@ Code: `apps/cli/src/routing/classify.rs:1-9`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile names capable models in the message when an image edit is blocked, but offers no one-tap switch. | ui |
+| mobile | partial | A one-tap 'Use <model>' switch to the first edit-capable image model the registry lists is in post-codex/chat-gates-s79.21-mobile-image-model-switch.patch; both chat screens that raise the blocked alert are Codex-held. | ui |
 | cli | partial | The CLI tells the user to pick another model with `agi models list` but offers no switch action. | ui |
 | chrome | partial | Chrome falls back to Auto silently and only suggests choosing another model after an outage; no switch action. | ui |
 
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:183-186`, `apps/cli/src/errors.rs:475-479`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
+Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`, `apps/cli/src/errors.rs:475-479`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S79.23: Specialist worker selection.
 

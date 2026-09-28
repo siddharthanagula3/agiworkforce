@@ -360,9 +360,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         group: 'Search results',
         icon: SEARCH_RESULT_TYPES[result.type].icon,
         typeLabel: SEARCH_RESULT_TYPES[result.type].label,
-        action: () => router.push(globalSearchResultHref(result)),
+        action: () => router.push(globalSearchResultHref(result, query)),
       })),
-    [router, searchResults],
+    [query, router, searchResults],
   );
 
   const filtered = useMemo(() => {

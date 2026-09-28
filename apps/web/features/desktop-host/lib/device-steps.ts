@@ -4,9 +4,12 @@ import {
   DesktopRuntimeError,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   describeDeviceDisplays,
+  describeDeviceFrontWindow,
+  deviceFrontWindowRefusal,
   deviceStepCommand,
   getHostBridge,
   isDeviceStepTool,
+  readDeviceFrontWindow,
   type DesktopHostDeclaration,
   type DeviceScreenDisplay,
   type DeviceStepTool,
@@ -43,6 +46,7 @@ interface ScreenCaptureResult {
   displayName: string;
   displayId?: number;
   displays?: DeviceScreenDisplay[];
+  front?: unknown;
 }
 
 async function invokeDeviceCommand<T>(command: string, args: Record<string, unknown>): Promise<T> {
@@ -64,6 +68,21 @@ function cap(text: string): string {
   return text.length > MAX_DEVICE_STEP_RESULT_LENGTH
     ? `${text.slice(0, MAX_DEVICE_STEP_RESULT_LENGTH)}\n[truncated]`
     : text;
+}
+
+function frontNote(value: unknown): string {
+  const front = readDeviceFrontWindow(value);
+  if (!front) return '';
+  const refusal = deviceFrontWindowRefusal(front);
+  return ` In front: ${describeDeviceFrontWindow(front)}.${refusal ? ` ${refusal}` : ''}`;
+}
+
+function frontOf(value: unknown): unknown {
+  return value && typeof value === 'object' ? (value as { front?: unknown }).front : undefined;
+}
+
+function reviewOf(input: Record<string, unknown>): { review?: string } {
+  return typeof input['review'] === 'string' ? { review: input['review'] } : {};
 }
 
 function describeEntries(entries: FileEntry[]): string {
@@ -102,7 +121,7 @@ async function captureFor(
     content:
       tool === 'device_zoom'
         ? `A ${capture.width} by ${capture.height} close-up of ${capture.displayName} follows. Its coordinates are the region asked for, not the whole screen.`
-        : `${capture.displayName} is ${capture.width} wide and ${capture.height} tall in the coordinates every other screen step uses.${displays ? ` ${displays}` : ''} The picture follows.`,
+        : `${capture.displayName} is ${capture.width} wide and ${capture.height} tall in the coordinates every other screen step uses.${displays ? ` ${displays}` : ''}${frontNote(capture.front)} The picture follows.`,
     isError: false,
     image: { base64: capture.imageBase64, mimeType: capture.mimeType },
   };
@@ -113,42 +132,54 @@ type ActionStepTool = Exclude<DeviceStepTool, 'device_screenshot' | 'device_zoom
 async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Promise<string> {
   const command = deviceStepCommand(tool);
   switch (tool) {
-    case 'device_move':
-      await invokeDeviceCommand<true>(command, { x: input['x'], y: input['y'] });
-      return `Moved the pointer to ${String(input['x'])}, ${String(input['y'])}.`;
-    case 'device_click':
-      await invokeDeviceCommand<true>(command, {
+    case 'device_move': {
+      const moved = await invokeDeviceCommand<unknown>(command, { x: input['x'], y: input['y'] });
+      return `Moved the pointer to ${String(input['x'])}, ${String(input['y'])}.${frontNote(frontOf(moved))}`;
+    }
+    case 'device_click': {
+      const clicked = await invokeDeviceCommand<unknown>(command, {
         x: input['x'],
         y: input['y'],
         button: input['button'],
         count: input['count'],
+        ...reviewOf(input),
       });
-      return `Clicked at ${String(input['x'])}, ${String(input['y'])}. Take a screenshot to see what changed.`;
-    case 'device_drag':
-      await invokeDeviceCommand<true>(command, {
+      return `Clicked at ${String(input['x'])}, ${String(input['y'])}.${frontNote(frontOf(clicked))} Take a screenshot to see what changed.`;
+    }
+    case 'device_drag': {
+      const dragged = await invokeDeviceCommand<unknown>(command, {
         x: input['x'],
         y: input['y'],
         toX: input['toX'],
         toY: input['toY'],
+        ...reviewOf(input),
       });
-      return `Dragged to ${String(input['toX'])}, ${String(input['toY'])}. Take a screenshot to see what changed.`;
-    case 'device_scroll':
-      await invokeDeviceCommand<true>(command, {
+      return `Dragged to ${String(input['toX'])}, ${String(input['toY'])}.${frontNote(frontOf(dragged))} Take a screenshot to see what changed.`;
+    }
+    case 'device_scroll': {
+      const scrolled = await invokeDeviceCommand<unknown>(command, {
         x: input['x'],
         y: input['y'],
         deltaX: input['deltaX'],
         deltaY: input['deltaY'],
       });
-      return 'Scrolled. Take a screenshot to see what is on screen now.';
-    case 'device_type':
-      await invokeDeviceCommand<true>(command, { text: input['text'] });
-      return 'Typed the text into whatever had keyboard focus. Take a screenshot to check it landed where you meant.';
-    case 'device_key':
-      await invokeDeviceCommand<true>(command, {
+      return `Scrolled.${frontNote(frontOf(scrolled))} Take a screenshot to see what is on screen now.`;
+    }
+    case 'device_type': {
+      const typed = await invokeDeviceCommand<unknown>(command, {
+        text: input['text'],
+        ...reviewOf(input),
+      });
+      return `Typed the text into whatever had keyboard focus.${frontNote(frontOf(typed))} Take a screenshot to check it landed where you meant.`;
+    }
+    case 'device_key': {
+      const pressed = await invokeDeviceCommand<unknown>(command, {
         key: input['key'],
         modifiers: input['modifiers'],
+        ...reviewOf(input),
       });
-      return 'Pressed the key. Take a screenshot to see what changed.';
+      return `Pressed the key.${frontNote(frontOf(pressed))} Take a screenshot to see what changed.`;
+    }
     case 'device_wait':
       await invokeDeviceCommand<true>(command, { ms: input['ms'] });
       return 'Waited. Take a screenshot to see the screen now.';

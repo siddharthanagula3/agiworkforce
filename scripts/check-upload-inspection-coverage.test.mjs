@@ -54,7 +54,6 @@ export async function POST(request) {
 
 const SINGLE_REQUEST_ROUTES = [
   'apps/web/app/api/code/sessions/[sessionId]/notebook/files/route.ts',
-  'apps/web/app/api/files/uploads/[uploadId]/route.ts',
   'apps/web/app/api/llm/v1/audio/transcriptions/route.ts',
   'apps/web/app/api/plugins/uploads/route.ts',
   'apps/web/app/api/skills/route.ts',
@@ -62,21 +61,32 @@ const SINGLE_REQUEST_ROUTES = [
 
 const DEFERRALS = [
   [
+    'apps/web/app/api/files/uploads/[uploadId]/route.ts',
+    [
+      'apps/web/lib/server/chat-attachment-completion.ts',
+      'apps/web/lib/server/project-knowledge-extraction.ts',
+    ],
+  ],
+  [
     'apps/web/app/api/uploads/chat-attachment/put/route.ts',
-    'apps/web/app/api/uploads/chat-attachment/complete/route.ts',
+    ['apps/web/lib/server/chat-attachment-completion.ts'],
   ],
   [
     'apps/web/app/api/uploads/knowledge-file/put/route.ts',
-    'apps/web/lib/server/project-knowledge-extraction.ts',
+    ['apps/web/lib/server/project-knowledge-extraction.ts'],
   ],
 ];
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function baseTree() {
   const tree = { 'apps/web/lib/security/upload-scan.ts': MODULE };
   for (const route of SINGLE_REQUEST_ROUTES) tree[route] = INSPECTS;
   for (const [stage, completing] of DEFERRALS) {
     tree[stage] = STAGES;
-    tree[completing] = COMPLETES;
+    for (const file of completing) tree[file] = COMPLETES;
   }
   return tree;
 }
@@ -112,7 +122,7 @@ test('reads caller bytes through the request and nothing else', () => {
 test('passes when every ingesting route inspects in place or at the finishing step', () => {
   const result = run(fixture(baseTree()));
   assert.equal(result.code, 0);
-  assert.match(result.output, /7 routes read caller bytes, 7 inspected, 2 of them/);
+  assert.match(result.output, /7 routes read caller bytes, 7 inspected, 3 of them/);
 });
 
 test('fails for whichever single-request route loses its inspection call', () => {
@@ -133,16 +143,18 @@ test('fails when a new route takes caller bytes with nothing behind it', () => {
   assert.match(result.output, /apps\/web\/app\/api\/avatars\/route\.ts reads caller bytes/);
 });
 
-test('fails when a deferral points at a file that does not inspect', () => {
+test('fails when any file a deferral names does not inspect', () => {
   for (const [stage, completing] of DEFERRALS) {
-    const tree = baseTree();
-    tree[completing] = COMPLETES.replaceAll('scanUploadBytes', 'store');
-    const result = run(fixture(tree));
-    assert.equal(result.code, 1, `${stage} accepted a deferral to nothing`);
-    assert.match(
-      result.output,
-      new RegExp(`defers inspection to ${completing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-    );
+    for (const file of completing) {
+      const tree = baseTree();
+      tree[file] = COMPLETES.replaceAll('scanUploadBytes', 'store');
+      const result = run(fixture(tree));
+      assert.equal(result.code, 1, `${stage} accepted a deferral to nothing through ${file}`);
+      assert.match(
+        result.output,
+        new RegExp(`${escapeRegExp(stage)} defers inspection to ${escapeRegExp(file)}`),
+      );
+    }
   }
 });
 

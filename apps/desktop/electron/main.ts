@@ -74,10 +74,14 @@ import {
 } from './shellIdentity';
 import { createCodeSessionActivity } from './runtime/codeSessionActivity';
 import {
+  computerUsePhase,
+  computerUseStatus,
+  configureComputerUse,
   handBackComputerUse,
-  stopComputerUseHelper,
+  shutDownComputerUse,
+  stopComputerUse,
   takeOverComputerUse,
-} from './runtime/computerUseService';
+} from './runtime/computerUseSession';
 import { installAppMenu } from './appMenu';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
 import {
@@ -1351,11 +1355,13 @@ function installMenu(): void {
       stepZoomLevel,
       takeOverScreen: () => void takeOverComputerUse(),
       handBackScreen: () => void handBackComputerUse(),
+      stopScreenControl: () => void stopComputerUse(),
     },
     {
       quickAsk: getShortcuts().quickAskShortcut,
       screenshot: getShortcuts().screenshotShortcut,
     },
+    computerUsePhase(),
   );
 }
 
@@ -1415,6 +1421,13 @@ if (!hasSingleInstanceLock) {
     applyGarnishShortcuts();
 
     configureRemoteControl((state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }));
+    configureComputerUse({
+      onChange: () => {
+        sendRuntimeEvent({ kind: 'computer-use-changed', status: computerUseStatus() });
+        installMenu();
+      },
+      onNotificationClick: showMainWindow,
+    });
     const codeSessionActivity = createCodeSessionActivity({
       sessionTitle: async (rootId, threadId) =>
         (await readDeveloperSession(rootId, threadId)).session.title.slice(
@@ -1464,7 +1477,7 @@ if (!hasSingleInstanceLock) {
     cancelAllShellRuns();
     stopRemoteControl();
     stopAllDeveloperRuntimes();
-    stopComputerUseHelper();
+    shutDownComputerUse();
     void stopBrowserBridge();
   });
 

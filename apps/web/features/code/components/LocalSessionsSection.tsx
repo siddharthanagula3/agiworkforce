@@ -11,6 +11,7 @@ import {
   LOCAL_CODE_COPY,
   localModelLabel,
   localSessionOriginLabel,
+  localSessionStatusLabel,
   newSessionLabel,
 } from '../local-code';
 import styles from '../CloudCodePage.module.css';
@@ -95,7 +96,14 @@ export function LocalSessionsSection({
                 onClick={() => onSelect(session)}
               >
                 <span className={styles['railRowGlyph']}>
-                  <TerminalSquare size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+                  {session.status === 'running' ? (
+                    <span
+                      className={styles['railRunningDot']}
+                      aria-label={LOCAL_CODE_COPY.sessionRunning}
+                    />
+                  ) : (
+                    <TerminalSquare size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+                  )}
                 </span>
                 <span className={styles['railLocalText']}>
                   <span className={styles['railRowLabel']}>{session.title}</span>
@@ -109,6 +117,11 @@ export function LocalSessionsSection({
                       .join(' · ')}
                   </span>
                 </span>
+                {localSessionStatusLabel(session.status) && (
+                  <span className={styles['railRowState']}>
+                    {localSessionStatusLabel(session.status)}
+                  </span>
+                )}
               </button>
             ))}
 

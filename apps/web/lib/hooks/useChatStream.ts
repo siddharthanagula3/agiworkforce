@@ -193,6 +193,9 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
+import { beginStreamPhase, endStreamPhase } from '@/features/chat/stores/stream-phase-store';
+import { cancelCloudRunAndConfirm } from '@/features/chat/lib/cancel-cloud-run';
+import { summarizeMcpContext } from '@/features/chat/lib/mcp-context-summary';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
 import type { RoutingProfileChoice } from '@agiworkforce/types';
@@ -937,6 +940,7 @@ export const WEB_INTERACTIVE_CARD_KINDS = [
   'map-search.v1',
   'mcp-app.v1',
   'places.v1',
+  'product-comparison.v1',
 ] as const satisfies readonly KnownInteractiveCardKind[];
 
 export type WebInteractiveCardKind = (typeof WEB_INTERACTIVE_CARD_KINDS)[number];
@@ -2412,9 +2416,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
    * the server persisted. The cursor is what this client already rendered, so
    * the replay can only ever append.
    */
-  const resumeFromCursor = async (): Promise<boolean> => {
-    if (isTurnContinuation || isTemporaryConversation || runHandle) return false;
-
+  const replayFromCursor = async (): Promise<boolean> => {
     for (let attempt = 0; attempt < STREAM_RESUME_ATTEMPTS; attempt += 1) {
       if (attempt > 0) {
         await new Promise((resolve) => setTimeout(resolve, STREAM_RESUME_RETRY_MS));
@@ -2459,6 +2461,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return false;
   };
 
+  const resumeFromCursor = async (): Promise<boolean> => {
+    if (isTurnContinuation || isTemporaryConversation || runHandle) return false;
+    beginStreamPhase(assistantMessageId, 'reconnecting');
+    try {
+      return await replayFromCursor();
+    } finally {
+      endStreamPhase(assistantMessageId, 'reconnecting');
+    }
+  };
+
   const settleStream = (): StreamOutcome => {
     flushContentBuffer(true);
     if (inThinkingBlock) {
@@ -2485,6 +2497,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const replayDurableRun = async (): Promise<StreamOutcome> => {
     if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
+    beginStreamPhase(assistantMessageId, 'reconnecting');
 
     flushContentBuffer(true);
     if (inThinkingBlock) {
@@ -2512,6 +2525,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         pollIntervalMs: DURABLE_RUN_POLL_INTERVAL_MS,
         signal: terminalFollowAbort.signal,
         onEvent: (envelope) => {
+          endStreamPhase(assistantMessageId, 'reconnecting');
           if (envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
@@ -2565,6 +2579,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
         },
         onSnapshot: (snapshot) => {
+          endStreamPhase(assistantMessageId, 'reconnecting');
           publishCloudRunReference({
             lastSequence: snapshot.nextAfterSequence,
             state: snapshot.run.state,
@@ -3250,6 +3265,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
+    endStreamPhase(assistantMessageId, 'reconnecting');
     closeFirstTokenWait();
     markFirstStreamActivitySeen();
     coalescedAppends.flush();
@@ -3422,11 +3438,13 @@ export function useChatStream(): UseChatStreamReturn {
         ...(options.skillName ? { skillName: options.skillName } : {}),
       });
       const persistedAttachments = durableAttachmentDescriptors(options.attachments);
+      const mcpContext = summarizeMcpContext(options.mcpContext);
       const userMetadata: MessageMetadata | undefined =
-        sendReplay || persistedAttachments
+        sendReplay || persistedAttachments || mcpContext
           ? {
               ...(sendReplay ? { sendReplay } : {}),
               ...(persistedAttachments ? { attachments: persistedAttachments } : {}),
+              ...(mcpContext ? { mcpContext } : {}),
             }
           : undefined;
       const getAuthToken: AuthTokenProvider = async () => {
@@ -4277,9 +4295,19 @@ export function useChatStream(): UseChatStreamReturn {
           getAuthToken: getToken,
           decorateMutationHeaders: addCsrfHeaders,
         });
-        void client.cancelRun(activeRun.runId).catch(() => {
-          toast.error('Could not stop the Cloud task. Check its activity before retrying.');
-        });
+        beginStreamPhase(activeRun.assistantMessageId, 'stopping');
+        void cancelCloudRunAndConfirm(client, activeRun.runId)
+          .then((stopped) => {
+            if (!stopped) {
+              toast.error(
+                'The Cloud task has not confirmed it stopped. Check its activity before retrying.',
+              );
+            }
+          })
+          .catch(() => {
+            toast.error('Could not stop the Cloud task. Check its activity before retrying.');
+          })
+          .finally(() => endStreamPhase(activeRun.assistantMessageId, 'stopping'));
       }
       stopStreaming(targetConversationId);
       setLoading(false, targetConversationId);
@@ -4948,7 +4976,15 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   // Nothing streamed, so consumeAssistantStream persisted nothing and the row
   // only exists on screen. Dropping it here keeps both sides agreeing that the
   // variant was never created.
-  if (ctx.variantRestore && !currentMessage?.content) {
+  const restoredLeaf = readConversationRows(conversationId).find(
+    (row) => row.id === ctx.variantRestore?.previousLeafId,
+  );
+  if (
+    ctx.variantRestore &&
+    !currentMessage?.content &&
+    !restoredLeaf?.error &&
+    restoredLeaf?.metadata?.agentActivity?.status !== 'failed'
+  ) {
     const store = useChatStore.getState();
     store.deleteMessage(assistantMessageId, conversationId);
     store.setActiveLeaf(conversationId, ctx.variantRestore.previousLeafId);
