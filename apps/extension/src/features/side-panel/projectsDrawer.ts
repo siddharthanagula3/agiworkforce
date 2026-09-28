@@ -13,6 +13,7 @@ import {
 } from '../cloud-bridge/projectsClient';
 import { t, tPlural } from '../../i18n';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
 
 export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-help {
@@ -235,6 +236,7 @@ export function buildProjectsDrawerSection(
 
   const sectionEl = el('div', { class: 'sp-drawer-section', id: 'sp-drawer-projects-section' });
   sectionEl.appendChild(el('h3', { class: 'sp-drawer-section-title' }, t('spProjectsTitle')));
+  sectionEl.appendChild(buildHelpArticleLink('projects', t('spHelpLinkProjects')));
   sectionEl.appendChild(el('p', { class: 'sp-drawer-projects-help' }, t('spProjectsHelp')));
 
   const newBtn = el(

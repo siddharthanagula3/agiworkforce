@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Render quoted-reply and project/style context as chips on the sent message; a quote is only inlined into the text as a "> You: ..." line. | ui |
+| mobile | partial | A sent message shows its quoted reply and the skill it ran with as chips above the bubble; the skill is recorded as sendReplay.skillName, the key the web reads. In post-codex/chat-gates-s16.04-mobile-sent-context-chips.patch. | ui |
 | cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.rs:4926-4929`
+Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:4926-4929`
 
 ## S16.05: Timestamp.
 
@@ -76,22 +76,19 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.r
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
+| mobile | partial | Resend on the user's own message is built in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (MessageBubble is held by Codex); the store already re-runs from a user message (retryMessage). Claude's user message row has Retry. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:522-522`
 
 ## S16.10: Branch-from-message action.
 
 - Done when: From a chosen user message the user can start a new branch conversation that contains the thread up to that message.
-- Wave: 2
+- Wave: 3
 - Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Wire a "Branch from here" action to the existing forkConversation store action (it already accepts forkPointMessageId); no screen calls it. | ui, mount |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatMessageStore.ts:242-242`, `apps/mobile/stores/chat/chatMessageStore.ts:271-272`
 
 ## S16.11: Message-version navigation.
 
@@ -101,12 +98,12 @@ Code: `apps/mobile/stores/chat/chatMessageStore.ts:242-242`, `apps/mobile/stores
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add a pager: edits on threaded Cloud chats already create sibling revisions (branchParentId) but the app shows only the active path with no way to page. | ui |
+| mobile | partial | Threaded Cloud chats show '< n / m >' on a revised question and a regenerated answer, switch the visible branch with the shared resolveLeafForSibling and save the choice through updateConversation, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/app/(app)/chat/[id].tsx:235-239`
+Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S16.12: Expand long message.
 

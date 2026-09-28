@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
 import type {
+  ManagedMemoryCitation,
   ResearchDeliverableSpec,
   ResearchStep,
   ResolvedWorkspaceControls,
@@ -61,6 +62,7 @@ import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   classifyAttachedSearchTool,
+  replaceNativeWebSearchTool,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
@@ -164,6 +166,7 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { scheduleMemoryRelevanceShadow } from '@/lib/services/semantic-decisions/consumers/memory-relevance';
@@ -326,6 +329,7 @@ import {
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
+  narrowResearchDomainPolicy,
   type ResearchDomainPolicy,
 } from './research-sources';
 import {
@@ -404,6 +408,8 @@ import {
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -1169,6 +1175,7 @@ export type ProcessedRequest = {
   projectSources?: readonly ProjectFileCitation[];
   /** The earlier conversations this turn's recall quoted, shown beside the answer. */
   pastChatSources?: readonly PastChatCitation[];
+  memoryCitations?: readonly ManagedMemoryCitation[];
   assistantMessageId?: string | undefined;
   assistantParentId?: string | undefined;
   userMessageId?: string | undefined;
@@ -3314,6 +3321,7 @@ export async function processRequest(
   }
 
   const loadedManagedMemories: readonly ManagedMemoryContextItem[] = turnContext?.memories ?? [];
+  const memoryCitations = turnContext?.memoryCitations ?? [];
   if (turnContext?.memoryPrompt) {
     applyManagedMemoryContext(chatRequest, turnContext.memoryPrompt);
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
@@ -4119,6 +4127,20 @@ export async function processRequest(
     );
   }
 
+  if (chatRequest.research === true) {
+    const { organizationId: researchWorkspaceId } = await scopedDbPromise;
+    await assertCapabilityAvailable(
+      buildFlagSubject(request, {
+        userId,
+        workspaceId: researchWorkspaceId,
+        role: null,
+        plan: subscription.plan_tier,
+        surface: chatSurface,
+      }),
+      'canUseDeepResearch',
+      'Deep Research',
+    );
+  }
   const researchMode = researchModeAllowed(
     chatRequest,
     resolvedModelCaps,
@@ -4127,12 +4149,35 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
-  const webSearchDomainPolicy = researchMode
-    ? null
-    : createResearchDomainPolicy({
-        allow: chatRequest.research_sources?.allow_domains,
-        deny: chatRequest.research_sources?.deny_domains,
-      });
+  const workspaceWebDomainPolicy =
+    chatRequest.web_search || chatRequest.web_fetch || researchMode
+      ? await scopedDbPromise.then((scoped) =>
+          readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
+        )
+      : null;
+  const narrowedDomainPolicy = narrowResearchDomainPolicy(
+    workspaceWebDomainPolicy,
+    createResearchDomainPolicy({
+      allow: chatRequest.research_sources?.allow_domains,
+      deny: chatRequest.research_sources?.deny_domains,
+    }),
+  );
+  if (!narrowedDomainPolicy.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Your workspace only allows reading ${narrowedDomainPolicy.allowed.join(', ')}, and none of the sites chosen for this chat are among them.`,
+            type: 'invalid_request_error',
+            code: 'sites_outside_workspace_policy',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  const webSearchDomainPolicy = narrowedDomainPolicy.policy;
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
   // lit, `runResearchLoop` never executed, and the user received an ordinary
@@ -5042,6 +5087,12 @@ export async function processRequest(
     ) {
       resolvedTools = [...(resolvedTools ?? []), webSearchToolDef()];
     }
+    if (workspaceWebDomainPolicy) {
+      resolvedTools = replaceNativeWebSearchTool(
+        resolvedTools,
+        chatRequest.stream === true && webSearchBackendConfigured(),
+      );
+    }
   }
 
   if (placesRequirement.offered) {
@@ -5122,7 +5173,7 @@ export async function processRequest(
       tools: resolvedTools,
       toolsCapable: resolvedModelCaps?.tools ?? true,
       stream: chatRequest.stream,
-      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL),
+      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL) && !workspaceWebDomainPolicy,
     });
   }
 
@@ -5402,6 +5453,7 @@ export async function processRequest(
       ? { projectSources: ownership.projectSources }
       : {}),
     ...(pastChatSources.length ? { pastChatSources } : {}),
+    ...(memoryCitations.length ? { memoryCitations } : {}),
     assistantMessageId: chatRequest.assistant_message_id,
     assistantParentId: chatRequest.assistant_parent_id,
     ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),
@@ -5449,7 +5501,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
-    ...(!researchMode && webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
+    ...(webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
     ...(researchMode && chatRequest.research_sources
       ? {
           researchSources: {

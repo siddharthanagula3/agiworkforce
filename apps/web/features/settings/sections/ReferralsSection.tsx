@@ -346,7 +346,7 @@ export function ReferralsSection() {
             <h2 id="referral-rules-heading" className="text-h4 text-foreground">
               How it works
             </h2>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground">
               <li>
                 A friend who signs up with your link and starts Pro gets {program.friendTrialDays}{' '}
                 days free. Pro then renews at its normal price unless they cancel before the trial

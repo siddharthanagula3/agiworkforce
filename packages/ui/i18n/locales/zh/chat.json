@@ -74,7 +74,10 @@
     "runtimeConsent": "此应用想使用您的账户调用 AI。每次请求都会计入您的套餐用量。",
     "runtimeConsentConnectors": "此应用想使用您的账户调用 AI，并读取或更改 {{apps}} 中的数据。它能看到这些应用返回的内容，每次请求都会计入您的套餐用量。",
     "runtimeAllow": "允许",
-    "runtimeDecline": "不允许"
+    "runtimeDecline": "不允许",
+    "saveCopy": "将副本保存到我的聊天",
+    "saveCopyBusy": "正在复制…",
+    "saveCopyFailed": "无法复制此工件。"
   },
   "sidebar": {
     "activeConversation": "当前对话",
@@ -440,7 +443,13 @@
     "videoModeAttachments_one": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "videoModeAttachments_other": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "viewSources_one": "查看 {{count}} 个来源",
-    "viewSources_other": "查看 {{count}} 个来源"
+    "viewSources_other": "查看 {{count}} 个来源",
+    "folderFilesLeftOut_one": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。",
+    "folderFilesLeftOut_other": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。",
+    "savedMemoriesUsed_one": "使用了 {{count}} 条已保存的记忆",
+    "savedMemoriesUsed_other": "使用了 {{count}} 条已保存的记忆",
+    "moreSavedMemories_one": "还有 {{count}} 条",
+    "moreSavedMemories_other": "还有 {{count}} 条"
   },
   "markdownTable": {
     "label": "表格",
@@ -462,7 +471,9 @@
     "expand": "展开代码",
     "close": "关闭展开的代码",
     "codeTitle": "{{language}} 代码",
-    "codeBlockLabel": "{{language}} 代码块"
+    "codeBlockLabel": "{{language}} 代码块",
+    "edit": "编辑",
+    "editLabel": "在聊天旁编辑此代码"
   },
   "streaming": {
     "reconnecting": "正在重新连接…",

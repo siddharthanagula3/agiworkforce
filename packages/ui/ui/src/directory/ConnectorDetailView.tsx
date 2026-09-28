@@ -332,7 +332,7 @@ export function ConnectorDetailView({
           {requiredByPlugins.length > 0 ? (
             <>
               <p className="mt-2">{CONNECTOR_REQUIRED_BY_PLUGINS_COPY}</p>
-              <ul className="mt-1 list-disc pl-5">
+              <ul className="mt-1 list-disc ps-5">
                 {requiredByPlugins.map((plugin) => (
                   <li key={plugin}>{plugin}</li>
                 ))}

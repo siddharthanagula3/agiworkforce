@@ -1,17 +1,33 @@
-import { Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme } from '@/src/ui/theme';
+import {
+  TEMPORARY_CHAT_CLOUD_EXPLAINER,
+  TEMPORARY_CHAT_LOCAL_EXPLAINER,
+} from './TemporaryChatBanner';
 
 export function TemporaryChatToggle() {
   const { colors } = useTheme();
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
+  const explanation =
+    useChatAppModeStore((s) => s.appMode) === 'cloud'
+      ? TEMPORARY_CHAT_CLOUD_EXPLAINER
+      : TEMPORARY_CHAT_LOCAL_EXPLAINER;
 
   const handlePress = () => {
-    setTemporaryChat(!isTemporaryChat);
+    if (isTemporaryChat) {
+      setTemporaryChat(false);
+      return;
+    }
+    Alert.alert('Turn on temporary chat?', explanation, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Turn on', onPress: () => setTemporaryChat(true) },
+    ]);
   };
 
   return (
@@ -29,7 +45,7 @@ export function TemporaryChatToggle() {
       }}
       accessible={true}
       accessibilityLabel={isTemporaryChat ? 'Temporary chat active' : 'Enable temporary chat'}
-      accessibilityHint="Memory will not be saved from this chat"
+      accessibilityHint={isTemporaryChat ? 'Turns temporary chat off' : explanation}
       accessibilityRole="button"
       accessibilityState={{ selected: isTemporaryChat }}
     >

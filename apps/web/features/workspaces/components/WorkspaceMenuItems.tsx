@@ -112,7 +112,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
                 'Switching reloads the app in this workspace. This work does not come with you:',
             })}
           </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+          <ul className="mt-1 list-disc space-y-0.5 ps-4 text-muted-foreground">
             {interruptions.map((interruption) => (
               <li key={interruption.kind}>{interruption.description}</li>
             ))}
@@ -216,7 +216,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
         </>
       ) : null}
       <DropdownMenuItem onSelect={onManage}>
-        <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+        <Users className="me-2 h-4 w-4" aria-hidden="true" />
         {t('navManageWorkspaces', { defaultValue: 'Manage workspaces' })}
       </DropdownMenuItem>
       <DropdownMenuSeparator />

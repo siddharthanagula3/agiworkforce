@@ -4,7 +4,7 @@ import { WorkspaceConnectorPolicy } from '@/features/workspace-console/component
 
 export const metadata: Metadata = {
   title: 'Connector policy',
-  description: 'Which integrations this workspace permits.',
+  description: 'Which integrations and websites this workspace permits.',
 };
 
 export default function WorkspaceConnectorsPage() {
@@ -12,7 +12,7 @@ export default function WorkspaceConnectorsPage() {
     <ConsolePage
       help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
       title="Connectors"
-      description="Which integrations members may use. Applied where the tool catalog is assembled, so a blocked connector is never offered to the model, from chat, a scheduled task, or an agent run."
+      description="Which integrations members may use and which websites web search reads. Applied on the server, so a blocked connector is never offered to the model and a blocked site is never read, from chat, a scheduled task, or an agent run."
     >
       <WorkspaceConnectorPolicy />
     </ConsolePage>

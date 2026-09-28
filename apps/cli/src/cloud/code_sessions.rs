@@ -79,9 +79,11 @@ pub async fn list(client: &CloudClient, status: &str) -> Result<Vec<CodeSession>
 }
 
 pub async fn show(client: &CloudClient, id: &str) -> Result<CodeSessionDetail, CloudError> {
-    client
-        .get(&format!("{CODE_SESSIONS_PATH}/{}", encode_segment(id)), &[])
-        .await
+    client.get(&session_path(id), &[]).await
+}
+
+pub fn session_path(id: &str) -> String {
+    format!("{CODE_SESSIONS_PATH}/{}", encode_segment(id))
 }
 
 pub fn page_url(base: &str, id: &str) -> String {
@@ -120,7 +122,7 @@ pub fn render_list(sessions: &[CodeSession], status: &str) -> String {
         return match status {
             "archived" => "No archived cloud Code sessions.".to_string(),
             "closed" => "No closed cloud Code sessions.".to_string(),
-            _ => "No cloud Code sessions yet. Start one on the web at /code.".to_string(),
+            _ => "No cloud Code sessions yet. Start one with `agi code start \"<task>\"` from a GitHub checkout, or on the web at /code.".to_string(),
         };
     }
     let mut lines = vec![format!("Cloud Code sessions ({})", sessions.len())];

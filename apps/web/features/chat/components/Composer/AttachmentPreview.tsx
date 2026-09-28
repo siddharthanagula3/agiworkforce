@@ -74,7 +74,7 @@ function RemoveButton({
         onClick();
       }}
       className={cn(
-        'absolute -right-1.5 -top-1.5 z-[var(--z-control)]',
+        'absolute -end-1.5 -top-1.5 z-[var(--z-control)]',
         // 20px was under the 24px target minimum this repository already
         // states. The dot stays small because it sits on the corner of a
         // thumbnail; the pseudo-element gives the finger a 40px target without
@@ -103,7 +103,7 @@ function removeLabel(fileName: string, status?: AttachmentUploadVisualStatus): s
 function PrivacyChip({ label }: { label: string }) {
   return (
     <div
-      className="absolute -bottom-1 left-1 z-[var(--z-control)] flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-foreground shadow-e1"
+      className="absolute -bottom-1 start-1 z-[var(--z-control)] flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-foreground shadow-e1"
       aria-label={`Outbound destination: ${label}`}
     >
       <Lock className="h-4 w-4" />

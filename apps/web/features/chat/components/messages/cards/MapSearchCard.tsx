@@ -71,7 +71,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             {/* Title as a chip over the map rather than a header bar above it,
                 so the result reads as a map rather than as a form with a
                 picture in it. */}
-            <div className="pointer-events-none absolute left-3 top-3 z-[var(--z-panel-backdrop)] max-w-[60%]">
+            <div className="pointer-events-none absolute start-3 top-3 z-[var(--z-panel-backdrop)] max-w-[60%]">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm font-semibold text-[color:var(--chat-text-primary)] shadow-e1">
                 <MapPinned
                   className="size-3.5 shrink-0 text-[color:var(--chat-accent-primary-text)]"
@@ -82,7 +82,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             </div>
           </LeafletMapCanvas>
 
-          <ol className="mt-2 flex flex-col gap-2 px-3 sm:absolute sm:right-3 sm:top-14 sm:z-[var(--z-panel-backdrop)] sm:mt-0 sm:w-64 sm:px-0">
+          <ol className="mt-2 flex flex-col gap-2 px-3 sm:absolute sm:end-3 sm:top-14 sm:z-[var(--z-panel-backdrop)] sm:mt-0 sm:w-64 sm:px-0">
             {primaryAction && !hasUnconfirmedPlace ? (
               <li className="order-last sm:order-first">
                 <button
@@ -132,7 +132,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             ))}
           </ol>
 
-          <span className="pointer-events-none absolute bottom-1 right-1 z-[var(--z-panel-backdrop)] rounded-compact bg-[var(--chat-surface-overlay)] px-1.5 py-0.5 text-xs text-[color:var(--chat-text-secondary)]">
+          <span className="pointer-events-none absolute bottom-1 end-1 z-[var(--z-panel-backdrop)] rounded-compact bg-[var(--chat-surface-overlay)] px-1.5 py-0.5 text-xs text-[color:var(--chat-text-secondary)]">
             {mapTileStyle(tileState.config, dark).attribution}
           </span>
         </div>
@@ -159,7 +159,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             type="button"
             onClick={() => ctx.onOpenUrl?.(action.url)}
             disabled={!ctx.onOpenUrl}
-            className="inline-flex min-h-10 items-center justify-between gap-3 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-2 text-left text-sm font-medium text-[color:var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-10 items-center justify-between gap-3 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-2 text-start text-sm font-medium text-[color:var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span>{action.label}</span>
             <ExternalLink

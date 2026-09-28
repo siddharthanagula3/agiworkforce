@@ -89,7 +89,7 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         href: '/workspace/connectors',
         label: 'Connectors',
         icon: PlugZap,
-        hint: 'Approved integrations',
+        hint: 'Approved integrations and websites',
       },
       {
         href: '/workspace/code',

@@ -209,7 +209,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
       onClick={() => setOpen((prev) => !prev)}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-2 transition-colors',
-        'text-left hover:bg-[var(--chat-surface-hover)]',
+        'text-start hover:bg-[var(--chat-surface-hover)]',
         open && 'bg-[var(--chat-surface-hover)]',
         collapsed && 'justify-center px-0',
       )}
@@ -247,7 +247,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
           role="menu"
           aria-label="Account menu"
           className={cn(
-            'absolute bottom-full mb-1 left-0 z-[var(--z-dropdown)] w-64',
+            'absolute bottom-full mb-1 start-0 z-[var(--z-dropdown)] w-64',
             'rounded-lg bg-[var(--chat-surface-elevated)]',
             'border border-[var(--chat-border)] shadow-lg',
             'animate-in fade-in-0 zoom-in-95',
@@ -406,7 +406,7 @@ function MenuButton({
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 transition-colors',
-        'text-sm text-left outline-none',
+        'text-sm text-start outline-none',
         destructive
           ? 'text-[var(--chat-destructive-text)] hover:bg-[var(--chat-destructive)]/10'
           : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',

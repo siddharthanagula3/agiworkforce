@@ -167,6 +167,12 @@ export interface PluginSubmissionResponse {
   submission: PluginSubmissionSummary;
 }
 
+export const PluginSubmissionParamsSchema = z.object({ id: z.string().uuid() });
+
+export function pluginSubmissionPath(id: string): string {
+  return `${PLUGIN_SUBMISSIONS_PATH}/${encodeURIComponent(id)}`;
+}
+
 export interface PluginSubmissionFile {
   path: string;
   content: string;

@@ -24,10 +24,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a generic spinner ('Generating response') shows before output; no distinct preparing-context state. | states |
+| mobile | partial | A turn with no text, tools or thinking yet reads 'Preparing' beside the spinner, as the web does; the indicator takes the label now (5799eb1bf8) and MessageBubble passes it in post-codex/chat-gates-s19.03-s19.19-mobile-turn-phases.patch. | ui |
 | cli | partial | The spinner says 'Thinking…' from the start; context preparation (memory, files) is not shown as its own state. | states |
 
-Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `apps/cli/src/tui/tui_app.rs:1272-1276`
+Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:22-22`, `apps/cli/src/tui/tui_app.rs:1272-1276`
 
 ## S19.08: Waiting for user input.
 
@@ -99,10 +99,10 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only video generation shows 'stopping'; stopping a chat turn has no in-progress state. | states |
+| mobile | partial | Stopping a Cloud run now waits for the cancel to land and shows 'Stopping…' on the turn meanwhile; a failed cancel leaves the turn running with the error. In post-codex/chat-gates-s19.17-mobile-stopping-state.patch. | ui |
 | cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `apps/mobile/stores/chat/chatExecutionStore.ts:2828-2835`, `apps/cli/src/tui/tui_app.rs:5240-5256`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`, `apps/cli/src/tui/tui_app.rs:5240-5256`
 
 ## S19.18: Cancelled.
 
@@ -112,9 +112,9 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Agent/research turns say 'Cancelled after …', but a plain answer stopped mid-stream shows no stopped marker. | states |
+| mobile | partial | Same change as S17.39 in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`, `apps/mobile/stores/chat/chatExecutionStore.ts:2840-2850`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`
 
 ## S19.19: Reconnecting.
 
@@ -124,11 +124,11 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sends made offline are queued and marked 'queued'; a stream that drops mid-turn ends as a failure instead of reconnecting. | states |
+| mobile | partial | The stream already reconnects (onReconnecting) but nothing showed it; post-codex/chat-gates-s19.03-s19.19-mobile-turn-phases.patch records the reconnecting turn in the store and shows 'Reconnecting…' on it until the next delta. ChatGPT's iOS app says when it is waiting for a connection (help.openai.com 6825453, 2026-08-21). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
+Code: `apps/mobile/services/streaming.ts:114-114`, `apps/mobile/services/streaming.ts:478-478`
 
 ## S19.20: Resuming existing work.
 
@@ -143,18 +143,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
 | vscode | partial | Opening a session reloads its transcript (conversationLoaded); a turn that was running is not re-attached. | states |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
-
-## S19.26: Failed with recoverable input.
-
-- Done when: A turn that fails because of the user's input (too long, bad attachment) explains what to change so the user can fix and resend.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Shows the gateway's failure text; only context length is warned about in advance (chip), with no input-specific recovery on the failed turn. | states |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`, `apps/mobile/src/features/chat/utils/messageStreamError.ts:160-172`
 
 ## S19.29: Background work continuing after UI closure.
 

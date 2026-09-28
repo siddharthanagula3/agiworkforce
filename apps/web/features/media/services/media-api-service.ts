@@ -1,9 +1,10 @@
-
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
 import type {
   ManagedMediaImageAspectRatio,
+  ManagedMediaImageProvider,
   ManagedMediaVideoAspectRatio,
+  ManagedMediaVideoProvider,
   ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
 
@@ -14,7 +15,7 @@ export interface GeneratedImage {
 
 export interface ImageGenerationRequest {
   prompt: string;
-  provider?: 'google' | 'openai' | 'stability';
+  provider?: ManagedMediaImageProvider;
   aspect_ratio?: ManagedMediaImageAspectRatio;
   size?: string;
   style?: string;
@@ -37,7 +38,7 @@ export interface VideoGenerationRequest {
   duration_secs?: number;
   resolution?: ManagedMediaVideoResolution;
   aspect_ratio?: ManagedMediaVideoAspectRatio;
-  provider?: 'runway' | 'google' | 'openrouter';
+  provider?: ManagedMediaVideoProvider;
   model?: string;
   conversation_id?: string;
   assistant_message_id?: string;
@@ -74,7 +75,7 @@ async function requireAuthToken(): Promise<string> {
 
 function createWebMediaIdempotencyKey(
   operation: ManagedMediaOperation,
-  operationId = crypto.randomUUID(),
+  operationId: string = crypto.randomUUID(),
 ): string {
   return createManagedMediaIdempotencyKey({
     surface: 'web',

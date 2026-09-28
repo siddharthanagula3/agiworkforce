@@ -176,7 +176,7 @@ function ScheduleTemplateGrid({
           <button
             type="button"
             onClick={() => onPick(template)}
-            className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+            className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-start transition-colors hover:border-foreground/30 hover:bg-muted/40"
           >
             <span className="text-sm font-medium text-foreground">{template.name}</span>
             <span className="text-xs text-muted-foreground">{template.description}</span>
@@ -845,12 +845,12 @@ export function SchedulesPage({
                   aria-controls="schedule-template-gallery"
                   onClick={() => setGalleryOpen((open) => !open)}
                 >
-                  <LayoutTemplate className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <LayoutTemplate className="me-2 h-4 w-4" aria-hidden="true" />
                   Templates
                 </Button>
               ) : null}
               <Button type="button" onClick={openCreate}>
-                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
                 {scope ? 'New task in this project' : 'Create Schedule'}
               </Button>
             </div>
@@ -902,7 +902,7 @@ export function SchedulesPage({
               className="mt-4"
               onClick={() => void loadSchedules()}
             >
-              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+              <RotateCcw className="me-2 h-4 w-4" aria-hidden="true" />
               Retry Loading Schedules
             </Button>
           </section>
@@ -932,7 +932,7 @@ export function SchedulesPage({
               and edits, never a schedule created behind their back.
             */}
             {canCreateSchedules && (
-              <div className="mt-10 text-left">
+              <div className="mt-10 text-start">
                 <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Or start from one of these
                 </h3>
@@ -1120,7 +1120,7 @@ export function SchedulesPage({
                 >
                   {loadingMoreSchedules && (
                     <Loader2
-                      className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                      className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
                       aria-hidden="true"
                     />
                   )}
@@ -1267,7 +1267,7 @@ export function SchedulesPage({
                 className="mt-3"
                 onClick={() => resultTarget && void openResultPanel(resultTarget)}
               >
-                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                <RotateCcw className="me-2 h-4 w-4" aria-hidden="true" />
                 Retry
               </Button>
             </div>
@@ -1293,7 +1293,7 @@ export function SchedulesPage({
               className="mt-auto"
               onClick={() => openChatAboutSchedule(resultTarget)}
             >
-              <MessageSquarePlus className="mr-2 h-4 w-4" aria-hidden="true" />
+              <MessageSquarePlus className="me-2 h-4 w-4" aria-hidden="true" />
               Open chat
             </Button>
           )}
@@ -1325,7 +1325,7 @@ export function SchedulesPage({
                 className="min-w-0 flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground"
               />
               <Button type="button" onClick={() => void copyShareLink()}>
-                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Copy className="me-2 h-4 w-4" aria-hidden="true" />
                 Copy link
               </Button>
             </div>
@@ -1347,7 +1347,7 @@ export function SchedulesPage({
                 onClick={() => void createShareLink(shareTarget)}
               >
                 {shareStatus === 'saving' ? (
-                  <Spinner size="sm" className="mr-2" aria-label="Creating the link" />
+                  <Spinner size="sm" className="me-2" aria-label="Creating the link" />
                 ) : null}
                 Create link
               </Button>

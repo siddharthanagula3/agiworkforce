@@ -41,12 +41,12 @@ export function ChatNotificationBadge({
           exit={{ scale: 0, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
           className={cn(
-            'absolute -top-1 -right-1 flex items-center justify-center',
+            'absolute -top-1 -end-1 flex items-center justify-center',
             'min-w-[18px] h-[18px] rounded-full',
             'text-caption font-bold leading-none',
             'ring-2 ring-card',
             bgClass,
-            label === '' && 'min-w-[10px] h-[10px] -top-0.5 -right-0.5',
+            label === '' && 'min-w-[10px] h-[10px] -top-0.5 -end-0.5',
             className,
           )}
         >

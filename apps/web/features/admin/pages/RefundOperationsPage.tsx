@@ -476,7 +476,7 @@ export default function RefundOperationsPage() {
                                 ? ` · 14-day withdrawal refund ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}${charge.withdrawalProrated ? ', prorated by use' : ', in full: no consent to immediate access'}`
                                 : ' · inside the 14-day withdrawal window'
                               : ''}
-                            <span className="ml-2 font-mono text-xs text-muted-foreground">
+                            <span className="ms-2 font-mono text-xs text-muted-foreground">
                               {charge.id}
                             </span>
                           </span>
@@ -506,7 +506,7 @@ export default function RefundOperationsPage() {
                           {dispute.restoredAt
                             ? ` · restored ${formatDateTime(dispute.restoredAt)}`
                             : ''}
-                          <span className="ml-2 font-mono text-xs text-muted-foreground">
+                          <span className="ms-2 font-mono text-xs text-muted-foreground">
                             {dispute.id}
                           </span>
                         </li>

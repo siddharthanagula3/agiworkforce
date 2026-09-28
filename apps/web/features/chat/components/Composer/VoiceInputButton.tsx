@@ -92,7 +92,7 @@ export function VoiceInputButton({
         >
           {t('composer.voiceUnsupportedHint', { defaultValue: LABEL.unsupportedHint })}
           <span
-            className="absolute left-1/2 top-full block h-0 w-0 -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-border"
+            className="absolute left-1/2 top-full block h-0 w-0 -translate-x-1/2 border-s-4 border-e-4 border-t-4 border-s-transparent border-e-transparent border-t-border"
             aria-hidden="true"
           />
         </div>

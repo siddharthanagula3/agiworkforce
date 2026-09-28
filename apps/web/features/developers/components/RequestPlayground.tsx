@@ -353,7 +353,7 @@ export function RequestPlayground() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={!canSend} aria-busy={sending}>
-              {sending ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
+              {sending ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
               {sending ? 'Sending' : 'Send request'}
             </Button>
             <Button

@@ -20,6 +20,8 @@ export * from './error-taxonomy';
 
 export * from './connector-vocabulary';
 
+export * from './message-block-kinds';
+
 export * from './customModel';
 
 export * from './tool-events';
@@ -396,6 +398,7 @@ export {
 } from './site-policy';
 
 export {
+  MAX_CUSTOM_INSTRUCTIONS_CHARS,
   PREFERRED_FORMATTINGS,
   PREFERRED_LENGTHS,
   PREFERRED_LENGTH_GUIDANCE,
