@@ -180,7 +180,10 @@ set the named variables in production and locally.
   calling the Gmail API with the same grant: `send_draft` sends a draft the
   user has seen (`drafts.send`, which needs `gmail.compose`) and
   `read_attachments` reads a message's attachments as text
-  (`messages.attachments.get`, which needs `gmail.readonly`). The full-mailbox,
+  (`messages.attachments.get`, which needs `gmail.readonly`), and
+  `create_draft_with_attachments` builds a draft with up to five of the
+  account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  The full-mailbox,
   full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
   out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
