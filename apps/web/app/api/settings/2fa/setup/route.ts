@@ -16,6 +16,7 @@ import {
 import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import { requireStepUp } from '@/lib/server/step-up-auth';
+import { requireAuthenticatorEnrollment } from '@/lib/authenticator-enrollment';
 
 async function handleSetup2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -23,6 +24,8 @@ async function handleSetup2FA(request: NextRequest) {
 
   const rateLimitResponse = await withRateLimit(request, '2fa-setup');
   if (rateLimitResponse) return rateLimitResponse;
+
+  requireAuthenticatorEnrollment();
 
   const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
   const { email } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);

@@ -242,9 +242,9 @@
       "ledger": "COMPLIANCE",
       "label": "GDPR: data subject rights",
       "owner": "Legal/compliance",
-      "reviewedOn": "2026-09-27",
-      "asOf": "2026-09-27",
-      "digest": "408e41bd196e962d",
+      "reviewedOn": "2026-09-28",
+      "asOf": "2026-09-28",
+      "digest": "17c2dd8d7b19b0cd",
       "jurisdiction": "European Union, EEA and United Kingdom (GDPR and UK GDPR)",
       "scope": "Every account on the hosted service, wherever the account holder is",
       "implementation": [

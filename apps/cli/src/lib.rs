@@ -157,9 +157,10 @@ pub(crate) mod installs;
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
-pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
-                // policy lives at platform::policy; re-exported here so callers using
-                // `crate::policy::*` continue to resolve unchanged.
+pub mod sdk_io;
+pub(crate) mod sources; // used by OneShotOutputMode::JsonLine in lib.rs
+                        // policy lives at platform::policy; re-exported here so callers using
+                        // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
 // PHASE2: WS transport for a2a, wraps jsonrpc::handle_request over persistent WS connections
@@ -4178,6 +4179,11 @@ pub async fn run_main() -> Result<()> {
                                 serde_json::to_string_pretty(&serde_json::json!({
                                     "response": turn.response, "input_tokens": turn.input_tokens,
                                     "output_tokens": turn.output_tokens,
+                                    "sources": turn.sources.iter().map(|source| serde_json::json!({
+                                        "url": source.url,
+                                        "title": source.title,
+                                        "snippet": source.snippet,
+                                    })).collect::<Vec<_>>(),
                                     "incomplete": turn.incomplete.map(|cause| serde_json::json!({
                                         "kind": cause.kind(),
                                         "message": cause.summary(),

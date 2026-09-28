@@ -6204,6 +6204,13 @@ async fn send_message_with_prompt(
                 });
             }
 
+            if let Some(footer) = crate::sources::render_footer(&turn.sources) {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: footer,
+                });
+            }
+
             if app.config.ui.bell_on_finish == Some(true)
                 && turn_started.elapsed() >= BELL_AFTER_TURN_OF
             {

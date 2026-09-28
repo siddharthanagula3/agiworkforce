@@ -61,17 +61,6 @@ Code: `apps/cli/src/shell_snapshot.rs:10-15`
 
 Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/lib/github-app.ts:941-944`
 
-## S99.29: Host capability manifest.
-
-- Done when: Each host publishes an accurate manifest of what it can do.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Device profiles are published, but Electron hard-codes localModels:false and localMcp:false even though it has a local model chat path. | handler |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:678-695`
-
 ## S99.30: Local-to-cloud handoff coordinator.
 
 - Done when: A coordinator hands local work to the cloud (and back) with admission checks.

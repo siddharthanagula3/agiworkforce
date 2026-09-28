@@ -952,7 +952,7 @@ message -- revise and call `update_plan` again.\n\n",
             callback: self.recorded_approval_callback(),
             require_confirmation: !self.skips_approval(),
         };
-        let (run_result, completion_usage, managed_request_ids, incomplete) = {
+        let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -967,16 +967,18 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let result = models::managed_approvals::with_managed_tool_approval(
-                managed_tool_approval,
-                run_turn(&mut adapter, params, &mut tracker),
-            )
-            .await;
+            let (result, sources) =
+                crate::sources::collect(models::managed_approvals::with_managed_tool_approval(
+                    managed_tool_approval,
+                    run_turn(&mut adapter, params, &mut tracker),
+                ))
+                .await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
                 std::mem::take(&mut adapter.managed_request_ids),
                 adapter.incomplete,
+                sources,
             )
         };
 
@@ -1076,6 +1078,10 @@ message -- revise and call `update_plan` again.\n\n",
                 }
             }
 
+            if self.memory_enabled {
+                self.extract_memory_window(&home, config);
+            }
+
             if self.memory_enabled
                 && crate::memory_pipeline::MemoryPipeline::needs_consolidation(&home)
             {
@@ -1135,7 +1141,40 @@ message -- revise and call `update_plan` again.\n\n",
             via_subscription,
             incomplete,
             managed_request_ids,
+            sources,
         })
+    }
+
+    fn extract_memory_window(&mut self, home: &std::path::Path, config: &CliConfig) {
+        if self.memory_extracted_at.elapsed() < crate::memory_pipeline::MEMORY_WINDOW_INTERVAL {
+            return;
+        }
+        let start = self.memory_extracted_through.min(self.messages.len());
+        let window = self.messages[start..].to_vec();
+        if !window
+            .iter()
+            .any(|message| message.role == "user" && !message.text_content().trim().is_empty())
+        {
+            return;
+        }
+        let window_id = format!("{}.{start}", self.runtime_session_id);
+        self.memory_extracted_through = self.messages.len();
+        self.memory_extracted_at = std::time::Instant::now();
+        let home = home.to_path_buf();
+        let config = config.clone();
+        let provider = self.provider.clone();
+        let model = self.model.clone();
+        let local_only = self.privacy_mode == super::PrivacyMode::Local;
+        let task = tokio::spawn(async move {
+            if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
+                &home, &window_id, &window, &config, &provider, &model, local_only,
+            )
+            .await
+            {
+                narrate!("[memory_pipeline] extraction error: {}", error);
+            }
+        });
+        self.track_memory_consolidation(task);
     }
 
     /// Send a side query (/btw), runs in a temporary fork, doesn't affect main history.

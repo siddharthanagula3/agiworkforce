@@ -22,7 +22,12 @@ describe('host shortcuts', () => {
     const fields = HOST_SHORTCUT_KEYS.map((key) => HOST_SHORTCUT_PREFERENCE_KEYS[key]);
 
     expect(new Set(fields).size).toBe(fields.length);
-    expect(fields).toEqual(['quickAskShortcut', 'screenshotShortcut', 'voiceShortcut']);
+    expect(fields).toEqual([
+      'quickAskShortcut',
+      'screenshotShortcut',
+      'windowShotShortcut',
+      'voiceShortcut',
+    ]);
   });
 
   it('never offers the same chord for two shortcuts', () => {
