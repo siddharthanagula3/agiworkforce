@@ -217,15 +217,14 @@ Code: `apps/web/app/api/connectors/route.ts:522-528`, `apps/web/features/connect
 
 - Done when: A connector can be set to read-only so its write operations are blocked.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Per-tool Allow/Ask/Block exists, but there is no single read-only switch that blocks every write tool of a connector. | ui |
-| desktop | partial | Per-tool Allow/Ask/Block exists, but there is no single read-only switch that blocks every write tool of a connector. | ui |
 | mobile | partial | Per-tool Allow/Ask/Block only, and only for tools that already have a saved permission; no read-only switch. | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:830-836`, `apps/web/features/settings/components/WebSettingsModal.tsx:231-238`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`
 
 ## S55.27: Write-action settings.
 
