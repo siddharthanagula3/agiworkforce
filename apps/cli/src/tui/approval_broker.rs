@@ -173,6 +173,7 @@ pub struct ApprovalRequest {
     pub summary: String,
     pub detail: Vec<String>,
     pub proposal: Option<String>,
+    pub saves_always_allow: bool,
 }
 
 impl ApprovalRequest {
@@ -183,11 +184,17 @@ impl ApprovalRequest {
             summary: summary.into(),
             detail,
             proposal: None,
+            saves_always_allow: false,
         }
     }
 
     pub fn with_proposal(mut self, content: impl Into<String>) -> Self {
         self.proposal = Some(content.into());
+        self
+    }
+
+    pub fn saving_always_allow(mut self, saves: bool) -> Self {
+        self.saves_always_allow = saves;
         self
     }
 }

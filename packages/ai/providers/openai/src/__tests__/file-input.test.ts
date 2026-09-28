@@ -107,22 +107,41 @@ describe('Chat Completions file input', () => {
   });
 
   it.each([
-    ['brief.pdf', 'application/pdf'],
-    ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-    ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  ])('refuses %s by name rather than throwing an opaque TypeError', (filename, mediaType) => {
-    let thrown: unknown;
-    try {
-      translateChatRequest(requestWithFile(filename, mediaType, 'binary'), {
-        compat,
-        provider: 'openai',
-      });
-    } catch (error) {
-      thrown = error;
-    }
+    ['brief.pdf', 'application/pdf', 'deepseek'],
+    [
+      'deck.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'openai',
+    ],
+    ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'openai'],
+  ])(
+    'refuses %s by name rather than throwing an opaque TypeError',
+    (filename, mediaType, provider) => {
+      let thrown: unknown;
+      try {
+        translateChatRequest(requestWithFile(filename, mediaType, 'binary'), {
+          compat,
+          provider,
+        });
+      } catch (error) {
+        thrown = error;
+      }
 
-    expect((thrown as Error).name).toBe(UNSUPPORTED_FILE_INPUT_ERROR_NAME);
-    expect((thrown as Error).message).toContain(filename);
-    expect((thrown as Error).message).toContain(mediaType);
+      expect((thrown as Error).name).toBe(UNSUPPORTED_FILE_INPUT_ERROR_NAME);
+      expect((thrown as Error).message).toContain(filename);
+      expect((thrown as Error).message).toContain(mediaType);
+    },
+  );
+
+  it('sends a PDF to OpenAI as a native file part', () => {
+    const parts = userParts(requestWithFile('brief.pdf', 'application/pdf', 'binary'));
+
+    expect(parts[1]).toEqual({
+      type: 'file',
+      file: {
+        filename: 'brief.pdf',
+        file_data: `data:application/pdf;base64,${base64('binary')}`,
+      },
+    });
   });
 });

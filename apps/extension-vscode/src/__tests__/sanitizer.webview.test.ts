@@ -78,7 +78,11 @@ describe('VSCODE-05, sanitizeHtml (command: URI and javascript: stripping in web
   it('keeps code-block actions as buttons that cannot submit', () => {
     const buttons = parse('```ts\nconst x = 1;\n```').querySelectorAll('button');
 
-    expect([...buttons].map((button) => button.getAttribute('type'))).toEqual(['button', 'button']);
+    expect([...buttons].map((button) => button.getAttribute('type'))).toEqual([
+      'button',
+      'button',
+      'button',
+    ]);
   });
 
   it('escapes raw HTML in model output instead of rendering it', () => {

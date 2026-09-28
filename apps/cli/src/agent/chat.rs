@@ -616,6 +616,27 @@ impl AgentSession {
         }));
     }
 
+    async fn project_conversation(&self) -> Option<String> {
+        if self.privacy_mode != super::PrivacyMode::Managed {
+            return None;
+        }
+        self.cloud_project_id()?;
+        let snapshot = self.cloud_snapshot()?;
+        match crate::cloud::ensure_hosted_conversation(self.privacy_mode, &snapshot).await {
+            Ok(conversation_id) => Some(conversation_id),
+            Err(error) if error.is_boundary() => {
+                crate::cloud::report_boundary_once(&error);
+                None
+            }
+            Err(error) => {
+                self.emit_turn_notice(format!(
+                    "This turn runs without your project's knowledge files: the conversation could not be filed under the project ({error})"
+                ));
+                None
+            }
+        }
+    }
+
     pub(super) fn emit_turn_notice(&self, notice: String) {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
@@ -969,6 +990,7 @@ message -- revise and call `update_plan` again.\n\n",
             callback: self.recorded_approval_callback(),
             require_confirmation: !self.skips_approval(),
         };
+        let project_conversation = self.project_conversation().await;
         let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
@@ -984,12 +1006,14 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let (result, sources) =
-                crate::sources::collect(models::managed_approvals::with_managed_tool_approval(
+            let (result, sources) = crate::sources::collect(crate::cloud::bound_to(
+                project_conversation,
+                models::managed_approvals::with_managed_tool_approval(
                     managed_tool_approval,
                     run_turn(&mut adapter, params, &mut tracker),
-                ))
-                .await;
+                ),
+            ))
+            .await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),

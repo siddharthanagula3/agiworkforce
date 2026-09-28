@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.02: Multiple-image comparison.
 
@@ -28,11 +28,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Up to 5 photos per pick, but cloud images need the upload scanner (UPLOAD_SCAN_WEBHOOK_URL) in production. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.03: Screenshot interpretation.
 
@@ -42,11 +42,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.04: Document-image interpretation.
 
@@ -56,11 +56,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.05: Chart interpretation.
 
@@ -70,11 +70,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.06: Diagram interpretation.
 
@@ -84,11 +84,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.07: Handwriting recognition.
 
@@ -98,11 +98,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.08: Visual text extraction.
 
@@ -112,10 +112,10 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.12: Object counting.
 
@@ -125,11 +125,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.13: Scene comparison.
 
@@ -139,11 +139,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.14: Visual troubleshooting.
 
@@ -153,11 +153,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. | flag-off |
-| desktop | partial | Production refuses every upload unless UPLOAD_SCAN_WEBHOOK_URL is set (or UPLOAD_SCAN_REQUIRED=false); set the scanner in production so attached images reach the model. Desktop shows the hosted web app. | flag-off |
+| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.17: Reference-image selection for another task.
 

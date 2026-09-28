@@ -90,21 +90,6 @@ fn provider_trust_mode(provider: &Provider) -> Option<agiworkforce_model_registr
     }
 }
 
-async fn managed_subscription_tier() -> &'static str {
-    let jwt = crate::tier_cache::load_jwt();
-    let resolution = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        crate::tier_cache::resolve_user_tier(jwt.as_deref()),
-    )
-    .await
-    .unwrap_or_default();
-
-    resolution
-        .cached
-        .map(|cached| cached.tier.managed_auto_routing_tier())
-        .unwrap_or("free")
-}
-
 async fn resolve_trigger_model(
     requested: &str,
     config: &CliConfig,
@@ -142,7 +127,7 @@ async fn resolve_trigger_model(
             requested
         );
     }
-    let tier = managed_subscription_tier().await;
+    let tier = crate::tier_cache::managed_auto_routing_tier().await;
     let route = crate::model_catalog::resolve_auto_model(
         requested,
         agiworkforce_model_registry::RoutingTaskType::General,

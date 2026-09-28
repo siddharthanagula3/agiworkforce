@@ -15,6 +15,7 @@ import {
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
+  type CloudAgentRunSteer,
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
@@ -203,6 +204,7 @@ export interface TasksTransport {
    * button that does nothing is worse than no button.
    */
   setRunArchived?(runId: string, archived: boolean): Promise<CloudAgentRun>;
+  sendAsNewMessage?(conversationId: string, text: string): void;
 }
 
 export interface TasksPageProps {
@@ -386,6 +388,19 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       replaceRun(run);
     },
     [getClient, replaceRun],
+  );
+
+  const sendSteerAsMessage = useCallback(
+    (run: CloudAgentRun | null) => {
+      const conversationId = run?.conversationId;
+      const send = transport.sendAsNewMessage;
+      if (!run || !conversationId || !send) return undefined;
+      return async (steer: CloudAgentRunSteer) => {
+        replaceRun(await getClient().withdrawSteer(run.id, steer.id));
+        send(conversationId, steer.text);
+      };
+    },
+    [getClient, replaceRun, transport.sendAsNewMessage],
   );
 
   const handleResume = useCallback(
@@ -649,6 +664,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   : undefined
               }
               onSteer={(message) => handleSteer(selectedRun.id, message)}
+              onSendSteerAsMessage={sendSteerAsMessage(selectedRun)}
             />
           ) : null}
         </div>
@@ -938,6 +954,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                 : undefined
             }
             onSteer={selectedRun ? (message) => handleSteer(selectedRun.id, message) : undefined}
+            onSendSteerAsMessage={sendSteerAsMessage(selectedRun)}
             {...(transport.shareConversation
               ? {
                   onShare: (conversationId: string) =>

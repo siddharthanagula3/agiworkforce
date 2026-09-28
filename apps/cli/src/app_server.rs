@@ -12,7 +12,7 @@
 
 pub(crate) mod account;
 mod developer_host;
-mod surfaces;
+pub(crate) mod surfaces;
 mod threads;
 
 pub use developer_host::CliDeveloperSessionHost;

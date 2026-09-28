@@ -56,7 +56,9 @@ use task_registry::{
 #[cfg(test)]
 use web::is_private_or_internal_ip;
 use web::{execute_tool_search, execute_web_fetch, execute_web_search};
-pub(crate) use web::{WEB_FETCH_CALL_TIMEOUT, WEB_SEARCH_TIMEOUT};
+pub(crate) use web::{
+    search_key_provider, SEARCH_KEY_PROVIDERS, WEB_FETCH_CALL_TIMEOUT, WEB_SEARCH_TIMEOUT,
+};
 
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
@@ -1642,7 +1644,8 @@ async fn execute_powershell(
                         },
                         "Allow this PowerShell command?",
                         vec![describe_command(&permission_command)],
-                    ),
+                    )
+                    .saving_always_allow(true),
                 )
                 .await
                 {
