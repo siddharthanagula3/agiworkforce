@@ -1177,6 +1177,50 @@ svg + .menuRowLabel {
   line-height: 1.45;
 }
 
+.shareOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: var(--chat-radius-md);
+  cursor: pointer;
+}
+
+.shareOption:hover {
+  background: var(--chat-surface-hover);
+}
+
+.shareLinkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shareWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--chat-warning-border);
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-warning-bg);
+  color: var(--chat-warning-fg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.shareWarning svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.shareActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .textInput,
 .select {
   box-sizing: border-box;
