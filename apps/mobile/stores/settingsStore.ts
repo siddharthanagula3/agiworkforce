@@ -65,6 +65,7 @@ export interface SettingsState {
   speechRate: number;
   speechPitch: number;
   selectedPresetId: string | null;
+  liveVoice: string | null;
   ttsProvider: TTSProvider;
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
@@ -81,6 +82,7 @@ export interface SettingsState {
   setSpeechRate: (rate: number) => void;
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
+  setLiveVoice: (voice: string | null) => void;
   setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
@@ -134,6 +136,7 @@ export const useSettingsStore = create<SettingsState>()(
       speechRate: 1.0,
       speechPitch: 1.0,
       selectedPresetId: null,
+      liveVoice: null,
       ttsProvider: 'system',
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
@@ -159,6 +162,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
+      setLiveVoice: (voice) => set({ liveVoice: voice }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),

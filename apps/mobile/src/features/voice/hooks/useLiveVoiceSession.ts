@@ -4,7 +4,9 @@ import type {
   LiveVoicePendingApproval,
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
+import { isLiveVoice } from '@agiworkforce/types/live-voices';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
 import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
 import {
@@ -145,8 +147,9 @@ export function useLiveVoiceSession({
       }
       applyAudioRoute(activeAudioRoute());
       conversationRef.current = (await ensureRef.current()) ?? conversationRef.current;
+      const chosenVoice = useSettingsStore.getState().liveVoice;
       return module.LiveVoiceSession.start({
-        voice: null,
+        voice: isLiveVoice(chosenVoice) ? chosenVoice : null,
         conversationId: conversationRef.current,
         language: activeSpeechLanguage().split('-')[0]?.trim().toLowerCase() || null,
         callbacks: {
