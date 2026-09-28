@@ -17,10 +17,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/event-budget', () => budget);
 
-import {
-  beginFreeTrialRequest,
-  settleFreeTrialRequest,
-} from '@/lib/services/free-trial-service';
+import { beginFreeTrialRequest, settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 const EMPTY_WINDOWS = {
   five_hour_used_microusd: '0',
@@ -125,7 +122,15 @@ describe('the global event ceiling beside the metered Free windows', () => {
 
     expect(result).toEqual({ ok: false, code: 'budget_reached', resetAt: null });
     const [release] = settlementWrites();
-    expect(release?.[1]).toEqual(['user-1', 'r3', 0, 'failed', expect.any(String)]);
+    expect(release?.[1]).toEqual([
+      'user-1',
+      'r3',
+      0,
+      'failed',
+      expect.any(String),
+      'failed',
+      'free_trial_token_budget_reached',
+    ]);
   });
 
   it('never asks the event ceiling for a turn the Free windows refused', async () => {

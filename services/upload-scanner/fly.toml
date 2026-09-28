@@ -1,0 +1,44 @@
+app = 'agiworkforce-upload-scanner'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+kill_timeout = 20
+
+[build]
+
+[deploy]
+  strategy = 'bluegreen'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 10
+    hard_limit = 25
+
+  [[http_service.checks]]
+    grace_period = '180s'
+    interval = '30s'
+    timeout = '5s'
+    method = 'GET'
+    path = '/health'
+
+[checks]
+  [checks.signatures]
+    type = 'http'
+    port = 8080
+    grace_period = '180s'
+    interval = '10m'
+    timeout = '5s'
+    method = 'get'
+    path = '/health/signatures'
+
+[[vm]]
+  memory = '4gb'
+  cpu_kind = 'shared'
+  cpus = 2
