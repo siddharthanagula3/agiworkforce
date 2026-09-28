@@ -68,17 +68,21 @@ export function resolveUploadSourceSurface(request: NextRequest): SyncedAppSurfa
 
 async function isTemporaryChatUpload(
   db: Pick<DatabaseAdapter, 'query'>,
-  userId: string,
+  scope: { userId: string; organizationId: string | null },
   input: { conversationId?: string | undefined; temporary?: boolean | undefined },
 ): Promise<boolean> {
+  const { userId, organizationId } = scope;
   if (!input.conversationId) return input.temporary === true;
   try {
     const [row] = await db.query<{ is_temporary: boolean }>(
       `select is_temporary
          from web_conversations
-        where id = $1 and user_id = $2 and deleted_at is null
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3
+          and deleted_at is null
         limit 1`,
-      [input.conversationId, userId],
+      [input.conversationId, userId, organizationId],
     );
     return row ? row.is_temporary : input.temporary === true;
   } catch (error) {
@@ -166,9 +170,12 @@ export async function findCompletedChatAttachment(
 }
 
 export async function resolveTemporaryChatUpload(
-  input: Pick<ChatAttachmentCompletionInput, 'db' | 'userId' | 'conversationId' | 'temporary'>,
+  input: Pick<
+    ChatAttachmentCompletionInput,
+    'db' | 'userId' | 'organizationId' | 'conversationId' | 'temporary'
+  >,
 ): Promise<boolean> {
-  return isTemporaryChatUpload(input.db, input.userId, {
+  return isTemporaryChatUpload(input.db, input, {
     conversationId: input.conversationId,
     temporary: input.temporary,
   });

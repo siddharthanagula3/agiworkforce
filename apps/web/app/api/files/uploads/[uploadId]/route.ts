@@ -195,7 +195,7 @@ async function finishedUpload(
   }
   const temporaryChat = await resolveTemporaryChatUpload({
     db,
-    userId: scope.userId,
+    ...scope,
     conversationId: completion.conversationId,
     temporary: completion.temporary,
   });
