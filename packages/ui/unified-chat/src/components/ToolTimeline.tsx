@@ -152,9 +152,7 @@ export function ToolTimeline({
         <Wrench className="w-3 h-3" />
         <span>
           {hasRunning ? (
-            <span className="text-violet-700 dark:text-violet-400">
-              {formatRunningSummary(entries)}
-            </span>
+            <span className="text-info-text">{formatRunningSummary(entries)}</span>
           ) : (
             <>
               {plural('counts.usedTools', entries.length, {
@@ -196,13 +194,11 @@ export function ToolTimeline({
                   return (
                     <div
                       key={group.parallelGroup}
-                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5"
+                      className="border-l-2 border-info-fill/30 pl-2 py-0.5 space-y-1.5"
                     >
                       <div className="flex items-center gap-1 mb-0.5">
-                        <GitBranch className="w-2.5 h-2.5 text-blue-700 dark:text-blue-400 shrink-0" />
-                        <span className="text-caption text-blue-700 dark:text-blue-400 font-mono">
-                          parallel
-                        </span>
+                        <GitBranch className="w-2.5 h-2.5 text-info-text shrink-0" />
+                        <span className="text-caption text-info-text font-mono">parallel</span>
                       </div>
                       {group.entries.map((entry) => (
                         <ToolCallCard

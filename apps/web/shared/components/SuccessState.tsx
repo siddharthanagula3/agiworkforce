@@ -53,7 +53,7 @@ export function SuccessState({
         <button
           type="button"
           onClick={action.onClick}
-          className="flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
         >
           {action.icon ? <action.icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
           {action.label}
