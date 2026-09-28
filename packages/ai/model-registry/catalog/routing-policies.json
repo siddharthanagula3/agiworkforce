@@ -688,6 +688,9 @@
       "voice_rewrite": {
         "modelKey": "family:google/gemini-flash-lite"
       },
+      "voice_speech": {
+        "modelKey": "family:openai/tts-fast"
+      },
       "general_balanced_pro": {
         "providerTask": {
           "provider": "openai",
