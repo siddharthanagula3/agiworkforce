@@ -168,6 +168,7 @@ export interface TasksTransport {
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
+  shareConversation?(conversationId: string): void;
   /**
    * Shelve a finished run, or bring one back. Optional because a surface that
    * cannot reach the archive route must not paint the control: an Archive
@@ -820,6 +821,12 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                 ? (goal) => transport.rerunWork?.(goal)
                 : undefined
             }
+            {...(transport.shareConversation
+              ? {
+                  onShare: (conversationId: string) =>
+                    transport.shareConversation?.(conversationId),
+                }
+              : {})}
           />
         </div>
       )}
