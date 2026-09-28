@@ -9468,6 +9468,11 @@ function buildUI(): void {
   const projectsDrawer: ProjectsDrawerAPI = buildProjectsDrawerSection({
     getActiveProject: () => _ctx.activeProject,
     setActiveProject: (project) => selectActiveProject(project),
+    openConversation: (conversationId) => {
+      void chrome.tabs.create({
+        url: `${FREE_TRIAL_GATEWAY}/chat/${encodeURIComponent(conversationId)}?from=chrome-extension`,
+      });
+    },
   });
   drawerGroupBody(t('spMenuProjects'), () => {
     void projectsDrawer.refresh();
