@@ -159,17 +159,6 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4477-4477`
 
-## S76.24: Structured JSON output.
-
-- Done when: The registry records native structured JSON output per model and JSON requests use it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | json_object is enforced by a system directive for every model; the registry structuredOutput flag only sets a task-family quality floor and is never used to pick native JSON mode. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:386-389`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `packages/ai/model-registry/catalog/routing-policies.json:358-359`
-
 ## S76.28: Context-window limit.
 
 - Done when: The registry records each model context window; the product shows it and trims or refuses over-long requests accordingly.
