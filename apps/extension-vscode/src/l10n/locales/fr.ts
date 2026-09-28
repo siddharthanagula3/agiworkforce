@@ -471,6 +471,20 @@ const fr = {
   'webview.sources_one': '{count} source',
   'webview.sources_many': '{count} de sources',
   'webview.sources_other': '{count} sources',
+  'sessionSync.continuedIn':
+    "Cette session s'est poursuivie dans {client}. Ses messages les plus récents sont affichés ici.",
+  'sessionSync.continuedElsewhere':
+    "Cette session s'est poursuivie dans une autre application. Ses messages les plus récents sont affichés ici.",
+  'sessionSync.heldBy': '{client} utilise cette session.',
+  'sessionSync.takeOverDetail':
+    "Prenez-en le contrôle pour envoyer votre message d'ici. Si {client} répond encore, arrêtez-le d'abord : deux applications qui écrivent en même temps laissent deux copies de la session.",
+  'sessionSync.takeOver': 'Prendre le contrôle et envoyer',
+  'sessionSync.notSent':
+    "Non envoyé : {client} utilise cette session. Renvoyez pour en prendre le contrôle d'ici.",
+  'sessionSync.takeOverFailed':
+    'Impossible de prendre le contrôle de cette session. Renvoyez pour réessayer.',
+  'sessionSync.stopBeforeTerminal':
+    'Arrêtez la réponse en cours avant de poursuivre cette session dans le terminal.',
 };
 
 export default fr;

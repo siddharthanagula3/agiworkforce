@@ -3988,6 +3988,33 @@ export function getWebviewContent(
       if (el) el.remove();
     }
 
+    function renderTranscript(conversation) {
+      messagesEl.innerHTML = '';
+      activePlanCard = null;
+      toolCallStack = null;
+      toolCallList = null;
+      activitySummaryButton = null;
+      activityIcon = null;
+      activityMeta = null;
+      toolCallMap = {};
+      progressMap = {};
+      currentAssistantEl = null;
+      accumulatedContent = '';
+      for (var historyIndex = 0; historyIndex < conversation.messages.length; historyIndex++) {
+        var historyMessage = conversation.messages[historyIndex];
+        if (!historyMessage) continue;
+        if (historyMessage.role === 'assistant') {
+          var assistantHistoryEl = addMessage('assistant', '');
+          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          bindCodeBlockActions(assistantHistoryEl);
+          appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+        } else if (historyMessage.role === 'user') {
+          addMessage('user', historyMessage.text || '');
+        }
+      }
+      if (conversation.plan) upsertPlanCard(conversation.plan);
+    }
+
     function setStreaming(value) {
       streaming = value;
       if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
@@ -4542,6 +4569,9 @@ export function getWebviewContent(
 
     // ── Event listeners ───────────────────────────────────────────────────────
     sendBtn.addEventListener('click', function() { sendMessage(); });
+    window.addEventListener('focus', function() {
+      vscode.postMessage({ type: 'viewFocused' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -6062,37 +6092,14 @@ export function getWebviewContent(
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
         approvalCards = {};
-        messagesEl.innerHTML = '';
-        activePlanCard = null;
-        toolCallStack = null;
-        toolCallList = null;
-        activitySummaryButton = null;
-        activityIcon = null;
-        activityMeta = null;
-        toolCallMap = {};
-        progressMap = {};
-        currentAssistantEl = null;
         activeQueuedClientMessageId = null;
-        accumulatedContent = '';
         removeTyping();
         setStreaming(false);
         showFollowUpStatus('', '', false);
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
-        for (var historyIndex = 0; historyIndex < msg.payload.messages.length; historyIndex++) {
-          var historyMessage = msg.payload.messages[historyIndex];
-          if (!historyMessage) continue;
-          if (historyMessage.role === 'assistant') {
-            var assistantHistoryEl = addMessage('assistant', '');
-            assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
-            bindCodeBlockActions(assistantHistoryEl);
-            appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
-          } else if (historyMessage.role === 'user') {
-            addMessage('user', historyMessage.text || '');
-          }
-        }
-        if (msg.payload.plan) upsertPlanCard(msg.payload.plan);
+        renderTranscript(msg.payload);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -6101,6 +6108,24 @@ export function getWebviewContent(
         } else {
           emptyStateEl = null;
         }
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      else if (msg.type === 'transcriptRefreshed') {
+        var undelivered = Array.prototype.filter.call(
+          messagesEl.querySelectorAll('.message.user[data-client-message-id]'),
+          function(message) {
+            var state = message.getAttribute('data-delivery-state');
+            return state === 'sending' || state === 'queued';
+          }
+        );
+        renderTranscript(msg.payload.conversation);
+        emptyStateEl = null;
+        addMessage('system', msg.payload.notice);
+        for (var undeliveredIndex = 0; undeliveredIndex < undelivered.length; undeliveredIndex++) {
+          messagesEl.appendChild(undelivered[undeliveredIndex]);
+        }
+        if (streaming) showTyping();
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 

@@ -357,6 +357,19 @@ const hi = {
   'checkpoints.filesRestored_other': 'AGI Workforce: {count} फ़ाइलें चेकपॉइंट पर वापस लाई गईं।',
   'webview.sources_one': '{count} स्रोत',
   'webview.sources_other': '{count} स्रोत',
+  'sessionSync.continuedIn': 'यह सत्र {client} में जारी रहा। इसके नवीनतम संदेश यहाँ दिखाए गए हैं।',
+  'sessionSync.continuedElsewhere':
+    'यह सत्र किसी दूसरे ऐप में जारी रहा। इसके नवीनतम संदेश यहाँ दिखाए गए हैं।',
+  'sessionSync.heldBy': '{client} इस सत्र का उपयोग कर रहा है।',
+  'sessionSync.takeOverDetail':
+    'अपना संदेश यहाँ से भेजने के लिए इसे अपने नियंत्रण में लें। अगर {client} अभी भी जवाब दे रहा है, तो पहले उसे वहाँ रोकें: दो ऐप एक साथ लिखें तो सत्र की दो प्रतियाँ बन जाती हैं।',
+  'sessionSync.takeOver': 'नियंत्रण लें और भेजें',
+  'sessionSync.notSent':
+    'नहीं भेजा गया: {client} इस सत्र का उपयोग कर रहा है। इसे यहाँ से नियंत्रण में लेने के लिए फिर से भेजें।',
+  'sessionSync.takeOverFailed':
+    'इस सत्र का नियंत्रण नहीं लिया जा सका। दोबारा कोशिश करने के लिए फिर से भेजें।',
+  'sessionSync.stopBeforeTerminal':
+    'इस सत्र को टर्मिनल में जारी रखने से पहले चल रही प्रतिक्रिया रोकें।',
 };
 
 export default hi;

@@ -258,6 +258,15 @@ const zh = {
   'checkpoints.skippedFiles_other': 'AGI Workforce：有 {count} 个文件无法还原：{files}',
   'checkpoints.filesRestored_other': 'AGI Workforce：已将 {count} 个文件还原到检查点。',
   'webview.sources_other': '{count} 个来源',
+  'sessionSync.continuedIn': '此会话已在 {client} 中继续。这里显示了它的最新消息。',
+  'sessionSync.continuedElsewhere': '此会话已在其他应用中继续。这里显示了它的最新消息。',
+  'sessionSync.heldBy': '{client} 正在使用此会话。',
+  'sessionSync.takeOverDetail':
+    '接管后即可从这里发送消息。如果 {client} 仍在回复，请先在那里停止它：两个应用同时写入会留下两份会话副本。',
+  'sessionSync.takeOver': '接管并发送',
+  'sessionSync.notSent': '未发送：{client} 正在使用此会话。再次发送即可从这里接管。',
+  'sessionSync.takeOverFailed': '无法接管此会话。请再次发送以重试。',
+  'sessionSync.stopBeforeTerminal': '请先停止当前回复，然后再在终端中继续此会话。',
 };
 
 export default zh;
