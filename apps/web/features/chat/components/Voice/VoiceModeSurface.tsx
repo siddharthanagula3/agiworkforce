@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
-import { ApprovalCard, Spinner } from '@agiworkforce/ui';
+import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
 
 import { cn } from '@shared/lib/utils';
@@ -38,6 +38,11 @@ const LABEL = {
   toolResults: 'What the actions returned',
   toolFailed: 'Did not complete',
   openFile: 'Open',
+  rejoinTitle: 'This chat already has an open voice session',
+  rejoinBody:
+    'Continue with the voice, language and pace it used, or start with your current settings.',
+  rejoin: 'Continue that session',
+  startFresh: 'Use my settings',
   pause: 'Pause',
   resume: 'Resume',
   pausedHint:
@@ -275,6 +280,38 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {session.rejoinOffer ? (
+        <div
+          role="dialog"
+          aria-labelledby="voice-rejoin-title"
+          data-testid="voice-rejoin-offer"
+          className="flex w-full max-w-md flex-col gap-2 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-4 text-sm"
+        >
+          <p id="voice-rejoin-title" className="font-medium text-[var(--chat-text-primary)]">
+            {LABEL.rejoinTitle}
+          </p>
+          <p className="text-[var(--chat-text-secondary)]">
+            Started{' '}
+            {new Date(session.rejoinOffer.startedAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            })}{' '}
+            on {session.rejoinOffer.surface}. {LABEL.rejoinBody}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" className="min-h-11" onClick={() => session.answerRejoin(true)}>
+              {LABEL.rejoin}
+            </Button>
+            <button
+              type="button"
+              onClick={() => session.answerRejoin(false)}
+              className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              {LABEL.startFresh}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {session.toolActivity.length > 0 ? (
         <div data-testid="voice-tool-activity" className="flex w-full max-w-md flex-col gap-2">
           {session.toolActivity.map((activity) => (

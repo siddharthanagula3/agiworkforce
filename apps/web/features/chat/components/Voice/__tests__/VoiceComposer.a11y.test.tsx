@@ -44,6 +44,8 @@ function session(overrides: Record<string, unknown> = {}) {
     pause: vi.fn(),
     resume: vi.fn(),
     paused: false,
+    rejoinOffer: null,
+    answerRejoin: vi.fn(),
     decideToolApproval: vi.fn(),
     reconnecting: false,
     reconnectAttempt: 0,
