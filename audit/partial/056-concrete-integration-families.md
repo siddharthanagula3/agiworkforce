@@ -46,13 +46,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| desktop | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| mobile | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
+| web | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
+| desktop | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
+| mobile | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
 
 ## S56.04: Email sending.
 
