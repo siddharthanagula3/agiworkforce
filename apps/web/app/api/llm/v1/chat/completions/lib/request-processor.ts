@@ -366,6 +366,12 @@ import {
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { CHAT_OUTPUT_FORMATS, chatOutputFormatInstruction } from '@/lib/chat-output-format';
+import {
+  forcedFunctionToolChoice,
+  hasGenericFunctionTool,
+  modelAcceptsForcedToolChoice,
+} from '@/lib/required-tool-call';
 import { buildCapabilityPreamble } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
@@ -580,6 +586,7 @@ export const ChatCompletionRequestSchema = z
       .optional(),
     code_execution: z.boolean().optional(),
     office_creation: z.boolean().optional(),
+    office_format: z.enum(CHAT_OUTPUT_FORMATS).optional(),
     /**
      * Connector ids the client has switched off for THIS conversation. The
      * tool catalog builder drops any tool whose server id is in this set, so
@@ -916,7 +923,7 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
   if (!request.office_creation) return;
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
-    createManagedOfficeFileToolDefinition(),
+    createManagedOfficeFileToolDefinition(request.office_format),
   ];
 }
 
@@ -5167,6 +5174,23 @@ export async function processRequest(
       tool_call_id: undefined,
     });
   }
+  const officeOutputFormat = chatRequest.office_creation ? chatRequest.office_format : undefined;
+  const officeOutputToolChoice =
+    officeOutputFormat &&
+    chatRequest.tool_choice === undefined &&
+    modelAcceptsForcedToolChoice(chatRequest.model) &&
+    hasGenericFunctionTool(resolvedTools, MANAGED_OFFICE_FILE_TOOL_NAME)
+      ? forcedFunctionToolChoice(MANAGED_OFFICE_FILE_TOOL_NAME)
+      : undefined;
+  if (officeOutputFormat) {
+    internalMessages.unshift({
+      role: 'system',
+      content: chatOutputFormatInstruction(officeOutputFormat),
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  }
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest = {
     model: chatRequest.model,
@@ -5179,6 +5203,7 @@ export async function processRequest(
       executionEnforcement.toolChoice ??
       placesEnforcement.toolChoice ??
       searchEnforcement.toolChoice ??
+      officeOutputToolChoice ??
       chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
