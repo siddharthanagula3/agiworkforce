@@ -125,7 +125,7 @@ export function ModelCatalogueBrowser({
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <header>
-        <h1 className="text-xl font-medium text-foreground">Models</h1>
+        <h1 className="text-h2 text-foreground">Models</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {`${entries.length} models from ${developers.length} developers${planLabel ? ` on ${planLabel}` : ''}. Every model runs on interchangeable providers, so you choose the model, not the supplier.`}
         </p>
@@ -134,7 +134,7 @@ export function ModelCatalogueBrowser({
       <section className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4">
         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium text-foreground">{autoProfile.label}</h2>
+          <h2 className="text-h5 text-foreground">{autoProfile.label}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{autoProfile.description}</p>
         </div>
         <button

@@ -90,7 +90,7 @@ export function WebPushOptIn() {
       role="region"
       aria-label="Run notifications"
     >
-      <div className="relative rounded-lg border bg-card p-4 shadow-2xl">
+      <div className="relative rounded-lg border bg-card p-4 shadow-e4">
         <button
           onClick={dismiss}
           className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"

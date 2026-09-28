@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
+import { ApprovalHistoryPanel } from '../components/ApprovalHistoryPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import {
   BrowserPairingSection,
@@ -31,7 +32,7 @@ export function CapabilitiesSection() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Capabilities</h2>
+        <h2 className="text-h2 text-foreground">Capabilities</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>
@@ -72,9 +73,7 @@ export function CapabilitiesSection() {
       </div>
 
       <section className="flex flex-col gap-4">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Code execution
-        </h3>
+        <h3 className="text-h5 uppercase tracking-wider text-muted-foreground">Code execution</h3>
 
         {row(
           'Cloud code execution and file creation',
@@ -93,6 +92,8 @@ export function CapabilitiesSection() {
       <RemoteControlSection />
 
       <ToolApprovalDefaultsPanel />
+
+      <ApprovalHistoryPanel />
 
       <LockdownModePanel />
 

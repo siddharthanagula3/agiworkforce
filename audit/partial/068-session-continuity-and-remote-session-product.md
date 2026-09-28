@@ -77,16 +77,15 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-376`, `apps/extension-vscod
 
 - Done when: Every client runs the session with the same model and the same instruction files.
 - Wave: 2
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud sessions use the web account's model choice and a fixed prompt with no repository instructions; no other client shares them. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
+| web | partial | Cloud turns now load AGENTS.md, CLAUDE.md and .agiworkforce/instructions.md like local runtimes (9af9750a2). Needs AGI_E2B_EXECUTION on in production (lead switches on at run end). | flag-off |
 | desktop | partial | The thread keeps its model and each runtime loads the folder's instruction files, but each client can switch the model per turn and cloud sessions are not covered. | surface-only |
-| mobile | partial | Phone sends guidance only; model and instructions are whatever the desktop runtime uses. | surface-only |
 | cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| vscode | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:472-472`, `apps/web/features/code/components/LocalSessionPanel.tsx:125-125`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
+Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib/services/cloud-code-agent-loop.ts:172-172`, `apps/web/features/code/components/LocalSessionPanel.tsx:125-125`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`
 
 ## S68.07: Same task plan and checkpoints.
 
@@ -107,14 +106,13 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-375`, `apps/extension-vscod
 
 - Done when: An approval pending in the session shows on every attached client and can be answered from any of them.
 - Wave: 2
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud approvals persist server-side and reappear after reload in the web app, but no other client sees them. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
 | desktop | partial | Desktop relays a local session's pending approvals to the paired phone and either side can answer; CLI and VS Code processes keep approvals to themselves. | surface-only |
-| mobile | partial | Answers the paired desktop's pending approvals; approvals raised in CLI or VS Code processes never reach the phone. | surface-only |
 | cli | partial | Approvals live in the process running the turn; another client on the same thread does not see them. | handler |
-| vscode | partial | Shows approvals for turns it runs; not shared with other clients. | handler |
 
 Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/desktop/electron/remote/codeRemoteController.ts:51-51`, `apps/web/features/code/components/LocalSessionPanel.tsx:230-230`
 
@@ -122,16 +120,15 @@ Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/cod
 
 - Done when: Tool activity of a running turn streams to every attached client.
 - Wave: 2
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud tool steps show only in the web app. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
 | desktop | partial | Desktop forwards a local turn's tool activity to the phone; CLI and VS Code turns stream only to their own window. | surface-only |
-| mobile | partial | Shows the paired desktop's in-flight tools only. | surface-only |
 | cli | partial | Tool cells stream only in the terminal running the turn. | handler |
-| vscode | partial | Tool rows stream only for turns this window runs. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`, `apps/web/features/code/components/LocalSessionPanel.tsx:229-229`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`
+Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`, `apps/web/features/code/components/LocalSessionPanel.tsx:229-229`, `apps/cli/src/tui/tui_app.rs:4865-4870`
 
 ## S68.10: Read-only session attachment.
 
@@ -152,16 +149,16 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:57-60`,
 
 - Done when: A client attaches to a running session with full control: send turns, stop, approve.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The auditor's terms (Take control\|attachSession\|thread/attach) can never match the cloud implementation, and the same auditor credited the mechanism elsewhere (S68.08 web: approvals persist server-side and reappear on reload; S68.15 web: the rail reopens a running session). Any signed-in browser reopens a running cloud session from the rail (CodeRail.tsx:292), re-reads its pending approvals so a half-finished turn stays answerable (CloudCodePage.tsx:362-369), and can stop the turn (l.1212) and send the next one. That is attach-with-control for cloud sessions, capped like the sibling cells: partial, miss ['flag-off','surface-only'], remaining: 'Cloud sessions can be reopened with full control from any browser, but only the web client can attach and creation needs AGI_E2B_EXECUTION=1 (gate.ts:22-27).' |  |
 | desktop | partial | Desktop is the host the phone controls; it cannot itself attach to a turn running in CLI or VS Code. | surface-only |
-| mobile | partial | Full control of desktop-hosted sessions only (steer, stop, approve); cannot attach to CLI or VS Code turns. | surface-only |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
+| vscode | partial | VS Code can now stop and approve a cloud session turn; it still cannot attach to a turn running in another local CLI process. | handler |
 
-Code: `apps/desktop/electron/remote/codeRemoteController.ts:267-272`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:207-207`, `apps/mobile/src/features/companion/remote-code/service.ts:52-58`
+Code: `apps/desktop/electron/remote/codeRemoteController.ts:267-272`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:273-273`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:204-204`
 
 ## S68.12: Execution-owner indicator.
 
@@ -182,14 +179,13 @@ Code: `crates/agiworkforce-protocol/src/developer_session.rs:438-448`
 
 - Done when: The user hands control of a session from one client to another explicitly.
 - Wave: 3
+- Already works on: web, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
 | desktop | partial | Only desktop-to-phone (Remote Control); no handoff to or from VS Code/CLI. | surface-only |
 | mobile | partial | Takes over steering of a desktop session; cannot hand work back or to other clients. | surface-only |
 | cli | partial | agi resume --cloud <id> explicitly pulls an account conversation from web or mobile into the CLI, but no CLI command hands a running local thread to another client. | ui |
-| vscode | partial | Continue CLI Session Here admits a local handoff of the newest CLI thread in this folder; Continue in Terminal resumes it in the CLI. No cloud or phone handoff. | surface-only |
 
 Code: `apps/desktop/electron/runtime/dispatcher.ts:874-875`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/mobile/src/features/companion/remote-code/service.ts:41-50`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:230-230`
 
@@ -208,7 +204,7 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 ## S68.16: Move work to cloud through an explicit handoff.
 
 - Done when: The user explicitly hands a local session over to cloud execution, seeing what moves.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -216,25 +212,25 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
-| vscode | partial | The extension only issues local handoffs (handOffThread(..., 'local')); nothing moves a session to cloud execution. | ui, handler |
+| vscode | partial | Continue in the Cloud reviews what moves, creates an AGI Code session on the pushed branch within CLOUD_CODE_LIMITS and runs the first turn (835ae2a5d, 23c3054ad). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/core/commandSetup.ts:479-479`
+Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/extension.ts:198-198`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:129-129`
 
 ## S68.17: Bring cloud results back to local workspace.
 
 - Done when: Results of cloud work come back into the user's local workspace.
 - Wave: 3
-- Already works on: web, vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
 ## S68.18: File/environment transfer review.
 
 - Done when: Before a transfer, the user reviews which files, context and environment will move.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -242,9 +238,8 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:39
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The cloud-continuation draft lists included/omitted messages and the destination for review before sending; files and environment are never listed. | ui |
-| vscode | partial | Handoff admission refuses unsafe handoffs and names why, but shows no review of what moves. | ui |
 
-Code: `apps/cli/src/claude_parity.rs:428-436`, `apps/extension-vscode/src/core/commandSetup.ts:480-492`
+Code: `apps/cli/src/claude_parity.rs:428-436`
 
 ## S68.19: Remote-machine discovery.
 
@@ -335,15 +330,14 @@ Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:52-52`, `app
 
 - Done when: After a dropped connection, the client reconnects and resumes the same session state.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Auto-reconnect with countdown and manual retry; the code view re-attaches on open. Only for the paired desktop. | surface-only |
 | cli | partial | The app-server advertises reconnect support for its clients; a restarted CLI resumes via agi resume. | surface-only |
 | vscode | partial | Restart Local Runtime reconnects to the runtime and the thread can be reopened from history. | surface-only |
 
-Code: `apps/mobile/app/(app)/companion/index.tsx:242-242`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`
 
 ## S68.27: Session export.
 
@@ -394,13 +388,11 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 
 - Done when: Activity in a session (approval needed, turn done, failure) notifies the user on their other clients.
 - Wave: 3
+- Already works on: desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code turns now notify the browser and the in-app feed when they need approval, finish or fail, and a tap opens /code/<id> (partials/sessions 8d2590e2d). Still open: local sessions on desktop, the CLI and VS Code send no activity notifications. | handler |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Cloud Code turns now push to the phone when they need approval, finish or fail, and a tap opens the session (partials/sessions 8d2590e2d). Still open: local sessions on desktop, the CLI and VS Code send no activity notifications. | handler |
+| web | partial | Cloud and desktop-local sessions notify; CLI and VS Code local sessions send no activity yet. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/agent-notification-service.ts:305-305`, `apps/web/lib/services/agent-notification-service.ts:321-321`, `apps/web/public/sw.js:54-54`, `apps/web/features/notifications/lib/notification-target.ts:31-31`
+Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`

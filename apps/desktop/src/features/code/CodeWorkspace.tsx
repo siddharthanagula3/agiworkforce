@@ -363,7 +363,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
       <div className="fixed inset-0 z-40" onContextMenu={(e) => e.preventDefault()}>
         <div
           ref={menuRef}
-          className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
+          className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-e3"
           style={{ left: tabMenu.x, top: tabMenu.y }}
         >
           <button
@@ -652,7 +652,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         >
           <DialogContent className="sm:max-w-lg space-y-4">
             <div className="min-w-0 space-y-1">
-              <h2 className="text-lg font-semibold">Unsaved changes</h2>
+              <h2 className="text-h3">Unsaved changes</h2>
               {/*
                * The path is interpolated into the sentence and file paths have no
                * break opportunities, so a long absolute path formed one unbreakable

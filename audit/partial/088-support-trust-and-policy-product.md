@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | In-product links go to general pages (Settings > Help, /privacy); no feature screen links to the help article that explains it. | ui |
-| desktop | partial | In-product links go to general pages (Settings > Help, /privacy); no feature screen links to the help article that explains it. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Permissions, configuration and custom-instructions screens link to /docs?topic=..., but the docs page ignores the topic parameter and opens the general index. | states |
 | chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
-Code: `apps/web/features/settings/sections/HelpSection.tsx:31-36`, `apps/web/features/chat/components/MicrophonePrivacyNotice.tsx:72-76`, `apps/web/app/api/help/search/route.ts:47-60`, `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`
+Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:906-910`, `apps/extension/src/side_panel.ts:5589-5592`, `apps/extension/src/side_panel.ts:7140-7149`
 
 ## S88.02: Searchable help center.
 
@@ -36,14 +35,11 @@ Code: `apps/web/features/settings/sections/HelpSection.tsx:31-36`, `apps/web/fea
 
 - Done when: A signed-in user can reach support from the product, describe a problem, and follow the replies.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile only opens a mail draft to support@agiworkforce.com; there is no in-app ticket, reply thread or status. | handler |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/about.tsx:287-289`
 
 ## S88.04: Report-a-bug flow.
 
@@ -90,14 +86,13 @@ Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/c
 
 - Done when: A user can produce a diagnostic bundle, see what it contains, and choose to share it with support.
 - Wave: 2
-- Already works on: desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Web collects build, platform and recent errors and attaches them to a ticket automatically, but never shows them to the user or lets them download the bundle. | ui |
 | cli | partial | The CLI has a redacted support-diagnostics builder, but nothing calls it; users only get the doctor report. | mount |
 
-Code: `apps/web/features/support/lib/ticket-client.ts:96-104`, `apps/web/features/support/components/SupportTicketsPanel.tsx:84-93`, `apps/cli/src/diagnostics_bundle.rs:52-67`
+Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 
 ## S88.10: Service-status integration.
 
@@ -116,49 +111,42 @@ Code: `apps/web/features/support/lib/ticket-client.ts:96-104`, `apps/web/feature
 
 - Done when: During an incident, users see a notice in the product describing the problem and its status.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The status page shows live health and the model picker marks a degraded provider, but no incident message or banner is shown in the product during an outage. | ui |
-| desktop | partial | The status page shows live health and the model picker marks a degraded provider, but no incident message or banner is shown in the product during an outage. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:406-412`, `apps/web/app/status/page.tsx:65-76`
 
 ## S88.12: Maintenance notices.
 
 - Done when: Users are told about planned maintenance before and during it, inside the product.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A static /maintenance page exists, but nothing routes users to it and nothing announces planned maintenance in advance. | mount |
-| desktop | partial | A static /maintenance page exists, but nothing routes users to it and nothing announces planned maintenance in advance. | mount |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/maintenance/page.tsx:6-11`
 
 ## S88.13: Release-update education.
 
 - Done when: After an update, users learn what changed (what's new, release notes) from inside the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Release notes are a separate page reached from Settings > Help; nothing in the product tells a user what changed after an update. | ui |
-| desktop | partial | Release notes are a separate page reached from Settings > Help; nothing in the product tells a user what changed after an update. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /release-notes and /changelog only print the running version and a link to repository releases; no notes are shown. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/HelpSection.tsx:49-54`, `apps/web/app/release-notes/page.tsx:18-20`, `apps/cli/src/claude_parity.rs:194-196`, `apps/cli/src/claude_parity.rs:1138-1148`
+Code: `apps/cli/src/claude_parity.rs:194-196`, `apps/cli/src/claude_parity.rs:1138-1148`
 
 ## S88.14: Model-retirement notice.
 
@@ -215,18 +203,6 @@ Code: `apps/web/features/settings/sections/PrivacySection.tsx:801-806`, `apps/we
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.19: Copyright/impersonation reporting.
-
-- Done when: Anyone can report copyright infringement or impersonation in hosted content and get a reference.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-| desktop | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-
-Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/app/api/copyright-notice/route.ts:147-159`
-
 ## S88.20: Safety-warning appeal.
 
 - Done when: When a response is refused for safety reasons, the user can appeal or report the refusal from that notice.
@@ -244,33 +220,27 @@ Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/a
 
 - Done when: A suspended user is told why and can appeal from where they are blocked, with a way to follow the appeal.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
-| desktop | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/auth/AuthNoticeStep.tsx:59-64`, `apps/web/lib/api-auth.ts:144-150`
 
 ## S88.23: Accessibility feedback.
 
 - Done when: Users can report accessibility barriers through a dedicated, accessible channel from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Accessibility barriers can only be reported by email from the /accessibility page; there is no in-product form. | handler |
-| desktop | partial | Accessibility barriers can only be reported by email from the /accessibility page; there is no in-product form. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/accessibility/page.tsx:109-115`
 
 ## S88.24: Policy-version history.
 

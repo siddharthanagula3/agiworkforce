@@ -51,7 +51,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
 
   return (
     <div
-      className={`mb-3 flex items-start gap-3 rounded-lg border p-4 shadow-lg transition-all ${config.bgClass} ${config.borderClass}`}
+      className={`mb-3 flex items-start gap-3 rounded-lg border p-4 shadow-e3 transition-all ${config.bgClass} ${config.borderClass}`}
       role="alert"
     >
       <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${config.iconClass}`} />

@@ -163,7 +163,7 @@ const openSessionRow = z.object({
   type: z.literal('openSessionRow'),
   payload: z.object({
     id: z.string().min(1).max(200),
-    source: z.enum(['local', 'cloud']),
+    source: z.enum(['local', 'cloud', 'cloud-code']),
   }),
 });
 

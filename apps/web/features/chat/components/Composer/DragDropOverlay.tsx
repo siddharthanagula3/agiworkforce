@@ -127,7 +127,7 @@ export function DragDropOverlay({
             </motion.div>
 
             <div className="text-center">
-              <h3 className="mb-1 text-xl font-semibold text-foreground">Drop files here</h3>
+              <h3 className="mb-1 text-h2 text-foreground">Drop files here</h3>
               <p className="text-sm text-muted-foreground">Release to attach to your message</p>
               {accept && accept.length > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">Accepted: {accept.join(', ')}</p>

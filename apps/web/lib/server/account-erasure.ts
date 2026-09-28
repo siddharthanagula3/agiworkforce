@@ -58,6 +58,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_shortcuts', column: 'user_id' },
   { table: 'user_skills', column: 'user_id' },
   { table: 'search_history', column: 'user_id' },
+  { table: 'scheduled_task_shares', column: 'user_id' },
   { table: 'scheduled_tasks', column: 'user_id' },
   { table: 'user_connectors', column: 'user_id' },
   { table: 'user_custom_connectors', column: 'user_id' },
@@ -242,12 +243,15 @@ async function eraseConnectorResponseCache(
   }
 
   try {
-    const granted = await db.query<{ connector_id: string }>(
-      'select connector_id from public.connector_oauth_grants where user_id = $1',
+    const granted = await db.query<{ connector_id: string; account_key: string }>(
+      'select connector_id, account_key from public.connector_oauth_grants where user_id = $1',
       [userId],
     );
     for (const row of granted) {
       contexts.push(mcpAuthorizationContext.userOauthConnector(userId, row.connector_id));
+      contexts.push(
+        mcpAuthorizationContext.userOauthConnector(userId, row.connector_id, row.account_key),
+      );
       contexts.push(mcpAuthorizationContext.operatorConnector(row.connector_id));
     }
   } catch (error) {

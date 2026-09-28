@@ -88,6 +88,12 @@ import {
   nestedDeadlineMs,
 } from '@/lib/deadline-policy';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
+import {
+  classifyEmptyTurn,
+  isCancelledFinishReason,
+  isEmptyTurnOutput,
+  isTurnTruncated,
+} from './turn-completeness';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import {
   researchDomainAllowed,
@@ -2390,13 +2396,23 @@ export async function* runResearchLoop(
       // message (an empty body also skips client persistence, so the whole
       // run would vanish on reload). If the model produced no report text,
       // emit an honest failure as real content and an error status.
-      if (!synthesis.canonicalText.trim()) {
+      if (isEmptyTurnOutput({ text: synthesis.canonicalText })) {
+        const emptyReport = classifyEmptyTurn({
+          finishReason: synthesis.finishReason,
+          reasoningReceived: synthesis.thinkingBlocks.length > 0 || synthesis.text.trim() !== '',
+        });
+        const emptyReportReason =
+          emptyReport.code === 'empty_response'
+            ? 'The model returned an empty report.'
+            : emptyReport.message;
         logger.error(
           {
             provider: processed.provider,
             requestId: processed.requestId,
             sources: sources.size,
             lastTurnError,
+            finishReason: synthesis.finishReason,
+            emptyReport: emptyReport.code,
           },
           '[research-loop] synthesis turn produced no text',
         );
@@ -2415,8 +2431,11 @@ export async function* runResearchLoop(
         const body = upstreamFailed
           ? `Deep research could not complete: every provider call failed. Last error: ${lastTurnError}.` +
             ' Retrying will not help until that is resolved.'
-          : `Deep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} across ${totalSearches} search${totalSearches === 1 ? '' : 'es'}, but the model returned an empty report.` +
-            ' Try running the research again.';
+          : `Deep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} across ${totalSearches} search${totalSearches === 1 ? '' : 'es'}, but ${
+              emptyReport.code === 'empty_response'
+                ? 'the model returned an empty report.'
+                : `no report was written. ${emptyReport.message}`
+            }` + ' Try running the research again.';
         yield status('error', statusLabel);
         yield encoder.encode(
           sseData({
@@ -2431,17 +2450,40 @@ export async function* runResearchLoop(
         await persistRun(
           'failed',
           '',
-          upstreamFailed
-            ? `Every provider call failed: ${lastTurnError}`
-            : 'The model returned an empty report.',
+          upstreamFailed ? `Every provider call failed: ${lastTurnError}` : emptyReportReason,
         );
         yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
         yield encoder.encode(sseDone());
         return;
       }
-      markPlanSteps([synthesisStepId], 'completed');
+      const reportCutShort = isTurnTruncated({
+        reportedFailure: false,
+        finishReason: synthesis.finishReason,
+        emptyOutput: false,
+      });
+      markPlanSteps([synthesisStepId], reportCutShort ? 'failed' : 'completed');
       yield planEvent();
       yield gapEvent(synthesis.canonicalText);
+      if (reportCutShort) {
+        const reportEndReason = isCancelledFinishReason(synthesis.finishReason)
+          ? 'Research was cancelled.'
+          : classifyEmptyTurn({ finishReason: synthesis.finishReason }).message;
+        logger.warn(
+          {
+            provider: processed.provider,
+            requestId: processed.requestId,
+            finishReason: synthesis.finishReason,
+          },
+          '[research-loop] synthesis turn ended before the model finished the report',
+        );
+        await persistRun('interrupted', synthesis.canonicalText, reportEndReason);
+        const cumulativeOnCutShort = sources.toSearchResultsEvent(responseModel);
+        if (cumulativeOnCutShort) yield encoder.encode(cumulativeOnCutShort);
+        yield status('error', 'Report cut short');
+        yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
+        yield encoder.encode(sseDone());
+        return;
+      }
       await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

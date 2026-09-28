@@ -132,7 +132,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
         <div className="p-6 pb-5">
           {/* Title row */}
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Create project</h2>
+            <h2 className="text-h3 text-foreground">Create project</h2>
           </div>
 
           {/* Project name input */}

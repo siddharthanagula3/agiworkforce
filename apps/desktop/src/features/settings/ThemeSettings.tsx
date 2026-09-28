@@ -264,7 +264,7 @@ function ThemePreviewCard({ mode, isSelected, onClick }: ThemePreviewCardProps) 
       {/* Selected checkmark badge */}
       {isSelected && (
         <span
-          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 shadow"
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 shadow-e1"
           aria-hidden
         >
           <Check className="h-3 w-3 text-white" strokeWidth={2.5} />
@@ -488,7 +488,7 @@ export function ThemeSettings() {
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-muted-foreground" />
           <div>
-            <h3 className="text-lg font-semibold">Themes</h3>
+            <h3 className="text-h3">Themes</h3>
             <p className="text-sm text-muted-foreground">
               Choose a color theme for the application. Changes apply immediately.
             </p>
@@ -696,7 +696,7 @@ export function ThemeSettings() {
             >
               <span
                 className={cn(
-                  'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                  'inline-block h-4 w-4 rounded-full bg-white shadow-e1 transition-transform',
                   reduceMotion ? 'translate-x-6' : 'translate-x-1',
                 )}
               />
@@ -724,7 +724,7 @@ export function ThemeSettings() {
             >
               <span
                 className={[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-e1 transition-transform',
                   dyslexicFont ? 'translate-x-6' : 'translate-x-1',
                 ].join(' ')}
               />

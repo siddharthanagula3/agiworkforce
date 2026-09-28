@@ -269,7 +269,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
               <ListChecks className="h-5 w-5 text-teal-700 dark:text-teal-400" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold leading-tight">{parsed.title}</h3>
+              <h3 className="text-h3">{parsed.title}</h3>
               {parsed.description && (
                 <p
                   className="mt-0.5 text-sm text-muted-foreground"

@@ -190,7 +190,7 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Agent Execution</h3>
+        <h3 className="text-h3 mb-1">Agent Execution</h3>
         <p className="text-sm text-muted-foreground mb-6">
           Control how the agent handles timeouts and stream inactivity during autonomous runs.
         </p>

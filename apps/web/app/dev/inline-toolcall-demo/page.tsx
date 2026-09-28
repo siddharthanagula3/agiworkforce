@@ -51,9 +51,7 @@ export default function InlineToolCallDemoPage() {
     <div className="min-h-screen bg-white text-stone-900 dark:bg-stone-950 dark:text-stone-100">
       <div className="mx-auto max-w-3xl px-8 py-12 font-sans">
         <header className="mb-10">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            R22 inline tool-call badge · static smoke-test harness
-          </h1>
+          <h1 className="text-h1">R22 inline tool-call badge · static smoke-test harness</h1>
           <p className="mt-2 text-sm text-stone-500">
             Synthetic props. Reference: desktop tool-call captures 02, 06 and 08.
           </p>
@@ -61,7 +59,7 @@ export default function InlineToolCallDemoPage() {
 
         {/* ── Block 1 · Reference parity (image 02): Filesystem integration ── */}
         <section className="mb-12">
-          <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
+          <h2 className="mb-3 text-h4 text-stone-700 dark:text-stone-300">
             Block 1 · Filesystem integration group (image 02 parity)
           </h2>
           <div
@@ -117,7 +115,7 @@ export default function InlineToolCallDemoPage() {
 
         {/* ── Block 2 · All badge letter / glyph variants ── */}
         <section className="mb-12">
-          <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
+          <h2 className="mb-3 text-h4 text-stone-700 dark:text-stone-300">
             Block 2 · All InlineToolKind → badge variants
           </h2>
           <div
@@ -214,7 +212,7 @@ export default function InlineToolCallDemoPage() {
 
         {/* ── Block 3 · Lifecycle states ── */}
         <section className="mb-12">
-          <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
+          <h2 className="mb-3 text-h4 text-stone-700 dark:text-stone-300">
             Block 3 · Lifecycle states (pending / running / success / error / partial)
           </h2>
           <div
@@ -262,7 +260,7 @@ export default function InlineToolCallDemoPage() {
 
         {/* ── Block 4 · Web search card (image 06 parity) ── */}
         <section className="mb-12">
-          <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
+          <h2 className="mb-3 text-h4 text-stone-700 dark:text-stone-300">
             Block 4 · WebSearchCard with favicons (image 06 parity)
           </h2>
           <div
@@ -279,7 +277,7 @@ export default function InlineToolCallDemoPage() {
 
         {/* ── Block 5 · Multi-row group, compact (image 08 parity) ── */}
         <section className="mb-12">
-          <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
+          <h2 className="mb-3 text-h4 text-stone-700 dark:text-stone-300">
             Block 5 · Compact stacked tool messages (image 08 parity)
           </h2>
           <div

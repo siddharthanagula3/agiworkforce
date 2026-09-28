@@ -138,7 +138,7 @@ export function RecorderHud() {
   return (
     <main className="flex h-full w-full items-start justify-center bg-transparent p-2">
       <section
-        className="relative flex h-[72px] w-full items-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 px-3 text-zinc-50 shadow-2xl backdrop-blur-xl"
+        className="relative flex h-[72px] w-full items-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 px-3 text-zinc-50 shadow-e4 backdrop-blur-xl"
         aria-label="Workflow capture controls"
       >
         <div

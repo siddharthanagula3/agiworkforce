@@ -8,6 +8,7 @@ import { SchedulesPage } from './SchedulesPage';
 import type { ScheduleTask } from '../types';
 
 export const SCHEDULE_FOCUS_QUERY_PARAM = 'schedule';
+export const SCHEDULE_SHARE_QUERY_PARAM = 'fromShare';
 
 export function SchedulesEntitlementLoading() {
   return (
@@ -26,7 +27,9 @@ export function SchedulesEntitlementLoading() {
 
 export function SchedulesPageWithProjects() {
   const router = useRouter();
-  const focusScheduleId = useSearchParams()?.get(SCHEDULE_FOCUS_QUERY_PARAM) ?? null;
+  const searchParams = useSearchParams();
+  const focusScheduleId = searchParams?.get(SCHEDULE_FOCUS_QUERY_PARAM) ?? null;
+  const sharedScheduleToken = searchParams?.get(SCHEDULE_SHARE_QUERY_PARAM) ?? null;
   const { projects } = useManagedCloudProjects();
   const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
   const billingIsLoading = useBillingStore((state) => state.isLoading);
@@ -37,6 +40,7 @@ export function SchedulesPageWithProjects() {
   return (
     <SchedulesPage
       focusScheduleId={focusScheduleId}
+      sharedScheduleToken={sharedScheduleToken}
       projects={projects.map((project) => ({ id: project.id, name: project.name }))}
       subscriptionTier={subscriptionTier}
       onOpenChat={(schedule: ScheduleTask) =>

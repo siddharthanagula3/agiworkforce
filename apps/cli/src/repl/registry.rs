@@ -369,6 +369,126 @@ pub fn export_conversation_for_display(
     arg: &str,
     session: &AgentSession,
 ) -> Result<String, CommandOutcome> {
+    render_export(parse_export_argument(arg).0, session)
+}
+
+pub fn export_conversation_to_file(arg: &str, session: &AgentSession) -> Option<CommandOutcome> {
+    let (format, path) = parse_export_argument(arg);
+    let path = path?;
+    let body = match render_export(format, session) {
+        Ok(body) => body,
+        Err(outcome) => return Some(outcome),
+    };
+    let target = session
+        .workspace_root()
+        .unwrap_or_default()
+        .join(crate::path_security::expand_home(path));
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, body.as_bytes()));
+    Some(match written {
+        Ok(()) => CommandOutcome::Info(format!(
+            "Exported the conversation to {}.",
+            target.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            CommandOutcome::Warn(format!(
+                "{} already exists, so nothing was written. Export to a new file name.",
+                target.display()
+            ))
+        }
+        Err(error) => {
+            CommandOutcome::Error(format!("Could not write {}: {error}", target.display()))
+        }
+    })
+}
+
+pub fn handle_export(arg: &str, session: &AgentSession) {
+    if let Some(outcome) = export_conversation_to_file(arg, session) {
+        outcome.print();
+        return;
+    }
+    match export_conversation_for_display(arg, session) {
+        Ok(text) => println!("{}", text),
+        Err(outcome) => outcome.print(),
+    }
+}
+
+pub async fn tasks_for_display(
+    manager: Option<&crate::subagent::SubagentManager>,
+    arg: &str,
+) -> CommandOutcome {
+    let mut words = arg.split_whitespace();
+    let subcommand = words.next().unwrap_or("list");
+    let id = words.next();
+    let tasks = match manager {
+        Some(manager) => manager.list().await,
+        None => Vec::new(),
+    };
+    match (subcommand, id, manager) {
+        ("list" | "ls", _, _) => CommandOutcome::Block(
+            sanitize_terminal_text(&crate::subagent::format_task_list(&tasks)).into_owned(),
+        ),
+        ("show" | "output" | "stop" | "cancel", None, _) => CommandOutcome::Warn(format!(
+            "Name the task: /tasks {subcommand} <id>. /tasks lists them."
+        )),
+        ("show" | "output" | "stop" | "cancel", Some(id), Some(manager)) => {
+            let Some((_, description, status)) = tasks.iter().find(|(task, _, _)| task == id)
+            else {
+                return CommandOutcome::Warn(format!(
+                    "No task {id} in this session. /tasks lists them."
+                ));
+            };
+            if matches!(subcommand, "stop" | "cancel") {
+                return match manager.cancel(id).await {
+                    Ok(()) => CommandOutcome::Info(format!("Stopped task {id}.")),
+                    Err(error) => CommandOutcome::Warn(format!("{error:#}")),
+                };
+            }
+            let detail = crate::subagent::format_task_detail(
+                id,
+                description,
+                status,
+                manager.get_result(id).await.as_ref(),
+            );
+            CommandOutcome::Block(sanitize_terminal_text(&detail).into_owned())
+        }
+        ("show" | "output" | "stop" | "cancel", Some(id), None) => {
+            CommandOutcome::Warn(format!("No task {id} in this session. /tasks lists them."))
+        }
+        (other, _, _) => CommandOutcome::Warn(format!(
+            "Unknown /tasks subcommand '{other}'. Use: /tasks [list | show <id> | stop <id>]"
+        )),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExportFormat {
+    Markdown,
+    Json,
+}
+
+fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
+    let arg = arg.trim();
+    let (keyword, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    let rest = Some(rest.trim()).filter(|rest| !rest.is_empty());
+    match keyword {
+        "" => (ExportFormat::Markdown, None),
+        "json" => (ExportFormat::Json, rest),
+        "markdown" | "md" => (ExportFormat::Markdown, rest),
+        _ if std::path::Path::new(arg)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json")) =>
+        {
+            (ExportFormat::Json, Some(arg))
+        }
+        _ => (ExportFormat::Markdown, Some(arg)),
+    }
+}
+
+fn render_export(format: ExportFormat, session: &AgentSession) -> Result<String, CommandOutcome> {
     if !session
         .messages
         .iter()
@@ -378,20 +498,13 @@ pub fn export_conversation_for_display(
             "Nothing to export, no messages in session yet.".to_string(),
         ));
     }
-
-    if arg == "json" {
-        conversations::export_as_json(session)
-            .map_err(|e| CommandOutcome::Error(format!("Export failed: {:#}", e)))
-    } else {
-        let md = conversations::export_as_markdown(session);
-        Ok(sanitize_terminal_text(&md).into_owned())
-    }
-}
-
-pub fn handle_export(arg: &str, session: &AgentSession) {
-    match export_conversation_for_display(arg, session) {
-        Ok(text) => println!("{}", text),
-        Err(outcome) => outcome.print(),
+    match format {
+        ExportFormat::Json => conversations::export_as_json(session)
+            .map_err(|e| CommandOutcome::Error(format!("Export failed: {:#}", e))),
+        ExportFormat::Markdown => {
+            let md = conversations::export_as_markdown(session);
+            Ok(sanitize_terminal_text(&md).into_owned())
+        }
     }
 }
 

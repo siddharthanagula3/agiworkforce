@@ -4331,7 +4331,7 @@ export function getWebviewContent(
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -4355,7 +4355,7 @@ export function getWebviewContent(
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }

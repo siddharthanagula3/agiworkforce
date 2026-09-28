@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Archive,
@@ -38,7 +38,7 @@ import {
   workModeLabel,
 } from './task-display';
 
-type TaskFilter = 'active' | 'all' | 'archived';
+type TaskFilter = 'active' | 'needs_you' | 'all' | 'archived';
 
 const ALL_STATES: AgentTaskState[] = [
   'queued',
@@ -56,8 +56,19 @@ const PAGE_SIZE = 25;
 
 const ARCHIVED_STATES: AgentTaskState[] = ['archived'];
 
+const NEEDS_INPUT_STATES: readonly AgentTaskState[] = [
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+];
+
+function needsInput(run: CloudAgentRun): boolean {
+  return NEEDS_INPUT_STATES.includes(runWorkState(run));
+}
+
 const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
   { value: 'active', label: 'Active' },
+  { value: 'needs_you', label: 'Needs you' },
   { value: 'all', label: 'All' },
   { value: 'archived', label: 'Archived' },
 ];
@@ -65,6 +76,7 @@ const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
 function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
   if (filter === 'all') return ALL_STATES;
   if (filter === 'archived') return ARCHIVED_STATES;
+  if (filter === 'needs_you') return [...NEEDS_INPUT_STATES];
   return undefined;
 }
 
@@ -188,6 +200,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const journalRef = useRef<TaskJournalSnapshot | null>(null);
 
   const getClient = useCallback(() => transport.client, [transport.client]);
+  const orderedRuns = useMemo(
+    () => [...runs.filter(needsInput), ...runs.filter((run) => !needsInput(run))],
+    [runs],
+  );
 
   const load = useCallback(
     async (nextFilter: TaskFilter, cursor: string | null) => {
@@ -367,6 +383,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             .filter((r) => {
               if (filter === 'archived') return r.state === 'archived';
               if (filter === 'active') return r.state !== 'archived';
+              if (filter === 'needs_you') return needsInput(r);
               return true;
             }),
         );
@@ -461,7 +478,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <ListChecks className="h-5 w-5 text-primary" />
-          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Work history</h1>
+          <h1 className="font-[var(--chat-font-sans)] text-display">Work history</h1>
         </div>
         <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
       </header>
@@ -501,14 +518,18 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            No {filter === 'all' ? '' : `${filter} `}work sessions yet
+            {filter === 'needs_you'
+              ? 'Nothing needs you right now'
+              : `No ${filter === 'all' ? '' : `${filter} `}work sessions yet`}
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {filter === 'archived'
               ? 'A finished task moves here when you archive it, and stays until you restore it.'
-              : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
+              : filter === 'needs_you'
+                ? 'A work session that is waiting for your approval, an answer or a resume shows up here.'
+                : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
           </p>
-          {transport.startWork && filter !== 'archived' ? (
+          {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
             <Button size="sm" onClick={transport.startWork}>
               Start AGI Work
             </Button>
@@ -517,7 +538,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       ) : (
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-2">
-            {runs.map((run) => {
+            {orderedRuns.map((run) => {
               const workState = runWorkState(run);
               const tone = taskStateTone(workState);
               const cancellable = isCancellableState(workState);

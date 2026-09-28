@@ -82,7 +82,7 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
     <Card className="flex h-full flex-col p-4">
       {}
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">OCR Text Extraction</h3>
+        <h3 className="text-h3">OCR Text Extraction</h3>
         {onClose && (
           <Button variant="ghost" size="sm" onClick={onClose}>
             Close

@@ -51,7 +51,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+          <h2 className="text-h1 text-foreground flex items-center">
             {action === 'approve' ? (
               <>
                 <CheckCircle className="mr-2 h-6 w-6 text-green-600" />

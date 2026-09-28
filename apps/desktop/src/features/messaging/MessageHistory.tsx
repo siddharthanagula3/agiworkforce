@@ -75,8 +75,8 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold mb-4">Message History</h2>
+    <div className="bg-white rounded-lg shadow-e1 p-6">
+      <h2 className="text-h2 mb-4">Message History</h2>
 
       {error && (
         <div className="mb-4 p-3 bg-danger-fill/10 border border-danger-fill/30 rounded text-danger-text text-sm">

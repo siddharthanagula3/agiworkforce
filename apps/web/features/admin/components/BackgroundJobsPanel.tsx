@@ -96,7 +96,7 @@ export default function BackgroundJobsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="background-jobs-title">
       <div>
-        <h2 id="background-jobs-title" className="text-sm font-medium">
+        <h2 id="background-jobs-title" className="text-h5">
           Background jobs
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -119,7 +119,7 @@ export default function BackgroundJobsPanel() {
 
       {unhealthy.length > 0 ? (
         <div role="alert" className={`${CARD_CLASS} border-danger`}>
-          <h3 className="text-sm font-medium text-danger">Queues that are not draining</h3>
+          <h3 className="text-h5 text-danger">Queues that are not draining</h3>
           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
             {unhealthy.map((alert) => (
               <li key={alert.queue}>
@@ -178,7 +178,7 @@ export default function BackgroundJobsPanel() {
       )}
 
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-medium">Dead letters</h3>
+        <h3 className="text-h5">Dead letters</h3>
         {dead.length === 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Nothing has given up. A job appears here after it exhausts its attempts or fails in a

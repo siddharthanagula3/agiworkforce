@@ -168,7 +168,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
                 onChange={(e) => setUrlInput(e.target.value)}
                 onBlur={(e) => commitUrl(e.target.value)}
                 placeholder={runtime.defaultUrl}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-e1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <p className="text-xs text-muted-foreground">
                 Default: {runtime.defaultUrl}. Changes apply when you save Settings.

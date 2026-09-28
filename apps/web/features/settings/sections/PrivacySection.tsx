@@ -25,6 +25,7 @@ import {
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const NAMESPACE = 'privacy';
 
@@ -402,6 +403,9 @@ export function PrivacySection() {
         >
           Privacy
         </h1>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="privacy-controls" label="How privacy controls work" />
+        </div>
         {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
           <SaveStatusLine
             failed={preferenceError !== null}

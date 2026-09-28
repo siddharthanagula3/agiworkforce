@@ -117,7 +117,7 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
             <Brain className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">Memory</h2>
+            <h2 className="text-h4">Memory</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {scope === 'cloud'
                 ? 'Control what AGI can remember and generate for your Managed Cloud account.'

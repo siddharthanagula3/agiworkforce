@@ -57,7 +57,7 @@ const TitleBar = ({
         'flex items-center justify-between gap-2 px-4 py-2 h-12 shrink-0',
         'bg-background/90 backdrop-blur-xl',
         'border-b border-border/60 rounded-t-2xl',
-        'shadow-[0_2px_12px_rgba(8,12,20,0.22)]',
+        'shadow-e1',
         'select-none',
         'min-w-[640px]',
         'relative z-50',
@@ -82,7 +82,7 @@ const TitleBar = ({
         </button>
         <AgiMark size={18} className="shrink-0 text-foreground" />
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
-          <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
+          <h1 className="text-h5 truncate">AGI Workforce</h1>
           <div className="text-[11px] text-muted-foreground leading-none mt-0.5 flex items-center gap-1.5">
             {isAuthenticated && user?.name ? (
               <>

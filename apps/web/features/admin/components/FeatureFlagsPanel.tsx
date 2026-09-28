@@ -260,7 +260,7 @@ export default function FeatureFlagsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="feature-flags-title">
       <div>
-        <h2 id="feature-flags-title" className="text-sm font-medium">
+        <h2 id="feature-flags-title" className="text-h5">
           Feature flags
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -457,9 +457,7 @@ export default function FeatureFlagsPanel() {
       )}
 
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-medium">
-          {editingVersion === null ? 'New flag' : `Editing ${form.key}`}
-        </h3>
+        <h3 className="text-h5">{editingVersion === null ? 'New flag' : `Editing ${form.key}`}</h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Key

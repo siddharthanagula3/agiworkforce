@@ -128,7 +128,7 @@ export const CookieConsent = () => {
             role="region"
             aria-label="Cookie consent"
           >
-            <div className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-lg">
+            <div className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-e3">
               <div className="flex items-start gap-3 pr-8">
                 <Cookie
                   size={COOKIE_ICON_SIZE}
@@ -136,7 +136,7 @@ export const CookieConsent = () => {
                   aria-hidden="true"
                 />
                 <div>
-                  <h3 className="text-sm font-semibold leading-5">Cookies on this site</h3>
+                  <h3 className="text-h5">Cookies on this site</h3>
                   <p className="mt-1 text-sm leading-5 text-muted-foreground">
                     Cookies that keep you signed in are always on. Analytics stays off until you
                     allow it, and we never set advertising cookies. Read the{' '}

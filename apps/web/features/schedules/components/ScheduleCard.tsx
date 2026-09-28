@@ -76,7 +76,7 @@ interface ScheduleCardProps {
 
 const TERMINAL_STATUSES = new Set<ScheduleTask['status']>(['completed', 'expired']);
 
-function scheduleTiming(schedule: ScheduleTask): string {
+export function scheduleTiming(schedule: ScheduleTask): string {
   const recurrence = taskRecurrence(schedule);
   const metadata = schedule.metadata ?? {};
   const time = typeof metadata['timeOfDay'] === 'string' ? metadata['timeOfDay'] : null;

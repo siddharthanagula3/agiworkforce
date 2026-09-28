@@ -6,7 +6,17 @@ import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/
 import { appendWebSearchTool } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { loadMcpToolDefs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
-import { EXECUTE_CODE_TOOL, resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import {
+  CREATE_FOLDER_TOOL,
+  e2bExecutionToolDefs,
+  EDIT_FILE_TOOL,
+  EXECUTE_CODE_TOOL,
+  LIST_FILES_TOOL,
+  READ_FILE_TOOL,
+  resolveCodeExecutionTools,
+  WRITE_FILE_TOOL,
+} from '@/lib/e2b/execution-tools';
+import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
@@ -63,6 +73,8 @@ export interface LiveVoiceToolCapability {
 
 const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
 const LONG_TOOL_TIMEOUT_MS = 45_000;
+const SANDBOX_TOOL_REASON =
+  "the voice client hands the call to our tool route, which runs it in the conversation's sandbox behind the chat approval gate";
 
 export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
   {
@@ -133,34 +145,70 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     requiresApproval: false,
   },
   {
-    id: 'run_code',
+    id: EXECUTE_CODE_TOOL,
     label: 'Running code',
     toolClass: 'function',
     risk: 'compute',
-    reachable: false,
-    reason: 'needs the sandbox executor and its per-turn workspace',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
     timeoutMs: LONG_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: EXECUTE_CODE_TOOL,
   },
   {
-    id: 'write_file',
+    id: WRITE_FILE_TOOL,
     label: 'Writing a file',
     toolClass: 'function',
     risk: 'write',
-    reachable: false,
-    reason: 'needs the sandbox executor and its per-turn workspace',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: true,
+    policyTool: WRITE_FILE_TOOL,
   },
   {
-    id: 'read_file',
+    id: EDIT_FILE_TOOL,
+    label: 'Editing a file',
+    toolClass: 'function',
+    risk: 'write',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
+    timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
+    requiresApproval: true,
+    policyTool: EDIT_FILE_TOOL,
+  },
+  {
+    id: CREATE_FOLDER_TOOL,
+    label: 'Creating a folder',
+    toolClass: 'function',
+    risk: 'write',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
+    timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
+    requiresApproval: true,
+    policyTool: CREATE_FOLDER_TOOL,
+  },
+  {
+    id: READ_FILE_TOOL,
     label: 'Reading a file',
     toolClass: 'function',
     risk: 'read',
-    reachable: false,
-    reason: 'needs the sandbox executor and its per-turn workspace',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: READ_FILE_TOOL,
+  },
+  {
+    id: LIST_FILES_TOOL,
+    label: 'Listing files',
+    toolClass: 'function',
+    risk: 'read',
+    reachable: true,
+    reason: SANDBOX_TOOL_REASON,
+    timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
+    requiresApproval: false,
+    policyTool: LIST_FILES_TOOL,
   },
   {
     id: 'agi_work',
@@ -244,7 +292,9 @@ export function resolveLiveVoiceDelegationTools(
 
   const hosted = [
     ...(appendWebSearchTool(provider, undefined, capabilities) ?? []),
-    ...(capabilities?.codeExecution === true ? resolveCodeExecutionTools(provider) : []),
+    ...(capabilities?.codeExecution === true && !e2bProvisioningReady()
+      ? resolveCodeExecutionTools(provider)
+      : []),
   ];
   const tools: unknown[] = [];
   const withheld: LiveVoiceToolCapability[] = [];
@@ -306,6 +356,7 @@ export async function resolveLiveVoiceFunctionTools(input: {
   const productTools: ChatFunctionTool[] = [
     ...(tierPolicy.allowSearch ? [urlFetchToolDef()] : []),
     createManagedOfficeFileToolDefinition(),
+    ...(e2bProvisioningReady() ? e2bExecutionToolDefs() : []),
   ];
   const candidates = [
     ...productTools.map((tool) => ({

@@ -171,7 +171,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
             </div>
 
             {billingError ? (
-              <p className="mt-4 text-center text-xs text-danger-text">{billingError}</p>
+              <p className="mt-4 text-center text-xs text-red-500">{billingError}</p>
             ) : null}
             {!currentTier ? (
               <p role="status" className="mt-4 text-center text-xs text-muted-foreground">

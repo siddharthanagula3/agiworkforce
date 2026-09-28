@@ -329,6 +329,7 @@ struct TuiApp {
     mention_candidates: Option<Vec<crate::mentions::MentionCandidate>>,
     /// Byte offset of the `@` the open mention popup is completing.
     mention_anchor: Option<usize>,
+    prompt_history: super::prompt_history::PromptHistory,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -493,6 +494,7 @@ impl TuiApp {
             generated_images: Vec::new(),
             mention_candidates: None,
             mention_anchor: None,
+            prompt_history: super::prompt_history::PromptHistory::load(),
         }
     }
 
@@ -657,11 +659,10 @@ impl TuiApp {
     }
 
     fn context_percent(&self) -> u8 {
-        context_percent_for(
-            &self.session.model,
-            self.session.total_input_tokens,
-            self.session.total_output_tokens,
-        )
+        let usage = self
+            .session
+            .context_usage(self.config.default.max_tokens as usize);
+        (usage.fraction * 100.0).clamp(0.0, 100.0) as u8
     }
 
     pub fn open_overlay(
@@ -1326,16 +1327,6 @@ fn append_continuation_chunk(buf: &mut String, chunk: &str) {
         buf.push_str("\n\n");
     }
     buf.push_str(chunk);
-}
-
-/// Context-window usage percent (0..=100) for a model + token counts.
-fn context_percent_for(model_name: &str, in_tokens: u32, out_tokens: u32) -> u8 {
-    let ctx_window = crate::model_catalog::context_window(model_name) as u64;
-    if ctx_window == 0 {
-        return 0;
-    }
-    let used = in_tokens as u64 + out_tokens as u64;
-    ((used * 100) / ctx_window).min(100) as u8
 }
 
 /// Disjoint snapshot of the fields the header/chat/status renderers read. Built
@@ -2596,10 +2587,14 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             InputAction::None
         }
 
-        // Up/Down: navigate within multiline composer when applicable,
-        // otherwise scroll the chat area.
+        // Up/Down: navigate within multiline composer when applicable, then
+        // through earlier prompts, otherwise scroll the chat area.
         KeyCode::Up => {
             if composer_move_up(app) {
+                InputAction::None
+            } else if let Some(prompt) = app.prompt_history.older(&app.input) {
+                app.input = prompt;
+                app.cursor = app.input.len();
                 InputAction::None
             } else {
                 InputAction::ScrollUp
@@ -2608,10 +2603,16 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         KeyCode::Down => {
             if composer_move_down(app) {
                 InputAction::None
+            } else if let Some(prompt) = app.prompt_history.newer() {
+                app.input = prompt;
+                app.cursor = app.input.len();
+                InputAction::None
             } else {
                 InputAction::ScrollDown
             }
         }
+        KeyCode::PageUp => InputAction::ScrollUp,
+        KeyCode::PageDown => InputAction::ScrollDown,
 
         _ => InputAction::None,
     }
@@ -2794,18 +2795,33 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
         .session
         .messages
         .iter()
-        .filter_map(|message| {
-            let role = match message.role.as_str() {
-                "user" => ChatRole::User,
-                "assistant" => ChatRole::Assistant,
-                _ => return None,
-            };
-            let text = message.text_content();
-            (!text.trim().is_empty()).then_some(ChatMessage { role, text })
-        })
+        .filter_map(chat_message_from_session)
         .collect();
     app.tool_cells.clear();
     app.scroll_offset = 0;
+}
+
+fn append_session_messages_since(app: &mut TuiApp, first: usize) {
+    if app.session.messages.len() < first {
+        rebuild_transcript_from_session(app);
+        return;
+    }
+    let added: Vec<ChatMessage> = app.session.messages[first..]
+        .iter()
+        .filter_map(chat_message_from_session)
+        .collect();
+    app.chat_messages.extend(added);
+    app.scroll_offset = 0;
+}
+
+fn chat_message_from_session(message: &crate::models::Message) -> Option<ChatMessage> {
+    let role = match message.role.as_str() {
+        "user" => ChatRole::User,
+        "assistant" => ChatRole::Assistant,
+        _ => return None,
+    };
+    let text = message.text_content();
+    (!text.trim().is_empty()).then_some(ChatMessage { role, text })
 }
 
 fn open_command_popup(app: &mut TuiApp) {
@@ -3279,6 +3295,7 @@ enum SlashResult {
     RunImage(String),
     /// Read the account's artifact index, or open one of its artifacts.
     RunArtifacts(String),
+    RunTasks(String),
 }
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
@@ -3366,6 +3383,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         },
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
+        "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
 
         "/plan" => {
             let new_mode = if app.mode == InteractionMode::Plan {
@@ -3481,14 +3499,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(msg)
         }
 
-        "/context" => {
-            let ctx = crate::model_catalog::context_window(&app.model_name);
-            let used = app.session.total_input_tokens + app.session.total_output_tokens;
-            SlashResult::SystemMessage(format!(
-                "Context: {}% used ({} / {} tokens)",
-                app.context_percent(), used, ctx
-            ))
-        }
+        "/context" | "/ctx" => SlashResult::SystemMessage(
+            app.session
+                .context_report(app.config.default.max_tokens as usize),
+        ),
 
         "/fast" => {
             match app.session.toggle_fast_mode(None) {
@@ -3643,7 +3657,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/export" => {
-            let arg = if arg.is_empty() { "markdown" } else { arg };
+            if let Some(outcome) = crate::repl::export_conversation_to_file(arg, &app.session) {
+                return SlashResult::SystemMessage(outcome.plain_message());
+            }
             match crate::repl::export_conversation_for_display(arg, &app.session) {
                 Ok(export) => {
                     SlashResult::SystemMessage(sanitize_terminal_text(&export).into_owned())
@@ -3910,16 +3926,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 // Send as a prompt but mark as side query
                 SlashResult::SendAsPrompt
             }
-        }
-
-        // ── Context (alias) ──
-        "/ctx" => {
-            let ctx = crate::model_catalog::context_window(&app.model_name);
-            let used = app.session.total_input_tokens + app.session.total_output_tokens;
-            SlashResult::SystemMessage(format!(
-                "Context: {}% used ({} / {} tokens)",
-                app.context_percent(), used, ctx
-            ))
         }
 
         // ── Review ──
@@ -4659,6 +4665,7 @@ async fn run_event_loop(
                 }
 
                 InputAction::SendMessage(text) => {
+                    app.prompt_history.record(&text);
                     // Detect natural language mode switches.
                     let mut handled_as_mode_command = false;
                     if let Some(new_mode) = detect_mode_intent(&text) {
@@ -4747,6 +4754,7 @@ async fn run_event_loop(
                                 // the duration and restore it after, the same
                                 // shape as RunLogin above.
                                 restore_terminal(terminal)?;
+                                let first_voice_message = app.session.messages.len();
                                 let result = crate::voice::run_voice_mode(
                                     &mut app.session,
                                     &app.config,
@@ -4755,6 +4763,7 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                append_session_messages_since(app, first_voice_message);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {
@@ -4809,6 +4818,17 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
+                                });
+                            }
+                            SlashResult::RunTasks(argument) => {
+                                let outcome = crate::repl::tasks_for_display(
+                                    app.session.subagent_manager.as_ref(),
+                                    &argument,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: outcome.plain_message(),
                                 });
                             }
                             SlashResult::RunCompact(focus) => {
@@ -5131,6 +5151,7 @@ async fn send_message_with_prompt(
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
+    let turn_context_percent = app.context_percent();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
 
@@ -5165,11 +5186,7 @@ async fn send_message_with_prompt(
                             total_input_tokens: turn_input_tokens,
                             total_output_tokens: turn_output_tokens,
                             turn_count,
-                            context_percent: context_percent_for(
-                                &app.model_name,
-                                turn_input_tokens,
-                                turn_output_tokens,
-                            ),
+                            context_percent: turn_context_percent,
                             chat_messages: &app.chat_messages,
                             tool_cells: &tool_cells,
                             is_loading: app.is_loading,
@@ -5243,11 +5260,7 @@ async fn send_message_with_prompt(
                         total_input_tokens: turn_input_tokens,
                         total_output_tokens: turn_output_tokens,
                         turn_count,
-                        context_percent: context_percent_for(
-                            &app.model_name,
-                            turn_input_tokens,
-                            turn_output_tokens,
-                        ),
+                        context_percent: turn_context_percent,
                         chat_messages: &app.chat_messages,
                         tool_cells: &tool_cells,
                         is_loading: app.is_loading,
@@ -6852,6 +6865,8 @@ mod tests {
             "insights",
             "status",
             "context",
+            "tasks",
+            "task",
             "fast",
             "new",
             "models",

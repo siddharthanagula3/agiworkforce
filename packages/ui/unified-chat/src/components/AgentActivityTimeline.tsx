@@ -64,6 +64,7 @@ export interface AgentActivityTimelineProps {
   className?: string;
   defaultExpanded?: boolean;
   onApprove?: (toolCallId: string) => void;
+  onApproveForChat?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
@@ -596,14 +597,14 @@ function sourcesFoundLabel(count: number, query: string | undefined): string {
 function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'progress' }> }) {
   return (
     <div className="relative pl-8 py-1.5">
-      <span className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background text-muted-foreground">
+      <span className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-base)] text-muted-foreground">
         {entry.status === 'running' ? (
           <Loader2
             className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
             aria-hidden="true"
           />
         ) : entry.status === 'failed' || entry.status === 'cancelled' ? (
-          <AlertCircle className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
+          <AlertCircle className="h-3.5 w-3.5 text-danger-text" aria-hidden="true" />
         ) : (
           <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
         )}
@@ -692,8 +693,8 @@ function StaticRow({
 
   return (
     <div className="relative pl-8 py-1.5">
-      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger" aria-hidden="true" />
-      <p className="break-words text-sm text-danger">{entry.message}</p>
+      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger-text" aria-hidden="true" />
+      <p className="break-words text-sm text-danger-text">{entry.message}</p>
       {entry.retryable && (
         <p className="mt-0.5 text-caption text-muted-foreground">Retry available</p>
       )}
@@ -763,7 +764,7 @@ function RunStatusIcon({
     return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
   }
   if (status === 'failed') {
-    return <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
+    return <AlertCircle className="h-4 w-4 text-danger-text" aria-hidden="true" />;
   }
   if (status === 'cancelled') {
     return <Square className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
@@ -780,6 +781,7 @@ export function AgentActivityTimeline({
   className,
   defaultExpanded = false,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   onResend,
@@ -1068,6 +1070,7 @@ export function AgentActivityTimeline({
                     }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
+                    onApproveForChat={onApproveForChat}
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}

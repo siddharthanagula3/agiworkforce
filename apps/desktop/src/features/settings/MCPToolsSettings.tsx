@@ -98,7 +98,7 @@ export function MCPToolsSettings() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold">MCP Tools</h3>
+          <h3 className="text-h3">MCP Tools</h3>
           <p className="text-sm text-muted-foreground">
             Configure and manage Model Context Protocol servers, tools, and credentials.
           </p>

@@ -216,10 +216,10 @@ Code: `apps/web/app/api/connectors/health/route.ts:21-29`, `apps/web/lib/connect
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | Connector detail in a warning state now shows Connect beside Disconnect and runs the connector's authorization again; not yet verified in a browser against a real expired grant, and the list row still shows only the warning label. | states |
 | desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:15-25`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
 ## S55.21: Test connection.
 

@@ -219,8 +219,8 @@
       "microsoft_graph_list_properties"
     ],
     "documentationUrl": "https://learn.microsoft.com/en-us/graph/mcp-server/overview",
-    "overridesInternalUrl": false,
-    "directoryOnly": true
+    "overridesInternalUrl": true,
+    "directoryOnly": false
   },
   {
     "connectorId": "cloudflare",
@@ -265,9 +265,9 @@
     "connectorId": "paypal",
     "name": "PayPal",
     "description": "Create invoices, orders, refunds, subscriptions, and shipment tracking in PayPal.",
-    "url": "https://mcp.paypal.com/http",
+    "url": "https://mcp.paypal.com/mcp",
     "transport": "streamable-http",
-    "authMode": "api-key",
+    "authMode": "oauth",
     "toolNames": [
       "create_product",
       "list_product",
@@ -544,16 +544,16 @@
     "directoryOnly": false
   },
   {
-    "connectorId": "github",
-    "name": "GitHub",
+    "connectorId": "github-mcp",
+    "name": "GitHub MCP",
     "description": "Work with repositories, issues, pull requests, and actions on GitHub.",
     "url": "https://api.githubcopilot.com/mcp/",
     "transport": "streamable-http",
     "authMode": "oauth",
     "toolNames": [],
     "documentationUrl": "https://github.com/github/github-mcp-server",
-    "overridesInternalUrl": false,
-    "directoryOnly": true
+    "overridesInternalUrl": true,
+    "directoryOnly": false
   },
   {
     "connectorId": "zapier",

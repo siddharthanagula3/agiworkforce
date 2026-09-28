@@ -33,6 +33,8 @@ export * from './visual-session-capture';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
+export * from './tool-request-diff';
+export * from './tool-approval-stakes';
 export * from './surface-binding';
 
 export * from './content-safety';
@@ -106,6 +108,7 @@ export * from './managed-usage-balance';
 
 export * from './cloud-code';
 export * from './cloud-code-agent-model';
+export * from './project-instructions';
 
 export * from './scheduler';
 

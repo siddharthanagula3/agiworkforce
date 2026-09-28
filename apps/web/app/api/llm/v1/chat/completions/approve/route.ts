@@ -17,6 +17,7 @@ import {
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { withManagedTurnSlot } from '../lib/turn-slot';
@@ -391,6 +392,31 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
       { status: 503, headers: getSecurityHeaders() },
     );
   }
+
+  const conversationId = processed.conversationIsTemporary
+    ? undefined
+    : processed.chatRequest.conversation_id;
+  const toolNames = new Map(
+    claim.checkpoint.pendingToolCalls.map((call) => [call.id, call.qualifiedName]),
+  );
+  await Promise.all(
+    enforcedApprovals.map((approval) =>
+      recordAuditEvent({
+        userId,
+        organizationId: processed.organizationId ?? null,
+        eventType: 'tool_approval_decided',
+        request,
+        surface: resolveCloudChatSurface(request),
+        detail: {
+          resourceType: 'tool',
+          resourceId: claim.checkpoint.runId,
+          resourceName: toolNames.get(approval.toolCallId),
+          status: approval.decision,
+          ...(conversationId ? { conversationId } : {}),
+        },
+      }),
+    ),
+  );
 
   const streamHeaders: Record<string, string> = {
     ...SSE_RESPONSE_HEADERS,

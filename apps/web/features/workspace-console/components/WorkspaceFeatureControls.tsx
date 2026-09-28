@@ -27,6 +27,7 @@ import {
   useWorkspaceGroups,
   useWorkspaceRoles,
 } from '../hooks/use-workspace-roles';
+import { WorkspacePolicyDiagnostics } from './WorkspacePolicyDiagnostics';
 
 export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'work',
@@ -138,7 +139,7 @@ function WorkspaceDefaults({
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-feature-controls-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Features and defaults
@@ -321,7 +322,7 @@ function PolicyExceptions({ organizationId }: { organizationId: string }) {
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-policy-exceptions-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Exceptions
@@ -487,6 +488,9 @@ export function WorkspaceFeatureControls() {
       />
       {overview.canManagePolicy && overview.configured ? (
         <PolicyExceptions organizationId={overview.organizationId} />
+      ) : null}
+      {overview.canManagePolicy ? (
+        <WorkspacePolicyDiagnostics organizationId={overview.organizationId} />
       ) : null}
     </div>
   );
