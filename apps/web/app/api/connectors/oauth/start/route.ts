@@ -21,6 +21,10 @@ import {
   type McpAuthorizationStart,
 } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import {
+  sensitiveDataConnector,
+  sensitiveDataRegionRefusal,
+} from '@/lib/connectors/sensitive-data-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -211,6 +215,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return fail(OAUTH_START_STATUS_OPEN, 409, OPEN_SERVER_MESSAGE);
   }
 
+  const regionRefusal = sensitiveDataRegionRefusal(connectorId, request);
+  if (regionRefusal) return fail(OAUTH_START_STATUS_UNAVAILABLE, 403, regionRefusal);
+
   if ((provider || discovered) && !isConnectorTokenStorageAvailable()) {
     return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
   }
@@ -318,6 +325,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       redirectUri,
       requestedScopes,
       returnPath,
+      ttlSeconds: sensitiveDataConnector(connectorId)?.authorizationTtlSeconds,
       issuer: authorization.context.issuer,
       resourceUrl: authorization.context.resource,
       ...(authorization.context.discoveryState

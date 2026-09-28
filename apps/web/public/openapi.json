@@ -618,13 +618,20 @@
           "top_p": {
             "type": "number",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`."
           },
           "n": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Only 1 is supported, because each request returns one completion. A larger value answers 400 `unsupported_parameter`."
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`."
           },
           "stop": {
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`.",
             "oneOf": [
               {
                 "type": "string"
@@ -650,15 +657,18 @@
           "presence_penalty": {
             "type": "number",
             "minimum": -2,
-            "maximum": 2
+            "maximum": 2,
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`."
           },
           "frequency_penalty": {
             "type": "number",
             "minimum": -2,
-            "maximum": 2
+            "maximum": 2,
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`."
           },
           "logit_bias": {
             "type": "object",
+            "description": "Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`.",
             "additionalProperties": {
               "type": "number",
               "minimum": -100,
@@ -666,7 +676,8 @@
             }
           },
           "user": {
-            "type": "string"
+            "type": "string",
+            "description": "An opaque identifier for your end user, passed to providers that accept one for abuse monitoring. Do not send names or email addresses. Forwarded to the provider when the serving model accepts it; a model that does not answers 400 `unsupported_parameter` naming it. `/llm/v1/models` lists each model's accepted parameters as `request_parameters`."
           },
           "tools": {
             "type": "array",
@@ -774,7 +785,12 @@
                   "properties": {
                     "url": { "type": "string", "format": "uri", "maxLength": 2000 },
                     "title": { "type": "string", "maxLength": 500 },
-                    "snippet": { "type": "string", "maxLength": 2000 }
+                    "snippet": { "type": "string", "maxLength": 2000 },
+                    "retrieved_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the run first retrieved this source, so the resumed run keeps that date instead of the time it resumed."
+                    }
                   }
                 }
               },

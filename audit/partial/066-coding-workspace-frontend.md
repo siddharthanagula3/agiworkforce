@@ -271,27 +271,25 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 
 - Done when: The user sees a list of checkpoints (saved states of code and conversation) for the session.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
 ## S66.23: Restore checkpoint.
 
 - Done when: The user restores the session's code and conversation to an earlier checkpoint.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
 ## S66.24: Plan mode.
 

@@ -75,7 +75,7 @@ export function CapabilitiesSection() {
 
         {row(
           'Cloud code execution and file creation',
-          'Lets AGI run code and build files in a sandbox to answer you. Turning it off refuses those tools server-side, so a chat can no longer run code even if it asks to.',
+          'Lets AGI run code and build files in a sandbox to answer you. The sandbox can reach only GitHub, npm and PyPI, and files you attach are copied into it. Turning it off refuses those tools server-side, so a chat can no longer run code even if it asks to.',
           <Switch
             aria-label="Cloud code execution and file creation"
             checked={settings.cloudCodeExecution}
