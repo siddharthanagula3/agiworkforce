@@ -159,17 +159,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
 
-## S43.15: Image-to-structured-data extraction.
-
-- Done when: User turns an image (receipt, form, card) into structured fields (JSON/CSV/rows) they can reuse.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | json_object is prompt-only and json_schema is refused, so structured output from an image is not enforced. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:387-395`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:305-322`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:150-154`
-
 ## S43.17: Reference-image selection for another task.
 
 - Done when: User picks an existing image (upload, library item or earlier output) as the reference input for a generation or edit.
