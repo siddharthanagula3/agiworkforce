@@ -699,6 +699,10 @@
       },
       {
         "from": "@agiworkforce/utils",
+        "to": "@agiworkforce/local-runtime-contract"
+      },
+      {
+        "from": "@agiworkforce/utils",
         "to": "@agiworkforce/types"
       },
       {
@@ -856,6 +860,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/ide-runtime"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/local-runtime-contract"
       },
       {
         "from": "agi-workforce",
