@@ -230,6 +230,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/unified-chat"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/utils"
       },
       {

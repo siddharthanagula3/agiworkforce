@@ -17,6 +17,7 @@ import {
   BarChart3,
   CreditCard,
   Server,
+  Puzzle,
   Terminal,
   ChevronDown,
 } from 'lucide-react';
@@ -101,6 +102,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         label: 'MCP servers',
         icon: Server,
         hint: 'Servers this workspace publishes to its members',
+      },
+      {
+        href: '/workspace/plugins',
+        label: 'Plugins',
+        icon: Puzzle,
+        hint: 'Plugins this workspace publishes, and who gets them',
       },
       {
         href: '/workspace/sharing',

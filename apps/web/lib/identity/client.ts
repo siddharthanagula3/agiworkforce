@@ -73,21 +73,25 @@ export function useSession(): IdentitySessionState {
 export function useCompletedSignUpForCurrentSession(): {
   isLoaded: boolean;
   isCurrentSession: boolean;
+  createdThisSession: boolean;
 } {
   const { isLoaded: authLoaded, userId, sessionId } = useAuth();
   const { fetchStatus, signUp } = useSignUp();
   const isLoaded = authLoaded && fetchStatus === 'idle';
+  const createdThisSession =
+    isLoaded &&
+    signUp.status === 'complete' &&
+    userId !== null &&
+    sessionId !== null &&
+    signUp.createdUserId === userId &&
+    signUp.createdSessionId === sessionId;
   return {
     isLoaded,
+    createdThisSession,
     isCurrentSession:
-      isLoaded &&
-      signUp.status === 'complete' &&
+      createdThisSession &&
       typeof signUp.legalAcceptedAt === 'number' &&
-      signUp.legalAcceptedAt > 0 &&
-      userId !== null &&
-      sessionId !== null &&
-      signUp.createdUserId === userId &&
-      signUp.createdSessionId === sessionId,
+      signUp.legalAcceptedAt > 0,
   };
 }
 

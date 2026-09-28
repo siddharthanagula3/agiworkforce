@@ -27,6 +27,7 @@ import { formatDownloadRecord, startBrowserToolDownload } from '../browser-tools
 import {
   alwaysAskRefusal,
   approvalRequirement,
+  PURCHASE_REFUSAL,
   type ActionApprovalRequirement,
 } from './approvalPolicy';
 import { planSiteToolCall, type SiteToolDescriptor } from '../tools/siteToolRegistry';
@@ -588,6 +589,9 @@ export async function runAgentLoop(
         'check, or enter a password, payment card or other sensitive detail, call ' +
         'ask_user_to_take_over with one short sentence saying what they should do, and wait. ' +
         'Never try to solve a CAPTCHA or guess a credential yourself.\n\n' +
+        'PURCHASES: Never place an order, pay, donate or send money yourself. When the next ' +
+        'step would complete a purchase or payment, call ask_user_to_take_over so the user can ' +
+        'check the amount and finish it.\n\n' +
         'Stop and return a clear final answer when the goal is accomplished.',
     };
 
@@ -884,6 +888,18 @@ async function dispatchToolCall(
   }
 
   const requirement = await resolveApprovalRequirement(tabId, toolName, args, options);
+
+  if (requirement.reason === 'purchase') {
+    await settle({ claim: 'refused', reason: PURCHASE_REFUSAL }, null);
+    await assertRunOwnership(options);
+    options.onProgress?.({
+      kind: 'tool_result',
+      stepNumber,
+      toolName,
+      toolResult: PURCHASE_REFUSAL,
+    });
+    return { role: 'tool', content: PURCHASE_REFUSAL, tool_call_id: toolCall.id, name: toolName };
+  }
 
   const uploadRefusal =
     requirement.reason === 'upload' ? await uploadPolicyRefusal(tabId, options) : null;

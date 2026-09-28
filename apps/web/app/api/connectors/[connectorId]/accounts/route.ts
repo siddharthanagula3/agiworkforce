@@ -5,22 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { recordAuditEvent } from '@/lib/security-audit';
-import {
-  connectorSupportsMultipleAccounts,
-  connectorSupportsServiceAccount,
-} from '@/lib/connectors/catalog';
-import { sortConnectorAccounts } from '@/lib/connectors/accounts';
-import { listConnectorAccounts, setDefaultConnectorAccount } from '@/lib/connectors/oauth-store';
-import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
-import { evictConnectorOAuthCaches } from '@/lib/user-connector-tools';
-import {
-  mcpAuthorizationContext,
-  purgeMcpResponseCachePartitions,
-} from '@/lib/connectors/mcp-runtime-cache';
+import { listConnectorAccounts } from '@/lib/connectors/oauth-store';
 
 export const runtime = 'nodejs';
 
@@ -47,80 +34,10 @@ async function handleGet(request: NextRequest, context: Params): Promise<NextRes
   const { userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
   const accounts = await listConnectorAccounts(userId, connectorId);
 
-  return NextResponse.json({
-    connectorId,
-    accounts: sortConnectorAccounts(accounts),
-    supportsMultipleAccounts: connectorSupportsMultipleAccounts(connectorId),
-    supportsServiceAccount: connectorSupportsServiceAccount(connectorId),
-  });
-}
-
-async function handlePatch(request: NextRequest, context: Params): Promise<NextResponse> {
-  const connectorId = await readConnectorId(context);
-  const { userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
-
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return csrfError as NextResponse;
-
-  const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
-  if (rateLimitResponse) return rateLimitResponse;
-
-  let body: { accountKey?: string };
-  try {
-    body = await request.json();
-  } catch {
-    throw createError.validation('Invalid request body');
-  }
-  const accountKey = body.accountKey?.trim();
-  if (!accountKey) throw createError.validation('accountKey is required');
-
-  const changed = await setDefaultConnectorAccount(userId, connectorId, accountKey);
-  if (!changed) {
-    throw createError.notFound(
-      `No connected account "${accountKey}" for ${connectorId}, so nothing was changed.`,
-    );
-  }
-  await evictConnectorOAuthCaches(userId, connectorId);
-
-  return NextResponse.json({ connectorId, accountKey, isDefault: true });
-}
-
-async function handleDelete(request: NextRequest, context: Params): Promise<NextResponse> {
-  const connectorId = await readConnectorId(context);
-  const { userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
-
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return csrfError as NextResponse;
-
-  const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
-  if (rateLimitResponse) return rateLimitResponse;
-
-  const accountKey = request.nextUrl.searchParams.get('accountKey')?.trim();
-  if (!accountKey) throw createError.validation('accountKey is required');
-
-  const revoked = await disconnectConnectorOAuthGrant(userId, connectorId, accountKey);
-  if (!revoked) {
-    throw createError.notFound(
-      `No connected account "${accountKey}" for ${connectorId}, so nothing was disconnected.`,
-    );
-  }
-  await evictConnectorOAuthCaches(userId, connectorId);
-  await purgeMcpResponseCachePartitions([
-    mcpAuthorizationContext.userOauthConnector(userId, connectorId, accountKey),
-  ]);
-  await recordAuditEvent({
-    userId,
-    eventType: 'connector_removed',
-    request,
-    detail: { resourceType: 'connector', connectorId, resourceId: accountKey, source: 'account' },
-  });
-
-  return NextResponse.json({ success: true, connectorId, accountKey });
+  return NextResponse.json({ connectorId, accounts });
 }
 
 export const GET = withErrorHandler(handleGet);
-export const PATCH = withErrorHandler(handlePatch);
-export const DELETE = withErrorHandler(handleDelete);
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

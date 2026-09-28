@@ -206,33 +206,26 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 
 - Done when: Before installing or updating, a dialog lists the permissions the plugin requires and asks the user to accept them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-installation-service.ts:213-230`, `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
-
 ## S10.23: Update Plugin.
 
 - Done when: An update dialog offers a newer plugin version, shows what changes, and applies it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S10.24: Skill import.
 
@@ -343,31 +336,25 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 ## S10.35: Screen-sharing source selection.
 
 - Done when: When sharing the screen, the user picks which screen or window to share before anything is captured.
-- Wave: 2
-- Already works on: desktop
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | In a plain browser the composer hides screenshot capture (capability table says web cannot capture); only the feedback dialog uses the browser picker. Offer the browser screen/window picker in the composer. | mount |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4465-4465`, `apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:54-54`
 
 ## S10.39: Sensitive-data transfer approval.
 
 - Done when: Before private or sensitive data is sent to an outside destination, the user is asked to approve that transfer and told what goes where.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| desktop | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| mobile | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:83-83`, `packages/ui/unified-chat/src/components/ToolCallCard.tsx:473-473`, `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`
+Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
 
 ## S10.40: Remote-device pairing.
 

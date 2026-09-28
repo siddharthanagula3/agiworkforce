@@ -12,6 +12,7 @@ import {
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addAttachmentTruncationHeader } from '@/lib/chat-attachment-truncation-notice';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
@@ -731,6 +732,7 @@ async function dispatchChatCompletions(
       addFallbackReasonHeader(researchHeaders, processed);
       addModelEscalationHeaders(researchHeaders, processed);
       addSecretRedactionNoticeHeader(researchHeaders, processed);
+      addAttachmentTruncationHeader(researchHeaders, processed);
       addProjectSourcesHeader(researchHeaders, processed);
       addRouteLaneHeader(researchHeaders, processed);
 
@@ -893,6 +895,7 @@ async function dispatchChatCompletions(
         addFallbackReasonHeader(headers, processed);
         addModelEscalationHeaders(headers, processed);
         addSecretRedactionNoticeHeader(headers, processed);
+        addAttachmentTruncationHeader(headers, processed);
         addProjectSourcesHeader(headers, processed);
         addRouteLaneHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
@@ -1074,7 +1077,12 @@ async function dispatchChatCompletions(
         },
         isCancellationRequested: () =>
           isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
-        takeSteerMessages: () => takeCloudAgentRunSteers(runDb, { userId, runId: run.id }),
+        takeSteerMessages: () =>
+          takeCloudAgentRunSteers(runDb, {
+            userId,
+            organizationId: processed.organizationId ?? null,
+            runId: run.id,
+          }),
         onApprovalCheckpoint: async (checkpoint) => {
           await saveCloudAgentApprovalCheckpoint(runDb, {
             userId,

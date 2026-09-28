@@ -58,7 +58,7 @@ use crate::platform::policy::{PolicyDecision, PolicyEngine};
 use crate::runtime::change_reason::ChangeReason;
 use crate::runtime::session::{
     ManagedSession, ManagedSessionApprovalOutcome, ManagedSessionAutoRouting,
-    ManagedSessionFileChangeKind,
+    ManagedSessionFileChangeKind, SessionFingerprint,
 };
 use crate::runtime::session_activity::SharedSessionActivity;
 use crate::runtime::session_control::{
@@ -485,6 +485,63 @@ impl CliDeveloperSessionHost {
             .collect()
     }
 
+    async fn read_session_file(
+        &self,
+        thread_id: &str,
+    ) -> Result<(PathBuf, Option<SessionFingerprint>, ManagedSession), DeveloperSessionHostError>
+    {
+        let store = self.store.clone();
+        let thread_id = thread_id.to_string();
+        let (path, fingerprint, managed) = tokio::task::spawn_blocking(move || {
+            let reference = ManagedSessionReference::SessionId(thread_id);
+            let path = store.resolve(reference.clone())?.path;
+            let fingerprint = crate::runtime::session::session_fingerprint(&path);
+            let managed = store.load(reference)?;
+            anyhow::Ok((path, fingerprint, managed))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        if managed.archived_at.is_some() {
+            return Err(DeveloperSessionHostError::conflict(
+                "Archived threads must be restored before they can be resumed",
+            ));
+        }
+        self.validate_session_workspace(&managed)?;
+        Ok((path, fingerprint, managed))
+    }
+
+    async fn refresh_from_disk(
+        &self,
+        thread_id: &str,
+        session: &Arc<Mutex<AgentSession>>,
+        taken_over: bool,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let (path, loaded) = {
+            let agent = session.lock().await;
+            (agent.managed_session_path.clone(), agent.loaded_fingerprint)
+        };
+        let Some(path) = path else {
+            return Ok(());
+        };
+        if !taken_over && crate::runtime::session::session_fingerprint(&path) == loaded {
+            return Ok(());
+        }
+        let (path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        {
+            let mut agent = session.lock().await;
+            agent
+                .load_managed_conversation(managed, path)
+                .map_err(invalid_request)?;
+            agent.loaded_fingerprint = fingerprint;
+        }
+        self.emit(
+            "thread/reloaded",
+            serde_json::json!({ "threadId": thread_id }),
+        );
+        Ok(())
+    }
+
     async fn build_agent(
         &self,
         managed_session: ManagedSession,
@@ -503,21 +560,8 @@ impl CliDeveloperSessionHost {
         )
         .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
-        if !managed_session.messages.is_empty() {
-            let fresh_system_message = agent.messages.first().cloned();
-            agent.messages = managed_session.messages.clone();
-            if !agent.memory_enabled {
-                if let (Some(fresh), Some(stored)) =
-                    (fresh_system_message, agent.messages.first_mut())
-                {
-                    if stored.role == "system" {
-                        *stored = fresh;
-                    }
-                }
-            }
-        }
         agent
-            .adopt_managed_session(managed_session, path)
+            .load_managed_conversation(managed_session, path)
             .map_err(invalid_request)?;
         agent.quiet = true;
 
@@ -646,25 +690,9 @@ impl CliDeveloperSessionHost {
             return Ok(session);
         }
 
-        let store = self.store.clone();
-        let thread_id_owned = thread_id.to_string();
-        let resolved = tokio::task::spawn_blocking(move || {
-            let reference = ManagedSessionReference::SessionId(thread_id_owned);
-            let resolved = store.resolve(reference.clone())?;
-            let session = store.load(reference)?;
-            anyhow::Ok((resolved, session))
-        })
-        .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
-
-        if resolved.1.archived_at.is_some() {
-            return Err(DeveloperSessionHostError::conflict(
-                "Archived threads must be restored before they can be resumed",
-            ));
-        }
-        self.validate_session_workspace(&resolved.1)?;
-        let agent = self.build_agent(resolved.1, resolved.0.path).await?;
+        let (path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        let agent = self.build_agent(managed, path).await?;
+        agent.lock().await.loaded_fingerprint = fingerprint;
 
         let (session, inserted) = {
             let mut sessions = self.sessions.lock().await;
@@ -1014,7 +1042,7 @@ impl CliDeveloperSessionHost {
         &self,
         thread_id: &str,
         session_path: &Path,
-    ) -> Result<(), DeveloperSessionHostError> {
+    ) -> Result<bool, DeveloperSessionHostError> {
         let path = session_path.to_path_buf();
         let writer = self.writer;
         let claim = tokio::task::spawn_blocking(move || writer_lease::claim(&path, writer))
@@ -1029,9 +1057,9 @@ impl CliDeveloperSessionHost {
                     Some(lease),
                     None,
                 );
-                Ok(())
+                Ok(false)
             }
-            LeaseClaim::Renewed(_) => Ok(()),
+            LeaseClaim::Renewed(_) => Ok(false),
             LeaseClaim::StaleTakeover { lease, previous } => {
                 self.emit_writer_change(
                     thread_id,
@@ -1039,7 +1067,7 @@ impl CliDeveloperSessionHost {
                     Some(lease),
                     Some(previous),
                 );
-                Ok(())
+                Ok(true)
             }
             LeaseClaim::TakenOver { lease, previous } => {
                 self.emit_writer_change(
@@ -1048,7 +1076,7 @@ impl CliDeveloperSessionHost {
                     Some(lease),
                     Some(previous),
                 );
-                Ok(())
+                Ok(true)
             }
             LeaseClaim::HeldBy(holder) => Err(DeveloperSessionHostError::writer_conflict(
                 format!(
@@ -1948,7 +1976,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .ok_or_else(|| {
                 DeveloperSessionHostError::internal("This thread has no persisted session file")
             })?;
-        self.claim_writer_for_turn(&params.thread_id, &session_path)
+        let taken_over = self
+            .claim_writer_for_turn(&params.thread_id, &session_path)
+            .await?;
+        self.refresh_from_disk(&params.thread_id, &session, taken_over)
             .await?;
         let (outcome, persisted) = {
             let mut agent = session.lock().await;
@@ -2211,18 +2242,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "This app-server already has {MAX_CONCURRENT_RUNNING_TURNS} turns running; interrupt one before starting another"
             )));
         }
-        let (session_path, activity) = {
-            let agent = session.lock().await;
-            (
-                agent.managed_session_path.clone(),
-                agent.session_activity.clone(),
-            )
-        };
-        let session_path = session_path.ok_or_else(|| {
-            DeveloperSessionHostError::internal("This thread has no persisted session file")
-        })?;
-        self.claim_writer_for_turn(&params.thread_id, &session_path)
+        let session_path = session
+            .lock()
+            .await
+            .managed_session_path
+            .clone()
+            .ok_or_else(|| {
+                DeveloperSessionHostError::internal("This thread has no persisted session file")
+            })?;
+        let taken_over = self
+            .claim_writer_for_turn(&params.thread_id, &session_path)
             .await?;
+        self.refresh_from_disk(&params.thread_id, &session, taken_over)
+            .await?;
+        let activity = session.lock().await.session_activity.clone();
 
         let mut refused_turn: Option<anyhow::Error> = None;
         {

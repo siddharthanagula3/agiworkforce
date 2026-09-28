@@ -71,39 +71,34 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 - Done when: User picks the aspect ratio of the generated image from ratios the model supports.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No aspect flag; only --size presets (1792x1024 etc.), which the route maps to a ratio. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:950-953`, `apps/cli/src/cloud/image.rs:277-283`
 
 ## S44.11: Background transparency option.
 
 - Done when: User asks for a transparent background on the generated image.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Route supports transparent_background on OpenAI edits; mobile never sends it. | ui |
-| cli | partial | No flag; the CLI request has no transparent_background field. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`, `apps/cli/src/cloud/image.rs:27-38`
+Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
 
 ## S44.18: Cancel generation.
 
 - Done when: User stops an image generation in progress and the job is cancelled (not billed further).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Stop only marks the message stopped on the phone; it never calls the cancel route, so the server job continues. | handler |
-| cli | partial | Ctrl-C only stops waiting; the CLI never calls the cancel route. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/media/image/cancel/route.ts:26-30`
@@ -112,14 +107,11 @@ Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/m
 
 - Done when: After a failed or stopped generation, user retries it in place with the same prompt.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No retry control; the user re-runs /image or agi image. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3307-3310`, `apps/cli/src/cloud/image.rs:261-274`
 
 ## S44.20: Variation generation.
 
@@ -157,43 +149,38 @@ Code: `apps/cli/src/tui/tui_app.rs:3307-3310`, `apps/cli/src/cloud/image.rs:261-
 
 - Done when: User can see the prompt and generation settings (model, ratio, size, quality) used for an image.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Prompt shows in the full-screen viewer and Library; model and settings are not shown for the image. | ui |
-| cli | partial | Prints model and provider; size, quality and ratio are not reported back. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`, `apps/cli/src/lib.rs:1751-1753`
+Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 ## S44.24: Reuse prompt.
 
 - Done when: User reuses the prompt of an earlier image in one action.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No reuse control; the user re-runs the command from shell history. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:939-951`, `apps/cli/src/tui/tui_app.rs:3307-3310`
 
 ## S44.25: Reuse settings.
 
 - Done when: User regenerates with the same settings (model, ratio) as an earlier image.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Model and ratio stay selected in the sheet, but an earlier image's settings cannot be restored. | ui |
-| cli | partial | Flags must be retyped; no saved settings. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`, `apps/cli/src/lib.rs:942-963`
+Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 ## S44.27: Save to Library.
 
@@ -270,11 +257,8 @@ Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/
 
 - Done when: Generated images are labelled as AI-generated (visibly and in machine-readable provenance).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Prints the model, but the saved file carries no AI-generated metadata (headers are dropped on disk). | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1751-1753`, `apps/cli/src/cloud/image.rs:317-323`

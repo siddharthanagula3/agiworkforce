@@ -69,22 +69,6 @@ Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 
 Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
-## S86.07: Trusted devices.
-
-- Done when: The user can see the devices trusted on the account (e.g. that skip extra checks or are linked) and remove trust.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Linked devices (CLI, VS Code, extension, desktop) can be listed, renamed and unlinked, but there is no trusted-device concept for sign-in checks, and Security says trusted-device lists are "not available", contradicting the Linked devices panel. | ui |
-| desktop | partial | Same as web (hosted Account page). | ui |
-| mobile | partial | Mobile lists sessions under "Devices" but not the linked-device registry, and has no trust setting. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:385-405`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:170-180`, `apps/web/features/settings/sections/SecuritySection.tsx:134-160`
-
 ## S86.10: Sign out all devices.
 
 - Done when: One action signs the account out everywhere: every browser, app and device credential.

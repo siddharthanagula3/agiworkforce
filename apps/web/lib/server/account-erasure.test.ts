@@ -41,6 +41,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
+  extForMime: vi.fn(),
+  streamStoredMedia: vi.fn(),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   copyPrivateObjectIfUnchanged: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('@/lib/server/object-storage', () => ({
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isProjectKnowledgeObjectStorageConfigured: () => mocks.objectStorageConfigured(),
+  getProjectKnowledgeObject: vi.fn(),
 }));
 vi.mock('@/lib/e2b/session-store', () => ({
   deleteE2BSessionsForUser: (...args: unknown[]) => mocks.deleteE2BSessionsForUser(...args),

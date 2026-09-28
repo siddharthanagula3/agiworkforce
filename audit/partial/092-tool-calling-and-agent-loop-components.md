@@ -27,14 +27,3 @@ Code: `apps/cli/src/agents.rs:331-335`, `apps/web/app/api/agents/execute/route.t
 | platform | partial | Subagents run only in the CLI runtime (task tool, subagent_v2); the hosted loop has depth/fan-out budget constants but no subagent spawning. | handler |
 
 Code: `apps/cli/src/agent/chat.rs:1710-1718`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`
-
-## S92.27: Human-input queue.
-
-- Done when: Requests for human input (approvals, questions, connector input) queue durably and the run resumes when answered.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The connector input_required pause is on for every attended turn (tool-loop.ts:2744; AGI_MCP_INPUT_PAUSE is deleted). Still open: no client answers the pause yet; the web input form and resume call are being built in the connector lane. | flag-off |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1077-1085`, `apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql:8-12`

@@ -20,15 +20,18 @@ import {
   PdfAttachmentUnreadableError,
 } from '@/lib/server/pdf-attachment-content';
 import { untrustedDocumentText } from '@/lib/server/untrusted-document-text';
+import { truncateExtractedText, wasExtractionTruncated } from '@/lib/server/extraction-truncation';
 import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { ImageDetailValue } from './image-detail';
+import { markNativeDocument, type NativeDocument } from './media-input';
 import { mapWithConcurrency } from './tool-loop';
 
 const MAX_REQUEST_ATTACHMENT_COUNT = 20;
 const MAX_REQUEST_ATTACHMENT_BYTES = 18 * 1024 * 1024;
 const MAX_NOTEBOOK_TEXT_CHARS = 200_000;
 const NOTEBOOK_MIME_TYPE = 'application/x-ipynb+json';
+const PDF_MIME_TYPE = 'application/pdf';
 export const MAX_PARALLEL_ATTACHMENT_FETCHES = 4;
 
 type AttachmentReferencePart = {
@@ -191,8 +194,7 @@ function extractNotebookText(data: Buffer): string | null {
   }
 
   const text = parts.join('\n\n').replace(/\r\n?/g, '\n').trim();
-  if (text.length <= MAX_NOTEBOOK_TEXT_CHARS) return text;
-  return `${text.slice(0, MAX_NOTEBOOK_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  return truncateExtractedText(text, MAX_NOTEBOOK_TEXT_CHARS);
 }
 
 type AttachmentSlot = {
@@ -309,6 +311,7 @@ async function fetchAttachmentPayload(
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
+  onTruncated?: (filename: string) => void,
 ): Promise<TurnAttachment[]> {
   const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
@@ -448,7 +451,7 @@ export async function hydrateChatAttachments(
       continue;
     }
 
-    if (asset.mimeType.trim().toLowerCase() === 'application/pdf') {
+    if (asset.mimeType.trim().toLowerCase() === PDF_MIME_TYPE) {
       let content: Awaited<ReturnType<typeof extractPdfAttachmentContent>>;
       try {
         content = await extractPdfAttachmentContent(object.data, filename);
@@ -461,6 +464,14 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (
+        live &&
+        (content.pagesOmitted ||
+          content.scannedPagesOmitted.length > 0 ||
+          wasExtractionTruncated(content.text))
+      ) {
+        onTruncated?.(filename);
+      }
       const pageImageParts = content.pageImages.flatMap((image) => [
         { type: 'text' as const, text: `[Page ${image.page}]` },
         {
@@ -477,28 +488,40 @@ export async function hydrateChatAttachments(
               },
             ]
           : [];
+      const nativeDocument: NativeDocument = {
+        filename,
+        mediaType: PDF_MIME_TYPE,
+        data: rawBase64,
+        pageCount: content.pageCount,
+      };
       if (content.text) {
-        slot.resolved = [
+        slot.resolved = markNativeDocument<AttachmentReferencePart>(
           header,
-          ...textDocumentParts(filename, content.text),
-          ...pageImageParts,
-          ...omittedScanNote,
-        ];
+          [...textDocumentParts(filename, content.text), ...pageImageParts, ...omittedScanNote],
+          nativeDocument,
+        );
         continue;
       }
       if (content.pageImages.length > 0) {
-        slot.resolved = [
+        slot.resolved = markNativeDocument<AttachmentReferencePart>(
           header,
-          {
-            type: 'text',
-            text: `[${filename} has no text layer; its ${content.pageImages.length === 1 ? 'page is' : `${content.pageImages.length} pages are`} attached as images]`,
-          },
-          ...pageImageParts,
-          ...omittedScanNote,
-        ];
+          [
+            {
+              type: 'text',
+              text: `[${filename} has no text layer; its ${content.pageImages.length === 1 ? 'page is' : `${content.pageImages.length} pages are`} attached as images]`,
+            },
+            ...pageImageParts,
+            ...omittedScanNote,
+          ],
+          nativeDocument,
+        );
         continue;
       }
-      slot.resolved = [header, { type: 'text', text: `[${filename} contains no readable text]` }];
+      slot.resolved = markNativeDocument<AttachmentReferencePart>(
+        header,
+        [{ type: 'text', text: `[${filename} contains no readable text]` }],
+        nativeDocument,
+      );
       continue;
     }
 
@@ -516,6 +539,7 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (live && wasExtractionTruncated(officeText)) onTruncated?.(filename);
       slot.resolved = officeText
         ? [header, ...textDocumentParts(filename, officeText)]
         : [header, { type: 'text', text: `[${filename} contains no readable text]` }];
@@ -536,6 +560,7 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (live && wasExtractionTruncated(notebookText)) onTruncated?.(filename);
       if (!notebookText) {
         slot.resolved = [
           header,

@@ -18,11 +18,14 @@ import {
   isFreeBillingPlanTier,
   managedUsageBucketLabel,
   normalizeUsagePercentage,
+  parseAccountUsageHistoryResponse,
+  parseAccountUsageLimitsResponse,
+  type AccountUsageHistoryResponse,
+  type AccountUsageLimitsResponse,
   type ManagedUsageCreditWindow,
+  type ManagedUsageSummaryResponse,
+  type TierUnitUsage,
 } from '@agiworkforce/types';
-import type { AccountUsageHistoryResponse } from '@/app/api/usage/history/route';
-import type { UsageLimitsResponse } from '@/app/api/usage/limits/route';
-import type { AccountUsageSummaryResponse } from '@/app/api/usage/route';
 import { usageWorkloadLabel } from '@/lib/billing/usage-attribution';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
@@ -35,8 +38,7 @@ type HistoryRow = Pick<
   AccountUsageHistoryResponse['byModel'][number],
   'key' | 'label' | 'requests' | 'credits'
 >;
-type LimitUnit = UsageLimitsResponse['units'][number];
-type AccountCredits = NonNullable<AccountUsageSummaryResponse['credits']>;
+type AccountCredits = NonNullable<ManagedUsageSummaryResponse['credits']>;
 
 const MINUTE_MS = 60 * 1000;
 const HISTORY_ROW_LIMIT = 8;
@@ -159,108 +161,6 @@ function periodEnd(start: string, granularity: Granularity): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function parseRows(value: unknown): AccountUsageHistoryResponse['byModel'] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((row) => {
-    if (!isRecord(row) || typeof row['key'] !== 'string') return [];
-    if (!isFiniteNumber(row['requests']) || !isFiniteNumber(row['credits'])) return [];
-    return [
-      {
-        key: row['key'],
-        label: typeof row['label'] === 'string' ? row['label'] : null,
-        requests: row['requests'],
-        inputTokens: isFiniteNumber(row['inputTokens']) ? row['inputTokens'] : 0,
-        outputTokens: isFiniteNumber(row['outputTokens']) ? row['outputTokens'] : 0,
-        credits: row['credits'],
-      },
-    ];
-  });
-}
-
-function parseUsageHistory(value: unknown): AccountUsageHistoryResponse | null {
-  if (!isRecord(value) || !isRecord(value['totals']) || !isRecord(value['freshness'])) return null;
-  const totals = value['totals'];
-  const freshness = value['freshness'];
-  const granularity = value['granularity'];
-  if (!isFiniteNumber(totals['requests']) || !isFiniteNumber(totals['credits'])) return null;
-  if (granularity !== 'day' && granularity !== 'week' && granularity !== 'month') return null;
-  const periods = Array.isArray(value['periods']) ? value['periods'] : [];
-  return {
-    userId: String(value['userId'] ?? ''),
-    from: String(value['from'] ?? ''),
-    to: String(value['to'] ?? ''),
-    granularity,
-    totals: {
-      requests: totals['requests'],
-      inputTokens: isFiniteNumber(totals['inputTokens']) ? totals['inputTokens'] : 0,
-      outputTokens: isFiniteNumber(totals['outputTokens']) ? totals['outputTokens'] : 0,
-      credits: totals['credits'],
-    },
-    periods: periods.flatMap((period) =>
-      isRecord(period) &&
-      typeof period['start'] === 'string' &&
-      isFiniteNumber(period['requests']) &&
-      isFiniteNumber(period['credits'])
-        ? [{ start: period['start'], requests: period['requests'], credits: period['credits'] }]
-        : [],
-    ),
-    byWorkload: parseRows(value['byWorkload']),
-    byModel: parseRows(value['byModel']),
-    byProject: parseRows(value['byProject']),
-    freshness: {
-      asOf: String(freshness['asOf'] ?? ''),
-      latestActivityAt:
-        typeof freshness['latestActivityAt'] === 'string' ? freshness['latestActivityAt'] : null,
-      unsettledRequests: isFiniteNumber(freshness['unsettledRequests'])
-        ? freshness['unsettledRequests']
-        : 0,
-    },
-  };
-}
-
-function parseUsageLimits(value: unknown): UsageLimitsResponse | null {
-  if (!isRecord(value) || !Array.isArray(value['units']) || !isRecord(value['images'])) return null;
-  const images = value['images'];
-  if (typeof value['resetAt'] !== 'string' || !isFiniteNumber(images['images'])) return null;
-  const units = value['units'].flatMap((unit): LimitUnit[] => {
-    if (!isRecord(unit) || !isFiniteNumber(unit['consumed'])) return [];
-    const kind = unit['unit'];
-    if (kind !== 'voice_minutes' && kind !== 'video_seconds' && kind !== 'computer_use_requests') {
-      return [];
-    }
-    return [
-      {
-        unit: kind,
-        consumed: unit['consumed'],
-        hardLimit: isFiniteNumber(unit['hardLimit']) ? unit['hardLimit'] : null,
-        softLimit: isFiniteNumber(unit['softLimit']) ? unit['softLimit'] : null,
-      },
-    ];
-  });
-  const responses = value['responses'];
-  return {
-    planTier: String(value['planTier'] ?? ''),
-    periodStart: String(value['periodStart'] ?? ''),
-    resetAt: value['resetAt'],
-    units,
-    images: {
-      images: images['images'],
-      requests: isFiniteNumber(images['requests']) ? images['requests'] : 0,
-      credits: isFiniteNumber(images['credits']) ? images['credits'] : 0,
-    },
-    responses:
-      isRecord(responses) &&
-      isFiniteNumber(responses['limit']) &&
-      isFiniteNumber(responses['active'])
-        ? { limit: responses['limit'], active: responses['active'] }
-        : null,
-  };
 }
 
 interface Loadable<T> {
@@ -392,7 +292,7 @@ function BalanceRow({ label, value, detail }: { label: string; value: string; de
 }
 
 function bonusRow(bonus: AccountCredits['bonus']): { value: string; detail: string } {
-  if (bonus === null) {
+  if (!bonus) {
     return { value: 'Unavailable', detail: 'Could not read your bonus credits. Refresh to retry.' };
   }
   if (bonus.remaining <= 0) {
@@ -450,7 +350,7 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
   );
 }
 
-function AllowanceRow({ unit }: { unit: LimitUnit }) {
+function AllowanceRow({ unit }: { unit: TierUnitUsage }) {
   const copy = MONTHLY_METERED_UNIT_COPY[unit.unit];
   const limit = unit.hardLimit;
   const used = formatCount(unit.consumed, copy.one, copy.many);
@@ -472,7 +372,7 @@ function AllowanceRow({ unit }: { unit: LimitUnit }) {
   );
 }
 
-function RunningResponsesRow({ reading }: { reading: UsageLimitsResponse['responses'] }) {
+function RunningResponsesRow({ reading }: { reading: AccountUsageLimitsResponse['responses'] }) {
   if (!reading) return null;
   return (
     <div style={ROW}>
@@ -484,7 +384,7 @@ function RunningResponsesRow({ reading }: { reading: UsageLimitsResponse['respon
   );
 }
 
-function MonthlyAllowancesCard({ resource }: { resource: Loadable<UsageLimitsResponse> }) {
+function MonthlyAllowancesCard({ resource }: { resource: Loadable<AccountUsageLimitsResponse> }) {
   const { data, loading, error, reload } = resource;
   if (!data && !loading && !error) return null;
 
@@ -737,7 +637,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
     reload,
   } = useUsageResource(
     enabled ? `/api/usage/history?granularity=${granularity}` : null,
-    parseUsageHistory,
+    parseAccountUsageHistoryResponse,
     'Could not load your usage history.',
   );
   if (!enabled) return null;
@@ -871,7 +771,7 @@ export function UsageSection() {
   const showFlagship = credits ? credits.flagship_weekly !== null : true;
   const limits = useUsageResource(
     usage !== null && !contractPriced ? '/api/usage/limits' : null,
-    parseUsageLimits,
+    parseAccountUsageLimitsResponse,
     LIMITS_FAILURE,
   );
 
