@@ -220,12 +220,12 @@ function checkReaders({ repoRoot, surfaces, fail }) {
   }
 }
 
-function checkClients({ repoRoot, fail }) {
+function checkClients({ repoRoot, exceptions, fail }) {
   const provenExceptions = new Set();
   for (const file of clientFiles(repoRoot)) {
     const source = read(repoRoot, file);
     if (source === null) continue;
-    const exception = RECORDED_EXCEPTIONS[file];
+    const exception = exceptions[file];
     const matrix = importedMatrixSymbols(source);
     if (matrix.length > 0) {
       if (MATRIX_PROVIDERS.includes(file)) {
@@ -252,7 +252,7 @@ function checkClients({ repoRoot, fail }) {
       }
     }
   }
-  for (const [file, exception] of Object.entries(RECORDED_EXCEPTIONS)) {
+  for (const [file, exception] of Object.entries(exceptions)) {
     if (!exception.why || !exception.fix) {
       fail(`${file} is a recorded exception without a reason and a fix`);
     }
@@ -267,7 +267,10 @@ function checkClients({ repoRoot, fail }) {
   }
 }
 
-export function checkCapabilityConsumption(repoRoot = REPO_ROOT) {
+export function checkCapabilityConsumption(
+  repoRoot = REPO_ROOT,
+  { exceptions = RECORDED_EXCEPTIONS } = {},
+) {
   const failures = [];
   const fail = (message) => failures.push(message);
   const surfaces = readSurfaces(repoRoot);
@@ -276,7 +279,7 @@ export function checkCapabilityConsumption(repoRoot = REPO_ROOT) {
     return failures;
   }
   checkReaders({ repoRoot, surfaces, fail });
-  checkClients({ repoRoot, fail });
+  checkClients({ repoRoot, exceptions, fail });
   return failures;
 }
 
