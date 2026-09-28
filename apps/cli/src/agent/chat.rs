@@ -691,6 +691,11 @@ impl AgentSession {
 
     fn search_refusal(&self) -> Option<String> {
         if self.privacy_mode == super::PrivacyMode::Managed {
+            if crate::tier_cache::capability_allowed(crate::tier_cache::WEB_SEARCH_CAPABILITY)
+                == Some(false)
+            {
+                return Some("Web search is not available on this account right now.".to_string());
+            }
             return (!crate::model_catalog::supports_web_search(&self.model)).then(|| {
                 "/search needs a model that can search the web. Switch to Auto or a search-capable model, then try again.".to_string()
             });
