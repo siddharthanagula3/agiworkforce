@@ -4,9 +4,11 @@ import {
   CLOUD_CODE_CHANGE_STATES,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATES,
+  CLOUD_CODE_SHARE_VISIBILITIES,
 } from '@agiworkforce/types';
 
 export const CLOUD_CODE_SESSIONS_PATH = '/api/code/sessions';
+export const CLOUD_CODE_SHARED_SESSIONS_PATH = '/api/code/shared';
 export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
 export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
@@ -35,6 +37,9 @@ export const CloudCodeSessionSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   closedAt: z.string().datetime().nullable(),
+  shareVisibility: z.enum(CLOUD_CODE_SHARE_VISIBILITIES).default('private'),
+  shareAudience: z.enum(['team', 'public']).optional(),
+  shareToken: z.string().nullable().default(null),
 });
 
 export const CloudCodeTerminalEntrySchema = z.object({
@@ -130,6 +135,20 @@ export const CloudCodeSessionDetailSchema = z.object({
 });
 
 export const CloudCodeSessionResponseSchema = z.object({ session: CloudCodeSessionSchema });
+
+export const CloudCodeSharedSessionSchema = z.object({
+  visibility: z.enum(['team', 'public']),
+  title: z.string(),
+  repositoryUrl: z.string().nullable(),
+  workingBranch: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+  pullRequestUrl: z.string().nullable(),
+  pullRequestNumber: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  terminalEntries: z.array(CloudCodeTerminalEntrySchema),
+  turns: z.array(CloudCodeAgentTurnRecordSchema),
+});
 export const CloudCodeSessionDeletedSchema = z.object({ deleted: z.literal(true) });
 
 export const CloudCodeCommandResponseSchema = z.object({

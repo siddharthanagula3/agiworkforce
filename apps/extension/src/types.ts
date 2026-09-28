@@ -48,6 +48,9 @@ export type NativeMessageType =
   | 'RESOLVE_CHAT_APPROVAL'
   | 'CANCEL_COMPUTER_USE'
   | 'GET_COMPUTER_USE_STATE'
+  | 'PAUSE_COMPUTER_USE'
+  | 'RESUME_COMPUTER_USE'
+  | 'AGI_CU_USER_INPUT'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'GET_ACCESSIBILITY_TREE'
@@ -71,6 +74,7 @@ export type NativeMessageType =
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
+  | 'UPDATE_SHORTCUT'
   | 'REPLAY_SHORTCUT'
   | 'GET_TAB_GROUP_STATE'
   | 'ADD_TAB_TO_GROUP'
@@ -499,6 +503,7 @@ export interface ChatMessageMessage extends BaseMessage {
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;
+  workMode?: 'chat' | 'agiwork';
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
@@ -782,6 +787,13 @@ export interface DeleteShortcutMessage extends BaseMessage {
   shortcutId: string;
 }
 
+export interface UpdateShortcutMessage extends BaseMessage {
+  type: 'UPDATE_SHORTCUT';
+  shortcutId: string;
+  name: string;
+  prompt: string;
+}
+
 export interface ReplayShortcutMessage extends BaseMessage {
   type: 'REPLAY_SHORTCUT';
   shortcutId: string;
@@ -900,11 +912,18 @@ export interface GetComputerUseStateMessage extends BaseMessage {
   type: 'GET_COMPUTER_USE_STATE';
 }
 
+export interface ComputerUseTakeoverMessage extends BaseMessage {
+  type: 'PAUSE_COMPUTER_USE' | 'RESUME_COMPUTER_USE';
+  runId: string;
+}
+
 export interface ComputerUseCommandResponse {
   success: boolean;
   runId?: string;
   runGeneration?: number;
   running?: boolean;
+  paused?: boolean;
+  pauseReason?: string;
   tabId?: number;
   error?: string;
 }
@@ -1054,6 +1073,7 @@ export type ExtensionMessage =
   | SaveShortcutMessage
   | ListShortcutsMessage
   | DeleteShortcutMessage
+  | UpdateShortcutMessage
   | ReplayShortcutMessage
   | CreateScheduledTaskMessage
   | ListScheduledTasksMessage
@@ -1067,6 +1087,7 @@ export type ExtensionMessage =
   | StartComputerUseMessage
   | CancelComputerUseMessage
   | GetComputerUseStateMessage
+  | ComputerUseTakeoverMessage
   | ApproveContextHandoffMessage
   | CancelContextHandoffMessage
   | StartDownloadMessage

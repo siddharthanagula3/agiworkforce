@@ -246,6 +246,12 @@ jobs:
             exit 1
           fi
 
+          zips=("$out"/*.zip)
+          if [ "${#zips[@]}" -ne 2 ]; then
+            echo "ERROR: expected two architecture-specific .zip update archives; got ${#zips[@]}" >&2
+            exit 1
+          fi
+
           verify_app() {
             local app_path="$1" expected_arch="$2"
             local plist="${app_path}/Contents/Info.plist"
@@ -293,6 +299,10 @@ jobs:
             }
           done
 
+          for zip in "${zips[@]}"; do
+            [ -s "$zip" ] || { echo "ERROR: empty artifact $zip" >&2; exit 1; }
+          done
+
       # Notarization proves who built the installer, not which bytes arrived.
       # /api/download/checksums serves this file, so the download page can only
       # show a digest the release itself published.
@@ -301,7 +311,7 @@ jobs:
         run: |
           set -euo pipefail
           cd apps/desktop/release
-          shasum -a 256 ./*.dmg | sed 's| \./| |' > SHA256SUMS
+          shasum -a 256 ./*.dmg ./*.zip | sed 's| \./| |' > SHA256SUMS
           shasum -a 256 -c SHA256SUMS
           cat SHA256SUMS
 
@@ -323,6 +333,7 @@ jobs:
           out="apps/desktop/release"
           gh release upload "$TAG" \
             "$out"/*.dmg \
+            "$out"/*.zip \
             "$out/SHA256SUMS"
 
   publish-release:

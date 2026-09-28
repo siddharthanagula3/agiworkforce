@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: The user turns computer use on in a guided setup that grants the needed permissions.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Browser control is set up per site by approving it, but there is no guided setup; the agent itself can only be reached from Run Autofill. | ui |
-
-Code: `apps/extension/src/features/computer-use/browserControlConsent.ts:90-96`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S65.02: Operating-system permission explanation.
 
@@ -44,26 +41,21 @@ Code: `apps/extension/src/features/computer-use/browserControlConsent.ts:90-96`,
 
 - Done when: The user sees what the agent sees on screen as it works.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The driven tab is the visible one, but the log's screenshot thumbnails never fill because no step carries the image. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1000-1005`
 
 ## S65.08: Cursor/action visualization.
 
 - Done when: The agent's pointer position or action target is shown visually as it acts.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The log names each click ("Click at (x, y)" or selector); nothing marks the target on the page. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1025-1031`
 
 ## S65.09: Current-application indicator.
 
@@ -137,9 +129,6 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1025-1031`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The agent can open a page's upload button (with approval) but the user must choose the file in Chrome's picker; it cannot drive the dialog. | handler |
-
-Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
 
 ## S65.18: Background application operation where supported.
 
@@ -150,22 +139,19 @@ Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The agent drives a tab through the debugger, but the run stops if the user switches to another tab, so it cannot work in a background tab. | handler |
+| chrome | partial | Claude in Chrome keeps working when the user switches tabs (support.claude.com/en/articles/12012173). The run still stops when another tab is activated outside a take-over; working in a hidden tab needs a live check that Page.captureScreenshot answers for a background tab before the cancellation can be lifted. | handler |
 
-Code: `apps/extension/src/background.ts:4707-4720`
+Code: `apps/extension/src/background.ts:4919-4919`
 
 ## S65.19: User-input arbitration.
 
 - Done when: When the user moves the mouse or types, the agent yields rather than fighting for control.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The cited lines stop the run only when the user activates another tab; the debugger detach path stops it when they dismiss Chrome's bar. Nothing observes the user moving the mouse or typing inside the driven tab, so the agent and the user can fight for the same page. Remaining: detect user input on the driven tab (or CDP Input events not sent by the loop) and pause. |  |
-
-Code: `apps/extension/src/background.ts:4707-4720`, `apps/extension/src/features/side-panel/computerUsePanel.ts:519-526`
 
 ## S65.20: Emergency stop.
 
@@ -213,14 +199,12 @@ Code: `apps/extension/src/background.ts:4707-4720`, `apps/extension/src/features
 
 - Done when: When sign-in is required the agent hands off to the user and continues afterwards.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The agent never fills passwords and asks before sensitive fields, but a sign-in stops the run; there is no continue-after-sign-in. | ui, handler |
-
-Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:219-221`
 
 ## S65.25: Action outcome/receipt.
 
@@ -258,14 +242,11 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 - Done when: When a permission is revoked the agent stops and the user is told how to restore it.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The stop half holds and is stronger than cited: removing a site or an admin policy change also cancels the run (background.ts:2615-2634). The second half does not: the copy names the cause only ("...so the run was stopped"), a removed site is reported as "The tab left the page this run was approved for", and nothing tells the user how to restore control (re-approve the site, start Run Autofill again). Remaining: add restore guidance to the cancellation copy and a distinct reason for site removal. |  |
-
-Code: `apps/extension/src/background.ts:4148-4165`, `apps/extension/src/features/side-panel/computerUsePanel.ts:515-520`, `apps/extension/src/side_panel.ts:7596-7604`
 
 ## S65.29: Remote access to a permitted local computer.
 

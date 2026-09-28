@@ -5,14 +5,12 @@ import Link from 'next/link';
 import {
   Archive,
   ArchiveRestore,
-  Download,
   LibraryBig,
   Link2,
   MoreHorizontal,
   Pencil,
   Terminal,
   Trash2,
-  type Icon,
 } from '@agiworkforce/icons';
 import {
   DropdownMenu,
@@ -27,21 +25,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
+import { ContinueOnDesktop } from '@/features/desktop-host';
 import { CODE_COPY, CODE_ROUTES } from '../code-surface';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
 const MENU_GLYPH_SIZE = 14;
-
-interface MenuLink {
-  href: string;
-  label: string;
-  glyph: Icon;
-}
-
-const OPEN_IN_LINKS: readonly MenuLink[] = [
-  { href: CODE_ROUTES.desktop, label: CODE_COPY.openDesktop, glyph: Download },
-];
 
 export interface CodeSessionMenuProps {
   verbose: boolean;
@@ -52,6 +41,7 @@ export interface CodeSessionMenuProps {
   onSetVerbose: (verbose: boolean) => void;
   onEditEnvironment: () => void;
   onRename: () => void;
+  onShare: () => void;
   onSetArchived: (archived: boolean) => void;
   onDeleteSession: () => void;
   onCloseSession: () => void;
@@ -66,31 +56,15 @@ export function CodeSessionMenu({
   onSetVerbose,
   onEditEnvironment,
   onRename,
+  onShare,
   onSetArchived,
   onDeleteSession,
   onCloseSession,
 }: CodeSessionMenuProps) {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-
-  const copyLink = async () => {
-    if (typeof window === 'undefined') return;
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
-    }
-  };
-
-  const copyLabel =
-    copyState === 'copied'
-      ? CODE_COPY.copiedLink
-      : copyState === 'failed'
-        ? CODE_COPY.copyLinkFailed
-        : CODE_COPY.copyLink;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && setCopyState('idle')}>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <button type="button" className={styles['headerButton']} aria-label={CODE_COPY.sessionMenu}>
           <MoreHorizontal size={GLYPH_SIZE} aria-hidden="true" />
@@ -113,14 +87,14 @@ export function CodeSessionMenu({
               <Terminal size={MENU_GLYPH_SIZE} aria-hidden="true" />
               <span className={styles['menuRowLabel']}>{CODE_COPY.openTerminal}</span>
             </DropdownMenuItem>
-            {OPEN_IN_LINKS.map(({ href, label, glyph: Glyph }) => (
-              <DropdownMenuItem key={href} asChild>
-                <Link href={href}>
-                  <Glyph size={MENU_GLYPH_SIZE} aria-hidden="true" />
-                  <span className={styles['menuRowLabel']}>{label}</span>
-                </Link>
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem asChild>
+              <ContinueOnDesktop
+                label={CODE_COPY.openDesktop}
+                fallbackHref={CODE_ROUTES.desktop}
+                glyphSize={MENU_GLYPH_SIZE}
+                labelClassName={styles['menuRowLabel']}
+              />
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
@@ -151,11 +125,12 @@ export function CodeSessionMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            void copyLink();
+            setMenuOpen(false);
+            onShare();
           }}
         >
           <Link2 size={MENU_GLYPH_SIZE} aria-hidden="true" />
-          <span className={styles['menuRowLabel']}>{copyLabel}</span>
+          <span className={styles['menuRowLabel']}>{CODE_COPY.share}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onSelect={onEditEnvironment}>

@@ -95,6 +95,7 @@ describe('normalizeShortcuts', () => {
     const duplicates = duplicateShortcutKeys({
       quickAskShortcut: '',
       screenshotShortcut: '',
+      windowShotShortcut: DEFAULT_SHORTCUTS.windowShotShortcut,
       voiceShortcut: DEFAULT_SHORTCUTS.voiceShortcut,
     });
 

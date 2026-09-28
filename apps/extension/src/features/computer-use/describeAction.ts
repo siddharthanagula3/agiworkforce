@@ -73,6 +73,9 @@ export function describeComputerUseAction(
     case 'read_network':
       return 'Read the list of requests this page has made, their status and timing. No bodies or headers are read.';
 
+    case 'ask_user_to_take_over':
+      return `Hand you the page: ${truncate(a['reason'], 80) || 'AGI needs you to use it'}.`;
+
     default: {
       const name = truncate(toolName, 40) || 'an action';
       return `Run "${name}" on this page. This action is not one AGI can describe in detail, approve it only if you expect it.`;

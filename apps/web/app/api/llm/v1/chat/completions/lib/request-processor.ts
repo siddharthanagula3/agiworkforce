@@ -43,6 +43,7 @@ import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execut
 import {
   DEVICE_HOST_HEADER,
   parseDesktopHostDeclaration,
+  type DesktopCapability,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
@@ -127,6 +128,12 @@ import {
   isScheduleTool,
   scheduleToolDefinition,
 } from '@/lib/server/tools/schedule-tool';
+import {
+  asksForPluginDraft,
+  isPluginDraftTool,
+  pluginDraftToolDefinition,
+} from '@/lib/server/tools/plugin-draft-tool';
+import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -305,6 +312,7 @@ import {
   loadProjectContext,
   MAX_PROJECT_CONTEXT_CHARS,
   renderProjectContextBlocks,
+  type LoadedProjectContext,
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
@@ -333,16 +341,14 @@ import {
 import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
-  formatManagedMemorySystemPrompt,
-  loadManagedMemoryContext,
   loadManagedMemoryPolicy,
-  loadProjectMemoryScope,
-  loadSuppressedMemorySources,
-  type ManagedMemoryContextDb,
   type ManagedMemoryContextItem,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
-import { resolvePastChatContext } from '@/lib/services/past-chat-context-service';
+import {
+  resolveInteractiveTurnContext,
+  type InteractiveTurnContext,
+} from '@/lib/services/turn-context-service';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
@@ -877,6 +883,32 @@ export function applyScheduleToolCapability(
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
     scheduleToolDefinition(),
+  ];
+}
+
+export function applyPluginDraftToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    pluginDraftsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.pluginDraftsAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
+    pluginDraftToolDefinition(),
   ];
 }
 
@@ -1475,99 +1507,6 @@ function activeStudyInstruction(row: {
   const topic = normalizeStudyTopic(row.study_topic);
   if (!topic || !isStudyMode(row.study_mode) || !isStudyLevel(row.study_level)) return null;
   return composeStudyInstruction({ topic, mode: row.study_mode, level: row.study_level });
-}
-
-/**
- * Apply server-owned account memories when the conversation policy allows it.
- * Exported so the Temporary Chat boundary and prompt-accounting behavior stay
- * covered without importing route or database globals into the test.
- */
-export function accountMemoryRequested(
-  surface: CloudChatSurface,
-  memoryEnabled: boolean | undefined,
-): boolean {
-  return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
-}
-
-export async function enrichManagedMemoryContext(params: {
-  db: ManagedMemoryContextDb;
-  userId: string;
-  chatRequest: ChatCompletionRequest;
-  isTemporary: boolean;
-  surface: CloudChatSurface;
-  projectId?: string | null;
-  organizationId?: string | null;
-  // Returned rather than only injected, so a later consumer judges the rows
-  // this turn actually carried instead of querying for them a second time.
-}): Promise<ManagedMemoryContextItem[]> {
-  if (
-    params.isTemporary ||
-    !accountMemoryRequested(params.surface, params.chatRequest.memory_enabled)
-  ) {
-    return [];
-  }
-
-  const [suppressedSources, scope] = await Promise.all([
-    loadSuppressedMemorySources(params.db, { userId: params.userId }),
-    loadProjectMemoryScope(params.db, {
-      userId: params.userId,
-      projectId: params.projectId ?? null,
-    }),
-  ]);
-  const memories = await loadManagedMemoryContext(params.db, {
-    userId: params.userId,
-    organizationId: params.organizationId ?? null,
-    suppressedSources,
-    scope,
-    query: lastUserMessageText(params.chatRequest),
-  });
-  const prompt = formatManagedMemorySystemPrompt(memories);
-  if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
-  return memories.map((memory) => ({
-    content: memory.content,
-    category: memory.category,
-    pinned: memory.pinned,
-  }));
-}
-
-export async function enrichPastChatContext(params: {
-  db: ManagedMemoryContextDb;
-  userId: string;
-  chatRequest: ChatCompletionRequest;
-  isTemporary: boolean;
-  surface: CloudChatSurface;
-  policy: ManagedMemoryPolicy;
-  organizationId?: string | null;
-  conversationId?: string | null;
-  projectId?: string | null;
-}): Promise<{ injected: boolean; citations: PastChatCitation[] }> {
-  if (
-    !params.policy.searchPastChats ||
-    params.isTemporary ||
-    params.surface === 'api' ||
-    params.chatRequest.memory_enabled === false
-  ) {
-    return { injected: false, citations: [] };
-  }
-
-  const query = lastUserMessageText(params.chatRequest);
-  if (!query) return { injected: false, citations: [] };
-
-  const scope = await loadProjectMemoryScope(params.db, {
-    userId: params.userId,
-    projectId: params.projectId ?? null,
-  });
-  const recall = await resolvePastChatContext(params.db, {
-    userId: params.userId,
-    query,
-    organizationId: params.organizationId ?? null,
-    currentConversationId: params.conversationId ?? null,
-    scope,
-  });
-  if (!recall.prompt) return { injected: false, citations: [] };
-
-  params.chatRequest.messages.unshift({ role: 'system', content: recall.prompt });
-  return { injected: true, citations: recall.citations };
 }
 
 function lastUserMessageText(request: ChatCompletionRequest): string {
@@ -2624,10 +2563,15 @@ export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
 ): DesktopHostDeclaration | null {
-  if (!deviceHost || !controls || controls.featureAccess.computer_use) return deviceHost;
+  if (!deviceHost || !controls) return deviceHost;
+  const withheld = new Set<DesktopCapability>([
+    ...(controls.featureAccess.computer_use ? [] : ['computer.use' as const]),
+    ...(controls.featureAccess.browser ? [] : ['browser.site' as const, 'browser.cdp' as const]),
+  ]);
+  if (withheld.size === 0) return deviceHost;
   return {
     ...deviceHost,
-    capabilities: deviceHost.capabilities.filter((capability) => capability !== 'computer.use'),
+    capabilities: deviceHost.capabilities.filter((capability) => !withheld.has(capability)),
   };
 }
 
@@ -2878,6 +2822,7 @@ export async function processRequest(
         isTemporary: boolean;
         selectedRouteId: string | null;
         projectId: string | null;
+        projectContext: LoadedProjectContext | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
         projectHasKnowledgeFiles: boolean;
@@ -2888,6 +2833,7 @@ export async function processRequest(
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
         let projectBlocks: readonly ProjectContextBlock[] = [];
+        let loadedProjectContext: LoadedProjectContext | null = null;
         let projectHasKnowledgeFiles = false;
         try {
           const scoped = await scopedDbPromise;
@@ -2965,6 +2911,7 @@ export async function processRequest(
                   ),
                 };
               }
+              loadedProjectContext = projectContext;
               projectHasKnowledgeFiles = projectContext.knowledgeFiles.length > 0;
               const rendered = renderProjectContextBlocks(projectContext);
               projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
@@ -3001,6 +2948,7 @@ export async function processRequest(
             isTemporary: ownedRows[0].is_temporary,
             selectedRouteId: ownedRows[0].selected_route_id,
             projectId: ownedRows[0].project_id,
+            projectContext: loadedProjectContext,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
             projectHasKnowledgeFiles,
@@ -3031,6 +2979,7 @@ export async function processRequest(
         isTemporary: false,
         selectedRouteId: null,
         projectId: null,
+        projectContext: null,
         projectBlocks: [],
         projectHasKnowledgeFiles: false,
         studyInstruction: null,
@@ -3238,10 +3187,36 @@ export async function processRequest(
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
+  let turnContext: InteractiveTurnContext | null = null;
+  try {
+    const scoped = await scopedDbPromise;
+    turnContext = await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
+      resolveInteractiveTurnContext(scoped.db, {
+        turnId: requestId,
+        userId,
+        organizationId: scoped.organizationId,
+        projectId: conversationProjectId,
+        conversationId: chatRequest.conversation_id ?? null,
+        temporaryChat: conversationIsTemporary,
+        surface: chatSurface,
+        memoryEnabled: chatRequest.memory_enabled,
+        policy: managedMemoryPolicy,
+        query: lastUserMessageText(chatRequest),
+        projectContext: ownership.projectContext,
+        projectBlocks: ownership.projectBlocks,
+      }),
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId, conversationId: chatRequest.conversation_id },
+      'Turn context could not be assembled; continuing without account memory or past chats',
+    );
+  }
+
   // The project instruction is stable for the conversation and joins the cached
   // preamble below. What the project merely supplies to read varies with the
   // question, so each remaining block is carried at its own layer instead.
-  for (const block of ownership.projectBlocks) {
+  for (const block of turnContext?.projectBlocks ?? ownership.projectBlocks) {
     if (block.layer === 'project') continue;
     chatRequest.messages.unshift({ role: 'system', content: block.text });
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);
@@ -3288,62 +3263,16 @@ export async function processRequest(
     }
   }
 
-  let pastChatSources: PastChatCitation[] = [];
-  if (managedMemoryPolicy.searchPastChats) {
-    try {
-      const scoped = await scopedDbPromise;
-      const recall = await enrichPastChatContext({
-        db: scoped.db,
-        userId,
-        chatRequest,
-        isTemporary: conversationIsTemporary,
-        surface: chatSurface,
-        policy: managedMemoryPolicy,
-        organizationId: scoped.organizationId,
-        conversationId: chatRequest.conversation_id ?? null,
-        projectId: conversationProjectId,
-      });
-      if (recall.injected) {
-        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
-        pastChatSources = recall.citations;
-      }
-    } catch (error) {
-      logger.error(
-        { error, userId, conversationId: chatRequest.conversation_id },
-        'Past-chat recall failed; continuing without excerpts',
-      );
-    }
+  const pastChatSources: readonly PastChatCitation[] = turnContext?.pastChatSources ?? [];
+  if (turnContext?.pastChatPrompt) {
+    chatRequest.messages.unshift({ role: 'system', content: turnContext.pastChatPrompt });
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
   }
 
-  let loadedManagedMemories: readonly ManagedMemoryContextItem[] = [];
-  if (managedMemoryPolicy.enabled) {
-    try {
-      const scoped = await scopedDbPromise;
-      const preMemoryMessageCount = chatRequest.messages.length;
-      // A memory confined to a project must not appear in a loose chat, and a
-      // project set to exclude global memory must not see the account pool.
-      // `conversationProjectId` is the ownership lookup's row, not a fresh
-      // query, so the scoping answers to the same read as the 404 check above.
-      loadedManagedMemories = await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
-        enrichManagedMemoryContext({
-          db: scoped.db,
-          userId,
-          chatRequest,
-          isTemporary: conversationIsTemporary,
-          surface: chatSurface,
-          projectId: conversationProjectId,
-          organizationId: scoped.organizationId,
-        }),
-      );
-      if (chatRequest.messages.length > preMemoryMessageCount) {
-        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
-      }
-    } catch (error) {
-      logger.error(
-        { error, userId, conversationId: chatRequest.conversation_id },
-        'Managed memory load failed; continuing without account memory',
-      );
-    }
+  const loadedManagedMemories: readonly ManagedMemoryContextItem[] = turnContext?.memories ?? [];
+  if (turnContext?.memoryPrompt) {
+    applyManagedMemoryContext(chatRequest, turnContext.memoryPrompt);
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
   }
 
   if (isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled) {
@@ -4404,6 +4333,18 @@ export async function processRequest(
     schedulesAllowed:
       asksForSchedule(lastUserText) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
+  });
+
+  applyPluginDraftToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    pluginDraftsAllowed:
+      userSkillAuthoringEnabled() &&
+      asksForPluginDraft(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'plugins', chatSurface)) === null &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'skills', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;

@@ -115,9 +115,7 @@ export default function SecurityOperationsPanel() {
     <section className="space-y-4" aria-labelledby="security-operations-title">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase text-sky-700 dark:text-sky-300">
-            Live administration
-          </p>
+          <p className="font-mono text-xs uppercase text-info-text">Live administration</p>
           <h2 id="security-operations-title" className="mt-1 text-h2 text-foreground">
             Security operations
           </h2>
@@ -166,7 +164,7 @@ export default function SecurityOperationsPanel() {
         <div className="overflow-hidden rounded-md border border-border bg-card">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+              <ShieldAlert className="h-4 w-4 text-info-text" aria-hidden="true" />
               <h3 className="text-h5 text-foreground">Recent security events</h3>
             </div>
             <span className="text-xs text-muted-foreground">Latest 25</span>
@@ -261,7 +259,7 @@ export default function SecurityOperationsPanel() {
         className="rounded-md border border-border bg-card p-4"
       >
         <div className="flex items-center gap-2">
-          <UserRoundCog className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+          <UserRoundCog className="h-4 w-4 text-info-text" aria-hidden="true" />
           <h3 className="text-h5 text-foreground">Account control</h3>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -312,7 +310,7 @@ export default function SecurityOperationsPanel() {
             className={
               action === 'ban-user'
                 ? 'self-end rounded-md border border-danger-fill/40 bg-danger-fill/5 px-4 py-2 text-sm text-danger-text hover:bg-danger-fill/10 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'self-end rounded-md border border-sky-600/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-800 hover:bg-sky-500/20 dark:border-sky-400/30 dark:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50'
+                : 'self-end rounded-md border border-info-fill/40 bg-info-fill/10 px-4 py-2 text-sm text-info-text hover:bg-info-fill/20 disabled:cursor-not-allowed disabled:opacity-50'
             }
           >
             {submitting ? 'Applying…' : ACTION_LABELS[action]}

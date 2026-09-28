@@ -21,4 +21,5 @@ export type PendingApprovalSnapshot = {
    * never as "yes".
    */
   reversible?: boolean;
+  proposedContent?: string;
 };

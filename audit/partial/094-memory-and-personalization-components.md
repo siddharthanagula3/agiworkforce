@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S94.18: Personalization attribution.
-
-- Done when: Replies record which memories or past chats shaped them, so the product can show attribution.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Attribute saved memories; past-chat citations are attached to replies, but the memories a turn loaded are kept only for a shadow relevance check. | handler |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3440-3446`
-
 ## S94.22: Daily-brief context builder.
 
 - Done when: A component assembles context for a daily brief (plans, time-sensitive items, recent work).

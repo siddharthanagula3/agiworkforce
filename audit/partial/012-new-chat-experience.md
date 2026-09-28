@@ -35,59 +35,39 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:97-103`, `apps/mobile/app/(app)/(ta
 
 - Done when: The new-chat screen offers clickable suggested prompts that fill or send a message.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Surface ready-made page prompts on the empty panel; today the six predefined page prompts (/summarize, /tldr, /explain...) appear only after typing "/". | ui |
-
-Code: `apps/extension/src/side_panel.ts:4556-4575`, `apps/extension/src/side_panel.ts:4599-4604`
 
 ## S12.05: Task-category shortcuts.
 
 - Done when: The new-chat screen offers one-tap task-category shortcuts (e.g. write, research, image) that set up the next message.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | topic and AGI Work chips are on the new-chat screen; image, video and Deep Research chips need the composer to run its existing plus-menu handlers from a chip (p-contrast next batch). | ui, handler |
-| desktop | partial | topic and AGI Work chips are on the new-chat screen; image, video and Deep Research chips need the composer to run its existing plus-menu handlers from a chip (p-contrast next batch). | ui, handler |
 | cli | partial | Add task commands for research and writing and list them on the welcome screen; today only /image (and /review for code) set up a task type, found by typing "/". | ui, handler |
 | vscode | partial | Inconsistent with CLI S12.05, credited partial for /image and /review behind '/': VS Code's registered @agi participant has the same task commands, each mapped to a task prompt by the handler. |  |
-| chrome | partial | The searches ('Write or edit\|Brainstorm...', 'TaskChips\|quickActionChip', 'task.?shortcut') never match the Chrome implementation: page-aware one-tap chips (getPageActions/agi-action-chip) in the default-on in-page panel that send through IN_PAGE_PROMPT to managed chat. CLI got partial for the same '/' task-prompt pattern. |  |
 
-Code: `apps/web/features/chat/components/NewChat/NewChatStarters.tsx:170-170`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-869`, `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
 
 ## S12.06: Recent Project shortcuts.
 
 - Done when: The new-chat screen offers shortcuts to the user's recent projects that open the project or start a chat in it.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The drawer lists up to six projects as one-tap shortcuts, but in Cloud mode they come in sync order, not most-recent first, and the new-chat screen itself has no recent-project row. | ui |
 | cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
-| chrome | partial | Offer recent projects on the empty side panel; today projects are chosen only from the Projects drawer. | ui |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx:328-337`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
-
-## S12.07: Recent-file suggestions.
-
-- Done when: When starting a chat the user is offered their recently used files to attach in one step.
-- Wave: 3
-- Already works on: mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | recent Library files are offered only in the AGI Work Files menu; the Chat-mode composer needs the same recent-files entry (p-contrast next batch). | ui |
-| desktop | partial | recent Library files are offered only in the AGI Work Files menu; the Chat-mode composer needs the same recent-files entry (p-contrast next batch). | ui |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5594-5594`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5640-5640`
 
 ## S12.08: Recommended Skills.
 
@@ -176,9 +156,8 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:36-36`, `apps/mobi
 | --- | --- | --- | --- |
 | cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Add a voice-conversation mode; the side panel's mic only dictates into the text box. | ui, handler |
 
-Code: `apps/cli/src/voice.rs:354-354`, `apps/extension/src/side_panel.ts:9531-9535`, `apps/extension/src/side_panel.ts:10170-10170`
+Code: `apps/cli/src/voice.rs:354-354`
 
 ## S12.15: Agentic-work entry.
 
@@ -245,15 +224,14 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448
 
 - Done when: The new-chat screen explains the available modes and gives examples of what each is for.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add examples; today one line explains Local vs Cloud. | ui |
 | cli | partial | Add examples; the welcome names the access modes and the Shift+Tab mode switch only. | ui |
-| chrome | partial | Add examples; Quick and Auto each have a one-line description only. | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app.rs:1476-1488`, `apps/extension/_locales/en/messages.json:1149-1149`
+Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app.rs:1476-1488`
 
 ## S12.23: Resumption of an unsent draft.
 
@@ -274,8 +252,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | signed-out visitors are redirected to sign-in; a guest path needs a founder decision on limits and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
-| desktop | partial | signed-out visitors are redirected to sign-in; a guest path needs a founder decision on limits and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
-| chrome | partial | Offer limited guest chat; today signed-out users get a sign-in gate and a disabled composer. | ui, handler |
+| web | partial | founder decision needed: Claude requires an account, 18 or older (support.claude.com/en/articles/8114491, fetched 2026-09-28); Gemini allows some features signed out (support.google.com/gemini/answer/13278668, fetched 2026-09-28); help.openai.com returned 403, so ChatGPT's allowance is unverified. A guest path needs stated limits, a cost cap and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
+| desktop | partial | founder decision needed: Claude requires an account, 18 or older (support.claude.com/en/articles/8114491, fetched 2026-09-28); Gemini allows some features signed out (support.google.com/gemini/answer/13278668, fetched 2026-09-28); help.openai.com returned 403, so ChatGPT's allowance is unverified. A guest path needs stated limits, a cost cap and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
 
-Code: `apps/web/app/chat/layout.tsx:16-16`, `apps/web/app/chat/layout.tsx:19-19`, `apps/extension/src/side_panel.ts:440-457`
+Code: `apps/web/app/chat/layout.tsx:16-16`, `apps/web/app/chat/layout.tsx:19-19`

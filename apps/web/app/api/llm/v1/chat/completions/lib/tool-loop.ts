@@ -347,6 +347,7 @@ import {
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
 import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
+import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
 import {
   executeMemoryTool,
   isMemoryTool,
@@ -853,6 +854,7 @@ function canonicalToolCategory(
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
   if (isScheduleTool(toolName)) return 'other';
+  if (isPluginDraftTool(toolName)) return 'other';
   if (toolName === 'execute_code') return 'code-execution';
   if (
     toolName === 'write_file' ||
@@ -2050,6 +2052,13 @@ async function runMcpTool(
     });
   }
 
+  if (isPluginDraftTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    return executePluginDraftTool(toolCall.args);
+  }
+
   if (isFileSearchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
@@ -2554,6 +2563,7 @@ export function isToolOffered(
   if (isMemoryTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isFileSearchTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isScheduleTool(qualifiedName)) return availableTools.has(qualifiedName);
+  if (isPluginDraftTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
