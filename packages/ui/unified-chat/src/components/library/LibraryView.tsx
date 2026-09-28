@@ -1319,7 +1319,7 @@ function FileViewerOverlay({
             </Button>
           </object>
         ) : textPreview.status === 'loading' ? (
-          <Spinner size="md" />
+          <Spinner size="default" />
         ) : textPreview.status === 'ready' ? (
           <FileTextPreview preview={textPreview.preview} />
         ) : (
