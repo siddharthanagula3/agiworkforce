@@ -333,9 +333,9 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /mcp lists only servers that loaded, each hard-coded "Connected"; show failed or needs-auth servers and the account's cloud connectors with a connect action. | ui |
+| cli | partial | Configured servers now show their real state; the account's cloud connectors with a connect action are still not listed. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3613-3613`, `apps/cli/src/tui/tui_app.rs:3625-3625`
+Code: `apps/cli/src/tui/tui_app.rs:4021-4021`
 
 ## S9.34: Capability-warning card.
 

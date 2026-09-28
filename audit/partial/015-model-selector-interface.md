@@ -84,18 +84,6 @@ Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670
 
 Code: `apps/web/features/settings/sections/GeneralSection.tsx:917-939`, `apps/web/shared/stores/model-store.ts:385-387`, `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
 
-## S15.11: Model description.
-
-- Done when: Each model in the selector has a short description of what it is good for.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Describe each model; the picker shows only a tier word (Fastest, Balanced, Most capable) and context size. | ui |
-
-Code: `apps/cli/src/tui/widgets/model_picker.rs:487-511`, `apps/cli/src/design_system.rs:365-371`
-
 ## S15.12: Input-modality badges.
 
 - Done when: Models show which inputs they accept (e.g. images, audio) as badges.
@@ -177,46 +165,42 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `
 
 - Done when: Models the user's plan cannot use are marked with the plan that unlocks them.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Name the plan a locked model needs; locked cloud rows say only "sign in", even for a signed-in user on a lower plan. | ui |
 | vscode | partial | Tell signed-in Free and Basic users which plan unlocks a model; the popover labels every cloud group "Unavailable" with "Sign in or add a provider key", even when they are signed in. | ui |
 | chrome | partial | Show models the plan cannot use with the plan that unlocks them; today they are left out of the list (the premium-gated style is never applied), and only signed-out users see "Sign in for models". | ui |
 
-Code: `apps/cli/src/tui/widgets/model_picker.rs:488-497`, `apps/cli/src/tui/widgets/model_picker.rs:191-199`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`, `apps/extension/src/side_panel.ts:2627-2627`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`, `apps/extension/src/side_panel.ts:2627-2627`, `apps/extension/src/side_panel.ts:6177-6179`
 
 ## S15.19: Preview or experimental badge.
 
 - Done when: Preview or experimental models carry a visible badge in the selector.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Badge preview/experimental models in the list; the lifecycle stage appears only on the model's About card ("Beta" in the list means an environment lock). | ui |
 | desktop | partial | Badge preview/experimental models in the list; the stage is only on the About card. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The item is a badge in the selector. The cited status icon lives in `agi models list` (a separate subcommand); the in-session /models output prints T/V/R only and the picker rows have no beta or deprecated mark, which the auditor's own note concedes. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:193-194`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`, `apps/cli/src/provider.rs:259-263`, `apps/cli/src/provider.rs:289-290`
+Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:193-194`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`
 
 ## S15.20: Deprecated-model notice.
 
 - Done when: A model scheduled for retirement shows a notice with its leaving date before it disappears.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Say when a deprecated model leaves; agi models list marks it only with "!" and the TUI picker drops deprecated catalog entries without notice. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/provider.rs:259-263`, `apps/cli/src/provider.rs:289-290`, `apps/cli/src/lib.rs:2237-2243`
 
 ## S15.21: Temporary-unavailability state.
 
