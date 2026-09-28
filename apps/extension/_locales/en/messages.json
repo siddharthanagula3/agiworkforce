@@ -2298,5 +2298,93 @@
   "spMapPreviewUnavailable": {
     "message": "The map could not be loaded. You can still open these places in Maps.",
     "description": "Shown when a map search card cannot draw its map"
+  },
+  "spMentionMenuLabel": {
+    "message": "Tabs and projects",
+    "description": "Accessible name of the menu that opens when @ is typed in the composer"
+  },
+  "spMentionTabs": {
+    "message": "Tabs",
+    "description": "Heading above open browser tabs in the @ menu"
+  },
+  "spMentionProjects": {
+    "message": "Projects",
+    "description": "Heading above the user's projects in the @ menu"
+  },
+  "spMentionProjectDetail": {
+    "message": "Start the chat in this project",
+    "description": "Second line of a project in the @ menu"
+  },
+  "spSiteAccessRefused": {
+    "message": "AGI can read $SITE$ only after you allow it. Nothing from that page was attached.",
+    "description": "Notice when Chrome's permission to read a chosen tab or link was not granted",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spLinkItem": {
+    "message": "Add a web page by link",
+    "description": "Attach menu item that opens a field for a link whose page text is attached"
+  },
+  "spLinkFormLabel": {
+    "message": "Add a web page by link",
+    "description": "Accessible name of the link form above the composer"
+  },
+  "spLinkInputLabel": {
+    "message": "Link to the page",
+    "description": "Accessible name of the link field"
+  },
+  "spLinkAdd": {
+    "message": "Add",
+    "description": "Button that reads the linked page and attaches its text"
+  },
+  "spLinkCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the link form"
+  },
+  "spLinkInvalid": {
+    "message": "Enter a link that starts with https:// or http://.",
+    "description": "Link form error for an unusable link"
+  },
+  "spLinkReading": {
+    "message": "Reading the page…",
+    "description": "Link form status while the linked page is read"
+  },
+  "spLinkUnreachable": {
+    "message": "$SITE$ could not be reached. Check the link and try again.",
+    "description": "Link form error when the page could not be fetched",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spLinkStatus": {
+    "message": "$SITE$ answered with error $STATUS$, so nothing was attached.",
+    "description": "Link form error when the site returned an error status",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      },
+      "status": {
+        "content": "$2",
+        "example": "404"
+      }
+    }
+  },
+  "spLinkNotText": {
+    "message": "The link on $SITE$ is not a web page or text, so it cannot be attached this way. Upload the file instead.",
+    "description": "Link form error when the link points to a file that is not HTML or text",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
   }
 }
