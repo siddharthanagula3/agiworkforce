@@ -3998,5 +3998,73 @@
   "spRunReport": {
     "message": "Report",
     "description": "Heading of a finished research run's report in the runs panel"
+  },
+  "spInstructionsLabel": {
+    "message": "Custom instructions",
+    "description": "Label of the account custom instructions field in the side panel settings"
+  },
+  "spInstructionsPlaceholder": {
+    "message": "What should AGI keep in mind when it answers? For example: answer in British English.",
+    "description": "Placeholder of the custom instructions field"
+  },
+  "spInstructionsEnabled": {
+    "message": "Use these instructions in new chats",
+    "description": "Checkbox that turns the account custom instructions on or off"
+  },
+  "spInstructionsSave": {
+    "message": "Save instructions",
+    "description": "Button that saves the custom instructions to the account"
+  },
+  "spResponseStyleLabel": {
+    "message": "Response style",
+    "description": "Label of the account response style choice"
+  },
+  "spResponseStyleDefault": {
+    "message": "Default",
+    "description": "Response style option that adds no style guidance"
+  },
+  "spResponseStyleConcise": {
+    "message": "Concise",
+    "description": "Response style option for short, direct answers"
+  },
+  "spResponseStyleExplanatory": {
+    "message": "Explanatory",
+    "description": "Response style option for answers that explain their reasoning"
+  },
+  "spResponseStyleFormal": {
+    "message": "Formal",
+    "description": "Response style option for a formal register"
+  },
+  "spResponseLengthLabel": {
+    "message": "Response length",
+    "description": "Label of the account response length choice"
+  },
+  "spResponseLengthDefault": {
+    "message": "Default",
+    "description": "Response length option that adds no length guidance"
+  },
+  "spResponseLengthShorter": {
+    "message": "Shorter",
+    "description": "Response length option for shorter answers"
+  },
+  "spResponseLengthLonger": {
+    "message": "Longer",
+    "description": "Response length option for fuller answers"
+  },
+  "spPersonalizationSaving": {
+    "message": "Saving…",
+    "description": "Status while personalization settings are being saved"
+  },
+  "spPersonalizationSaved": {
+    "message": "Saved to your account. New chats use it on every device.",
+    "description": "Status after personalization settings are saved"
+  },
+  "spPersonalizationSaveFailed": {
+    "message": "Your personalization could not be saved. Try again.",
+    "description": "Status when saving personalization fails without a reason"
+  },
+  "spPersonalizationUnavailable": {
+    "message": "Your personalization could not be loaded.",
+    "description": "Status when the account personalization cannot be read"
   }
 }

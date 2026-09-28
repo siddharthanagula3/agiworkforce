@@ -35,9 +35,12 @@ import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
+  MAX_CUSTOM_INSTRUCTIONS_CHARS,
   normalizeModelId,
   getProviderDisplayLabel,
+  PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
+  RESPONSE_STYLES,
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
@@ -47,6 +50,8 @@ import {
   type InteractiveCardResponsePayload,
   type ManagedUsageWarning,
   type ModelSpeed,
+  type PreferredLength,
+  type ResponseStyle,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -273,6 +278,12 @@ import {
   type MemoryCommandRequest,
   type MemoryCommandResult,
 } from './features/cloud-bridge/memoryClient';
+import {
+  fetchAccountPersonalization,
+  saveAccountInstructions,
+  saveAccountResponseStyle,
+  type AccountPersonalization,
+} from './features/cloud-bridge/personalizationClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
@@ -5326,6 +5337,8 @@ function injectStyles(): void {
     .sp-ob-body:empty { display: none; }
     .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
     .sp-drawer-memory-preferences[hidden] { display: none; }
+    .sp-drawer-personalization { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+    .sp-drawer-personalization[hidden] { display: none; }
     .sp-drawer-memory-preference {
       display: flex;
       align-items: center;
@@ -11196,6 +11209,169 @@ function buildUI(): void {
   personalizationSection.appendChild(
     el('p', { class: 'sp-drawer-memory-help' }, t('spPersonalizationHelp')),
   );
+  const personalizationBody = el('div', { class: 'sp-drawer-personalization', hidden: '' });
+  personalizationBody.appendChild(
+    el(
+      'label',
+      { class: 'sp-drawer-toggle-label', for: 'sp-drawer-instructions' },
+      t('spInstructionsLabel'),
+    ),
+  );
+  const instructionsInput = el('textarea', {
+    id: 'sp-drawer-instructions',
+    class: 'sp-drawer-memory-textarea',
+    maxlength: String(MAX_CUSTOM_INSTRUCTIONS_CHARS),
+    placeholder: t('spInstructionsPlaceholder'),
+  }) as HTMLTextAreaElement;
+  personalizationBody.appendChild(instructionsInput);
+  const instructionsToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-instructions-enabled',
+  }) as HTMLInputElement;
+  personalizationBody.appendChild(
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      instructionsToggle,
+      el('label', { for: 'sp-drawer-instructions-enabled' }, t('spInstructionsEnabled')),
+    ),
+  );
+  const instructionsSaveBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spInstructionsSave'),
+  ) as HTMLButtonElement;
+  personalizationBody.appendChild(instructionsSaveBtn);
+  const responseStyleLabels: Record<ResponseStyle, string> = {
+    default: t('spResponseStyleDefault'),
+    concise: t('spResponseStyleConcise'),
+    explanatory: t('spResponseStyleExplanatory'),
+    formal: t('spResponseStyleFormal'),
+  };
+  const responseLengthLabels: Record<PreferredLength, string> = {
+    default: t('spResponseLengthDefault'),
+    shorter: t('spResponseLengthShorter'),
+    longer: t('spResponseLengthLonger'),
+  };
+  const responseStyleSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-drawer-response-style',
+    style: 'width: auto; max-width: 60%;',
+  }) as HTMLSelectElement;
+  for (const style of RESPONSE_STYLES) {
+    responseStyleSelect.appendChild(el('option', { value: style }, responseStyleLabels[style]));
+  }
+  const responseLengthSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-drawer-response-length',
+    style: 'width: auto; max-width: 60%;',
+  }) as HTMLSelectElement;
+  for (const length of PREFERRED_LENGTHS) {
+    responseLengthSelect.appendChild(el('option', { value: length }, responseLengthLabels[length]));
+  }
+  for (const [id, label, select] of [
+    ['sp-drawer-response-style', t('spResponseStyleLabel'), responseStyleSelect],
+    ['sp-drawer-response-length', t('spResponseLengthLabel'), responseLengthSelect],
+  ] as const) {
+    const row = el('div', { class: 'sp-drawer-toggle-row' });
+    row.appendChild(el('label', { class: 'sp-drawer-toggle-label', for: id }, label));
+    row.appendChild(select);
+    personalizationBody.appendChild(row);
+  }
+  const personalizationStatus = el('div', {
+    class: 'sp-drawer-toggle-status',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  personalizationBody.appendChild(personalizationStatus);
+  personalizationSection.appendChild(personalizationBody);
+  let personalizationSnapshot: AccountPersonalization | null = null;
+
+  function renderDrawerPersonalization(personalization: AccountPersonalization): void {
+    personalizationSnapshot = personalization;
+    instructionsInput.value = personalization.instructions;
+    instructionsToggle.checked = personalization.instructionsEnabled;
+    responseStyleSelect.value = personalization.style;
+    responseLengthSelect.value = personalization.preferredLength;
+    for (const control of [
+      instructionsInput,
+      instructionsToggle,
+      instructionsSaveBtn,
+      responseStyleSelect,
+      responseLengthSelect,
+    ]) {
+      control.disabled = false;
+    }
+    personalizationBody.hidden = false;
+  }
+
+  function savePersonalizationChange(
+    save: (token: string) => Promise<void>,
+    next: Partial<AccountPersonalization>,
+  ): void {
+    const previous = personalizationSnapshot;
+    if (!previous) return;
+    instructionsSaveBtn.disabled = true;
+    responseStyleSelect.disabled = true;
+    responseLengthSelect.disabled = true;
+    instructionsToggle.disabled = true;
+    personalizationStatus.textContent = t('spPersonalizationSaving');
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await save(auth.token);
+      renderDrawerPersonalization({ ...previous, ...next });
+      personalizationStatus.textContent = t('spPersonalizationSaved');
+    })().catch((error: unknown) => {
+      renderDrawerPersonalization(previous);
+      personalizationStatus.textContent =
+        error instanceof Error ? error.message : t('spPersonalizationSaveFailed');
+    });
+  }
+
+  function saveDrawerInstructions(): void {
+    const instructions = {
+      instructions: instructionsInput.value.trim(),
+      instructionsEnabled: instructionsToggle.checked,
+    };
+    savePersonalizationChange(
+      (token) => saveAccountInstructions(token, instructions),
+      instructions,
+    );
+  }
+
+  function saveDrawerResponseStyle(): void {
+    const style = {
+      style: responseStyleSelect.value as ResponseStyle,
+      preferredLength: responseLengthSelect.value as PreferredLength,
+    };
+    savePersonalizationChange((token) => saveAccountResponseStyle(token, style), style);
+  }
+
+  instructionsSaveBtn.addEventListener('click', saveDrawerInstructions);
+  instructionsToggle.addEventListener('change', saveDrawerInstructions);
+  responseStyleSelect.addEventListener('change', saveDrawerResponseStyle);
+  responseLengthSelect.addEventListener('change', saveDrawerResponseStyle);
+
+  async function refreshDrawerPersonalization(token: string): Promise<void> {
+    try {
+      renderDrawerPersonalization(await fetchAccountPersonalization(token));
+      personalizationStatus.textContent = '';
+    } catch (error) {
+      personalizationBody.hidden = false;
+      for (const control of [
+        instructionsInput,
+        instructionsToggle,
+        instructionsSaveBtn,
+        responseStyleSelect,
+        responseLengthSelect,
+      ]) {
+        control.disabled = true;
+      }
+      personalizationStatus.textContent =
+        error instanceof Error ? error.message : t('spPersonalizationUnavailable');
+    }
+  }
   const personalizationBtn = el(
     'button',
     { type: 'button', class: 'sp-drawer-memory-add-btn' },
@@ -11599,6 +11775,7 @@ function buildUI(): void {
   }
 
   function setDrawerMemoryExtrasHidden(hidden: boolean): void {
+    if (hidden) personalizationBody.hidden = true;
     memoryScope.hidden = hidden;
     if (hidden) memoryPreferencesBlock.hidden = true;
     exclusionsBlock.hidden = hidden;
@@ -11820,6 +11997,7 @@ function buildUI(): void {
     }
     setDrawerMemoryExtrasHidden(false);
     await Promise.all([
+      refreshDrawerPersonalization(auth.token),
       fetchMemoryPreferences(auth.token)
         .then(renderMemoryPreferences)
         .catch(() => {
