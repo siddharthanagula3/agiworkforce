@@ -402,7 +402,16 @@ export type FreeTrialContentPart =
   | {
       type: 'image_url';
       image_url: { url: string; detail: 'auto' | 'low' | 'high' };
-    };
+    }
+  | { type: 'file'; file: { asset_id: string } };
+
+export interface ManagedChatFileAttachment {
+  assetId: string;
+  mimeType: string;
+}
+
+export const MANAGED_CHAT_FILE_ASSET_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface FreeTrialMessage {
   role: 'user' | 'assistant' | 'system';
@@ -436,14 +445,24 @@ function assertAttachmentBudget(attachments: readonly string[]): void {
 export function createMultimodalUserContent(
   text: string,
   attachments: string[],
+  files: readonly ManagedChatFileAttachment[] = [],
 ): FreeTrialContentPart[] {
   assertAttachmentBudget(attachments);
+  if (attachments.length + files.length > MANAGED_CHAT_MAX_ATTACHMENTS) {
+    throw new Error(`Too many attachments: maximum is ${MANAGED_CHAT_MAX_ATTACHMENTS}`);
+  }
   const parts: FreeTrialContentPart[] = [{ type: 'text', text }];
   for (const attachment of attachments) {
     parts.push({
       type: 'image_url',
       image_url: { url: attachment, detail: 'auto' },
     });
+  }
+  for (const file of files) {
+    if (!MANAGED_CHAT_FILE_ASSET_ID.test(file.assetId)) {
+      throw new Error('Unsupported attachment: expected an uploaded file reference');
+    }
+    parts.push({ type: 'file', file: { asset_id: file.assetId } });
   }
   return parts;
 }
@@ -466,6 +485,16 @@ function assertMessageShape(message: FreeTrialMessage): void {
     if (!part || typeof part !== 'object') throw new Error('Invalid managed chat content part');
     if (part.type === 'text') {
       if (typeof part.text !== 'string') throw new Error('Invalid managed chat text part');
+      continue;
+    }
+    if (part.type === 'file') {
+      if (
+        !part.file ||
+        typeof part.file.asset_id !== 'string' ||
+        !MANAGED_CHAT_FILE_ASSET_ID.test(part.file.asset_id)
+      ) {
+        throw new Error('Invalid managed chat file part');
+      }
       continue;
     }
     if (
@@ -510,7 +539,7 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
         continue;
       }
       attachmentCount += 1;
-      attachmentBytes += imageDataUrlByteLength(part.image_url.url);
+      if (part.type === 'image_url') attachmentBytes += imageDataUrlByteLength(part.image_url.url);
       if (
         attachmentCount > MANAGED_CHAT_MAX_ATTACHMENTS ||
         attachmentBytes > MANAGED_CHAT_MAX_ATTACHMENT_BYTES

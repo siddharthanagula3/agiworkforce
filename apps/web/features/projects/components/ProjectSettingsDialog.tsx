@@ -20,6 +20,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import { ProjectMemoryPanel } from './ProjectMemoryPanel';
+import { ProjectDefaultModelField } from './ProjectDefaultModelField';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -54,6 +55,7 @@ export function ProjectSettingsDialog({
     project.usesAccountInstructions !== false,
   );
   const [usesAccountStyle, setUsesAccountStyle] = useState(project.usesAccountStyle !== false);
+  const [defaultModelId, setDefaultModelId] = useState(project.defaultModelId ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
@@ -64,6 +66,7 @@ export function ProjectSettingsDialog({
     setUsesGlobalMemory(project.usesGlobalMemory !== false);
     setUsesAccountInstructions(project.usesAccountInstructions !== false);
     setUsesAccountStyle(project.usesAccountStyle !== false);
+    setDefaultModelId(project.defaultModelId ?? null);
   }, [
     project.id,
     project.name,
@@ -72,6 +75,7 @@ export function ProjectSettingsDialog({
     project.usesGlobalMemory,
     project.usesAccountInstructions,
     project.usesAccountStyle,
+    project.defaultModelId,
   ]);
 
   useEffect(() => {
@@ -85,7 +89,8 @@ export function ProjectSettingsDialog({
       instructions !== (project.instructions ?? '') ||
       usesGlobalMemory !== (project.usesGlobalMemory !== false) ||
       usesAccountInstructions !== (project.usesAccountInstructions !== false) ||
-      usesAccountStyle !== (project.usesAccountStyle !== false));
+      usesAccountStyle !== (project.usesAccountStyle !== false) ||
+      defaultModelId !== (project.defaultModelId ?? null));
   const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
     dirty,
     description:
@@ -145,6 +150,7 @@ export function ProjectSettingsDialog({
       usesGlobalMemory,
       usesAccountInstructions,
       usesAccountStyle,
+      defaultModelId,
     };
     setIsSaving(true);
     try {
@@ -274,6 +280,8 @@ export function ProjectSettingsDialog({
                 className="resize-y rounded-xl bg-muted/40"
               />
             </div>
+
+            <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />
 
             <div className="space-y-1.5">
               <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
