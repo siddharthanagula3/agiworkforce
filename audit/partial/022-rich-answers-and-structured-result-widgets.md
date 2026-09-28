@@ -10,30 +10,26 @@ nothing is left.
 
 - Done when: Answers grounded in sources show citation chips that identify and open the source.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Sources appear only as links inside the agent activity step; the answer carries no numbered citation chips. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:421-421`, `apps/extension/src/features/side-panel/bubbles.ts:406-406`
 
 ## S22.02: Source-preview cards.
 
 - Done when: Hovering/tapping a citation shows a preview card (title, site, snippet/date) before opening it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Source rows show only domain and title; the snippet is received but never displayed, and there is no preview on the chip. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Source links show a title/hostname tooltip only; no preview card. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:181-181`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:18-18`, `apps/extension/src/features/side-panel/bubbles.ts:425-425`, `apps/extension/src/features/side-panel/bubbles.ts:406-406`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:181-181`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:18-18`
 
 ## S22.03: Search-result lists.
 

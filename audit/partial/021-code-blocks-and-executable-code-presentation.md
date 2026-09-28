@@ -172,18 +172,6 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:415-415`, `
 
 Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:40-40`, `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:121-121`, `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
-## S21.19: Generated-file output.
-
-- Done when: Files produced by execution are listed and can be opened or downloaded.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Generated files are received and stored on the message but the side panel never renders them, so the user cannot see or open them. | ui |
-
-Code: `apps/extension/src/side_panel.ts:10795-10795`, `apps/extension/src/features/side-panel/bubbles.ts:225-225`
-
 ## S21.20: Plot output.
 
 - Done when: Plots/images produced by execution render inline.
