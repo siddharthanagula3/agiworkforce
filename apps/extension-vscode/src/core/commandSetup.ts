@@ -164,6 +164,7 @@ import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
+  describeModelSwitchLosses,
   modelDisplayLabel,
   modelLockHeading,
   modelLockReason,
@@ -189,6 +190,7 @@ import { exportVsCodeDiagnostics } from '../features/diagnostics';
 const execFileAsync = promisify(execFile);
 
 const UPGRADE_URL = 'https://agiworkforce.com/pricing';
+const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
 
@@ -1199,6 +1201,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
         }
         return;
+      }
+
+      const losses = describeModelSwitchLosses(currentModel, picked.modelId);
+      if (losses.length > 0) {
+        const choice = await vscode.window.showWarningMessage(
+          `Switch to ${modelDisplayLabel(picked.modelId)}?`,
+          {
+            modal: true,
+            detail: `Unlike ${modelDisplayLabel(currentModel)}, it ${losses.join('; it ')}.`,
+          },
+          SWITCH_MODEL_ANYWAY,
+        );
+        if (choice !== SWITCH_MODEL_ANYWAY) return;
       }
 
       await vscode.workspace
