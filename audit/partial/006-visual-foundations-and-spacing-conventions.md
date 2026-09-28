@@ -34,26 +34,13 @@ Code: `apps/mobile/components/ui/text.tsx:8-8`
 
 - Done when: Captions and metadata use a named small-text role no smaller than 12px that keeps AA contrast.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The caption variant no longer dilutes text, but metadata text is still set ad hoc at 10-11px in about 175 places, below the 12px floor web enforces. | ui |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | 10-11px metadata |
 
-Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/settings/auto-approve.tsx:163-163`, `apps/extension/src/side_panel.ts:1257-1257`
-
-## S6.12: Line-height rules.
-
-- Done when: Line height is defined per text role (paired with size) rather than set ad hoc per element.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal line heights |
-
-Code: `apps/extension/src/side_panel.ts:1252-1252`
+Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/settings/auto-approve.tsx:163-163`
 
 ## S6.23: Dialog padding.
 
@@ -67,65 +54,38 @@ Code: `apps/extension/src/side_panel.ts:1252-1252`
 
 Code: `apps/mobile/src/features/chat/components/MessageEditModal.tsx:144-144`, `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:80-80`
 
-## S6.26: Button sizes and density variants.
-
-- Done when: Buttons come in a defined set of sizes/densities from one component.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal control heights |
-
-Code: `apps/extension/src/side_panel.ts:1234-1234`
-
-## S6.27: Border-radius scale.
-
-- Done when: Corner radii come from one named radius ladder.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal radii |
-
-Code: `apps/extension/src/side_panel.ts:1311-1311`
-
 ## S6.28: Shadow and elevation scale.
 
 - Done when: Shadows come from a small named elevation scale per theme.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A few components set literal shadow/elevation values; there is no shared elevation scale. | ui |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal shadows |
 
-Code: `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:64-67`, `apps/mobile/app/(app)/settings/memory.tsx:449-449`, `apps/extension/src/side_panel.ts:1314-1314`
+Code: `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:64-67`, `apps/mobile/app/(app)/settings/memory.tsx:449-449`
 
 ## S6.29: Layering and z-index rules.
 
 - Done when: Stacking order uses one named z-index ladder; components never invent numeric layers.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A handful of overlays set literal zIndex values; there is no shared layering ladder. | ui |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | z-index 100 on autonomy popover |
 
-Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps/mobile/app/(app)/voice.tsx:360-360`, `apps/extension/src/side_panel.ts:1226-1226`
+Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps/mobile/app/(app)/voice.tsx:360-360`
 
 ## S6.30: Motion durations and easing.
 
 - Done when: Animations and transitions use named durations and easing curves.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Durations and easing are literals per component (about 20 files); no shared motion constants. | ui |
-| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal durations |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:46-46`, `apps/mobile/src/features/chat/components/ImageGenProgress.tsx:40-40`, `apps/extension/src/side_panel.ts:1497-1497`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:46-46`, `apps/mobile/src/features/chat/components/ImageGenProgress.tsx:40-40`
