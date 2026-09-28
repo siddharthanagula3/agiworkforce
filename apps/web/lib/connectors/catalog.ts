@@ -231,6 +231,10 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   paypal: mcpConnector('paypal', 'oauth2', 'high-impact'),
   square: mcpConnector('square', 'oauth2', 'high-impact'),
   plaid: mcpConnector('plaid', 'oauth2', 'high-impact'),
+  'bank-accounts': firstPartyConnector('bank-accounts', 'oauth2', 'high-impact', [
+    'get_account_balances',
+    'get_transactions',
+  ]),
   dropbox: mcpConnector('dropbox', 'oauth2', 'read-write'),
   box: mcpConnector('box', 'oauth2', 'read-write'),
   sharepoint: mcpConnector('sharepoint', 'oauth2', 'read-write'),

@@ -14,6 +14,7 @@ import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-
 import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
 import { getIdentityProvider } from './lib/server/identity';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
+import { plaidLinkContentSecurityOrigins } from './lib/connectors/plaid-config';
 
 const CHAT_ROOT_PATH = '/chat';
 const AGI_WORK_PATH = '/agi-work';
@@ -34,15 +35,19 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
   const identityOrigins = getIdentityProvider().middleware.contentSecurityPolicyOrigins();
   const identityScript = identityOrigins.script.map((origin) => ` ${origin}`).join('');
   const identityConnect = identityOrigins.connect.map((origin) => ` ${origin}`).join('');
+  const plaidOrigins = plaidLinkContentSecurityOrigins();
+  const plaidScript = plaidOrigins.script.map((origin) => ` ${origin}`).join('');
+  const plaidFrame = plaidOrigins.frame.map((origin) => ` ${origin}`).join('');
+  const plaidConnect = plaidOrigins.connect.map((origin) => ` ${origin}`).join('');
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${identityScript} https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com https://apis.google.com;
+    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${identityScript}${plaidScript} https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com https://apis.google.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${storageUploadOrigins}${identityConnect} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${storageUploadOrigins}${identityConnect}${plaidConnect} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
-    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https://docs.google.com${sandboxFrameSrc};
+    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https://docs.google.com${sandboxFrameSrc}${plaidFrame};
     frame-ancestors ${frameAncestors};
     form-action 'self';
     base-uri 'self';
