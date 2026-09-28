@@ -931,6 +931,7 @@ export interface InteractiveCardResponseBinding {
 
 export const WEB_INTERACTIVE_CARD_KINDS = [
   'clarify.v1',
+  'itinerary.v1',
   'map-search.v1',
   'mcp-app.v1',
   'places.v1',

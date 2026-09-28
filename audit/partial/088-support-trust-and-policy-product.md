@@ -45,42 +45,39 @@ Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `app
 
 - Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1320-1325`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.06: Feature request.
 
 - Done when: Users can submit a feature request from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1325-1327`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.07: User-reviewable diagnostic bundle.
 

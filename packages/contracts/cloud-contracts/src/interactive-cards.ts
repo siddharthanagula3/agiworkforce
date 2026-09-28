@@ -237,6 +237,21 @@ const MediaRefSchema = z
 
 const SourceSchema = z.object({ url: HttpsUrlSchema, title: z.string().min(1).max(120) }).strict();
 
+export function isAllowedItineraryRouteUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === 'https://www.google.com' &&
+      url.pathname === '/maps/dir/' &&
+      url.searchParams.get('api') === '1' &&
+      Boolean(url.searchParams.get('origin')) &&
+      Boolean(url.searchParams.get('destination'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export const ItineraryCardBodySchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -323,6 +338,25 @@ export const ItineraryCardBodySchema = z
       body.route.unresolvedStopCount !== unresolved
     ) {
       ctx.addIssue({ code: 'custom', path: ['route'], message: 'unresolved count mismatch' });
+    }
+    if (body.route.status === 'available') {
+      const stopIds = new Set(body.stops.map((stop) => stop.id));
+      for (const [index, leg] of body.route.legs.entries()) {
+        if (!isAllowedItineraryRouteUrl(leg.url)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['route', 'legs', index, 'url'],
+            message: 'route URL is not a directions link',
+          });
+        }
+        if (leg.stopIds.some((stopId) => !stopIds.has(stopId))) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['route', 'legs', index, 'stopIds'],
+            message: 'route leg names an unknown stop',
+          });
+        }
+      }
     }
   });
 
