@@ -1052,6 +1052,28 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the credential the place search tool calls Google Places with',
   }),
+  published('PLAID_CLIENT_ID', {
+    type: 'string',
+    owner: 'apps/web/lib/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Plaid client the Bank accounts connector links and reads accounts as',
+  }),
+  secret('PLAID_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Plaid secret every bank account request authenticates with',
+  }),
+  published('PLAID_ENV', {
+    type: 'string',
+    owner: 'apps/web/lib/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('sandbox', 'production'),
+    description: 'which Plaid environment the Bank accounts connector talks to',
+  }),
   secret('OPENROUTER_API_KEY', {
     type: 'string',
     owner: 'apps/web/lib/services',

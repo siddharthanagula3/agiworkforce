@@ -351,7 +351,13 @@ import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
 import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
-import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
+import {
+  executeMemoryTool,
+  isMemoryTool,
+  memoryToolSource,
+  SAVE_MEMORY_TOOL_NAME,
+} from '@/lib/server/tools/memory-tools';
+import { isSensitiveDataToolName } from '@/lib/connectors/sensitive-data-connectors';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
 import {
@@ -405,6 +411,8 @@ const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000)
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_RETRY_HELD_PROVIDER_CHARS = 64 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
+const SENSITIVE_DATA_MEMORY_REFUSAL =
+  'Nothing was saved to memory: this turn read health or bank records, and those are never kept in memory. Tell the user it was not saved.';
 
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
@@ -1976,6 +1984,7 @@ async function runMcpTool(
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
+    sensitiveDataRead?: () => boolean;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2082,6 +2091,12 @@ async function runMcpTool(
     }
     if (!executionContext?.userId) {
       return { content: 'A signed-in account is required to use Memory.', isError: true };
+    }
+    if (
+      toolCall.qualifiedName === SAVE_MEMORY_TOOL_NAME &&
+      executionContext.sensitiveDataRead?.() === true
+    ) {
+      return { content: SENSITIVE_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
@@ -3237,6 +3252,7 @@ export async function* runToolLoop(
     skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
     return skillInstallOverridesPromise;
   };
+  let sensitiveDataRead = false;
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -4605,8 +4621,12 @@ export async function* runToolLoop(
               ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
+              sensitiveDataRead: () => sensitiveDataRead,
             },
           );
+          if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
+            sensitiveDataRead = true;
+          }
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
           return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;

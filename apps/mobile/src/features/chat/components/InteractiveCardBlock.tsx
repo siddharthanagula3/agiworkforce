@@ -5,6 +5,7 @@ import { AlertCircle, MapPinned, Navigation, ExternalLink } from 'lucide-react-n
 import { isAllowedItineraryRouteUrl } from '@agiworkforce/cloud-contracts';
 import {
   isResolvedPlace,
+  type ImageCardBody,
   type InteractiveCard,
   type ItineraryCardBody,
   type ItineraryTravelMode,
@@ -15,6 +16,8 @@ import {
 import { getAuthHeaders } from '@/services/authSession';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
+import { GeneratedImage } from './GeneratedImage';
+import { ImageFullScreen } from './ImageFullScreen';
 
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 200;
@@ -334,6 +337,32 @@ function MapSearchCard({
   );
 }
 
+const IMAGE_CARD_MAX_WIDTH = 320;
+
+function ImageCard({ body, width }: { body: ImageCardBody; width: number }) {
+  const [fullScreenUrl, setFullScreenUrl] = useState<string | null>(null);
+  const imageWidth = Math.min(width, IMAGE_CARD_MAX_WIDTH);
+  return (
+    <View style={{ marginTop: 12 }}>
+      {body.images.map((image) => (
+        <GeneratedImage
+          key={image.assetId}
+          imageUrl={image.url}
+          revisedPrompt={body.prompt}
+          width={imageWidth}
+          onPress={() => setFullScreenUrl(image.url)}
+        />
+      ))}
+      <ImageFullScreen
+        imageUrl={fullScreenUrl}
+        prompt={body.prompt}
+        visible={fullScreenUrl !== null}
+        onClose={() => setFullScreenUrl(null)}
+      />
+    </View>
+  );
+}
+
 const ITINERARY_DIRECTIONS: Record<ItineraryTravelMode, string> = {
   walking: 'Walking directions in Google Maps',
   driving: 'Driving directions in Google Maps',
@@ -553,6 +582,9 @@ export function InteractiveCardBlock({
       {cards.map((card) => {
         if (card.recognized && card.kind === 'itinerary.v1') {
           return <ItineraryCard key={card.cardId} body={card.body} />;
+        }
+        if (card.recognized && card.kind === 'image.v1') {
+          return <ImageCard key={card.cardId} body={card.body} width={cardWidth} />;
         }
         if (card.recognized && card.kind === 'map-search.v1') {
           return (
