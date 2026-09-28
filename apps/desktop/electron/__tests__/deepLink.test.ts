@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DESKTOP_RUNTIME_EVENT_CHANNEL } from '@agiworkforce/local-runtime-contract';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 
 const DEEP_LINK = 'agiworkforce-cloud://chat/conversation-1?nonce=nonce-abc123';
@@ -21,6 +22,7 @@ function makeWebContents() {
       if (event === 'did-finish-load') cb();
     }),
     isLoading: () => false,
+    isDestroyed: () => false,
     setWindowOpenHandler: vi.fn(),
     userAgent: 'test',
     focus: vi.fn(),
@@ -214,7 +216,7 @@ describe('deep-link delivery', () => {
     expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
   });
 
-  it('sends a legacy sign-in callback to the expired sign-in page', async () => {
+  it('tells the page a legacy sign-in callback expired without navigating the window', async () => {
     await bootMain('remote');
 
     openUrl(LEGACY_SSO_LINK);
@@ -222,9 +224,10 @@ describe('deep-link delivery', () => {
     const loads = shell.windows.flatMap(
       (win) => (win.loadURL as ReturnType<typeof vi.fn>).mock.calls,
     );
-    expect(loads.flat()).toContainEqual(
-      expect.stringContaining('/auth/desktop/complete#expired=1'),
-    );
+    expect(loads.flat()).not.toContainEqual(expect.stringContaining('/auth/desktop/complete'));
+    expect(webContentsSend).toHaveBeenCalledWith(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+      kind: 'browser-sign-in-expired',
+    });
     expect(webContentsSend).not.toHaveBeenCalledWith(
       ELECTRON_IPC_CHANNELS.deepLink,
       LEGACY_SSO_LINK,

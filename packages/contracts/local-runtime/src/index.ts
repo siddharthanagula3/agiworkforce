@@ -368,5 +368,6 @@ export {
   DESKTOP_SIGN_IN_PATH,
   desktopSignInLink,
   isDesktopSignInLink,
+  readDesktopSignInChallenge,
   readDesktopSignInCode,
 } from './desktop-sign-in';
