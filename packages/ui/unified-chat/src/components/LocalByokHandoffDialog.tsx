@@ -121,7 +121,7 @@ export function LocalByokHandoffDialog({
             {showContextPanel && (
               <section className="min-h-0 overflow-y-auto border-b border-border/60 p-4 md:border-b-0 md:border-r">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-medium">Context</h3>
+                  <h3 className="text-h5">Context</h3>
                   <span className="text-xs text-muted-foreground">
                     {selectedContextIds.length}/{candidates!.length}
                   </span>
@@ -225,7 +225,7 @@ export function LocalByokHandoffDialog({
 
               {findings.length > 0 && (
                 <div className="mt-4">
-                  <h3 className="mb-2 text-sm font-medium">Secret Findings</h3>
+                  <h3 className="mb-2 text-h5">Secret Findings</h3>
                   <div className="space-y-2">
                     {findings.map((finding) => (
                       <div
@@ -257,7 +257,7 @@ export function LocalByokHandoffDialog({
 
               <div className="mt-4">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-medium">Redacted Payload</h3>
+                  <h3 className="text-h5">Redacted Payload</h3>
                   {preview && !blocked && (
                     <span
                       className={cn(

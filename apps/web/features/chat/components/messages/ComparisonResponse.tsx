@@ -75,7 +75,7 @@ export function ComparisonResponse({
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-quick',
                 isActive
-                  ? 'bg-background text-foreground shadow-sm'
+                  ? 'bg-background text-foreground shadow-e1'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >

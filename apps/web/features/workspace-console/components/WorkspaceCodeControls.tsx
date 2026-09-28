@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   WORKSPACE_CODE_CONTROL_HINTS,
   WORKSPACE_CODE_CONTROL_LABELS,
@@ -139,6 +139,20 @@ export function WorkspaceCodeControls() {
     setEgressHosts(saved.allowedEgressHosts.join(', '));
   }, [saved]);
 
+  const edited =
+    saved !== null &&
+    draft !== null &&
+    JSON.stringify({
+      ...draft,
+      allowedMcpServers: parseHosts(mcpServers),
+      allowedEgressHosts: parseHosts(egressHosts),
+    }) !== JSON.stringify(saved);
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: edited && !update.isPending,
+    description:
+      'Your changes to the Code controls have not been saved. If you leave now, they will be lost.',
+  });
+
   if (policy.isLoading) {
     return (
       <section style={cardStyle} className="px-5 py-6">
@@ -177,7 +191,7 @@ export function WorkspaceCodeControls() {
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-code-controls-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Code connections
@@ -301,6 +315,7 @@ export function WorkspaceCodeControls() {
         </div>
       ) : null}
       {dialog}
+      {discardDialog}
     </section>
   );
 }

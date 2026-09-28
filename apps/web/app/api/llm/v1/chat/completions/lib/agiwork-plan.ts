@@ -12,12 +12,25 @@ export const MAX_AGIWORK_GOAL_FIELD_CHARS = 1000;
 
 export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
 export const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
+export const AGIWORK_PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
+
+export const AGIWORK_EXCLUDABLE_TOOLS = ['web_search', 'code_execution'] as const;
+export type AgiWorkExcludableTool = (typeof AGIWORK_EXCLUDABLE_TOOLS)[number];
+
+const AGIWORK_TOOL_LABELS: Record<AgiWorkExcludableTool, string> = {
+  web_search: 'web search',
+  code_execution: 'code execution',
+};
 
 export const AgiWorkGoalSchema = z
   .object({
     goal: z.string().trim().min(1).max(MAX_AGIWORK_GOAL_CHARS),
     constraints: z.string().trim().max(MAX_AGIWORK_GOAL_FIELD_CHARS).optional(),
     deliverable: z.string().trim().max(MAX_AGIWORK_GOAL_FIELD_CHARS).optional(),
+    excludedTools: z
+      .array(z.enum(AGIWORK_EXCLUDABLE_TOOLS))
+      .max(AGIWORK_EXCLUDABLE_TOOLS.length)
+      .optional(),
   })
   // Drop optional fields that arrived empty so `{ goal, constraints: '' }` and
   // `{ goal }` are stored identically.
@@ -25,6 +38,9 @@ export const AgiWorkGoalSchema = z
     goal: value.goal,
     ...(value.constraints ? { constraints: value.constraints } : {}),
     ...(value.deliverable ? { deliverable: value.deliverable } : {}),
+    ...(value.excludedTools && value.excludedTools.length > 0
+      ? { excludedTools: [...new Set(value.excludedTools)] }
+      : {}),
   }));
 
 export type AgiWorkGoal = z.infer<typeof AgiWorkGoalSchema>;
@@ -87,8 +103,14 @@ export function agiWorkGoalHeadline(goal: AgiWorkGoal): string {
 }
 
 export function agiWorkPlanningDirective(goal: AgiWorkGoal): string {
+  const excluded = new Set(goal.excludedTools ?? []);
+  const tools = [
+    ...(excluded.has('web_search') ? [] : ['web search', 'fetch']),
+    ...(excluded.has('code_execution') ? [] : ['code execution']),
+    'file creation',
+  ];
   const lines = [
-    'You are about to start an AGI Work run with tools (web search, fetch, code execution, file creation).',
+    `You are about to start an AGI Work run with tools (${tools.join(', ')}).`,
     `Objective: ${goal.goal}`,
   ];
   if (goal.constraints) lines.push(`Constraints: ${goal.constraints}`);
@@ -144,7 +166,7 @@ export function buildAgiWorkPlan(descriptions: string[]): AgiWorkPlanStep[] {
 
 export function advanceAgiWorkPlan(
   steps: AgiWorkPlanStep[],
-  transition: 'start' | 'complete' | 'fail' | 'cancel',
+  transition: 'start' | 'complete' | 'fail' | 'cancel' | 'stop',
 ): AgiWorkPlanStep[] {
   if (transition === 'start') {
     let marked = false;
@@ -169,7 +191,52 @@ export function advanceAgiWorkPlan(
   );
 }
 
-export function agiWorkPlanEvent(steps: AgiWorkPlanStep[], responseModel: string): string {
+export function advanceAgiWorkPlanToStep(
+  steps: AgiWorkPlanStep[],
+  ordinal: number,
+): AgiWorkPlanStep[] {
+  if (ordinal < 1 || ordinal > steps.length) return steps;
+  return steps.map((step, index) => {
+    if (step.status === 'failed' || step.status === 'cancelled') return step;
+    if (index < ordinal - 1) return { ...step, status: 'completed' };
+    if (index === ordinal - 1 && step.status !== 'completed') {
+      return { ...step, status: 'in_progress' };
+    }
+    return step;
+  });
+}
+
+const STEP_MARKER_PATTERN = /^[\s>*_#-]*Step\s+(\d{1,2})\s*[:.)]/gim;
+
+export function agiWorkPlanStepMarker(text: string): number | null {
+  let latest: number | null = null;
+  for (const match of text.matchAll(STEP_MARKER_PATTERN)) {
+    const ordinal = Number(match[1]);
+    if (Number.isInteger(ordinal) && (latest === null || ordinal > latest)) latest = ordinal;
+  }
+  return latest;
+}
+
+export function agiWorkExecutionDirective(steps: AgiWorkPlanStep[]): string {
+  return [
+    'Work through this plan in order:',
+    ...steps.map((step, index) => `${index + 1}. ${step.description}`),
+    'When you begin a step, first write a line of its own that starts with "Step N:" and names the step, so the user can follow your progress.',
+  ].join('\n');
+}
+
+export const AgiWorkSuppliedPlanSchema = z.object({
+  steps: z
+    .array(z.string().trim().min(1).max(MAX_PLAN_STEP_CHARS))
+    .min(1)
+    .max(AGIWORK_PLAN_MAX_STEPS),
+});
+
+export function agiWorkPlanEvent(
+  steps: AgiWorkPlanStep[],
+  responseModel: string,
+  review?: { goal: AgiWorkGoal; awaitingApproval: boolean },
+): string {
   return `data: ${JSON.stringify({
     choices: [
       {
@@ -180,6 +247,7 @@ export function agiWorkPlanEvent(steps: AgiWorkPlanStep[], responseModel: string
               description: step.description,
               status: step.status,
             })),
+            ...(review ? { goal: review.goal, awaiting_approval: review.awaitingApproval } : {}),
           },
         },
         index: 0,
@@ -193,6 +261,11 @@ export function agiWorkGoalProgressEvent(goal: AgiWorkGoal): AgentEvent {
   const detailParts: string[] = [];
   if (goal.constraints) detailParts.push(`Constraints: ${goal.constraints}`);
   if (goal.deliverable) detailParts.push(`Deliverable: ${goal.deliverable}`);
+  if (goal.excludedTools?.length) {
+    detailParts.push(
+      `Tools off: ${goal.excludedTools.map((tool) => AGIWORK_TOOL_LABELS[tool]).join(', ')}`,
+    );
+  }
   return {
     type: 'progress-update',
     progressId: AGIWORK_GOAL_PROGRESS_ID,
@@ -202,11 +275,34 @@ export function agiWorkGoalProgressEvent(goal: AgiWorkGoal): AgentEvent {
   };
 }
 
+const PLAN_STEP_PROGRESS_STATUS: Partial<
+  Record<AgiWorkPlanStepStatus, Extract<AgentEvent, { type: 'progress-update' }>['status']>
+> = {
+  in_progress: 'running',
+  completed: 'completed',
+  failed: 'failed',
+};
+
 export function agiWorkPlanProgressEvents(steps: AgiWorkPlanStep[]): AgentEvent[] {
-  return steps.map((step, index) => ({
+  const overview: AgentEvent = {
     type: 'progress-update',
-    progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}${step.id}`,
-    summary: `${index + 1}. ${step.description}`,
+    progressId: AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+    summary: `Plan · ${steps.length} step${steps.length === 1 ? '' : 's'}`,
+    detail: steps.map((step, index) => `${index + 1}. ${step.description}`).join('\n'),
     status: 'completed',
-  }));
+  };
+  const started = steps.flatMap((step, index): AgentEvent[] => {
+    const status = PLAN_STEP_PROGRESS_STATUS[step.status];
+    return status
+      ? [
+          {
+            type: 'progress-update',
+            progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}${step.id}`,
+            summary: `${index + 1}. ${step.description}`,
+            status,
+          },
+        ]
+      : [];
+  });
+  return [overview, ...started];
 }

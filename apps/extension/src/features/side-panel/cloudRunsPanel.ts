@@ -4,7 +4,12 @@ import {
   type CloudAgentRun,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { agentTaskStateLabel } from '@agiworkforce/types';
+import {
+  AGENT_TASK_BOARD_STAGES,
+  agentTaskBoardStage,
+  agentTaskStateLabel,
+  type AgentTaskBoardStage,
+} from '@agiworkforce/types';
 import {
   ALL_MANAGED_RUN_STATES,
   cancelChromeManagedRun,
@@ -296,6 +301,92 @@ export const CLOUD_RUNS_PANEL_CSS =
     opacity: 0.55;
   }
 
+  .sp-runs-board {
+    display: flex;
+    gap: 8px;
+    padding: 0 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .sp-runs-column {
+    flex: 0 0 min(240px, 85%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 8px;
+    scroll-snap-align: start;
+    min-width: 0;
+  }
+
+  .sp-runs-column-head {
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--agi-ext-text);
+  }
+
+  .sp-runs-column-count {
+    font-weight: 400;
+    color: var(--agi-ext-text-muted);
+  }
+
+  .sp-runs-column-empty {
+    padding: 12px 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--agi-ext-text-muted);
+  }
+
+  .sp-runs-column-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sp-runs-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 6px;
+    background: var(--agi-ext-surface);
+  }
+
+  .sp-runs-card-open {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    font: inherit;
+    color: var(--agi-ext-text);
+    cursor: pointer;
+    min-width: 0;
+  }
+
+  .sp-runs-card-note {
+    font-size: 11px;
+    color: var(--agi-ext-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .sp-runs-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
   .sp-runs-detail-head {
     display: flex;
     align-items: center;
@@ -339,6 +430,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 ` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'all';
+type RunLayout = 'list' | 'board';
 type RunStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
 type StatusOrigin = 'progress' | 'load' | 'action';
 
@@ -382,6 +474,17 @@ const LIVE_RUN_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
   'paused',
 ]);
 
+const NEEDS_YOU_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+]);
+
+function needsYouFirst(runs: readonly CloudAgentRun[]): CloudAgentRun[] {
+  const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
+  return [...runs.filter(needsYou), ...runs.filter((run) => !needsYou(run))];
+}
+
 const RELATIVE_TIME_FORMAT = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 const RELATIVE_TIME_STEPS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
   { unit: 'day', ms: 86_400_000 },
@@ -395,6 +498,23 @@ const SIGN_IN_OPENING_LABEL = 'Opening…';
 const SIGN_IN_FAILED = 'The sign-in tab did not open.';
 
 const RUN_REFRESH_INTERVAL_MS = 4_000;
+const RUN_LAYOUT_STORAGE_KEY = 'agi-ext-runs-layout';
+
+function loadRunLayout(): RunLayout {
+  try {
+    return globalThis.localStorage?.getItem(RUN_LAYOUT_STORAGE_KEY) === 'board' ? 'board' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveRunLayout(layout: RunLayout): void {
+  try {
+    globalThis.localStorage?.setItem(RUN_LAYOUT_STORAGE_KEY, layout);
+  } catch {
+    return;
+  }
+}
 const MAX_RENDERED_JOURNAL_ENTRIES = 200;
 const MAX_RENDERED_TEXT_CHARACTERS = 20_000;
 
@@ -532,8 +652,26 @@ export function buildCloudRunsPanel(
   );
   filters.appendChild(activeFilterBtn);
   filters.appendChild(allFilterBtn);
+  const layoutGroup = el('div', {
+    class: 'sp-runs-filters',
+    role: 'group',
+    'aria-label': 'Run layout',
+  });
+  const listLayoutBtn = el(
+    'button',
+    { type: 'button', class: 'sp-runs-filter', 'data-layout': 'list', 'aria-pressed': 'true' },
+    'List',
+  );
+  const boardLayoutBtn = el(
+    'button',
+    { type: 'button', class: 'sp-runs-filter', 'data-layout': 'board', 'aria-pressed': 'false' },
+    'Board',
+  );
+  layoutGroup.appendChild(listLayoutBtn);
+  layoutGroup.appendChild(boardLayoutBtn);
   const refreshBtn = el('button', { type: 'button', class: 'sp-runs-icon-btn' }, 'Refresh');
   header.appendChild(filters);
+  header.appendChild(layoutGroup);
   header.appendChild(refreshBtn);
   panelEl.appendChild(header);
 
@@ -551,6 +689,7 @@ export function buildCloudRunsPanel(
   panelEl.appendChild(schedules.sectionEl);
 
   let filter: RunFilter = 'active';
+  let layout: RunLayout = loadRunLayout();
   let runs: CloudAgentRun[] = [];
   let nextCursor: string | null = null;
   let openRunId: string | null = null;
@@ -785,6 +924,132 @@ export function buildCloudRunsPanel(
     return fragment;
   }
 
+  function focusBoardCard(runId: string): void {
+    const card = Array.from(listEl.querySelectorAll<HTMLElement>('[data-board-run-id]')).find(
+      (node) => node.getAttribute('data-board-run-id') === runId,
+    );
+    card?.querySelector<HTMLElement>('.sp-runs-card-open')?.focus();
+  }
+
+  function moveBoardCard(run: CloudAgentRun, action: Promise<void>): void {
+    void action.finally(() => {
+      if (layout === 'board' && openRunId === null) focusBoardCard(run.id);
+    });
+  }
+
+  function buildBoardCard(run: CloudAgentRun, now: number): HTMLElement {
+    const card = el('li', { class: 'sp-runs-card', 'data-board-run-id': run.id });
+    const openBtn = el('button', {
+      type: 'button',
+      class: 'sp-runs-card-open',
+      'data-run-id': run.id,
+      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${agentTaskStateLabel(run.state)}`,
+    });
+    const head = el('div', { class: 'sp-run-row-head' });
+    head.appendChild(
+      el(
+        'span',
+        { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
+        agentTaskStateLabel(run.state),
+      ),
+    );
+    head.appendChild(el('span', { class: 'sp-run-time' }, formatRelativeTime(run.updatedAt, now)));
+    openBtn.appendChild(head);
+    openBtn.appendChild(
+      el('div', { class: 'sp-run-title' }, `${WORK_MODE_LABELS[run.workMode]} • ${run.model}`),
+    );
+    openBtn.addEventListener('click', () => void openRunDetail(run.id));
+    card.appendChild(openBtn);
+
+    const pending = run.pendingApproval;
+    if (pending) {
+      card.appendChild(
+        el(
+          'div',
+          { class: 'sp-runs-card-note' },
+          `Wants to run ${pending.toolCalls.map((call) => call.name).join(', ')}`,
+        ),
+      );
+    } else if (run.pendingInput) {
+      card.appendChild(
+        el(
+          'div',
+          { class: 'sp-runs-card-note' },
+          `Answer on ${ORIGIN_SURFACE_LABELS[run.originSurface]} to let it continue.`,
+        ),
+      );
+    }
+
+    const actions = el('div', { class: 'sp-runs-card-actions' });
+    if (pending) {
+      const busy = pendingDecisionRunId !== null;
+      const approveBtn = el(
+        'button',
+        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Approve ${run.model} run` },
+        'Approve',
+      );
+      const denyBtn = el(
+        'button',
+        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Deny ${run.model} run` },
+        'Deny',
+      );
+      approveBtn.disabled = busy;
+      denyBtn.disabled = busy;
+      approveBtn.addEventListener('click', () =>
+        moveBoardCard(run, submitApproval(run, 'approved')),
+      );
+      denyBtn.addEventListener('click', () => moveBoardCard(run, submitApproval(run, 'rejected')));
+      actions.appendChild(approveBtn);
+      actions.appendChild(denyBtn);
+    }
+    if (LIVE_RUN_STATES.has(run.state)) {
+      const stopBtn = el(
+        'button',
+        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Stop ${run.model} run` },
+        'Stop',
+      );
+      stopBtn.disabled = run.cancellationRequestedAt !== null;
+      stopBtn.addEventListener('click', () => {
+        stopBtn.disabled = true;
+        moveBoardCard(run, cancelRun(run));
+      });
+      actions.appendChild(stopBtn);
+    }
+    if (actions.childElementCount > 0) card.appendChild(actions);
+    return card;
+  }
+
+  function buildBoard(now: number): HTMLElement {
+    const board = el('div', { class: 'sp-runs-board', role: 'region', 'aria-label': 'Run board' });
+    const grouped = new Map<AgentTaskBoardStage, CloudAgentRun[]>();
+    for (const run of runs) {
+      const stage = agentTaskBoardStage(run.state);
+      grouped.set(stage, [...(grouped.get(stage) ?? []), run]);
+    }
+    for (const stage of AGENT_TASK_BOARD_STAGES) {
+      const stageRuns = grouped.get(stage.id) ?? [];
+      if (!stage.alwaysShown && stageRuns.length === 0) continue;
+      const headingId = `sp-runs-stage-${stage.id}`;
+      const column = el('section', {
+        class: 'sp-runs-column',
+        'data-stage': stage.id,
+        'aria-labelledby': headingId,
+      });
+      const heading = el('h3', { class: 'sp-runs-column-head', id: headingId }, stage.label);
+      heading.appendChild(el('span', { class: 'sp-runs-column-count' }, String(stageRuns.length)));
+      column.appendChild(heading);
+      if (stageRuns.length === 0) {
+        column.appendChild(el('div', { class: 'sp-runs-column-empty' }, 'Nothing here'));
+      } else {
+        const list = el('ul', { class: 'sp-runs-column-list' });
+        for (const run of stageRuns) list.appendChild(buildBoardCard(run, now));
+        column.appendChild(list);
+      }
+      board.appendChild(column);
+    }
+    return board;
+  }
+
   function renderList(): void {
     const now = deps.now();
     const fragment = document.createDocumentFragment();
@@ -799,7 +1064,8 @@ export function buildCloudRunsPanel(
         ),
       );
     } else {
-      for (const run of runs) fragment.appendChild(buildRunRow(run, now));
+      if (layout === 'board') fragment.appendChild(buildBoard(now));
+      else for (const run of needsYouFirst(runs)) fragment.appendChild(buildRunRow(run, now));
       if (nextCursor) {
         const moreBtn = el(
           'button',
@@ -831,7 +1097,7 @@ export function buildCloudRunsPanel(
       );
       head.appendChild(
         el(
-          'span',
+          'h2',
           { class: 'sp-runs-detail-title' },
           `${WORK_MODE_LABELS[run.workMode]} • ${run.model} • ${ORIGIN_SURFACE_LABELS[run.originSurface]}`,
         ),
@@ -872,6 +1138,8 @@ export function buildCloudRunsPanel(
     schedules.sectionEl.hidden = detailOpen;
     activeFilterBtn.setAttribute('aria-pressed', String(filter === 'active'));
     allFilterBtn.setAttribute('aria-pressed', String(filter === 'all'));
+    listLayoutBtn.setAttribute('aria-pressed', String(layout === 'list'));
+    boardLayoutBtn.setAttribute('aria-pressed', String(layout === 'board'));
     if (detailOpen) renderDetail();
     else renderList();
   }
@@ -978,6 +1246,15 @@ export function buildCloudRunsPanel(
     void load();
   }
 
+  function setLayout(next: RunLayout): void {
+    if (layout === next) return;
+    layout = next;
+    saveRunLayout(next);
+    render();
+  }
+
+  listLayoutBtn.addEventListener('click', () => setLayout('list'));
+  boardLayoutBtn.addEventListener('click', () => setLayout('board'));
   activeFilterBtn.addEventListener('click', () => setFilter('active'));
   allFilterBtn.addEventListener('click', () => setFilter('all'));
   refreshBtn.addEventListener('click', () => void load());

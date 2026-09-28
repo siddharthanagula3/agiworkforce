@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useConfirm } from '@agiworkforce/ui';
+import { useConfirm, useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { toWebConversation } from '@/lib/hooks/useConversations';
 import {
@@ -37,6 +37,7 @@ const actionButtonStyle = {
 } as const;
 
 export function ArchivedChatsSection() {
+  const { plural } = useUiTranslation('settings');
   const router = useRouter();
   // Destructive-action confirmation (shell-nav-ia-gap-01 remainder), same
   // shared AlertDialog wrapper as PrivacySection and WebChatPage, replacing
@@ -151,7 +152,10 @@ export function ArchivedChatsSection() {
   const handleDeleteAll = async () => {
     const scope = hasMore
       ? 'Every archived chat'
-      : `All ${conversations.length} archived chat${conversations.length === 1 ? '' : 's'}`;
+      : plural('counts.allArchivedChats', conversations.length, {
+          one: 'All {{count}} archived chat',
+          other: 'All {{count}} archived chats',
+        });
     const confirmed = await confirmDestructive({
       title: 'Delete all archived chats in this workspace?',
       description: `${scope} in the current workspace will be removed from your history. Chats that are not archived are not affected. You can restore them from Settings > Deleted chats.`,

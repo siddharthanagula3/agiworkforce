@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-20
+Last updated: 2026-09-27
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -46,20 +46,23 @@ The gate is `resolveToolCallGate()` in
 `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts`, a table of
 ranks that `tool-loop.ts` calls once per tool call. Precedence, highest first:
 
-| Rank | Condition                                                                               | Verdict                   | Machine reason               |
-| ---- | --------------------------------------------------------------------------------------- | ------------------------- | ---------------------------- |
-| 1    | User saved `deny` for the tool                                                          | deny                      | `blocked_by_user_permission` |
-| 2    | A device-step tool on a turn that carries a device host                                 | allow                     | `auto_approval_mode`         |
-| 3    | User saved `allow`, and the trifecta triple holds                                       | ask, deny when unattended | `lethal_trifecta`            |
-| 4    | User saved `allow`                                                                      | allow                     | `always_allow`               |
-| 5    | User saved `ask`                                                                        | ask                       | `user_requires_approval`     |
-| 6    | `approvalMode` is `manual`, no trifecta, and the account policy auto-approves this tool | allow                     | `account_default_read_only`  |
-| 7    | `approvalMode` is `manual`                                                              | ask                       | `manual_approval_mode`       |
-| 8    | Trifecta triple holds                                                                   | ask, deny when unattended | `lethal_trifecta`            |
-| 9    | otherwise                                                                               | allow                     | `auto_approval_mode`         |
+| Rank | Condition                                                                               | Verdict                                                | Machine reason               |
+| ---- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------- |
+| 1    | User saved `deny` for the tool                                                          | deny                                                   | `blocked_by_user_permission` |
+| 2    | A device-step tool on a turn that carries a device host                                 | allow                                                  | `auto_approval_mode`         |
+| 3    | User saved `allow`, and the trifecta triple holds                                       | ask; unattended: pause if it can checkpoint, else deny | `lethal_trifecta`            |
+| 4    | User saved `allow`                                                                      | allow                                                  | `always_allow`               |
+| 5    | User saved `ask`                                                                        | ask                                                    | `user_requires_approval`     |
+| 6    | `approvalMode` is `manual`, no trifecta, and the account policy auto-approves this tool | allow                                                  | `account_default_read_only`  |
+| 7    | `approvalMode` is `manual`                                                              | ask                                                    | `manual_approval_mode`       |
+| 8    | Trifecta triple holds                                                                   | ask; unattended: pause if it can checkpoint, else deny | `lethal_trifecta`            |
+| 9    | otherwise                                                                               | allow                                                  | `auto_approval_mode`         |
 
-An escalation on an unattended run has nobody to ask, so `escalatedGate` denies
-rather than falling through to an allow.
+Ranks 3 and 8 have the outcome `escalate`, which `resolveToolCallGate` turns
+into a verdict. An attended turn asks. An unattended run has nobody to ask, so
+it pauses at an approval checkpoint when the run can save one
+(`unattendedEscalationPauses` with an `onApprovalCheckpoint` in `tool-loop.ts`),
+and otherwise denies. An escalation never falls through to an allow.
 
 `approvalMode` comes from `classifyToolLoopInputs` in `tool-loop-routing.ts`. It
 is `manual` when the turn offers an MCP or connector tool, and also whenever any
@@ -92,6 +95,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `edit_file`          | asks                   | asks                           | write, not reversible                                                            |
 | `create_office_file` | asks                   | asks                           | write, reversible                                                                |
 | `skill`              | asks                   | runs                           | read, reversible                                                                 |
+| `read_tool_result`   | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
@@ -481,8 +485,8 @@ the vendor's server decides, and the column says so.
 | `todoist`          | Todoist                       | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
 | `vercel`           | Vercel                        | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
 | `linear`           | Linear                        | `read`, `write`, `issues:create`, `comments:create`, `app:assignable`, `app:mentionable`                                                                                           | Read and edit issues and comments. Excludes `admin`.                                                                                                                      |
-| `jira`             | Atlassian                     | `read:me`, `read:jira-user`, `read:jira-work`, `write:jira-work`, `offline_access`                                                                                                 | Read and edit issues. Excludes every `manage:` and `admin:` configuration scope.                                                                                          |
-| `confluence`       | Atlassian                     | `read:me`, `read:confluence-space.summary`, `read:confluence-content.all`, `write:confluence-content`, `offline_access`                                                            | Read spaces and pages, write page content. Excludes configuration management.                                                                                             |
+| `jira`             | Atlassian                     | `read:me`, `read:jira:agent-interface`, `write:jira:agent-interface`, `search:jira:agent-interface`, `offline_access`                                                              | Read, search and edit issues through the Rovo MCP server. Excludes the `delete:` and `manage:` Jira scopes and every other product the server offers.                     |
+| `confluence`       | Atlassian                     | `read:me`, `read:confluence:agent-interface`, `write:confluence:agent-interface`, `search:confluence:agent-interface`, `offline_access`                                            | Read, search and edit pages through the Rovo MCP server. Excludes every other product the server offers.                                                                  |
 | `asana`            | Asana                         | `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read`, OIDC                                | Granular task and project access. Excludes the legacy `default` scope, which is full account access.                                                                      |
 | `zoom`             | Zoom                          | `user:read:user`, `meeting:read:meeting`, `meeting:read:list_meetings`, `meeting:write:meeting`, `cloud_recording:read:list_user_recordings`                                       | Granular scopes only (Zoom's post-2024 format). Excludes every `account:` and admin scope.                                                                                |
 | `hubspot`          | HubSpot                       | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                              | CRM object access. Excludes `automation`, `content`, and every schema or settings write.                                                                                  |

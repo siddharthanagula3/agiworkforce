@@ -1,12 +1,13 @@
 import { formatCredits, getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
-import type {
-  ManagedCloudScheduleCondition,
-  ManagedCloudScheduleDaypart,
-  ManagedCloudScheduleMissedExecutionPolicy,
-  ManagedCloudScheduleRecurrence,
-  ManagedCloudScheduleRun,
-  ManagedCloudScheduleSources,
-  ManagedCloudScheduleTask,
+import {
+  describeScheduleRunTiming,
+  type ManagedCloudScheduleCondition,
+  type ManagedCloudScheduleDaypart,
+  type ManagedCloudScheduleMissedExecutionPolicy,
+  type ManagedCloudScheduleRecurrence,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleSources,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import type { ProductRecurrence } from '@/lib/schedules/schedule-time';
 
@@ -203,6 +204,12 @@ export function taskRecurrence(task: ScheduleTask): ProductRecurrence {
 
 export function scheduleConditionUrl(task: ScheduleTask): string {
   return task.condition?.url ?? '';
+}
+
+export type { ManagedCloudScheduleRunTiming as ScheduleRunTiming } from '@agiworkforce/cloud-contracts';
+
+export function scheduleRunTiming(run: ScheduleRun, timezone: string) {
+  return describeScheduleRunTiming(run, (value) => formatDateTime(value, timezone));
 }
 
 export function scheduleResultText(run: ScheduleRun): string | null {

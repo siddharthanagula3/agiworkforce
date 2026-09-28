@@ -204,7 +204,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
       >
         <motion.div
           className={cn(
-            'relative w-full max-w-md rounded-lg border shadow-2xl',
+            'relative w-full max-w-md rounded-lg border shadow-e4',
             urgency === 'critical'
               ? 'border-danger-fill/50 bg-danger-fill/10'
               : urgency === 'warning'
@@ -252,7 +252,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
               </div>
 
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-zinc-100 mb-1">
+                <h2 className="text-h3 text-zinc-100 mb-1">
                   {urgency === 'critical'
                     ? 'Time Running Out'
                     : urgency === 'warning'

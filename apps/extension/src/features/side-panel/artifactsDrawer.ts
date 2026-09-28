@@ -105,7 +105,7 @@ export function buildArtifactsDrawerSection(
   const deps: ArtifactsDrawerDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
 
   const sectionEl = el('div', { class: 'sp-drawer-section', id: 'sp-drawer-artifacts-section' });
-  sectionEl.appendChild(el('div', { class: 'sp-drawer-section-title' }, t('spArtifactsTitle')));
+  sectionEl.appendChild(el('h3', { class: 'sp-drawer-section-title' }, t('spArtifactsTitle')));
   sectionEl.appendChild(el('p', { class: 'sp-drawer-artifacts-help' }, t('spArtifactsHelp')));
 
   const listEl = el('ul', {

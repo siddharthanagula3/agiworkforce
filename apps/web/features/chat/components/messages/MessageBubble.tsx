@@ -100,6 +100,7 @@ import {
   hasStreamError,
   ProjectFileCitations,
   resolveModelEscalation,
+  StreamAnnouncer,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import {
@@ -170,6 +171,10 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
+import {
+  useChatToolAllowanceStore,
+  useToolsAllowedForChat,
+} from '../../stores/chat-tool-allowance-store';
 import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import {
@@ -177,12 +182,17 @@ import {
   type ResearchPlanDecision,
   type ResearchPlanOptions,
 } from '../research/ResearchActivity';
+import { AgiWorkPlanReview, type AgiWorkPlanDecision } from '../work-session/AgiWorkPlanReview';
 import {
   reconcileCitationMarkersFromSourceList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
+import type {
+  AgiWorkPlanReview as AgiWorkPlanReviewState,
+  AgiWorkPlanStep,
+} from '../../utils/agiwork-plan';
 import {
   collectMessageResearchSources,
   orderSourcesByCitation,
@@ -521,6 +531,7 @@ interface Message {
     imageGenModel?: string;
     /** Bounded provider/gateway retry instant for explicit image regeneration. */
     imageRetryAt?: string;
+    imageVersions?: StoreMessageMetadata['imageVersions'];
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -584,6 +595,9 @@ interface Message {
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
+    /** AGI Work plan steps with their status, and the goal and approval state they belong to. */
+    agiWorkPlan?: AgiWorkPlanStep[];
+    agiWorkPlanReview?: AgiWorkPlanReviewState;
     /**
      * The client's post-stream metadata save failed. What is on screen is
      * richer than what a reload will show, and the notice below says so.
@@ -618,6 +632,8 @@ interface MessageBubbleProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  /** Answer an AGI Work plan: start it as edited, cancel it, or retry from a stopped step. */
+  onAgiWorkPlanDecision?: (messageId: string, decision: AgiWorkPlanDecision) => void;
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
@@ -693,6 +709,7 @@ const MessageBubbleComponent = function MessageBubble({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   isRetryingResearch = false,
   onDelete,
   onDeleteVariant,
@@ -1689,6 +1706,45 @@ const MessageBubbleComponent = function MessageBubble({
     message.isStreaming === true &&
     canonicalActivity.entries.every(isLocalPlaceholderActivityEntry);
   const activityTimeline = placeholderOnlyActivity ? undefined : canonicalActivity;
+  const chatConversationId = message.sessionId ?? activeConversationId;
+  const toolsAllowedForChat = useToolsAllowedForChat(chatConversationId);
+  const allowForChat = useChatToolAllowanceStore((state) => state.allowForChat);
+  const handleApproveToolForChat = useCallback(
+    (toolCallId: string) => {
+      const entry = activityTimeline?.entries.find(
+        (candidate) => candidate.kind === 'tool' && candidate.toolCallId === toolCallId,
+      );
+      if (chatConversationId && entry?.kind === 'tool')
+        allowForChat(chatConversationId, entry.name);
+      handleApproveTool(toolCallId);
+    },
+    [activityTimeline, allowForChat, chatConversationId, handleApproveTool],
+  );
+  const approvedForChatRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!resolveToolApproval || approvalTurnExpired || toolsAllowedForChat.length === 0) return;
+    for (const entry of activityTimeline?.entries ?? []) {
+      if (
+        entry.kind !== 'tool' ||
+        entry.status !== 'awaiting-approval' ||
+        entry.inputRequest !== undefined ||
+        entry.approval?.decision !== undefined ||
+        entry.approval?.riskLevel === 'high' ||
+        !toolsAllowedForChat.includes(entry.name) ||
+        approvedForChatRef.current.has(entry.toolCallId)
+      ) {
+        continue;
+      }
+      approvedForChatRef.current.add(entry.toolCallId);
+      handleApproveTool(entry.toolCallId);
+    }
+  }, [
+    activityTimeline,
+    approvalTurnExpired,
+    handleApproveTool,
+    resolveToolApproval,
+    toolsAllowedForChat,
+  ]);
   /**
    * A turn the user stopped before its first token has no words and no media.
    * Copy, the two ratings and Read aloud all act on that text, so on this turn
@@ -1859,6 +1915,7 @@ const MessageBubbleComponent = function MessageBubble({
     >
       {/* Delete confirmation. Rendered outside the dropdown so closing the menu
           on select cannot unmount the dialog that the select just opened. */}
+      {isUser ? <h5 className="sr-only">You said:</h5> : <h6 className="sr-only">AGI said:</h6>}
       {destructiveConfirmDialog}
       {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
           read as a right-aligned bubble, assistant messages as a flat left column. */}
@@ -1917,6 +1974,16 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
+          {!isUser && onAgiWorkPlanDecision && message.metadata?.agiWorkPlan?.length ? (
+            <AgiWorkPlanReview
+              steps={message.metadata.agiWorkPlan}
+              awaitingApproval={message.metadata.agiWorkPlanReview?.awaitingApproval === true}
+              runFinished={!message.isStreaming}
+              busy={isRetryingResearch || (message.isStreaming ?? false)}
+              onDecision={(decision) => onAgiWorkPlanDecision(message.id, decision)}
+            />
+          ) : null}
+
           {/* One canonical Cloud run spine. It is collapsed inline by default,
               expands in place, and each tool then owns its own request/response
               disclosure. Legacy tool events below are a migration fallback only. */}
@@ -1940,6 +2007,9 @@ const MessageBubbleComponent = function MessageBubble({
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
+              onApproveForChat={
+                resolveToolApproval && chatConversationId ? handleApproveToolForChat : undefined
+              }
               onReject={resolveToolApproval ? handleRejectTool : undefined}
               isApprovalExpired={() => approvalTurnExpired}
               onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}
@@ -2150,6 +2220,7 @@ const MessageBubbleComponent = function MessageBubble({
                       content={cleanedContent}
                       isStreaming
                       citations={citationsByMarker}
+                      announce={false}
                     />
                   ) : (
                     <MarkdownContent
@@ -2159,16 +2230,20 @@ const MessageBubbleComponent = function MessageBubble({
                       literalHtml={isUser}
                     />
                   );
-                  return formatCardType ? (
-                    <MessageFormatCard
-                      content={cleanedContent}
-                      cardType={formatCardType}
-                      messageId={message.id}
-                    >
-                      {markdown}
-                    </MessageFormatCard>
-                  ) : (
-                    markdown
+                  return (
+                    <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
+                      {formatCardType ? (
+                        <MessageFormatCard
+                          content={cleanedContent}
+                          cardType={formatCardType}
+                          messageId={message.id}
+                        >
+                          {markdown}
+                        </MessageFormatCard>
+                      ) : (
+                        markdown
+                      )}
+                    </StreamAnnouncer>
                   );
                 })()
               )}
@@ -2440,6 +2515,7 @@ const MessageBubbleComponent = function MessageBubble({
                 aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
                 modelId={message.metadata.imageGenModel as string | undefined}
                 retryAt={message.metadata.imageRetryAt as string | undefined}
+                previousVersions={message.metadata.imageVersions}
                 onRegenerate={onRegenerateImage}
               />
             </div>
@@ -2877,7 +2953,7 @@ const MessageBubbleComponent = function MessageBubble({
                   'flex flex-nowrap items-center gap-1 transition-opacity',
                   ACTION_ROW_MIN_HEIGHT,
                   isUser || !isLatestTurn
-                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100'
+                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100'
                     : 'opacity-100',
                 )}
               >
@@ -3328,6 +3404,8 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.isThinking === next?.isThinking &&
     prev?.agentActivity === next?.agentActivity &&
     prev?.research === next?.research &&
+    prev?.agiWorkPlan === next?.agiWorkPlan &&
+    prev?.agiWorkPlanReview === next?.agiWorkPlanReview &&
     prev?.generatedFiles === next?.generatedFiles &&
     prev?.generatedFile === next?.generatedFile &&
     prev?.artifactManifest === next?.artifactManifest &&
@@ -3420,6 +3498,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;
   if (prev.onSelectVariant !== next.onSelectVariant) return false;
+  if (prev.onAgiWorkPlanDecision !== next.onAgiWorkPlanDecision) return false;
+  if (prev.isRetryingResearch !== next.isRetryingResearch) return false;
 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;

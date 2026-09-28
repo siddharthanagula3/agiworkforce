@@ -117,9 +117,7 @@ export function DirectoryManageView({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-base font-semibold text-foreground">
-          {DIRECTORY_SECTION_LABELS[section]}
-        </h2>
+        <h2 className="text-h4 text-foreground">{DIRECTORY_SECTION_LABELS[section]}</h2>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <button type="button" onClick={onBrowse} className={DIRECTORY_CREATE_BUTTON}>
             {DIRECTORY_BROWSE_LABEL}

@@ -430,6 +430,10 @@
         "icon": "$(add)"
       },
       {
+        "command": "agi-workforce.memory.rememberSelection",
+        "title": "AGI Workforce: Remember This"
+      },
+      {
         "command": "agi-workforce.memory.edit",
         "title": "AGI Workforce: Edit Memory Fact",
         "icon": "$(edit)"
@@ -497,6 +501,26 @@
         "command": "agi-workforce.pullCloudTaskIntoWorkspace",
         "title": "AGI Workforce: Pull Cloud Task Into Workspace",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "agi-workforce.showApprovalHistory",
+        "title": "AGI Workforce: Show Approval History",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "agi-workforce.showSessionActivity",
+        "title": "AGI Workforce: Show Session Activity",
+        "icon": "$(history)"
+      },
+      {
+        "command": "agi-workforce.continueInCloud",
+        "title": "AGI Workforce: Continue in the Cloud",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "agi-workforce.openCloudCodeSession",
+        "title": "AGI Workforce: Open AGI Code Session",
+        "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.showSchedules",
@@ -638,6 +662,11 @@
         "command": "agi-workforce.showContextFiles",
         "title": "AGI Workforce: Show Context Files",
         "icon": "$(pin)"
+      },
+      {
+        "command": "agi-workforce.personalize",
+        "title": "AGI Workforce: Personalization",
+        "icon": "$(person)"
       },
       {
         "command": "agi-workforce.showSkills",
@@ -883,6 +912,11 @@
           "command": "agi-workforce.sendSelectionToNewSession",
           "when": "editorHasSelection",
           "group": "agi-workforce@10"
+        },
+        {
+          "command": "agi-workforce.memory.rememberSelection",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@11"
         }
       ],
       "commandPalette": [
@@ -964,6 +998,10 @@
         },
         {
           "command": "agi-workforce.pullCloudTaskIntoWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openCloudCodeSession",
           "when": "false"
         },
         {

@@ -22,16 +22,15 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/fe
 
 - Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An open conversation has no page heading: the title is a menu button, and the only h1 on /chat is the empty-state greeting. Add an h1 with the conversation title. | ui |
-| desktop | partial | An open conversation has no page heading: the title is a menu button, and the only h1 on /chat is the empty-state greeting. Add an h1 with the conversation title. | ui |
 | mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
 | vscode | partial | Only the onboarding steps use h2; the chat view, settings panel and cards have no headings. | ui |
-| chrome | partial | Headings exist only inside rendered answer markdown; the panel's own views (history, projects, runs) have no heading elements. | ui |
+| chrome | partial | b21db27be: each tab view has an h1, drawer and Recents h2; bridge and schedules titles belong to other lanes | bridge URL title, schedules title |
 
-Code: `apps/web/features/chat/components/ConversationTitleMenu.tsx:132-132`, `packages/ui/unified-chat/src/components/BrandedGreeting.tsx:44-44`, `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2284-2284`
+Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2284-2284`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -58,14 +57,11 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 
 - Done when: A streaming reply is announced calmly (in word-bounded chunks or once when done), never token by token and never twice.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The answer is spoken twice: StreamAnnouncer reads it in 2-second word-bounded chunks, then the transcript's status region reads "Response complete." plus the full text. Keep one of the two. | handler |
-| desktop | partial | The answer is spoken twice: StreamAnnouncer reads it in 2-second word-bounded chunks, then the transcript's status region reads "Response complete." plus the full text. Keep one of the two. | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx:3-3`, `packages/ui/unified-chat/src/components/markdown/StreamingMarkdownContent.tsx:174-174`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1055-1055`
 
 ## S11.09: Accessible tool and approval status.
 
@@ -78,19 +74,6 @@ Code: `packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx:3-3`
 | mobile | partial | Approve and reject are labelled, but activity rows announce only "Show details for <step>", not whether it is running, done or failed. | states |
 
 Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
-
-## S11.10: Touch equivalents for hover interactions.
-
-- Done when: Anything revealed on hover is also reachable by touch (always visible on touch screens or shown on tap).
-- Wave: 3
-- Already works on: chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Action rows on user messages and older replies show only on hover or keyboard focus; on touch screens add the [@media(hover:none)] reveal the sidebar rows already use. | ui |
-| desktop | partial | Action rows on user messages and older replies show only on hover or keyboard focus; on touch screens add the [@media(hover:none)] reveal the sidebar rows already use. | ui |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2807-2807`, `packages/ui/ui/src/sidebar/SessionItem.tsx:264-264`
 
 ## S11.12: Text resizing.
 
@@ -113,18 +96,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/m
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S11.14: Reduced motion.
-
-- Done when: With the OS or app reduced-motion preference on, looping and travelling animation stops or is replaced.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | --plain / AGI_PLAIN (the no-animation mode) is honoured only by REPL output; the default TUI keeps its 50ms spinner and shimmer sweep. | mount |
-
-Code: `apps/cli/src/output.rs:30-35`, `apps/cli/src/tui/shimmer.rs:21-21`, `apps/cli/src/lib.rs:4610-4610`
-
 ## S11.15: Captions.
 
 - Done when: Spoken audio (voice conversations) can be shown as live captions.
@@ -145,21 +116,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Voice turns are printed but not added back to the TUI transcript after voice mode returns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/tui/tui_app.rs:4671-4671`
-
-## S11.17: Chart descriptions.
-
-- Done when: A chart comes with a text description (title, what is plotted, key values) that assistive tech can read.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Charts announce only their kind and point count ("bar, 12 points, 2 series"); add a text summary of title, axes and key values. | ui |
-| desktop | partial | Charts announce only their kind and point count ("bar, 12 points, 2 series"); add a text summary of title, axes and key values. | ui |
-
-Code: `packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx:167-167`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1050-1050`
+Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
 
 ## S11.19: Right-to-left layouts.
 
@@ -232,29 +191,27 @@ Code: `apps/web/features/billing/components/Billing/types.ts:77-77`, `apps/mobil
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A few strings use i18next _one/_other keys (and Arabic has none of its zero/two/few/many forms); about 18 files still build English "s" suffixes inline. | ui |
-| desktop | partial | A few strings use i18next _one/_other keys (and Arabic has none of its zero/two/few/many forms); about 18 files still build English "s" suffixes inline. | ui |
+| web | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
+| desktop | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
 | mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
 | vscode | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
-| chrome | partial | Only an English locale ships and plurals are separate one/many message keys; chrome.i18n has no plural rules, so add a plural-aware formatter before adding locales. | ui |
+| chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
 
-Code: `packages/ui/i18n/locales/en/pricing.json:191-191`, `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:156-156`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension-vscode/src/core/commandSetup.ts:276-276`
+Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158-158`, `packages/ui/i18n/locales/ar/errors.json:295-295`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension-vscode/src/core/commandSetup.ts:276-276`
 
 ## S11.25: Translated error messages.
 
 - Done when: Error messages appear in the user's chosen language.
 - Wave: 3
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | errors.json is translated into 12 languages but no code reads the errors namespace; error text is hard-coded English. Route errors through t('errors:…'). | handler |
-| desktop | partial | errors.json is translated into 12 languages but no code reads the errors namespace; error text is hard-coded English. Route errors through t('errors:…'). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Host notifications are translated (l10n in 12 locales), but errors inside the chat webview are English only. | ui |
-| chrome | partial | Errors go through chrome.i18n (t()), but only an English locale ships, and some errors (dictation) are literal strings. | ui |
 
-Code: `packages/ui/i18n/locales/ar/errors.json:2-2`, `apps/web/features/onboarding/components/OnboardingWizard.tsx:88-88`, `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
+Code: `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
 
 ## S11.26: Platform-specific shortcut notation.
 
@@ -276,14 +233,3 @@ Code: `apps/extension-vscode/package.json:1143-1143`, `apps/extension-vscode/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S11.28: Accessible terminal output mode.
-
-- Done when: The CLI offers a plain output mode for screen readers (no colour, spinners or redraws) and honours NO_COLOR everywhere.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI code highlighting now honours NO_COLOR, but --plain and AGI_PLAIN still affect only REPL output: the default TUI opens with spinners and redraws. Make --plain skip the TUI and strip colour everywhere. | handler |
-
-Code: `apps/cli/src/lib.rs:433-433`, `apps/cli/src/lib.rs:2998-2998`, `apps/cli/src/lib.rs:4610-4610`, `apps/cli/src/tui/markdown_renderer.rs:8-8`

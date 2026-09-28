@@ -99,5 +99,17 @@
     "groupSettings": "Configuración",
     "groupCustomize": "Personalizar",
     "groupDesktop": "Aplicación de escritorio"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} comando personalizado",
+    "customCommands_other": "{{count}} comandos personalizados",
+    "allArchivedChats_one": "El chat archivado",
+    "allArchivedChats_other": "Los {{count}} chats archivados",
+    "followUps_one": "{{count}} seguimiento",
+    "followUps_other": "{{count}} seguimientos",
+    "members_one": "{{count}} miembro",
+    "members_other": "{{count}} miembros",
+    "models_one": "{{count}} modelo",
+    "models_other": "{{count}} modelos"
   }
 }

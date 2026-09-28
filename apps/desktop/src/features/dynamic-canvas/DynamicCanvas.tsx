@@ -428,7 +428,7 @@ function KanbanBoardContent({
                 key={card.id}
                 draggable={!readOnly}
                 onDragStart={() => handleDragStart(card.id, col.id)}
-                className="rounded border border-border/30 bg-background p-1.5 text-xs cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow"
+                className="rounded border border-border/30 bg-background p-1.5 text-xs cursor-grab active:cursor-grabbing hover:shadow-e1 transition-shadow"
                 style={{
                   borderLeftColor: card.color ?? undefined,
                   borderLeftWidth: card.color ? 3 : undefined,
@@ -713,7 +713,7 @@ function WidgetPalette({
         <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-md border border-border/50 bg-background shadow-lg py-1">
+        <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-md border border-border/50 bg-background shadow-e3 py-1">
           <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
             Add Widget
           </div>
@@ -1223,10 +1223,10 @@ export function DynamicCanvas({
           return (
             <div
               key={id}
-              className={`absolute rounded-md border shadow-sm transition-shadow ${
+              className={`absolute rounded-md border shadow-e1 transition-shadow ${
                 isSelected
-                  ? 'border-primary ring-2 ring-primary/30 shadow-md'
-                  : 'border-border/40 hover:border-border/70 hover:shadow-md'
+                  ? 'border-primary ring-2 ring-primary/30 shadow-e2'
+                  : 'border-border/40 hover:border-border/70 hover:shadow-e2'
               } ${dragging?.id === id ? 'cursor-grabbing' : 'cursor-grab'}`}
               style={{
                 left: bounds.position.x,

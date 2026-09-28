@@ -3,7 +3,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
+import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
 interface CitationChipProps {
@@ -15,13 +15,19 @@ interface CitationChipProps {
 export function CitationChip({ index, title, url }: CitationChipProps) {
   const colors = useThemeColors();
   const canOpen = Boolean(url && isValidExternalHttpUrl(url));
-  const handlePress = async () => {
-    if (canOpen && url) {
-      const opened = await openUntrustedUrlInAppBrowser(url);
-      if (!opened) {
-        Alert.alert('Could not open citation', 'Check your connection and try again.');
-      }
+  const openSource = async () => {
+    if (!canOpen || !url) return;
+    const opened = await openUntrustedUrlInAppBrowser(url);
+    if (!opened) {
+      Alert.alert('Could not open citation', 'Check your connection and try again.');
     }
+  };
+  const handlePress = () => {
+    if (!canOpen || !url) return;
+    Alert.alert(title, hostnameOf(url), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Open page', onPress: () => void openSource() },
+    ]);
   };
 
   return (
@@ -33,7 +39,7 @@ export function CitationChip({ index, title, url }: CitationChipProps) {
       })}
       accessibilityLabel={`Citation ${index}: ${title}`}
       accessibilityRole={canOpen ? 'link' : undefined}
-      accessibilityHint={canOpen ? 'Opens source in browser' : undefined}
+      accessibilityHint={canOpen ? 'Shows the source, then opens it in the browser' : undefined}
     >
       <Text className="text-[11px] font-medium" style={{ color: colors.teal }}>
         [{index}]

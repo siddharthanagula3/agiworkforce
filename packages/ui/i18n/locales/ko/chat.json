@@ -117,6 +117,7 @@
     "renameProject": "프로젝트 이름 변경",
     "restore": "복원",
     "running": "실행 중",
+    "unread": "읽지 않음",
     "searchConversations": "대화 검색",
     "searchConversationsDescription": "대화 기록을 검색하고 일치하는 대화를 엽니다.",
     "share": "공유",
@@ -199,6 +200,7 @@
     "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요."
   },
   "bubble": {
+    "assistantSaid": "AGI의 답변:",
     "assistantThinking": "어시스턴트가 생각 중입니다",
     "cancelEdit": "취소",
     "copied": "복사됨",
@@ -210,7 +212,8 @@
     "messageAttachments": "메시지 첨부 파일",
     "retryResponse": "이 응답 재시도",
     "saveEdit": "저장",
-    "toolResult": "결과"
+    "toolResult": "결과",
+    "userSaid": "내가 말한 내용:"
   },
   "goalHandoff": {
     "action": "작업으로 실행",
@@ -226,9 +229,13 @@
     "shareConversation": "대화 공유",
     "temporaryChat": "임시 채팅",
     "temporaryChatRetentionNote": "기록에 저장되지 않으며 이번 대화에서는 메모리를 사용하지 않습니다.",
+    "temporaryChatPersonalized": "개인화",
+    "temporaryChatUnpersonalized": "개인화 안 함",
+    "temporaryChatPersonalizationHint": "개인화는 프로필, 지침, 응답 스타일을 사용합니다. 개인화 안 함은 이를 제외합니다.",
     "toggleArtifacts": "아티팩트 패널 전환",
     "toggleArtifactsCount": "아티팩트 패널 전환 ({{count}})",
-    "toggleStats": "통계"
+    "toggleStats": "통계",
+    "untitledConversation": "대화"
   },
   "interface": {
     "closeRewindCheckpoints": "되감기 체크포인트 닫기",
@@ -302,5 +309,42 @@
     "morningNamed": "{{name}}님, 좋은 아침입니다",
     "afternoonNamed": "{{name}}님, 안녕하세요",
     "eveningNamed": "{{name}}님, 좋은 저녁입니다"
+  },
+  "counts": {
+    "shortcutsOff_one": "단축키 {{count}}개 꺼짐",
+    "shortcutsOff_other": "단축키 {{count}}개 꺼짐",
+    "searchHistoryCleared_one": "기록에서 검색 {{count}}개를 삭제했습니다",
+    "searchHistoryCleared_other": "기록에서 검색 {{count}}개를 삭제했습니다",
+    "searches_one": "검색 {{count}}회",
+    "searches_other": "검색 {{count}}회",
+    "searchesOf_one": "검색 {{max}}회 중 {{count}}회",
+    "searchesOf_other": "검색 {{max}}회 중 {{count}}회",
+    "sources_one": "출처 {{count}}개",
+    "sources_other": "출처 {{count}}개",
+    "intermediateSteps_one": "중간 단계 {{count}}개",
+    "intermediateSteps_other": "중간 단계 {{count}}개",
+    "conversations_one": "대화 {{count}}개",
+    "conversations_other": "대화 {{count}}개",
+    "tools_one": "도구 {{count}}개",
+    "tools_other": "도구 {{count}}개",
+    "citations_one": "인용 {{count}}개",
+    "citations_other": "인용 {{count}}개",
+    "checkpoints_one": "체크포인트 {{count}}개",
+    "checkpoints_other": "체크포인트 {{count}}개",
+    "usedTools_one": "도구 {{count}}개 사용",
+    "usedTools_other": "도구 {{count}}개 사용",
+    "runningTools_one": "도구 {{count}}개 실행 중",
+    "runningTools_other": "도구 {{count}}개 실행 중",
+    "runningToolsOf_one": "도구 실행 중 {{running}}/{{count}}: {{name}}",
+    "runningToolsOf_other": "도구 실행 중 {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "표",
+    "expand": "표 확대",
+    "copy": "표 복사",
+    "copied": "표를 복사했습니다",
+    "copyFailed": "복사하지 못했습니다. 클립보드를 사용할 수 없습니다",
+    "download": "CSV로 다운로드",
+    "close": "확대한 표 닫기"
   }
 }

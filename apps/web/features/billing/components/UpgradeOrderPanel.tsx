@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -18,6 +18,7 @@ import {
   type UpgradePromotionSummary,
 } from '../services/stripe-payments';
 import { getBillingPlanDisplay, formatCatalogPrice } from '../lib/plan-display';
+import { UpgradePromotionCode } from './UpgradePromotionCode';
 import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -33,20 +34,6 @@ function formatMoney(cents: number, currency: string): string {
 
 function formatRenewalDate(iso: string): string {
   return formatBillingDate(iso) ?? '';
-}
-
-function describePromotion(promotion: UpgradePromotionSummary): string {
-  const amount =
-    promotion.percentOff !== null
-      ? `${promotion.percentOff}% off`
-      : promotion.amountOffCents !== null && promotion.currency
-        ? `${formatMoney(promotion.amountOffCents, promotion.currency)} off`
-        : 'A discount';
-  if (promotion.duration === 'forever') return `${amount} every billing period`;
-  if (promotion.duration === 'repeating' && promotion.durationInMonths) {
-    return `${amount} for ${promotion.durationInMonths} ${promotion.durationInMonths === 1 ? 'month' : 'months'}`;
-  }
-  return `${amount} this payment`;
 }
 
 /**
@@ -86,8 +73,6 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
   const [replacesScheduledChange, setReplacesScheduledChange] = useState(false);
   const [grandfatheredNotice, setGrandfatheredNotice] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<UpgradePromotionSummary | null>(null);
-  const [promotionOpen, setPromotionOpen] = useState(false);
-  const [promotionInput, setPromotionInput] = useState('');
   const [promotionPending, setPromotionPending] = useState(false);
   const [promotionError, setPromotionError] = useState<string | null>(null);
 
@@ -176,10 +161,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
     }
   }, [returnPath]);
 
-  async function applyPromotion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const code = promotionInput.trim();
-    if (!code || promotionPending) return;
+  async function applyPromotion(code: string) {
     setPromotionPending(true);
     setPromotionError(null);
     try {
@@ -205,7 +187,6 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
 
   function removePromotion() {
     setPromotion(null);
-    setPromotionInput('');
     setPromotionError(null);
     setPreviewKey((value) => value + 1);
   }
@@ -358,60 +339,14 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
       </section>
 
       {!previewing && amountDue && !checkoutRequired ? (
-        <section aria-label="Promotion code" className="flex flex-col gap-2 text-sm">
-          {promotion ? (
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>
-                Promotion {promotion.code}: {describePromotion(promotion)}.
-              </span>
-              <button
-                type="button"
-                onClick={removePromotion}
-                className="font-medium underline underline-offset-2 pointer-coarse:min-h-11"
-              >
-                Remove
-              </button>
-            </p>
-          ) : promotionOpen ? (
-            <form onSubmit={(event) => void applyPromotion(event)} className="flex flex-wrap gap-2">
-              <label className="sr-only" htmlFor="upgrade-promotion-code">
-                Promotion code
-              </label>
-              <input
-                id="upgrade-promotion-code"
-                value={promotionInput}
-                onChange={(event) => setPromotionInput(event.target.value)}
-                autoComplete="off"
-                autoCapitalize="characters"
-                placeholder="Promotion code"
-                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 pointer-coarse:h-11"
-              />
-              <Button
-                type="submit"
-                variant="outline"
-                size="sm"
-                className="pointer-coarse:h-11"
-                disabled={!promotionInput.trim() || promotionPending}
-                isLoading={promotionPending}
-              >
-                Apply
-              </Button>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPromotionOpen(true)}
-              className="self-start font-medium underline underline-offset-2 pointer-coarse:min-h-11"
-            >
-              Add a promotion code
-            </button>
-          )}
-          {promotionError ? (
-            <p role="alert" className="text-danger">
-              {promotionError}
-            </p>
-          ) : null}
-        </section>
+        <UpgradePromotionCode
+          inputId="upgrade-promotion-code"
+          promotion={promotion}
+          pending={promotionPending}
+          error={promotionError}
+          onApply={(code) => void applyPromotion(code)}
+          onRemove={removePromotion}
+        />
       ) : null}
 
       {!previewing && replacesScheduledChange ? (

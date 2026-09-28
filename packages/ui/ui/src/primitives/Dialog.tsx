@@ -107,7 +107,7 @@ function DialogContent({
         // moved nothing. Scrolling the content keeps every control reachable;
         // the x axis stays hidden so the rounded corners still clip.
         className={cn(
-          'fixed left-[50%] top-[50%] z-[var(--z-modal)] grid w-[min(96vw,42rem)] max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-background/95 p-6 shadow-[0_32px_120px_-32px_rgba(0,0,0,0.65)] backdrop-blur-xl',
+          'fixed left-[50%] top-[50%] z-[var(--z-modal)] grid w-[min(96vw,42rem)] max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-background/95 p-6 shadow-e4 backdrop-blur-xl',
           !disableAnimation &&
             'duration-quick data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
           className,

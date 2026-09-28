@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: async () => null }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: async () => [] }) }));
 vi.mock('@/lib/services/organization-role-service', () => ({
+  MAX_WORKSPACE_GROUP_NAME_CHARS: 255,
+  createWorkspaceGroup: vi.fn(),
   listDirectoryGroupsWithRoles: async (_db: unknown, _org: string, managerId?: string) => {
     mocks.listed.push(managerId);
     return [];
@@ -23,6 +25,7 @@ vi.mock('../../workspace-access', () => ({
     organizationId: 'org_1',
     access: { organizationId: 'org_1', role: 'member', permissions: mocks.permissions },
   }),
+  requireWorkspaceConsolePermission: vi.fn(),
 }));
 
 import { GET } from '../route';

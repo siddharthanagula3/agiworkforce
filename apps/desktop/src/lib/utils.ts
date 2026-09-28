@@ -7,9 +7,6 @@
  * @module utils
  */
 
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
 export {
   formatBytes,
   formatNumber,
@@ -26,17 +23,4 @@ export {
   throttle,
 } from '@agiworkforce/utils';
 
-/**
- * Combine class names with Tailwind CSS merge support.
- *
- * @param inputs - Class names to combine
- * @returns Merged class string
- *
- * @example
- * ```tsx
- * <div className={cn('p-4', isActive && 'bg-blue-500', className)} />
- * ```
- */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+export { cn } from '@agiworkforce/ui/cn';

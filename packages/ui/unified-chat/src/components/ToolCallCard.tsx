@@ -1,11 +1,37 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import {
+  TOOL_APPROVAL_ACTION_LABELS,
+  TOOL_APPROVAL_HIGH_RISK_NOTICE,
+  detectFileDiff,
+  detectResultDiff,
+  toolApprovalStakes,
+  type FileDiff,
+} from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
 import { HighlightedCode } from './markdown/HighlightedCode';
 import { cn } from '../lib/utils';
 import './markdown/codeBlock.css';
+
+export {
+  detectFileDiff,
+  detectResultDiff,
+  looksLikeUnifiedDiff,
+  parseUnifiedDiff,
+  type DiffLine,
+  type DiffLineType,
+  type FileDiff,
+} from '@agiworkforce/types';
 
 export type ToolCallStatus =
   | 'pending'
@@ -39,6 +65,7 @@ export interface ToolCallCardProps {
   kind?: InlineToolKind;
   iconLetter?: string;
   onApprove?: (id: string) => void;
+  onApproveForChat?: (id: string) => void;
   onReject?: (id: string) => void;
   onCancel?: (id: string) => void;
   expired?: boolean;
@@ -48,8 +75,6 @@ export interface ToolCallCardProps {
   footer?: ReactNode;
   className?: string;
 }
-
-const HIGH_RISK_APPROVAL_NOTICE = 'High risk. Check the request below before you allow it.';
 
 const CODE_EXECUTION_TOOLS = new Set([
   'execute_code',
@@ -84,101 +109,7 @@ export function detectCodeBlock(
   return { language, code };
 }
 
-export type DiffLineType = 'add' | 'remove' | 'context' | 'meta';
-
-export interface DiffLine {
-  type: DiffLineType;
-  content: string;
-}
-
-export interface FileDiff {
-  filePath?: string;
-  lines: DiffLine[];
-  additions: number;
-  deletions: number;
-}
-
-const UNIFIED_HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/m;
-const PATCH_ENVELOPE_HEADER = /^\*\*\* (?:Begin Patch|Add File|Update File|Delete File)\b/m;
-const DIFF_META_PREFIXES = ['@@', '--- ', '+++ ', 'diff ', 'index ', '*** ', '\\ No newline'];
-const FILE_PATH_KEYS = ['path', 'file_path', 'filePath', 'file', 'target_file'];
-const OLD_TEXT_KEYS = ['old_text', 'oldText', 'old_string', 'oldString', 'before'];
-const NEW_TEXT_KEYS = ['new_text', 'newText', 'new_string', 'newString', 'after'];
 const MAX_RENDERED_DIFF_LINES = 400;
-
-export function looksLikeUnifiedDiff(text: string): boolean {
-  return UNIFIED_HUNK_HEADER.test(text) || PATCH_ENVELOPE_HEADER.test(text);
-}
-
-export function parseUnifiedDiff(text: string): DiffLine[] {
-  return text.split('\n').map((line) => {
-    if (DIFF_META_PREFIXES.some((prefix) => line.startsWith(prefix))) {
-      return { type: 'meta' as const, content: line };
-    }
-    if (line.startsWith('+')) return { type: 'add' as const, content: line.slice(1) };
-    if (line.startsWith('-')) return { type: 'remove' as const, content: line.slice(1) };
-    if (line.startsWith(' ')) return { type: 'context' as const, content: line.slice(1) };
-    return { type: 'context' as const, content: line };
-  });
-}
-
-function readString(
-  source: Record<string, unknown> | undefined,
-  keys: string[],
-): string | undefined {
-  if (!source) return undefined;
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value === 'string') return value;
-  }
-  return undefined;
-}
-
-function filePathFromDiffHeader(text: string): string | undefined {
-  const unified = text.match(/^\+\+\+ (?:b\/)?(.+)$/m)?.[1]?.trim();
-  if (unified && unified !== '/dev/null') return unified;
-  return text.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]?.trim();
-}
-
-function buildDiff(lines: DiffLine[], filePath?: string): FileDiff | null {
-  const additions = lines.filter((line) => line.type === 'add').length;
-  const deletions = lines.filter((line) => line.type === 'remove').length;
-  if (additions === 0 && deletions === 0) return null;
-  return { filePath, lines, additions, deletions };
-}
-
-export function detectFileDiff(parameters?: Record<string, unknown>): FileDiff | null {
-  if (!parameters) return null;
-  const argPath = readString(parameters, FILE_PATH_KEYS);
-
-  const patch = readString(parameters, ['patch', 'diff', 'unified_diff', 'patchText']);
-  if (patch && looksLikeUnifiedDiff(patch)) {
-    return buildDiff(parseUnifiedDiff(patch), argPath ?? filePathFromDiffHeader(patch));
-  }
-
-  const oldText = readString(parameters, OLD_TEXT_KEYS);
-  const newText = readString(parameters, NEW_TEXT_KEYS);
-  if (oldText == null && newText == null) return null;
-
-  const lines: DiffLine[] = [
-    ...(oldText
-      ? oldText.split('\n').map((content) => ({ type: 'remove' as const, content }))
-      : []),
-    ...(newText ? newText.split('\n').map((content) => ({ type: 'add' as const, content })) : []),
-  ];
-  return buildDiff(lines, argPath);
-}
-
-export function detectResultDiff(
-  result?: string,
-  parameters?: Record<string, unknown>,
-): FileDiff | null {
-  if (!result || !looksLikeUnifiedDiff(result)) return null;
-  return buildDiff(
-    parseUnifiedDiff(result),
-    filePathFromDiffHeader(result) ?? readString(parameters, FILE_PATH_KEYS),
-  );
-}
 
 function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
   const visible = lines.slice(0, MAX_RENDERED_DIFF_LINES);
@@ -352,6 +283,7 @@ const ToolCallCardComponent = ({
   kind,
   iconLetter,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   expired = false,
@@ -390,6 +322,10 @@ const ToolCallCardComponent = ({
   const codeBlock = useMemo(() => detectCodeBlock(name, args), [name, args]);
   const requestDiff = useMemo(() => (codeBlock ? null : detectFileDiff(args)), [codeBlock, args]);
   const resultDiff = useMemo(() => detectResultDiff(result, args), [result, args]);
+  const approvalStakes = useMemo(
+    () => (showApprovalPrompt ? toolApprovalStakes(name, args) : []),
+    [showApprovalPrompt, name, args],
+  );
   const displayError = useMemo(() => {
     const raw = errorDetail ?? error;
     return raw ? humanizeToolErrorText(raw) : undefined;
@@ -493,7 +429,7 @@ const ToolCallCardComponent = ({
               )}
             >
               {highRiskApproval
-                ? HIGH_RISK_APPROVAL_NOTICE
+                ? TOOL_APPROVAL_HIGH_RISK_NOTICE
                 : 'This tool requires approval before execution.'}
             </p>
             <div className="flex gap-1.5">
@@ -507,6 +443,15 @@ const ToolCallCardComponent = ({
                   {TOOL_APPROVAL_ACTION_LABELS.allow}
                 </button>
               )}
+              {onApproveForChat && !highRiskApproval && (
+                <button
+                  type="button"
+                  onClick={() => onApproveForChat(id)}
+                  className="h-6 px-2 text-xs font-medium rounded-compact border border-border bg-background hover:bg-muted transition-colors"
+                >
+                  {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
+                </button>
+              )}
               {onReject && (
                 <button
                   type="button"
@@ -518,6 +463,20 @@ const ToolCallCardComponent = ({
               )}
             </div>
           </div>
+        )}
+
+        {approvalStakes.length > 0 && (
+          <dl
+            data-testid="tool-approval-stakes"
+            className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-compact border border-border p-2 text-xs"
+          >
+            {approvalStakes.map((stake) => (
+              <Fragment key={`${stake.kind}:${stake.label}`}>
+                <dt className="text-muted-foreground">{stake.label}</dt>
+                <dd className="min-w-0 break-words font-medium">{stake.value}</dd>
+              </Fragment>
+            ))}
+          </dl>
         )}
 
         {showParameters && (hasArgs || commandText) && (

@@ -18,6 +18,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 interface InstalledPluginRecord {
   scope: 'user' | 'local';
@@ -213,6 +214,7 @@ function PluginRow({
   onRemove: (plugin: ResolvedPlugin) => void;
   onToggleEnabled: (plugin: ResolvedPlugin, enabled: boolean) => void;
 }) {
+  const { plural } = useUiTranslation('common');
   const [expanded, setExpanded] = useState(false);
   const updateKey = `update:${plugin.id}`;
   const removeKey = `remove:${plugin.id}`;
@@ -248,12 +250,18 @@ function PluginRow({
             )}
             {plugin.skills.length > 0 && (
               <span className="text-xs text-muted-foreground">
-                {plugin.skills.length} skill{plugin.skills.length !== 1 ? 's' : ''}
+                {plural('counts.skills', plugin.skills.length, {
+                  one: '{{count}} skill',
+                  other: '{{count}} skills',
+                })}
               </span>
             )}
             {plugin.agents.length > 0 && (
               <span className="text-xs text-muted-foreground">
-                {plugin.agents.length} agent{plugin.agents.length !== 1 ? 's' : ''}
+                {plural('counts.agents', plugin.agents.length, {
+                  one: '{{count}} agent',
+                  other: '{{count}} agents',
+                })}
               </span>
             )}
           </div>
@@ -731,7 +739,7 @@ export function SkillsPluginsSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold mb-1">Skills &amp; Plugins</h3>
+          <h3 className="text-h3 mb-1">Skills &amp; Plugins</h3>
           <p className="text-sm text-muted-foreground">
             Installed plugins can provide agents, skills, and tools. AGI also reads existing
             compatibility-backed project resources from the current workspace.

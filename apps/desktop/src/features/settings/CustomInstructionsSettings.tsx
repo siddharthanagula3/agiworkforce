@@ -65,7 +65,7 @@ export function CustomInstructionsSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+        <h3 className="text-h3 mb-2 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-foreground" />
           Custom Instructions
         </h3>

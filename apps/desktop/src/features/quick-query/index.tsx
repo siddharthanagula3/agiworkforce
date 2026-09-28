@@ -23,6 +23,7 @@ import {
 import type { Provider } from '../../stores/settingsStore';
 import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 interface RecentConversationItem {
   conversationId: string | number;
@@ -118,6 +119,7 @@ export function QuickQuery({
   onRequestVoice,
   onRequestCapture,
 }: QuickQueryProps) {
+  const { plural } = useUiTranslation('common');
   const [query, setQuery] = useState('');
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [recentConversations, setRecentConversations] = useState<RecentConversationItem[]>([]);
@@ -417,8 +419,10 @@ export function QuickQuery({
                       <span>{formatRelativeTimestamp(conversation.lastUpdated)}</span>
                       <span>•</span>
                       <span>
-                        {conversation.messageCount} message
-                        {conversation.messageCount === 1 ? '' : 's'}
+                        {plural('counts.messages', conversation.messageCount, {
+                          one: '{{count}} message',
+                          other: '{{count}} messages',
+                        })}
                       </span>
                     </div>
                   </button>
@@ -522,7 +526,7 @@ export function QuickQuery({
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
                 'text-sm font-medium transition-all duration-150',
                 query.trim()
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-e3 shadow-blue-600/20'
                   : 'bg-white/[0.04] text-zinc-600 cursor-not-allowed',
               )}
             >

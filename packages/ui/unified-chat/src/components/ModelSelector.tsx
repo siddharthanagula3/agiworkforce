@@ -596,7 +596,7 @@ export function ModelSelector({
           align="end"
           sideOffset={6}
           className={cn(
-            'z-[var(--z-dropdown)] w-80 overflow-hidden rounded-xl shadow-lg',
+            'z-[var(--z-dropdown)] w-80 overflow-hidden rounded-xl shadow-e3',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
           )}
         >

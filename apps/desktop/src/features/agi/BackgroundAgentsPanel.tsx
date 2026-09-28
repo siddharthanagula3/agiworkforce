@@ -146,7 +146,7 @@ export function BackgroundAgentsPanel() {
   return (
     <div className="flex h-full flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-200">
+        <h2 className="text-h5 text-slate-200">
           Background Agents ({activeCount}/{maxAgents} active)
         </h2>
         <button

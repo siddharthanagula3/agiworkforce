@@ -242,9 +242,22 @@ export function resolveManagedArtifactUrl(uri: string): string | null {
   }
 }
 
+const AUTHOR_LABELS: Record<ChatMessage['role'], string> = {
+  user: 'You said:',
+  assistant: 'AGI said:',
+};
+
+function buildAuthorLabel(role: ChatMessage['role']): HTMLElement {
+  return el('h2', { class: 'sp-visually-hidden' }, AUTHOR_LABELS[role]);
+}
+
 function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): HTMLElement {
   const isUser = msg.role === 'user';
-  const wrapper = el('div', { class: `sp-msg sp-msg-${msg.role}`, 'data-id': msg.id });
+  const wrapper = el(
+    'div',
+    { class: `sp-msg sp-msg-${msg.role}`, 'data-id': msg.id },
+    buildAuthorLabel(msg.role),
+  );
 
   const bubble = el('div', {
     class: `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`,
@@ -685,6 +698,7 @@ export function buildBubbleWithTools(
   const wrapper = document.createElement('div');
   wrapper.className = `sp-msg sp-msg-${msg.role}`;
   wrapper.setAttribute('data-id', msg.id);
+  wrapper.appendChild(buildAuthorLabel(msg.role));
 
   const textParts: string[] = [];
   const toolBlocks: ToolCallBlock[] = [];

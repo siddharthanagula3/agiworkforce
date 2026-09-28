@@ -10,6 +10,7 @@ import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MermaidDiagram } from './MermaidDiagram';
+import { MarkdownTable } from './MarkdownTable';
 import { HighlightedCode } from './HighlightedCode';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
@@ -431,7 +432,7 @@ const MarkdownTableHeader = ({
 }) => (
   <th
     className={cn(
-      'border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
+      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
       markdownTableAlignmentClass(align, style?.textAlign),
     )}
   >
@@ -442,9 +443,9 @@ const MarkdownTableHeader = ({
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   img: MarkdownImage as Components['img'],
-  h1: ({ children }) => <h1 className="mb-4 mt-6 text-xl font-bold">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-3 mt-5 text-lg font-semibold">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>,
+  h1: ({ children }) => <h1 className="mb-4 mt-6 text-h2">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-3 mt-5 text-h3">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-2 mt-4 text-h4">{children}</h3>,
   p: MarkdownParagraph as Components['p'],
   ul: MarkdownUnorderedList as Components['ul'],
   ol: MarkdownOrderedList as Components['ol'],
@@ -455,16 +456,7 @@ const markdownComponents: Components = {
       {children}
     </blockquote>
   ),
-  table: ({ children }) => (
-    <div
-      className="my-3 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
-      role="region"
-      aria-label="Table"
-      tabIndex={0}
-    >
-      <table className="w-full border-collapse text-sm">{children}</table>
-    </div>
-  ),
+  table: MarkdownTable as Components['table'],
   th: MarkdownTableHeader as Components['th'],
   td: MarkdownTableCell as Components['td'],
   a: MarkdownLink as Components['a'],

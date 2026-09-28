@@ -27,12 +27,7 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code (/code) lists the files a run changed with their diffs, but there is no browsable project tree, and artifacts in chat are single files. | ui |
-| desktop | partial | Same as web (hosted): changed-files list in Cloud Code, no project tree. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:171-176`, `apps/web/features/code/services/cloud-code-api.ts:396-400`
 
 ## S28.03: File creation and deletion.
 
@@ -120,19 +115,6 @@ Code: `apps/extension-vscode/package.json:1060-1064`, `apps/extension-vscode/src
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
-
-## S28.09: Source/preview split view.
-
-- Done when: Source and preview can be shown side by side.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Preview and Source are two tabs of one pane; they are never shown side by side. | ui |
-| desktop | partial | Same as web (hosted): toggle, not split. | ui |
-| mobile | partial | Preview and Source are a toggle in the full-screen viewer; no split view. | ui |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1204-1235`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1760-1770`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:352-380`
 
 ## S28.10: HTML preview.
 
@@ -251,13 +233,10 @@ Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
-| desktop | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
-| mobile | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
 | cli | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1563-1578`, `apps/web/app/api/artifacts/publish/route.ts:182-205`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-429`
 
 ## S28.30: Rollback.
 
@@ -267,8 +246,5 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1563-1578
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Restore works in the store (appends), but the chip and its controls appear only when one artifact has two versions, and the phone app never makes a second one: artifacts are re-derived per message and a retry becomes a new message, so in practice there is nothing to step through. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`, `apps/mobile/src/features/artifacts/store.ts:153-162`

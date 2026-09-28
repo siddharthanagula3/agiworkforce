@@ -39,7 +39,7 @@ describe('response_format', () => {
     expect(result.success).toBe(false);
   });
 
-  it('refuses json_schema rather than silently returning prose', () => {
+  it('refuses a json_schema whose root is not an object', () => {
     const result = ChatCompletionRequestSchema.safeParse({
       ...base,
       response_format: { type: 'json_schema', json_schema: { name: 'x', schema: {} } },
@@ -47,25 +47,34 @@ describe('response_format', () => {
     expect(result.success).toBe(false);
   });
 
-  it('tells the caller what to use instead', () => {
+  it('accepts a json_schema it can enforce', () => {
     const result = ChatCompletionRequestSchema.safeParse({
       ...base,
-      response_format: { type: 'json_schema' },
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'receipt',
+          schema: {
+            type: 'object',
+            properties: { total: { type: 'number' } },
+            required: ['total'],
+            additionalProperties: false,
+          },
+        },
+      },
     });
-    expect(result.success).toBe(false);
-    if (result.success) return;
-    const message = result.error.issues.map((i) => i.message).join(' ');
-    expect(message).toContain('tools');
-    expect(message).toContain('tool_choice');
+    expect(result.success).toBe(true);
   });
 
-  it('points the error at response_format.type, not the whole request', () => {
+  it('asks for the schema when json_schema names none', () => {
     const result = ChatCompletionRequestSchema.safeParse({
       ...base,
       response_format: { type: 'json_schema' },
     });
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error.issues.some((i) => i.path.join('.') === 'response_format.type')).toBe(true);
+    expect(
+      result.error.issues.some((i) => i.path.join('.') === 'response_format.json_schema'),
+    ).toBe(true);
   });
 });

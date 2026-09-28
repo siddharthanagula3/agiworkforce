@@ -117,6 +117,7 @@
     "renameProject": "プロジェクト名を変更",
     "restore": "復元",
     "running": "実行中",
+    "unread": "未読",
     "searchConversations": "会話を検索",
     "searchConversationsDescription": "会話履歴を検索して、該当する会話を開きます。",
     "share": "共有",
@@ -199,6 +200,7 @@
     "voiceUnsupportedHint": "このブラウザでは音声入力に対応していません。Chrome または Edge をお試しください。"
   },
   "bubble": {
+    "assistantSaid": "AGIの発言:",
     "assistantThinking": "アシスタントが考えています",
     "cancelEdit": "キャンセル",
     "copied": "コピーしました",
@@ -210,7 +212,8 @@
     "messageAttachments": "メッセージの添付ファイル",
     "retryResponse": "この返信を再試行",
     "saveEdit": "保存",
-    "toolResult": "結果"
+    "toolResult": "結果",
+    "userSaid": "あなたの発言:"
   },
   "goalHandoff": {
     "action": "タスクとして実行",
@@ -226,9 +229,13 @@
     "shareConversation": "会話を共有",
     "temporaryChat": "一時的なチャット",
     "temporaryChatRetentionNote": "履歴には保存されず、このターンではメモリーも使用されません。",
+    "temporaryChatPersonalized": "パーソナライズ",
+    "temporaryChatUnpersonalized": "パーソナライズなし",
+    "temporaryChatPersonalizationHint": "パーソナライズはプロフィール、指示、応答スタイルを使います。パーソナライズなしではそれらを使いません。",
     "toggleArtifacts": "アーティファクトパネルの表示切り替え",
     "toggleArtifactsCount": "アーティファクトパネルの表示切り替え（{{count}}）",
-    "toggleStats": "統計"
+    "toggleStats": "統計",
+    "untitledConversation": "会話"
   },
   "interface": {
     "closeRewindCheckpoints": "巻き戻しチェックポイントを閉じる",
@@ -302,5 +309,42 @@
     "morningNamed": "{{name}}さん、おはようございます",
     "afternoonNamed": "{{name}}さん、こんにちは",
     "eveningNamed": "{{name}}さん、こんばんは"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} 件のショートカットがオフ",
+    "shortcutsOff_other": "{{count}} 件のショートカットがオフ",
+    "searchHistoryCleared_one": "履歴から {{count}} 件の検索を削除しました",
+    "searchHistoryCleared_other": "履歴から {{count}} 件の検索を削除しました",
+    "searches_one": "{{count}} 件の検索",
+    "searches_other": "{{count}} 件の検索",
+    "searchesOf_one": "{{max}} 件中 {{count}} 件の検索",
+    "searchesOf_other": "{{max}} 件中 {{count}} 件の検索",
+    "sources_one": "{{count}} 件のソース",
+    "sources_other": "{{count}} 件のソース",
+    "intermediateSteps_one": "{{count}} 件の途中計算",
+    "intermediateSteps_other": "{{count}} 件の途中計算",
+    "conversations_one": "{{count}} 件の会話",
+    "conversations_other": "{{count}} 件の会話",
+    "tools_one": "{{count}} 個のツール",
+    "tools_other": "{{count}} 個のツール",
+    "citations_one": "{{count}} 件の引用",
+    "citations_other": "{{count}} 件の引用",
+    "checkpoints_one": "{{count}} 個のチェックポイント",
+    "checkpoints_other": "{{count}} 個のチェックポイント",
+    "usedTools_one": "{{count}} 個のツールを使用",
+    "usedTools_other": "{{count}} 個のツールを使用",
+    "runningTools_one": "{{count}} 個のツールを実行中",
+    "runningTools_other": "{{count}} 個のツールを実行中",
+    "runningToolsOf_one": "ツールを実行中 {{running}}/{{count}}: {{name}}",
+    "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "表",
+    "expand": "表を拡大",
+    "copy": "表をコピー",
+    "copied": "表をコピーしました",
+    "copyFailed": "コピーできませんでした。クリップボードを利用できません",
+    "download": "CSV としてダウンロード",
+    "close": "拡大した表を閉じる"
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -77,6 +77,7 @@ export default function DirectorySyncAdminPage({
 }: {
   organizationId?: string;
 } = {}) {
+  const { plural } = useUiTranslation('settings');
   const orgQuery = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : '';
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -297,7 +298,7 @@ export default function DirectorySyncAdminPage({
       {confirmDialog}
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header>
-          <h1 className="text-2xl font-medium text-foreground">Directory sync (SCIM 2.0)</h1>
+          <h1 className="text-h1 text-foreground">Directory sync (SCIM 2.0)</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Provision and deprovision members from your identity provider. Requires an active
             Enterprise subscription; every request is re-checked against the plan of the admin who
@@ -325,7 +326,7 @@ export default function DirectorySyncAdminPage({
         {loading ? <p className="text-sm text-muted-foreground">Loading directory sync…</p> : null}
 
         <section className="rounded-md border border-border bg-card p-5">
-          <h2 className="text-base font-medium text-foreground">Connections</h2>
+          <h2 className="text-h4 text-foreground">Connections</h2>
           {connections.length === 0 && !loading ? (
             <p className="mt-2 text-sm text-muted-foreground">No directory sync connection yet.</p>
           ) : (
@@ -411,7 +412,7 @@ export default function DirectorySyncAdminPage({
         </section>
 
         <section className="rounded-md border border-border bg-card p-5">
-          <h2 className="text-base font-medium text-foreground">SCIM tokens</h2>
+          <h2 className="text-h4 text-foreground">SCIM tokens</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             A token is shown once, when it is minted. Only its hash is stored, so it cannot be
             recovered, mint a new one and revoke the old.
@@ -506,7 +507,7 @@ export default function DirectorySyncAdminPage({
         </section>
 
         <section className="rounded-md border border-border bg-card p-5">
-          <h2 className="text-base font-medium text-foreground">Group role mapping</h2>
+          <h2 className="text-h4 text-foreground">Group role mapping</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             A provisioned user gets the strongest role among the groups they belong to. Leave a
             group unmapped and its members land as{' '}
@@ -532,7 +533,10 @@ export default function DirectorySyncAdminPage({
                   <div>
                     <p className="text-sm text-foreground">{group.display_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {group.member_count} member{group.member_count === 1 ? '' : 's'}
+                      {plural('counts.members', group.member_count, {
+                        one: '{{count}} member',
+                        other: '{{count}} members',
+                      })}
                     </p>
                   </div>
                   <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -563,7 +567,7 @@ export default function DirectorySyncAdminPage({
         </section>
 
         <section className="rounded-md border border-border bg-card p-5">
-          <h2 className="text-base font-medium text-foreground">Recent IdP activity</h2>
+          <h2 className="text-h4 text-foreground">Recent IdP activity</h2>
           {events.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
               Nothing yet. If your IdP is configured and this stays empty, it is not reaching this

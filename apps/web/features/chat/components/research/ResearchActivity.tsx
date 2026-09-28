@@ -34,6 +34,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
 import { ResearchPlan } from './ResearchPlan';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -173,6 +174,7 @@ export function ResearchActivity({
   onPlanDecision,
   connectorOptions,
 }: ResearchActivityProps) {
+  const { plural } = useUiTranslation('chat');
   const isActive =
     isStreaming &&
     (research.phase === 'planning' ||
@@ -214,15 +216,27 @@ export function ResearchActivity({
 
   const counts: string[] = [];
   if (typeof research.searches === 'number' && research.searches > 0) {
-    const searchLabel = `search${research.searches === 1 ? '' : 'es'}`;
     counts.push(
       isActive && typeof research.maxSearches === 'number' && research.maxSearches > 0
-        ? `${research.searches} of ${research.maxSearches} ${searchLabel}`
-        : `${research.searches} ${searchLabel}`,
+        ? plural(
+            'counts.searchesOf',
+            research.searches,
+            { one: '{{count}} of {{max}} search', other: '{{count}} of {{max}} searches' },
+            { max: research.maxSearches },
+          )
+        : plural('counts.searches', research.searches, {
+            one: '{{count}} search',
+            other: '{{count}} searches',
+          }),
     );
   }
   if (typeof research.sources === 'number' && research.sources > 0) {
-    counts.push(`${research.sources} source${research.sources === 1 ? '' : 's'}`);
+    counts.push(
+      plural('counts.sources', research.sources, {
+        one: '{{count}} source',
+        other: '{{count}} sources',
+      }),
+    );
   }
   if (!isActive && typeof research.credits === 'number' && Number.isFinite(research.credits)) {
     counts.push(formatCredits(research.credits, { maximumFractionDigits: 2 }));

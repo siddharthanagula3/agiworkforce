@@ -374,9 +374,7 @@ describe('BillingSection', () => {
     render(<BillingSection />);
 
     const block = within(screen.getByRole('region', { name: 'Buy credits' }));
-    expect(
-      block.getByText('Credit packs are available on paid plans billed by AGI Workforce.'),
-    ).toBeTruthy();
+    expect(block.getByText('Credit packs are available on paid plans.')).toBeTruthy();
     expect(block.queryByRole('radio')).toBeNull();
     expect(
       block.getByText('Pro gives you 2x more credits per dollar than a credit pack.'),

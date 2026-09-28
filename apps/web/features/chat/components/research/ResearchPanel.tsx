@@ -24,6 +24,7 @@ import { ResearchReportView, type ReportArtifactInput } from './ResearchReportVi
 import { ResearchReportsGallery } from './ResearchReportsGallery';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
+import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 
 // ============================================================================
 // Source row
@@ -305,6 +306,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
   const layout = useOverlayLayout();
   const isModalOverlay = layout === 'mobile' && panelOpen;
   useOverlayDialog(panelRef, isModalOverlay, closePanel);
+  const panelWidth = useSidePanelWidth();
 
   if (!panelOpen) return null;
 
@@ -325,16 +327,17 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
-          // Desktop: inline panel, same width as ArtifactsPanel
           'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
           // Slide-in animation
           'animate-in slide-in-from-right duration-moved',
         )}
+        style={layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label="Research panel"
         // Only the covering form is a dialog. Beside the conversation this is an
         // ordinary region and must not trap focus or swallow Escape.
         {...(isModalOverlay ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
       >
+        {layout === 'desktop' && <SidePanelResizeHandle label="Resize research panel" />}
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -482,7 +485,7 @@ export function ResearchToggleButton({
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={panelOpen ? 'Close sources panel' : 'Open sources panel'}
       title="Research sources"

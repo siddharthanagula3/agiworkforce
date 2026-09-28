@@ -18,6 +18,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
+import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
@@ -1415,6 +1416,39 @@ export function useUserActivity(
   });
 }
 
+export interface ApprovalHistoryEntry {
+  id: string;
+  toolName: string;
+  decision: 'approved' | 'rejected';
+  conversationId: string | null;
+  createdAt: string;
+}
+
+export function useApprovalHistory(
+  limit: number,
+  offset: number,
+): UseQueryResult<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error> {
+  return useQuery<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error>({
+    queryKey: ['settings', 'approvals', limit, offset],
+    queryFn: async () => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const params = new URLSearchParams({ limit: String(limit + 1), offset: String(offset) });
+      const res = await fetch(`${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(statusMessage(res.status));
+      const json = (await res.json()) as { approvals?: ApprovalHistoryEntry[] };
+      const approvals = json.approvals ?? [];
+      return { approvals: approvals.slice(0, limit), hasMore: approvals.length > limit };
+    },
+    staleTime: 60 * 1000,
+    meta: {
+      errorMessage: 'Failed to load approval history',
+    },
+  });
+}
+
 // ============================================================================
 // AUDIT LOGS HOOKS
 // ============================================================================
@@ -1557,7 +1591,7 @@ export interface OrgSharedProject {
   name: string;
   ownerUserId: string;
   sharedByUserId: string;
-  defaultAccess: 'read' | 'write';
+  defaultAccess: 'read' | 'write' | 'none';
   createdAt: string;
   /** Explicit per-member overrides. Members not listed inherit `defaultAccess`. */
   memberGrants: { userId: string; access: OrgMemberProjectAccess }[];
@@ -1604,12 +1638,20 @@ export interface OrgSharedConversation {
   createdAt: string;
 }
 
+export interface OrgSharingMember {
+  userId: string;
+  role: OrgSharingRole;
+  joinedAt: string;
+  displayName: string | null;
+  email: string | null;
+}
+
 export interface OrgSharedOverview {
   organizationId: string;
   currentUserId: string;
   currentUserRole: OrgSharingRole;
   canManageSharing: boolean;
-  members: { userId: string; role: OrgSharingRole; joinedAt: string }[];
+  members: OrgSharingMember[];
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];
   sharedArtifacts: OrgSharedArtifact[];
@@ -1666,16 +1708,31 @@ async function sharingRequest(path: string, method: 'PUT' | 'PATCH' | 'DELETE', 
   return res.json() as Promise<unknown>;
 }
 
-/** Share one of the caller's own projects with their organization. */
-export function useShareProjectWithOrganization(): UseMutationResult<unknown, Error, string> {
+export type ProjectShareAudience = 'workspace' | 'invited';
+
+/**
+ * Share one of the caller's own projects with their organization, open to the
+ * whole workspace or only to the members given access.
+ */
+export function useShareProjectWithOrganization(): UseMutationResult<
+  unknown,
+  Error,
+  { projectId: string; audience: ProjectShareAudience }
+> {
   const queryClient: QueryClient = useQueryClient();
-  return useMutation<unknown, Error, string>({
-    mutationFn: (projectId: string) =>
-      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PUT'),
-    onSuccess: () => {
+  return useMutation<unknown, Error, { projectId: string; audience: ProjectShareAudience }>({
+    mutationFn: ({ projectId, audience }) =>
+      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PUT', {
+        audience,
+      }),
+    onSuccess: (_data, { audience }) => {
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      toast.success('Project shared with your organization');
+      toast.success(
+        audience === 'invited'
+          ? 'Project shared with the people you invite'
+          : 'Project shared with your workspace',
+      );
     },
     onError: (error: Error) =>
       toast.error(toUserMessage(error, 'The request failed. Please try again.')),
@@ -1724,6 +1781,36 @@ export function useSetSharedProjectMemberAccess(): UseMutationResult<
     },
     onError: (error: Error) =>
       toast.error(toUserMessage(error, 'The request failed. Please try again.')),
+  });
+}
+
+export function useSetSharedProjectMembersAccess(): UseMutationResult<
+  void,
+  Error,
+  { projectId: string; userIds: string[]; access: OrgMemberProjectAccess }
+> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    { projectId: string; userIds: string[]; access: OrgMemberProjectAccess }
+  >({
+    mutationFn: async ({ projectId, userIds, access }) => {
+      for (const userId of userIds) {
+        await sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PATCH', {
+          userId,
+          access,
+        });
+      }
+    },
+    onSuccess: (_result, { userIds }) => {
+      toast.success(
+        userIds.length === 1 ? 'Access updated' : `Access updated for ${userIds.length} people`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY }),
   });
 }
 

@@ -70,7 +70,7 @@ export function EmptyChat({
   }
 
   return (
-    <div className="flex w-full flex-col items-center justify-center gap-7 px-6 pb-6">
+    <div className="flex w-full flex-col items-center justify-center gap-7 px-gutter-compact pb-6 sm:px-gutter-regular">
       <BrandedGreeting
         userName={user?.name ?? null}
         workspaceLabel={workspaceLabel}

@@ -170,6 +170,77 @@ export async function requestOrganizationRegionMove(
   return { ...current, requested: input.target };
 }
 
+export async function cancelOrganizationRegionMove(
+  input: Omit<RegionMoveInput, 'target'>,
+): Promise<OrganizationRegionState> {
+  const env = input.env ?? process.env;
+  const current = await readOrganizationRegion(input.db, input.organizationId, env);
+  if (!current.requested) return current;
+  await input.db.execute(
+    `update public.organizations
+        set data_region_requested = null,
+            data_region_requested_at = null
+      where id = $1`,
+    [input.organizationId],
+  );
+  await recordAuditEvent({
+    eventType: 'data_region_change_cancelled',
+    userId: input.actorUserId,
+    organizationId: input.organizationId,
+    severity: 'info',
+    detail: {
+      resourceType: 'data_region',
+      resourceId: input.organizationId,
+      previousRegion: current.effective,
+      region: current.requested,
+    },
+  });
+  return { ...current, requested: null, requestedAt: null };
+}
+
+export class RegionMoveNotRequestedError extends Error {
+  constructor(organizationId: string, target: DataRegionId) {
+    super(
+      `Workspace ${organizationId} has no outstanding move to "${target}"; ` +
+        'record the request before completing it.',
+    );
+    this.name = 'RegionMoveNotRequestedError';
+  }
+}
+
+export interface PendingRegionMove {
+  organizationId: string;
+  name: string;
+  from: DataRegionId;
+  to: DataRegionId;
+  requestedAt: string | null;
+}
+
+export async function listPendingRegionMoves(db: DatabaseAdapter): Promise<PendingRegionMove[]> {
+  const rows = await db.query<RegionRow & { id: string; name: string }>(
+    `select id, name, data_region, data_region_requested, data_region_requested_at
+       from public.organizations
+      where data_region_requested is not null
+      order by data_region_requested_at asc nulls last
+      limit 200`,
+  );
+  return rows.flatMap((row) => {
+    const to = normaliseDataRegion(row.data_region_requested);
+    if (!to) return [];
+    const requestedAt = row.data_region_requested_at;
+    return [
+      {
+        organizationId: row.id,
+        name: row.name,
+        from: normaliseDataRegion(row.data_region) ?? DEFAULT_DATA_REGION,
+        to,
+        requestedAt:
+          requestedAt instanceof Date ? requestedAt.toISOString() : (requestedAt as string | null),
+      },
+    ];
+  });
+}
+
 /**
  * Cutover. Called once the copy into the target region has been verified, which
  * is a runbook step against real infrastructure rather than something this
@@ -181,10 +252,7 @@ export async function completeOrganizationRegionMove(
   const env = input.env ?? process.env;
   const current = await readOrganizationRegion(input.db, input.organizationId, env);
   if (current.requested !== input.target) {
-    throw new Error(
-      `Workspace ${input.organizationId} has no outstanding move to "${input.target}"; ` +
-        'record the request before completing it.',
-    );
+    throw new RegionMoveNotRequestedError(input.organizationId, input.target);
   }
   await input.db.execute(
     `update public.organizations

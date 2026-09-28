@@ -15,8 +15,9 @@ import {
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../lib/request-surface';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { withManagedTurnSlot } from '../lib/turn-slot';
@@ -154,7 +155,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
       model: 'chat-completions',
       feature: 'llm_v1_chat_completions',
       isFreeTrial: isFreeTierRequest,
-      surface: resolveCloudChatSurface(request),
+      surface: resolveAuthenticatedSurface(request, authResult),
     },
     getSecurityHeaders(),
   );
@@ -391,6 +392,31 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
       { status: 503, headers: getSecurityHeaders() },
     );
   }
+
+  const conversationId = processed.conversationIsTemporary
+    ? undefined
+    : processed.chatRequest.conversation_id;
+  const toolNames = new Map(
+    claim.checkpoint.pendingToolCalls.map((call) => [call.id, call.qualifiedName]),
+  );
+  await Promise.all(
+    enforcedApprovals.map((approval) =>
+      recordAuditEvent({
+        userId,
+        organizationId: processed.organizationId ?? null,
+        eventType: 'tool_approval_decided',
+        request,
+        surface: resolveAuthenticatedSurface(request, authResult),
+        detail: {
+          resourceType: 'tool',
+          resourceId: claim.checkpoint.runId,
+          resourceName: toolNames.get(approval.toolCallId),
+          status: approval.decision,
+          ...(conversationId ? { conversationId } : {}),
+        },
+      }),
+    ),
+  );
 
   const streamHeaders: Record<string, string> = {
     ...SSE_RESPONSE_HEADERS,

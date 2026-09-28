@@ -174,7 +174,7 @@ export function CloudReflectSection() {
 
           {recap.topics.length > 0 ? (
             <div>
-              <h3 className="text-sm font-medium text-foreground">What you spent time on</h3>
+              <h3 className="text-h5 text-foreground">What you spent time on</h3>
               <ul className="mt-3 flex flex-col gap-3">
                 {recap.topics.map((topic) => (
                   <li key={topic.id} className="rounded-lg border border-border bg-card/40 p-4">
@@ -203,7 +203,7 @@ export function CloudReflectSection() {
 
           {recap.insights.length > 0 ? (
             <div>
-              <h3 className="text-sm font-medium text-foreground">Expanding your skills</h3>
+              <h3 className="text-h5 text-foreground">Expanding your skills</h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 Observations and optional next steps, not a performance score.
               </p>

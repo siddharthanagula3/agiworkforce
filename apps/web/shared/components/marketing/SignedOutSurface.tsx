@@ -15,6 +15,7 @@ export interface SignedOutSurfaceProps {
   signInHref: string;
   signInLabel: string;
   secondary?: { href: string; label: string };
+  after?: ReactNode;
 }
 
 /**
@@ -32,6 +33,7 @@ export function SignedOutSurface({
   signInHref,
   signInLabel,
   secondary,
+  after,
 }: SignedOutSurfaceProps) {
   const ctas: PageCta[] = [{ href: signInHref, label: signInLabel }];
   if (secondary) {
@@ -49,6 +51,7 @@ export function SignedOutSurface({
           lede={children}
           ctas={ctas}
         />
+        {after}
       </main>
       <MarketingFooter />
     </div>

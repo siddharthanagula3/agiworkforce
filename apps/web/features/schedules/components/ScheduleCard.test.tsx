@@ -56,6 +56,7 @@ function renderCard(schedule: ScheduleTask) {
       onEdit={vi.fn()}
       onDelete={vi.fn()}
       onToggleHistory={vi.fn()}
+      onResolveApproval={vi.fn()}
       onRetryHistory={vi.fn()}
       onLoadMoreHistory={vi.fn()}
       onShare={vi.fn()}
@@ -168,6 +169,7 @@ describe('ScheduleCard failure presentation', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onToggleHistory={vi.fn()}
+        onResolveApproval={vi.fn()}
         onRetryHistory={vi.fn()}
         onLoadMoreHistory={vi.fn()}
         onShare={vi.fn()}

@@ -112,9 +112,7 @@ function LibrarySignInRequired() {
       className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 py-24 text-center"
     >
       <Lock className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden />
-      <h1 className="text-lg font-medium text-[var(--chat-text-primary)]">
-        Sign in to see your library
-      </h1>
+      <h1 className="text-h3 text-[var(--chat-text-primary)]">Sign in to see your library</h1>
       <p className="max-w-sm text-sm text-[var(--chat-text-muted)]">
         Files and artifacts are stored against your account. Nothing here is lost, it is just not
         readable until you sign in.
@@ -149,6 +147,7 @@ export function LibraryView() {
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
       fetchAsset: (uri) => fetch(uri, { credentials: 'same-origin' }),
       inlinePreviewUri: (uri) => uri,
+      textPreviewUri: (uri) => `${uri}/text`,
       listFolders: async () => {
         const response = await fetch(PROJECT_LIST_ENDPOINT, { credentials: 'same-origin' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -192,6 +191,8 @@ export function LibraryView() {
           () => toast.error('That file could not be attached. Download it and attach it instead.'),
         );
       },
+      openConversation: (conversationId) =>
+        router.push(`/chat/${encodeURIComponent(conversationId)}`),
       addToChat: async (item) => {
         await stageLibraryItemForNewChat(item, { workMode: 'chat' });
         router.push(NEW_CHAT_PATH);

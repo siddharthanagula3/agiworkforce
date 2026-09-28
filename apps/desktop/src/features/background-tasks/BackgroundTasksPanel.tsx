@@ -198,16 +198,14 @@ export function BackgroundTasksPanel({
   return (
     <div
       className={cn(
-        'flex flex-col bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg',
+        'flex flex-col bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-e3',
         className,
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-            Background Tasks
-          </h3>
+          <h3 className="text-h5 text-gray-900 dark:text-gray-100">Background Tasks</h3>
           {activeTasks.length > 0 && (
             <Badge variant="default" className="text-xs">
               {activeTasks.length} active

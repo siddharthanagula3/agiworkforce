@@ -2,7 +2,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import type { ManagedCloudAgentRunApprovalDecision } from '@agiworkforce/cloud-contracts';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { TOOL_APPROVAL_ACTION_LABELS, creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
@@ -15,6 +15,7 @@ import {
   CLOUD_RUN_STATE_LABELS,
   CLOUD_RUN_WORK_MODE_LABELS,
   type CloudRunActivityTone,
+  CLOUD_RUN_PLAN_STATUS_LABELS,
 } from '../runPresentation';
 import type { CloudRunDetail } from '../store';
 
@@ -58,6 +59,8 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
+const STOPPED_SHORT_STATES = new Set(['partial', 'timed_out', 'cancelled', 'failed']);
 
 export function CloudRunDetailSheet({
   detail,
@@ -178,6 +181,18 @@ export function CloudRunDetailSheet({
                   ) : null}
                   {run.usage ? (
                     <MetadataRow
+                      label="Cost"
+                      value={
+                        run.usage.costCents === null
+                          ? 'Metered against your free trial allowance'
+                          : formatCredits(creditsFromCents(run.usage.costCents), {
+                              maximumFractionDigits: 2,
+                            })
+                      }
+                    />
+                  ) : null}
+                  {run.usage ? (
+                    <MetadataRow
                       label="Usage"
                       value={`${run.usage.providerCalls} calls · ${run.usage.inputTokens + run.usage.outputTokens} tokens`}
                     />
@@ -295,6 +310,39 @@ export function CloudRunDetailSheet({
                 <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
                   {DEVICE_STEP_NOTE}
                 </Text>
+              </View>
+            ) : null}
+
+            {run && detail && detail.plan.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                <SectionTitle label={`Plan · ${detail.plan.length}`} />
+                {detail.plan.map((step) => {
+                  const live = detail.status === 'live';
+                  const status = step.status === 'running' && !live ? 'stopped' : step.status;
+                  return (
+                    <Text
+                      key={step.ordinal}
+                      accessibilityLabel={`Step ${step.ordinal}, ${step.description}, ${CLOUD_RUN_PLAN_STATUS_LABELS[status]}`}
+                      style={{
+                        color:
+                          status === 'completed'
+                            ? colors.textPrimary
+                            : status === 'failed'
+                              ? colors.agentError
+                              : colors.textSecondary,
+                        fontSize: 13,
+                        lineHeight: 19,
+                      }}
+                    >
+                      {`${step.ordinal}. ${step.description} · ${CLOUD_RUN_PLAN_STATUS_LABELS[status]}`}
+                    </Text>
+                  );
+                })}
+                {STOPPED_SHORT_STATES.has(run.workState ?? run.state) ? (
+                  <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+                    {`Done ${detail.plan.filter((step) => step.status === 'completed').length} of ${detail.plan.length} steps before it stopped.`}
+                  </Text>
+                ) : null}
               </View>
             ) : null}
 

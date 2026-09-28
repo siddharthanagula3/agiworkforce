@@ -6,7 +6,17 @@ import {
   type ContextCandidate,
   type ContextSourceLoader,
 } from '@agiworkforce/context-engine';
-import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
+import {
+  classifyTaskLocally,
+  detectIndicScript,
+  resolveAutoRoute,
+  type AutoRoutingRequest,
+} from '@agiworkforce/routing';
+import {
+  sideCallRoutingRequest,
+  sideCallTrainingOptOut,
+} from '@/lib/server/side-call-training-policy';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import {
   DomainErrorCode,
@@ -545,6 +555,7 @@ async function runScheduledToolLoop(input: {
     approvalMode: input.approvalMode,
     toolApprovalPolicy: input.plan.toolApprovalPolicy,
     unattended: true,
+    unattendedEscalationPauses: true,
     userId: input.userId,
     connectorPermissions: input.plan.connectorPermissions,
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),
@@ -637,20 +648,31 @@ async function runScheduledCompletion(input: {
   };
 }
 
-function selectScheduledRoute(
+const NO_TRAINING_MODEL_MESSAGE =
+  'No model on your plan keeps your chats out of training right now, so this scheduled run did not start.';
+
+async function selectScheduledRoute(
+  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
-): ScheduledRunRoute {
-  const route = resolveAutoRoute({
+): Promise<ScheduledRunRoute> {
+  const baseRouting: AutoRoutingRequest = {
     selection: task.model ?? 'auto',
     taskType,
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
-  });
+  };
+  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
+  if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);
+  const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
-    throw new Error('The selected model is not available for scheduled managed execution');
+    throw new Error(
+      routing === baseRouting
+        ? 'The selected model is not available for scheduled managed execution'
+        : NO_TRAINING_MODEL_MESSAGE,
+    );
   }
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
@@ -731,7 +753,14 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const taskType = classifyTaskLocally(prompt, []).type;
   const route = resume
     ? resumedRoute(resume.checkpoint.route)
-    : selectScheduledRoute(task, taskType, subscriptionTier);
+    : await selectScheduledRoute(scope, task, taskType, subscriptionTier);
+  if (
+    resume &&
+    !modelKeepsInputsOutOfTraining(route.modelKey) &&
+    (await sideCallTrainingOptOut(scope.db, scope.userId))
+  ) {
+    throw new Error(NO_TRAINING_MODEL_MESSAGE);
+  }
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 

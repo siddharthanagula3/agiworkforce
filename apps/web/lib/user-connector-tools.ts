@@ -31,12 +31,15 @@ import {
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
+  GitHubWriteOutcomeUnknownError,
   getInstallationAccessToken,
   getPrDiff,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
+  issueCommentPostedSince,
   postIssueComment,
   postPrReview,
+  pullRequestReviewPostedSince,
 } from '@/lib/github-app';
 import { openCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import {
@@ -384,6 +387,51 @@ function asInteger(value: unknown): number | null {
   return null;
 }
 
+async function writeWithReconciledOutcome(input: {
+  userId: string;
+  toolName: string;
+  target: string;
+  write: () => Promise<void>;
+  wasPosted: (since: Date) => Promise<boolean>;
+  success: string;
+}): Promise<ConnectorExecResult> {
+  const startedAt = new Date();
+  try {
+    await input.write();
+    return { handled: true, content: input.success, isError: false };
+  } catch (error) {
+    if (!(error instanceof GitHubWriteOutcomeUnknownError)) throw error;
+  }
+  try {
+    if (await input.wasPosted(startedAt)) {
+      logger.warn(
+        { userId: input.userId, toolName: input.toolName },
+        '[user-connector] github write outcome reconciled: it landed',
+      );
+      return { handled: true, content: input.success, isError: false };
+    }
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName },
+      '[user-connector] github write outcome reconciled: it did not land',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time, and ${input.target} shows nothing was posted. It is safe to try again.`,
+      isError: true,
+    };
+  } catch (error) {
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName, error },
+      '[user-connector] github write outcome could not be reconciled',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time and it could not be confirmed whether anything was posted on ${input.target}. Check ${input.target} before trying again, so it is not posted twice.`,
+      isError: true,
+    };
+  }
+}
+
 async function executeGithubTool(
   userId: string,
   toolName: string,
@@ -435,12 +483,14 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postIssueComment(token, owner, repo, issueNumber, body);
-      return {
-        handled: true,
-        content: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${issueNumber}`,
+        write: () => postIssueComment(token, owner, repo, issueNumber, body),
+        wasPosted: (since) => issueCommentPostedSince(token, owner, repo, issueNumber, body, since),
+        success: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
+      });
     }
 
     if (toolName === 'post_pull_request_review') {
@@ -453,12 +503,15 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postPrReview(token, owner, repo, pullNumber, body, 'COMMENT');
-      return {
-        handled: true,
-        content: `Posted review on ${owner}/${repo}#${pullNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${pullNumber}`,
+        write: () => postPrReview(token, owner, repo, pullNumber, body, 'COMMENT'),
+        wasPosted: (since) =>
+          pullRequestReviewPostedSince(token, owner, repo, pullNumber, body, since),
+        success: `Posted review on ${owner}/${repo}#${pullNumber}.`,
+      });
     }
 
     return { handled: true, content: `Unknown GitHub tool: ${toolName}`, isError: true };
@@ -830,6 +883,7 @@ export interface UserCustomConnectorSummary {
   transport: string;
   createdAt: string;
   updatedAt: string;
+  signInRequired: boolean;
   credentialUnreadable?: true;
 }
 
@@ -855,10 +909,12 @@ export async function getUserCustomConnectorSummaries(
       url: string;
       transport: string;
       auth_header_enc: string | null;
+      sign_in_required: boolean;
       created_at: string;
       updated_at: string;
     }>(
-      `select id, short_id, name, url, transport, auth_header_enc, created_at, updated_at
+      `select id, short_id, name, url, transport, auth_header_enc, sign_in_required,
+              created_at, updated_at
          from user_custom_connectors
         where user_id = $1
         order by created_at desc`,
@@ -872,6 +928,7 @@ export async function getUserCustomConnectorSummaries(
       transport: r.transport,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      signInRequired: r.sign_in_required,
       ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
     }));
   } catch (error) {
@@ -958,6 +1015,22 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   };
 }
 
+async function personalCustomRowConfig(
+  userId: string,
+  row: CustomConnectorRow,
+): Promise<McpServerConfig> {
+  const config = customRowToMcpConfig(row);
+  if (row.auth_header_enc) return config;
+  const access = await resolveConnectorAccessToken(userId, customServerId(row.short_id), {
+    discovered: true,
+  });
+  if (access.status !== 'ready') return config;
+  return {
+    ...config,
+    headers: { Authorization: `${access.tokenType || 'Bearer'} ${access.accessToken}` },
+  };
+}
+
 interface CustomCatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
@@ -1004,7 +1077,7 @@ async function buildCustomConnectorCatalog(
   try {
     const { catalog, handles } = await buildMcpToolCatalog(
       {
-        [serverId]: customRowToMcpConfig(row),
+        [serverId]: await personalCustomRowConfig(userId, row),
       },
       MCP_EGRESS_POLICY,
       {
@@ -1062,7 +1135,7 @@ async function executeCustomConnectorTool(
     handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: customServerId(row.short_id),
-      config: customRowToMcpConfig(row),
+      config: await personalCustomRowConfig(userId, row),
       ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(row.url, `user:${userId}:custom:${row.id}`)),
     });
@@ -1112,6 +1185,18 @@ async function executeCustomConnectorTool(
           ),
           isError: true,
         };
+      }
+      if (!row.auth_header_enc) {
+        const granted = (await getUserConnectorOAuthGrantSummaries(userId)).some(
+          (grant) => grant.connectorId === serverId,
+        );
+        return connectRequiredResult({
+          connectorId: serverId,
+          connectorLabel: row.name,
+          connectable: true,
+          toolName,
+          reason: granted ? 'authorization_expired' : 'not_connected',
+        });
       }
       return {
         handled: true,
@@ -2095,7 +2180,7 @@ export async function withUserConnectorMcpHandle<T>(
         connectorLabel: row.name,
         url: row.url,
         authorizationContext: `user:${userId}:custom:${row.id}`,
-        config: customRowToMcpConfig(row),
+        config: await personalCustomRowConfig(userId, row),
         isCustom: true,
       };
     }
@@ -2156,7 +2241,7 @@ export async function withUserConnectorMcpHandle<T>(
           connectorLabel: customRow.name,
           url: customRow.url,
           authorizationContext: `user:${userId}:custom:${customRow.id}`,
-          config: customRowToMcpConfig(customRow),
+          config: await personalCustomRowConfig(userId, customRow),
           isCustom: true,
         };
       } else if (directory) {

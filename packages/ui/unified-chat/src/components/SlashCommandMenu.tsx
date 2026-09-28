@@ -60,7 +60,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.15 }}
-          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-lg overflow-hidden z-[var(--z-dropdown)]"
+          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
           role="listbox"
           aria-label="Slash command suggestions"
         >
