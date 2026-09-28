@@ -361,5 +361,14 @@
     "runningToolsOf_few": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "Выполняется {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Таблица",
+    "expand": "Развернуть таблицу",
+    "copy": "Скопировать таблицу",
+    "copied": "Таблица скопирована",
+    "copyFailed": "Не удалось скопировать, буфер обмена недоступен",
+    "download": "Скачать в CSV",
+    "close": "Закрыть развёрнутую таблицу"
   }
 }

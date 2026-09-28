@@ -27,6 +27,7 @@ const MEMBERS = [
     userId: 'finance-user',
     name: 'Finance',
     email: 'f@example.com',
+    avatarUrl: null,
     role: 'member',
     isCurrentUser: false,
   },
@@ -34,6 +35,7 @@ const MEMBERS = [
     userId: 'owner-user',
     name: 'Owner',
     email: 'o@example.com',
+    avatarUrl: null,
     role: 'owner',
     isCurrentUser: true,
   },
@@ -57,7 +59,8 @@ function respond(payload: unknown, status = 200) {
 
 function route(payload: unknown) {
   return (input: string, init?: RequestInit) => {
-    if (input === '/api/settings/team') return Promise.resolve(respond({ members: MEMBERS }));
+    if (input === '/api/settings/team?organizationId=org-1')
+      return Promise.resolve(respond({ members: MEMBERS }));
     if (init?.method === 'POST' || init?.method === 'DELETE') {
       return Promise.resolve(respond({ delegation: DELEGATION }));
     }
@@ -109,10 +112,8 @@ describe('WorkspaceDelegation', () => {
     fetchMock.mockImplementation(route(body()));
     renderPanel();
 
-    await userEvent.selectOptions(
-      await screen.findByLabelText(/Member/u),
-      await screen.findByRole('option', { name: /Finance/u }),
-    );
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Member' }));
+    await userEvent.click(await screen.findByRole('option', { name: /Finance/u }));
     await userEvent.click(screen.getByRole('checkbox', { name: 'admin.billing.view' }));
     await userEvent.selectOptions(screen.getByLabelText(/Expires in/u), '7');
     await userEvent.click(screen.getByRole('button', { name: 'Grant delegation' }));
@@ -145,10 +146,8 @@ describe('WorkspaceDelegation', () => {
     });
     renderPanel();
 
-    await userEvent.selectOptions(
-      await screen.findByLabelText(/Member/u),
-      await screen.findByRole('option', { name: /Finance/u }),
-    );
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Member' }));
+    await userEvent.click(await screen.findByRole('option', { name: /Finance/u }));
     await userEvent.click(screen.getByRole('checkbox', { name: 'admin.billing.view' }));
     await userEvent.click(screen.getByRole('button', { name: 'Grant delegation' }));
 
@@ -174,7 +173,7 @@ describe('WorkspaceDelegation', () => {
     fetchMock.mockImplementation(route(body({ canManage: false })));
     renderPanel();
 
-    expect(await screen.findByText('finance-user')).toBeInTheDocument();
+    expect(await screen.findByText('Finance')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Grant delegation' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull();
   });

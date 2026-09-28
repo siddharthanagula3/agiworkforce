@@ -335,5 +335,14 @@
     "runningTools_other": "正在运行 {{count}} 个工具",
     "runningToolsOf_one": "正在运行工具 {{running}}/{{count}}：{{name}}",
     "runningToolsOf_other": "正在运行工具 {{running}}/{{count}}：{{name}}"
+  },
+  "markdownTable": {
+    "label": "表格",
+    "expand": "展开表格",
+    "copy": "复制表格",
+    "copied": "已复制表格",
+    "copyFailed": "复制失败，剪贴板不可用",
+    "download": "下载为 CSV",
+    "close": "关闭展开的表格"
   }
 }
