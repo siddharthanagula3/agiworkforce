@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError, isAppError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import {
@@ -65,6 +66,17 @@ async function handleSubmit(request: NextRequest) {
   if (userId) {
     try {
       const appeal = await submitAccountAppeal(userId, parsed.data.message);
+      await recordAuditEvent({
+        userId,
+        eventType: 'support_appeal_submitted',
+        request,
+        severity: 'warning',
+        detail: {
+          resourceType: 'support_ticket',
+          resourceId: appeal.ticket.id,
+          status: 'signed_in',
+        },
+      });
       return NextResponse.json({ appeal }, { status: 201, headers: NO_STORE });
     } catch (error) {
       if (error instanceof AppealContactMissingError) {
@@ -78,7 +90,19 @@ async function handleSubmit(request: NextRequest) {
   if (!parsed.data.email) {
     throw createError.validation('Enter the email address of the suspended account.');
   }
-  await submitSignedOutAppeal({ email: parsed.data.email, message: parsed.data.message });
+  const filed = await submitSignedOutAppeal({
+    email: parsed.data.email,
+    message: parsed.data.message,
+  });
+  if (filed) {
+    await recordAuditEvent({
+      userId: filed.userId,
+      eventType: 'support_appeal_submitted',
+      request,
+      severity: 'warning',
+      detail: { resourceType: 'support_ticket', resourceId: filed.ticketId, status: 'signed_out' },
+    });
+  }
   return NextResponse.json({ received: true }, { status: 202, headers: NO_STORE });
 }
 

@@ -96,18 +96,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/m
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S11.14: Reduced motion.
-
-- Done when: With the OS or app reduced-motion preference on, looping and travelling animation stops or is replaced.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | --plain / AGI_PLAIN (the no-animation mode) is honoured only by REPL output; the default TUI keeps its 50ms spinner and shimmer sweep. | mount |
-
-Code: `apps/cli/src/output.rs:30-35`, `apps/cli/src/tui/shimmer.rs:21-21`, `apps/cli/src/lib.rs:4610-4610`
-
 ## S11.15: Captions.
 
 - Done when: Spoken audio (voice conversations) can be shown as live captions.
@@ -128,9 +116,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Voice turns are printed but not added back to the TUI transcript after voice mode returns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/tui/tui_app.rs:4671-4671`
+Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
 
 ## S11.19: Right-to-left layouts.
 
@@ -245,14 +233,3 @@ Code: `apps/extension-vscode/package.json:1143-1143`, `apps/extension-vscode/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S11.28: Accessible terminal output mode.
-
-- Done when: The CLI offers a plain output mode for screen readers (no colour, spinners or redraws) and honours NO_COLOR everywhere.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI code highlighting now honours NO_COLOR, but --plain and AGI_PLAIN still affect only REPL output: the default TUI opens with spinners and redraws. Make --plain skip the TUI and strip colour everywhere. | handler |
-
-Code: `apps/cli/src/lib.rs:433-433`, `apps/cli/src/lib.rs:2998-2998`, `apps/cli/src/lib.rs:4610-4610`, `apps/cli/src/tui/markdown_renderer.rs:8-8`

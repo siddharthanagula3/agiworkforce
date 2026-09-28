@@ -8,7 +8,6 @@ import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   useOrganizationSharedOverview,
-  useSetSharedProjectMemberAccess,
   useShareConnectorWithOrganization,
   useShareProjectWithOrganization,
   useUnshareConnectorFromOrganization,
@@ -16,7 +15,14 @@ import {
   useUnshareConversationFromOrganization,
   useUnshareProjectFromOrganization,
   type OrgSharedOverview,
+  type ProjectShareAudience,
 } from '../hooks/use-settings-queries';
+import {
+  ProjectAudienceSelect,
+  SharedProjectAudienceControl,
+  SharedProjectMemberAccessList,
+  memberProjectAccess,
+} from '@/features/projects/components/ProjectSharingControls';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -155,9 +161,9 @@ async function fetchOwnConnectors(): Promise<OwnConnector[]> {
 
 function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
+  const [audience, setAudience] = useState<ProjectShareAudience>('invited');
   const shareProject = useShareProjectWithOrganization();
   const unshareProject = useUnshareProjectFromOrganization();
-  const setAccess = useSetSharedProjectMemberAccess();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const ownProjects = useQuery<OwnProject[], Error>({
@@ -177,7 +183,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FolderGit2 size={14} aria-hidden />}
       title="Shared projects"
-      description="Members can open a shared project and read its instructions and knowledge files. Give someone Can edit and they can also change its name, instructions, appearance and sources; archiving and deleting stay with the owner, and conversations stay private to each member."
+      description="Share a project with the people you invite, or with everyone in the workspace. Members with access read its instructions and knowledge files; give someone Can edit and they can also change its name, instructions, appearance and sources. Archiving and deleting stay with the owner, and conversations stay private to each member."
     >
       {overview.canManageSharing && ownProjects.isError ? (
         <LoadError
@@ -206,13 +212,20 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
               </option>
             ))}
           </select>
+          <label htmlFor="org-share-audience" style={{ position: 'absolute', left: -9999 }}>
+            Who can open it
+          </label>
+          <ProjectAudienceSelect id="org-share-audience" value={audience} onChange={setAudience} />
           <button
             type="button"
             style={buttonStyle}
             disabled={!selected || shareProject.isPending}
             onClick={() => {
               if (!selected) return;
-              shareProject.mutate(selected, { onSuccess: () => setSelected('') });
+              shareProject.mutate(
+                { projectId: selected, audience },
+                { onSuccess: () => setSelected('') },
+              );
             }}
           >
             {shareProject.isPending ? 'Sharing…' : 'Share project with organization'}
@@ -233,12 +246,11 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
           }}
         >
           {overview.sharedProjects.map((project) => {
-            const denied = new Set(
-              project.memberGrants
-                .filter((grant) => grant.access === 'none')
-                .map((grant) => grant.userId),
+            const visibleTo = overview.members.filter(
+              (member) =>
+                member.userId === project.ownerUserId ||
+                memberProjectAccess(project, member.userId) !== 'none',
             );
-            const visibleTo = overview.members.filter((member) => !denied.has(member.userId));
             const editorCount = project.memberGrants.filter(
               (grant) => grant.access === 'write',
             ).length;
@@ -288,58 +300,10 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 </div>
 
                 {overview.canManageSharing ? (
-                  <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-                    {overview.members.map((member) => {
-                      const grant = project.memberGrants.find((g) => g.userId === member.userId);
-                      const value =
-                        grant?.access === 'none'
-                          ? 'none'
-                          : grant?.access === 'write'
-                            ? 'write'
-                            : 'read';
-                      const controlId = `access-${project.projectId}-${member.userId}`;
-                      return (
-                        <div
-                          key={member.userId}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-2)',
-                            fontSize: 12,
-                          }}
-                        >
-                          <label
-                            htmlFor={controlId}
-                            style={{ flex: 1, color: 'var(--text-2)', wordBreak: 'break-all' }}
-                          >
-                            {member.displayName ?? member.email ?? member.userId} ({member.role})
-                          </label>
-                          <select
-                            id={controlId}
-                            value={value}
-                            style={selectStyle}
-                            disabled={setAccess.isPending}
-                            onChange={(event) =>
-                              setAccess.mutate({
-                                projectId: project.projectId,
-                                userId: member.userId,
-                                access:
-                                  event.target.value === 'none'
-                                    ? 'none'
-                                    : event.target.value === 'write'
-                                      ? 'write'
-                                      : 'inherit',
-                              })
-                            }
-                          >
-                            <option value="read">Can view</option>
-                            <option value="write">Can edit</option>
-                            <option value="none">No access</option>
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <SharedProjectAudienceControl project={project} />
+                    <SharedProjectMemberAccessList project={project} members={overview.members} />
+                  </>
                 ) : null}
               </li>
             );

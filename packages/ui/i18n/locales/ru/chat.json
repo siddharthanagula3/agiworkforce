@@ -117,6 +117,7 @@
     "renameProject": "Переименовать проект",
     "restore": "Восстановить",
     "running": "Выполняется",
+    "unread": "Непрочитано",
     "searchConversations": "Поиск по чатам",
     "searchConversationsDescription": "Поиск по истории чатов и открытие подходящего чата.",
     "share": "Поделиться",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "С персонализацией используются ваш профиль, инструкции и стиль ответов. Без персонализации они не учитываются.",
     "toggleArtifacts": "Переключить панель артефактов",
     "toggleArtifactsCount": "Переключить панель артефактов ({{count}})",
-    "toggleStats": "Статистика"
+    "toggleStats": "Статистика",
+    "untitledConversation": "Разговор"
   },
   "interface": {
     "closeRewindCheckpoints": "Закрыть точки отката",
@@ -361,5 +363,14 @@
     "runningToolsOf_few": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "Выполняется {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Таблица",
+    "expand": "Развернуть таблицу",
+    "copy": "Скопировать таблицу",
+    "copied": "Таблица скопирована",
+    "copyFailed": "Не удалось скопировать, буфер обмена недоступен",
+    "download": "Скачать в CSV",
+    "close": "Закрыть развёрнутую таблицу"
   }
 }

@@ -825,20 +825,6 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           >
             {languageLabel(artifact.language)}
           </span>
-          {sourceConversationId ? (
-            <Link
-              href={`/chat/${sourceConversationId}`}
-              style={{
-                fontSize: 'var(--agi-text-xs)',
-                fontWeight: 500,
-                color: 'var(--agi-ink)',
-                textDecoration: 'underline',
-                textUnderlineOffset: 3,
-              }}
-            >
-              Open chat
-            </Link>
-          ) : null}
           {INSPIRATION.some((card) => card.id === artifact.id) ? (
             <Link
               href={inspirationPath(artifact.id)}
@@ -851,6 +837,23 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
               }}
             >
               Open page
+            </Link>
+          ) : null}
+          {sourceConversationId ? (
+            <Link
+              href={`/chat/${sourceConversationId}`}
+              style={{
+                fontSize: 'var(--agi-text-xs)',
+                fontWeight: 500,
+                color: 'var(--agi-ink-2)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 'var(--corner-control)',
+                padding: 'var(--space-1) var(--space-2)',
+                textDecoration: 'none',
+                flexShrink: 0,
+              }}
+            >
+              Open chat
             </Link>
           ) : null}
           <button

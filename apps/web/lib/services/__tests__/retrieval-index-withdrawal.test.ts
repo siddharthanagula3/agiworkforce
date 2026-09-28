@@ -122,6 +122,7 @@ describe('every indexable source follows its original out of reach', () => {
         source_kind: kind,
         source_id: '22222222-2222-4222-8222-222222222222',
         user_id: 'user-1',
+        organization_id: null,
       });
 
       const sourceRead = statements.find((sql) => new RegExp(`from\\s+${table}\\b`).test(sql));

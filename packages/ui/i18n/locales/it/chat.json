@@ -117,6 +117,7 @@
     "renameProject": "Rinomina progetto",
     "restore": "Ripristina",
     "running": "In esecuzione",
+    "unread": "Non letto",
     "searchConversations": "Cerca conversazioni",
     "searchConversationsDescription": "Cerca nella cronologia delle conversazioni e apri la conversazione corrispondente.",
     "share": "Condividi",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "Personalizzata usa il tuo profilo, le tue istruzioni e il tuo stile di risposta. Non personalizzata li esclude.",
     "toggleArtifacts": "Attiva/disattiva il pannello degli artefatti",
     "toggleArtifactsCount": "Attiva/disattiva il pannello degli artefatti ({{count}})",
-    "toggleStats": "Statistiche"
+    "toggleStats": "Statistiche",
+    "untitledConversation": "Conversazione"
   },
   "interface": {
     "closeRewindCheckpoints": "Chiudi punti di ripristino",
@@ -335,5 +337,14 @@
     "runningTools_other": "Esecuzione di {{count}} strumenti",
     "runningToolsOf_one": "Esecuzione di {{running}}/{{count}} strumento: {{name}}",
     "runningToolsOf_other": "Esecuzione di {{running}}/{{count}} strumenti: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tabella",
+    "expand": "Espandi tabella",
+    "copy": "Copia tabella",
+    "copied": "Tabella copiata",
+    "copyFailed": "Copia non riuscita, appunti non disponibili",
+    "download": "Scarica come CSV",
+    "close": "Chiudi tabella espansa"
   }
 }

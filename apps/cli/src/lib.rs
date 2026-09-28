@@ -904,6 +904,9 @@ enum Command {
         /// Show only the conversations stored in your AGI Workforce account.
         #[arg(long)]
         cloud: bool,
+        /// Show only the account conversations filed under this project (id or name).
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Sync dotfiles and settings across devices.
     Sync {
@@ -1020,6 +1023,24 @@ enum ProjectsSubcommand {
         #[arg(long)]
         description: Option<String>,
     },
+    /// Show one project: description, instructions, knowledge files and conversation count.
+    Show {
+        /// Project id or name.
+        project: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Rename a project or change its description or instructions.
+    Edit {
+        /// Project id or name.
+        project: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        instructions: Option<String>,
+    },
     /// Link this directory to an account project by id or name.
     Link {
         /// Project id or name.
@@ -1068,6 +1089,12 @@ enum ArtifactsSubcommand {
         /// artifact's own name; a path with no extension gains one.
         #[arg(long)]
         out: Option<String>,
+        /// Open the written file in this computer's default app for its type.
+        #[arg(long, requires = "out")]
+        open: bool,
+        /// Copy the content to the clipboard.
+        #[arg(long)]
+        copy: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1076,6 +1103,9 @@ enum ArtifactsSubcommand {
     Open {
         /// Artifact id.
         id: String,
+        /// Always open the conversation it came from, even when it is published.
+        #[arg(long)]
+        chat: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1083,6 +1113,22 @@ enum ArtifactsSubcommand {
     Publish {
         /// Artifact id.
         id: String,
+        /// Who can open the link: public (anyone with it) or workspace.
+        #[arg(long, default_value = "public")]
+        audience: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List what this account has published, with each page's audience and link.
+    Published {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change who can open a published artifact: public or workspace.
+    Audience {
+        /// Artifact id.
+        id: String,
+        audience: String,
         #[arg(long)]
         json: bool,
     },
@@ -1114,6 +1160,45 @@ enum MemorySubcommand {
     Forget {
         /// Memory id or its exact text.
         memory: String,
+    },
+    /// Replace a memory's text, keeping its id, category and pin.
+    Edit {
+        /// Memory id or its exact text.
+        memory: String,
+        /// The new text.
+        text: Vec<String>,
+    },
+    /// Keep a memory at the top so it is always used.
+    Pin {
+        /// Memory id or its exact text.
+        memory: String,
+    },
+    /// Stop prioritising a pinned memory.
+    Unpin {
+        /// Memory id or its exact text.
+        memory: String,
+    },
+    /// Write the account's memories as JSON to a file, or to stdout.
+    Export {
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
+    Never {
+        /// Term to add. Repeatable.
+        #[arg(long)]
+        add: Vec<String>,
+        /// Term to remove. Repeatable.
+        #[arg(long)]
+        remove: Vec<String>,
+    },
+    /// Import memories from a text or markdown file, such as another assistant's export.
+    /// Duplicates of what the account already holds are skipped.
+    Import {
+        file: std::path::PathBuf,
+        /// Where the memories came from, shown as their origin.
+        #[arg(long, default_value = "Other")]
+        source: String,
     },
 }
 
@@ -1163,6 +1248,47 @@ enum SchedulesSubcommand {
         /// Skip the confirmation prompt.
         #[arg(long, short = 'y')]
         yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change a schedule's name, description, prompt, model, cron expression or time zone.
+    Edit {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        /// New 5-field cron expression.
+        #[arg(long)]
+        schedule: Option<String>,
+        #[arg(long)]
+        timezone: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a schedule from firing until it is resumed.
+    Pause {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused schedule fire again.
+    Resume {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule once now and wait for its result.
+    Run {
+        /// Schedule id, or its exact name.
+        id: String,
         #[arg(long)]
         json: bool,
     },
@@ -1297,6 +1423,9 @@ enum SessionAction {
     List {
         #[arg(long, default_value = "20")]
         limit: usize,
+        /// List archived sessions instead.
+        #[arg(long)]
+        archived: bool,
     },
     /// Show the turn-by-turn transcript of a session.
     Show { session_id: String },
@@ -1761,6 +1890,40 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
 /// Print the account's conversations under the device list. A boundary (signed
 /// out, Local mode) is stated, never swallowed and never shown as an empty
 /// account.
+async fn print_project_history(project: &str, limit: usize) -> Result<()> {
+    let privacy = account_privacy_mode();
+    let projects = cloud::refresh_projects(privacy)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let found = projects
+        .find(project)
+        .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+    let conversations = cloud::hosted_conversations(privacy)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let filed: Vec<_> = conversations
+        .iter()
+        .filter(|conversation| conversation.project_id.as_deref() == Some(found.id.as_str()))
+        .collect();
+    if filed.is_empty() {
+        println!("No conversations are filed under {} yet.", found.name);
+        return Ok(());
+    }
+    println!("Conversations in {}:", found.name);
+    for conversation in filed.iter().take(limit) {
+        println!(
+            "  {}  {}  {} messages  {}",
+            conversation.id,
+            conversation.title,
+            conversation.messages.len(),
+            conversation.updated_at
+        );
+    }
+    println!();
+    println!("Resume one with `agi resume --cloud <id>`.");
+    Ok(())
+}
+
 async fn print_hosted_history(limit: usize) {
     let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
@@ -1935,6 +2098,110 @@ async fn handle_projects_command(
             }
             Ok(())
         }
+        ProjectsSubcommand::Show { project, json } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            let (detail, files) = cloud::project_detail(privacy, &found.id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if *json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({ "project": detail, "files": files })
+                    )?
+                );
+                return Ok(());
+            }
+            let text = |key: &str| {
+                detail
+                    .get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .map(|value| terminal_text::sanitize_terminal_text(value).into_owned())
+            };
+            println!("{}  {}", found.id, text("name").unwrap_or_default());
+            if let Some(description) = text("description") {
+                println!("  {description}");
+            }
+            println!(
+                "  Conversations: {}{}",
+                detail
+                    .get("conversationCount")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
+                if found.is_archived {
+                    "  (archived)"
+                } else {
+                    ""
+                }
+            );
+            match text("instructions") {
+                Some(instructions) => println!(
+                    "  Instructions:\n    {}",
+                    instructions.replace('\n', "\n    ")
+                ),
+                None => println!("  Instructions: none"),
+            }
+            if files.is_empty() {
+                println!("  Knowledge files: none");
+            } else {
+                println!("  Knowledge files ({}):", files.len());
+                for file in &files {
+                    let name = file
+                        .get("fileName")
+                        .or_else(|| file.get("name"))
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("(unnamed)");
+                    println!("    {}", terminal_text::sanitize_terminal_text(name));
+                }
+            }
+            println!(
+                "\n`agi history --project {}` lists its conversations.",
+                found.id
+            );
+            Ok(())
+        }
+        ProjectsSubcommand::Edit {
+            project,
+            name,
+            description,
+            instructions,
+        } => {
+            let mut patch = serde_json::Map::new();
+            if let Some(name) = name.as_deref().map(str::trim) {
+                if name.is_empty() {
+                    anyhow::bail!("A project needs a name");
+                }
+                patch.insert("name".to_string(), serde_json::json!(name));
+            }
+            if let Some(description) = description {
+                patch.insert("description".to_string(), serde_json::json!(description));
+            }
+            if let Some(instructions) = instructions {
+                patch.insert("instructions".to_string(), serde_json::json!(instructions));
+            }
+            if patch.is_empty() {
+                anyhow::bail!("Nothing to change: pass --name, --description or --instructions.");
+            }
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            cloud::update_project(privacy, &found.id, &serde_json::Value::Object(patch))
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("Updated project {}.", found.id);
+            Ok(())
+        }
         ProjectsSubcommand::Create { name, description } => {
             if name.trim().is_empty() {
                 anyhow::bail!("A project needs a name");
@@ -1989,14 +2256,54 @@ async fn handle_artifacts_command(
             let entries = artifacts::list(&client, *limit, project.as_deref())
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let published = artifacts::published(&client).await.unwrap_or_default();
             render_structured(
                 serde_json::to_value(&entries)?,
-                artifacts::render_index(&entries),
+                artifacts::render_index_marked(&entries, &published),
                 *json,
                 output,
             )
         }
-        ArtifactsSubcommand::Show { id, out, json } => {
+        ArtifactsSubcommand::Published { json } => {
+            let published = artifacts::published(&client)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&published)?,
+                artifacts::render_published(&published),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Audience { id, audience, json } => {
+            let visibility = artifacts::audience_visibility(audience)
+                .with_context(|| format!("Audience must be public or workspace, not {audience}"))?;
+            let Some(published) = artifacts::published_for(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            else {
+                anyhow::bail!("Artifact '{id}' is not published; publish it first")
+            };
+            let updated = artifacts::set_audience(&client, &published.token, visibility)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                updated,
+                format!(
+                    "Artifact {id} can now be opened by {}.",
+                    artifacts::audience_label(visibility)
+                ),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Show {
+            id,
+            out,
+            open,
+            copy,
+            json,
+        } => {
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2008,6 +2315,15 @@ async fn handle_artifacts_command(
                 entry.language.as_deref().or(Some(&block.language)),
             );
 
+            if *copy {
+                arboard::Clipboard::new()
+                    .and_then(|mut clipboard| clipboard.set_text(block.content.clone()))
+                    .map_err(|error| anyhow::anyhow!("Could not copy to the clipboard: {error}"))?;
+                if out.is_none() {
+                    println!("Copied '{}' to the clipboard.", entry.display_title());
+                    return Ok(());
+                }
+            }
             let Some(out) = out else {
                 return render_structured(
                     serde_json::json!({
@@ -2030,21 +2346,30 @@ async fn handle_artifacts_command(
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::write(&path, &block.content)?;
+            let opened = *open && open_with_default_app(&path);
             render_structured(
-                serde_json::json!({ "id": entry.id, "path": path.to_string_lossy() }),
-                format!("{}", path.display()),
+                serde_json::json!({ "id": entry.id, "path": path.to_string_lossy(), "opened": opened }),
+                if *open && !opened {
+                    format!("{} (could not open it automatically)", path.display())
+                } else {
+                    format!("{}", path.display())
+                },
                 *json,
                 output,
             )
         }
-        ArtifactsSubcommand::Open { id, json } => {
+        ArtifactsSubcommand::Open { id, chat, json } => {
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let share_url = artifacts::published_for(&client, &entry.id)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error}"))?
-                .and_then(|published| published.share_url);
+            let share_url = if *chat {
+                None
+            } else {
+                artifacts::published_for(&client, &entry.id)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?
+                    .and_then(|published| published.share_url)
+            };
             let url = artifacts::browse_url(client.base(), &entry, share_url.as_deref());
             let opened = oauth::open_external_url(&url, oauth::UserActionContext::user_initiated());
             render_structured(
@@ -2058,23 +2383,31 @@ async fn handle_artifacts_command(
                 output,
             )
         }
-        ArtifactsSubcommand::Publish { id, json } => {
+        ArtifactsSubcommand::Publish { id, audience, json } => {
+            let visibility = artifacts::audience_visibility(audience)
+                .with_context(|| format!("Audience must be public or workspace, not {audience}"))?;
             let entry = artifacts::resolve(&client, id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let block = artifacts::content(&client, &entry)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let published = artifacts::publish(&client, &entry, &block)
+            let mut published = artifacts::publish(&client, &entry, &block)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if published.visibility != visibility {
+                artifacts::set_audience(&client, &published.token, visibility)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                published.visibility = visibility.to_string();
+            }
             render_structured(
                 serde_json::to_value(&published)?,
                 format!(
-                    "Published '{}' at {} ({}).",
+                    "Published '{}' at {} (opens for {}).",
                     entry.display_title(),
                     published.share_url,
-                    published.visibility
+                    artifacts::audience_label(&published.visibility)
                 ),
                 *json,
                 output,
@@ -2108,6 +2441,24 @@ async fn handle_artifacts_command(
             )
         }
     }
+}
+
+fn open_with_default_app(path: &std::path::Path) -> bool {
+    let mut command = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(target_os = "windows") {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", ""]);
+        command
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    command
+        .arg(path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 async fn handle_history_command(
@@ -2152,11 +2503,132 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
-            for entry in &cache.entries {
-                let pin = if entry.pinned { "*" } else { " " };
-                let origin = entry.source.as_deref().unwrap_or("web");
-                println!("{pin} {}  [{origin}]", entry.id);
-                println!("    {}", entry.content);
+            let mut topics: Vec<&str> = cache
+                .entries
+                .iter()
+                .map(|entry| entry.category.as_deref().unwrap_or("General"))
+                .collect();
+            topics.sort_unstable();
+            topics.dedup();
+            println!(
+                "{} memories in your account (* pinned, used first):",
+                cache.entries.len()
+            );
+            for topic in topics {
+                println!("\n{topic}");
+                for entry in cache
+                    .entries
+                    .iter()
+                    .filter(|entry| entry.category.as_deref().unwrap_or("General") == topic)
+                {
+                    let pin = if entry.pinned { "*" } else { " " };
+                    let origin = entry.source.as_deref().unwrap_or("web");
+                    let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
+                    println!("{pin} {}  [{origin}, updated {updated}]", entry.id);
+                    println!(
+                        "    {}",
+                        terminal_text::sanitize_terminal_text(&entry.content)
+                    );
+                }
+            }
+            Ok(())
+        }
+        MemorySubcommand::Edit { memory, text } => {
+            let content = text.join(" ");
+            if content.trim().is_empty() {
+                anyhow::bail!("Usage: agi memory edit <id|text> <new text>");
+            }
+            cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            match cloud::revise_memory(privacy, memory, Some(&content), None)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                Some(refusals) if refusals.is_empty() => {
+                    println!("Updated in your account, on every client.");
+                    Ok(())
+                }
+                Some(refusals) => {
+                    for refusal in &refusals {
+                        println!("Not updated: {refusal}");
+                    }
+                    anyhow::bail!("Your account did not store this change")
+                }
+            }
+        }
+        MemorySubcommand::Pin { memory } | MemorySubcommand::Unpin { memory } => {
+            let pinned = matches!(action, MemorySubcommand::Pin { .. });
+            cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            match cloud::revise_memory(privacy, memory, None, Some(pinned))
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                Some(refusals) if refusals.is_empty() => {
+                    println!(
+                        "{}",
+                        if pinned {
+                            "Pinned: this memory is used first."
+                        } else {
+                            "Unpinned."
+                        }
+                    );
+                    Ok(())
+                }
+                Some(_) => anyhow::bail!("Your account did not store this change"),
+            }
+        }
+        MemorySubcommand::Never { add, remove } => {
+            let text = cloud::personalization::never_remember(add, remove)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("{text}");
+            Ok(())
+        }
+        MemorySubcommand::Export { out } => {
+            let cache = cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let json = serde_json::to_string_pretty(&cache.entries)?;
+            match out {
+                Some(path) => {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(path)
+                        .and_then(|mut file| std::io::Write::write_all(&mut file, json.as_bytes()))
+                        .with_context(|| {
+                            format!("Could not write {} (it must not exist yet)", path.display())
+                        })?;
+                    println!(
+                        "Exported {} memories to {}.",
+                        cache.entries.len(),
+                        path.display()
+                    );
+                }
+                None => println!("{json}"),
+            }
+            Ok(())
+        }
+        MemorySubcommand::Import { file, source } => {
+            let text = std::fs::read_to_string(file)
+                .with_context(|| format!("Could not read {}", file.display()))?;
+            match cloud::import_memories(privacy, &text, source)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => println!("Nothing new to import: every memory in that file is already in your account."),
+                Some(result) => println!(
+                    "Imported {} memories. Skipped {} duplicates; {} were refused by your memory policy and {} matched never-remember terms.",
+                    result.inserted_count,
+                    result.skipped_duplicate_count,
+                    result.blocked_count,
+                    result.excluded_count
+                ),
             }
             Ok(())
         }
@@ -2281,6 +2753,72 @@ async fn handle_schedules_command(
             }
             Err(error) => Err(anyhow::anyhow!("{error}")),
         },
+        SchedulesSubcommand::Edit {
+            id,
+            name,
+            description,
+            prompt,
+            model,
+            schedule,
+            timezone,
+            json,
+        } => {
+            let patch = schedules::schedule_patch(
+                name.as_deref(),
+                description.as_deref(),
+                prompt.as_deref(),
+                model.as_deref(),
+                schedule.as_deref(),
+                timezone.as_deref(),
+            );
+            if patch.as_object().is_some_and(serde_json::Map::is_empty) {
+                return schedules_command_failure(
+                    "Nothing to change: pass --name, --description, --prompt, --model, --schedule or --timezone."
+                        .to_string(),
+                );
+            }
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.update(&resolved, &patch).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Pause { id, json } | SchedulesSubcommand::Resume { id, json } => {
+            let active = matches!(action, SchedulesSubcommand::Resume { .. });
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.set_active(&resolved, active).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Run { id, json } => {
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.run_now(&resolved).await {
+                Ok(run) => render(
+                    serde_json::to_value(&run)?,
+                    schedules::render_runs(&resolved, std::slice::from_ref(&run)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
         SchedulesSubcommand::Runs {
             id,
             limit,
@@ -2942,16 +3480,37 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
 
 async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
-        SessionAction::List { limit } => {
-            let mut summaries =
-                runtime::session_control::list_active_managed_sessions().unwrap_or_default();
+        SessionAction::List { limit, archived } => {
+            let mut summaries = if archived {
+                runtime::session_control::ManagedSessionStore::user_config()?
+                    .list()?
+                    .into_iter()
+                    .filter(|summary| summary.archived_at.is_some())
+                    .collect()
+            } else {
+                runtime::session_control::list_active_managed_sessions().unwrap_or_default()
+            };
             summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
-                println!("No sessions found.");
+                println!(
+                    "{}",
+                    if archived {
+                        "No archived sessions. `agi session archive <id>` archives one."
+                    } else {
+                        "No sessions found."
+                    }
+                );
                 return Ok(());
             }
-            println!("{}", ts::accent_header("Recent sessions:"));
+            println!(
+                "{}",
+                ts::accent_header(if archived {
+                    "Archived sessions (agi session unarchive <id> restores one):"
+                } else {
+                    "Recent sessions:"
+                })
+            );
             for s in summaries {
                 println!(
                     "  {}  {:>9}  {}",
@@ -4125,7 +4684,12 @@ pub async fn run_main() -> Result<()> {
                 action: None,
                 limit,
                 cloud,
+                project,
             } => {
+                if let Some(project) = project {
+                    print_project_history(project, *limit).await?;
+                    return Ok(());
+                }
                 if !cloud {
                     let conn = sessions::open_db()?;
                     let list = sessions::list_sessions(&conn, *limit)?;

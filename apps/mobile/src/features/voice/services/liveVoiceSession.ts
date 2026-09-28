@@ -58,6 +58,7 @@ export interface LiveVoiceSessionCallbacks {
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
   onError: (message: string) => void;
+  onConnectionLost?: (message: string) => void;
 }
 
 export interface LiveVoiceSessionOptions {
@@ -272,6 +273,15 @@ export class LiveVoiceSession {
     return LiveVoiceToolCallResponseSchema.parse(await response.json());
   }
 
+  cancelBackendWork(): void {
+    for (const delegationId of [...this.pendingDelegations]) {
+      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
+    }
+    this.pendingDelegations.clear();
+    this.toolBridge.cancel();
+    this.publishBackendBusy();
+  }
+
   private publishBackendBusy(): void {
     this.callbacks.onBackendBusy(this.pendingDelegations.size > 0 || this.toolBridge.busy);
   }
@@ -353,9 +363,13 @@ export class LiveVoiceSession {
 
   private fail(): void {
     if (this.closing || this.disposed) return;
-    this.callbacks.onError(
-      this.started ? LIVE_VOICE_MESSAGE.connectionDropped : LIVE_VOICE_MESSAGE.connectionFailed,
-    );
+    if (this.started && this.callbacks.onConnectionLost) {
+      this.callbacks.onConnectionLost(LIVE_VOICE_MESSAGE.connectionDropped);
+    } else {
+      this.callbacks.onError(
+        this.started ? LIVE_VOICE_MESSAGE.connectionDropped : LIVE_VOICE_MESSAGE.connectionFailed,
+      );
+    }
     this.finalizeTurns();
     this.dispose();
   }

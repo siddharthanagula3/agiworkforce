@@ -1342,14 +1342,11 @@ function KeyboardShortcutsRow() {
 }
 
 function VoiceSpeedRow() {
-  const { isSupported, voices } = useTTS();
+  const { isSupported } = useTTS();
   const voiceSpeed = useSettingsStore((state) => state.voiceSpeed) ?? 'normal';
   const setVoiceSpeed = useSettingsStore((state) => state.setVoiceSpeed);
 
-  // Hidden rather than disabled when the browser exposes no voices: the row
-  // above already explains the absence, and a second dead control repeating it
-  // adds noise without adding information.
-  if (!isSupported || voices.length === 0) return null;
+  if (!isSupported) return null;
 
   const options = [
     { value: 'slow' as const, label: 'Slow' },
@@ -1426,9 +1423,10 @@ function ReadAloudVoiceRow() {
 
   if (!isSupported || voices.length === 0) {
     return (
-      <Row label="Read-aloud voice">
+      <Row label="Backup read-aloud voice">
         <span className="text-xs text-muted-foreground sm:text-right">
-          This browser exposes no speech voices, so read-aloud is unavailable here.
+          This browser has no speech voices of its own, so read-aloud has no backup when the AGI
+          voice is unavailable.
         </span>
       </Row>
     );
@@ -1436,12 +1434,12 @@ function ReadAloudVoiceRow() {
 
   return (
     <>
-      <Row label="Read-aloud voice">
+      <Row label="Backup read-aloud voice">
         <div className="flex min-w-0 items-center gap-2">
           <select
             value={voiceUri ?? ''}
             onChange={(event) => setVoiceUri(event.target.value || null)}
-            aria-label="Read-aloud voice"
+            aria-label="Backup read-aloud voice"
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground sm:max-w-[220px]"
           >
             <option value="">Browser default</option>
@@ -1454,7 +1452,11 @@ function ReadAloudVoiceRow() {
           <button
             type="button"
             onClick={() =>
-              isSpeaking ? stop() : speak('This is how messages will sound when read aloud.')
+              isSpeaking
+                ? stop()
+                : speak('This is how read-aloud sounds when it falls back to this voice.', {
+                    deviceVoice: true,
+                  })
             }
             className="h-8 shrink-0 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
           >
@@ -1463,9 +1465,11 @@ function ReadAloudVoiceRow() {
         </div>
       </Row>
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
-        Read-aloud uses your browser&apos;s built-in speech. It always plays through your system
-        default output device, browsers give web pages no way to choose one, so change it in your
-        operating system&apos;s sound settings. Read-aloud plays a reply on request and then stops.
+        Read-aloud speaks replies in the AGI voice, which uses a few credits per reply. When that
+        voice is unavailable it falls back to this browser voice. Audio always plays through your
+        system default output device, browsers give web pages no way to choose one, so change it in
+        your operating system&apos;s sound settings. Read-aloud plays a reply on request and then
+        stops.
       </p>
     </>
   );

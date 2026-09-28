@@ -97,6 +97,7 @@ pub enum Method {
     Get,
     Post,
     Put,
+    Patch,
     Delete,
 }
 
@@ -106,6 +107,7 @@ impl Method {
             Method::Get => "GET",
             Method::Post => "POST",
             Method::Put => "PUT",
+            Method::Patch => "PATCH",
             Method::Delete => "DELETE",
         }
     }
@@ -115,6 +117,7 @@ impl Method {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,
             Method::Put => reqwest::Method::PUT,
+            Method::Patch => reqwest::Method::PATCH,
             Method::Delete => reqwest::Method::DELETE,
         }
     }
@@ -146,6 +149,13 @@ impl Route {
     pub fn put(path: impl Into<String>) -> Self {
         Self {
             method: Method::Put,
+            path: path.into(),
+        }
+    }
+
+    pub fn patch(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::Patch,
             path: path.into(),
         }
     }
