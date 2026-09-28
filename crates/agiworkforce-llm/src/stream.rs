@@ -773,7 +773,12 @@ async fn stream_openai_compat(
     req: &ChatRequest<'_>,
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError> {
-    let body = build_openai_compat_request_body(req, opts);
+    let mut body = build_openai_compat_request_body(req, opts);
+    if let Value::Object(fields) = &mut body {
+        for (key, value) in &spec.extra_body {
+            fields.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
     post_openai_compat_stream(client, spec, &body, req.model, req.idle_timeout, on_event).await
 }
 
@@ -2392,6 +2397,7 @@ mod credential_transport_tests {
             base_url: base_url.to_string(),
             auth,
             extra_headers: Vec::new(),
+            extra_body: Vec::new(),
         }
     }
 

@@ -247,6 +247,7 @@ pub struct AgentSession {
     /// re-resolution falls back conservatively (byok trust → "byok", else
     /// "free"), matching the app-server host's semantics.
     pub(crate) auto_routing_tier: Option<String>,
+    pub(crate) cloud_project: Option<String>,
     /// Image blocks queued for the next `send()` call.  They are prepended to
     /// the user message as `ContentBlock::Image` parts so the model receives
     /// both the images and the text prompt in a single multipart user turn.
@@ -710,6 +711,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            cloud_project: None,
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
@@ -1780,7 +1782,7 @@ impl AgentSession {
             title,
             model: Some(self.model.clone()),
             provider: Some(models::provider_persistence_name(&self.provider)),
-            project_id: linked_cloud_project(),
+            project_id: self.cloud_project_id(),
             messages: self
                 .messages
                 .iter()
@@ -1805,6 +1807,10 @@ impl AgentSession {
                 "this turn is saved on this device but not yet in your account: {error}"
             )),
         }
+    }
+
+    pub(crate) fn cloud_project_id(&self) -> Option<String> {
+        self.cloud_project.clone().or_else(linked_cloud_project)
     }
 
     pub fn managed_session_id(&self) -> Option<&str> {
