@@ -89,7 +89,7 @@ describe('UploadFileDialog', () => {
     chooseFile(file);
     fireEvent.click(screen.getByRole('button', { name: UPLOAD_SUBMIT_LABEL }));
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(file));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(file, undefined));
     expect(screen.getByRole('button', { name: new RegExp(UPLOAD_BUSY_LABEL) })).toHaveProperty(
       'disabled',
       true,

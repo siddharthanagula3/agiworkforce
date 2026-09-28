@@ -16,6 +16,12 @@ export * from './tauri';
 
 export * from './errors';
 
+export * from './error-taxonomy';
+
+export * from './connector-vocabulary';
+
+export * from './message-block-kinds';
+
 export * from './customModel';
 
 export * from './tool-events';

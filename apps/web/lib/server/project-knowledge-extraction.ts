@@ -1,8 +1,16 @@
 import 'server-only';
 
-import { isTextAttachmentMeta, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import {
+  isTextAttachmentMeta,
+  MAX_ATTACHMENT_BYTES,
+  MAX_FILE_TEXT_CHARS,
+} from '@agiworkforce/types';
 import { matchDenylistedUpload } from '@/lib/moderation';
-import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
+import {
+  scanUploadBytes,
+  uploadRefusalMessage,
+  type UploadScanFinding,
+} from '@/lib/security/upload-scan';
 import { objectKeyFromStorageUri, StoredObjectTooLargeError } from './object-storage';
 import {
   extractOfficeDocumentText,
@@ -29,8 +37,6 @@ import {
   rebaseAnchors,
   type KnowledgeAnchor,
 } from './project-knowledge-anchors';
-
-export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
 
 type ExtractionErrorCode =
   | 'invalid_storage_uri'
@@ -86,8 +92,8 @@ interface ExtractProjectKnowledgeFileInput {
 function normalizeAndBoundText(value: string): string | null {
   const normalized = value.replace(/\r\n?/g, '\n').trim();
   if (!normalized) return null;
-  if (normalized.length <= MAX_EXTRACTED_PROJECT_TEXT_CHARS) return normalized;
-  return `${normalized.slice(0, MAX_EXTRACTED_PROJECT_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  if (normalized.length <= MAX_FILE_TEXT_CHARS) return normalized;
+  return `${normalized.slice(0, MAX_FILE_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
 }
 
 /**
@@ -327,7 +333,7 @@ export async function extractProjectKnowledgeFile(
   if (!scan.ok) {
     throw new ProjectKnowledgeExtractionError(
       'content_rejected',
-      KNOWLEDGE_FILE_REJECTION_MESSAGE,
+      uploadRefusalMessage(scan.findings, KNOWLEDGE_FILE_REJECTION_MESSAGE),
       { sha256: hashMatch.sha256, findings: scan.findings },
     );
   }

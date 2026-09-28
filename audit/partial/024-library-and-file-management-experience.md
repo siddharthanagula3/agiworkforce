@@ -154,17 +154,14 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 - Done when: Users can filter the Library by where files came from (upload, generated, connector/provider).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a Generated-files tab; no filter by source (upload, surface, connector/provider), though /api/library already accepts origin=uploaded. | ui |
-| desktop | partial | Only a Generated-files tab; no filter by source (upload, surface, connector/provider), though /api/library already accepts origin=uploaded. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:96-103`, `apps/web/app/api/library/route.ts:67-97`
 
 ## S24.19: Sort by name, date, size, or type.
 

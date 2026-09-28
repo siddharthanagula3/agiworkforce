@@ -86,7 +86,8 @@ describe('Desktop Cloud entitlement projection', () => {
     expect(auto).toBeTruthy();
     expect(canUseDesktopCloudResearch('free', auto)).toBe(false);
     expect(canUseDesktopCloudResearch('basic', auto)).toBe(false);
-    expect(canUseDesktopCloudResearch('pro', auto)).toBe(false);
+    expect(canUseDesktopCloudResearch('pro', auto)).toBe(true);
+    expect(canUseDesktopCloudResearch('team', auto)).toBe(true);
     expect(canUseDesktopCloudResearch('max', auto)).toBe(true);
     expect(canUseDesktopCloudResearch('enterprise', auto)).toBe(true);
   });

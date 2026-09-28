@@ -27,11 +27,11 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Branch is a free-text field, not a list of the repo's branches; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/features/code/CloudCodePage.tsx:514-521`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
 
 ## S66.03: Worktree picker.
 
@@ -197,10 +197,10 @@ Code: `apps/cli/src/agent/mod.rs:430-430`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Terminal box runs one command at a time in the sandbox (no interactive PTY); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off. An interactive PTY is declined at parity: Codex cloud offers task logs only (learn.chatgpt.com/docs/cloud) and Claude Code on the web has no browser terminal, its Open in > Terminal copies a teleport command (code.claude.com/docs/en/claude-code-on-the-web), both checked 2026-09-28 | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/web/features/code/CloudCodePage.tsx:672-680`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/features/code/components/CodeChangesPanel.tsx:546-546`, `apps/web/app/api/code/sessions/[sessionId]/commands/route.ts:104-104`
 
 ## S66.16: Terminal tabs.
 
@@ -310,10 +310,10 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud sessions always run as an agent with no mode switch (edits go through run_command with fixed approval rules); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-tools.ts:272-272`, `apps/web/features/code/components/CodeComposer.tsx:815-820`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/db/neon/0335_cloud_code_plan_turns.sql:20-20`, `packages/contracts/types/src/cloud-code.ts:283-283`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:156-156`, `apps/web/lib/services/cloud-code-agent-service.ts:671-671`
 
 ## S66.26: Permission-mode control.
 
@@ -323,10 +323,10 @@ Code: `apps/web/lib/services/cloud-code-agent-tools.ts:272-272`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Code composer's mode menu saves the chat tool-approval preference, but cloud code turns ignore it (classifyCommandRisk alone decides what needs approval); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | handler, flag-off |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:837-845`, `apps/web/lib/services/cloud-code-agent-tools.ts:181-193`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:339-339`, `apps/web/lib/services/cloud-code-agent-tools.ts:346-346`, `apps/web/lib/services/cloud-code-agent-tools.ts:353-353`, `apps/web/lib/services/cloud-code-agent-service.ts:670-670`
 
 ## S66.27: Context-usage indicator.
 

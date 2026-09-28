@@ -1,4 +1,5 @@
 import {
+  describeScheduleRunTiming,
   MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
   type ManagedCloudScheduleMutation,
@@ -12,6 +13,7 @@ import {
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   createChromeSchedule,
+  listChromeScheduleRuns,
   listChromeSchedules,
   readChromeScheduleApproval,
   resolveChromeScheduleApproval,
@@ -20,6 +22,7 @@ import {
 } from '../cloud-bridge/schedulesClient';
 import { t } from '../../i18n';
 import { el } from './dom';
+import { renderMarkdown, sanitizeHtml } from './markdown';
 
 export const SCHEDULES_SECTION_CSS = `
   .sp-schedules {
@@ -184,6 +187,63 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedule-template:focus-visible,
   .sp-schedule-input:focus-visible,
   .sp-schedule-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+  .sp-schedule-runs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--agi-ext-border);
+  }
+  .sp-schedule-runs-heading {
+    color: var(--agi-ext-text-muted);
+    font-size: var(--type-caption-size);
+    font-weight: 600;
+    line-height: var(--type-caption-height);
+  }
+  .sp-schedule-runs-prompt {
+    margin: 0;
+    color: var(--agi-ext-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
+  }
+  .sp-schedule-run-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .sp-schedule-run {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: var(--corner-control);
+    background: var(--agi-ext-bg);
+  }
+  .sp-schedule-run-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .sp-schedule-run-status {
+    color: var(--agi-ext-text);
+    font-size: var(--type-caption-size);
+    font-weight: 600;
+    line-height: var(--type-caption-height);
+  }
+  .sp-schedule-run-status[data-status='failed'],
+  .sp-schedule-run-status[data-status='timeout'] { color: var(--agi-ext-danger-text); }
+  .sp-schedule-run-output {
+    max-height: 220px;
+    overflow-y: auto;
+    color: var(--agi-ext-text);
+    font-size: var(--type-caption-size);
+    line-height: var(--type-body-height);
+    overflow-wrap: anywhere;
+  }
+  .sp-schedule-run-output > :first-child { margin-top: 0; }
+  .sp-schedule-run-output > :last-child { margin-bottom: 0; }
+  .sp-schedule-run-error {
+    color: var(--agi-ext-danger-text);
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
+    overflow-wrap: anywhere;
+  }
   .sp-schedule-approval-input {
     margin: 0;
     max-height: 120px;
@@ -198,12 +258,20 @@ export const SCHEDULES_SECTION_CSS = `
 export interface SchedulesSectionDependencies {
   createSchedule: typeof createChromeSchedule;
   listSchedules: typeof listChromeSchedules;
+  listRuns: typeof listChromeScheduleRuns;
   setScheduleEnabled: typeof setChromeScheduleEnabled;
   runScheduleNow: typeof runChromeScheduleNow;
   readApproval: typeof readChromeScheduleApproval;
   resolveApproval: typeof resolveChromeScheduleApproval;
   signIn: typeof openClerkSignIn;
   now: () => number;
+}
+
+interface ScheduleRunsView {
+  scheduleId: string;
+  state: 'loading' | 'ready' | 'error';
+  runs: ManagedCloudScheduleRun[];
+  message: string;
 }
 
 export interface SchedulesSectionAPI {
@@ -215,6 +283,7 @@ export interface SchedulesSectionAPI {
 const DEFAULT_DEPENDENCIES: SchedulesSectionDependencies = {
   createSchedule: createChromeSchedule,
   listSchedules: listChromeSchedules,
+  listRuns: listChromeScheduleRuns,
   setScheduleEnabled: setChromeScheduleEnabled,
   runScheduleNow: runChromeScheduleNow,
   readApproval: readChromeScheduleApproval,
@@ -512,6 +581,8 @@ export function buildSchedulesSection(
   let active = false;
   let inFlight: AbortController | null = null;
   let pendingScheduleId: string | null = null;
+  let openRunsId: string | null = null;
+  let runsView: ScheduleRunsView | null = null;
 
   function setStatus(message: string, kind?: 'error'): void {
     statusEl.replaceChildren(document.createTextNode(message));
@@ -589,13 +660,124 @@ export function buildSchedulesSection(
     });
     actions.appendChild(runBtn);
 
+    const runsOpen = openRunsId === schedule.id;
+    const runsBtn = el(
+      'button',
+      {
+        type: 'button',
+        class: 'sp-schedule-btn',
+        'aria-expanded': String(runsOpen),
+        'aria-controls': `sp-schedule-runs-${schedule.id}`,
+      },
+      t('spSchedulesRuns'),
+    );
+    runsBtn.addEventListener('click', () => {
+      void toggleRuns(schedule);
+    });
+    actions.appendChild(runsBtn);
+
     row.appendChild(actions);
+    if (runsOpen) row.appendChild(buildRuns(schedule, now));
 
     const waiting = approvals.get(schedule.id);
     if (waiting?.pendingApproval) {
       row.appendChild(buildApproval(schedule, waiting, waiting.pendingApproval, busy, now));
     }
     return row;
+  }
+
+  function runStatusLabel(status: ManagedCloudScheduleRun['status']): string {
+    switch (status) {
+      case 'success':
+        return t('spScheduleRunSucceeded');
+      case 'failed':
+        return t('spScheduleRunFailed');
+      case 'timeout':
+        return t('spScheduleRunTimedOut');
+      case 'cancelled':
+        return t('spScheduleRunCancelled');
+      case 'awaiting_approval':
+        return t('spScheduleRunAwaitingApproval');
+      case 'running':
+        return t('spScheduleRunRunning');
+    }
+  }
+
+  function buildRunEntry(run: ManagedCloudScheduleRun, now: number): HTMLElement {
+    const entry = el('li', { class: 'sp-schedule-run' });
+    const head = el('div', { class: 'sp-schedule-run-head' });
+    head.appendChild(
+      el(
+        'span',
+        { class: 'sp-schedule-run-status', 'data-status': run.status },
+        runStatusLabel(run.status),
+      ),
+    );
+    head.appendChild(el('span', { class: 'sp-schedule-sub' }, formatRelative(run.startedAt, now)));
+    entry.appendChild(head);
+    const timing = describeScheduleRunTiming(run, (iso) => formatRelative(iso, now));
+    if (timing) entry.appendChild(el('div', { class: 'sp-schedule-sub' }, timing.note));
+    if (run.output?.trim()) {
+      const answer = el('div', { class: 'sp-schedule-run-output' });
+      answer.innerHTML = sanitizeHtml(renderMarkdown(run.output));
+      entry.appendChild(answer);
+    } else if (run.status === 'success' && !timing?.skipped) {
+      entry.appendChild(el('div', { class: 'sp-schedule-sub' }, t('spScheduleRunNoAnswer')));
+    }
+    if (run.error) entry.appendChild(el('div', { class: 'sp-schedule-run-error' }, run.error));
+    return entry;
+  }
+
+  function buildRuns(schedule: ManagedCloudScheduleTask, now: number): HTMLElement {
+    const block = el('div', {
+      class: 'sp-schedule-runs',
+      id: `sp-schedule-runs-${schedule.id}`,
+      role: 'region',
+      'aria-label': t('spSchedulesRunsLabel', [schedule.name]),
+    });
+    if (schedule.prompt?.trim()) {
+      block.appendChild(el('div', { class: 'sp-schedule-runs-heading' }, t('spSchedulesPrompt')));
+      block.appendChild(el('p', { class: 'sp-schedule-runs-prompt' }, schedule.prompt));
+    }
+    block.appendChild(el('div', { class: 'sp-schedule-runs-heading' }, t('spSchedulesRuns')));
+    const view = runsView?.scheduleId === schedule.id ? runsView : null;
+    if (!view || view.state === 'loading') {
+      block.appendChild(
+        el('div', { class: 'sp-schedule-sub', role: 'status' }, t('spSchedulesRunsLoading')),
+      );
+      return block;
+    }
+    if (view.state === 'error') {
+      block.appendChild(el('div', { class: 'sp-schedule-run-error', role: 'alert' }, view.message));
+      return block;
+    }
+    if (view.runs.length === 0) {
+      block.appendChild(el('div', { class: 'sp-schedule-sub' }, t('spSchedulesRunsEmpty')));
+      return block;
+    }
+    const list = el('ol', { class: 'sp-schedule-run-list' });
+    for (const run of view.runs) list.appendChild(buildRunEntry(run, now));
+    block.appendChild(list);
+    return block;
+  }
+
+  async function toggleRuns(schedule: ManagedCloudScheduleTask): Promise<void> {
+    if (openRunsId === schedule.id) {
+      openRunsId = null;
+      runsView = null;
+      render();
+      return;
+    }
+    openRunsId = schedule.id;
+    runsView = { scheduleId: schedule.id, state: 'loading', runs: [], message: '' };
+    render();
+    const result = await deps.listRuns(schedule.id);
+    if (openRunsId !== schedule.id) return;
+    runsView =
+      result.status === 'success'
+        ? { scheduleId: schedule.id, state: 'ready', runs: result.runs, message: '' }
+        : { scheduleId: schedule.id, state: 'error', runs: [], message: result.message };
+    render();
   }
 
   function buildApproval(
@@ -759,6 +941,8 @@ export function buildSchedulesSection(
     approvals = new Map();
     listed = false;
     pendingScheduleId = null;
+    openRunsId = null;
+    runsView = null;
     setStatus('');
     render();
   }

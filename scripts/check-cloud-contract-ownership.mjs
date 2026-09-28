@@ -15,6 +15,8 @@ const cloudModules = [
   'embeddings',
   'generated-files',
   'artifact-index',
+  'artifact-runtime',
+  'finance',
   'library',
   'managed-media',
   'me',
@@ -509,7 +511,17 @@ if (exists(`${cloudPackagePath}/src/index.ts`)) {
     ),
   ].map((match) => match[1]);
   if (JSON.stringify(actualModules) !== JSON.stringify(cloudModules)) {
-    errors.push(`${cloudPackageName} index exports must match the canonical module order`);
+    const unlisted = actualModules.filter((moduleName) => !cloudModules.includes(moduleName));
+    const unexported = cloudModules.filter((moduleName) => !actualModules.includes(moduleName));
+    const detail = [
+      unlisted.length > 0 ? `add ${unlisted.join(', ')} to cloudModules in this script` : null,
+      unexported.length > 0 ? `export ${unexported.join(', ')} from the index` : null,
+    ]
+      .filter(Boolean)
+      .join('; ');
+    errors.push(
+      `${cloudPackageName} index exports must match the canonical module order${detail ? ` (${detail})` : ', and they list the same modules in a different order'}`,
+    );
   }
 }
 

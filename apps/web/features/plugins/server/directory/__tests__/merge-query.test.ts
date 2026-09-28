@@ -104,12 +104,13 @@ describe('mergeDirectoryEntries', () => {
 });
 
 describe('computeDirectoryStats', () => {
-  it('counts verified, facets and works-with over the whole directory', () => {
+  it('counts verified, facets, works-with and categories over the whole directory', () => {
     expect(computeDirectoryStats(ENTRIES)).toEqual({
       totalPlugins: 4,
       verified: 4,
       bySource: { builtin: 1, partner: 1, marketplace: 2 },
       byWorksWith: { 'claude-code': 2, cowork: 1, web: 3 },
+      byCategory: { design: 3, developer: 1 },
     });
   });
 });

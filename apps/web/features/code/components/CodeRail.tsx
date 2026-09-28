@@ -49,6 +49,7 @@ import {
   type CodeStatusFilter,
 } from '../code-surface';
 import { ContinueOnDesktop } from '@/features/desktop-host';
+import { RemoteComputerLink } from '@/features/remote-dispatch';
 import styles from '../CloudCodePage.module.css';
 
 const RAIL_GLYPH_SIZE = 16;
@@ -268,6 +269,12 @@ export function CodeRail({
           <ContinueOnDesktop
             label={CODE_COPY.desktop}
             fallbackHref={CODE_ROUTES.desktop}
+            glyphSize={SECTION_GLYPH_SIZE}
+            className={`${styles['railRow']} ${styles['railSubRow']}`}
+            glyphClassName={styles['railRowGlyph']}
+            labelClassName={styles['railRowLabel']}
+          />
+          <RemoteComputerLink
             glyphSize={SECTION_GLYPH_SIZE}
             className={`${styles['railRow']} ${styles['railSubRow']}`}
             glyphClassName={styles['railRowGlyph']}
