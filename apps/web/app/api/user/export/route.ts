@@ -672,10 +672,25 @@ const developerWebhookEndpointExportSchema = z.object({
   url: z.string(),
   description: z.string().nullable(),
   event_types: z.array(z.string()),
-  secret_prefix: z.string(),
   enabled: z.boolean(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
+});
+
+const developerWebhookDeliveryExportSchema = z.object({
+  id: z.string(),
+  endpoint_id: z.string(),
+  event_id: z.string(),
+  event_type: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  status: z.string(),
+  attempts: z.number(),
+  response_status: z.number().nullable(),
+  error: z.string().nullable(),
+  redelivery_of: z.string().nullable(),
+  last_attempt_at: nullableTimestampSchema,
+  delivered_at: nullableTimestampSchema,
+  created_at: timestampSchema,
 });
 
 const developerProjectExportSchema = z.object({
@@ -1437,6 +1452,17 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 }> = [
   // Two roles, two sections. Each one carries what this person supplied or was
   // given, and never the other party's account id.
+  {
+    section: 'developer_webhook_deliveries',
+    table: 'developer_webhook_deliveries',
+    sql: `select id, endpoint_id, event_id, event_type, payload, status, attempts, response_status,
+                 error, redelivery_of, last_attempt_at, delivered_at, created_at
+          from developer_webhook_deliveries
+          where user_id = $1
+          order by created_at asc`,
+    schema: developerWebhookDeliveryExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
   {
     section: 'referrals_made',
     table: 'referrals',
@@ -2763,7 +2789,7 @@ async function collectUserData(
 
   exportData['developer_webhook_endpoints'] = await queryExportRows({
     db,
-    sql: `select id, url, description, event_types, secret_prefix, enabled, created_at, updated_at
+    sql: `select id, url, description, event_types, enabled, created_at, updated_at
           from developer_webhook_endpoints
           where user_id = $1
           order by created_at asc`,

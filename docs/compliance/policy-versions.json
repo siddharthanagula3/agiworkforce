@@ -63,6 +63,11 @@
           "date": "2026-09-27",
           "digest": "0d390129817c56c5",
           "note": "The erasure table count moves from 103 to 105 as developer webhook endpoints and their delivery log joined the list; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "c5252511fc5105de",
+          "note": "The erasure table count moves from 105 to 106 as external resource references joined the list; no commitment changed, so the date stays."
         }
       ]
     },
@@ -188,6 +193,11 @@
           "date": "2026-08-14",
           "digest": "e93cdce8ea060c48",
           "note": "The erasure table count moves from 103 to 105 as developer webhook endpoints and their delivery log joined the list; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "28c9bec60be66224",
+          "note": "The erasure table count moves from 105 to 106 as external resource references joined the list; a factual correction rather than a fresh review of the page, so the date stays."
         }
       ]
     },
@@ -305,6 +315,11 @@
           "date": "2026-09-21",
           "digest": "9a4eecbe42c720f7",
           "note": "The GDPR row states the erasure count of 105 tables and the change record gains the developer webhooks entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "8b143c0c03711fbc",
+          "note": "The erasure count moves from 105 to 106 with external resource references, and the row-level-isolation row is re-measured at 223 of 347 database-backed routes with 124 on the owner connection and 128 touching no database; the change record says so and the date stays."
         }
       ]
     },

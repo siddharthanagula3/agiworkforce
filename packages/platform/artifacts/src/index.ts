@@ -11,3 +11,4 @@ export * from './artifact-derivation';
 export * from './artifacts';
 export * from './artifact-sync';
 export * from './artifact-store';
+export * from './artifact-changes';

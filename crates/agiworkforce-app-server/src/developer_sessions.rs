@@ -6,9 +6,10 @@ use agiworkforce_protocol::developer_session::{
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookAddParams,
     HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
-    LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse, McpServerListResponse,
-    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
-    MemoryAddResponse, ModelListParams, PluginInstallParams, PluginListResponse,
+    LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
+    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
+    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
@@ -397,6 +398,24 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::WORKTREE_LIST))
+    }
+
+    async fn list_permissions(&self) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_LIST))
+    }
+
+    async fn inspect_mcp_server(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_INSPECT))
+    }
+
+    async fn remove_permission(
+        &self,
+        _params: PermissionsRemoveParams,
+    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_REMOVE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1069,6 +1088,32 @@ impl DeveloperSessionProcessor {
                     return *response;
                 }
                 self.host.list_worktrees().await.map(serde_json::to_value)
+            }
+            method::MCP_INSPECT => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .inspect_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host.list_permissions().await.map(serde_json::to_value)
+            }
+            method::PERMISSIONS_REMOVE => {
+                let params = match parse_params::<PermissionsRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::MEMORY_ADD => {
                 let params = match parse_params::<MemoryAddParams>(&request) {

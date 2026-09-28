@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
-import { useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
+import { translateUiPlural, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
@@ -204,7 +204,10 @@ export function MemoryEditor({
     if (facts.length === 0) return;
     confirm({
       title: 'Delete all memory facts?',
-      description: `This cannot be undone. All ${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} would have to be added again.`,
+      description: translateUiPlural('chat', 'counts.deleteAllFacts', facts.length, {
+        one: 'This cannot be undone. All {{count}} fact would have to be added again.',
+        other: 'This cannot be undone. All {{count}} facts would have to be added again.',
+      }),
       confirmLabel: 'Forget everything',
       onConfirm: () => runMutation(() => clear()),
     });

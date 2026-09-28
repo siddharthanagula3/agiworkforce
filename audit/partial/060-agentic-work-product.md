@@ -205,14 +205,13 @@ Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265
 
 - Done when: The user can redirect a running task with new guidance without starting over.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | The cited 'guidance' is only the rejection reason collected when the user rejects a pending tool approval (guidance is undefined on approve, and nothing offers it to a running run). That is not redirecting a running task with new guidance. miss: states/ui; remaining: offer a steer/pause-and-resume control with guidance for running cloud tasks. |  |
 | chrome | partial | The cited guidance field lives inside buildApprovalCard, so it exists only while a run is awaiting_input on a tool approval; a run that is simply running offers Stop and nothing else (no pause, no guidance). The criterion is redirecting a running task; chrome can steer only at an approval prompt. miss: states; remaining: add a pause/steer control for running runs (web has Pause -> Resume with guidance). |  |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:117-129`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:146-150`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:663-671`, `apps/extension/src/features/cloud-bridge/managedRunControl.ts:386-394`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:663-671`, `apps/extension/src/features/cloud-bridge/managedRunControl.ts:386-394`
 
 ## S60.21: Pause.
 

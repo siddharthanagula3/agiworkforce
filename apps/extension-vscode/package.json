@@ -210,6 +210,11 @@
         "icon": "$(debug-step-back)"
       },
       {
+        "command": "agi-workforce.showArchivedSessions",
+        "title": "AGI Workforce: Archived Sessions",
+        "icon": "$(archive)"
+      },
+      {
         "command": "agi-workforce.remoteControl",
         "title": "AGI Workforce: Remote Control",
         "icon": "$(broadcast)"

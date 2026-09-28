@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type {
+  CreateCustomConnectorRequest,
+  CreateCustomConnectorResponse,
+  CustomConnectorSummary,
+  DeleteCustomConnectorResponse,
+  ListCustomConnectorsResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -37,7 +44,7 @@ const AUDIT_SOURCE = 'custom_mcp';
 async function withDirectoryLink(
   summary: UserCustomConnectorSummary,
   signedIn: ReadonlySet<string>,
-): Promise<UserCustomConnectorSummary & { directoryId?: string; signedIn: boolean }> {
+): Promise<CustomConnectorSummary> {
   const linked = await findDirectoryTargetByRemoteUrl(summary.url);
   const signIn = { ...summary, signedIn: signedIn.has(customConnectorId(summary.shortId)) };
   return linked ? { ...signIn, directoryId: linked.connectorId } : signIn;
@@ -60,16 +67,10 @@ async function handleGet(request: NextRequest) {
   );
 
   const oauthRedirectUri = resolveClientRedirectUri();
-  return NextResponse.json({ connectors, ...(oauthRedirectUri ? { oauthRedirectUri } : {}) });
-}
-
-interface CreateBody {
-  name?: string;
-  url?: string;
-  transport?: 'sse' | 'streamable-http';
-  authToken?: string;
-  oauthClientId?: string;
-  oauthClientSecret?: string;
+  return NextResponse.json({
+    connectors,
+    ...(oauthRedirectUri ? { oauthRedirectUri } : {}),
+  } satisfies ListCustomConnectorsResponse);
 }
 
 async function handlePost(request: NextRequest) {
@@ -98,9 +99,9 @@ async function handlePost(request: NextRequest) {
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 
-  let body: CreateBody;
+  let body: Partial<CreateCustomConnectorRequest>;
   try {
-    body = (await request.json()) as CreateBody;
+    body = (await request.json()) as Partial<CreateCustomConnectorRequest>;
   } catch {
     throw createError.validation('Invalid JSON body');
   }
@@ -156,7 +157,7 @@ async function handlePost(request: NextRequest) {
             protocolEra: probe.protocolEra,
           }
         : {}),
-    },
+    } satisfies CreateCustomConnectorResponse,
     { status: 201 },
   );
 }
@@ -195,7 +196,7 @@ async function handleDelete(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true } satisfies DeleteCustomConnectorResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

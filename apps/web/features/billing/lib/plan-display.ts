@@ -1,3 +1,4 @@
+import { translateUiPlural } from '@agiworkforce/ui';
 import {
   BILLING_PLAN_CAPABILITY_LABELS,
   MANAGED_USAGE_BASELINES,
@@ -59,10 +60,18 @@ export function planUsageComparisonLabel(plan: string | null | undefined): strin
     : null;
 }
 
-function limitLabel(limit: BillingPlanLimit, singular: string, plural: string): string {
+function limitLabel(
+  limit: BillingPlanLimit,
+  singular: string,
+  plural: string,
+  countKey: string,
+): string {
   if (limit === 'unlimited') return `Unlimited ${plural}`;
   if (limit === 'custom') return `Custom ${singular} limit`;
-  return `${String(limit)} ${limit === 1 ? singular : plural}`;
+  return translateUiPlural('settings', countKey, limit, {
+    one: `{{count}} ${singular}`,
+    other: `{{count}} ${plural}`,
+  });
 }
 
 const BYTES_PER_GIGABYTE = 1024 ** 3;
@@ -200,8 +209,15 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
     features.push(BILLING_PLAN_CAPABILITY_LABELS.managed_chat);
   }
   if (limits) {
-    features.push(limitLabel(limits.projects, 'project', 'projects'));
-    features.push(limitLabel(limits.customMcpServers, 'custom MCP server', 'custom MCP servers'));
+    features.push(limitLabel(limits.projects, 'project', 'projects', 'counts.planProjects'));
+    features.push(
+      limitLabel(
+        limits.customMcpServers,
+        'custom MCP server',
+        'custom MCP servers',
+        'counts.planCustomMcpServers',
+      ),
+    );
   }
   for (const capability of FEATURED_CAPABILITIES) {
     if (canUseBillingPlanCapability(plan, capability)) {

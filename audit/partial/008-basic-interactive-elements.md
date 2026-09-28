@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: Irreversible actions use a distinct destructive button style (danger colour before hover) whose label meets contrast.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
-| chrome | partial | b21db27be: delete and remove show danger text at rest; workflow lane delete buttons left | .sp-wf-btn-delete, .sp-wf-task-delete |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:3213-3213`, `apps/extension/src/features/side-panel/projectsDrawer.ts:137-137`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`
 
 ## S8.06: Toggle buttons.
 

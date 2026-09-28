@@ -59,14 +59,11 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/
 
 - Done when: Within a project, a list of the project's conversations that open when selected.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The Projects drawer lists a project's chat titles as plain text; make them open the conversation in the side panel. | handler |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:333-358`
 
 ## S4.09: Project files and sources.
 
@@ -78,18 +75,6 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:333-358`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S4.10: Project instructions.
-
-- Done when: A place to view and edit a project's instructions, which then apply to chats in that project.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Instructions can be typed when creating a project and are shown when a project has no description, but an existing project's instructions cannot be edited in the side panel. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/extension/src/features/side-panel/projectsDrawer.ts:362-366`, `apps/extension/src/features/cloud-bridge/projectsClient.ts:145-150`
 
 ## S4.11: Project members.
 
@@ -120,14 +105,11 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A home for agentic work where the user states a goal for an autonomous multi-step (AGI Work) run and can reach their recent work.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The Work runs tab shows runs started on other devices, but side-panel chat always sends workMode "chat" (managedChatHandler.ts:487), so an AGI Work run cannot be started here. | ui |
-
-Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features/cloud-bridge/managedChatHandler.ts:487-487`
 
 ## S4.14: Active-task dashboard.
 
@@ -153,14 +135,11 @@ Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features
 
 - Done when: An approvals inbox gathers every pending approval across the user's tasks and lets them approve or reject each.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Approve/Reject buttons appear on each waiting run in the Work runs tab (filters are Active/All only); add an inbox or filter for runs awaiting a decision. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:722-726`
 
 ## S4.18: Routine details.
 
@@ -406,18 +385,6 @@ Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:293-2
 | chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
 
 Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
-
-## S4.39: Usage dashboard.
-
-- Done when: A usage dashboard shows current usage against plan limits per window (session/weekly/credits), reset times and recent usage history.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Side panel shows a single remaining-usage line with reset time; the full usage dashboard opens on web ("Manage usage"). | surface-only |
-
-Code: `apps/extension/src/side_panel.ts:8360-8369`, `apps/extension/src/side_panel.ts:8127-8132`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:58-58`
 
 ## S4.40: Billing settings.
 

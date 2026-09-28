@@ -18,6 +18,7 @@ import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 import type { SessionBinding } from '../../protocol/webviewMessages';
 import { webviewStringsScript } from './webviewStrings';
+import { t } from '../../l10n';
 
 export function escapeHtml(value: string): string {
   return value
@@ -603,6 +604,10 @@ export function getWebviewContent(
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
     .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
+    .message-actions--user { justify-content: flex-end; }
+    .message.user:hover .message-actions--user,
+    .message-actions--user:focus-within { opacity: 1; }
+    .message.user[data-delivery-state] .message-actions--user { display: none; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -2100,6 +2105,18 @@ export function getWebviewContent(
       text-align: left;
     }
     .sessions-sheet-row:hover { background: var(--hover); }
+    .sessions-sheet-row.has-snippet { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+    .sessions-sheet-row-snippet {
+      flex-basis: 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: start;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
     .sessions-sheet-row-title {
       flex: 1;
       min-width: 0;
@@ -2477,6 +2494,15 @@ export function getWebviewContent(
       <div class="sessions-sheet-actions">
         <button
           class="icon-btn"
+          id="sessionsArchived"
+          type="button"
+          title="${escapeHtml(t('webview.archivedSessions'))}"
+          aria-label="${escapeHtml(t('webview.archivedSessions'))}"
+        >
+          <span class="codicon codicon-archive" aria-hidden="true"></span>
+        </button>
+        <button
+          class="icon-btn"
           id="sessionsContinueInCloud"
           type="button"
           title="Continue in the cloud"
@@ -2846,6 +2872,7 @@ export function getWebviewContent(
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
     const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
+    const sessionsArchived = document.getElementById('sessionsArchived');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -3905,6 +3932,47 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function userActionButton(action, iconClass, title, label, messageEl) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'message-action';
+      button.title = title;
+      button.setAttribute('aria-label', label);
+      var icon = document.createElement('span');
+      icon.className = 'codicon ' + iconClass;
+      icon.setAttribute('aria-hidden', 'true');
+      button.appendChild(icon);
+      button.addEventListener('click', function () {
+        var text = messageEl.getAttribute('data-text') || '';
+        var occurrence = 0;
+        var bubbles = messagesEl.querySelectorAll('.message.user[data-text]');
+        for (var i = 0; i < bubbles.length; i++) {
+          if (bubbles[i] === messageEl) break;
+          if (
+            !bubbles[i].hasAttribute('data-delivery-state') &&
+            bubbles[i].getAttribute('data-text') === text
+          ) {
+            occurrence++;
+          }
+        }
+        vscode.postMessage({
+          type: 'messageAction',
+          payload: { action: action, text: text, occurrence: occurrence },
+        });
+      });
+      return button;
+    }
+
+    function appendUserActions(messageEl, text) {
+      if (!messageEl || !text) return;
+      messageEl.setAttribute('data-text', text);
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--user';
+      row.appendChild(userActionButton('resend', 'codicon-redo', L10N.resendMessage, L10N.resendMessageLabel, messageEl));
+      row.appendChild(userActionButton('branch', 'codicon-repo-forked', L10N.branchFromMessage, L10N.branchFromMessageLabel, messageEl));
+      messageEl.appendChild(row);
+    }
+
     function prependAuthor(messageEl, label) {
       var author = document.createElement('span');
       author.className = 'visually-hidden';
@@ -4009,7 +4077,8 @@ export function getWebviewContent(
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
-          addMessage('user', historyMessage.text || '');
+          var userHistoryEl = addMessage('user', historyMessage.text || '');
+          appendUserActions(userHistoryEl, historyMessage.text || '');
         }
       }
       if (conversation.plan) upsertPlanCard(conversation.plan);
@@ -4527,6 +4596,7 @@ export function getWebviewContent(
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
       appendSentContext(userMessageEl);
+      appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
         appendQueuedControls(userMessageEl, clientMessageId, text);
@@ -4784,6 +4854,8 @@ export function getWebviewContent(
     var sessionsRows = [];
     var sessionsUnavailable = null;
     var sessionsLoading = false;
+    var sessionsSearchState = null;
+    var sessionsSearchTimer = null;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
@@ -4803,11 +4875,39 @@ export function getWebviewContent(
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
-      var visible = query === ''
+      var titleMatches = query === ''
         ? sessionsRows
         : sessionsRows.filter(function (row) {
             return row.title.toLowerCase().indexOf(query) !== -1;
           });
+      var visible = titleMatches;
+      if (sessionsSearchState && sessionsSource === 'local') {
+        if (sessionsSearchState.pending) {
+          var searching = document.createElement('div');
+          searching.className = 'sessions-sheet-empty';
+          searching.setAttribute('role', 'status');
+          searching.textContent = L10N.searchingSessions;
+          sessionsSheetList.appendChild(searching);
+          return;
+        }
+        if (sessionsSearchState.unavailable) {
+          var searchNotice = document.createElement('div');
+          searchNotice.className = 'sessions-sheet-empty';
+          searchNotice.setAttribute('role', 'status');
+          searchNotice.textContent = sessionsSearchState.unavailable;
+          sessionsSheetList.appendChild(searchNotice);
+        } else {
+          visible = sessionsSearchState.rows;
+        }
+        if (visible.length === 0) {
+          var noMatch = document.createElement('div');
+          noMatch.className = 'sessions-sheet-empty';
+          noMatch.setAttribute('role', 'status');
+          noMatch.textContent = fillText(L10N.noMatchingSessions, { query: sessionsSearchState.query });
+          sessionsSheetList.appendChild(noMatch);
+          return;
+        }
+      }
       if (sessionsUnavailable) {
         var notice = document.createElement('div');
         notice.className = 'sessions-sheet-empty';
@@ -4847,6 +4947,14 @@ export function getWebviewContent(
           button.appendChild(age);
           button.appendChild(dot);
           button.appendChild(source);
+          if (row.snippet) {
+            var snippet = document.createElement('span');
+            snippet.className = 'sessions-sheet-row-snippet';
+            snippet.textContent = row.snippet;
+            button.classList.add('has-snippet');
+            button.appendChild(snippet);
+            button.title = row.title + ' · ' + row.snippet;
+          }
           if (row.branch) {
             var branchDot = document.createElement('span');
             branchDot.className = 'sessions-sheet-row-dot';
@@ -4875,7 +4983,10 @@ export function getWebviewContent(
       sessionsRows = [];
       sessionsUnavailable = null;
       sessionsLoading = true;
+      sessionsSearchState = null;
+      if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
       if (sessionsSearch) sessionsSearch.hidden = true;
+      if (sessionsArchived) sessionsArchived.hidden = source !== 'local';
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
@@ -4893,6 +5004,8 @@ export function getWebviewContent(
     function closeSessionsSheet() {
       if (!sessionsSheet) return;
       sessionsSheet.hidden = true;
+      sessionsSearchState = null;
+      if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
       if (sessionsSearch) sessionsSearch.value = '';
       if (sessionsBtn) sessionsBtn.focus();
     }
@@ -4910,7 +5023,28 @@ export function getWebviewContent(
     if (sessionsTabCloud) {
       sessionsTabCloud.addEventListener('click', function () { requestSessions('cloud'); });
     }
-    if (sessionsSearch) sessionsSearch.addEventListener('input', renderSessionsRows);
+    function onSessionsSearchInput() {
+      var query = sessionsSearch ? sessionsSearch.value.trim() : '';
+      if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
+      if (sessionsSource !== 'local' || query.length < 2) {
+        sessionsSearchState = null;
+        renderSessionsRows();
+        return;
+      }
+      sessionsSearchState = { query: query, rows: [], unavailable: null, pending: true };
+      renderSessionsRows();
+      sessionsSearchTimer = setTimeout(function () {
+        vscode.postMessage({ type: 'searchSessions', payload: { query: query } });
+      }, 250);
+    }
+
+    if (sessionsSearch) sessionsSearch.addEventListener('input', onSessionsSearchInput);
+    if (sessionsArchived) {
+      sessionsArchived.addEventListener('click', function () {
+        closeSessionsSheet();
+        vscode.postMessage({ type: 'openArchivedSessions' });
+      });
+    }
     if (sessionsSheet) {
       sessionsSheet.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
@@ -6046,7 +6180,19 @@ export function getWebviewContent(
           sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
-          if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;
+          if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length === 0;
+          renderSessionsRows();
+        }
+      }
+
+      else if (msg.type === 'sessionsSearchResults') {
+        if (sessionsSearchState && msg.payload.query === sessionsSearchState.query) {
+          sessionsSearchState = {
+            query: msg.payload.query,
+            rows: msg.payload.rows || [],
+            unavailable: msg.payload.unavailable || null,
+            pending: false,
+          };
           renderSessionsRows();
         }
       }

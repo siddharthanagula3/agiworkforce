@@ -7,7 +7,7 @@ import type {
   UserRow,
 } from '@/features/admin/services/operator-metrics';
 import { centsFromCredits, formatCredits } from '@agiworkforce/types';
-import { useConfirm } from '@agiworkforce/ui';
+import { useConfirm, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import BackgroundJobsPanel from '../components/BackgroundJobsPanel';
@@ -216,8 +216,16 @@ export function OperatorDashboardPage() {
       if (typed === null) return;
       const result = await operatorAction({ action: 'reset-all-usage', confirm: typed });
       setNotice(
-        `Cleared ${formatCreditAmount(Number(result['clearedCredits'] ?? 0))} across ` +
-          `${Number(result['affectedUsers'] ?? 0)} account(s).`,
+        translateUiPlural(
+          'settings',
+          'counts.clearedAcrossAccounts',
+          Number(result['affectedUsers'] ?? 0),
+          {
+            one: 'Cleared {{credits}} across {{count}} account.',
+            other: 'Cleared {{credits}} across {{count}} accounts.',
+          },
+          { credits: formatCreditAmount(Number(result['clearedCredits'] ?? 0)) },
+        ),
       );
       await load(tab);
     } catch (e) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useEffect, useState } from 'react';
 import type { CollectionState, CollectionStage } from '@/lib/services/enterprise-collection-state';
 
@@ -39,7 +40,10 @@ const DESTRUCTIVE_STYLE: React.CSSProperties = {
 };
 
 function daysPastDueLabel(daysPastDue: number): string {
-  return `${daysPastDue} day${daysPastDue === 1 ? '' : 's'}`;
+  return translateUiPlural('common', 'counts.days', daysPastDue, {
+    one: '{{count}} day',
+    other: '{{count}} days',
+  });
 }
 
 function adminCopy(collectionState: CollectionState): string {

@@ -201,7 +201,10 @@ read cannot tell you whether a given migration in the 0153 to 0174 range has
 shipped; that requires the ledger. After applying migrations to production,
 bump `appliedThrough` in `scripts/config/production-migrations-applied.json`
 with the apply date and the ledger commit, because that file is the only
-record `scripts/check-migration-dependencies.mjs` can read. Row-level
+record `scripts/check-migration-dependencies.mjs` can read, and record each
+newly applied file's SHA-256 in `scripts/config/applied-migration-checksums.json`,
+which the same guard uses to refuse any later edit to an applied migration.
+Row-level
 security is enforced by
 `scripts/check-rls-boundary.mjs` against
 `scripts/config/rls-boundary-allowlist.json`, which requires a stated
