@@ -307,6 +307,7 @@ export interface UseChatStreamReturn {
     toolCallId: string,
     inputResponses: Record<string, unknown>,
   ) => Promise<boolean>;
+  steerActiveTurn: (conversationId: string, message: string) => Promise<string | null>;
   isStreaming: boolean;
 }
 
@@ -4324,6 +4325,20 @@ export function useChatStream(): UseChatStreamReturn {
     [getToken, stopStreaming, setLoading, abortConversation],
   );
 
+  const steerActiveTurn = useCallback(
+    async (conversationId: string, message: string): Promise<string | null> => {
+      const activeRun = activeRunsRef.current.get(conversationId);
+      if (!activeRun) return null;
+      const client = createManagedCloudAgentRunClient({
+        getAuthToken: getToken,
+        decorateMutationHeaders: addCsrfHeaders,
+      });
+      const { steer } = await client.steerRun(activeRun.runId, message);
+      return steer.id;
+    },
+    [getToken],
+  );
+
   return {
     sendMessage,
     stopGeneration,
@@ -4331,6 +4346,7 @@ export function useChatStream(): UseChatStreamReturn {
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
     isStreaming,
   };
 }
