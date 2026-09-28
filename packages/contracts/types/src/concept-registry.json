@@ -1578,51 +1578,58 @@
     {
       "table": "shared_conversations",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
+    },
+    {
+      "table": "scheduled_task_shares",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "shared_sessions",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "organization_shared_artifacts",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "organization_shared_connectors",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "organization_shared_projects",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "organization_shared_sessions",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "organization_project_access",
       "disposition": "canonical-gap",
-      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and eight tables answer it with no one schema",
       "becomes": "share",
-      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the eight share tables"
     },
     {
       "table": "user_settings",

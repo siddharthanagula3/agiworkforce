@@ -22,15 +22,14 @@ Code: `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/cli/src/tui/tu
 
 - Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
 - Wave: 3
-- Already works on: desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a permanent "Always allow" exists for connector tools; there is no allow-for-this-session choice. | ui |
 | mobile | partial | Mobile shows "Approved for this session" when another client chose it, but offers only Allow/Deny itself. | ui |
 | chrome | partial | Approved sites persist and "Ask before acting" is a standing toggle; no allow-for-this-session choice on an approval. | ui |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:493-493`, `apps/mobile/src/features/tasks/runPresentation.ts:205-205`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:307-329`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:205-205`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:307-329`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 ## S59.04: Per-application permission.
 
@@ -78,16 +77,14 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, 
 
 - Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
-| desktop | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
 | mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
 | chrome | partial | The browser agent can ask before acting, but has no mode that allows reading pages while refusing clicks and typing. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:193-196`, `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 ## S59.10: Ask-before-writing mode.
 
@@ -160,10 +157,13 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| mobile | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
+| vscode | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
+| chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
 ## S59.26: Approval from another device.
 

@@ -87,6 +87,13 @@ function statusLine(tool: ToolCall, query: string | null): SearchLine | null {
         text: tool.output?.trim() || 'The search failed. Try sending the message again.',
         tone: 'error',
       };
+    case 'succeeded':
+      return (tool.searchResults ?? []).length === 0
+        ? {
+            text: query ? `No results for \u201c${query}\u201d.` : 'The search found no results.',
+            tone: 'muted',
+          }
+        : null;
     default:
       return null;
   }

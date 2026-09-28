@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Security, Account, Workspace and Roles link to their help article; other feature screens still link only to general pages | ui |
-| desktop | partial | Security, Account, Workspace and Roles link to their help article; other feature screens still link only to general pages | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Permissions, configuration and custom-instructions screens link to /docs?topic=..., but the docs page ignores the topic parameter and opens the general index. | states |
 | chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
-Code: `apps/web/features/settings/sections/SecuritySection.tsx:121-121`, `apps/web/features/settings/sections/AccountSection.tsx:392-392`, `apps/web/features/settings/sections/TeamSection.tsx:432-432`, `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:234-234`
+Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:906-910`, `apps/extension/src/side_panel.ts:5589-5592`, `apps/extension/src/side_panel.ts:7140-7149`
 
 ## S88.02: Searchable help center.
 
@@ -182,15 +181,11 @@ Code: `apps/web/features/settings/components/ImportMemoryDialog.tsx:19-21`, `app
 
 - Done when: A user can submit access, correction or erasure requests and see their status in a privacy portal.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The criterion includes "see their status". The cited lines show submission only. GET /api/privacy/requests does return the signed-in user's requests with status (route.ts:153-161), but no page or component calls it (git grep for a GET caller of /api/privacy/requests in apps and packages: none); the form shows a reference once at submit time and the only list is the admin route named in the operator alert (:60). Suggested cell: partial, miss [ui], remaining "Render the user's own rights requests and their status on /privacy/requests from GET /api/privacy/requests; today a user gets a reference at submit time and nothing afterwards." |  |
-| desktop | partial | The criterion includes "see their status". The cited lines show submission only. GET /api/privacy/requests does return the signed-in user's requests with status (route.ts:153-161), but no page or component calls it (git grep for a GET caller of /api/privacy/requests in apps and packages: none); the form shows a reference once at submit time and the only list is the admin route named in the operator alert (:60). Suggested cell: partial, miss [ui], remaining "Render the user's own rights requests and their status on /privacy/requests from GET /api/privacy/requests; today a user gets a reference at submit time and nothing afterwards." Desktop is hosted-web and cannot rank above web. |  |
-| mobile | partial | The n/a reason is an R-a link-out to /privacy (the policy), not to the portal, and R-a only applies when the surface implements none of it. Mobile natively exercises two of the rights: Settings > Storage "Export all my data" fetches GET /api/user/export, and Cloud Account "Delete Account" calls DELETE /api/user/delete-account after a confirmation. What is missing is a correction/withdrawal request and any request status. Suggested cell: partial, miss [ui, surface-only], remaining "Export and account deletion are native; correction, consent-withdrawal and nomination requests and their status exist only on the web portal, which the app does not link." |  |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:801-806`, `apps/web/app/privacy/requests/RightsRequestForm.tsx:76-84`, `apps/web/app/api/privacy/requests/route.ts:87-107`
 
 ## S88.18: Content-reporting flow.
 

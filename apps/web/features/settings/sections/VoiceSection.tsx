@@ -13,6 +13,7 @@
 import { defaultLanguage as DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 export function VoiceSection() {
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
@@ -43,6 +44,9 @@ export function VoiceSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Dictate into the composer with the microphone button.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="voice" label="How voice works" />
+        </div>
       </div>
 
       <div>

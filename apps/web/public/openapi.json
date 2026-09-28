@@ -628,6 +628,36 @@
             "type": "boolean",
             "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
           },
+          "web_search": {
+            "type": "boolean",
+            "description": "Lets the model search the web while it answers. Each search is billed in credits and shows in your usage as Agentic search."
+          },
+          "research": {
+            "type": "boolean",
+            "description": "Runs Deep Research: the model plans, searches and reads many sources before it writes a cited report. A model that cannot run research answers the request normally instead. Searches are billed as Agentic search."
+          },
+          "research_sources": {
+            "type": "object",
+            "description": "What a Deep Research run may read. Applies only when `research` is true.",
+            "properties": {
+              "files": {
+                "type": "boolean",
+                "description": "Also search the documents indexed in your account."
+              },
+              "allow_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Only read and cite pages on these sites, for example `nature.com`."
+              },
+              "deny_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Never read or cite pages on these sites."
+              }
+            }
+          },
           "personalization": {
             "type": "boolean",
             "description": "`false` answers without your account's personalization: no custom instructions, profile or response style, and no memory is read or saved for this request. Omitted or `true` keeps the default."
@@ -5257,7 +5287,7 @@
       },
       "put": {
         "summary": "Save a connector tool permission",
-        "description": "Saves `allow`, `ask` or `deny` for one connector tool. Whether the tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
+        "description": "Saves `allow`, `ask` or `deny` for one connector tool (`toolName`) or for up to 200 of them at once (`toolNames`), which is how a whole category such as the connector's write and delete tools is set. Send exactly one of the two. Whether a tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
         "tags": ["Users"],
         "security": [
           {
@@ -5269,7 +5299,35 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConnectorToolPermission"
+                "type": "object",
+                "required": ["connectorId", "level"],
+                "properties": {
+                  "connectorId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolNames": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"],
+                    "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+                  }
+                }
               }
             }
           }
@@ -5288,7 +5346,7 @@
                     },
                     "destructive": {
                       "type": "boolean",
-                      "description": "Whether the server treats this tool as destructive"
+                      "description": "Whether the server treats any of these tools as destructive"
                     }
                   }
                 }
@@ -5296,7 +5354,7 @@
             }
           },
           "400": {
-            "description": "Missing connectorId or toolName, or an unknown level",
+            "description": "Missing connectorId, neither or both of toolName and toolNames, or an unknown level",
             "content": {
               "application/json": {
                 "schema": {

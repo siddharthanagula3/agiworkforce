@@ -23,6 +23,7 @@ import {
 } from '@/lib/connectors/oauth-registry';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
+import { getCustomConnectorOAuthClient } from '@/lib/connectors/mcp-custom-connections';
 import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordNotification } from '@/lib/services/notification-service';
@@ -160,7 +161,7 @@ async function refreshUnderLock(
   let result: LockedRefresh;
   try {
     result = await withLockedConnectorOAuthGrant(userId, connectorId, seen.accountKey, (locked) =>
-      refreshLockedGrant(locked, seen, provider, connectorId),
+      refreshLockedGrant(locked, seen, provider, userId, connectorId),
     );
   } catch (error) {
     if (error instanceof ConnectorGrantLockTimeoutError) {
@@ -183,6 +184,7 @@ async function refreshLockedGrant(
   locked: LockedConnectorOAuthGrant,
   seen: ConnectorOAuthGrant,
   provider: ConnectorOAuthProvider | null,
+  userId: string,
   connectorId: string,
 ): Promise<LockedRefresh> {
   const current = locked.grant;
@@ -195,12 +197,14 @@ async function refreshLockedGrant(
   if (!refreshToken) return { outcome: EXPIRED, dropped: await locked.revoke() };
 
   if (current.mcpUrl) {
+    const client = await getCustomConnectorOAuthClient(userId, connectorId);
     const outcome = await refreshDiscoveredGrant({
       mcpUrl: current.mcpUrl,
       issuer: current.issuer,
       refreshToken,
       tokenType: current.tokenType,
       grantedScopes: current.grantedScopes,
+      ...(client ? { client } : {}),
     });
 
     if (outcome.status === 'authorization-server-changed' || outcome.status === 'rejected') {

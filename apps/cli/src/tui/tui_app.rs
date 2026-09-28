@@ -2795,18 +2795,33 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
         .session
         .messages
         .iter()
-        .filter_map(|message| {
-            let role = match message.role.as_str() {
-                "user" => ChatRole::User,
-                "assistant" => ChatRole::Assistant,
-                _ => return None,
-            };
-            let text = message.text_content();
-            (!text.trim().is_empty()).then_some(ChatMessage { role, text })
-        })
+        .filter_map(chat_message_from_session)
         .collect();
     app.tool_cells.clear();
     app.scroll_offset = 0;
+}
+
+fn append_session_messages_since(app: &mut TuiApp, first: usize) {
+    if app.session.messages.len() < first {
+        rebuild_transcript_from_session(app);
+        return;
+    }
+    let added: Vec<ChatMessage> = app.session.messages[first..]
+        .iter()
+        .filter_map(chat_message_from_session)
+        .collect();
+    app.chat_messages.extend(added);
+    app.scroll_offset = 0;
+}
+
+fn chat_message_from_session(message: &crate::models::Message) -> Option<ChatMessage> {
+    let role = match message.role.as_str() {
+        "user" => ChatRole::User,
+        "assistant" => ChatRole::Assistant,
+        _ => return None,
+    };
+    let text = message.text_content();
+    (!text.trim().is_empty()).then_some(ChatMessage { role, text })
 }
 
 fn open_command_popup(app: &mut TuiApp) {
@@ -4739,6 +4754,7 @@ async fn run_event_loop(
                                 // the duration and restore it after, the same
                                 // shape as RunLogin above.
                                 restore_terminal(terminal)?;
+                                let first_voice_message = app.session.messages.len();
                                 let result = crate::voice::run_voice_mode(
                                     &mut app.session,
                                     &app.config,
@@ -4747,6 +4763,7 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                append_session_messages_since(app, first_voice_message);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {

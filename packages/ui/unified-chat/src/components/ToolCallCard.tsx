@@ -65,6 +65,7 @@ export interface ToolCallCardProps {
   kind?: InlineToolKind;
   iconLetter?: string;
   onApprove?: (id: string) => void;
+  onApproveForChat?: (id: string) => void;
   onReject?: (id: string) => void;
   onCancel?: (id: string) => void;
   expired?: boolean;
@@ -282,6 +283,7 @@ const ToolCallCardComponent = ({
   kind,
   iconLetter,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   expired = false,
@@ -439,6 +441,15 @@ const ToolCallCardComponent = ({
                 >
                   <Play className="h-2.5 w-2.5" />
                   {TOOL_APPROVAL_ACTION_LABELS.allow}
+                </button>
+              )}
+              {onApproveForChat && !highRiskApproval && (
+                <button
+                  type="button"
+                  onClick={() => onApproveForChat(id)}
+                  className="h-6 px-2 text-xs font-medium rounded-compact border border-border bg-background hover:bg-muted transition-colors"
+                >
+                  {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
                 </button>
               )}
               {onReject && (

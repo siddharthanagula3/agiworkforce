@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspacePeoplePage() {
   return (
     <ConsolePage
+      help={{ docId: 'workspace-administration', label: 'How workspaces work' }}
       title="Members"
       description="Who belongs to this workspace, what role they hold, and how many seats that consumes."
     >

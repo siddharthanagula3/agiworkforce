@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceUsagePage() {
   return (
     <ConsolePage
+      help={{ docId: 'usage-and-credits', label: 'How credits and limits work' }}
       title="Usage"
       description="What this workspace consumed on AGI-managed cloud, by member, model, and provider."
     >

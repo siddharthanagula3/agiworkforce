@@ -84,14 +84,13 @@ Code: `apps/cli/src/lib.rs:2453-2453`, `apps/extension-vscode/package.json:638-6
 
 - Done when: A chat can search the public web and answer from the results.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Web search works only after you set SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY/TAVILY_API_KEY) in the environment; there is no in-product way to turn it on. | handler |
 | vscode | partial | The "search the web" option only prefixes the prompt; the search runs in the local CLI and needs SEARCH_API_KEY set in its environment. | handler |
 | chrome | partial | Chrome never asks for web search (its chat request carries no web_search flag), so the server offers no search tool; add a web-search toggle or send the flag. | ui |
-| api | partial | The chat endpoint accepts web_search for API keys, but the field is missing from the published OpenAPI spec, so API users cannot discover it. | api |
 
 Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:834-850`, `apps/web/lib/web-search/required-search.ts:129-129`
 
@@ -102,31 +101,9 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vsc
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only Deep Research runs can be limited to sites ("Only this site" in the plan); ordinary web search in chat cannot be restricted to chosen websites. | ui |
-| desktop | partial | Same as web (hosted): Only Deep Research runs can be limited to sites ("Only this site" in the plan); ordinary web search in chat cannot be restricted to chosen websites. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 | api | partial | research_sources.allow_domains works on the chat endpoint but only for research runs and is not in the published OpenAPI spec. | api |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:146-149`, `apps/web/features/chat/pages/WebChatPage.tsx:4750-4753`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:637-642`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
-
-## S34.09: Search by source type.
-
-- Done when: The user can choose which kinds of sources a search covers (e.g. web, news, academic, files, chats) and get results only of those kinds.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | History search has no source-type filter although /api/search accepts kind; web search cannot be limited to a type (news, academic, video); only Library tabs (images, videos, documents, artifacts) and Deep Research "My files" choose a type, and connected apps are never offered there. | ui |
-| desktop | partial | Same as web (hosted): History search has no source-type filter although /api/search accepts kind; web search cannot be limited to a type (news, academic, video); only Library tabs (images, videos, documents, artifacts) and Deep Research "My files" choose a type, and connected apps are never offered there. | ui |
-| mobile | partial | Global search only groups results by type (chats, projects, files, library, artifacts) and the Library has type chips; no source-type choice for web search or chat history. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/search/route.ts:327-327`, `apps/web/features/chat/services/global-search-service.ts:168-176`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:96-103`, `apps/web/features/chat/components/research/ResearchActivity.tsx:392-392`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
 
 ## S34.15: Date-range filters.
 
@@ -148,15 +125,9 @@ Code: `apps/web/app/api/search/route.ts:327-327`, `apps/web/features/chat/servic
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only Deep Research runs take "Only this site" / "Never this site"; ordinary web search in chat cannot include or exclude domains. | ui |
-| desktop | partial | Same as web (hosted): Only Deep Research runs take "Only this site" / "Never this site"; ordinary web search in chat cannot include or exclude domains. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 | api | partial | research_sources.allow_domains/deny_domains work on the chat endpoint only for research runs and are not in the published OpenAPI spec. | api |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:145-149`, `apps/web/features/chat/pages/WebChatPage.tsx:4750-4753`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:637-642`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
 
 ## S34.19: User-selected source collections.
 
@@ -202,17 +173,16 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2265-2269`, `apps/extensio
 
 - Done when: When a search query is ambiguous the product offers clarification choices the user can pick before searching.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Clarification choices exist (clarify card) but are never offered on a turn with web search or Deep Research, and web search is on by default, so search queries never get clarification choices. | handler |
-| desktop | partial | Same as web (hosted): Clarification choices exist (clarify card) but are never offered on a turn with web search or Deep Research, and web search is on by default, so search queries never get clarification choices. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The agent can ask a free-text question (ask_user) and wait for a typed answer, but it offers no choices to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/clarify-tool-service.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:709-721`, `apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:34-34`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:471-493`
+Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:471-493`
 
 ## S34.23: Result previews.
 
@@ -246,15 +216,12 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 - Done when: Hovering or tapping a citation shows a preview of the source (title, site, snippet) without leaving the answer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tapping a citation chip opens the page straight away; there is no preview of the source first. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/CitationChip.tsx:18-20`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1008`
 
 ## S34.26: Source list expansion.
 
@@ -283,80 +250,27 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/webview/render.ts:5-7`
 
-## S34.28: Add source to answer.
-
-- Done when: The user can add a specific source to an answer so it is used/cited.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Sources can be added only to a Deep Research plan before it starts; a finished answer cannot take a new source and be re-answered. | ui |
-| desktop | partial | Same as web (hosted): Sources can be added only to a Deep Research plan before it starts; a finished answer cannot take a new source and be re-answered. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | partial | Only research_sources (domains/files) can be set when a research run starts; there is no call to add a source to an existing answer, and the field is undocumented. | api |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:239-251`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-420`
-
-## S34.29: Remove source from answer.
-
-- Done when: The user can remove/exclude a source from an answer and have it regenerated without it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Sources can be removed only from a Deep Research plan before it starts; a source cannot be removed from a finished answer. | ui |
-| desktop | partial | Same as web (hosted): Sources can be removed only from a Deep Research plan before it starts; a source cannot be removed from a finished answer. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:365-370`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`
-
-## S34.30: Save source to Project or notebook.
-
-- Done when: The user can save a cited source into a Project or notebook for later use.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only a whole Deep Research report can be saved to a project or the library; a single cited source cannot be saved. | ui |
-| desktop | partial | Same as web (hosted): Only a whole Deep Research report can be saved to a project or the library; a single cited source cannot be saved. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:496-499`, `apps/web/features/chat/components/research/ResearchReportView.tsx:279-281`
-
 ## S34.31: Search-result freshness information.
 
 - Done when: Search results and sources show how fresh they are (publication or retrieval date).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Search result and citation cards show title, snippet and site but no publication or retrieval date. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:42-50`
 
 ## S34.32: Empty-results and unavailable-source states.
 
 - Done when: Searches that find nothing, or whose source/provider is unavailable, show a clear empty or unavailable state instead of silence.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Failed, cancelled and cut-short searches say so, but a search that returns no results shows nothing, and global search has no "no matches" message. | states |
 | cli | partial | Only a "not configured" or request-failed message is printed; an empty result set is passed to the model silently. | states |
 | vscode | partial | Session search shows an empty notice, but web search has no no-results or unavailable state beyond the prompt telling the model to say so. | states |
 
-Code: `apps/mobile/src/features/chat/components/WebSearchToolCard.tsx:85-88`, `apps/mobile/src/features/chat/components/WebSearchToolCard.tsx:102-102`, `apps/cli/src/features/exec/tools/web/mod.rs:288-291`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:288-291`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4162-4162`
