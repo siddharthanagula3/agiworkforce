@@ -848,7 +848,7 @@ function describeDeviceForRegistry(): DeviceRegistryProfile {
     capabilities: {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
-      localModels: !localInferenceCommands.has('local_chat_start'),
+      localModels: false,
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },
