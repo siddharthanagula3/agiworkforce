@@ -13,7 +13,7 @@ export const metadata = buildMetadata({
 export default function BillingInvoicesPage() {
   return (
     <main id="main-content" className="mx-auto w-full max-w-3xl px-4 py-10">
-      <h1 className="text-2xl font-semibold">Invoices and receipts</h1>
+      <h1 className="text-h1">Invoices and receipts</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Every invoice raised against your account, newest first, with its receipt and its PDF.
         Credit purchases are paid once and each has its own receipt below. Payment methods and the

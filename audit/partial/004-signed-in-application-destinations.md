@@ -275,17 +275,15 @@ Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/ex
 
 - Done when: A dedicated image studio where the user writes a prompt, picks style/size options, generates images and sees results/history in one place.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Images are generated from a chat composer mode ("Create image") and land in the conversation and Library; there is no dedicated image studio page (prompt, presets, history side by side). | ui |
-| desktop | partial | Images are generated from a chat composer mode ("Create image") and land in the conversation and Library; there is no dedicated image studio page (prompt, presets, history side by side). | ui |
-| mobile | partial | Images are generated from the chat composer (Add to chat / task chips) and appear in Library > Images; there is no dedicated image studio screen. | ui |
+| mobile | partial | Mobile studio screen waits for the Codex mobile release (rule 12); the web studio's building blocks (image options, Library kind=image history) are ready to reuse. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/image/generate/route.ts:1037-1038`, `apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts:95-110`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:1-60`
+Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 ## S4.28: Image collection.
 

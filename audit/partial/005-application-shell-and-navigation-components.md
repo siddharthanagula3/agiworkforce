@@ -181,18 +181,6 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/e
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S5.29: User/profile menu.
-
-- Done when: A user/profile menu shows who is signed in and offers account actions (settings, plan, sign out).
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /login and /logout exist, but the TUI has no command showing the signed-in account and plan (agi usage does, outside the TUI; TUI /usage shows session tokens). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3527-3529`, `apps/cli/src/tui/tui_app.rs:3527-3530`
-
 ## S5.30: Help menu.
 
 - Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
@@ -252,17 +240,14 @@ Code: `apps/mobile/app/_layout.tsx:724-725`, `apps/cli/src/tui/tui_app.rs:1985-1
 
 - Done when: The app tells the user when a new release is available (or just installed) and how to get it.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi update installs on demand; the TUI shows no notice that a newer version exists. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:774-776`, `apps/cli/src/lib.rs:3521-3523`
 
 ## S5.38: Resource deep links.
 

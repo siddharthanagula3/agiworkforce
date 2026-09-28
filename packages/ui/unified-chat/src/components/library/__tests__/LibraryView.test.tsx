@@ -995,7 +995,7 @@ describe('shared LibraryView', () => {
       expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
     });
 
-    it('reads a PDF inline, with a download fallback inside the reader', async () => {
+    it('reads a PDF inline in a framed reader', async () => {
       const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
       render(<LibraryView transport={transport} />);
 
@@ -1004,8 +1004,8 @@ describe('shared LibraryView', () => {
 
       expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
       const reader = screen.getByTestId('library-pdf-reader');
-      expect(reader.getAttribute('data')).toContain('preview=pdf');
-      expect(screen.getByRole('button', { name: 'Download to view' })).toBeTruthy();
+      expect(reader.getAttribute('src')).toContain('preview=pdf');
+      expect(reader.getAttribute('title')).toBe('quarterly-report.pdf');
     });
 
     it('hands the typed question and the file to askAboutFile, then clears the composer', async () => {

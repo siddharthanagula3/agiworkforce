@@ -146,7 +146,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._attention.record('turn-finished');
     }
     this._refreshBadge();
-    alertSessionActivity(message, () => this.reveal());
+    alertSessionActivity(message, {
+      reveal: () => this.reveal(),
+      respond: (requestId, decision) =>
+        void this._stateManager.handleMessage({
+          type: 'respondToApproval',
+          payload: { requestId, decision },
+        }),
+    });
     return this._view?.webview.postMessage(message);
   }
 

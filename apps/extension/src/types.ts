@@ -494,6 +494,7 @@ export interface ChatMessageMessage extends BaseMessage {
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   attachments?: string[];
+  fileAttachments?: Array<{ assetId: string; mimeType: string }>;
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;

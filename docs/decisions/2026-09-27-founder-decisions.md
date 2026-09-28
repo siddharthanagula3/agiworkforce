@@ -167,4 +167,6 @@ Customers choose a model, never a supplier, so there is no provider or route
 lock on web, desktop, the API or the CLI's managed routes (S79.17, S79.18).
 Neither leader offers an advisor model consulted mid-task (S79.22), specialist
 worker models on web (S79.23), confidence-based abstention (S79.25), a
-classification adapter (S79.29) or a routing evaluation screen (S79.31).
+classification adapter (S79.29), a routing evaluation screen (S79.31), video
+input (S76.12), a capability inspector (S78.27) or a user control for image
+detail (S76.05 outside the API).

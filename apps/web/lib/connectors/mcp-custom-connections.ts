@@ -363,7 +363,7 @@ export async function getCustomConnectorOAuthClient(
     rows = await db.query<CustomConnectorOAuthClientRow>(
       `select oauth_client_id, oauth_client_secret_enc
          from user_custom_connectors
-        where user_id = $1 and short_id = $2`,
+        where user_id = $1 and organization_id is null and short_id = $2`,
       [userId, shortId],
     );
   } catch (error) {
