@@ -253,6 +253,7 @@ export interface CloudCodeAgentStep {
 export interface CloudCodeAgentTurnRecord {
   turnId: string;
   goal: string;
+  mode: CloudCodeTurnMode;
   stopReason: CloudCodeAgentStopReason | null;
   stepsUsed: number;
   /** Tokens this turn reported, summed from what each step's provider call returned. */
@@ -277,6 +278,14 @@ export const CLOUD_CODE_DEFAULT_TURN_STEPS: CloudCodeTurnStepBound = 24;
 
 export function isCloudCodeTurnStepBound(value: unknown): value is CloudCodeTurnStepBound {
   return (CLOUD_CODE_TURN_STEP_BOUNDS as readonly unknown[]).includes(value);
+}
+
+export const CLOUD_CODE_TURN_MODES = ['agent', 'plan'] as const;
+export type CloudCodeTurnMode = (typeof CLOUD_CODE_TURN_MODES)[number];
+export const CLOUD_CODE_DEFAULT_TURN_MODE: CloudCodeTurnMode = 'agent';
+
+export function isCloudCodeTurnMode(value: unknown): value is CloudCodeTurnMode {
+  return (CLOUD_CODE_TURN_MODES as readonly unknown[]).includes(value);
 }
 
 export const CLOUD_CODE_PAGE_ROUTE = '/code';
