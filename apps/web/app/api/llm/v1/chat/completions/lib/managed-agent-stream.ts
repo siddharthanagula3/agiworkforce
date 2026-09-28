@@ -6,7 +6,11 @@ import {
   observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
-import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
+import {
+  markManagedUsageClientDelivered,
+  type ManagedUsageAttempt,
+} from '@/lib/services/managed-usage-request-service';
+import { classifyError } from '@agiworkforce/provider-runtime';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import {
@@ -72,6 +76,24 @@ export function containsManagedAgentReportedFailure(value: Uint8Array): boolean 
   return false;
 }
 
+export function managedAgentReportedFailureCode(value: Uint8Array): string | undefined {
+  const text = new TextDecoder().decode(value);
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+    try {
+      const event = JSON.parse(line.slice(6)) as {
+        choices?: Array<{ delta?: { x_stream_error?: { code?: unknown } } }>;
+      };
+      const code = event.choices?.[0]?.delta?.x_stream_error?.code;
+      if (typeof code === 'string') return code;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 export function extractManagedAgentEventEnvelopes(value: Uint8Array): AgentEventEnvelope[] {
   const envelopes: AgentEventEnvelope[] = [];
   const text = new TextDecoder().decode(value);
@@ -123,6 +145,7 @@ export function buildManagedAgentStream(
   const encoder = new TextEncoder();
   let settled = false;
   let reportedFailure = false;
+  let reportedFailureCode: string | undefined;
   let lastTaskState: AgentTaskState | undefined;
   let terminalReported = false;
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
@@ -299,7 +322,11 @@ export function buildManagedAgentStream(
     }
   };
 
-  const settle = async (reason: string, outcome: 'completed' | 'failed' | 'cancelled') => {
+  const settle = async (
+    reason: string,
+    outcome: 'completed' | 'failed' | 'cancelled',
+    attempt: ManagedUsageAttempt | null = { outcome },
+  ) => {
     if (settled) return;
     const serving = servingRequest();
     if (input.processed.managedUsage) {
@@ -310,6 +337,7 @@ export function buildManagedAgentStream(
         usage: input.usage,
         reason,
         cancelled: outcome !== 'completed',
+        attempt,
         cpst: buildCpstUsageFields(serving, {
           billingOutcome: outcome === 'completed' ? 'completed' : 'failed',
           ...(outcome === 'cancelled' ? { cancelled: true } : {}),
@@ -372,6 +400,9 @@ export function buildManagedAgentStream(
                 ? `${input.completionReason}_reported_failure`
                 : input.completionReason,
               reportedFailure ? 'failed' : 'completed',
+              reportedFailure
+                ? { outcome: 'failed', errorClass: reportedFailureCode }
+                : { outcome: 'completed' },
             );
             if (input.processed.managedUsage && !reportedFailure) {
               await markManagedUsageClientDelivered(input.processed.managedUsage).catch((error) => {
@@ -389,7 +420,10 @@ export function buildManagedAgentStream(
             return;
           }
           if (isManagedAgentTerminalEvent(next.value)) continue;
-          if (containsManagedAgentReportedFailure(next.value)) reportedFailure = true;
+          if (containsManagedAgentReportedFailure(next.value)) {
+            reportedFailure = true;
+            reportedFailureCode ??= managedAgentReportedFailureCode(next.value);
+          }
           if (persistable) {
             assistantText += publicText.push(extractAssistantTextDelta(next.value));
             sourceCollector.ingestWireBytes(next.value);
@@ -418,7 +452,10 @@ export function buildManagedAgentStream(
           // Preserve the original stream failure.
         }
         try {
-          await settle(`${input.completionReason}_stream_failed`, 'failed');
+          await settle(`${input.completionReason}_stream_failed`, 'failed', {
+            outcome: 'failed',
+            errorClass: classifyError(error).category,
+          });
         } catch (settlementError) {
           logger.error(
             { settlementError, requestId: input.processed.requestId },
@@ -453,10 +490,14 @@ export function buildManagedAgentStream(
       try {
         await input.generator.return(undefined);
       } finally {
+        const awaitingInput = input.preserveAwaitingInputOnCancel?.() ?? false;
         try {
-          await settle(input.cancellationReason, 'cancelled');
+          await settle(
+            input.cancellationReason,
+            'cancelled',
+            awaitingInput ? null : { outcome: 'cancelled' },
+          );
         } finally {
-          const awaitingInput = input.preserveAwaitingInputOnCancel?.() ?? false;
           if (input.runJournal) {
             await transitionJournal(awaitingInput ? 'awaiting_input' : 'cancelled');
           }

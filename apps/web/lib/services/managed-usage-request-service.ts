@@ -212,6 +212,15 @@ function resolveServedRouteFromObservations(
   return { provider, model: modelId, routeId };
 }
 
+export type ManagedUsageAttemptOutcome = 'completed' | 'failed' | 'cancelled';
+
+export interface ManagedUsageAttempt {
+  outcome: ManagedUsageAttemptOutcome;
+  errorClass?: string | undefined;
+}
+
+const ATTEMPT_ERROR_CLASS_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
 export interface ManagedUsageFinalization {
   requestStatus: 'completed' | 'released' | 'outcome_unknown';
   operationResult: 'finalized' | 'already_finalized';
@@ -575,6 +584,59 @@ async function attributeToScheduleRun(
   );
 }
 
+async function attributeToConversation(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+  conversationId: string | undefined,
+): Promise<void> {
+  if (!conversationId) return;
+  try {
+    await db.execute(
+      `update public.managed_usage_requests
+          set conversation_id = $3::uuid
+        where user_id = $1 and idempotency_key = $2 and conversation_id is null`,
+      [userId, idempotencyKey, conversationId],
+    );
+  } catch (error) {
+    logger.error(
+      { event: 'managed_usage_conversation_unrecorded', error, userId, idempotencyKey },
+      'The conversation of a managed generation attempt could not be recorded',
+    );
+  }
+}
+
+async function recordAttemptOutcome(
+  reservation: ManagedUsageRequestReservation,
+  attempt: ManagedUsageAttempt,
+): Promise<void> {
+  const errorClass =
+    attempt.outcome === 'failed' &&
+    attempt.errorClass &&
+    ATTEMPT_ERROR_CLASS_PATTERN.test(attempt.errorClass)
+      ? attempt.errorClass
+      : null;
+  try {
+    await reservation.db.execute(
+      `update public.managed_usage_requests
+          set attempt_outcome = $3, attempt_error_class = $4
+        where user_id = $1 and idempotency_key = $2 and attempt_outcome is null`,
+      [reservation.userId, reservation.idempotencyKey, attempt.outcome, errorClass],
+    );
+  } catch (error) {
+    logger.error(
+      {
+        event: 'managed_usage_attempt_outcome_unrecorded',
+        error,
+        userId: reservation.userId,
+        idempotencyKey: reservation.idempotencyKey,
+        outcome: attempt.outcome,
+      },
+      'How a managed generation attempt ended could not be recorded',
+    );
+  }
+}
+
 async function attributeToApiKey(
   db: DatabaseAdapter,
   userId: string,
@@ -606,6 +668,7 @@ export async function reserveManagedUsageRequest(
     quotaFeature?: string;
     attribution?: UsageAttribution;
     apiKeyId?: string;
+    conversationId?: string;
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
@@ -663,6 +726,7 @@ export async function reserveManagedUsageRequest(
   }
   await attributeToScheduleRun(input.db, input.userId, idempotencyKey);
   await attributeToApiKey(input.db, input.userId, idempotencyKey, input.apiKeyId);
+  await attributeToConversation(input.db, input.userId, idempotencyKey, input.conversationId);
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||
@@ -881,6 +945,7 @@ export async function finalizeManagedUsageRequest(
     providerCostMicrousd?: number;
     providerCostCents?: number;
     usage?: Record<string, unknown>;
+    attempt?: ManagedUsageAttempt | null;
   },
 ): Promise<ManagedUsageFinalization> {
   const billedMicrousd =
@@ -954,6 +1019,10 @@ export async function finalizeManagedUsageRequest(
 
   const settledCostMicrousd = ledgerAmount(row['actual_cost_microusd']) ?? actualCostMicrousd;
   const settledCostCents = ledgerCentsFromMicrousd(settledCostMicrousd);
+
+  if (input.attempt !== null) {
+    await recordAttemptOutcome(input, input.attempt ?? { outcome: input.outcome });
+  }
 
   // The request fingerprint is the task identity: a regenerated turn sends the
   // same payload and hashes the same, so the ledger can separate what the first
