@@ -118,7 +118,7 @@ import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
-import { connectorsAllowedForTurn } from './lib/connector-capability';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -589,7 +589,12 @@ async function dispatchChatCompletions(
       // file search runs before the loop so a failing index degrades to a
       // web-only run rather than failing the turn.
       const researchDomainPolicy = processed.webSearchDomainPolicy ?? null;
-      const researchConnectorIds = processed.researchSources?.connectors ?? [];
+      const requestedResearchConnectorIds = processed.researchSources?.connectors ?? [];
+      const researchConnectorIds =
+        requestedResearchConnectorIds.length > 0 &&
+        (await connectorsAllowedForTurn(request, userId, processed))
+          ? requestedResearchConnectorIds
+          : [];
       const researchFileSources = processed.researchSources?.files
         ? await searchResearchFileSources(runDb, {
             userId,

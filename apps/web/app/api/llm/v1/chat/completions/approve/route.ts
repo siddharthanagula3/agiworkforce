@@ -23,7 +23,7 @@ import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { withManagedTurnSlot } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
-import { connectorsAllowedForTurn } from '../lib/connector-capability';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
