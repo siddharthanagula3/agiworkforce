@@ -633,6 +633,18 @@ const it = {
   'chatError.comparePlans': 'Confronta i piani',
   'chatError.seeUsage': 'Vedi il tuo utilizzo',
   'chatError.seeOptions': 'Vedi le opzioni',
+  'webview.mcpAuthRequired':
+    '{server} richiede un nuovo accesso. AGI non ha potuto usarlo per questo passaggio.',
+  'webview.mcpReconnect': 'Accedi e continua',
+  'webview.mcpReconnecting': 'Accesso in corso…',
+  'webview.mcpReconnected': 'Accesso a {server} eseguito. AGI continua.',
+  'mcpReconnect.progress': 'AGI Workforce: accesso a {server}',
+  'mcpReconnect.notFinished':
+    "AGI Workforce: l'accesso a {server} non è stato completato, quindi AGI non ha continuato. Riprova quando sei pronto.",
+  'mcpReconnect.failed': 'AGI Workforce: accesso a {server} non riuscito: {reason}',
+  'mcpReconnect.noSession':
+    "AGI Workforce: qui non c'è una sessione da continuare dopo l'accesso a {server}.",
+  'mcpReconnect.continue': 'continua',
 };
 
 export default it;

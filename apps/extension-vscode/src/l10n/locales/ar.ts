@@ -773,6 +773,18 @@ const ar = {
   'chatError.comparePlans': 'مقارنة الخطط',
   'chatError.seeUsage': 'عرض استخدامك',
   'chatError.seeOptions': 'عرض الخيارات',
+  'webview.mcpAuthRequired':
+    'يطلب {server} تسجيل الدخول مرة أخرى. لم يتمكن AGI من استخدامه في هذه الخطوة.',
+  'webview.mcpReconnect': 'تسجيل الدخول والمتابعة',
+  'webview.mcpReconnecting': 'جارٍ تسجيل الدخول…',
+  'webview.mcpReconnected': 'تم تسجيل الدخول إلى {server}. يتابع AGI العمل.',
+  'mcpReconnect.progress': 'AGI Workforce: جارٍ تسجيل الدخول إلى {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: لم يكتمل تسجيل الدخول إلى {server}، لذلك لم يتابع AGI. حاول مرة أخرى عندما تكون مستعدًا.',
+  'mcpReconnect.failed': 'AGI Workforce: تعذر تسجيل الدخول إلى {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: لا توجد جلسة هنا لمتابعتها بعد تسجيل الدخول إلى {server}.',
+  'mcpReconnect.continue': 'تابع',
 };
 
 export default ar;

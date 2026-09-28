@@ -571,6 +571,18 @@ const de = {
   'chatError.comparePlans': 'Tarife vergleichen',
   'chatError.seeUsage': 'Nutzung ansehen',
   'chatError.seeOptions': 'Optionen ansehen',
+  'webview.mcpAuthRequired':
+    '{server} verlangt, dass Sie sich erneut anmelden. AGI konnte den Server für diesen Schritt nicht nutzen.',
+  'webview.mcpReconnect': 'Anmelden und fortfahren',
+  'webview.mcpReconnecting': 'Anmeldung läuft…',
+  'webview.mcpReconnected': 'Bei {server} angemeldet. AGI macht weiter.',
+  'mcpReconnect.progress': 'AGI Workforce: Anmeldung bei {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: Die Anmeldung bei {server} wurde nicht abgeschlossen, daher hat AGI nicht weitergemacht. Versuchen Sie es erneut, wenn Sie bereit sind.',
+  'mcpReconnect.failed': 'AGI Workforce: Die Anmeldung bei {server} ist fehlgeschlagen: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: Hier gibt es keine Sitzung, die nach der Anmeldung bei {server} fortgesetzt werden kann.',
+  'mcpReconnect.continue': 'weiter',
 };
 
 export default de;

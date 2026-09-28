@@ -694,6 +694,18 @@ const ru = {
   'chatError.comparePlans': 'Сравнить тарифы',
   'chatError.seeUsage': 'Посмотреть использование',
   'chatError.seeOptions': 'Посмотреть варианты',
+  'webview.mcpAuthRequired':
+    '{server} просит войти заново. AGI не смог использовать его на этом шаге.',
+  'webview.mcpReconnect': 'Войти и продолжить',
+  'webview.mcpReconnecting': 'Выполняется вход…',
+  'webview.mcpReconnected': 'Вход в {server} выполнен. AGI продолжает.',
+  'mcpReconnect.progress': 'AGI Workforce: вход в {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: вход в {server} не завершён, поэтому AGI не продолжил. Попробуйте снова, когда будете готовы.',
+  'mcpReconnect.failed': 'AGI Workforce: не удалось войти в {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: здесь нет сеанса, который можно продолжить после входа в {server}.',
+  'mcpReconnect.continue': 'продолжай',
 };
 
 export default ru;

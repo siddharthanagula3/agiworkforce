@@ -473,6 +473,18 @@ const ja = {
   'chatError.comparePlans': 'プランを比較',
   'chatError.seeUsage': '使用状況を見る',
   'chatError.seeOptions': '選択肢を見る',
+  'webview.mcpAuthRequired':
+    '{server} への再サインインが必要です。AGI はこの手順でそれを使えませんでした。',
+  'webview.mcpReconnect': 'サインインして続ける',
+  'webview.mcpReconnecting': 'サインインしています…',
+  'webview.mcpReconnected': '{server} にサインインしました。AGI が続行しています。',
+  'mcpReconnect.progress': 'AGI Workforce: {server} にサインインしています',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} へのサインインが完了しなかったため、AGI は続行していません。準備ができたらもう一度お試しください。',
+  'mcpReconnect.failed': 'AGI Workforce: {server} へのサインインに失敗しました: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server} にサインインした後に続けるセッションがここにありません。',
+  'mcpReconnect.continue': '続けて',
 };
 
 export default ja;

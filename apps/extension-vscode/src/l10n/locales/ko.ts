@@ -461,6 +461,18 @@ const ko = {
   'chatError.comparePlans': '요금제 비교',
   'chatError.seeUsage': '사용량 보기',
   'chatError.seeOptions': '옵션 보기',
+  'webview.mcpAuthRequired':
+    '{server}에 다시 로그인해야 합니다. AGI가 이 단계에서 사용할 수 없었습니다.',
+  'webview.mcpReconnect': '로그인하고 계속',
+  'webview.mcpReconnecting': '로그인 중…',
+  'webview.mcpReconnected': '{server}에 로그인했습니다. AGI가 계속 진행합니다.',
+  'mcpReconnect.progress': 'AGI Workforce: {server}에 로그인하는 중',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} 로그인이 끝나지 않아 AGI가 계속하지 않았습니다. 준비되면 다시 시도하세요.',
+  'mcpReconnect.failed': 'AGI Workforce: {server}에 로그인하지 못했습니다: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server}에 로그인한 뒤 이어서 진행할 세션이 여기에 없습니다.',
+  'mcpReconnect.continue': '계속해',
 };
 
 export default ko;

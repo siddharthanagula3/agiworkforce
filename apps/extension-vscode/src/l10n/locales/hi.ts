@@ -529,6 +529,18 @@ const hi = {
   'chatError.comparePlans': 'प्लान की तुलना करें',
   'chatError.seeUsage': 'अपना उपयोग देखें',
   'chatError.seeOptions': 'अपने विकल्प देखें',
+  'webview.mcpAuthRequired':
+    '{server} चाहता है कि आप फिर से साइन इन करें। AGI इस चरण में इसका उपयोग नहीं कर सका।',
+  'webview.mcpReconnect': 'साइन इन करें और जारी रखें',
+  'webview.mcpReconnecting': 'साइन इन हो रहा है…',
+  'webview.mcpReconnected': '{server} में साइन इन हो गया। AGI जारी है।',
+  'mcpReconnect.progress': 'AGI Workforce: {server} में साइन इन हो रहा है',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} में साइन इन पूरा नहीं हुआ, इसलिए AGI ने जारी नहीं रखा। तैयार होने पर फिर से कोशिश करें।',
+  'mcpReconnect.failed': 'AGI Workforce: {server} में साइन इन नहीं हो सका: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server} में साइन इन के बाद जारी रखने के लिए यहाँ कोई सत्र नहीं है।',
+  'mcpReconnect.continue': 'जारी रखो',
 };
 
 export default hi;

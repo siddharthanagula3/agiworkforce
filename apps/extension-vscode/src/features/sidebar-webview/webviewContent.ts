@@ -3808,6 +3808,50 @@ export function getWebviewContent(
       return block;
     }
 
+    function renderMcpAuthCard(server) {
+      var cards = messagesEl.querySelectorAll('.mcp-auth-card');
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.server === server && cards[i].dataset.state !== 'done') return;
+      }
+      var card = addMessage('system', fillText(L10N.mcpAuthRequired, { server: server }));
+      card.classList.add('mcp-auth-card');
+      card.dataset.server = server;
+      card.setAttribute('role', 'status');
+      var actions = document.createElement('div');
+      actions.className = 'error-actions';
+      var reconnect = document.createElement('button');
+      reconnect.type = 'button';
+      reconnect.className = 'error-retry';
+      reconnect.textContent = L10N.mcpReconnect;
+      reconnect.addEventListener('click', function () {
+        if (reconnect.disabled) return;
+        reconnect.disabled = true;
+        reconnect.textContent = L10N.mcpReconnecting;
+        card.dataset.state = 'pending';
+        vscode.postMessage({ type: 'reconnectMcpServer', payload: { server: server } });
+      });
+      actions.appendChild(reconnect);
+      card.appendChild(actions);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function settleMcpAuthCard(server, ok) {
+      var cards = messagesEl.querySelectorAll('.mcp-auth-card');
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (card.dataset.server !== server || card.dataset.state === 'done') continue;
+        var reconnect = card.querySelector('button');
+        if (ok) {
+          card.dataset.state = 'done';
+          card.textContent = fillText(L10N.mcpReconnected, { server: server });
+        } else if (reconnect) {
+          delete card.dataset.state;
+          reconnect.disabled = false;
+          reconnect.textContent = L10N.mcpReconnect;
+        }
+      }
+    }
+
     function resendLastTurn(errorBlock, model) {
       if (lastSendPayload === null || runtimeBlock !== null) return;
       if (errorBlock && errorBlock.parentNode) errorBlock.parentNode.removeChild(errorBlock);
@@ -6250,6 +6294,16 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionBoundary') {
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+      }
+
+      else if (msg.type === 'mcpAuthRequired') {
+        if (msg.payload && msg.payload.server) renderMcpAuthCard(String(msg.payload.server));
+      }
+
+      else if (msg.type === 'mcpReconnected') {
+        if (msg.payload && msg.payload.server) {
+          settleMcpAuthCard(String(msg.payload.server), msg.payload.ok === true);
+        }
       }
 
       else if (msg.type === 'webSearchSetup') {

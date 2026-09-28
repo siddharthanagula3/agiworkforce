@@ -634,6 +634,18 @@ const pt = {
   'chatError.comparePlans': 'Comparar planos',
   'chatError.seeUsage': 'Ver seu uso',
   'chatError.seeOptions': 'Ver suas opções',
+  'webview.mcpAuthRequired':
+    '{server} precisa que você entre de novo. O AGI não conseguiu usá-lo nesta etapa.',
+  'webview.mcpReconnect': 'Entrar e continuar',
+  'webview.mcpReconnecting': 'Entrando…',
+  'webview.mcpReconnected': 'Conectado a {server}. O AGI está continuando.',
+  'mcpReconnect.progress': 'AGI Workforce: entrando em {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: a entrada em {server} não terminou, então o AGI não continuou. Tente de novo quando quiser.',
+  'mcpReconnect.failed': 'AGI Workforce: não foi possível entrar em {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: não há sessão aqui para continuar depois de entrar em {server}.',
+  'mcpReconnect.continue': 'continue',
 };
 
 export default pt;
