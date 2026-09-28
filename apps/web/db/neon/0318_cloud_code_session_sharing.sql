@@ -63,7 +63,7 @@ as $$
   select s.id, s.user_id, s.organization_id, s.share_visibility
     from public.cloud_code_sessions s
    where s.share_token = p_share_token
-     and public.current_app_user_id() is not null
+     and nullif(public.current_app_user_id(), '') is not null
      and (
        s.share_visibility = 'public'
        or (
