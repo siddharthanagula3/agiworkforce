@@ -2950,5 +2950,45 @@
   "spMemoryCommandUnavailable": {
     "message": "Memory did not answer, so nothing was changed.",
     "description": "A remember or forget request could not reach memory"
+  },
+  "spTemporaryChatLabel": {
+    "message": "Temporary chat",
+    "description": "Menu item that makes the new chat temporary"
+  },
+  "spTemporaryChatExplanation": {
+    "message": "Stays out of your history, search, memory and Library.",
+    "description": "One-line consequence of a temporary chat, shown under the menu item"
+  },
+  "spTemporaryChatRetention": {
+    "message": "Won't be saved to your history or show up in search, and skips memory. Files you attach stay out of your Library, and a connector asks before every call even where you saved Always allow. A connector call still reaches that service, which keeps its own record.",
+    "description": "Full description of what a temporary chat does"
+  },
+  "spTemporaryChatActive": {
+    "message": "Temporary chat. Stays out of your history, search, memory and Library.",
+    "description": "Notice above the composer while the chat is temporary"
+  },
+  "spTemporaryChatTurnOff": {
+    "message": "Turn off",
+    "description": "Turns temporary chat off before any message was sent"
+  },
+  "spTemporaryChatEnd": {
+    "message": "End temporary chat",
+    "description": "Starts ending a temporary chat that has messages"
+  },
+  "spTemporaryChatEndPrompt": {
+    "message": "End this temporary chat? It is never written to your history, so every message goes and nobody can reopen or restore it. Copy out anything you still need first.",
+    "description": "Asks before a temporary chat is ended and discarded"
+  },
+  "spTemporaryChatEndConfirm": {
+    "message": "End and discard",
+    "description": "Confirms ending and discarding the temporary chat"
+  },
+  "spTemporaryChatKeep": {
+    "message": "Keep chatting",
+    "description": "Keeps the temporary chat open"
+  },
+  "spTemporaryChatUnavailable": {
+    "message": "The temporary chat could not start, so nothing was sent. Check your connection and try again.",
+    "description": "The temporary conversation could not be created"
   }
 }
