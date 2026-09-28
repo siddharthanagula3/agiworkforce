@@ -19,6 +19,14 @@ import {
   showCloudCodeSession,
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
+import {
+  SHOW_APPROVAL_HISTORY_COMMAND,
+  showApprovalHistory,
+} from './features/permissions/approvalHistory';
+import {
+  SHOW_SESSION_ACTIVITY_COMMAND,
+  showSessionReceipt,
+} from './features/sidebar-webview/sessionReceipt';
 import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
@@ -202,6 +210,19 @@ export function activate(context: vscode.ExtensionContext): void {
           });
         },
       ),
+      vscode.commands.registerCommand(SHOW_APPROVAL_HISTORY_COMMAND, () =>
+        showApprovalHistory(context.secrets),
+      ),
+      vscode.commands.registerCommand(SHOW_SESSION_ACTIVITY_COMMAND, async () => {
+        const provider = chatState?.sidebarProvider;
+        try {
+          await showSessionReceipt(await provider?.activeThreadReceipt());
+        } catch (error) {
+          void vscode.window.showErrorMessage(
+            `AGI Workforce: this session's activity could not be read, ${error instanceof Error ? error.message : String(error)}.`,
+          );
+        }
+      }),
       vscode.commands.registerCommand(CONTINUE_IN_CLOUD_COMMAND, () =>
         continueInCloud({
           readSource: readWorkspaceCloudSource,

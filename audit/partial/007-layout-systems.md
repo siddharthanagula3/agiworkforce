@@ -35,15 +35,14 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:482-
 
 - Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Spreadsheet and chart artifacts can be expanded to full screen from the artifact panel, but the conversation has no wide data-analysis layout: tables in answers stay in the reading column. | ui |
-| desktop | partial | Spreadsheet and chart artifacts can be expanded to full screen from the artifact panel, but the conversation has no wide data-analysis layout: tables in answers stay in the reading column. | ui |
 | mobile | partial | Artifacts, including tables, open in a full-screen modal on the phone, but there is no wide data layout for tablets or for tables inside answers. | ui |
 | vscode | partial | Tabular artifacts open as plain text in a full-width editor tab; there is no table or chart view. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:967-967`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1182-1182`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:938-941`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:100-102`, `apps/extension-vscode/src/core/commandSetup.ts:2285-2285`
 
 ## S7.04: Conversation plus artifact split view.
 

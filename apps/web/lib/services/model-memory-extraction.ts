@@ -38,6 +38,7 @@ import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempot
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
 
 export const MODEL_MEMORY_EXTRACTION_ENV = 'AGI_MODEL_MEMORY_EXTRACTION';
 
@@ -101,13 +102,15 @@ export async function extractAutoMemoryFactsWithModel(
   // not even resolve a route or touch the registry.
   if (!isMemoryExtractionWorthwhile(input.message)) return patternFacts(input.message);
 
-  const route = resolveAutoRoute({
+  const routing = await sideCallRoutingRequest(input.db, input.userId, {
     selection: 'auto',
     taskType: 'simple_chat',
     subscriptionTier: 'free',
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
   });
+  if (!routing) return patternFacts(input.message);
+  const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     logger.warn(
       { code: route.code, userId: input.userId, requestId: input.requestId },

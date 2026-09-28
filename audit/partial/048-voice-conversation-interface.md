@@ -99,14 +99,14 @@ Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: The user can pause the whole voice conversation (mic and assistant) and resume it later without ending it.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a microphone mute exists; the assistant keeps talking and the session keeps running and billing. Add a pause that holds both and the meter. | ui |
 | desktop | partial | Same as web: mute only, no pause of the session. | ui |
 | mobile | partial | Mute (live bar and companion) only stops listening; there is no pause that holds a spoken reply and resumes it. | ui |
 
-Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps/web/features/chat/hooks/use-voice-session.ts:449-449`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
+Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
 
 ## S48.12: Push-to-talk.
 
@@ -151,11 +151,11 @@ Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The live-voice carousel has no sample; the only Preview button (Settings, read-aloud) plays a browser speech voice, not a live voice. | ui |
+| web | partial | needs recorded samples of each live voice (owner asset); the live API has no preview endpoint | ui |
 | desktop | partial | Same as web: no live-voice sample. | ui |
 | mobile | partial | Settings previews on-device voices, which the companion uses, but live voice ignores the chosen voice (starts with voice null). | handler |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/web/features/settings/sections/GeneralSection.tsx:1362-1362`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
+Code: `apps/web/features/chat/lib/live-voices.ts:9-9`, `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
 
 ## S48.17: Language selection.
 
@@ -230,20 +230,6 @@ Code: `apps/cli/src/voice.rs:221-221`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
-## S48.23: Transcript editing where appropriate.
-
-- Done when: Where appropriate, the user can correct a spoken turn's transcript before or after it is acted on.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Spoken turns go straight to the live model with no chance to correct them; saved voice turns can only be edited afterwards as ordinary messages. | ui |
-| desktop | partial | Spoken turns go straight to the live model with no chance to correct them; saved voice turns can only be edited afterwards as ordinary messages. | ui |
-| mobile | partial | Live and companion turns are sent as heard; only composer dictation (S49.02) is editable before send. | ui |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/web/features/chat/lib/live-voice-session.ts:543-543`, `apps/web/features/chat/pages/WebChatPage.tsx:5729-5729`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:101-101`, `apps/cli/src/voice.rs:229-229`
-
 ## S48.24: Type while speaking.
 
 - Done when: During a voice conversation the user can also type a message into the same conversation.
@@ -251,11 +237,11 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:543-543`, `apps/web/feat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The voice composer field sends a normal text turn to the chat model; the live voice model never sees it, so the spoken conversation does not know what was typed. | handler |
+| web | partial | blocked: the GPT-Live protocol (developers.openai.com/api/docs/guides/live-conversations, fetched 2026-09-27) documents no user text input event, only session.instructions/thinking/commentary.append | handler |
 | desktop | partial | The voice composer field sends a normal text turn to the chat model; the live voice model never sees it, so the spoken conversation does not know what was typed. | handler |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`, `apps/web/features/chat/hooks/use-voice-session.ts:468-468`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:640-640`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`
 
 ## S48.26: View tool results during Voice.
 
@@ -317,23 +303,11 @@ Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A camera toggle and preview are built into the voice surface but only render when a frame sink is passed, and WebChatPage never passes one; the live session has no path for frames. Wire a frame sink into the live session. | mount, handler |
+| web | partial | blocked: GPT-Live documents no image or video frame input (live-conversations guide, fetched 2026-09-27); image input exists only in the separate Realtime API | mount, handler |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:258-258`, `apps/web/features/chat/pages/WebChatPage.tsx:5051-5051`
-
-## S48.36: Reconnection state.
-
-- Done when: When the voice connection drops, a reconnecting state is shown and the session reconnects (or says it could not).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A dropped live session shows an error with Try again, but there is no reconnecting state or automatic reconnect (the mobile hook passes no onConnectionLost). | handler |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:132-132`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:218-218`
+Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`
 
 ## S48.38: Continue unfinished work in text.
 
@@ -377,11 +351,10 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/
 
 - Done when: The user can stop the spoken reply without cancelling the underlying task, and cancel the task separately.
 - Wave: 3
-- Already works on: web
+- Already works on: web, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
-| mobile | partial | In the companion, tapping the orb while it speaks stops only the speech; a turn still thinking cannot be cancelled from voice, and the live bar has neither control. | ui |
 
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:231-231`, `apps/mobile/app/(app)/voice.tsx:267-267`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`

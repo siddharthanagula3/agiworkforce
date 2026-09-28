@@ -118,14 +118,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Members appear only as raw user ids with a per-project access select in Workspace > Sharing; add a people picker (search by name or email) for sharing and assigning. | ui |
-| desktop | partial | Members appear only as raw user ids with a per-project access select in Workspace > Sharing; add a people picker (search by name or email) for sharing and assigning. | ui |
+| web | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
+| desktop | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:292-316`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:317-332`, `apps/web/app/workspace/sharing/page.tsx:16-16`
+Code: `apps/web/shared/components/people/MemberPicker.tsx:99-99`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:282-282`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:288-288`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:124-124`
 
 ## S9.13: File browser.
 
@@ -197,17 +197,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 - Done when: Tasks are laid out as a board with a column per status so the user sees and manages work by stage.
 - Wave: 3
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
-| desktop | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The Cloud Tasks view is one flat tree of runs with state icons; add a status-grouped board or at least grouping by stage. | ui |
-| chrome | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:468-477`, `apps/web/app/tasks/page.tsx:12-17`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:102-104`
+Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:102-104`
 
 ## S9.22: Stepper.
 

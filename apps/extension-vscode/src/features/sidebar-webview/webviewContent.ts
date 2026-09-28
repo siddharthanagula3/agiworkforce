@@ -3,6 +3,7 @@ import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker
 import {
   AGENT_MODE_LABEL,
   EFFORT_LABEL,
+  REMOTE_CODE_LIMITS,
   TOOL_APPROVAL_ACTION_LABELS,
   toolCallStatusLabel,
   type AgentMode,
@@ -748,6 +749,18 @@ export function getWebviewContent(
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -3605,6 +3618,7 @@ export function getWebviewContent(
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+      syncStartSuggestions();
     }
 
     var assistantSources = new WeakMap();
@@ -4975,6 +4989,21 @@ export function getWebviewContent(
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -5594,6 +5623,11 @@ export function getWebviewContent(
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'startSuggestions') {
+        startSuggestions = msg.payload;
+        syncStartSuggestions();
       }
 
       else if (msg.type === 'activeProject') {
@@ -6400,6 +6434,69 @@ export function getWebviewContent(
     }
 
     var recentChats = { conversations: [], total: 0 };
+    var startSuggestions = { projects: [], skills: [], connectors: [] };
+
+    function prefillComposer(text) {
+      userInput.value = text;
+      autoResize();
+      saveComposerDraft();
+      userInput.focus();
+      userInput.setSelectionRange(text.length, text.length);
+    }
+
+    function buildSuggestionRow(label, detail, onPick) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = detail || label;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = label;
+      row.appendChild(title);
+      if (detail) {
+        var sub = document.createElement('span');
+        sub.className = 'recent-chat-age';
+        sub.textContent = detail;
+        row.appendChild(sub);
+      }
+      row.addEventListener('click', onPick);
+      return row;
+    }
+
+    function appendSuggestionGroup(block, heading, rows) {
+      if (rows.length === 0) return;
+      var title = document.createElement('div');
+      title.className = 'recent-chats-title';
+      title.textContent = heading;
+      block.appendChild(title);
+      for (var i = 0; i < rows.length; i++) block.appendChild(rows[i]);
+    }
+
+    function syncStartSuggestions() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.start-suggestions');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      var block = document.createElement('div');
+      block.className = 'recent-chats start-suggestions';
+      appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
+        return buildSuggestionRow(project.name, 'Use in this chat', function () {
+          vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
+        });
+      }));
+      appendSuggestionGroup(block, 'Skills', startSuggestions.skills.map(function (skill) {
+        return buildSuggestionRow(skill.name, skill.description, function () {
+          prefillComposer('Use the ' + skill.name + ' skill to ');
+        });
+      }));
+      appendSuggestionGroup(block, 'Connected apps', startSuggestions.connectors.map(function (connector) {
+        return buildSuggestionRow(connector.name, 'Ask with it', function () {
+          prefillComposer('Using ' + connector.name + ', ');
+        });
+      }));
+      if (!block.firstChild) return;
+      emptyStateEl.classList.add('empty-state--has-recents');
+      emptyStateEl.appendChild(block);
+    }
 
     function buildRecentChatRow(conversation) {
       var row = document.createElement('button');
@@ -6429,7 +6526,7 @@ export function getWebviewContent(
       if (mounted) mounted.parentNode.removeChild(mounted);
       emptyStateEl.classList.toggle(
         'empty-state--has-recents',
-        recentChats.conversations.length > 0,
+        recentChats.conversations.length > 0 || Boolean(emptyStateEl.querySelector('.start-suggestions')),
       );
       if (recentChats.conversations.length === 0) return;
       var block = document.createElement('div');
