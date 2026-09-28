@@ -38,6 +38,8 @@ function session(overrides: Record<string, unknown> = {}) {
     deviceName: 'Built-in Microphone',
     backendBusy: false,
     toolApprovals: [],
+    toolActivity: [],
+    toolOutcomes: [],
     decideToolApproval: vi.fn(),
     reconnecting: false,
     reconnectAttempt: 0,

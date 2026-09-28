@@ -59,11 +59,19 @@ export function liveVoiceFunctionCallOf(event: unknown): LiveVoiceFunctionCall |
   };
 }
 
+export interface LiveVoiceToolResult {
+  callId: string;
+  name: string;
+  output: string;
+  isError: boolean;
+}
+
 export interface LiveVoiceToolBridgeOptions {
   callTool: (request: LiveVoiceToolCallRequest) => Promise<LiveVoiceToolCallResponse>;
   send: (event: Record<string, unknown>) => void;
   onApprovalsChanged: (approvals: readonly LiveVoicePendingApproval[]) => void;
   onToolCompleted?: (name: string) => void;
+  onToolResult?: (result: LiveVoiceToolResult) => void;
 }
 
 interface OpenFunctionCall extends LiveVoiceFunctionCall {
@@ -151,6 +159,12 @@ export class LiveVoiceToolBridge {
     if (response.status === 'completed' && !response.isError) {
       this.options.onToolCompleted?.(call.name);
     }
+    this.options.onToolResult?.({
+      callId: call.callId,
+      name: call.name,
+      output: response.output,
+      isError: response.status !== 'completed' || response.isError,
+    });
     this.publish();
     this.flush();
   }
