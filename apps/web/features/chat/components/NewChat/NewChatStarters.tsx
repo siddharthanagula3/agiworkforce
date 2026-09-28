@@ -12,11 +12,8 @@ import {
   X,
   type Icon,
 } from '@agiworkforce/icons';
-import {
-  canUseBillingPlanCapability,
-  normalizeBillingPlanTier,
-  type CloudWorkMode,
-} from '@agiworkforce/types';
+import type { CloudWorkMode } from '@agiworkforce/types';
+import { useCapability } from '@agiworkforce/unified-chat';
 import { AGI_WORK_LABEL } from '@features/chat/lib/agi-work';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -52,11 +49,9 @@ export interface NewChatStartersProps {
 }
 
 function useAgiWorkAvailable(): boolean {
-  return useBillingStore(
-    (state) =>
-      isBillingPolicyReady(state) &&
-      canUseBillingPlanCapability(normalizeBillingPlanTier(state.subscription?.tier), 'agi_work'),
-  );
+  const agiWorkCapability = useCapability('canUseAgiWork');
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  return billingPolicyReady && agiWorkCapability;
 }
 
 export function NewChatStarters({ workMode, onPrompt, onFocusComposer }: NewChatStartersProps) {

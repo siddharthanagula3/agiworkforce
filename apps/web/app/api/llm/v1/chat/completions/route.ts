@@ -13,7 +13,7 @@ import {
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
-import { addAttachmentTruncationHeader } from '@/lib/chat-attachment-truncation-notice';
+import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {

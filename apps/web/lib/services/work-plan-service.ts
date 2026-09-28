@@ -2,9 +2,9 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
+import { MAX_AGIWORK_GOAL_CHARS } from '@agiworkforce/cloud-contracts';
 import {
   agiWorkPlanContextSource,
-  MAX_AGIWORK_GOAL_CHARS,
   MAX_AGIWORK_GOAL_FIELD_CHARS,
 } from '@/app/api/llm/v1/chat/completions/lib/agiwork-plan';
 import type { ContextSource } from '@agiworkforce/context';

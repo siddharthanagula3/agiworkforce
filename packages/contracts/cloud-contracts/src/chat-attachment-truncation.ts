@@ -2,10 +2,17 @@ export const ATTACHMENTS_TRUNCATED_HEADER = 'X-AGI-Attachments-Truncated';
 
 const MAX_HEADER_VALUE_CHARS = 2_000;
 const MAX_NAMED_ATTACHMENTS = 10;
-const NAME_LIST = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
 function encodeNames(names: readonly string[]): string {
   return encodeURIComponent(JSON.stringify(names));
+}
+
+function formatNameList(names: readonly string[]): string {
+  if (typeof Intl !== 'undefined' && typeof Intl.ListFormat === 'function') {
+    return new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(names);
+  }
+  if (names.length <= 2) return names.join(' and ');
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
 export function toAttachmentTruncationHeaderValue(
@@ -45,5 +52,5 @@ export function describeAttachmentTruncation(names: readonly string[] | undefine
   if (names.length === 1) {
     return `Only part of ${names[0]} was read because it is too long to read in full.`;
   }
-  return `Only part of each of these files was read because they are too long to read in full: ${NAME_LIST.format(names)}.`;
+  return `Only part of each of these files was read because they are too long to read in full: ${formatNameList(names)}.`;
 }

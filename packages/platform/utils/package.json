@@ -15,6 +15,7 @@
     "./display-name": "./src/displayName.ts",
     "./fence": "./src/fence.ts",
     "./format": "./src/format.ts",
+    "./greeting": "./src/greeting.ts",
     "./interaction-timings": "./src/interactionTimings.ts",
     "./logger": "./src/logger.ts",
     "./managed-chat-idempotency": "./src/managedChatIdempotency.ts",
@@ -58,6 +59,9 @@
       ],
       "format": [
         "./src/format.ts"
+      ],
+      "greeting": [
+        "./src/greeting.ts"
       ],
       "interaction-timings": [
         "./src/interactionTimings.ts"
