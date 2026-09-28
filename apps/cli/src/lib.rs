@@ -114,6 +114,7 @@ pub mod approval_audit;
 pub(crate) mod approval_details;
 pub mod ecosystem;
 pub mod init;
+pub(crate) mod installs;
 pub mod interactive;
 pub mod keybindings;
 pub mod local_models;
@@ -140,9 +141,11 @@ pub mod powershell_tool;
 pub mod sandbox;
 pub mod schedules;
 pub mod shell_snapshot;
+pub(crate) mod sources;
 pub mod sync;
 pub mod terminal_style;
 pub mod terminal_text;
+pub(crate) mod terminals;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
@@ -152,15 +155,13 @@ pub mod usage_summary;
 
 // Phase-2 candidates, implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
-pub(crate) mod installs;
 #[allow(dead_code)]
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
-pub mod sdk_io;
-pub(crate) mod sources; // used by OneShotOutputMode::JsonLine in lib.rs
-                        // policy lives at platform::policy; re-exported here so callers using
-                        // `crate::policy::*` continue to resolve unchanged.
+pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
+                // policy lives at platform::policy; re-exported here so callers using
+                // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
 // PHASE2: WS transport for a2a, wraps jsonrpc::handle_request over persistent WS connections
@@ -992,18 +993,45 @@ enum Command {
         /// a filename is used as given. Defaults to the working directory.
         #[arg(long)]
         out: Option<String>,
+        /// Aspect ratio as width:height, e.g. 16:9. A model that cannot draw it
+        /// says which ratios it can.
+        #[arg(long, value_parser = cloud::image::parse_aspect_ratio, conflicts_with = "size")]
+        aspect: Option<String>,
         /// Image size, e.g. 256x256. The account decides the default.
         #[arg(long)]
         size: Option<String>,
         /// Rendering quality the hosted route accepts (standard or hd).
-        #[arg(long)]
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(cloud::image::IMAGE_QUALITIES))]
         quality: Option<String>,
+        /// Draw on a transparent background. --transparent=false turns a saved
+        /// default off.
+        #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+        transparent: Option<bool>,
         /// How many images to generate.
-        #[arg(long, short = 'n', default_value_t = 1)]
-        count: u8,
+        #[arg(long, short = 'n')]
+        count: Option<u8>,
         /// Catalogue image model to use instead of the first admitted one.
         #[arg(short, long)]
         model: Option<String>,
+        /// Reuse the prompt and settings of your last image. A prompt or
+        /// setting given here replaces that part.
+        #[arg(long)]
+        again: bool,
+        /// Try your last failed or stopped image again with the same prompt
+        /// and settings.
+        #[arg(long, conflicts_with_all = ["prompt", "again", "aspect", "size", "quality", "transparent", "count", "model", "save_defaults"])]
+        retry: bool,
+        /// Remember the settings on this command for later images. Without a
+        /// prompt, only saves them.
+        #[arg(long)]
+        save_defaults: bool,
+        /// Forget your saved image settings.
+        #[arg(long, conflicts_with = "save_defaults")]
+        clear_defaults: bool,
+        /// Show the prompt, settings and files of your last image and your
+        /// saved defaults, and exit.
+        #[arg(long)]
+        last: bool,
         /// List the image models this account can generate with, and exit.
         #[arg(long)]
         list_models: bool,
@@ -1993,12 +2021,8 @@ async fn print_hosted_history(limit: usize) {
 
 /// `agi image "<prompt>"`: one hosted generation, saved where the user asked.
 async fn handle_image_command(
-    prompt: Option<&str>,
-    out: Option<&str>,
-    size: Option<&str>,
-    quality: Option<&str>,
-    count: u8,
-    model: Option<&str>,
+    command: cloud::image::ImageCommand,
+    last: bool,
     list_models: bool,
 ) -> Result<()> {
     let privacy = account_privacy_mode();
@@ -2013,35 +2037,85 @@ async fn handle_image_command(
         }
         for model in &models {
             println!(
-                "{}  {}  {}  {}",
-                model.model_id, model.name, model.provider, model.state
+                "{}  {}  {}  {}{}",
+                model.model_id,
+                model.name,
+                model.provider,
+                model.state,
+                if model.supports_edit {
+                    "  transparent background"
+                } else {
+                    ""
+                }
             );
         }
         return Ok(());
     }
 
-    let Some(prompt) = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()) else {
-        anyhow::bail!("An image needs a prompt: agi image \"a red bicycle\"");
-    };
-
-    let options = cloud::image::ImageRequestOptions {
-        prompt: prompt.to_string(),
-        count,
-        size: size.map(str::to_string),
-        quality: quality.map(str::to_string),
-        model: model.map(str::to_string),
-        out: out.map(std::path::PathBuf::from),
-    };
-    let cwd = std::env::current_dir()?;
-    let generation = cloud::image::generate(privacy, &options, &cwd)
-        .await
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-
-    for path in &generation.paths {
-        println!("{}", path.display());
+    if last {
+        println!("{}", cloud::image::describe_last());
+        return Ok(());
     }
-    output::print_info(&format!("{} via {}", generation.model, generation.provider));
-    Ok(())
+    if command.clear_defaults {
+        output::print_info(&cloud::image::clear_defaults().map_err(|error| anyhow::anyhow!(error))?);
+    }
+    if command.save_defaults {
+        output::print_info(
+            &cloud::image::save_defaults(&command.settings).map_err(|error| anyhow::anyhow!(error))?,
+        );
+    }
+    if !command.retry && !command.again && command.prompt.is_none() {
+        if command.save_defaults || command.clear_defaults {
+            return Ok(());
+        }
+        anyhow::bail!("An image needs a prompt: agi image \"a red bicycle\"");
+    }
+
+    let cwd = std::env::current_dir()?;
+    let run = if command.retry {
+        cloud::image::retry(privacy, command.out.clone(), &cwd, image_interrupt()).await
+    } else {
+        let options = cloud::image::prepare(&command).map_err(|error| anyhow::anyhow!(error))?;
+        cloud::image::generate(privacy, &options, &cwd, image_interrupt()).await
+    }
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    match run {
+        cloud::image::ImageRun::Saved(generation) => {
+            for file in &generation.files {
+                println!("{}", file.path.display());
+            }
+            if command.again || command.retry {
+                output::print_info(&format!("Prompt: {}", generation.prompt));
+            }
+            output::print_info(&generation.summary());
+            Ok(())
+        }
+        cloud::image::ImageRun::Stopped(message) => {
+            output::print_info(&message);
+            std::process::exit(130);
+        }
+        cloud::image::ImageRun::Failed(failure) => anyhow::bail!(
+            "{}{}",
+            failure.message,
+            if failure.retryable {
+                " Run `agi image --retry` to try it again."
+            } else {
+                ""
+            }
+        ),
+    }
+}
+
+async fn image_interrupt() {
+    if tokio::signal::ctrl_c().await.is_err() {
+        std::future::pending::<()>().await;
+    }
+    output::print_info("Stopping the image. Press Ctrl-C again to quit without waiting.");
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        std::process::exit(130);
+    });
 }
 
 /// Render a structured command's result, honouring the global
@@ -3843,6 +3917,7 @@ pub async fn run_main() -> Result<()> {
         None => None,
     };
     let outcome = run_cli(cli).await;
+    terminals::stop_all();
     if let Some(worktree) = session_worktree.filter(|_| interactive) {
         settle_session_worktree(&worktree).await;
     }
@@ -4185,6 +4260,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     // exits immediately.
                     tokio::spawn(async {
                         let _ = tokio::signal::ctrl_c().await;
+                        terminals::stop_all();
                         std::process::exit(130);
                     });
                     let partial = partial_buffer
@@ -4214,6 +4290,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         eprintln!("Interrupted, turn cancelled before completion.");
                     }
                     // 130 = 128 + SIGINT, the conventional exit code.
+                    terminals::stop_all();
                     std::process::exit(130);
                 };
                 match result {
@@ -5078,22 +5155,36 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Image {
                 prompt,
                 out,
+                aspect,
                 size,
                 quality,
+                transparent,
                 count,
                 model,
+                again,
+                retry,
+                save_defaults,
+                clear_defaults,
+                last,
                 list_models,
             } => {
-                handle_image_command(
-                    prompt.as_deref(),
-                    out.as_deref(),
-                    size.as_deref(),
-                    quality.as_deref(),
-                    *count,
-                    model.as_deref(),
-                    *list_models,
-                )
-                .await
+                let command = cloud::image::ImageCommand {
+                    prompt: prompt.clone(),
+                    settings: cloud::image::ImageSettings {
+                        model: model.clone(),
+                        aspect_ratio: aspect.clone(),
+                        size: size.clone(),
+                        quality: quality.clone(),
+                        transparent_background: *transparent,
+                        count: *count,
+                    },
+                    out: out.as_deref().map(std::path::PathBuf::from),
+                    again: *again,
+                    retry: *retry,
+                    save_defaults: *save_defaults,
+                    clear_defaults: *clear_defaults,
+                };
+                handle_image_command(command, *last, *list_models).await
             }
 
             // --- Onboarding ---

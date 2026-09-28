@@ -446,6 +446,14 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
+  try {
+    await sidebarProvider.releaseForTerminal();
+  } catch (error) {
+    await vscode.window.showWarningMessage(
+      `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
   const cli = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
   const terminal = vscode.window.createTerminal({ name: 'AGI', cwd: folder.uri });
   terminal.show();

@@ -7,7 +7,9 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
+import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { clearTermsGateMarker, hasCurrentTermsGateMarker } from '../TermsGate';
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
@@ -24,14 +26,18 @@ export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string })
 export function RecordTermsAcceptance({
   redirectTo,
   surface = 'web-signup',
+  confirmAge = false,
 }: {
   redirectTo: string;
   surface?: 'web-signup' | 'web-login';
+  confirmAge?: boolean;
 }) {
   const { isLoaded, isSignedIn } = useSession();
   const completedSignUp = useCompletedSignUpForCurrentSession();
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
+  const [ageStep, setAgeStep] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const attempted = useRef(false);
 
   const record = useCallback(async () => {
@@ -56,8 +62,7 @@ export function RecordTermsAcceptance({
   }, [redirectTo, router, surface]);
 
   useEffect(() => {
-    if (!isLoaded || (surface === 'web-signup' && !completedSignUp.isLoaded) || attempted.current)
-      return;
+    if (!isLoaded || !completedSignUp.isLoaded || attempted.current) return;
     attempted.current = true;
     if (!isSignedIn) {
       clearTermsGateMarker();
@@ -74,10 +79,19 @@ export function RecordTermsAcceptance({
       );
       return;
     }
+    if (
+      surface === 'web-login' &&
+      (confirmAge || (completedSignUp.createdThisSession && !completedSignUp.isCurrentSession))
+    ) {
+      setAgeStep(true);
+      return;
+    }
     void record();
   }, [
+    completedSignUp.createdThisSession,
     completedSignUp.isCurrentSession,
     completedSignUp.isLoaded,
+    confirmAge,
     isLoaded,
     isSignedIn,
     record,
@@ -85,6 +99,25 @@ export function RecordTermsAcceptance({
     router,
     surface,
   ]);
+
+  if (ageStep) {
+    return (
+      <div className="mt-6 flex flex-col" data-testid="terms-age-confirmation">
+        <AuthAgeConfirmation confirmed={ageConfirmed} disabled={false} onChange={setAgeConfirmed} />
+        <button
+          type="button"
+          className={AUTH_PRIMARY_BUTTON_CLASS}
+          disabled={!ageConfirmed}
+          onClick={() => {
+            setAgeStep(false);
+            void record();
+          }}
+        >
+          Continue
+        </button>
+      </div>
+    );
+  }
 
   if (failure === 'outdated') {
     return (

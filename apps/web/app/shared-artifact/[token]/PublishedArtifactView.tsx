@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { SandboxedIframe } from '@/features/chat/components/SandboxedIframe';
 import {
@@ -12,6 +13,7 @@ import {
   isSandboxedPublishedKind,
   type PublishedArtifactKind,
 } from '@/features/chat/components/artifacts/publishedArtifactRender';
+import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
 
 /**
  * Public viewer for a published artifact (CAP-015 slice 2).
@@ -30,6 +32,7 @@ export interface PublishedArtifactViewProps {
   publishedAt: string;
   /** Who the publication is for. Drives the line under the title, nothing else. */
   audience?: 'public' | 'organization';
+  token?: string;
 }
 
 function formatDate(value: string): string {
@@ -45,9 +48,12 @@ export function PublishedArtifactView({
   content,
   publishedAt,
   audience = 'public',
+  token,
 }: PublishedArtifactViewProps) {
   const { t } = useTranslation('chat');
   const sandboxed = isSandboxedPublishedKind(kind);
+  const runnable = kind === 'html' || kind === 'react';
+  const runtime = usePublishedArtifactRuntime(runnable ? token : undefined);
   const [renderError, setRenderError] = useState<string | null>(null);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
@@ -94,6 +100,46 @@ export function PublishedArtifactView({
         </div>
       ) : null}
 
+      {runtime.signInNeeded && token ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-muted/40 px-4 py-3 text-sm text-foreground"
+        >
+          <p className="min-w-0 flex-1">
+            {t('artifactPublish.runtimeSignIn', "Sign in to use this app's AI and saved data.")}
+          </p>
+          <Button asChild size="sm">
+            <a href={`/login?redirectTo=${encodeURIComponent(`/shared-artifact/${token}`)}`}>
+              {t('artifactPublish.runtimeSignInAction', 'Sign in')}
+            </a>
+          </Button>
+        </div>
+      ) : null}
+
+      {runtime.askingForAi ? (
+        <section
+          aria-label={t('artifactPublish.runtimeConsentLabel', 'AI permission')}
+          aria-live="polite"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-muted/40 px-4 py-3 text-sm text-foreground"
+          data-testid="artifact-runtime-consent"
+        >
+          <p className="min-w-0 flex-1">
+            {t(
+              'artifactPublish.runtimeConsent',
+              "This app wants to use AI with your account. Each request counts toward your plan's usage.",
+            )}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button size="sm" onClick={() => runtime.answerAiRequest(true)}>
+              {t('artifactPublish.runtimeAllow', 'Allow')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => runtime.answerAiRequest(false)}>
+              {t('artifactPublish.runtimeDecline', "Don't allow")}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       {sandboxed ? (
         <SandboxedIframe
           payload={payload}
@@ -101,6 +147,7 @@ export function PublishedArtifactView({
           title={heading}
           className="h-[70vh] w-full rounded-lg border border-border/40 bg-white"
           onRenderError={setRenderError}
+          runtime={runtime.host}
         />
       ) : kind === 'svg' ? (
         svgSrc ? (

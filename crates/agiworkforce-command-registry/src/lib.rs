@@ -391,7 +391,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "tasks",
-            "List subagent tasks (/tasks show <id>, /tasks stop <id>)",
+            "List subagent tasks and background commands (/tasks show <id>, /tasks stop <id>)",
             true,
             true,
             vec!["task"],

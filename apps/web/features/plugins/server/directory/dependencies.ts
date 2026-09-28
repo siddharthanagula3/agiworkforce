@@ -1,19 +1,26 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { valid } from 'semver';
 import {
   PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
   type PluginInstalledDependency,
 } from '@agiworkforce/cloud-contracts';
 
 import {
+  conflictingConstraints,
+  conflictingConstraintsMessage,
+  installedOutsideRangeMessage,
+  listedOutsideRangeMessage,
   mergePluginDependencies,
   parsePluginDependencies,
   pluginLabel,
   PluginDependencyError,
   resolvePluginDependencies,
+  unmetConstraint,
   type PluginDependencyNode,
   type PluginDependencyRef,
+  type PluginVersionConstraint,
   type ResolvedPluginDependency,
 } from '@/lib/services/plugin-dependencies';
 import {
@@ -26,7 +33,9 @@ import {
 import {
   CLAUDE_PLUGIN_METADATA_PATH,
   GITHUB_API_USER_AGENT,
+  PLUGIN_DIRECTORY_FALLBACK_VERSION,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
+  PLUGIN_DIRECTORY_SHA_VERSION_PREFIX,
   RUNTIME_NOTE_NOT_INSPECTED,
   RUNTIME_NOTE_SOURCE_UNKNOWN,
   SOURCE_FACET_BUILTIN,
@@ -34,10 +43,13 @@ import {
 } from './constants';
 import { rawFileUrl } from './inspection';
 import { DIRECTORY_MARKETPLACES, type DirectoryFetch } from './official-marketplace';
+import { releaseTagSatisfying } from './release-tags';
 import { fetchPluginSkillFiles } from './skill-files';
 import type { InstalledDirectorySkill, PluginDirectoryEntry, PluginSourceLocation } from './types';
 
 const HTTP_NOT_FOUND = 404;
+const UNDECLARED_VERSION_PREFIX = `${PLUGIN_DIRECTORY_FALLBACK_VERSION}+${PLUGIN_DIRECTORY_SHA_VERSION_PREFIX}`;
+const UNVERSIONED_COPY = 'a copy with no version';
 
 export interface InstallableSource {
   record: PluginDirectoryEntry;
@@ -106,6 +118,7 @@ interface ExistingInstallation {
   id: string;
   enabled: boolean;
   review_required: boolean;
+  installed_version: string;
 }
 
 export function installableSource(record: PluginDirectoryEntry): SourceCheck {
@@ -183,14 +196,14 @@ function isDirectoryMarketplace(name: string): boolean {
   return DIRECTORY_MARKETPLACES.some((marketplace) => marketplace.name === name);
 }
 
-async function enabledInMarketplace(
+async function enabledVersionInMarketplace(
   db: DatabaseAdapter,
   userId: string,
   marketplace: string,
   pluginKey: string,
-): Promise<boolean> {
-  const rows = await db.query<{ id: string }>(
-    `select installation.id
+): Promise<string | null> {
+  const rows = await db.query<{ installed_version: string }>(
+    `select installation.installed_version
        from public.plugin_marketplace_installations installation
        join public.plugin_marketplace_entries entries on entries.id = installation.entry_id
        join public.plugin_marketplace_sources sources on sources.id = entries.source_id
@@ -202,7 +215,16 @@ async function enabledInMarketplace(
       limit 1`,
     [userId, pluginKey, [marketplace, shadowSourceName(marketplace)]],
   );
-  return rows.length > 0;
+  return rows[0]?.installed_version ?? null;
+}
+
+function declaredVersion(version: string): string | null {
+  return version.startsWith(UNDECLARED_VERSION_PREFIX) ? null : version;
+}
+
+function shownVersion(version: string): string {
+  const declared = declaredVersion(version);
+  return declared === null ? UNVERSIONED_COPY : (valid(declared) ?? declared);
 }
 
 interface DependencyTarget {
@@ -293,13 +315,28 @@ async function resolveMarketplaceDependencies(
           `Dependency "${target.label}" (required by ${target.requiredBy}) is not in this upload, so ${rootLabel} was not installed. Add it to the same zip, or name the marketplace it comes from as ${reference.name}@<marketplace>.`,
         );
       }
-      if (reference.version !== null) {
-        throw new PluginDependencyError(
-          `Dependency "${target.label}" (required by ${target.requiredBy}) asks for version ${reference.version}, and the web app installs the version its marketplace lists without checking a range, so ${rootLabel} was not installed.`,
-        );
-      }
       if (marketplace !== declaringMarketplace) {
-        if (await enabledInMarketplace(context.db, context.userId, marketplace, reference.name)) {
+        const enabled = await enabledVersionInMarketplace(
+          context.db,
+          context.userId,
+          marketplace,
+          reference.name,
+        );
+        if (enabled !== null) {
+          const constraint: PluginVersionConstraint | null =
+            reference.version === null
+              ? null
+              : { range: reference.version, requiredBy: target.requiredBy };
+          if (constraint && unmetConstraint(declaredVersion(enabled), [constraint])) {
+            throw new PluginDependencyError(
+              installedOutsideRangeMessage(
+                target.label,
+                constraint,
+                shownVersion(enabled),
+                rootLabel,
+              ),
+            );
+          }
           return null;
         }
         if (!root.allowlist.includes(marketplace)) {
@@ -326,7 +363,7 @@ async function existingDirectoryInstallations(
     ExistingInstallation & { repository_url: string; plugin_key: string }
   >(
     `select installation.id, installation.enabled, installation.review_required,
-            sources.repository_url, entries.plugin_key
+            installation.installed_version, sources.repository_url, entries.plugin_key
        from public.plugin_marketplace_installations installation
        join public.plugin_marketplace_entries entries on entries.id = installation.entry_id
        join public.plugin_marketplace_sources sources on sources.id = entries.source_id
@@ -358,12 +395,83 @@ async function existingEntryInstallations(
 ): Promise<Map<string, ExistingInstallation>> {
   if (entryIds.length === 0) return new Map();
   const rows = await db.query<ExistingInstallation & { entry_id: string }>(
-    `select id, enabled, review_required, entry_id
+    `select id, enabled, review_required, installed_version, entry_id
        from public.plugin_marketplace_installations
       where user_id = $1 and entry_id = any($2::uuid[])`,
     [userId, entryIds],
   );
   return new Map(rows.map((row) => [row.entry_id, row]));
+}
+
+function listedVersion(plugin: DependencyPlugin): string {
+  return plugin.kind === 'directory' ? plugin.source.record.version : plugin.found.entry.version;
+}
+
+async function listedOutsideRange(
+  context: DependencyContext,
+  dependency: ResolvedDependency,
+  constraint: PluginVersionConstraint,
+  rootLabel: string,
+): Promise<string> {
+  const listed = shownVersion(listedVersion(dependency.plugin));
+  if (dependency.plugin.kind !== 'directory') {
+    return listedOutsideRangeMessage(dependency.label, constraint, listed, rootLabel);
+  }
+  const { record, location } = dependency.plugin.source;
+  const release = await releaseTagSatisfying(
+    location.repositoryUrl,
+    record.id,
+    dependency.constraints,
+    context.fetchImpl,
+  );
+  if (release.status === 'none') {
+    return `Dependency "${dependency.label}" has no git tag satisfying ${constraint.range} (required by ${constraint.requiredBy}), so ${rootLabel} was not installed.`;
+  }
+  if (release.status === 'found') {
+    return `Dependency "${dependency.label}" (required by ${constraint.requiredBy}) requires ${constraint.range}, and its marketplace lists ${listed}. The web app installs only the version its marketplace lists, so install ${rootLabel} from the released CLI, which installs ${release.tag}.`;
+  }
+  return listedOutsideRangeMessage(dependency.label, constraint, listed, rootLabel);
+}
+
+async function assertVersionConstraints(
+  context: DependencyContext,
+  dependency: ResolvedDependency,
+  existing: ExistingInstallation | undefined,
+  rootLabel: string,
+): Promise<void> {
+  if (dependency.constraints.length === 0) return;
+  const conflict = conflictingConstraints(dependency.constraints);
+  if (conflict) {
+    throw new PluginDependencyError(
+      conflictingConstraintsMessage(dependency.label, conflict, rootLabel),
+    );
+  }
+  if (existing?.enabled) {
+    const unmet = unmetConstraint(
+      declaredVersion(existing.installed_version),
+      dependency.constraints,
+    );
+    if (unmet) {
+      throw new PluginDependencyError(
+        installedOutsideRangeMessage(
+          dependency.label,
+          unmet,
+          shownVersion(existing.installed_version),
+          rootLabel,
+        ),
+      );
+    }
+    return;
+  }
+  const unmet = unmetConstraint(
+    declaredVersion(listedVersion(dependency.plugin)),
+    dependency.constraints,
+  );
+  if (unmet) {
+    throw new PluginDependencyError(
+      await listedOutsideRange(context, dependency, unmet, rootLabel),
+    );
+  }
 }
 
 export async function planMarketplaceDependencies(
@@ -392,6 +500,7 @@ export async function planMarketplaceDependencies(
       plugin.kind === 'directory'
         ? directoryInstalled.get(plugin.source)
         : entryInstalled.get(plugin.found.entry.id);
+    await assertVersionConstraints(context, dependency, existing, rootLabel);
     if (existing?.enabled) continue;
     if (existing?.review_required) {
       throw new PluginDependencyError(

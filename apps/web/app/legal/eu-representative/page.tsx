@@ -12,6 +12,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'EU representative',
@@ -36,7 +37,8 @@ export default function EuRepresentativePage() {
                 Article 27 GDPR.
               </strong>{' '}
               We would rather state that than defer it. Last updated:{' '}
-              {POLICY_LAST_UPDATED.euRepresentative}.
+              {POLICY_LAST_UPDATED.euRepresentative}.{' '}
+              <PolicyVersionsLink policy="euRepresentative" />
             </>
           }
           ctas={[]}

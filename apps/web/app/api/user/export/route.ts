@@ -18,6 +18,9 @@ import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-ser
 import { recordAuditEvent } from '@/lib/security-audit';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-export-reader';
+import { requestDataExportArchive } from '@/lib/server/data-export-archive';
+import { requireCsrfToken } from '@/lib/csrf';
+import type { DataExportArchiveResponse } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -611,6 +614,14 @@ const publishedArtifactExportSchema = z.object({
   language: z.string().nullable(),
   content: z.string(),
   visibility: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const publishedArtifactStorageExportSchema = z.object({
+  published_artifact_id: z.string(),
+  storage_key: z.string(),
+  value: z.string(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -1438,6 +1449,15 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: bonusCreditGrantExportSchema,
+  },
+  {
+    section: 'published_app_saved_data',
+    table: 'published_artifact_storage',
+    sql: `select published_artifact_id, storage_key, value, created_at, updated_at
+          from published_artifact_storage
+          where owner_user_id = $1
+          order by published_artifact_id asc, storage_key asc`,
+    schema: publishedArtifactStorageExportSchema,
   },
   {
     section: 'expiring_credit_purchases',
@@ -2362,6 +2382,7 @@ async function collectUserData(
     userId: user.id,
     ledger,
   });
+
   // Files the user uploaded and media generated for them. Absent from this
   // export until 2026-08-21, while account erasure has always deleted them.
   // so the product could destroy this category of personal data on request but
@@ -2828,7 +2849,53 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
   );
 }
 
+async function handleRequestExportArchive(request: NextRequest): Promise<NextResponse> {
+  const { userId, email } = await getClerkAuthUser(request);
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'user-data-export', userId);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const serviceDb = getNeonDb();
+  const scopedDbFor = (organizationId: string | null): DatabaseAdapter =>
+    createClaimedUserScopedDb(serviceDb, { userId, organizationId });
+  const origin = exportOrigin(request);
+
+  const { archive, created } = await requestDataExportArchive({
+    db: scopedDbFor(null),
+    userId,
+    origin,
+    collect: () => collectUserData({ id: userId, email }, scopedDbFor, serviceDb, origin),
+  });
+  if (created) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'data_exported',
+      request,
+      detail: {
+        resourceType: 'user_data',
+        resourceId: archive.id,
+        source: 'gdpr_portability_archive',
+      },
+    });
+  }
+
+  const body: DataExportArchiveResponse = { archive };
+  return NextResponse.json(body, {
+    status: 202,
+    headers: {
+      'Cache-Control': 'private, no-store',
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  });
+}
+
 export const GET = withCorsRoute(withErrorHandler(handleExportUserData));
+
+export const POST = withCorsRoute(withErrorHandler(handleRequestExportArchive));
 
 export function OPTIONS(request: NextRequest) {
   return (

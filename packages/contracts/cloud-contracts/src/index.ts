@@ -29,6 +29,7 @@ export * from './project-knowledge';
 export * from './managed-cloud-project-knowledge-client';
 export * from './resumable-uploads';
 export * from './managed-cloud-resumable-upload-client';
+export * from './data-export';
 export * from './domain-events';
 export * from './tool-events';
 export * from './agent-events';

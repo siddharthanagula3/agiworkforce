@@ -176,6 +176,15 @@ const legacyInitializeResponseSchema = z.object({
   }),
 });
 
+const threadWriterSchema = z.object({
+  holderId: z.string().min(1).max(64),
+  holderLabel: z.string().min(1).max(200),
+  acquiredAt: z.string(),
+  expiresAt: z.string(),
+  heldByThisHost: z.boolean(),
+  stale: z.boolean(),
+});
+
 const threadSummarySchema = z.object({
   id: z.string().min(1),
   title: z.string().max(500),
@@ -204,6 +213,7 @@ const threadSummarySchema = z.object({
   gitBranch: z.string().min(1).max(512).optional(),
   worktreeRoot: z.string().min(1).max(16_384).optional(),
   client: z.string().min(1).max(200).optional(),
+  writer: threadWriterSchema.optional().catch(undefined),
 });
 
 const threadStartResponseSchema = z.object({ thread: threadSummarySchema });
@@ -856,6 +866,23 @@ export class LocalRuntimeProtocolError extends Error {
   }
 }
 
+const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
+const threadWriterConflictSchema = z.object({
+  threadId: z.string().min(1),
+  writer: threadWriterSchema,
+});
+
+export function writerConflictHolder(error: unknown): string | undefined {
+  if (
+    !(error instanceof LocalRuntimeProtocolError) ||
+    error.code !== THREAD_WRITER_CONFLICT_ERROR_CODE
+  ) {
+    return undefined;
+  }
+  const conflict = threadWriterConflictSchema.safeParse(error.data);
+  return conflict.success ? conflict.data.writer.holderLabel : undefined;
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -1117,6 +1144,23 @@ export class LocalRuntimeClient {
   async archiveThread(threadId: string): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('thread/archive', { threadId });
+  }
+
+  async releaseWriter(threadId: string): Promise<void> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('writerLease'))) return;
+    await connection.request('thread/writer/release', { threadId });
+  }
+
+  async takeOverWriter(threadId: string): Promise<ThreadSummary> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('writerLease'))) {
+      throw new Error(
+        'The installed AGI CLI cannot hand a session from another app to this one. Update the AGI CLI to take it over.',
+      );
+    }
+    const result = await connection.request('thread/writer/takeover', { threadId });
+    return threadStartResponseSchema.parse(result).thread as ThreadSummary;
   }
 
   async deleteThread(threadId: string): Promise<void> {

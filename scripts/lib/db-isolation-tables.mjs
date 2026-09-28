@@ -3,6 +3,7 @@ export const USER_OWNED_TABLES = new Set([
   'web_messages',
   'web_artifacts',
   'web_artifact_versions',
+  'published_artifact_storage',
   'user_projects',
   'project_knowledge_files',
   'external_resource_references',

@@ -104,6 +104,16 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path.',
   },
+  generate_image: {
+    label: 'Create an image',
+    description:
+      'Creates an image from a description and shows it in the conversation. It runs the same pipeline as Image mode, with its safety checks, model policy and credit charge, and is offered only when your plan includes image generation. Classified as a reversible write with no egress path.',
+  },
+  edit_image: {
+    label: 'Edit an image',
+    description:
+      'Makes a new version of an image you attached or one made earlier in the conversation, through the same pipeline as Image mode. The original is kept. Classified as a reversible write with no egress path.',
+  },
   skill: {
     label: 'Run a skill',
     description:

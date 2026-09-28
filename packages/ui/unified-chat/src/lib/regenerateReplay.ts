@@ -13,6 +13,7 @@ export interface SendReplayMetadataLike {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: string;
   workMode?: CloudWorkMode;
   styleMode?: string;
   hasSkillInstruction?: boolean;
@@ -20,8 +21,7 @@ export interface SendReplayMetadataLike {
 }
 
 export type RegenerateReplayDecision<R extends SendReplayMetadataLike = SendReplayMetadataLike> =
-  | { ok: true; replay?: R }
-  | { ok: false; message: string };
+  { ok: true; replay?: R } | { ok: false; message: string };
 
 export interface RegenerateReplayMetadata<
   R extends SendReplayMetadataLike = SendReplayMetadataLike,
@@ -83,6 +83,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
   thinkingEnabled?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
+  officeFormat?: R['officeOutputFormat'];
   workMode?: R['workMode'];
   styleMode?: R['styleMode'];
   skillName?: string;
@@ -92,6 +93,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
     thinkingEnabled: replay?.thinkingEnabled,
     codeExecution: replay?.codeExecutionEnabled,
     officeCreation: replay?.officeCreationEnabled,
+    officeFormat: replay?.officeOutputFormat,
     workMode: replay?.workMode,
     styleMode: replay?.styleMode,
     skillName: replay?.skillName,

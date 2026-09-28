@@ -16,7 +16,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 
 import {
   getCustomRemoteMcpLimitErrorMessage,
-  getKnowledgeStorageLimitErrorMessage,
+  getFileStorageLimitErrorMessage,
   getProjectLimitErrorMessage,
 } from './free-plan-entitlements';
 
@@ -29,7 +29,7 @@ describe('plan labels in entitlement messages follow the catalog', () => {
 
   it('renames the plan in the connector and storage messages too', () => {
     expect(getCustomRemoteMcpLimitErrorMessage('max')).toContain('Renamed Max');
-    expect(getKnowledgeStorageLimitErrorMessage('pro', 1024 ** 3)).toContain('Renamed Pro');
+    expect(getFileStorageLimitErrorMessage('pro', 1024 ** 3)).toContain('Renamed Pro');
   });
 
   it('still refuses to name a plan that has no managed allowance', () => {
