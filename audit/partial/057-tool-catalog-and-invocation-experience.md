@@ -235,15 +235,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| desktop | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| mobile | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1218-1220`, `apps/web/features/media/services/media-api-service.ts:195-195`, `apps/mobile/app/(app)/chat/[id].tsx:386-386`, `apps/mobile/src/features/video/services/videogen.ts:65-65`
 
 ## S57.21: Memory tool.
 

@@ -211,49 +211,33 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extensi
 
 - Done when: The assistant can edit a word-processing document (e.g. Google Docs or Word) in a connected account.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-| desktop | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-| mobile | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.19: Spreadsheet editing.
 
 - Done when: The assistant can read and edit a spreadsheet in a connected account.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-| desktop | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-| mobile | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.20: Presentation editing.
 
 - Done when: The assistant can edit a presentation (e.g. Slides/PowerPoint) in a connected account.
 - Wave: 3
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-| desktop | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-| mobile | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.21: Team-message search.
 
