@@ -218,6 +218,9 @@ import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import {
   type AgiWorkPlanStep,
   advanceAgiWorkPlan,
+  advanceAgiWorkPlanToStep,
+  agiWorkExecutionDirective,
+  agiWorkPlanStepMarker,
   agiWorkGoalProgressEvent,
   agiWorkPlanEvent,
   agiWorkPlanProgressEvents,
@@ -3971,9 +3974,14 @@ export async function* runToolLoop(
           ? 'cancel'
           : reason === 'error' || reason === 'refusal'
             ? 'fail'
-            : 'complete';
+            : stoppedShort
+              ? 'stop'
+              : 'complete';
       agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, transition);
       yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+      for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+        yield encoder.encode(eventStream.emit(planEvent));
+      }
     }
     if (reason === 'cancelled') {
       yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
@@ -4670,6 +4678,13 @@ export async function* runToolLoop(
           for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
             yield encoder.encode(eventStream.emit(planEvent));
           }
+          const directive = agiWorkExecutionDirective(agiWorkPlan);
+          const last = messages.at(-1);
+          if (last?.role === 'user' && typeof last.content === 'string') {
+            messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${directive}` };
+          } else {
+            messages.push({ role: 'user', content: directive });
+          }
         } else {
           logger.warn(
             { provider: processed.provider, requestId: processed.requestId },
@@ -5238,6 +5253,20 @@ export async function* runToolLoop(
         }
         providerStep = await stepPromise;
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
+        if (agiWorkPlan.length > 0) {
+          const marker = agiWorkPlanStepMarker(
+            providerStep.canonicalText || providerStep.textContent,
+          );
+          const advanced =
+            marker === null ? agiWorkPlan : advanceAgiWorkPlanToStep(agiWorkPlan, marker);
+          if (JSON.stringify(advanced) !== JSON.stringify(agiWorkPlan)) {
+            agiWorkPlan = advanced;
+            yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+            for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+              yield encoder.encode(eventStream.emit(planEvent));
+            }
+          }
+        }
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
         }
