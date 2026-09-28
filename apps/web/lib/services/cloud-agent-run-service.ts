@@ -2643,7 +2643,7 @@ export async function cancelHumanHeldCloudAgentRun(
       (latest, row) => (!latest || Number(row.version) > Number(latest.version) ? row : latest),
       undefined,
     );
-    if (!checkpoint) return current;
+    if (!checkpoint) return null;
 
     const turnId = z.string().min(1).parse(checkpoint.turn_id);
     const kind = z.string().min(1).parse(checkpoint.checkpoint_kind);
@@ -2668,7 +2668,7 @@ export async function cancelHumanHeldCloudAgentRun(
     });
     return appended.run;
   });
-  return run;
+  return run ?? transitionCloudAgentRun(db, { ...input, state: 'cancelled' });
 }
 
 export function isCloudAgentRunHumanHeld(state: AgentTaskState): boolean {
