@@ -6,6 +6,7 @@ import { BookOpen } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 
 import { toUserMessage } from '@/lib/user-error-message';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 import {
   MAX_STUDY_TOPIC_LENGTH,
@@ -37,7 +38,7 @@ async function createConversationForStudy(title: string): Promise<string> {
   const response = await fetch('/api/chat/conversations', {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ title }),
   });
   const body: unknown = await response.json().catch(() => null);
