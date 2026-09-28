@@ -11,6 +11,7 @@ import {
 } from '@/lib/services/legal-hold-gate';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 
 // A temporary chat's files are media assets like any other until their window
 // is up, so callers reach their retention through this module rather than a
@@ -790,7 +791,7 @@ export async function permanentlyDeleteMediaAsset(
   const held = legalHoldPredicate('file', { alias: 'asset', nextParamIndex: 4 });
   const exclusion = legalHoldExclusion('file', { alias: 'asset', nextParamIndex: 4 });
   try {
-    return await db.transaction(async (tx) => {
+    const removed = await db.transaction(async (tx) => {
       const organizationId = await resolveActiveOrganizationId(tx, userId);
       const scope = `asset.id = $1 and asset.user_id = $2
             and asset.organization_id is not distinct from $3::uuid
@@ -829,6 +830,8 @@ export async function permanentlyDeleteMediaAsset(
       }
       return true;
     });
+    if (removed) await purgeDerivedRecords(db, 'media_assets', [{ owner: userId, key: id }]);
+    return removed;
   } catch (error) {
     if (isSchemaNotReady(error)) return false;
     throw error;
