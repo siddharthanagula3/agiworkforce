@@ -1,5 +1,9 @@
 import 'server-only';
 
+import type {
+  ManagedCloudSlackLinkWorkspace,
+  ManagedCloudSlackOverview,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   billingPlanCapabilityPlanLabels,
@@ -11,7 +15,6 @@ import { listWorkspaceMemberships } from '@/lib/services/active-workspace-servic
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 
 import { isSlackAppConfigured } from './slack-config';
-import type { SlackLinkWorkspace, SlackOverview } from './slack-contract';
 import { listSlackWorkspacesInstalledBy } from './slack-installations';
 import { listSlackAccountLinks } from './slack-links';
 import { listPendingSlackApprovals } from './slack-runs';
@@ -36,7 +39,7 @@ export const PERSONAL_WORKSPACE_NAME = 'Personal';
 export async function listSlackLinkWorkspaces(
   db: DatabaseAdapter,
   userId: string,
-): Promise<SlackLinkWorkspace[]> {
+): Promise<ManagedCloudSlackLinkWorkspace[]> {
   const memberships = await listWorkspaceMemberships(db, userId);
   const workspaces = [
     { id: null, name: PERSONAL_WORKSPACE_NAME },
@@ -54,7 +57,7 @@ export async function loadSlackOverview(
   db: DatabaseAdapter,
   userId: string,
   organizationId: string | null,
-): Promise<SlackOverview> {
+): Promise<ManagedCloudSlackOverview> {
   const [planAllowed, installations, links, approvals] = await Promise.all([
     slackPlanAllowed(db, userId, organizationId),
     listSlackWorkspacesInstalledBy(db, userId),

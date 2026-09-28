@@ -2,6 +2,18 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
+import {
+  MANAGED_CLOUD_SLACK_PATH,
+  ManagedCloudSlackAccountUnlinkedSchema,
+  ManagedCloudSlackInstallationRemovedSchema,
+  ManagedCloudSlackOverviewSchema,
+  ManagedCloudSlackRunDecisionSchema,
+  managedCloudSlackAccountLinkPath,
+  managedCloudSlackInstallationPath,
+  managedCloudSlackRunApprovalPath,
+  type ManagedCloudSlackOverview,
+  type ManagedCloudSlackPendingApproval,
+} from '@agiworkforce/cloud-contracts';
 import { Button, Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
@@ -10,12 +22,9 @@ import {
   SLACK_SETTINGS_STATUS_PARAM,
   isSlackInstallStatus,
   type SlackInstallStatus,
-  type SlackOverview,
-  type SlackPendingApprovalView,
 } from '@/lib/slack/slack-contract';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const OVERVIEW_PATH = '/api/slack';
 const OVERVIEW_UNREADABLE = 'Your Slack settings could not be loaded.';
 
 const INSTALL_STATUS_MESSAGE: Readonly<Record<SlackInstallStatus, string>> = {
@@ -32,7 +41,7 @@ const INSTALL_STATUS_MESSAGE: Readonly<Record<SlackInstallStatus, string>> = {
 type OverviewState =
   | { kind: 'loading' }
   | { kind: 'failed'; message: string }
-  | { kind: 'ready'; data: SlackOverview };
+  | { kind: 'ready'; data: ManagedCloudSlackOverview };
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -146,7 +155,7 @@ function ApprovalItem({
   busy,
   onDecide,
 }: {
-  approval: SlackPendingApprovalView;
+  approval: ManagedCloudSlackPendingApproval;
   busy: boolean;
   onDecide: (decision: 'approved' | 'rejected') => void;
 }) {
@@ -239,9 +248,12 @@ export function SlackSection() {
 
   const load = useCallback(async () => {
     try {
-      const response = await sendAuthorizedJson(OVERVIEW_PATH, { method: 'GET' });
+      const response = await sendAuthorizedJson(MANAGED_CLOUD_SLACK_PATH, { method: 'GET' });
       if (!response.ok) throw await readError(response, OVERVIEW_UNREADABLE);
-      setState({ kind: 'ready', data: (await response.json()) as SlackOverview });
+      setState({
+        kind: 'ready',
+        data: ManagedCloudSlackOverviewSchema.parse(await response.json()),
+      });
     } catch (cause) {
       setState({ kind: 'failed', message: toUserMessage(cause, OVERVIEW_UNREADABLE) });
     }
@@ -270,10 +282,11 @@ export function SlackSection() {
       `installation:${installationId}`,
       async () => {
         const response = await sendAuthorizedJson(
-          `/api/slack/installations/${encodeURIComponent(installationId)}`,
+          managedCloudSlackInstallationPath(installationId),
           { method: 'DELETE' },
         );
         if (!response.ok) throw await readError(response, 'The app could not be removed.');
+        ManagedCloudSlackInstallationRemovedSchema.parse(await response.json());
         return `AGI Workforce was removed from ${teamName}.`;
       },
       'The app could not be removed.',
@@ -284,30 +297,31 @@ export function SlackSection() {
     void run(
       `link:${linkId}`,
       async () => {
-        const response = await sendAuthorizedJson(
-          `/api/slack/links/${encodeURIComponent(linkId)}`,
-          { method: 'DELETE' },
-        );
+        const response = await sendAuthorizedJson(managedCloudSlackAccountLinkPath(linkId), {
+          method: 'DELETE',
+        });
         if (!response.ok)
           throw await readError(response, 'That Slack account could not be disconnected.');
+        ManagedCloudSlackAccountUnlinkedSchema.parse(await response.json());
         return `Your Slack account in ${teamName} was disconnected.`;
       },
       'That Slack account could not be disconnected.',
     );
   }
 
-  function decide(approval: SlackPendingApprovalView, decision: 'approved' | 'rejected') {
+  function decide(approval: ManagedCloudSlackPendingApproval, decision: 'approved' | 'rejected') {
     void run(
       `approval:${approval.runId}`,
       async () => {
         const response = await sendAuthorizedJson(
-          `/api/slack/runs/${encodeURIComponent(approval.runId)}/approval`,
+          managedCloudSlackRunApprovalPath(approval.runId),
           {
             method: 'POST',
             body: { decision, toolCallIds: approval.toolCalls.map((call) => call.id) },
           },
         );
         if (!response.ok) throw await readError(response, 'Your decision could not be saved.');
+        ManagedCloudSlackRunDecisionSchema.parse(await response.json());
         return decision === 'approved'
           ? 'Approved. The answer continues in Slack.'
           : 'Denied. The answer continues in Slack without that step.';
