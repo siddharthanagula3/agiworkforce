@@ -20,7 +20,7 @@ use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
 pub(super) async fn execute_run_command(
     args: &HashMap<String, String>,
-    mut require_confirmation: bool,
+    require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let command = match args.get("command") {
@@ -47,182 +47,41 @@ pub(super) async fn execute_run_command(
 
     print_tool_status("run_command", &format!("Bash({})", command));
 
-    // C3 execution-policy gate: every command the string would run, including the
-    // ones after `&&`, `;`, `|` or inside `$(...)`, is evaluated before anything
-    // executes. A `Forbidden` decision is a hard block that no confirmation can
-    // override. Confirmation is only waived when EVERY segment matched an explicit
-    // allow rule.
+    let mut details = Vec::new();
+    if let Some(dir) = &working_dir {
+        details.push(format!("in {}", dir.display()));
+    }
+    let require_confirmation = match approve_command(
+        "run_command",
+        command,
+        details,
+        require_confirmation,
+        approval_callback,
+    )
+    .await?
     {
-        use crate::features::exec::exec_policy::{evaluate_command, load_policy};
-        use agiworkforce_execpolicy::Decision;
-        let evaluation = evaluate_command(&load_policy()?, command);
-        match evaluation.decision {
-            Decision::Forbidden => {
-                return Ok(ToolResult {
-                    tool_name: "run_command".to_string(),
-                    success: false,
-                    output: format!(
-                        "Command '{}' is blocked by the execution policy (forbidden) and was not run.",
-                        redact_tool_output(command)
-                    ),
-                });
-            }
-            Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
-            Decision::Allow if evaluation.every_segment_matched_rule => {
-                require_confirmation = false
-            }
-            Decision::Prompt | Decision::Allow => {}
-        }
-    }
-
-    if require_confirmation {
-        let safety = classify_command(command);
-        let hook_bypass = bypasses_git_hooks(command);
-        if !matches!(safety, CommandSafety::Safe) {
-            let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
-
-            match perms.check_command_allowing_hook_bypass(command) {
-                Some(true) => {
-                    // Previously allowed, skip prompt
-                }
-                Some(false) => {
-                    return Ok(ToolResult {
-                        tool_name: "run_command".to_string(),
-                        success: false,
-                        output: format!(
-                            "Command '{}' is denied by saved permissions. Use /permissions reset to clear.",
-                            redact_tool_output(command)
-                        ),
-                    });
-                }
-                None => {
-                    let (prompt_msg, default) = if hook_bypass {
-                        (
-                            "This command turns the repository's git hooks off. Allow it?",
-                            false,
-                        )
-                    } else {
-                        match safety {
-                            CommandSafety::Dangerous => {
-                                ("This command could be destructive. Allow it?", false)
-                            }
-                            _ => ("Allow this command?", true),
-                        }
-                    };
-                    let mut details = vec![
-                        describe_command(command),
-                        classify_filesystem_effect(command).describe().to_string(),
-                    ];
-                    if let Some(dir) = &working_dir {
-                        details.push(format!("in {}", dir.display()));
-                    }
-                    if hook_bypass {
-                        details.push(git_hook_bypass_reason().to_string());
-                    }
-
-                    if let Some(decision) = request_approval(
-                        approval_callback,
-                        ApprovalRequest::new(
-                            ApprovalRequestKind::Exec {
-                                command: command.to_string(),
-                            },
-                            prompt_msg,
-                            details,
-                        ),
-                    )
-                    .await
-                    {
-                        if !approval_allows(decision) {
-                            return Ok(ToolResult {
-                                tool_name: "run_command".to_string(),
-                                success: false,
-                                output: "User denied command execution".to_string(),
-                            });
-                        }
-
-                        let mut perms =
-                            crate::permissions::PermissionStore::load().unwrap_or_default();
-                        match decision {
-                            ApprovalDecision::AllowSession => {
-                                perms.allow_session_for_process(command);
-                            }
-                            ApprovalDecision::AlwaysAllow => {
-                                if let Err(error) =
-                                    crate::features::exec::exec_policy::persist_allow_command(
-                                        command,
-                                    )
-                                    .await
-                                {
-                                    return Ok(ToolResult {
-                                        tool_name: "run_command".to_string(),
-                                        success: false,
-                                        output: format!(
-                                            "Command was approved but its Always Allow rule could not be saved ({error}); the command was not run. Choose Allow Once to proceed without persistence."
-                                        ),
-                                    });
-                                }
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        match safety {
-                            CommandSafety::Dangerous => {
-                                eprintln!(
-                                    "  {} {}",
-                                    ts::danger_header("DANGEROUS:"),
-                                    ts::danger(describe_command(command))
-                                );
-                            }
-                            _ => {
-                                eprintln!(
-                                    "  {} {}",
-                                    ts::warning("Command:"),
-                                    ts::muted(describe_command(command))
-                                );
-                            }
-                        }
-
-                        eprintln!(
-                            "  {} {}",
-                            ts::warning("Effect:"),
-                            ts::muted(classify_filesystem_effect(command).describe())
-                        );
-
-                        if hook_bypass {
-                            eprintln!(
-                                "  {} {}",
-                                ts::danger_header("HOOKS OFF:"),
-                                ts::danger(git_hook_bypass_reason())
-                            );
-                        }
-
-                        let confirmed = Confirm::new()
-                            .with_prompt(prompt_msg)
-                            .default(default)
-                            .interact()
-                            .unwrap_or(false);
-
-                        if !confirmed {
-                            return Ok(ToolResult {
-                                tool_name: "run_command".to_string(),
-                                success: false,
-                                output: "User denied command execution".to_string(),
-                            });
-                        }
-
-                        let mut perms =
-                            crate::permissions::PermissionStore::load().unwrap_or_default();
-                        perms.allow_session_for_process(command);
-                    }
-                }
-            }
-        }
-    }
+        Ok(require_confirmation) => require_confirmation,
+        Err(refusal) => return Ok(refusal),
+    };
 
     // Most command strings are a program and its operands, and handing those to
     // `sh -c` is the only reason an operand can be read as syntax. When the
     // string needs no shell, it is exec'd as argv instead.
     let structured = parse_simple_command(command);
+
+    if args
+        .get("run_in_background")
+        .is_some_and(|value| matches!(value.trim(), "true" | "1" | "yes"))
+    {
+        return start_in_background(
+            command,
+            structured,
+            working_dir,
+            require_confirmation,
+            approval_callback,
+        )
+        .await;
+    }
 
     let result: std::io::Result<std::process::Output> = if crate::sandbox::sandbox_disabled() {
         let command_process = match &structured {
@@ -239,19 +98,8 @@ pub(super) async fn execute_run_command(
         }
         crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
     } else {
-        if let Some(host) = command_requests_network(command)
-            .then(|| internal_destination(command))
-            .flatten()
-        {
-            return Ok(ToolResult {
-                tool_name: "run_command".to_string(),
-                success: false,
-                output: format!(
-                    "Command '{}' targets {}, which the sandbox blocks: a request the model composes must not reach a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
-                    redact_tool_output(command),
-                    host,
-                ),
-            });
+        if let Some(refusal) = internal_destination_refusal(command) {
+            return Ok(refusal);
         }
         let network =
             sandbox_network_policy(command, require_confirmation, approval_callback).await;
@@ -357,6 +205,374 @@ pub(super) async fn execute_run_command(
             ),
         }),
     }
+}
+
+fn internal_destination_refusal(command: &str) -> Option<ToolResult> {
+    let host = command_requests_network(command)
+        .then(|| internal_destination(command))
+        .flatten()?;
+    Some(ToolResult {
+        tool_name: "run_command".to_string(),
+        success: false,
+        output: format!(
+            "Command '{}' targets {}, which the sandbox blocks: a request the model composes must not reach a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
+            redact_tool_output(command),
+            host,
+        ),
+    })
+}
+
+async fn start_in_background(
+    command: &str,
+    structured: Option<(String, Vec<String>)>,
+    working_dir: Option<std::path::PathBuf>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
+    let refuse = |output: String| ToolResult {
+        tool_name: "run_command".to_string(),
+        success: false,
+        output,
+    };
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let run_in = working_dir.unwrap_or_else(|| cwd.clone());
+    let manager = if crate::sandbox::sandbox_disabled() {
+        None
+    } else {
+        if let Some(refusal) = internal_destination_refusal(command) {
+            return Ok(refusal);
+        }
+        let network =
+            sandbox_network_policy(command, require_confirmation, approval_callback).await;
+        match crate::sandbox::SandboxManager::for_command_execution(cwd, network) {
+            Ok(manager) => Some(manager),
+            Err(error) => {
+                return Ok(refuse(format!(
+                    "Sandbox unavailable ({error}). Re-run with --no-sandbox only if you accept unrestricted command execution."
+                )))
+            }
+        }
+    };
+    let invocation = match &structured {
+        Some((program, args)) => crate::sandbox::Invocation::Program { program, args },
+        None => crate::sandbox::Invocation::Shell(command),
+    };
+    let background = match crate::terminals::start(command, |terminal| {
+        crate::sandbox::background_command(manager.as_ref(), invocation, &run_in, terminal)
+    }) {
+        Ok(background) => background,
+        Err(error) => return Ok(refuse(format!("The command did not start: {error:#}"))),
+    };
+    let output = crate::terminals::read_new(&background, crate::terminals::FIRST_OUTPUT_WAIT).await;
+    let how = if background.terminal {
+        "in a pseudo-terminal"
+    } else {
+        "with piped input and output, because this system has no pseudo-terminal"
+    };
+    Ok(ToolResult {
+        tool_name: "run_command".to_string(),
+        success: !matches!(output.state, crate::terminals::CommandState::Exited(code) if code != Some(0)),
+        output: truncate_output_with_save(
+            "run_command",
+            format!(
+                "Started {} in the background {how}. Read what it prints or type into it with command_output, and end it with command_stop.\n{}",
+                background.id,
+                crate::terminals::report(&background, &output)
+            ),
+        ),
+    })
+}
+
+pub(super) async fn execute_command_output(
+    args: &HashMap<String, String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
+    let result = |success: bool, output: String| ToolResult {
+        tool_name: "command_output".to_string(),
+        success,
+        output,
+    };
+    let Some(id) = args
+        .get("id")
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+    else {
+        return Ok(result(
+            true,
+            crate::terminals::summary(&crate::terminals::list()),
+        ));
+    };
+    let Some(background) = crate::terminals::find(id) else {
+        return Ok(result(
+            false,
+            format!("There is no background command {id}. Call command_output without an id to list them."),
+        ));
+    };
+    print_tool_status("command_output", &background.id);
+    if let Some(input) = args.get("input").filter(|input| !input.is_empty()) {
+        if background.state() != crate::terminals::CommandState::Running {
+            let output = crate::terminals::read_new(&background, std::time::Duration::ZERO).await;
+            return Ok(result(
+                false,
+                format!(
+                    "The input was not sent because the command is no longer running.\n{}",
+                    crate::terminals::report(&background, &output)
+                ),
+            ));
+        }
+        let typed: String = input
+            .chars()
+            .filter(|character| !character.is_control() || matches!(character, '\n' | '\r'))
+            .collect();
+        if !typed.trim().is_empty() {
+            match approve_command(
+                "command_output",
+                typed.trim(),
+                vec![format!(
+                    "typed into {}, which runs: {}",
+                    background.id,
+                    redact_tool_output(&background.command)
+                )],
+                require_confirmation,
+                approval_callback,
+            )
+            .await?
+            {
+                Ok(_) => {}
+                Err(refusal) => return Ok(refusal),
+            }
+        }
+        if let Err(error) = crate::terminals::send_input(&background, input).await {
+            return Ok(result(false, format!("{error:#}")));
+        }
+    }
+    let wait = args
+        .get("wait_seconds")
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .map(|seconds| std::time::Duration::from_secs_f64(seconds).min(crate::terminals::MAX_WAIT))
+        .unwrap_or(crate::terminals::DEFAULT_WAIT);
+    let output = crate::terminals::read_new(&background, wait).await;
+    Ok(result(
+        true,
+        truncate_output_with_save(
+            "command_output",
+            crate::terminals::report(&background, &output),
+        ),
+    ))
+}
+
+pub(super) async fn execute_command_stop(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let result = |success: bool, output: String| ToolResult {
+        tool_name: "command_stop".to_string(),
+        success,
+        output,
+    };
+    let Some(background) = args.get("id").and_then(|id| crate::terminals::find(id)) else {
+        return Ok(result(
+            false,
+            "There is no background command with that id. Call command_output without an id to list them.".to_string(),
+        ));
+    };
+    print_tool_status("command_stop", &background.id);
+    let already_ended = background.state() != crate::terminals::CommandState::Running;
+    let state = crate::terminals::stop(&background).await;
+    let output = crate::terminals::read_new(&background, std::time::Duration::ZERO).await;
+    let note = if already_ended {
+        "It had already ended."
+    } else if state == crate::terminals::CommandState::Running {
+        "It was killed and is still shutting down."
+    } else {
+        "Stopped it and everything it started."
+    };
+    Ok(result(
+        state != crate::terminals::CommandState::Running,
+        truncate_output_with_save(
+            "command_stop",
+            format!("{note}\n{}", crate::terminals::report(&background, &output)),
+        ),
+    ))
+}
+
+pub(super) async fn approve_command(
+    tool_name: &str,
+    command: &str,
+    extra_details: Vec<String>,
+    mut require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<std::result::Result<bool, ToolResult>> {
+    // C3 execution-policy gate: every command the string would run, including the
+    // ones after `&&`, `;`, `|` or inside `$(...)`, is evaluated before anything
+    // executes. A `Forbidden` decision is a hard block that no confirmation can
+    // override. Confirmation is only waived when EVERY segment matched an explicit
+    // allow rule.
+    {
+        use crate::features::exec::exec_policy::{evaluate_command, load_policy};
+        use agiworkforce_execpolicy::Decision;
+        let evaluation = evaluate_command(&load_policy()?, command);
+        match evaluation.decision {
+            Decision::Forbidden => {
+                return Ok(Err(ToolResult {
+                    tool_name: tool_name.to_string(),
+                    success: false,
+                    output: format!(
+                        "Command '{}' is blocked by the execution policy (forbidden) and was not run.",
+                        redact_tool_output(command)
+                    ),
+                }));
+            }
+            Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
+            Decision::Allow if evaluation.every_segment_matched_rule => {
+                require_confirmation = false
+            }
+            Decision::Prompt | Decision::Allow => {}
+        }
+    }
+
+    if require_confirmation {
+        let safety = classify_command(command);
+        let hook_bypass = bypasses_git_hooks(command);
+        if !matches!(safety, CommandSafety::Safe) {
+            let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+
+            match perms.check_command_allowing_hook_bypass(command) {
+                Some(true) => {
+                    // Previously allowed, skip prompt
+                }
+                Some(false) => {
+                    return Ok(Err(ToolResult {
+                        tool_name: tool_name.to_string(),
+                        success: false,
+                        output: format!(
+                            "Command '{}' is denied by saved permissions. Use /permissions reset to clear.",
+                            redact_tool_output(command)
+                        ),
+                    }));
+                }
+                None => {
+                    let (prompt_msg, default) = if hook_bypass {
+                        (
+                            "This command turns the repository's git hooks off. Allow it?",
+                            false,
+                        )
+                    } else {
+                        match safety {
+                            CommandSafety::Dangerous => {
+                                ("This command could be destructive. Allow it?", false)
+                            }
+                            _ => ("Allow this command?", true),
+                        }
+                    };
+                    let mut details = vec![
+                        describe_command(command),
+                        classify_filesystem_effect(command).describe().to_string(),
+                    ];
+                    details.extend(extra_details);
+                    if hook_bypass {
+                        details.push(git_hook_bypass_reason().to_string());
+                    }
+
+                    if let Some(decision) = request_approval(
+                        approval_callback,
+                        ApprovalRequest::new(
+                            ApprovalRequestKind::Exec {
+                                command: command.to_string(),
+                            },
+                            prompt_msg,
+                            details,
+                        ),
+                    )
+                    .await
+                    {
+                        if !approval_allows(decision) {
+                            return Ok(Err(ToolResult {
+                                tool_name: tool_name.to_string(),
+                                success: false,
+                                output: "User denied command execution".to_string(),
+                            }));
+                        }
+
+                        let mut perms =
+                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        match decision {
+                            ApprovalDecision::AllowSession => {
+                                perms.allow_session_for_process(command);
+                            }
+                            ApprovalDecision::AlwaysAllow => {
+                                if let Err(error) =
+                                    crate::features::exec::exec_policy::persist_allow_command(
+                                        command,
+                                    )
+                                    .await
+                                {
+                                    return Ok(Err(ToolResult {
+                                        tool_name: tool_name.to_string(),
+                                        success: false,
+                                        output: format!(
+                                            "Command was approved but its Always Allow rule could not be saved ({error}); the command was not run. Choose Allow Once to proceed without persistence."
+                                        ),
+                                    }));
+                                }
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        match safety {
+                            CommandSafety::Dangerous => {
+                                eprintln!(
+                                    "  {} {}",
+                                    ts::danger_header("DANGEROUS:"),
+                                    ts::danger(describe_command(command))
+                                );
+                            }
+                            _ => {
+                                eprintln!(
+                                    "  {} {}",
+                                    ts::warning("Command:"),
+                                    ts::muted(describe_command(command))
+                                );
+                            }
+                        }
+
+                        eprintln!(
+                            "  {} {}",
+                            ts::warning("Effect:"),
+                            ts::muted(classify_filesystem_effect(command).describe())
+                        );
+
+                        if hook_bypass {
+                            eprintln!(
+                                "  {} {}",
+                                ts::danger_header("HOOKS OFF:"),
+                                ts::danger(git_hook_bypass_reason())
+                            );
+                        }
+
+                        let confirmed = Confirm::new()
+                            .with_prompt(prompt_msg)
+                            .default(default)
+                            .interact()
+                            .unwrap_or(false);
+
+                        if !confirmed {
+                            return Ok(Err(ToolResult {
+                                tool_name: tool_name.to_string(),
+                                success: false,
+                                output: "User denied command execution".to_string(),
+                            }));
+                        }
+
+                        let mut perms =
+                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        perms.allow_session_for_process(command);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Ok(require_confirmation))
 }
 
 /// The directory a command was asked to run in. It has to be a directory
