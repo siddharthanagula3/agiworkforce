@@ -102,6 +102,10 @@ const DERIVED_CONTENT = [
 const OPERATIONAL_RECORD = [
   'account_compromise_responses',
   'account_lockout_attempts',
+  'account_security_challenges',
+  'account_security_credentials',
+  'account_security_enrollments',
+  'account_security_sessions',
   'account_security_settings',
   'account_sessions',
   'admin_request_idempotency',

@@ -1,0 +1,172 @@
+-- =============================================================================
+-- Migration 0334: Advanced Account Security, sign-in completed with a passkey
+--                 or security key
+--
+-- Why    : a stolen password or a read inbox was enough to reach an account,
+--          because every sign-in method the identity provider offers ends in a
+--          usable session. ChatGPT's Advanced Account Security lets a person
+--          opt in to requiring a passkey or a FIDO security key for every
+--          sign-in, with recovery keys shown once and a 48-hour wait on any
+--          recovery.
+--
+-- Shape  : account_security_enrollments is one row per person who started or
+--          finished enrolling: when they enrolled (null while setting up), the
+--          hashes of their unused recovery keys, keys generated but not yet
+--          confirmed as saved, and the recovery hold a used key starts.
+--          account_security_credentials holds each registered passkey or
+--          security key's public key and signature counter; no private
+--          material ever reaches the server. account_security_sessions records
+--          which identity sessions completed a passkey check and until when,
+--          which is what the request gate reads. account_security_challenges
+--          holds single-use WebAuthn challenges and the browser handoffs a
+--          desktop or mobile app uses when it cannot run WebAuthn itself.
+--
+-- Depends: 0037 (profiles, current_app_user_id), 0076 (set_row_updated_at)
+-- =============================================================================
+
+begin;
+
+create table if not exists public.account_security_enrollments (
+  user_id text primary key references public.profiles(id) on delete cascade,
+  enrolled_at timestamptz,
+  recovery_key_hashes text[] not null default '{}'
+    check (cardinality(recovery_key_hashes) <= 16),
+  pending_recovery_key_hashes text[]
+    check (pending_recovery_key_hashes is null or cardinality(pending_recovery_key_hashes) <= 16),
+  pending_recovery_keys_expire_at timestamptz,
+  recovery_started_at timestamptz,
+  recovery_unlocks_at timestamptz,
+  recovery_session_id text check (recovery_session_id is null or char_length(recovery_session_id) <= 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint account_security_pending_keys_shape check (
+    (pending_recovery_key_hashes is null) = (pending_recovery_keys_expire_at is null)
+  ),
+  constraint account_security_recovery_hold_shape check (
+    (recovery_started_at is null and recovery_unlocks_at is null and recovery_session_id is null)
+    or (
+      recovery_started_at is not null
+      and recovery_unlocks_at > recovery_started_at
+      and recovery_session_id is not null
+    )
+  )
+);
+
+drop trigger if exists set_account_security_enrollments_updated_at on public.account_security_enrollments;
+create trigger set_account_security_enrollments_updated_at
+  before update on public.account_security_enrollments
+  for each row execute function public.set_row_updated_at();
+
+create table if not exists public.account_security_credentials (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null references public.profiles(id) on delete cascade,
+  credential_id text not null unique check (credential_id ~ '^[A-Za-z0-9_-]{16,1400}$'),
+  public_key text not null check (public_key ~ '^[A-Za-z0-9_-]{16,4096}$'),
+  sign_count bigint not null default 0 check (sign_count >= 0),
+  transports text[] not null default '{}' check (cardinality(transports) <= 8),
+  device_type text not null check (device_type = any (array['singleDevice', 'multiDevice'])),
+  backed_up boolean not null default false,
+  name text not null check (char_length(name) between 1 and 64),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+
+drop trigger if exists set_account_security_credentials_updated_at on public.account_security_credentials;
+create trigger set_account_security_credentials_updated_at
+  before update on public.account_security_credentials
+  for each row execute function public.set_row_updated_at();
+
+create index if not exists idx_account_security_credentials_user
+  on public.account_security_credentials (user_id, created_at);
+
+create table if not exists public.account_security_sessions (
+  session_id text primary key check (char_length(session_id) between 1 and 200),
+  user_id text not null references public.profiles(id) on delete cascade,
+  method text not null check (method = any (array['passkey', 'recovery'])),
+  credential_id uuid references public.account_security_credentials(id) on delete set null,
+  verified_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  constraint account_security_sessions_window check (expires_at > verified_at)
+);
+
+create index if not exists idx_account_security_sessions_user
+  on public.account_security_sessions (user_id, expires_at);
+
+create table if not exists public.account_security_challenges (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null references public.profiles(id) on delete cascade,
+  purpose text not null check (purpose = any (array['registration', 'authentication', 'handoff'])),
+  session_id text not null check (char_length(session_id) between 1 and 200),
+  challenge text check (challenge is null or challenge ~ '^[A-Za-z0-9_-]{16,128}$'),
+  handoff_hash text unique check (handoff_hash is null or handoff_hash ~ '^[0-9a-f]{64}$'),
+  code_challenge text check (code_challenge is null or code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  code_hash text check (code_hash is null or code_hash ~ '^[0-9a-f]{64}$'),
+  client text check (client is null or client = any (array['desktop', 'mobile'])),
+  completed_at timestamptz,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint account_security_challenges_handoff_shape check (
+    (purpose = 'handoff') = (handoff_hash is not null and code_challenge is not null and client is not null)
+  ),
+  constraint account_security_challenges_ceremony_shape check (
+    purpose = 'handoff' or challenge is not null
+  )
+);
+
+drop trigger if exists set_account_security_challenges_updated_at on public.account_security_challenges;
+create trigger set_account_security_challenges_updated_at
+  before update on public.account_security_challenges
+  for each row execute function public.set_row_updated_at();
+
+create index if not exists idx_account_security_challenges_session
+  on public.account_security_challenges (user_id, session_id, purpose);
+
+create index if not exists idx_account_security_challenges_expiry
+  on public.account_security_challenges (expires_at);
+
+revoke all on public.account_security_enrollments from app_rls;
+revoke all on public.account_security_credentials from app_rls;
+revoke all on public.account_security_sessions from app_rls;
+revoke all on public.account_security_challenges from app_rls;
+grant select, insert, update, delete on public.account_security_enrollments to app_rls;
+grant select, insert, update, delete on public.account_security_credentials to app_rls;
+grant select, insert, update, delete on public.account_security_sessions to app_rls;
+grant select, insert, update, delete on public.account_security_challenges to app_rls;
+
+alter table public.account_security_enrollments enable row level security;
+alter table public.account_security_enrollments force row level security;
+alter table public.account_security_credentials enable row level security;
+alter table public.account_security_credentials force row level security;
+alter table public.account_security_sessions enable row level security;
+alter table public.account_security_sessions force row level security;
+alter table public.account_security_challenges enable row level security;
+alter table public.account_security_challenges force row level security;
+
+drop policy if exists account_security_enrollments_owner on public.account_security_enrollments;
+create policy account_security_enrollments_owner
+  on public.account_security_enrollments for all to app_rls
+  using (user_id = (select public.current_app_user_id()))
+  with check (user_id = (select public.current_app_user_id()));
+
+drop policy if exists account_security_credentials_owner on public.account_security_credentials;
+create policy account_security_credentials_owner
+  on public.account_security_credentials for all to app_rls
+  using (user_id = (select public.current_app_user_id()))
+  with check (user_id = (select public.current_app_user_id()));
+
+drop policy if exists account_security_sessions_owner on public.account_security_sessions;
+create policy account_security_sessions_owner
+  on public.account_security_sessions for all to app_rls
+  using (user_id = (select public.current_app_user_id()))
+  with check (user_id = (select public.current_app_user_id()));
+
+drop policy if exists account_security_challenges_owner on public.account_security_challenges;
+create policy account_security_challenges_owner
+  on public.account_security_challenges for all to app_rls
+  using (user_id = (select public.current_app_user_id()))
+  with check (user_id = (select public.current_app_user_id()));
+
+commit;

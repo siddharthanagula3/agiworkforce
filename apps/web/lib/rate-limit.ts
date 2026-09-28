@@ -579,6 +579,31 @@ export const rateLimitConfigs = {
     window: '1 h',
     failClosed: true,
   },
+  'account-security-read': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'account-security-write': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
+  'account-security-verify': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'account-security-recovery': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
+  'account-security-handoff': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
   'settings-account-compromise-read': {
     limit: 60,
     window: '1 m',
