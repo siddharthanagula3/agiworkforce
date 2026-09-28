@@ -56,6 +56,16 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Looks up a place or a route and renders a map card in the conversation. A search, not a verified place identity and not turn-by-turn navigation.',
   },
+  plan_itinerary: {
+    label: 'Plan an itinerary',
+    description:
+      'Looks up each stop of a trip plan as a places search and renders the plan as an itinerary card with a map and directions links. It reads place data and books nothing.',
+  },
+  compare_products: {
+    label: 'Compare products',
+    description:
+      'Renders the products a search found as a comparison card with prices, stores, buy links and specs. It keeps only links this turn retrieved, makes no request of its own and buys nothing.',
+  },
   url_fetch: {
     label: 'Fetch a page',
     description:

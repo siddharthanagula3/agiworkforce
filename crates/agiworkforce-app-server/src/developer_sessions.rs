@@ -6,16 +6,19 @@ use agiworkforce_protocol::developer_session::{
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookListResponse,
     InitializeParams, InitializeResponse, LocalModelListResponse, McpLoginParams, McpLoginResponse,
-    McpServerListResponse, ModelListParams, PluginListResponse, PluginSetEnabledParams,
-    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams,
-    ThreadHandoffParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    McpServerListResponse, MemoryAddParams, MemoryAddResponse, ModelListParams, PluginListResponse,
+    PluginSetEnabledParams, ProtocolVersionUnsupportedData, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -107,6 +110,34 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn archive_thread(&self, params: ThreadIdParams)
         -> Result<(), DeveloperSessionHostError>;
+
+    async fn unarchive_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_UNARCHIVE))
+    }
+
+    async fn search_threads(
+        &self,
+        _params: ThreadSearchParams,
+    ) -> Result<ThreadSearchResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_SEARCH))
+    }
+
+    async fn list_checkpoints(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadCheckpointsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_CHECKPOINTS))
+    }
+
+    async fn rewind_thread(
+        &self,
+        _params: ThreadRewindParams,
+    ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_REWIND))
+    }
 
     /// Remove a thread and everything persisted with it. Irreversible, so a
     /// user-facing caller confirms before sending it.
@@ -268,6 +299,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: SlashCommandRunParams,
     ) -> Result<SlashCommandRunResponse, DeveloperSessionHostError> {
         Err(unsupported("commands/run"))
+    }
+
+    async fn add_memory(
+        &self,
+        _params: MemoryAddParams,
+    ) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MEMORY_ADD))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -544,6 +582,46 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
+            method::THREAD_UNARCHIVE => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .unarchive_thread(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::THREAD_SEARCH => {
+                let params = match parse_params::<ThreadSearchParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .search_threads(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_CHECKPOINTS => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_checkpoints(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_REWIND => {
+                let params = match parse_params::<ThreadRewindParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .rewind_thread(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::THREAD_DELETE => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
                     Ok(params) => params,
@@ -777,6 +855,13 @@ impl DeveloperSessionProcessor {
                     .run_command(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::MEMORY_ADD => {
+                let params = match parse_params::<MemoryAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.add_memory(params).await.map(serde_json::to_value)
             }
             method::SHUTDOWN => {
                 if let Err(response) = parse_params::<ShutdownParams>(&request) {

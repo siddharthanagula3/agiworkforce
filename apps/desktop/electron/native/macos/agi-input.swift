@@ -9,6 +9,8 @@
 // It decides nothing. Every request has already passed the device-step contract
 // and the user's computer.use grant before it reaches here.
 
+import AppKit
+import Carbon
 import CoreGraphics
 import Foundation
 
@@ -203,13 +205,53 @@ func pressKey(_ key: String, modifiers: [String]) throws {
   up.post(tap: .cghidEventTap)
 }
 
-func perform(_ request: [String: Any]) throws {
+func secureInputOwner() -> Int32? {
+  guard let session = CGSessionCopyCurrentDictionary() as? [String: Any],
+    let owner = session["kCGSSessionSecureInputPID"] as? NSNumber
+  else {
+    return nil
+  }
+  return owner.int32Value
+}
+
+func frontWindow() -> [String: Any] {
+  let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+  guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]
+  else {
+    return [:]
+  }
+  for window in windows {
+    guard (window[kCGWindowLayer as String] as? Int) == 0,
+      let owner = window[kCGWindowOwnerPID as String] as? Int32,
+      let name = window[kCGWindowOwnerName as String] as? String
+    else {
+      continue
+    }
+    var front: [String: Any] = ["app": name]
+    if let bundle = NSRunningApplication(processIdentifier: owner)?.bundleIdentifier {
+      front["bundleId"] = bundle
+    }
+    if let title = window[kCGWindowName as String] as? String, !title.isEmpty {
+      front["window"] = title
+    }
+    if IsSecureEventInputEnabled() {
+      let holder = secureInputOwner()
+      front["secureInput"] = holder == nil || holder == owner
+    }
+    return front
+  }
+  return [:]
+}
+
+func perform(_ request: [String: Any]) throws -> [String: Any] {
   guard let action = request["action"] as? String else {
     throw Failure(message: "Every request needs an \"action\".")
   }
   switch action {
   case "ping":
-    return
+    return [:]
+  case "front":
+    return ["front": frontWindow()]
   case "move":
     try moveMouse(to: point(request, "x", "y"))
   case "click":
@@ -239,6 +281,7 @@ func perform(_ request: [String: Any]) throws {
   default:
     throw Failure(message: "\"\(action)\" is not an action this device runs.")
   }
+  return [:]
 }
 
 func reply(_ payload: [String: Any]) {
@@ -264,8 +307,10 @@ while let line = readLine(strippingNewline: true) {
   }
   let id = request["id"] as? NSNumber
   do {
-    try perform(request)
-    reply(id == nil ? ["ok": true] : ["id": id!, "ok": true])
+    var payload = try perform(request)
+    payload["ok"] = true
+    if let id { payload["id"] = id }
+    reply(payload)
   } catch let failure as Failure {
     reply(
       id == nil

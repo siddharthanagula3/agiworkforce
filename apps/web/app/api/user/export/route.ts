@@ -438,6 +438,16 @@ const userSkillExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const userSkillFileExportSchema = z.object({
+  id: z.string(),
+  skill_id: z.string(),
+  path: z.string(),
+  content: z.string(),
+  byte_size: z.number().int().nonnegative(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const userShortcutExportSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -2342,6 +2352,19 @@ async function collectUserData(
     values: [user.id],
     schema: userSkillExportSchema,
     section: 'user_skills',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['user_skill_files'] = await queryExportRows({
+    db,
+    sql: `select id, skill_id, path, content, byte_size, created_at, updated_at
+          from user_skill_files
+          where user_id = $1
+          order by skill_id asc, path asc`,
+    values: [user.id],
+    schema: userSkillFileExportSchema,
+    section: 'user_skill_files',
     userId: user.id,
     ledger,
   });

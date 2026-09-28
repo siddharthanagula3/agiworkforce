@@ -72,6 +72,7 @@ const CUSTOMER_CONTENT = [
   'user_memories',
   'user_projects',
   'user_shortcuts',
+  'user_skill_files',
   'user_skills',
   'video_generation_jobs',
   'voice_sessions',

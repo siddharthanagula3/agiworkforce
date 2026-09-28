@@ -9,6 +9,7 @@ import {
   useUiTranslation,
 } from '@agiworkforce/ui';
 import { toCsv, toTsv, type TabularData } from '../../lib/tabular';
+import { downloadTextFile } from './downloadTextFile';
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
@@ -29,17 +30,6 @@ function readTableData(table: HTMLTableElement): TabularData {
     source: 'delimited',
     delimiter: ',',
   };
-}
-
-function downloadCsv(csv: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function TableActions({
@@ -129,7 +119,7 @@ export function MarkdownTable({ children }: { children?: React.ReactNode }) {
   const handleDownload = useCallback(() => {
     const table = tableRef.current;
     if (!table) return;
-    downloadCsv(toCsv(readTableData(table)), 'table.csv');
+    downloadTextFile(toCsv(readTableData(table)), 'table.csv', 'text/csv;charset=utf-8');
   }, []);
 
   const tableLabel = t('markdownTable.label', 'Table');

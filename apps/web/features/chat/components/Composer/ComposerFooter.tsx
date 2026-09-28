@@ -71,18 +71,16 @@ import {
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
   type ModelEnvironment,
-  type EnvironmentAvailability,
 } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
-  getAllowedAutoModesForTier,
   getBestAutoModeForTier,
   getModelReasoning,
   isAutoModeModelId,
-  isModelAllowedForTier,
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
+import { environmentAvailability, modelLock } from '@features/chat/lib/model-plan-admission';
 import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import {
@@ -97,7 +95,10 @@ import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
 import { useChatModelStore } from '@agiworkforce/unified-chat';
 import {
+  MODEL_PICKER_RELEASE_STAGE_LABEL,
   buildModelPickerShortList,
+  resolveModelReleaseStage,
+  resolveModelSpeedLabel,
   resolvePlanLockLabel,
   type ModelPickerAutoRow,
   type ModelPickerCapabilityKey,
@@ -269,87 +270,6 @@ function defaultStoreEffort(r: ModelReasoning): Effort {
   return r.defaultEffort ?? 'medium';
 }
 
-function isModelSelectableForTier(model: AIModel, tier: string | null): boolean {
-  // A null tier means the plan is not known yet. Guessing "free" here told
-  // paying subscribers to upgrade whenever /api/me was slow or answered 401,
-  // so the tier gate withholds its claim until the plan resolves; the server
-  // still enforces the real entitlement on send.
-  if (tier === null) return true;
-  if (model.providerKey === 'managed_cloud') {
-    return getAllowedAutoModesForTier(tier).includes(model.id);
-  }
-  return isModelAllowedForTier(model.id, tier);
-}
-
-// ---------------------------------------------------------------------------
-// Environment gating (Phase A, Phase B replaces environmentAvailability with
-// the real managed-compute-beta signal once the E2B client is wired in).
-// ---------------------------------------------------------------------------
-
-/**
- * Return the current availability of a model's required execution environment.
- *
- * PHASE A: returns { configured: false } for every environment, locking all
- * env-gated models until Phase B wires the real managed-compute-beta signal.
- * No current model sets requiresEnvironment, so this never triggers today.
- *
- * PHASE B: replace the body with a hook/context read that checks whether the
- * managed-compute beta is enabled for the current user and whether E2B is
- * currently reachable, then return { configured: true, available: <ping> }.
- */
-function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
-  // Phase A: all environments are unconfigured, env-gated models stay locked.
-  return { configured: false };
-}
-
-/**
- * Combined lock decision: tier gate first, then environment gate.
- *
- * Keeping these two separate signals in one function means every call-site
- * routes through the same logic, no gating leak is possible from a partial
- * update.
- *
- * Returns:
- *   locked:  true  → row is grayed/disabled
- *   reason:  string → shown in aria-label / tooltip (env-lock only; tier-lock
- *                      keeps existing "requires upgrade" wording)
- *   kind:    'tier' | 'env' → determines click behaviour and badge copy
- *
- * CRITICAL SAFETY: a model WITHOUT requiresEnvironment returns the same result
- * as the old isModelSelectableForTier call, so no current model is affected.
- */
-function modelLock(
-  model: AIModel,
-  tier: string | null,
-): { locked: boolean; reason?: string; kind: 'tier' | 'env' | 'coming_soon' } {
-  if (freeQuotaSelection(model.id)) return { locked: false, kind: 'tier' };
-  // Availability check FIRST, a coming_soon/unavailable model is display-only:
-  // never selectable, never routable, regardless of tier. This is the picker
-  // side of the availability invariant (guardrail-enforced in the catalog).
-  if (model.availability && model.availability !== 'live') {
-    return {
-      locked: true,
-      kind: 'coming_soon',
-      // `unavailableReason` in models.json is an internal ops record (probe
-      // results, key provisioning), never surface it to users.
-      reason: 'Coming soon, not yet available',
-    };
-  }
-  // Tier check next (existing pure logic).
-  if (!isModelSelectableForTier(model, tier)) {
-    return { locked: true, kind: 'tier' };
-  }
-  // Environment check (new; no-op when requiresEnvironment is absent).
-  const envResult = evaluateModelEnvironment(
-    model.requiresEnvironment,
-    model.requiresEnvironment ? environmentAvailability(model.requiresEnvironment) : undefined,
-  );
-  if (!envResult.selectable) {
-    return { locked: true, reason: envResult.reason, kind: 'env' };
-  }
-  return { locked: false, kind: 'tier' };
-}
-
 /**
  * True for models that burn plan usage fastest · drives the usage-rate tooltip.
  *
@@ -405,10 +325,12 @@ function rowGuidance(
   row: ModelPickerRowModel | undefined,
   degraded: ProviderAvailability | undefined,
   deprecation: { shortLabel: string } | null,
+  speedLabel: string | null,
 ): string {
   if (degraded) return 'Unavailable right now';
   if (deprecation) return `Leaving ${deprecation.shortLabel}`;
-  return row?.guidance ?? model.provider;
+  const guidance = row?.guidance ?? model.provider;
+  return speedLabel ? `${speedLabel} · ${guidance}` : guidance;
 }
 
 function PriceBand({ band }: { band: ModelPickerPriceBand }) {
@@ -654,7 +576,10 @@ function ModelRow({
   const isHardDisabled = isEnvLocked || isComingSoon;
   const marks = capabilityMarks(row?.capabilityKeys ?? []);
   const deprecationWarning = deprecationWarningFor(model);
-  const guidance = rowGuidance(model, row, degraded, deprecationWarning);
+  const speedLabel = resolveModelSpeedLabel(model.id);
+  const releaseStage = isHardDisabled ? null : resolveModelReleaseStage(model.id, model.name);
+  const releaseStageLabel = releaseStage ? MODEL_PICKER_RELEASE_STAGE_LABEL[releaseStage] : null;
+  const guidance = rowGuidance(model, row, degraded, deprecationWarning, speedLabel);
 
   const handleLockedClick = () => {
     if (isHardDisabled) return;
@@ -670,6 +595,7 @@ function ModelRow({
         : model.name;
   const ariaLabel = [
     baseAriaLabel,
+    releaseStageLabel,
     deprecationWarning ? `Leaving on ${deprecationWarning.fullLabel}` : null,
     degraded ? degraded.reason : null,
   ]
@@ -741,6 +667,11 @@ function ModelRow({
       )}
       <span className="ml-auto flex shrink-0 items-center gap-2">
         {row?.priceBand && <PriceBand band={row.priceBand} />}
+        {releaseStageLabel && (
+          <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
+            {releaseStageLabel}
+          </span>
+        )}
         {isComingSoon && (
           <span
             className={`${PICKER_BADGE_CLASS} bg-muted/50 text-muted-foreground`}

@@ -12,7 +12,12 @@ import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
 import { useStyleStore } from '@/features/chat/stores/style-store';
-import { useModelStore } from '@shared/stores/model-store';
+import { useModelStore, type AIModel } from '@shared/stores/model-store';
+import {
+  isModelOnPlan,
+  useDefaultModelPreference,
+  useKnownPlanTier,
+} from '@features/chat/lib/default-model-preference';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
@@ -258,7 +263,11 @@ export function GeneralSection() {
 
     try {
       const stored = await fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE);
-      setPreferredName(storedText(stored.preferredName) ?? fallbackPreferredName);
+      setPreferredName(
+        typeof stored.preferredName === 'string'
+          ? stored.preferredName.trim()
+          : fallbackPreferredName,
+      );
       setWorkDescription(
         (storedText(stored.workDescription) as WorkDescription | undefined) ??
           (serverProfile?.work_description as WorkDescription | null) ??
@@ -478,7 +487,7 @@ export function GeneralSection() {
     if (!profilePreferencesReady) return;
     const trimmedFull = displayName.trim();
     if (!trimmedFull) return;
-    const trimmedPreferred = preferredName.trim() || (trimmedFull.split(' ')[0] ?? trimmedFull);
+    const trimmedPreferred = preferredName.trim();
     setSaving(true);
     setSaveError(null);
     try {
@@ -594,7 +603,7 @@ export function GeneralSection() {
           {/* What should AGI call you */}
           <FieldRow
             label="What should AGI call you?"
-            helper="The assistant uses this in greetings and follow-ups."
+            helper="The assistant uses this in greetings and follow-ups. Leave it empty to be greeted without a name."
             htmlFor="general-preferred-name"
           >
             <input
@@ -1016,52 +1025,80 @@ function PreferenceSyncNotice() {
   );
 }
 
+const LAST_USED_MODEL_VALUE = '';
+
+type UpgradePlan = 'basic' | 'pro' | 'max';
+
+interface DefaultModelChoice {
+  model: AIModel;
+  plan: UpgradePlan | null;
+}
+
+function upgradePlanFor(model: AIModel, tier: string): UpgradePlan | null {
+  if (model.availability && model.availability !== 'live') return null;
+  if (isModelAllowedForTier(model.id, tier)) return null;
+  const minimum = getMinimumRequiredTier(model.id);
+  return minimum && minimum !== 'free' ? minimum : null;
+}
+
 function DefaultModelRow() {
-  const selectedModelId = useModelStore((state) => state.selectedModelId);
-  const setSelectedModel = useModelStore((state) => state.setSelectedModel);
   const availableModels = useModelStore((state) => state.availableModels);
-  const tier = useBillingStore((state) => state.subscription?.tier ?? null);
-  const billingReady = useBillingStore((state) => state.initialized && state.error === null);
-  const [lockedChoice, setLockedChoice] = useState<{
-    name: string;
-    plan: 'basic' | 'pro' | 'max';
-  } | null>(null);
+  const tier = useKnownPlanTier();
+  const preference = useDefaultModelPreference(availableModels.length > 0);
+  const [lockedChoice, setLockedChoice] = useState<{ name: string; plan: UpgradePlan } | null>(
+    null,
+  );
+  const choices = useMemo<DefaultModelChoice[]>(() => {
+    if (tier === null) return [];
+    return availableModels.flatMap((model): DefaultModelChoice[] => {
+      if (isModelOnPlan(model, tier)) return [{ model, plan: null }];
+      const plan = upgradePlanFor(model, tier);
+      return plan ? [{ model, plan }] : [];
+    });
+  }, [availableModels, tier]);
+  if (availableModels.length === 0) return null;
 
-  const selectable = availableModels.filter((model) => model.availability !== 'coming_soon');
-  if (selectable.length === 0) return null;
-
-  const unlockingPlan = (modelId: string): 'basic' | 'pro' | 'max' | null => {
-    if (!billingReady || isModelAllowedForTier(modelId, tier ?? 'free')) return null;
-    const minimum = getMinimumRequiredTier(modelId);
-    return minimum && minimum !== 'free' ? minimum : null;
-  };
+  const savedDefault = preference.modelId
+    ? choices.find((choice) => choice.plan === null && choice.model.id === preference.modelId)
+    : undefined;
+  const savedDefaultOffPlan =
+    preference.status === 'ready' && preference.modelId !== null && tier !== null && !savedDefault;
 
   return (
-    <Row label="Default model">
-      <div className="flex flex-col items-end gap-1">
+    <Row
+      label="Default model"
+      hint={
+        savedDefaultOffPlan
+          ? 'Your saved default is not on your current plan, so new chats start with the model you used last.'
+          : 'New chats start with this model.'
+      }
+    >
+      <div className="flex flex-col items-stretch gap-1 sm:items-end">
         <select
-          value={selectedModelId}
+          value={savedDefault?.model.id ?? LAST_USED_MODEL_VALUE}
+          disabled={tier === null || preference.status !== 'ready' || preference.saving}
           onChange={(event) => {
-            const chosen = selectable.find((model) => model.id === event.target.value);
-            const plan = unlockingPlan(event.target.value);
-            if (plan && chosen) {
-              setLockedChoice({ name: chosen.name, plan });
+            const chosen = choices.find((choice) => choice.model.id === event.target.value);
+            if (chosen?.plan) {
+              setLockedChoice({ name: chosen.model.name, plan: chosen.plan });
               return;
             }
             setLockedChoice(null);
-            setSelectedModel(event.target.value);
+            void preference
+              .save(event.target.value || null)
+              .catch((error: unknown) =>
+                toast.error(toUserMessage(error, 'Your default model was not saved. Try again.')),
+              );
           }}
           aria-label="Default model"
           className={`${SELECT_CLASS} max-w-[220px]`}
         >
-          {selectable.map((model) => {
-            const plan = unlockingPlan(model.id);
-            return (
-              <option key={model.id} value={model.id}>
-                {plan ? `${model.name} · Upgrade to use (${PLAN_LABEL[plan]})` : model.name}
-              </option>
-            );
-          })}
+          <option value={LAST_USED_MODEL_VALUE}>Last used</option>
+          {choices.map(({ model, plan }) => (
+            <option key={model.id} value={model.id}>
+              {plan ? `${model.name} · Upgrade to use (${PLAN_LABEL[plan]})` : model.name}
+            </option>
+          ))}
         </select>
         {lockedChoice ? (
           <p role="status" className="text-xs text-muted-foreground">
@@ -1074,6 +1111,18 @@ function DefaultModelRow() {
             </Link>
           </p>
         ) : null}
+        {preference.status === 'error' && (
+          <p role="alert" className="flex items-center gap-2 text-xs text-danger">
+            {preference.error}
+            <button
+              type="button"
+              onClick={preference.retry}
+              className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+            >
+              Try again
+            </button>
+          </p>
+        )}
       </div>
     </Row>
   );

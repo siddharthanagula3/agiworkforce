@@ -8,6 +8,7 @@ import {
   type ObjectStore,
   type PendingMultipartUpload,
   type PresignPutInput,
+  type PresignUploadPartInput,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
@@ -245,6 +246,10 @@ export function createRetryingObjectStore(
             return run('listPendingMultipartUploads', () =>
               store.listPendingMultipartUploads(bucket, prefix),
             );
+          },
+
+          presignUploadPart(input: PresignUploadPartInput): Promise<string> {
+            return run('presignUploadPart', () => store.presignUploadPart(input));
           },
         }
       : {}),

@@ -12,7 +12,7 @@ import {
   PICTURE_METADATA_REFUSAL,
   carriesPictureMetadata,
   pictureMetadataRefusalNotice,
-  prepareChatAttachments,
+  prepareChatAttachment,
   type ChatDraftRefusal,
 } from '@features/chat/lib/attachment-metadata';
 
@@ -84,6 +84,93 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type IntakeIssueReason =
+  | 'empty'
+  | 'too_large'
+  | 'unsupported'
+  | 'too_many'
+  | 'duplicate'
+  | typeof PICTURE_METADATA_REFUSAL;
+
+interface IntakeIssue {
+  file: File;
+  reason: IntakeIssueReason;
+}
+
+interface HeldFile {
+  file: File;
+  key: string;
+}
+
+interface IntakeLimits {
+  maxFiles: number;
+  maxFileSize: number;
+}
+
+function fileIdentity(file: File): string {
+  return JSON.stringify([file.name, file.size, file.lastModified, file.type]);
+}
+
+function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
+  const { file } = issue;
+  switch (issue.reason) {
+    case 'empty':
+      return `"${file.name}" is empty. Add content to the file and attach it again.`;
+    case 'too_large':
+      return `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(limits.maxFileSize)}.`;
+    case 'unsupported':
+      return `"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`;
+    case 'too_many':
+      return `Maximum ${limits.maxFiles} files allowed.`;
+    case 'duplicate':
+      return `"${file.name}" is already attached.`;
+    default:
+      return pictureMetadataRefusalNotice(file.name);
+  }
+}
+
+function issueReasonPhrase(reason: IntakeIssueReason, limits: IntakeLimits): string {
+  switch (reason) {
+    case 'empty':
+      return 'empty';
+    case 'too_large':
+      return `larger than ${formatFileSize(limits.maxFileSize)}`;
+    case 'unsupported':
+      return 'unsupported file type';
+    case 'too_many':
+      return `over the ${limits.maxFiles}-file limit`;
+    case 'duplicate':
+      return 'already attached';
+    default:
+      return 'its location details could not be removed';
+  }
+}
+
+function intakeNotice(
+  total: number,
+  attached: number,
+  issues: readonly IntakeIssue[],
+  limits: IntakeLimits,
+): string | null {
+  const [first] = issues;
+  if (!first) return null;
+  if (total === 1) return singleIssueNotice(first, limits);
+  if (attached === 0 && issues.every((issue) => issue.reason === 'too_many')) {
+    return singleIssueNotice(first, limits);
+  }
+  const list = issues
+    .map((issue) => `"${issue.file.name}" (${issueReasonPhrase(issue.reason, limits)})`)
+    .join(', ');
+  return attached > 0
+    ? `Attached ${attached} of ${total} files. Not attached: ${list}.`
+    : `None of the ${total} files were attached: ${list}.`;
+}
+
+function refusalOf(issue: IntakeIssue): ChatDraftRefusal | null {
+  if (issue.reason === 'duplicate') return null;
+  return { filename: issue.file.name, reason: issue.reason };
+}
+
 /**
  * Exported so callers (e.g. the composer's drop/paste/file-input handlers)
  * can pre-filter or validate a `File[]` using the exact same rule `addFiles`
@@ -102,6 +189,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const [refused, setRefused] = useState<ChatDraftRefusal[]>([]);
   const [preparing, setPreparing] = useState(false);
   const previewUrlsRef = useRef<string[]>([]);
+  const previewKeysRef = useRef<string[]>([]);
+  const heldKeysRef = useRef<Set<string>>(new Set());
   const heldCountRef = useRef(0);
   const draftGenerationRef = useRef(0);
   const pendingBatchesRef = useRef(0);
@@ -127,93 +216,117 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const admit = useCallback(
-    (generation: number, accepted: File[], unreadable: ChatDraftRefusal[]) => {
-      if (generation !== draftGenerationRef.current) return;
-      heldCountRef.current -= unreadable.length;
-      for (const refusal of unreadable) onError?.(pictureMetadataRefusalNotice(refusal.filename));
-      if (unreadable.length > 0) setRefused((prev) => [...prev, ...unreadable]);
-      if (accepted.length === 0) return;
-      const newPreviews = accepted.map((file) => {
-        const url = URL.createObjectURL(file);
-        previewUrlsRef.current.push(url);
-        return { file, url, type: classifyFile(file) };
-      });
-      setAttachments((prev) => [...prev, ...accepted]);
-      setPreviews((prev) => [...prev, ...newPreviews]);
-    },
-    [onError],
-  );
+  const admit = useCallback((accepted: readonly HeldFile[], unreadable: readonly HeldFile[]) => {
+    heldCountRef.current -= unreadable.length;
+    for (const entry of unreadable) heldKeysRef.current.delete(entry.key);
+    if (unreadable.length > 0) {
+      setRefused((prev) => [
+        ...prev,
+        ...unreadable.map((entry): ChatDraftRefusal => ({
+          filename: entry.file.name,
+          reason: PICTURE_METADATA_REFUSAL,
+        })),
+      ]);
+    }
+    if (accepted.length === 0) return;
+    const newPreviews = accepted.map(({ file }) => {
+      const url = URL.createObjectURL(file);
+      previewUrlsRef.current.push(url);
+      return { file, url, type: classifyFile(file) };
+    });
+    previewKeysRef.current.push(...accepted.map((entry) => entry.key));
+    setAttachments((prev) => [...prev, ...accepted.map((entry) => entry.file)]);
+    setPreviews((prev) => [...prev, ...newPreviews]);
+  }, []);
 
   const addFiles = useCallback(
     (incoming: File[]) => {
       if (incoming.length === 0) return;
 
+      const limits: IntakeLimits = { maxFiles, maxFileSize };
+      const report = (attached: number, issues: readonly IntakeIssue[]) => {
+        const notice = intakeNotice(incoming.length, attached, issues, limits);
+        if (notice) onError?.(notice);
+      };
+      const issues: IntakeIssue[] = [];
+      const batch: HeldFile[] = [];
+      const batchKeys = new Set<string>();
       const availableSlots = maxFiles - heldCountRef.current;
-      const rejected: ChatDraftRefusal[] = [];
-      if (availableSlots <= 0) {
-        onError?.(`Maximum ${maxFiles} files allowed.`);
-        setRefused((prev) => [
-          ...prev,
-          ...incoming.map((file) => ({ filename: file.name, reason: 'too_many' as const })),
-        ]);
-        return;
-      }
-
-      const candidates: File[] = [];
 
       for (const file of incoming) {
-        if (candidates.length >= availableSlots) {
-          onError?.(`Only ${availableSlots} more file(s) can be added (max ${maxFiles}).`);
-          rejected.push({ filename: file.name, reason: 'too_many' });
-          break;
+        const key = fileIdentity(file);
+        if (heldKeysRef.current.has(key) || batchKeys.has(key)) {
+          issues.push({ file, reason: 'duplicate' });
+          continue;
         }
-
+        if (batch.length >= availableSlots) {
+          issues.push({ file, reason: 'too_many' });
+          continue;
+        }
         if (file.size === 0) {
-          onError?.(`"${file.name}" is empty. Add content to the file and attach it again.`);
-          rejected.push({ filename: file.name, reason: 'empty' });
+          issues.push({ file, reason: 'empty' });
           continue;
         }
-
         if (file.size > maxFileSize) {
-          onError?.(
-            `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(maxFileSize)}.`,
-          );
-          rejected.push({ filename: file.name, reason: 'too_large' });
+          issues.push({ file, reason: 'too_large' });
           continue;
         }
-
         if (!isAllowedType(file)) {
-          onError?.(`"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`);
-          rejected.push({ filename: file.name, reason: 'unsupported' });
+          issues.push({ file, reason: 'unsupported' });
           continue;
         }
-
-        candidates.push(file);
+        batchKeys.add(key);
+        batch.push({ file, key });
       }
 
-      if (rejected.length > 0) setRefused((prev) => [...prev, ...rejected]);
-      if (candidates.length === 0) return;
-
-      heldCountRef.current += candidates.length;
-      const generation = draftGenerationRef.current;
-      if (pendingBatchesRef.current === 0 && !candidates.some(carriesPictureMetadata)) {
-        admit(generation, candidates, []);
+      const refusals = issues.map(refusalOf).filter((entry) => entry !== null);
+      if (refusals.length > 0) setRefused((prev) => [...prev, ...refusals]);
+      if (batch.length === 0) {
+        report(0, issues);
         return;
       }
+
+      heldCountRef.current += batch.length;
+      for (const entry of batch) heldKeysRef.current.add(entry.key);
+      const generation = draftGenerationRef.current;
+      if (
+        pendingBatchesRef.current === 0 &&
+        !batch.some(({ file }) => carriesPictureMetadata(file))
+      ) {
+        admit(batch, []);
+        report(batch.length, issues);
+        return;
+      }
+
+      const settle = (accepted: readonly HeldFile[], unreadable: readonly HeldFile[]) => {
+        if (generation !== draftGenerationRef.current) return;
+        admit(accepted, unreadable);
+        report(accepted.length, [
+          ...issues,
+          ...unreadable.map((entry): IntakeIssue => ({
+            file: entry.file,
+            reason: PICTURE_METADATA_REFUSAL,
+          })),
+        ]);
+      };
 
       pendingBatchesRef.current += 1;
       setPreparing(true);
       admissionRef.current = admissionRef.current
-        .then(() => prepareChatAttachments(candidates))
+        .then(() => Promise.all(batch.map(({ file }) => prepareChatAttachment(file))))
         .then(
-          ({ accepted, refused: unreadable }) => admit(generation, accepted, unreadable),
-          () =>
-            admit(
-              generation,
-              [],
-              candidates.map((file) => ({ filename: file.name, reason: PICTURE_METADATA_REFUSAL })),
-            ),
+          (results) => {
+            const accepted: HeldFile[] = [];
+            const unreadable: HeldFile[] = [];
+            results.forEach((result, index) => {
+              const entry = batch[index];
+              if (!entry) return;
+              if (result.status === 'ready') accepted.push({ file: result.file, key: entry.key });
+              else unreadable.push(entry);
+            });
+            settle(accepted, unreadable);
+          },
+          () => settle([], batch),
         )
         .then(() => {
           pendingBatchesRef.current -= 1;
@@ -232,6 +345,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         revokeUrl(preview.url);
       }
 
+      const [key] = previewKeysRef.current.splice(index, 1);
+      if (key) heldKeysRef.current.delete(key);
       heldCountRef.current = Math.max(0, heldCountRef.current - 1);
       setAttachments((prev) => prev.filter((_, i) => i !== index));
       setPreviews((prev) => prev.filter((_, i) => i !== index));
@@ -242,6 +357,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const clearAll = useCallback(() => {
     draftGenerationRef.current += 1;
     heldCountRef.current = 0;
+    heldKeysRef.current.clear();
+    previewKeysRef.current = [];
     revokeAllUrls();
     setAttachments([]);
     setPreviews([]);

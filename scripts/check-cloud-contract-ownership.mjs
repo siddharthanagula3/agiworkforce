@@ -32,6 +32,8 @@ const cloudModules = [
   'managed-cloud-chat-attachments-client',
   'project-knowledge',
   'managed-cloud-project-knowledge-client',
+  'resumable-uploads',
+  'managed-cloud-resumable-upload-client',
   'domain-events',
   'tool-events',
   'agent-events',

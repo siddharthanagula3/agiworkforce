@@ -281,10 +281,10 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | No security-review command; only by asking the local agent in words. | ui |
+| desktop | partial | None of the nine commits added a security-review command, tool or menu entry; a local session can still only be asked to check for security problems in words, same as before. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`
+Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`
 
 ## S67.23: Explain findings.
 
@@ -316,16 +316,15 @@ Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services
 
 - Done when: The user picks which of the agent's proposed patches to apply, and only those are applied.
 - Wave: 2
-- Already works on: vscode
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Only per-command approve/reject of a paused step; no selection among patches (commit takes every change); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, handler |
-| desktop | partial | Approve/deny each pending edit or command as it comes; no way to pick among patches after the fact. | handler |
 | mobile | partial | Approve/deny each pending desktop tool call from the phone; no patch-level selection. | handler |
 | cli | partial | /diff-review stages the files you approve; agi apply applies the whole latest diff; no per-patch selection. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:405-409`, `apps/web/features/code/CloudCodePage.tsx:634-638`, `apps/web/features/code/components/LocalSessionPanel.tsx:230-232`, `apps/desktop/electron/runtime/dispatcher.ts:907-910`
+Code: `apps/web/features/code/components/CodeTranscript.tsx:405-409`, `apps/web/features/code/CloudCodePage.tsx:634-638`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
 
 ## S67.26: Generate documentation.
 
@@ -396,16 +395,16 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:180-184`, `apps/we
 
 - Done when: The agent opens a pull request for its branch on the code host.
 - Wave: 2
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Create pull request opens a GitHub PR for the working branch; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | No pull-request tool: the local agent can only shell out to the gh CLI if the user has it installed and signed in (network command needs approval). | handler |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
 | vscode | partial | Same local runtime: no pull-request tool, only gh through the shell tool. | handler |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:320-327`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:57-60`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/desktop/electron/runtime/dispatcher.ts:892-895`
+Code: `apps/web/features/code/components/CodeChangesPanel.tsx:320-327`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:57-60`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.32: Respond to review feedback.
 
@@ -461,11 +460,11 @@ Code: `apps/web/app/api/github/webhook/route.ts:32-32`, `apps/web/app/api/github
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Each cloud turn is bounded by a fixed 10-minute budget the user cannot change; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
-| desktop | partial | The local loop stops at the runtime's default iteration cap; there is no way to set a goal bound. | ui |
+| desktop | partial | No commit added a way to set a goal or a turn/time bound from the panel; the local loop still stops only at the runtime's default MAX_AGENTIC_ITERATIONS cap. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | vscode | partial | The runtime loop uses its default cap; the extension exposes only effort presets, not a goal bound. | ui |
 
-Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/cli/src/agent/chat.rs:946-946`
+Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`, `apps/cli/src/agent/chat.rs:947-947`
 
 ## S67.37: Persist useful repository-specific Memory.
 
@@ -476,11 +475,11 @@ Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCode
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Reuse works (the local runtime loads project memory each session), but saving is unreachable from the desktop panel: the local agent has no memory tool, the app-server exposes no memory command, and /memory add exists only in the CLI. | ui |
+| desktop | partial | Reuse still works (project memory loads into the prompt each session), but no commit added a memory-save tool, app-server command or panel control; saving repository-specific memory is still unreachable from the desktop surface. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | vscode | partial | VS Code memory commands edit account-wide facts (/api/memory/sync); repository memory is only what the local runtime already loads from project files. | ui |
 
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/desktop/electron/runtime/dispatcher.ts:892-895`, `apps/cli/src/agent/prompt.rs:399-403`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`, `apps/desktop/electron/runtime/dispatcher.ts:1053-1053`, `apps/cli/src/agent/prompt.rs:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
 
 ## S67.38: Load repository instruction files.
 
@@ -499,12 +498,11 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 
 - Done when: The agent uses skills and plugins defined in the project and the user can see or toggle them.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Project skills load only if consent was granted earlier from the CLI or VS Code; the desktop Code panel shows no skills or plugins and cannot grant consent or toggle them. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/cli/src/skills.rs:125-129`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`

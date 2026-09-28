@@ -9,7 +9,7 @@ import { useUiTranslation } from '../i18n';
 const SEPARATOR = /[\s,;]+/;
 
 export interface ChipInputProps {
-  values: string[];
+  values: readonly string[];
   onChange: (next: string[]) => void;
   label: string;
   listLabel?: string;

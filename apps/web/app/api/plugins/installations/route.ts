@@ -9,12 +9,17 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
+import {
+  refusePluginDependencyInstall,
+  refusePluginInstall,
+} from '@/features/plugins/server/directory/install-gate';
 import {
   installWebPlugin,
   listPluginInstallations,
+  planWebPluginInstall,
 } from '@/lib/services/plugin-installation-service';
 import type { PluginInstallationsResponse } from '@agiworkforce/types';
+import type { PluginInstalledDependency } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,8 +62,20 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     pluginKeys: [parsed.data.pluginId],
   });
   if (refused) return refused;
-  const installation = await installWebPlugin(db, userId, parsed.data.pluginId);
-  if (!installation) {
+  const plan = await planWebPluginInstall(db, userId, parsed.data.pluginId);
+  if (plan) {
+    const refusedDependency = await refusePluginDependencyInstall(
+      request,
+      scope,
+      plan.dependencies.map((dependency) => ({
+        pluginKey: dependency.plugin.entry.id,
+        requiredBy: dependency.requiredBy,
+      })),
+    );
+    if (refusedDependency) return refusedDependency;
+  }
+  const installation = plan ? await installWebPlugin(db, userId, parsed.data.pluginId, plan) : null;
+  if (!plan || !installation) {
     return NextResponse.json(
       {
         error: {
@@ -68,6 +85,27 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       },
       { status: 409 },
     );
+  }
+  const dependencies: PluginInstalledDependency[] = plan.dependencies
+    .filter((dependency) => !dependency.satisfied)
+    .map((dependency) => ({
+      pluginId: dependency.plugin.entry.id,
+      name: dependency.plugin.entry.name,
+      version: dependency.plugin.entry.version,
+      requiredBy: dependency.requiredBy,
+    }));
+  for (const dependency of dependencies) {
+    await recordWorkspaceAuditEvent(db, request, {
+      userId,
+      eventType: 'plugin_installed',
+      detail: {
+        resourceType: 'plugin',
+        resourceId: dependency.pluginId,
+        version: dependency.version,
+        source: 'registry',
+        reason: `required by ${dependency.requiredBy}`,
+      },
+    });
   }
   await recordWorkspaceAuditEvent(db, request, {
     userId,
@@ -79,7 +117,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       source: 'registry',
     },
   });
-  return NextResponse.json({ installation }, { status: 201 });
+  return NextResponse.json({ installation, dependencies }, { status: 201 });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

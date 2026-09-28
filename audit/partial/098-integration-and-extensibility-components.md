@@ -31,13 +31,13 @@ Code: `apps/web/lib/connectors/accounts.ts:76-96`, `apps/web/app/api/connectors/
 ## S98.19: Plugin dependency resolver.
 
 - Done when: Installing a plugin resolves and installs the plugins it depends on.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | A dependency resolver exists in the CLI registry module but nothing calls it, and web installs ignore dependencies. | mount |
+| platform | partial | partials/mcp-web 3d89fbc1d: web installs of built-in packs, directory plugins and registered-marketplace entries now resolve, gate, install or re-enable their declared dependencies (same marketplace, or another one the root marketplace allowlists in allowCrossMarketplaceDependenciesOn or that is already installed and enabled) in one step, and the directory notice lists them. Left: the CLI resolver resolve_with_dependencies (apps/cli/src/features/plugins/registry.rs:538) is still uncalled by agi plugin install (p-desktop-cli file); a dependency with a version range is refused on web because apps/web has no semver dependency; uploaded and authored plugins install without resolving dependencies (archive.ts, plugin-owned-source-service.ts, uploads route, p-routines-voice files). | cli |
 
-Code: `apps/cli/src/features/plugins/registry.rs:538-563`
+Code: `apps/web/lib/services/plugin-dependencies.ts:106-106`, `apps/web/lib/services/plugin-installation-service.ts:235-235`, `apps/web/lib/services/plugin-installation-service.ts:337-337`, `apps/web/app/api/plugins/installations/route.ts:120-120`
 
 ## S98.26: Publisher identity service.
 
@@ -65,6 +65,6 @@ Code: `apps/web/app/api/settings/organization/mcp/route.ts:132-142`, `apps/web/a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Versions can be put in review, published or suspended by hand, and packages get a static content scan, but no service runs quality or safety evaluations of an extension. | handler |
+| platform | partial | The package scan now covers every file of an uploaded plugin or skill with Pass, Warn (acknowledged) and Fail; organization-provisioned skills are scanned when org distribution lands (migration 0324, next batches) | handler |
 
-Code: `apps/web/lib/services/plugin-lifecycle.ts:371-376`, `apps/web/lib/services/plugin-lifecycle.ts:395-395`
+Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `apps/web/lib/services/plugin-owned-source-service.ts:110-110`, `apps/web/lib/services/user-skill-service.ts:145-145`

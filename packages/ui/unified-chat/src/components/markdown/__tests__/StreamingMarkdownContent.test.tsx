@@ -17,7 +17,8 @@ vi.mock('mermaid', () => ({
 // Shiki resolves after paint, so a real highlighter would rewrite the DOM at a
 // moment no assertion here can pin down. Every call is recorded instead, which
 // is also what the streaming budget below is asserted against.
-vi.mock('../shikiHighlighter', () => ({
+vi.mock('../shikiHighlighter', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shikiHighlighter')>()),
   readHighlightCache: () => null,
   highlightToLines: (code: string, language: string) => hoisted.highlightToLines(code, language),
 }));

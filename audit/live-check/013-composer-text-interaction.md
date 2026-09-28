@@ -8,8 +8,6 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
-| S13.10: Undo and redo. | web | live-web |
-| S13.10: Undo and redo. | desktop | live-web |
 | S13.10: Undo and redo. | mobile | device |
 | S13.10: Undo and redo. | vscode | device |
 | S13.10: Undo and redo. | chrome | live-web |
