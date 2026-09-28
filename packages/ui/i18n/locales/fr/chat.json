@@ -72,6 +72,7 @@
     "runtimeSignInAction": "Se connecter",
     "runtimeConsentLabel": "Autorisation d'IA",
     "runtimeConsent": "Cette app souhaite utiliser l'IA avec votre compte. Chaque requête est comptée dans l'utilisation de votre forfait.",
+    "runtimeConsentConnectors": "Cette app souhaite utiliser l'IA avec votre compte et lire ou modifier des données dans {{apps}}. Elle voit ce que ces apps renvoient, et chaque requête est comptée dans l'utilisation de votre forfait.",
     "runtimeAllow": "Autoriser",
     "runtimeDecline": "Ne pas autoriser"
   },
