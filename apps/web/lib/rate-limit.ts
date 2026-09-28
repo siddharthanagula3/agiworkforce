@@ -604,6 +604,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'account-security-email': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
   'settings-account-compromise-read': {
     limit: 60,
     window: '1 m',

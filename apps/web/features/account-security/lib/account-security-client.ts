@@ -10,7 +10,9 @@ import {
 import {
   ACCOUNT_SECURITY_CREDENTIAL_OPTIONS_PATH,
   ACCOUNT_SECURITY_CREDENTIALS_PATH,
+  ACCOUNT_SECURITY_ENROLLMENT_CODE_PATH,
   ACCOUNT_SECURITY_ENROLLMENT_PATH,
+  ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH,
   ACCOUNT_SECURITY_HANDOFF_COMPLETION_PATH,
   ACCOUNT_SECURITY_HANDOFF_OPTIONS_PATH,
   ACCOUNT_SECURITY_HANDOFF_PATH,
@@ -23,6 +25,7 @@ import {
   ACCOUNT_SECURITY_VERIFICATION_PATH,
   accountSecurityCredentialPath,
   type AccountSecurityCredential,
+  type AccountSecurityEnrollmentCodeResponse,
   type AccountSecurityEnrollmentResponse,
   type AccountSecurityHandoffResponse,
   type AccountSecurityHandoffVerifiedResponse,
@@ -30,6 +33,7 @@ import {
   type AccountSecurityRecoveryKeysResponse,
   type AccountSecurityRecoveryStartedResponse,
   type AccountSecurityStatus,
+  type AccountSecurityUndoResponse,
   type AccountSecurityVerificationResponse,
 } from '@agiworkforce/cloud-contracts/account-security';
 import { DESKTOP_DEEP_LINK_SCHEME } from '@agiworkforce/local-runtime-contract';
@@ -148,23 +152,44 @@ export async function confirmReplacementRecoveryKeys(runStepUp: StepUpRunner): P
   );
 }
 
-export async function enrollAccountSecurity(
-  runStepUp: StepUpRunner,
-): Promise<AccountSecurityEnrollmentResponse> {
-  return readJson(
-    await runStepUp((headers) =>
-      send(ACCOUNT_SECURITY_ENROLLMENT_PATH, 'POST', { recoveryKeysSaved: true }, headers),
-    ),
-    'Advanced Account Security could not be turned on.',
-  );
-}
-
 async function assertWithPasskey(): Promise<unknown> {
   const optionsJSON = await readJson<PublicKeyCredentialRequestOptionsJSON>(
     await send(ACCOUNT_SECURITY_VERIFICATION_OPTIONS_PATH, 'POST'),
     'Verification could not start.',
   );
   return startAuthentication({ optionsJSON });
+}
+
+export async function sendEnrollmentCode(): Promise<AccountSecurityEnrollmentCodeResponse> {
+  return readJson(
+    await send(ACCOUNT_SECURITY_ENROLLMENT_CODE_PATH, 'POST'),
+    'The code could not be emailed.',
+  );
+}
+
+export async function enrollAccountSecurity(
+  runStepUp: StepUpRunner,
+  emailCode: string,
+): Promise<AccountSecurityEnrollmentResponse> {
+  const response = await assertWithPasskey();
+  return readJson(
+    await runStepUp((headers) =>
+      send(
+        ACCOUNT_SECURITY_ENROLLMENT_PATH,
+        'POST',
+        { recoveryKeysSaved: true, emailCode, response },
+        headers,
+      ),
+    ),
+    'Advanced Account Security could not be turned on.',
+  );
+}
+
+export async function turnOffFromEmailLink(token: string): Promise<AccountSecurityUndoResponse> {
+  return readJson(
+    await send(ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH, 'POST', { token }),
+    'Advanced Account Security could not be turned off.',
+  );
 }
 
 export async function verifyWithPasskey(): Promise<string> {

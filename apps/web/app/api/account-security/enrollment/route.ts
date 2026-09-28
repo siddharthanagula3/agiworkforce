@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   ACCOUNT_SECURITY_ENROLLMENT_PATH,
   AccountSecurityAssertionRequestSchema,
-  AccountSecurityRecoveryKeysSavedSchema,
+  AccountSecurityEnrollmentRequestSchema,
   type AccountSecurityEnrollmentResponse,
 } from '@agiworkforce/cloud-contracts/account-security';
 
@@ -33,10 +33,10 @@ async function handleEnroll(request: NextRequest) {
     request,
     await getUserScopedDb(request, ACCOUNT_SECURITY_SCOPE),
   );
-  await readValidatedJsonBody(
+  const body = await readValidatedJsonBody(
     request,
-    AccountSecurityRecoveryKeysSavedSchema,
-    'Confirm that you saved your recovery keys.',
+    AccountSecurityEnrollmentRequestSchema,
+    'Confirm that you saved your recovery keys, enter the code we emailed you and confirm with one of your passkeys or security keys.',
   );
   await requireStepUp({
     userId: caller.userId,
@@ -47,6 +47,7 @@ async function handleEnroll(request: NextRequest) {
   const enrolled: AccountSecurityEnrollmentResponse = await enrollAccountSecurity(
     caller,
     getNeonDb(),
+    { emailCode: body.emailCode, response: body.response },
     request,
   );
   return NextResponse.json(enrolled, { status: 201 });

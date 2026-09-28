@@ -1,6 +1,13 @@
 import 'server-only';
 
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from 'node:crypto';
 
 const RECOVERY_KEY_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const RECOVERY_KEY_GROUPS = 4;
@@ -9,6 +16,9 @@ const RECOVERY_KEY_LENGTH = RECOVERY_KEY_GROUPS * RECOVERY_KEY_GROUP_LENGTH;
 const RECOVERY_KEY_DOMAIN = 'agi:account-security:recovery-key:v1';
 const HANDOFF_DOMAIN = 'agi:account-security:handoff:v1';
 const HANDOFF_CODE_DOMAIN = 'agi:account-security:handoff-code:v1';
+const UNDO_DOMAIN = 'agi:account-security:undo:v1';
+const ENROLLMENT_CODE_KEY_INFO = 'agi:account-security:enrollment-code:v1';
+const MIN_SECRET_BYTES = 32;
 const TOKEN_BYTES = 32;
 
 function sha256Hex(domain: string, value: string): string {
@@ -64,6 +74,34 @@ export function hashHandoffToken(token: string): string {
 
 export function hashHandoffCode(code: string): string {
   return sha256Hex(HANDOFF_CODE_DOMAIN, code);
+}
+
+export function hashUndoToken(token: string): string {
+  return sha256Hex(UNDO_DOMAIN, token);
+}
+
+export function generateEnrollmentCode(length: number): string {
+  return Array.from({ length }, () => String(randomInt(10))).join('');
+}
+
+let enrollmentCodeKey: Buffer | null = null;
+
+function enrollmentCodeSigningKey(): Buffer {
+  if (enrollmentCodeKey) return enrollmentCodeKey;
+  const secret = process.env['CSRF_SECRET'];
+  if (!secret || Buffer.byteLength(secret, 'utf8') < MIN_SECRET_BYTES) {
+    throw new Error(
+      'Advanced Account Security needs CSRF_SECRET (at least 32 bytes) to hash codes',
+    );
+  }
+  enrollmentCodeKey = Buffer.from(
+    hkdfSync('sha256', secret, Buffer.alloc(0), ENROLLMENT_CODE_KEY_INFO, 32),
+  );
+  return enrollmentCodeKey;
+}
+
+export function hashEnrollmentCode(userId: string, code: string): string {
+  return createHmac('sha256', enrollmentCodeSigningKey()).update(`${userId}:${code}`).digest('hex');
 }
 
 export function codeChallengeFor(verifier: string): string {

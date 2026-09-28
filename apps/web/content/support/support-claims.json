@@ -3427,6 +3427,75 @@
       ]
     },
     {
+      "id": "advanced-security-enrollment-needs-email-code-and-passkey",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Turning it on requires a code we email to the address on your account and one of the passkeys or security keys you added.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-security/__tests__/gate.test.ts",
+          "name": "refuses a password step-up grant and passkeys the attacker added without the code emailed to the owner"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "const credential = await consumeAssertion(caller, input.response, request);"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-enrollment-waits-after-email-change",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "It cannot be turned on within 7 days of a change to the email address on your account.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "emailChangeCooldownDays: 7"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "and event_key = 'email_changed'"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-undo-link-for-forty-eight-hours",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "We also email a link that turns it off and signs everyone out, without a passkey, for 48 hours after it was turned on, in case it was not you.",
+      "implementation": [
+        "apps/web/lib/server/account-security/undo.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "undoHours: 48"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/undo.ts",
+          "text": "revokeEveryOtherSession(identity, open.userId, null)"
+        }
+      ]
+    },
+    {
       "id": "advanced-security-email-recovery-no-longer-restores",
       "doc": "account-security",
       "section": "Advanced Account Security",

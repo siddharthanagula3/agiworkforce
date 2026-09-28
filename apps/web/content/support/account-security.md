@@ -36,8 +36,12 @@ accounts at higher risk of targeted attacks. Signing in needs one of your
 passkeys or security keys. A password or an email code alone no longer gets in.
 To turn it on, add at least two passkeys or security keys, including one that
 works across devices, such as a passkey synced by your password manager or a
-hardware security key, then save your recovery keys. Every other device is
-signed out when you turn it on.
+hardware security key, then save your recovery keys. Turning it on requires a
+code we email to the address on your account and one of the passkeys or security
+keys you added. It cannot be turned on within 7 days of a change to the
+email address on your account. Every other device is signed out when you turn it
+on. We also email a link that turns it off and signs everyone out, without a
+passkey, for 48 hours after it was turned on, in case it was not you.
 
 Email account recovery no longer restores access. A recovery key starts
 recovery, and the account unlocks 48 hours later. Each recovery key works once,

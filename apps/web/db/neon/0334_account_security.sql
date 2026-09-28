@@ -18,8 +18,13 @@
 --          material ever reaches the server. account_security_sessions records
 --          which identity sessions completed a passkey check and until when,
 --          which is what the request gate reads. account_security_challenges
---          holds single-use WebAuthn challenges and the browser handoffs a
---          desktop or mobile app uses when it cannot run WebAuthn itself.
+--          holds single-use WebAuthn challenges, the browser handoffs a
+--          desktop or mobile app uses when it cannot run WebAuthn itself, and
+--          the one-time code emailed to the account's address before it can
+--          enroll, stored only as a keyed hash with a count of wrong tries.
+--          Turning the mode on records the session that did it and the hash of
+--          a 48-hour link, emailed to the account, that turns it off again
+--          without a passkey in case the enrollment was not the owner's.
 --
 -- Depends: 0037 (profiles, current_app_user_id), 0076 (set_row_updated_at)
 -- =============================================================================
@@ -37,8 +42,15 @@ create table if not exists public.account_security_enrollments (
   recovery_started_at timestamptz,
   recovery_unlocks_at timestamptz,
   recovery_session_id text check (recovery_session_id is null or char_length(recovery_session_id) <= 200),
+  enrolled_session_id text check (enrolled_session_id is null or char_length(enrolled_session_id) <= 200),
+  undo_token_hash text unique check (undo_token_hash is null or undo_token_hash ~ '^[0-9a-f]{64}$'),
+  undo_expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint account_security_undo_shape check (
+    (undo_token_hash is null) = (undo_expires_at is null)
+    and (undo_token_hash is null or enrolled_at is not null)
+  ),
   constraint account_security_pending_keys_shape check (
     (pending_recovery_key_hashes is null) = (pending_recovery_keys_expire_at is null)
   ),
@@ -97,13 +109,16 @@ create index if not exists idx_account_security_sessions_user
 create table if not exists public.account_security_challenges (
   id uuid primary key default gen_random_uuid(),
   user_id text not null references public.profiles(id) on delete cascade,
-  purpose text not null check (purpose = any (array['registration', 'authentication', 'handoff'])),
+  purpose text not null check (
+    purpose = any (array['registration', 'authentication', 'handoff', 'enrollment_email'])
+  ),
   session_id text not null check (char_length(session_id) between 1 and 200),
   challenge text check (challenge is null or challenge ~ '^[A-Za-z0-9_-]{16,128}$'),
   handoff_hash text unique check (handoff_hash is null or handoff_hash ~ '^[0-9a-f]{64}$'),
   code_challenge text check (code_challenge is null or code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
   code_hash text check (code_hash is null or code_hash ~ '^[0-9a-f]{64}$'),
   client text check (client is null or client = any (array['desktop', 'mobile'])),
+  attempts smallint not null default 0 check (attempts between 0 and 10),
   completed_at timestamptz,
   expires_at timestamptz not null,
   created_at timestamptz not null default now(),
@@ -112,7 +127,11 @@ create table if not exists public.account_security_challenges (
     (purpose = 'handoff') = (handoff_hash is not null and code_challenge is not null and client is not null)
   ),
   constraint account_security_challenges_ceremony_shape check (
-    purpose = 'handoff' or challenge is not null
+    purpose = any (array['handoff', 'enrollment_email']) or challenge is not null
+  ),
+  constraint account_security_challenges_email_code_shape check (
+    purpose <> 'enrollment_email'
+    or (code_hash is not null and challenge is null and handoff_hash is null)
   )
 );
 

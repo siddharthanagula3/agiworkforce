@@ -17,6 +17,7 @@ import {
 import { ShieldCheck } from 'lucide-react';
 import {
   ACCOUNT_SECURITY_CREDENTIAL_NAME_MAX_LENGTH,
+  ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH,
   ACCOUNT_SECURITY_POLICY,
   type AccountSecurityCredential,
   type AccountSecurityStatus,
@@ -36,15 +37,22 @@ import {
   fetchAccountSecurityStatus,
   generateRecoveryKeys,
   removeCredential,
+  sendEnrollmentCode,
   verifyWithPasskey,
   type StepUpRunner,
 } from '../lib/account-security-client';
 import { RecoveryKeysSheet } from './RecoveryKeysSheet';
 
-type Setup = { step: 'closed' } | { step: 'methods' } | { step: 'keys'; keys: string[] | null };
+type Setup =
+  | { step: 'closed' }
+  | { step: 'methods' }
+  | { step: 'keys'; keys: string[] | null }
+  | { step: 'email'; sentTo: string; expiresAt: string };
 
 const HOLD_HOURS = ACCOUNT_SECURITY_POLICY.recoveryHoldHours;
 const MINIMUM_METHODS = ACCOUNT_SECURITY_POLICY.minimumSignInMethods;
+const CODE_LENGTH = ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH;
+const UNDO_HOURS = ACCOUNT_SECURITY_POLICY.undoHours;
 
 const WHAT_CHANGES = [
   'Signing in needs one of your passkeys or security keys. A password or an email code alone no longer gets in.',
@@ -169,6 +177,7 @@ export function AdvancedAccountSecurityPanel() {
   const [setup, setSetup] = useState<Setup>({ step: 'closed' });
   const [replacement, setReplacement] = useState<string[] | null>(null);
   const [keysSaved, setKeysSaved] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
@@ -242,27 +251,34 @@ export function AdvancedAccountSecurityPanel() {
     [run],
   );
 
-  const handleEnroll = useCallback(async () => {
-    const turnedOn = await run(async () => {
-      const enrolledResult = await enrollAccountSecurity(stepUp);
-      setSetup({ step: 'closed' });
-      setKeysSaved(false);
-      const signedOut = enrolledResult.sessionsSignedOut + enrolledResult.devicesSignedOut;
-      setNotice(
-        signedOut > 0
-          ? `Advanced Account Security is on. ${signedOut} other session${signedOut === 1 ? ' was' : 's were'} signed out. Confirm with one of your passkeys or security keys to keep going.`
-          : 'Advanced Account Security is on. Confirm with one of your passkeys or security keys to keep going.',
-      );
-    }, 'Advanced Account Security could not be turned on.');
-    if (!turnedOn) return;
-    await run(
-      async () => {
-        await verifyWithPasskey();
-      },
-      'That passkey or security key could not be verified. Confirm again to keep going.',
-      true,
-    );
-  }, [run, stepUp]);
+  const handleSendCode = useCallback(
+    () =>
+      run(async () => {
+        const sent = await sendEnrollmentCode();
+        setEmailCode('');
+        setSetup({ step: 'email', sentTo: sent.sentTo, expiresAt: sent.expiresAt });
+      }, 'The code could not be emailed.'),
+    [run],
+  );
+
+  const handleEnroll = useCallback(
+    (code: string) =>
+      run(async () => {
+        const enrolledResult = await enrollAccountSecurity(stepUp, code);
+        setSetup({ step: 'closed' });
+        setKeysSaved(false);
+        setEmailCode('');
+        const signedOut = enrolledResult.sessionsSignedOut + enrolledResult.devicesSignedOut;
+        const signedOutLine =
+          signedOut > 0
+            ? ` ${signedOut} other session${signedOut === 1 ? ' was' : 's were'} signed out.`
+            : '';
+        setNotice(
+          `Advanced Account Security is on.${signedOutLine} We emailed you a link that turns it off for the next ${UNDO_HOURS} hours, in case this was not you.`,
+        );
+      }, 'Advanced Account Security could not be turned on.'),
+    [run, stepUp],
+  );
 
   const handleVerify = useCallback(
     () =>
@@ -401,7 +417,7 @@ export function AdvancedAccountSecurityPanel() {
           <div className="space-y-4">
             <div>
               <h3 className="text-sm font-medium text-foreground">
-                Step 1 of 2: Add your sign-in methods
+                Step 1 of 3: Add your sign-in methods
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Add at least {MINIMUM_METHODS} passkeys or security keys, including one that works
@@ -450,7 +466,7 @@ export function AdvancedAccountSecurityPanel() {
           <div className="space-y-4">
             <div>
               <h3 className="text-sm font-medium text-foreground">
-                Step 2 of 2: Save your recovery keys
+                Step 2 of 3: Save your recovery keys
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 If you lose your passkeys and security keys, a recovery key starts account recovery.
@@ -463,10 +479,10 @@ export function AdvancedAccountSecurityPanel() {
               <Button
                 type="button"
                 disabled={busy || !keysSaved}
-                onClick={() => void handleEnroll()}
+                onClick={() => void handleSendCode()}
               >
                 {busy ? <Spinner size="sm" /> : null}
-                Turn on Advanced Account Security
+                Continue
               </Button>
               <Button
                 type="button"
@@ -478,6 +494,64 @@ export function AdvancedAccountSecurityPanel() {
               </Button>
             </div>
           </div>
+        ) : null}
+
+        {status?.state === 'available' && setup.step === 'email' ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (emailCode.length === CODE_LENGTH) void handleEnroll(emailCode);
+            }}
+          >
+            <div>
+              <h3 className="text-sm font-medium text-foreground">
+                Step 3 of 3: Confirm it is you
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                We emailed a {CODE_LENGTH}-digit code to {setup.sentTo}. It expires at{' '}
+                {formatWhen(setup.expiresAt)}. Enter it, then confirm with one of the passkeys or
+                security keys you added.
+              </p>
+            </div>
+            <Input
+              aria-label="Code from the email"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={CODE_LENGTH}
+              value={emailCode}
+              disabled={busy}
+              onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, ''))}
+              className="max-w-40 tracking-widest"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy || emailCode.length !== CODE_LENGTH}>
+                {busy ? <Spinner size="sm" /> : null}
+                Turn on Advanced Account Security
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void handleSendCode()}
+              >
+                Send a new code
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  setEmailCode('');
+                  setKeysSaved(false);
+                  setSetup({ step: 'closed' });
+                }}
+              >
+                Not now
+              </Button>
+            </div>
+          </form>
         ) : null}
 
         {status?.state === 'enrolled' ? (

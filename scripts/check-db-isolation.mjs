@@ -274,15 +274,19 @@ const ALLOWLIST = [
     match: /lib\/server\/account-security\/store\.ts$/,
     tables: [
       'account_security_challenges',
+      'account_security_enrollments',
       'scim_provisioned_users',
       'sso_connections',
       'profiles',
     ],
-    functions: ['readOpenHandoff', 'readOrganizationControl'],
+    functions: ['readOpenHandoff', 'readEnrollmentUndo', 'readOrganizationControl'],
     reason:
       'readOpenHandoff finds a browser verification handoff by the hash of its unguessable ' +
       'token, because the browser that opens it holds no session: the token is the capability, ' +
       'and every later write on that row is constrained by the user_id the row names. ' +
+      'readEnrollmentUndo finds the enrollment an emailed turn-off link names the same way, ' +
+      'for an owner who may have no session left, and undoEnrollment then writes only by that ' +
+      'user_id. ' +
       'readOrganizationControl reads the account by its own id and asks whether an ' +
       "organization's directory has linked it or has verified its email domain, which the " +
       'directory and domain tables can answer only across organizations',
