@@ -311,6 +311,7 @@ describe('the registry', () => {
         'notifications.schedule-completed',
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',
+        'webhooks.developer-delivery',
       ].sort(),
     );
   });
