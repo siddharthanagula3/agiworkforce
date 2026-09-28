@@ -7,10 +7,8 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import {
-  MANAGED_MEMORY_MAX_CATEGORY_CHARS,
-  MANAGED_MEMORY_MAX_CONTENT_CHARS,
   MANAGED_MEMORY_MAX_PAGE_SIZE,
-  isManagedMemorySource,
+  readManagedMemoryCreateRequest,
   type ManagedMemoryDeleteAllResponse,
   type ManagedMemoryListResponse,
   type ManagedMemoryWriteResponse,
@@ -34,8 +32,6 @@ type MemoryRow = UserMemoryRow & {
   source_conversation_id?: string | null;
   source_conversation_title?: string | null;
 };
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -112,47 +108,16 @@ async function handleCreateMemory(request: NextRequest) {
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
-  let body: {
-    content?: string;
-    category?: string;
-    source?: string;
-    pinned?: boolean;
-    expiresAt?: unknown;
-    projectId?: unknown;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
 
-  if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
-    throw createError.validation('Content is required');
-  }
-
-  if (body.content.length > MANAGED_MEMORY_MAX_CONTENT_CHARS) {
-    throw createError.validation(
-      `Content must be ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`,
-    );
-  }
-
-  if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
-    throw createError.validation('pinned must be a boolean');
-  }
-
-  // The category is injected verbatim into the memory context a later turn
-  // sends to the model, so it is bounded and typed here rather than accepted as
-  // whatever the caller sent.
-  if (body.category !== undefined && body.category !== null) {
-    if (typeof body.category !== 'string') {
-      throw createError.validation('category must be a string');
-    }
-    if (body.category.trim().length > MANAGED_MEMORY_MAX_CATEGORY_CHARS) {
-      throw createError.validation(
-        `category must be ${MANAGED_MEMORY_MAX_CATEGORY_CHARS} characters or less`,
-      );
-    }
-  }
+  const read = readManagedMemoryCreateRequest(rawBody);
+  if (!read.ok) throw createError.validation(read.message);
+  const body = read.request;
 
   const expiry = parseMemoryExpiry(body.expiresAt);
   if (!expiry.ok) {
@@ -160,10 +125,7 @@ async function handleCreateMemory(request: NextRequest) {
   }
 
   let projectId: string | null = null;
-  if (body.projectId !== undefined && body.projectId !== null) {
-    if (typeof body.projectId !== 'string' || !UUID_PATTERN.test(body.projectId)) {
-      throw createError.validation('projectId must be a project id');
-    }
+  if (body.projectId) {
     const [project] = await db.query<{ id: string }>(
       `select id from user_projects
         where id = $1::uuid and user_id = $2 and deleted_at is null
@@ -175,7 +137,7 @@ async function handleCreateMemory(request: NextRequest) {
     projectId = project.id;
   }
 
-  const source = isManagedMemorySource(body.source) ? body.source : 'web';
+  const source = body.source ?? 'web';
 
   const content = body.content.trim();
   await assertMemoryWriteAllowed(db, { userId, content });
