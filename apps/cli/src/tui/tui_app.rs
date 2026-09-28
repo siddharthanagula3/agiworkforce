@@ -196,6 +196,7 @@ impl ToolTiming {
 }
 
 const CONTEXT_WARNING_PERCENT: u8 = 85;
+const BELL_AFTER_TURN_OF: std::time::Duration = std::time::Duration::from_secs(10);
 
 static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -3538,6 +3539,7 @@ enum SlashResult {
     RunArtifacts(String),
     RunTasks(String),
     RunWorktree(String),
+    RunMcp(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3784,8 +3786,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/status" => {
+            let account = match crate::tier_cache::load_jwt() {
+                None => "not signed in (agi login)".to_string(),
+                Some(_) => match crate::tier_cache::read_tier_cache() {
+                    Some(cached) => format!("signed in, {} plan", cached.tier.label()),
+                    None => "signed in".to_string(),
+                },
+            };
             let msg = format!(
-                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
+                "Account: {account}\nVersion: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
                 crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
@@ -3984,36 +3993,65 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         ),
 
         // ── Tools & plugins ──
+        "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
+
         "/mcp" => {
             use crate::tui::widgets::screen_renderers::{
                 McpScope, McpServerSummary, McpStatus, render_mcp_list,
             };
-            let scopes = if let Some(tools) = app.session.mcp_info() {
-                // Group tools by server name into a single scope.
-                let mut server_names: Vec<String> =
-                    tools.iter().map(|t| t.server_name.clone()).collect();
-                server_names.sort();
-                server_names.dedup();
-                let servers: Vec<McpServerSummary> = server_names
-                    .iter()
-                    .map(|name| {
-                        let tool_count =
-                            tools.iter().filter(|t| &t.server_name == name).count();
-                        McpServerSummary {
-                            name: name.clone(),
-                            status: McpStatus::Connected,
-                            tool_count: Some(tool_count),
+            let tools = app.session.mcp_info().unwrap_or_default();
+            let registry = crate::mcp::registry::McpRegistry::load()
+                .map(|registry| registry.list())
+                .unwrap_or_default();
+            let configured = crate::mcp::McpManager::load_configs().unwrap_or_default();
+            let tokens = crate::mcp::McpOAuthStore::load().unwrap_or_default();
+            let mut names: Vec<String> = configured
+                .keys()
+                .cloned()
+                .chain(registry.iter().map(|row| row.name.clone()))
+                .chain(tools.iter().map(|tool| tool.server_name.clone()))
+                .collect();
+            names.sort();
+            names.dedup();
+            let servers: Vec<McpServerSummary> = names
+                .iter()
+                .map(|name| {
+                    let tool_count = tools.iter().filter(|tool| &tool.server_name == name).count();
+                    let disabled = registry.iter().any(|row| &row.name == name && !row.enabled);
+                    let signed_out_remote = configured.get(name).is_some_and(|config| {
+                        match config.as_transport() {
+                            crate::mcp::McpTransport::Http { url, .. }
+                            | crate::mcp::McpTransport::Sse { url, .. } => {
+                                tokens.get(&url).is_none()
+                                    && tokens.get(url.trim_end_matches('/')).is_none()
+                            }
+                            crate::mcp::McpTransport::Stdio { .. } => false,
                         }
-                    })
-                    .collect();
-                vec![McpScope {
-                    label: "Connected servers".to_string(),
-                    servers,
-                }]
-            } else {
-                vec![]
-            };
-            SlashResult::SystemMessage(render_mcp_list(&scopes))
+                    });
+                    let status = if disabled {
+                        McpStatus::Disabled
+                    } else if tool_count > 0 {
+                        McpStatus::Connected
+                    } else if signed_out_remote {
+                        McpStatus::NeedsAuth
+                    } else {
+                        McpStatus::Failed
+                    };
+                    McpServerSummary {
+                        name: name.clone(),
+                        status,
+                        tool_count: Some(tool_count),
+                    }
+                })
+                .collect();
+            let mut text = render_mcp_list(&[McpScope {
+                label: "Configured servers".to_string(),
+                servers,
+            }]);
+            text.push_str(
+                "\n/mcp tools [server] lists tools · /mcp restart reconnects · agi mcp login <name> signs in to a remote server · /mcp enable|disable <name>",
+            );
+            SlashResult::SystemMessage(text)
         }
 
         "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
@@ -4027,6 +4065,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 arg.split_whitespace().next().unwrap_or(""),
                 "" | "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
                     | "new" | "create" | "init" | "validate" | "doctor" | "check"
+                    | "delete" | "remove" | "rm" | "rename" | "set"
                     | "help" | "-h" | "--help"
             );
             if arg.is_empty() {
@@ -4255,7 +4294,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             .persist_effort_project(&e.label().to_ascii_lowercase())
                             .map(|_| " and saved as this project's default")
                             .unwrap_or("");
-                        SlashResult::SystemMessage(format!("Effort set to {}{saved}", e.label()))
+                        let note = if matches!(
+                            crate::model_catalog::effort_support(&app.session.model),
+                            crate::model_catalog::EffortSupport::Unsupported
+                        ) {
+                            ". This model has no effort control, so it applies once you switch to one that does"
+                        } else {
+                            ""
+                        };
+                        SlashResult::SystemMessage(format!(
+                            "Effort set to {}{saved}{note}",
+                            e.label()
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"
@@ -4561,6 +4611,22 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    tokio::spawn(async {
+        let Ok(release) = crate::update_check::fetch_latest_release().await else {
+            return;
+        };
+        if crate::update_check::compare_versions(
+            crate::update_check::running_version(),
+            &release.version,
+        ) == crate::update_check::UpdateVerdict::Available
+        {
+            crate::tui::push_tui_notice(format!(
+                "agi {} is available (you have {}). Install it with: agi update --install",
+                release.version,
+                crate::update_check::running_version()
+            ));
+        }
+    });
     let effective_provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
@@ -5240,6 +5306,14 @@ async fn run_event_loop(
                                     text,
                                 });
                             }
+                            SlashResult::RunMcp(argument) => {
+                                let outcome =
+                                    crate::repl::mcp_for_display(&argument, &mut app.session).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: outcome.plain_message(),
+                                });
+                            }
                             SlashResult::RunWorktree(argument) => {
                                 let text = crate::repl::handle_worktree(&argument).await;
                                 app.chat_messages.push(ChatMessage {
@@ -5585,6 +5659,7 @@ async fn send_message_with_prompt(
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
     let turn_context_percent = app.context_percent();
+    let turn_started = Instant::now();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
     let side_query = app
@@ -5815,6 +5890,15 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if app.config.ui.bell_on_finish == Some(true)
+                && turn_started.elapsed() >= BELL_AFTER_TURN_OF
+            {
+                use std::io::Write;
+                let mut stdout = std::io::stdout();
+                let _ = stdout.write_all(b"\x07");
+                let _ = stdout.flush();
+            }
 
             let context_percent = app.context_percent();
             if context_percent >= CONTEXT_WARNING_PERCENT

@@ -701,6 +701,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       gap: 6px;
       margin-top: 10px;
     }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
     .approval-card__action {
       min-height: var(--control-md);
       padding: 0 12px;
@@ -4947,6 +4966,49 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4990,6 +5052,20 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
       }
 
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
+      }
+
       if (payload.detail) {
         var detail = document.createElement('pre');
         detail.className = 'approval-card__detail';
@@ -5020,6 +5096,21 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -7278,6 +7369,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -11525,6 +11635,49 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -11568,6 +11721,20 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
       }
 
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
+      }
+
       if (payload.detail) {
         var detail = document.createElement('pre');
         detail.className = 'approval-card__detail';
@@ -11598,6 +11765,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -13856,6 +14038,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -18103,6 +18304,49 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -18146,6 +18390,20 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
       }
 
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
+      }
+
       if (payload.detail) {
         var detail = document.createElement('pre');
         detail.className = 'approval-card__detail';
@@ -18176,6 +18434,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };

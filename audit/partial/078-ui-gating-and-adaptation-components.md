@@ -26,14 +26,13 @@ Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components
 
 - Done when: Composer controls (effort, thinking, attachment options) appear, change or disappear according to the selected model.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The TUI effort picker is offered for every model; no composer control changes with the selected model. | ui |
 | vscode | partial | The effort control is shown or hidden per provider, not from the selected model's capabilities. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:347-352`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S78.03: Model-dependent accepted-file types.
 
@@ -54,14 +53,13 @@ Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/
 
 - Done when: The reasoning/effort options offered match the selected model, and unsupported levels are not sent.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI sends the chosen effort to every model without checking which efforts that model supports. | handler |
 | vscode | partial | Effort is offered per provider rather than from each model's registry effort levels. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:347-352`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S78.05: Model-dependent sampling options.
 

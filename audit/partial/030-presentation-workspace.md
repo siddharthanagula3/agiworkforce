@@ -83,14 +83,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 
 - Done when: The user can download the deck as a .pptx file.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
-| desktop | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
 | mobile | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`

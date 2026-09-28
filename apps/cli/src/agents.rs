@@ -434,6 +434,30 @@ pub fn render_agents_command(arg: &str) -> String {
             }
         }
         "validate" | "doctor" | "check" => format_agent_validation(&discover_agents()),
+        "delete" | "remove" | "rm" => match first_non_flag(&tokens[1..]) {
+            Some(name) => delete_agent(name, tokens.contains(&"--yes")),
+            None => "Usage: /agents delete <name> --yes".to_string(),
+        },
+        "rename" => match (tokens.get(1), tokens.get(2)) {
+            (Some(name), Some(new_name)) => {
+                rename_agent(name, new_name).unwrap_or_else(|error| format!("{error:#}"))
+            }
+            _ => "Usage: /agents rename <name> <new-name>".to_string(),
+        },
+        "set" => match (tokens.get(1), tokens.get(2)) {
+            (Some(name), Some(field)) if tokens.len() > 3 => {
+                let value = arg
+                    .splitn(4, char::is_whitespace)
+                    .nth(3)
+                    .unwrap_or_default()
+                    .trim();
+                set_agent_field(name, field, value).unwrap_or_else(|error| format!("{error:#}"))
+            }
+            _ => format!(
+                "Usage: /agents set <name> <field> <value>\nFields: {}",
+                EDITABLE_AGENT_FIELDS.join(", ")
+            ),
+        },
         maybe_name => match find_agent(maybe_name) {
             Some(agent) => format_agent_detail(&agent),
             None => format!(
@@ -457,6 +481,9 @@ fn render_agents_help() -> String {
         "  /agents create <name>    create .agiworkforce/agents/<name>.md",
         "  /agents create <name> --global",
         "  /agents validate         report duplicate or incomplete agents",
+        "  /agents set <name> <field> <value>   change description, model, tools, prompt...",
+        "  /agents rename <name> <new-name>",
+        "  /agents delete <name> --yes",
     ]
     .join("\n")
 }
@@ -666,6 +693,154 @@ fn project_agents_dir() -> Result<PathBuf> {
     Ok(std::env::current_dir()?
         .join(".agiworkforce")
         .join("agents"))
+}
+
+const EDITABLE_AGENT_FIELDS: [&str; 7] = [
+    "description",
+    "model",
+    "tools",
+    "disallowedTools",
+    "maxTurns",
+    "permissionMode",
+    "prompt",
+];
+
+fn owned_agent(name: &str) -> Result<AgentDefinition> {
+    let agent = find_agent_exact(name)
+        .or_else(|| find_agent(name))
+        .with_context(|| format!("Agent `{name}` was not found."))?;
+    let owned = [project_agents_dir(), global_agents_dir()]
+        .into_iter()
+        .flatten()
+        .any(|dir| agent.path.starts_with(dir));
+    if !owned {
+        bail!(
+            "Agent `{}` comes from {}, which this command does not edit.",
+            agent.name,
+            agent.path.display()
+        );
+    }
+    Ok(agent)
+}
+
+fn delete_agent(name: &str, confirmed: bool) -> String {
+    let agent = match owned_agent(name) {
+        Ok(agent) => agent,
+        Err(error) => return format!("{error:#}"),
+    };
+    if !confirmed {
+        return format!(
+            "This deletes {} and cannot be undone. Run /agents delete {} --yes to confirm.",
+            agent.path.display(),
+            agent.name
+        );
+    }
+    match std::fs::remove_file(&agent.path) {
+        Ok(()) => format!("Deleted agent `{}` ({}).", agent.name, agent.path.display()),
+        Err(error) => format!("Could not delete {}: {error}", agent.path.display()),
+    }
+}
+
+fn rename_agent(name: &str, new_name: &str) -> Result<String> {
+    let agent = owned_agent(name)?;
+    let slug = slugify_agent_name(new_name);
+    if slug.is_empty() {
+        bail!("agent name must contain at least one letter or number");
+    }
+    let target = agent.path.with_file_name(format!("{slug}.md"));
+    if target.exists() && target != agent.path {
+        bail!("{} already exists", target.display());
+    }
+    let content = std::fs::read_to_string(&agent.path)?;
+    let updated = replace_frontmatter_field(&content, "name", &slug)?;
+    write_checked_agent(&target, &updated, &content, &agent.path)?;
+    if target != agent.path {
+        std::fs::remove_file(&agent.path)?;
+    }
+    Ok(format!(
+        "Renamed agent `{}` to `{slug}` ({}).",
+        agent.name,
+        target.display()
+    ))
+}
+
+fn set_agent_field(name: &str, field: &str, value: &str) -> Result<String> {
+    let agent = owned_agent(name)?;
+    let field = EDITABLE_AGENT_FIELDS
+        .iter()
+        .find(|known| known.eq_ignore_ascii_case(field))
+        .with_context(|| {
+            format!(
+                "Unknown field `{field}`. Fields: {}",
+                EDITABLE_AGENT_FIELDS.join(", ")
+            )
+        })?;
+    let content = std::fs::read_to_string(&agent.path)?;
+    let updated = match *field {
+        "prompt" => {
+            let (frontmatter, _) = split_agent_frontmatter(&content)?;
+            format!("{frontmatter}\n\n{}\n", value.trim())
+        }
+        "tools" | "disallowedTools" => {
+            let items: Vec<String> = value
+                .split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(|item| format!("{item:?}"))
+                .collect();
+            replace_frontmatter_field(&content, field, &format!("[{}]", items.join(", ")))?
+        }
+        "description" => replace_frontmatter_field(&content, field, &format!("{value:?}"))?,
+        _ => replace_frontmatter_field(&content, field, value)?,
+    };
+    write_checked_agent(&agent.path, &updated, &content, &agent.path)?;
+    Ok(format!("Agent `{}`: {field} updated.", agent.name))
+}
+
+fn split_agent_frontmatter(content: &str) -> Result<(&str, &str)> {
+    let rest = content
+        .strip_prefix("---")
+        .context("agent file has no frontmatter")?;
+    let end = rest
+        .find("\n---")
+        .context("agent file frontmatter is not closed")?;
+    let split = 3 + end + 4;
+    Ok((&content[..split], &content[split..]))
+}
+
+fn replace_frontmatter_field(content: &str, field: &str, value: &str) -> Result<String> {
+    let (frontmatter, body) = split_agent_frontmatter(content)?;
+    let prefix = format!("{field}:");
+    let mut replaced = false;
+    let mut lines: Vec<String> = frontmatter
+        .lines()
+        .map(|line| {
+            if !replaced && line.trim_start().starts_with(&prefix) {
+                replaced = true;
+                format!("{field}: {value}")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect();
+    if !replaced {
+        let closing = lines.len() - 1;
+        lines.insert(closing, format!("{field}: {value}"));
+    }
+    Ok(format!("{}{body}", lines.join("\n")))
+}
+
+fn write_checked_agent(target: &Path, updated: &str, original: &str, source: &Path) -> Result<()> {
+    std::fs::write(target, updated)?;
+    if let Err(error) = load_agent(target) {
+        if target == source {
+            std::fs::write(source, original)?;
+        } else {
+            let _ = std::fs::remove_file(target);
+        }
+        bail!("That change would leave the agent unreadable, so it was not saved: {error:#}");
+    }
+    Ok(())
 }
 
 fn global_agents_dir() -> Result<PathBuf> {
