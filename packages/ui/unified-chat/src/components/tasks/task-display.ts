@@ -1,5 +1,6 @@
 import type { CloudAgentRun, CloudAgentWorkMode } from '@agiworkforce/cloud-contracts';
 import { agentTaskStateLabel, creditsFromCents, formatCredits } from '@agiworkforce/types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 // The run-state enum isn't exported as a standalone type from cloud-contracts;
 export type AgentTaskState = CloudAgentRun['state'];
@@ -9,10 +10,13 @@ export function runWorkState(run: Pick<CloudAgentRun, 'state' | 'workState'>): A
   return run.workState ?? run.state;
 }
 
+export type AgiWorkExcludedTool = 'web_search' | 'code_execution';
+
 export interface AgiWorkRerunGoal {
   goal: string;
   constraints?: string;
   deliverable?: string;
+  excludedTools?: AgiWorkExcludedTool[];
 }
 
 export function workModeLabel(mode: CloudAgentWorkMode): string {
@@ -123,4 +127,22 @@ export function isLiveTaskState(state: AgentTaskState): boolean {
     state === 'awaiting_approval' ||
     state === 'paused'
   );
+}
+
+const TASK_RESULT_MAX_CHARS = 4_000;
+
+export function taskResultText(events: readonly AgentEventEnvelope[]): string {
+  let segment = '';
+  let lastSegment = '';
+  for (const envelope of events) {
+    const event = envelope.event;
+    if (event.type === 'tool-execution-start') {
+      if (segment.trim()) lastSegment = segment;
+      segment = '';
+    } else if (event.type === 'text-delta') {
+      segment += event.delta;
+    }
+  }
+  const text = (segment.trim() ? segment : lastSegment).trim();
+  return text.length > TASK_RESULT_MAX_CHARS ? `${text.slice(0, TASK_RESULT_MAX_CHARS)}…` : text;
 }

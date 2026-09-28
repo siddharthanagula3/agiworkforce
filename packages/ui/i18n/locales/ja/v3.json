@@ -381,6 +381,9 @@
       "constraintsPlaceholder": "範囲、避けるべきこと、優先する情報源…",
       "deliverableLabel": "成果物",
       "deliverablePlaceholder": "期待する具体的な成果物（ファイル、表、要約など）",
+      "toolsLabel": "このタスクで使えるツール",
+      "toolWebSearch": "ウェブ検索と閲覧",
+      "toolCodeExecution": "コード実行",
       "palette": {
         "label": "AGI Work ツール",
         "searchPlaceholder": "プラグイン、フォルダー、スキルを検索",

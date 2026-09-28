@@ -381,6 +381,9 @@
       "constraintsPlaceholder": "Boundaries, must-avoids, sources to prefer…",
       "deliverableLabel": "Deliverable",
       "deliverablePlaceholder": "The concrete output you expect (a file, a table, a summary…)",
+      "toolsLabel": "Tools this task may use",
+      "toolWebSearch": "Web search and browsing",
+      "toolCodeExecution": "Code execution",
       "palette": {
         "label": "AGI Work tools",
         "searchPlaceholder": "Search plugins, folders and skills",

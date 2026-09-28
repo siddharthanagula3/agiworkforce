@@ -159,7 +159,11 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@agiworkforce/cloud-contracts';
-import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
+import {
+  buildAgiWorkGoalInput,
+  type AgiWorkExcludableTool,
+  type AgiWorkGoalInput,
+} from '@/features/chat/utils/agiwork-plan';
 import {
   getImageAspectOptionsForModel,
   IMAGE_MODEL_DEFAULT,
@@ -741,6 +745,7 @@ const ChatComposerNewComponent = ({
   // only in AGI Work mode; the composed message is the objective itself.
   const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
   const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
+  const [agiWorkExcludedTools, setAgiWorkExcludedTools] = useState<AgiWorkExcludableTool[]>([]);
   const [agiWorkFieldsOpen, setAgiWorkFieldsOpen] = useState(false);
   const { t: tAgiWork } = useTranslation('v3');
   const { t: tChat } = useTranslation('chat');
@@ -918,6 +923,7 @@ const ChatComposerNewComponent = ({
     imageMode,
     videoMode,
     selectedSkillName,
+    agiWorkScope,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
@@ -938,6 +944,21 @@ const ChatComposerNewComponent = ({
     (name: string | null) => setComposerToggles({ selectedSkillName: name }),
     [setComposerToggles],
   );
+
+  useEffect(() => {
+    if (!agiWorkScope) return;
+    setAgiWorkConstraints(agiWorkScope.constraints);
+    setAgiWorkDeliverable(agiWorkScope.deliverable);
+    setAgiWorkExcludedTools(agiWorkScope.excludedTools);
+    setAgiWorkFieldsOpen(
+      Boolean(
+        agiWorkScope.constraints ||
+        agiWorkScope.deliverable ||
+        agiWorkScope.excludedTools.length > 0,
+      ),
+    );
+    setComposerToggles({ agiWorkScope: null });
+  }, [agiWorkScope, setComposerToggles]);
 
   // Per-conversation connector opt-out (persisted, unlike the toggles above --
   // see `disabledConnectorIdsByConversation` in the chat store).
@@ -1713,6 +1734,7 @@ const ChatComposerNewComponent = ({
     // The AGI Work scope fields belong to a single send, like the skill pick.
     setAgiWorkConstraints('');
     setAgiWorkDeliverable('');
+    setAgiWorkExcludedTools([]);
     setAgiWorkFieldsOpen(false);
     // Aspect ratio and the chosen media model ride with the mode above: a user
     // shooting a sequence at 16:9 on a catalog-selected video model should stay
@@ -2994,6 +3016,7 @@ const ChatComposerNewComponent = ({
             ? buildAgiWorkGoalInput(outgoingContent, {
                 constraints: agiWorkConstraints,
                 deliverable: agiWorkDeliverable,
+                excludedTools: agiWorkExcludedTools,
               })
             : undefined,
       },
@@ -3096,6 +3119,7 @@ const ChatComposerNewComponent = ({
     officeCreationEnabled,
     agiWorkConstraints,
     agiWorkDeliverable,
+    agiWorkExcludedTools,
     onSend,
     clearComposerState,
     writeComposerMessage,
@@ -5557,6 +5581,39 @@ const ChatComposerNewComponent = ({
                 className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
               />
             </label>
+            <fieldset className="flex flex-col gap-1">
+              <legend className="text-caption font-medium text-muted-foreground">
+                {tAgiWork('agiWork.compose.toolsLabel')}
+              </legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {(
+                  [
+                    ['web_search', 'agiWork.compose.toolWebSearch'],
+                    ['code_execution', 'agiWork.compose.toolCodeExecution'],
+                  ] as const
+                ).map(([tool, labelKey]) => (
+                  <label
+                    key={tool}
+                    className="flex min-h-6 items-center gap-2 text-sm text-foreground"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!agiWorkExcludedTools.includes(tool)}
+                      onChange={(event) =>
+                        setAgiWorkExcludedTools((current) =>
+                          event.target.checked
+                            ? current.filter((excluded) => excluded !== tool)
+                            : [...current, tool],
+                        )
+                      }
+                      disabled={isTurnActive || composerDisabled}
+                      className="h-4 w-4 accent-[var(--chat-accent-primary)]"
+                    />
+                    {tAgiWork(labelKey)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         </div>
       )}
