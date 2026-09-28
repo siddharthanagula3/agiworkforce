@@ -159,6 +159,7 @@ describe('discovered MCP OAuth with the v2 SDK', () => {
           issuer: ORIGINAL_ISSUER,
           mcpUrl: MCP_URL,
         }),
+        { accountLabel: null },
       );
     },
   );

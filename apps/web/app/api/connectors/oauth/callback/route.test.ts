@@ -137,6 +137,7 @@ describe('GET /api/connectors/oauth/callback', () => {
       tokenType: 'Bearer',
       accessTokenExpiresAt: new Date('2026-08-05T01:00:00.000Z'),
       grantedScopes: ['read'],
+      accountLabel: null,
     });
 
     const response = await GET(request(`?state=${STATE}&code=auth-code`));
@@ -152,6 +153,7 @@ describe('GET /api/connectors/oauth/callback', () => {
         refreshToken: 'refresh-token-value',
         tokenEndpoint: 'https://auth.example.com/token',
       }),
+      { accountLabel: null },
     );
     const target = location(response);
     expect(target.pathname).toBe('/connectors');
@@ -167,6 +169,7 @@ describe('GET /api/connectors/oauth/callback', () => {
       tokenType: 'Bearer',
       accessTokenExpiresAt: null,
       grantedScopes: ['read'],
+      accountLabel: null,
     });
 
     const response = await GET(request(`?state=${STATE}&code=auth-code`));
