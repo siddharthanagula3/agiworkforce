@@ -15,21 +15,23 @@ use agiworkforce_protocol::developer_session::{
     DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
     DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
     HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
-    HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
-    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerListResponse, McpServerParams, McpServerTestResponse,
-    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams, RewindSkippedFile,
+    HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse, HookRemoveParams,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpAddParams,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
+    MemoryAddResponse, ModelListParams, PendingApprovalSnapshot, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
+    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -424,6 +426,7 @@ impl CliDeveloperSessionHost {
             approval_notes: true,
             approval_edits: true,
             mcp_tools: self.load_integrations,
+            installs: true,
         }
     }
 
@@ -580,7 +583,15 @@ impl CliDeveloperSessionHost {
                         manager.shutdown_all().await;
                         return;
                     }
-                    session.lock().await.set_mcp_manager(manager);
+                    let previous = {
+                        let mut agent = session.lock().await;
+                        let previous = agent.take_mcp_manager();
+                        agent.set_mcp_manager(manager);
+                        previous
+                    };
+                    if let Some(mut previous) = previous {
+                        previous.shutdown_all().await;
+                    }
                     ("mcp/ready", None)
                 }
                 Ok(Ok(None)) => ("mcp/ready", None),
@@ -611,6 +622,19 @@ impl CliDeveloperSessionHost {
                 let _ = notifications.send(notification);
             }
         });
+    }
+
+    async fn reload_integrations(&self) {
+        let sessions: Vec<(String, Arc<Mutex<AgentSession>>)> = self
+            .sessions
+            .lock()
+            .await
+            .iter()
+            .map(|(thread_id, session)| (thread_id.clone(), session.clone()))
+            .collect();
+        for (thread_id, session) in sessions {
+            self.load_integrations_in_background(thread_id, session);
+        }
     }
 
     async fn load_agent(
@@ -3065,6 +3089,123 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
         )
         .await
+    }
+
+    async fn install_skill(
+        &self,
+        params: SkillInstallParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::install_skill(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("skills/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn remove_skill(
+        &self,
+        params: SkillRemoveParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_skill(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("skills/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn install_plugin(
+        &self,
+        params: PluginInstallParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::install_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("plugins/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn remove_plugin(
+        &self,
+        params: PluginRemoveParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("plugins/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn add_mcp_server(
+        &self,
+        params: McpAddParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::add_mcp_server(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("mcp/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn remove_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed = tokio::task::spawn_blocking(move || {
+            surfaces::remove_mcp_server(&workspace_root, params)
+        })
+        .await
+        .map_err(internal_error)??;
+        self.emit("mcp/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn add_hook(
+        &self,
+        params: HookAddParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::add_hook(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("hooks/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn remove_hook(
+        &self,
+        params: HookRemoveParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_hook(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("hooks/changed", serde_json::json!({}));
+        Ok(changed)
     }
 
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {

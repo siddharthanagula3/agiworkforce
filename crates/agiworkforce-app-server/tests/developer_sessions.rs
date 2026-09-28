@@ -344,6 +344,7 @@ fn capabilities() -> AppServerCapabilities {
         approval_notes: false,
         approval_edits: false,
         mcp_tools: false,
+        installs: false,
     }
 }
 
@@ -1268,6 +1269,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 scope: HookConfigScope::User,
                 trusted: true,
                 source: Some("/home/dev/.agiworkforce/hooks.json".to_string()),
+                position: Some(1),
             }],
         })
     }
