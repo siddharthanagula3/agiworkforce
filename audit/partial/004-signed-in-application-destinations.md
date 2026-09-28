@@ -153,16 +153,14 @@ Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features
 
 - Done when: An approvals inbox gathers every pending approval across the user's tasks and lets them approve or reject each.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
-| desktop | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Approve/Reject buttons appear on each waiting run in the Work runs tab (filters are Active/All only); add an inbox or filter for runs awaiting a decision. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:57-61`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:391-408`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:722-726`
 
 ## S4.18: Routine details.
 

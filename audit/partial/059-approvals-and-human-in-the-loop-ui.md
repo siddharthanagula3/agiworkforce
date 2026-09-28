@@ -155,22 +155,6 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
 
-## S59.27: Approval via notification.
-
-- Done when: When an approval is needed the user is notified and can approve or deny directly from the notification.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Web push announces "needs your approval" and opens the app; no Approve/Deny action in the notification. | ui |
-| desktop | partial | Hosted web push only opens the app; no actionable approval notification. | ui |
-| mobile | partial | The approval notification only opens the app ("Review"); the user cannot approve or deny from the notification itself. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `apps/web/lib/services/cloud-agent-run-service.ts:1389-1393`, `apps/mobile/services/notificationCategories.ts:10-16`
-
 ## S59.29: User takeover.
 
 - Done when: While the agent controls a screen or browser, the user can take over control and later hand it back.
