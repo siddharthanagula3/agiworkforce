@@ -117,6 +117,11 @@ fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse
         purchased_credits: snapshot.purchased_credits,
         cached: snapshot.cached,
         source: AccountSource::Cli,
+        web_search_key: crate::tools::search_key_provider().map(str::to_string),
+        web_search_logins: crate::tools::SEARCH_KEY_PROVIDERS
+            .iter()
+            .map(|provider| provider.to_string())
+            .collect(),
     }
 }
 

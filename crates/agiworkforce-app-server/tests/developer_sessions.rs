@@ -1141,6 +1141,8 @@ impl DeveloperSessionHost for SurfaceHost {
             purchased_credits: None,
             cached: !params.refresh,
             source: AccountSource::Cli,
+            web_search_key: None,
+            web_search_logins: Vec::new(),
         })
     }
 
