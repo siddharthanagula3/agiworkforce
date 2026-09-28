@@ -940,6 +940,11 @@ enum Command {
     Usage,
     /// Show what each plan includes and its credits per window.
     Plans,
+    /// List or revoke the account's AGI API keys.
+    Keys {
+        #[command(subcommand)]
+        action: Option<KeysSubcommand>,
+    },
     /// Print your referral link. Friends who join with it get a Pro trial, and you both earn bonus credits.
     Invite {
         /// Emit the link as JSON.
@@ -1577,6 +1582,24 @@ enum McpSubcommand {
         /// Registry name of the server to remove.
         name: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum KeysSubcommand {
+    /// Show every active key with its prefix, scopes and last use.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Revoke a key by id or name. Anything still using it stops working.
+    Revoke {
+        key: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+    /// Create a key. Creation needs a fresh sign-in check, so it opens your account settings.
+    Create,
 }
 
 #[derive(Subcommand, Debug)]
@@ -3842,7 +3865,12 @@ pub async fn run_main() -> Result<()> {
     // below, which dispatch ahead of the per-run option resolution. Every
     // `AgentSession` reads this policy once at construction and refuses to
     // write managed-session state when it is off.
-    cli_options::set_session_persistence_enabled(normalized_cli_options.session_persistence);
+    let keep_history = config::CliConfig::load()
+        .map(|config| config.default.keep_history != Some(false))
+        .unwrap_or(true);
+    cli_options::set_session_persistence_enabled(
+        normalized_cli_options.session_persistence && keep_history,
+    );
 
     for dir in &normalized_cli_options.additional_dirs {
         crate::path_security::register_additional_workspace_root(dir)
@@ -4911,6 +4939,64 @@ pub async fn run_main() -> Result<()> {
                 println!("{}", usage_summary::account_lines().await.join("\n"));
                 Ok(())
             }
+            Command::Keys { action } => {
+                let client = cloud::CloudClient::connect_managed()
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action
+                    .as_ref()
+                    .unwrap_or(&KeysSubcommand::List { json: false })
+                {
+                    KeysSubcommand::List { json } => {
+                        let keys = cloud::api_keys::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        render_structured(
+                            serde_json::to_value(&keys)?,
+                            cloud::api_keys::render(&keys),
+                            *json,
+                            cli.output,
+                        )
+                    }
+                    KeysSubcommand::Revoke { key, yes } => {
+                        let keys = cloud::api_keys::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let found = keys
+                            .iter()
+                            .find(|candidate| candidate.id == *key || candidate.name == *key)
+                            .with_context(|| format!("No active API key '{key}'"))?;
+                        if !confirm_destructive(
+                            &format!(
+                                "Revoke API key {} ({}…)? Anything still using it stops working, and this cannot be undone.",
+                                found.name, found.key_prefix
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left the key active.");
+                            return Ok(());
+                        }
+                        cloud::api_keys::revoke(&client, &found.id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Revoked API key {}.", found.name);
+                        Ok(())
+                    }
+                    KeysSubcommand::Create => {
+                        let url =
+                            format!("{}/settings/account", client.base().trim_end_matches('/'));
+                        let opened = oauth::open_external_url(
+                            &url,
+                            oauth::UserActionContext::user_initiated(),
+                        );
+                        println!(
+                            "Creating an API key needs a fresh sign-in check, which happens in your account settings{}: {url}",
+                            if opened { " (opened in your browser)" } else { "" }
+                        );
+                        Ok(())
+                    }
+                }
+            }
+
             Command::Plans => {
                 println!("{}", plans::plans_lines().join("\n"));
                 Ok(())

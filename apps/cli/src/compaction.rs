@@ -119,9 +119,26 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     let mut truncated = false;
     let mut total = 0usize;
 
+    if let Some((path, content)) = global_instructions() {
+        total += estimate_tokens(&content);
+        if total <= MAX_INSTRUCTION_TOKENS {
+            sources.push(InstructionSource {
+                dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
+                path,
+                content,
+            });
+        } else {
+            truncated = true;
+            total = 0;
+        }
+    }
+
     for dir in dirs.iter().rev() {
         for name in INSTRUCTION_FILES {
             let path = dir.join(name);
+            if sources.iter().any(|source| same_file(&source.path, &path)) {
+                continue;
+            }
             let content = match std::fs::read_to_string(&path) {
                 Ok(content) => content,
                 Err(_) => continue,
@@ -141,6 +158,26 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     }
 
     (sources, truncated)
+}
+
+fn global_instructions() -> Option<(std::path::PathBuf, String)> {
+    let home = crate::config::CliConfig::config_dir().ok()?;
+    ["instructions.md", "INSTRUCTIONS.md"]
+        .iter()
+        .map(|name| home.join(name))
+        .find_map(|path| {
+            std::fs::read_to_string(&path)
+                .ok()
+                .filter(|content| !content.trim().is_empty())
+                .map(|content| (path, content))
+        })
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
 }
 
 /// Load `AGENTS.md`, `CLAUDE.md`, and AGI instruction files root-first from
