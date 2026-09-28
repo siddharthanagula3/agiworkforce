@@ -675,18 +675,40 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   );
 
   const handleCommit = useCallback(
-    async (message: string) => {
+    async (message: string, files: string[] | null) => {
       if (!selectedSession || committing) return;
       setCommitting(true);
       setError(null);
       setCommitNotice(null);
       try {
-        const result = await api.commit(selectedSession.id, message);
+        const result = await api.commit(selectedSession.id, {
+          message,
+          ...(files ? { files } : {}),
+        });
         replaceSession(result.session);
         setCommitNotice(result.push.ok ? CODE_COPY.commitPushed : result.push.output);
         void loadChanges(selectedSession.id);
       } catch (commitError) {
         setError(friendlyError(commitError));
+      } finally {
+        setCommitting(false);
+      }
+    },
+    [api, committing, loadChanges, replaceSession, selectedSession],
+  );
+
+  const handleDiscard = useCallback(
+    async (files: string[]) => {
+      if (!selectedSession || committing || files.length === 0) return;
+      setCommitting(true);
+      setError(null);
+      setCommitNotice(null);
+      try {
+        const result = await api.discardChanges(selectedSession.id, files);
+        replaceSession(result.session);
+        void loadChanges(selectedSession.id);
+      } catch (discardError) {
+        setError(friendlyError(discardError));
       } finally {
         setCommitting(false);
       }
@@ -1219,7 +1241,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                     changesLoading={changesLoading}
                     pullRequestBusy={pullRequestBusy}
                     onToggleWide={() => setChangesWide((open) => !open)}
-                    onCommit={(message) => void handleCommit(message)}
+                    onCommit={(message, files) => void handleCommit(message, files)}
+                    onDiscard={(files) => void handleDiscard(files)}
                     onRunCommand={(command) => void handleRunCommand(command)}
                     onRefreshChanges={() => void loadChanges(selectedSession.id)}
                     onCreatePullRequest={() => void handleCreatePullRequest()}

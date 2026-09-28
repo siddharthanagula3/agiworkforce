@@ -1459,6 +1459,25 @@ svg + .menuRowLabel {
   flex-direction: column;
 }
 
+.fileSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fileSelectRow .fileRow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fileCheckbox {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0 0 0 8px;
+  accent-color: var(--chat-accent-primary);
+}
+
 .diff {
   display: flex;
   overflow-x: auto;

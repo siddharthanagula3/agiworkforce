@@ -455,6 +455,17 @@ const UNSAFE_GIT_BRANCH_MESSAGE = 'Refused a branch name that is not a plain git
 const GIT_STATUS_COMMAND = 'git status --porcelain=v1 --untracked-files=all';
 const GIT_CURRENT_BRANCH_COMMAND = 'git rev-parse --abbrev-ref HEAD';
 const GIT_DIFF_COMMAND = 'git --no-pager diff --no-color';
+const GIT_RESTORE_COMMAND = 'git restore --source=HEAD --staged --worktree --';
+const GIT_REMOVE_COMMAND = 'git rm -f --quiet --';
+const GIT_CLEAN_COMMAND = 'git clean -f --quiet --';
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function gitPathCommand(command: string, files: string[]): string {
+  return `${command} ${files.map(shellQuote).join(' ')}`;
+}
 
 function commandResult(
   stdoutValue: unknown,
@@ -1166,9 +1177,45 @@ export const getE2BExecutor = tracedCodeAction(
             return commandCatchResult(err);
           }
         },
-        async add({ path, all }): Promise<CommandExecutionResult> {
+        async add({ path, all, files }): Promise<CommandExecutionResult> {
           try {
-            const result = await sandbox.git.add(path, { ...(all ? { all } : {}) });
+            const result = await sandbox.git.add(
+              path,
+              files && files.length > 0 ? { files } : { ...(all ? { all } : {}) },
+            );
+            return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+          } catch (err) {
+            return commandCatchResult(err);
+          }
+        },
+        async restore({ path, files }): Promise<CommandExecutionResult> {
+          try {
+            const result = await sandbox.commands.run(gitPathCommand(GIT_RESTORE_COMMAND, files), {
+              cwd: path,
+              timeoutMs: E2B_COMMAND_TIMEOUT_MS,
+            });
+            return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+          } catch (err) {
+            return commandCatchResult(err);
+          }
+        },
+        async remove({ path, files }): Promise<CommandExecutionResult> {
+          try {
+            const result = await sandbox.commands.run(gitPathCommand(GIT_REMOVE_COMMAND, files), {
+              cwd: path,
+              timeoutMs: E2B_COMMAND_TIMEOUT_MS,
+            });
+            return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+          } catch (err) {
+            return commandCatchResult(err);
+          }
+        },
+        async clean({ path, files }): Promise<CommandExecutionResult> {
+          try {
+            const result = await sandbox.commands.run(gitPathCommand(GIT_CLEAN_COMMAND, files), {
+              cwd: path,
+              timeoutMs: E2B_COMMAND_TIMEOUT_MS,
+            });
             return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
           } catch (err) {
             return commandCatchResult(err);

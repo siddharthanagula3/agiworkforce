@@ -35,7 +35,14 @@ export interface E2BGitExecutor {
   }): Promise<CommandExecutionResult>;
   /** Creates the branch and checks it out, so later commits land on it. */
   createBranch(input: { path: string; branch: string }): Promise<CommandExecutionResult>;
-  add(input: { path: string; all?: boolean }): Promise<CommandExecutionResult>;
+  /** Stages `files` when given, otherwise every change when `all` is set. */
+  add(input: { path: string; all?: boolean; files?: string[] }): Promise<CommandExecutionResult>;
+  /** Returns tracked files to their last committed contents, in the index and on disk. */
+  restore(input: { path: string; files: string[] }): Promise<CommandExecutionResult>;
+  /** Deletes files git tracks only in the index, such as a new file that was staged. */
+  remove(input: { path: string; files: string[] }): Promise<CommandExecutionResult>;
+  /** Deletes untracked files. */
+  clean(input: { path: string; files: string[] }): Promise<CommandExecutionResult>;
   /** The branch currently checked out, which after a clone is what it cloned. */
   currentBranch(input: { path: string }): Promise<CommandExecutionResult>;
   /** Porcelain status of the working tree, including untracked files. */
