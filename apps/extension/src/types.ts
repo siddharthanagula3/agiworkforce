@@ -543,6 +543,7 @@ export interface ResolveChatApprovalMessage extends BaseMessage {
   id: string;
   cloudRun: ManagedCloudAgentRunReference;
   toolApprovals: ToolApprovalDecisionWire[];
+  guidance?: string;
 }
 
 export interface ChatChunkMessage {

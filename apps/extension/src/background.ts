@@ -5467,6 +5467,7 @@ async function handleResolveChatApproval(
         id,
         run: message.cloudRun,
         toolApprovals: message.toolApprovals,
+        ...(typeof message.guidance === 'string' ? { guidance: message.guidance } : {}),
         signal: activeStream.controller.signal,
       },
       {

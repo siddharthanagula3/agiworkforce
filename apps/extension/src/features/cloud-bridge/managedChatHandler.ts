@@ -137,6 +137,7 @@ export interface ChromeManagedApprovalRequest {
   id: string;
   run: ManagedCloudAgentRunReference;
   toolApprovals: ToolApprovalDecisionWire[];
+  guidance?: string;
   signal?: AbortSignal;
 }
 
@@ -610,6 +611,7 @@ export async function executeChromeManagedApproval(
     !ToolApprovalResumeRequestSchema.safeParse({
       run_id: request.run.runId,
       tool_approvals: request.toolApprovals,
+      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
     }).success
   ) {
     return {
@@ -634,9 +636,10 @@ export async function executeChromeManagedApproval(
     token,
     {
       signal: request.signal,
+      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
       idempotencyKey: await managedChatIdempotencyKey(
         'approval',
-        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}`,
+        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}:${request.guidance ?? ''}`,
       ),
     },
   )) {
