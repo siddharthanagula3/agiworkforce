@@ -203,7 +203,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Fifteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-21.',
+      'Implemented. Sixteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-27.',
   },
   {
     label: 'Rate limiting',
@@ -381,6 +381,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-27',
+                        value:
+                          'Protected route groups moved from fifteen to sixteen with the developer console, which holds API keys, rate limits and a request playground and is checked at the edge before render like the rest of the signed-in app.',
+                      },
                       {
                         label: '2026-09-27',
                         value:

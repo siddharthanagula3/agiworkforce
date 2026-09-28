@@ -81,6 +81,7 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
   isBrowserCommand,
+  isImageChatToolName,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -358,6 +359,11 @@ import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import {
+  executeProductComparisonTool,
+  isProductComparisonTool,
+} from '@/lib/services/product-comparison-tool-service';
+import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   applyFreeTrialProviderBudget,
@@ -767,6 +773,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
     isMapSearchTool(toolName) ||
     isPlacesSearchTool(toolName) ||
     isItineraryTool(toolName) ||
+    isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -833,6 +840,7 @@ function canonicalToolCategory(
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isItineraryTool(toolName)) return 'other';
+  if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
@@ -1944,6 +1952,7 @@ async function runMcpTool(
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
     freeTrialSpend?: FreeTrialToolSpend;
     sourcePositionFor?: (url: string) => number | undefined;
+    isRetrievedSource?: (url: string) => boolean;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -1952,6 +1961,8 @@ async function runMcpTool(
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
+    conversationId?: string | null;
+    latestAttachedImage?: () => string | null;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2151,6 +2162,47 @@ async function runMcpTool(
           content: outcome.content,
           isError: true,
           ...(outcome.unaffordable ? { unavailable: true } : {}),
+        };
+  }
+
+  if (isProductComparisonTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeProductComparisonTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      isRetrievedSource: executionContext?.isRetrievedSource ?? (() => false),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
+  if (isImageChatToolName(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const userId = executionContext?.userId;
+    const requestId = executionContext?.requestId;
+    if (!userId || !requestId) {
+      return { content: 'Images cannot be made in this chat.', isError: true, unavailable: true };
+    }
+    const outcome = await executeImageChatTool(toolCall.qualifiedName, toolCall.args, {
+      toolCallId: toolCall.id,
+      requestId,
+      userId,
+      organizationId: executionContext.organizationId ?? null,
+      db: callerScopedDb(executionContext, userId),
+      surface: executionContext.surface ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      latestAttachedImage: executionContext.latestAttachedImage ?? (() => null),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : {
+          content: outcome.content,
+          isError: true,
+          ...(outcome.unavailable ? { unavailable: true } : {}),
         };
   }
 
@@ -2495,6 +2547,7 @@ export function isToolOffered(
     isMapSearchTool(qualifiedName) ||
     isPlacesSearchTool(qualifiedName) ||
     isItineraryTool(qualifiedName) ||
+    isProductComparisonTool(qualifiedName) ||
     isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
@@ -3711,6 +3764,7 @@ export async function* runToolLoop(
   // Whether answer text has reached the reader, which decides whether a later
   // transport failure is an interruption or a model that was never reached.
   let publicTextEmitted = false;
+  const nativeSourceKeys = new Set<string>();
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
@@ -3737,6 +3791,7 @@ export async function* runToolLoop(
       );
     }
     for (const result of entry.serverToolResults ?? []) {
+      for (const source of result.sources) nativeSourceKeys.add(normalizeSourceUrlKey(source.url));
       const enrichedTitleSources = await enrichWebSearchResultTitles(result.sources);
       yield encoder.encode(
         eventStream.emit({
@@ -3797,6 +3852,10 @@ export async function* runToolLoop(
     sourcePositionFor(url);
     deliveredSourceKeys.add(normalizeSourceUrlKey(url));
   }
+  const isRetrievedSource = (url: string): boolean => {
+    const key = normalizeSourceUrlKey(url);
+    return deliveredSourceKeys.has(key) || nativeSourceKeys.has(key);
+  };
   const toolGovernor = createToolTurnGovernor(resolveTurnToolCallCap(agiWorkTurn));
   // Provider-native grounding is the model's own decision, so it is counted per
   // step from what the stream reports rather than from a tool call we made.
@@ -4487,11 +4546,18 @@ export async function* runToolLoop(
               webSearchDomainPolicy: processed.webSearchDomainPolicy ?? null,
               surface: processed.chatSurface,
               temporaryChat: processed.conversationIsTemporary === true,
+              conversationId: processed.conversationId ?? null,
+              latestAttachedImage: () =>
+                latestTurnImage({
+                  turnAttachments: processed.turnAttachments,
+                  messages: processed.chatRequest.messages,
+                }),
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },
               ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
+              isRetrievedSource,
               loadSkillInstallOverrides,
               queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone

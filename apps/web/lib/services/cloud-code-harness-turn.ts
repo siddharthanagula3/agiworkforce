@@ -99,6 +99,7 @@ export interface RunCloudCodeHarnessTurnInput {
   signal: AbortSignal;
   maxDurationMs?: number;
   elapsedMs?: number;
+  maxTurns?: number;
   onEvent?: (event: AgentEvent) => void | Promise<void>;
 }
 
@@ -129,7 +130,7 @@ export async function runCloudCodeHarnessTurn(
     request: {
       prompt: input.goal,
       workspacePath: input.workspacePath,
-      maxTurns: HARNESS_MAX_TURNS,
+      maxTurns: input.maxTurns ?? HARNESS_MAX_TURNS,
       timeoutMs: harnessRunDeadlineMs(input.maxDurationMs, input.elapsedMs ?? 0),
       ...(resumeSessionId ? { resumeSessionId } : {}),
     },

@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S96.02: Artifact-version store.
-
-- Done when: A server store keeps each artifact's successive versions so any version can be read back or restored.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Chat artifacts sync only their current content and version number: web_artifact_versions (0039) exists but no code writes it. Only published pages keep a real version history (published_artifact_versions, restorable via PATCH). | handler |
-
-Code: `apps/web/db/neon/0039_artifact_cloud_sync.sql:59-67`, `apps/web/app/api/chat/sync/route.ts:674-690`, `apps/web/app/api/artifacts/publish/route.ts:105-145`
-
 ## S96.03: Structured-document storage.
 
 - Done when: Documents are stored server-side as structured content (not only as text inside chat messages).
@@ -24,9 +13,6 @@ Code: `apps/web/db/neon/0039_artifact_cloud_sync.sql:59-67`, `apps/web/app/api/c
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Artifacts, documents included, are stored as flat text (web_artifacts.content) plus type/language; there is no structured document model (blocks, marks). | persistence |
-
-Code: `apps/web/db/neon/0039_artifact_cloud_sync.sql:40-58`, `apps/web/app/api/chat/sync/route.ts:690-700`
 
 ## S96.13: Generated-code build service.
 
@@ -35,28 +21,11 @@ Code: `apps/web/db/neon/0039_artifact_cloud_sync.sql:40-58`, `apps/web/app/api/c
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | React is transpiled in the browser by Babel standalone inside the sandbox; there is no build or bundling service, so imports beyond React/ReactDOM cannot resolve. | handler |
-
-Code: `infrastructure/sandbox/index.html:360-383`
 
 ## S96.21: Deployment history.
 
 - Done when: Each publication keeps a deployment history the owner can inspect.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | published_artifact_versions records every publish and GET ?versionsOf= lists them, but no client ever calls the history or the restore. | mount |
-
-Code: `apps/web/app/api/artifacts/publish/route.ts:105-145`, `apps/web/app/api/artifacts/publish/route.ts:318-330`
-
-## S96.26: Unpublish/rollback controller.
-
-- Done when: A controller unpublishes a publication and restores earlier versions.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Unpublish is wired end to end (Settings, CLI, conversation deletion); the version-restore endpoint (PATCH /api/artifacts/publish) has no caller. | mount |
-
-Code: `apps/web/lib/services/published-artifact-service.ts:368-372`, `apps/web/lib/services/published-artifact-service.ts:386-392`, `apps/web/app/api/artifacts/publish/route.ts:318-330`

@@ -62,6 +62,9 @@ pub mod method {
     pub const THREAD_ARCHIVE: &str = "thread/archive";
     pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
     pub const THREAD_SEARCH: &str = "thread/search";
+    pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
+    pub const THREAD_REWIND: &str = "thread/rewind";
+    pub const THREAD_PLAN: &str = "thread/plan";
     pub const THREAD_DELETE: &str = "thread/delete";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
     pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
@@ -83,11 +86,21 @@ pub mod method {
     pub const SKILLS_LIST: &str = "skills/list";
     pub const SKILLS_SET_ENABLED: &str = "skills/setEnabled";
     pub const SKILLS_CONSENT: &str = "skills/consent";
+    pub const SKILLS_INSTALL: &str = "skills/install";
+    pub const SKILLS_REMOVE: &str = "skills/remove";
     pub const PLUGINS_LIST: &str = "plugins/list";
     pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
+    pub const PLUGINS_INSTALL: &str = "plugins/install";
+    pub const PLUGINS_REMOVE: &str = "plugins/remove";
     pub const MCP_LIST: &str = "mcp/list";
     pub const MCP_LOGIN: &str = "mcp/login";
+    pub const MCP_TEST: &str = "mcp/test";
+    pub const MCP_TOOLS: &str = "mcp/tools";
+    pub const MCP_ADD: &str = "mcp/add";
+    pub const MCP_REMOVE: &str = "mcp/remove";
     pub const HOOKS_LIST: &str = "hooks/list";
+    pub const HOOKS_ADD: &str = "hooks/add";
+    pub const HOOKS_REMOVE: &str = "hooks/remove";
     pub const SETTINGS_READ: &str = "settings/read";
     pub const SETTINGS_WRITE: &str = "settings/write";
     pub const COMMANDS_LIST: &str = "commands/list";
@@ -347,6 +360,16 @@ pub struct AppServerCapabilities {
     pub max_turns: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub memory: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub approval_notes: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub approval_edits: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_tools: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub installs: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -557,6 +580,123 @@ pub struct ThreadReadResponse {
     /// `kind` is `created` is a file the thread generated.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<DeveloperSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<DeveloperPlanStep>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub todos: Vec<DeveloperTodo>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperStepStatus {
+    Pending,
+    InProgress,
+    Done,
+    Blocked,
+    Skipped,
+    Superseded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperPlanStep {
+    pub description: String,
+    pub status: DeveloperStepStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperTodo {
+    pub content: String,
+    pub status: DeveloperStepStatus,
+    pub priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPlanNotification {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub plan: Option<Vec<DeveloperPlanStep>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub todos: Option<Vec<DeveloperTodo>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpoint {
+    pub checkpoint_index: u32,
+    pub created_at: String,
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    pub tracked_files: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpointsResponse {
+    pub checkpoints: Vec<ThreadCheckpoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ThreadRewindRestore {
+    Both,
+    Conversation,
+    Code,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub checkpoint_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub restore: Option<ThreadRewindRestore>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct RewindSkippedFile {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindResponse {
+    pub thread: ThreadSummary,
+    pub prompt: String,
+    pub conversation_restored: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restored_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<RewindSkippedFile>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -704,6 +844,9 @@ pub struct PendingApprovalSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub reversible: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub proposed_content: Option<String>,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -1477,6 +1620,12 @@ pub struct ApprovalResponseParams {
     pub turn_id: String,
     pub request_id: String,
     pub decision: ReviewDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub edited_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1806,6 +1955,82 @@ pub struct McpLoginResponse {
     pub status: McpServerConfiguredStatus,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerParams {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerTestResponse {
+    pub name: String,
+    pub connected: bool,
+    pub elapsed_ms: u64,
+    pub tool_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpToolSummary {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpPromptArgumentSummary {
+    pub name: String,
+    pub description: String,
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpPromptSummary {
+    pub name: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arguments: Vec<McpPromptArgumentSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpResourceSummary {
+    pub uri: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerToolsResponse {
+    pub name: String,
+    pub tools: Vec<McpToolSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompts: Vec<McpPromptSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resources: Vec<McpResourceSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
@@ -1827,6 +2052,91 @@ pub struct HookSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub position: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HookAddParams {
+    pub event: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HookRemoveParams {
+    pub event: String,
+    pub position: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillInstallParams {
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillRemoveParams {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginInstallParams {
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub integrity: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginRemoveParams {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum McpRemoteTransport {
+    Http,
+    Sse,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpAddParams {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transport: Option<McpRemoteTransport>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub env: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub headers: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub overwrite: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2821,6 +3131,7 @@ mod tests {
                 detail: "psql -f migrate.sql".to_string(),
                 risk_level: Some(AgentEventApprovalRiskLevel::High),
                 reversible: Some(false),
+                proposed_content: None,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),

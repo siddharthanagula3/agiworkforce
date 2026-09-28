@@ -10,50 +10,13 @@ nothing is left.
 
 - Done when: ATX headings (# to ######) render as styled headings, not literal hash marks.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only # to #### are recognised; ##### and ###### headings show their hash marks as plain text. | ui |
-| chrome | partial | Only #, ## and ### are converted; #### and deeper headings show literal hash marks. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:100-100`
-
-## S20.03: Bold, italic, and strikethrough.
-
-- Done when: **bold**, *italic* and ~~strikethrough~~ render with the matching text styles.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Bold and italic work, but ~~strikethrough~~ is never converted (the sanitizer allows <del> yet the renderer emits none), so tildes show literally. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:106-106`
-
-## S20.04: Ordered lists.
-
-- Done when: Numbered lists render with their numbers (respecting the start value) and list indentation.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Numbered items become bare <li> elements with no <ol>, so their numbers are dropped. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:119-119`
-
-## S20.06: Nested lists.
-
-- Done when: Indented sub-lists render nested under their parent item with deeper indentation.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Indented sub-items are not matched (the list pattern anchors at column 0), so nested levels print as plain text lines. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:116-116`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`
 
 ## S20.07: Task lists.
 
@@ -67,52 +30,15 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S20.09: Horizontal rules.
-
-- Done when: A thematic break (---, ***) renders as a horizontal divider.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The cited line is the whole thematic-break handling and matches dashes only; running the function on "***" and "___" lines yields <p>***</p> and <p>___</p>. The criterion names both forms. |  |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:114-114`
-
-## S20.10: Inline code.
-
-- Done when: `inline code` renders in a monospace style distinct from prose.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The <code> wrap at 98 is followed by the * and _ italic passes at 109-110, which match inside the span. Reproduced verbatim: "Use `my_var_name`" -> <code>my<em>var</em>name</code>. Monospace survives but identifiers with underscores or stars, the common case in code, are corrupted. |  |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:98-98`
-
-## S20.11: Fenced code blocks.
-
-- Done when: Fenced code blocks render as a monospace block preserving whitespace.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The fence pass wraps code in <pre><code> but every later replace (bold, italic, headings, lists, blank-line split) still runs over the wrapped text. Reproduced with the function copied verbatim: a Python fence with `def __init__`, a blank line and `- item` renders as <pre><code>...def <strong>init</strong>(self):\n<p>pass<br><ul><li>item</code></pre></li></ul></p>. Whitespace is not preserved and the block is broken, which is the criterion. |  |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:95-95`
-
 ## S20.13: Autolinks.
 
 - Done when: A bare URL in the answer (https://…, www.…) becomes a clickable link.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S20.14: Footnotes where supported.
 
@@ -125,16 +51,6 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S20.15: Tables.
-
-- Done when: GFM pipe tables render as a grid with a header row and aligned cells.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
 ## S20.16: Wide-table scrolling.
@@ -152,17 +68,14 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 
 - Done when: A rendered table offers a download (CSV/XLSX) of its contents.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Download as CSV exists only for table/CSV artifacts in the artifact panel; a Markdown table inside an answer has no download. | ui |
-| desktop | partial | Download as CSV exists only for table/CSV artifacts in the artifact panel; a Markdown table inside an answer has no download. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1445-1445`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:988-988`
 
 ## S20.19: Inline mathematical notation.
 
@@ -241,17 +154,14 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: Searching finds text inside an answer and highlights the matching words in the rendered answer.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Search jumps to the message and outlines the whole bubble; the matched words are not highlighted inside the answer and there is no find-in-conversation bar. | ui |
-| desktop | partial | Search jumps to the message and outlines the whole bubble; the matched words are not highlighted inside the answer and there is no find-in-conversation bar. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:270-270`, `apps/web/features/chat/pages/WebChatPage.tsx:3933-3933`
 
 ## S20.28: Print and export rendering.
 
@@ -261,13 +171,13 @@ Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:270-270`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
-| desktop | partial | Print keeps the rendered formatting, but PDF/DOCX export re-parses Markdown line by line and drops tables, math, nesting and inline styling. | ui |
+| web | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
+| desktop | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
 | mobile | partial | PDF export converts only headings, bold/italic, code and flat lists; tables, math, links and list numbering are lost. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5468-5468`, `apps/web/features/chat/services/document-export-service.ts:169-169`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:36-36`, `apps/mobile/services/fileCreation.ts:59-59`
+Code: `packages/ui/unified-chat/src/components/markdown/markdownDocument.ts:230-230`, `apps/web/features/chat/services/export-pdf.ts:868-868`, `apps/web/features/chat/services/export-pdf.ts:422-422`, `apps/web/features/chat/services/export-pdf.ts:845-845`
 
 ## S20.29: Right-to-left content.
 

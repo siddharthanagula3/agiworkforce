@@ -256,6 +256,7 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
       name,
       scopes,
       expiresInDays,
+      projectId,
     }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
@@ -267,7 +268,7 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
       const response = await withStepUp((headers) =>
         sendAuthorizedJson(
           '/api/settings/api-keys',
-          { method: 'POST', body: { name, scopes, expiresAt } },
+          { method: 'POST', body: { name, scopes, expiresAt, projectId: projectId ?? null } },
           headers,
         ),
       );

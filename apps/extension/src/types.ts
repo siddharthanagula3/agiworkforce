@@ -71,6 +71,7 @@ export type NativeMessageType =
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
+  | 'UPDATE_SHORTCUT'
   | 'REPLAY_SHORTCUT'
   | 'GET_TAB_GROUP_STATE'
   | 'ADD_TAB_TO_GROUP'
@@ -499,6 +500,7 @@ export interface ChatMessageMessage extends BaseMessage {
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;
+  workMode?: 'chat' | 'agiwork';
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
@@ -782,6 +784,13 @@ export interface DeleteShortcutMessage extends BaseMessage {
   shortcutId: string;
 }
 
+export interface UpdateShortcutMessage extends BaseMessage {
+  type: 'UPDATE_SHORTCUT';
+  shortcutId: string;
+  name: string;
+  prompt: string;
+}
+
 export interface ReplayShortcutMessage extends BaseMessage {
   type: 'REPLAY_SHORTCUT';
   shortcutId: string;
@@ -1054,6 +1063,7 @@ export type ExtensionMessage =
   | SaveShortcutMessage
   | ListShortcutsMessage
   | DeleteShortcutMessage
+  | UpdateShortcutMessage
   | ReplayShortcutMessage
   | CreateScheduledTaskMessage
   | ListScheduledTasksMessage

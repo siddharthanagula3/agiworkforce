@@ -18,6 +18,7 @@ import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
 import { citationPublisherDomain } from '@agiworkforce/unified-chat';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { formatSourceDate } from '../../utils/research-sources';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
@@ -84,7 +85,12 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
 
   // A grounded result's title IS its publisher's domain, so printing the host
   // under it repeats the same word twice and says nothing.
-  const subtitle = [displayTitle === displayHost ? null : displayHost, source.publishedDate]
+  const retrievedOn = formatSourceDate(source.retrievedAt);
+  const subtitle = [
+    displayTitle === displayHost ? null : displayHost,
+    source.publishedDate,
+    retrievedOn ? `Retrieved ${retrievedOn}` : null,
+  ]
     .filter(Boolean)
     .join(' · ');
 

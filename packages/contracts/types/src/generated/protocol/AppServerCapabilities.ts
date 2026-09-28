@@ -41,4 +41,9 @@ export type AppServerCapabilities = {
   promptCommands?: boolean;
   maxTurns?: boolean;
   memory?: boolean;
+  plan?: boolean;
+  approvalNotes?: boolean;
+  approvalEdits?: boolean;
+  mcpTools?: boolean;
+  installs?: boolean;
 };

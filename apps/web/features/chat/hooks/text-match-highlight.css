@@ -1,0 +1,12 @@
+::highlight(agi-find-match),
+::highlight(agi-jump-match) {
+  background-color: color-mix(in srgb, var(--warning-fill) 40%, transparent);
+}
+
+@media (forced-colors: active) {
+  ::highlight(agi-find-match),
+  ::highlight(agi-jump-match) {
+    background-color: Mark;
+    color: MarkText;
+  }
+}

@@ -198,7 +198,9 @@
     "addAttachmentsAndToolsActive": "Добавить вложения и инструменты: активно {{count}}",
     "voiceStart": "Начать голосовой ввод",
     "voiceUnsupportedBrowser": "Голосовой ввод не поддерживается в этом браузере",
-    "voiceUnsupportedHint": "Голосовой ввод не поддерживается в этом браузере. Попробуйте Chrome или Edge."
+    "voiceUnsupportedHint": "Голосовой ввод не поддерживается в этом браузере. Попробуйте Chrome или Edge.",
+    "expandInput": "Развернуть поле сообщения",
+    "collapseInput": "Свернуть поле сообщения"
   },
   "bubble": {
     "assistantSaid": "AGI ответил:",
@@ -373,5 +375,22 @@
     "copyFailed": "Не удалось скопировать, буфер обмена недоступен",
     "download": "Скачать в CSV",
     "close": "Закрыть развёрнутую таблицу"
+  },
+  "markdown": {
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "copyFailed": "Не удалось скопировать",
+    "copyLabel": "Скопировать код",
+    "copiedLabel": "Код скопирован",
+    "copyFailedLabel": "Не удалось скопировать код",
+    "download": "Скачать {{fileName}}",
+    "expand": "Развернуть код",
+    "close": "Закрыть развёрнутый код",
+    "codeTitle": "Код {{language}}",
+    "codeBlockLabel": "Блок кода {{language}}"
+  },
+  "streaming": {
+    "reconnecting": "Переподключение…",
+    "stopping": "Остановка облачной задачи…"
   }
 }

@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { ManagedMediaImageAspectRatioSchema } from './managed-media';
 import {
   CLARIFY_HEADER_MAX_LENGTH,
   CLARIFY_MAX_OPTIONS,
   CLARIFY_MAX_QUESTIONS,
   CLARIFY_MIN_OPTIONS,
   CLARIFY_OTHER_MAX_LENGTH,
+  IMAGE_CARD_MAX_IMAGES,
+  IMAGE_TOOL_PROMPT_MAX_LENGTH,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   INTERACTIVE_CARDS_METADATA_KEY,
   INTERACTIVE_CARD_MAX_SERIALIZED_LENGTH,
@@ -29,6 +32,16 @@ import {
   PLACES_SEARCH_NEAR_MAX_LENGTH,
   PLACES_SEARCH_QUERY_MAX_LENGTH,
   PLACE_PRICE_LEVELS,
+  PRODUCT_COMPARISON_BEST_FOR_MAX_LENGTH,
+  PRODUCT_COMPARISON_MAX_PRODUCTS,
+  PRODUCT_COMPARISON_MAX_SOURCES,
+  PRODUCT_COMPARISON_MAX_SPECS,
+  PRODUCT_COMPARISON_MERCHANT_MAX_LENGTH,
+  PRODUCT_COMPARISON_MIN_PRODUCTS,
+  PRODUCT_COMPARISON_NAME_MAX_LENGTH,
+  PRODUCT_COMPARISON_SPEC_LABEL_MAX_LENGTH,
+  PRODUCT_COMPARISON_SPEC_VALUE_MAX_LENGTH,
+  PRODUCT_COMPARISON_TITLE_MAX_LENGTH,
   isKnownInteractiveCardKind,
   type InteractiveCard,
   type MapSearchAction,
@@ -236,6 +249,28 @@ const MediaRefSchema = z
   .strict();
 
 const SourceSchema = z.object({ url: HttpsUrlSchema, title: z.string().min(1).max(120) }).strict();
+
+const IMAGE_CARD_URL_PATTERN =
+  /^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+const ImageCardImageSchema = z
+  .object({ assetId: z.string().uuid(), url: z.string().regex(IMAGE_CARD_URL_PATTERN) })
+  .strict()
+  .refine(
+    (image) =>
+      IMAGE_CARD_URL_PATTERN.exec(image.url)?.[1]?.toLowerCase() === image.assetId.toLowerCase(),
+    { message: 'url does not name the asset' },
+  );
+
+export const ImageCardBodySchema = z
+  .object({
+    operation: z.enum(['generate', 'edit']),
+    prompt: z.string().min(1).max(IMAGE_TOOL_PROMPT_MAX_LENGTH),
+    images: z.array(ImageCardImageSchema).min(1).max(IMAGE_CARD_MAX_IMAGES),
+    aspectRatio: ManagedMediaImageAspectRatioSchema.optional(),
+    model: z.string().min(1).max(200).optional(),
+  })
+  .strict();
 
 export function isAllowedItineraryRouteUrl(value: string): boolean {
   try {
@@ -490,6 +525,66 @@ export const McpAppCardBodySchema = z
   })
   .strict();
 
+const ProductComparisonProductSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    name: z.string().min(1).max(PRODUCT_COMPARISON_NAME_MAX_LENGTH),
+    bestFor: z.string().min(1).max(PRODUCT_COMPARISON_BEST_FOR_MAX_LENGTH).optional(),
+    price: z
+      .object({
+        amount: z.number().finite().nonnegative(),
+        currency: z.string().regex(/^[A-Z]{3}$/),
+        sourceUrl: HttpsUrlSchema,
+      })
+      .strict()
+      .optional(),
+    merchant: z.string().min(1).max(PRODUCT_COMPARISON_MERCHANT_MAX_LENGTH).optional(),
+    buyUrl: HttpsUrlSchema.optional(),
+    specs: z
+      .array(z.string().max(PRODUCT_COMPARISON_SPEC_VALUE_MAX_LENGTH))
+      .max(PRODUCT_COMPARISON_MAX_SPECS),
+    sources: z.array(SourceSchema).min(1).max(PRODUCT_COMPARISON_MAX_SOURCES),
+  })
+  .strict();
+
+export const ProductComparisonCardBodySchema = z
+  .object({
+    title: z.string().min(1).max(PRODUCT_COMPARISON_TITLE_MAX_LENGTH),
+    specLabels: z
+      .array(z.string().min(1).max(PRODUCT_COMPARISON_SPEC_LABEL_MAX_LENGTH))
+      .max(PRODUCT_COMPARISON_MAX_SPECS),
+    products: z
+      .array(ProductComparisonProductSchema)
+      .min(PRODUCT_COMPARISON_MIN_PRODUCTS)
+      .max(PRODUCT_COMPARISON_MAX_PRODUCTS),
+    checkedAt: IsoDate,
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    const ids = new Set<string>();
+    for (const [index, product] of body.products.entries()) {
+      if (ids.has(product.id)) {
+        ctx.addIssue({ code: 'custom', path: ['products', index, 'id'], message: 'duplicate id' });
+      }
+      ids.add(product.id);
+      if (product.specs.length !== body.specLabels.length) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['products', index, 'specs'],
+          message: 'specs do not line up with the spec labels',
+        });
+      }
+      const price = product.price;
+      if (price && !product.sources.some((source) => source.url === price.sourceUrl)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['products', index, 'price', 'sourceUrl'],
+          message: 'price source is not one of the product sources',
+        });
+      }
+    }
+  });
+
 export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | null {
   const envelope = InteractiveCardEnvelopeSchema.safeParse(
     (payload as { card?: unknown } | null | undefined)?.card,
@@ -507,13 +602,17 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
   const parsed =
     kind === 'clarify.v1'
       ? ClarifyCardBodySchema.safeParse(rawBody)
-      : kind === 'itinerary.v1'
-        ? ItineraryCardBodySchema.safeParse(rawBody)
-        : kind === 'map-search.v1'
-          ? MapSearchCardBodySchema.safeParse(rawBody)
-          : kind === 'places.v1'
-            ? PlacesCardBodySchema.safeParse(rawBody)
-            : McpAppCardBodySchema.safeParse(rawBody);
+      : kind === 'image.v1'
+        ? ImageCardBodySchema.safeParse(rawBody)
+        : kind === 'itinerary.v1'
+          ? ItineraryCardBodySchema.safeParse(rawBody)
+          : kind === 'map-search.v1'
+            ? MapSearchCardBodySchema.safeParse(rawBody)
+            : kind === 'places.v1'
+              ? PlacesCardBodySchema.safeParse(rawBody)
+              : kind === 'product-comparison.v1'
+                ? ProductComparisonCardBodySchema.safeParse(rawBody)
+                : McpAppCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;

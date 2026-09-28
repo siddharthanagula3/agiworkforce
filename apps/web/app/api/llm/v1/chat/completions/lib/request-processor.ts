@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
@@ -9,7 +10,11 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { normalizeResearchDeliverable, RESEARCH_GUIDANCE_MAX_CHARS } from '@agiworkforce/types';
+import {
+  IMAGE_CARD_KIND,
+  normalizeResearchDeliverable,
+  RESEARCH_GUIDANCE_MAX_CHARS,
+} from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -54,6 +59,7 @@ import {
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
+  classifyAttachedSearchTool,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
@@ -79,6 +85,15 @@ import {
   isItineraryTool,
   itineraryToolDefinition,
 } from '@/lib/places/itinerary-tool';
+import {
+  PRODUCT_COMPARISON_CARD_KIND,
+  asksForProductComparison,
+  productComparisonToolDefinition,
+} from '@/lib/services/product-comparison-tool-service';
+import {
+  imageChatToolDefinitions,
+  imageChatToolOffer,
+} from '@/app/api/media/image/lib/image-chat-tools';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -211,6 +226,7 @@ import {
   planResponseBudget,
   buildRoutingDecisionTrace,
   resolveAutoRoute,
+  speedFirstSlots,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
 import type {
@@ -289,16 +305,20 @@ import {
   loadProjectContext,
   MAX_PROJECT_CONTEXT_CHARS,
   renderProjectContextBlocks,
+  type LoadedProjectContext,
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
-import { speedFirstSlots } from './routing-profile-selection';
 import {
   modelKeepsInputsOutOfTraining,
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
-import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
+import {
+  createResearchDomainPolicy,
+  MAX_RESEARCH_CONNECTOR_SOURCES,
+  type ResearchDomainPolicy,
+} from './research-sources';
 import {
   IMAGE_DETAIL_VALUES,
   imageDetailRefusalMessage,
@@ -314,16 +334,14 @@ import {
 import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
-  formatManagedMemorySystemPrompt,
-  loadManagedMemoryContext,
   loadManagedMemoryPolicy,
-  loadProjectMemoryScope,
-  loadSuppressedMemorySources,
-  type ManagedMemoryContextDb,
   type ManagedMemoryContextItem,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
-import { resolvePastChatContext } from '@/lib/services/past-chat-context-service';
+import {
+  resolveInteractiveTurnContext,
+  type InteractiveTurnContext,
+} from '@/lib/services/turn-context-service';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
@@ -509,6 +527,10 @@ export const ChatCompletionRequestSchema = z
         files: z.boolean().optional(),
         allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
         deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        connectors: z
+          .array(z.string().trim().min(1).max(200))
+          .max(MAX_RESEARCH_CONNECTOR_SOURCES)
+          .optional(),
       })
       .optional(),
     research_resume: z
@@ -946,7 +968,7 @@ export function applyMapSearchCardCapability(
   }
 }
 
-const ITINERARY_CARD_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
   'web',
   'desktop',
   'mobile',
@@ -963,7 +985,7 @@ export function applyItineraryToolCapability(
   },
 ): boolean {
   if (
-    !ITINERARY_CARD_SURFACES.has(params.surface) ||
+    !CARD_TOOL_SURFACES.has(params.surface) ||
     !params.toolsCapable ||
     !request.stream ||
     !params.placesAvailable ||
@@ -977,6 +999,44 @@ export function applyItineraryToolCapability(
     itineraryToolDefinition(),
   ];
   return true;
+}
+
+export function shouldOfferProductComparison(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    tools: readonly unknown[] | undefined;
+  },
+): boolean {
+  return (
+    CARD_TOOL_SURFACES.has(params.surface) &&
+    params.toolsCapable &&
+    request.stream === true &&
+    classifyAttachedSearchTool(params.tools) !== null &&
+    asksForProductComparison(params.userMessage) &&
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
+  );
+}
+
+export function imageToolsForTurn(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    planTier: string | null | undefined;
+  },
+): ReturnType<typeof imageChatToolDefinitions> {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) !== true
+  ) {
+    return [];
+  }
+  const offer = imageChatToolOffer(params.planTier, params.surface);
+  return offer ? imageChatToolDefinitions(offer) : [];
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -1183,6 +1243,7 @@ export type ProcessedRequest = {
     files: boolean;
     allowDomains: string[];
     denyDomains: string[];
+    connectors: string[];
   };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
@@ -1413,99 +1474,6 @@ function activeStudyInstruction(row: {
   const topic = normalizeStudyTopic(row.study_topic);
   if (!topic || !isStudyMode(row.study_mode) || !isStudyLevel(row.study_level)) return null;
   return composeStudyInstruction({ topic, mode: row.study_mode, level: row.study_level });
-}
-
-/**
- * Apply server-owned account memories when the conversation policy allows it.
- * Exported so the Temporary Chat boundary and prompt-accounting behavior stay
- * covered without importing route or database globals into the test.
- */
-export function accountMemoryRequested(
-  surface: CloudChatSurface,
-  memoryEnabled: boolean | undefined,
-): boolean {
-  return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
-}
-
-export async function enrichManagedMemoryContext(params: {
-  db: ManagedMemoryContextDb;
-  userId: string;
-  chatRequest: ChatCompletionRequest;
-  isTemporary: boolean;
-  surface: CloudChatSurface;
-  projectId?: string | null;
-  organizationId?: string | null;
-  // Returned rather than only injected, so a later consumer judges the rows
-  // this turn actually carried instead of querying for them a second time.
-}): Promise<ManagedMemoryContextItem[]> {
-  if (
-    params.isTemporary ||
-    !accountMemoryRequested(params.surface, params.chatRequest.memory_enabled)
-  ) {
-    return [];
-  }
-
-  const [suppressedSources, scope] = await Promise.all([
-    loadSuppressedMemorySources(params.db, { userId: params.userId }),
-    loadProjectMemoryScope(params.db, {
-      userId: params.userId,
-      projectId: params.projectId ?? null,
-    }),
-  ]);
-  const memories = await loadManagedMemoryContext(params.db, {
-    userId: params.userId,
-    organizationId: params.organizationId ?? null,
-    suppressedSources,
-    scope,
-    query: lastUserMessageText(params.chatRequest),
-  });
-  const prompt = formatManagedMemorySystemPrompt(memories);
-  if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
-  return memories.map((memory) => ({
-    content: memory.content,
-    category: memory.category,
-    pinned: memory.pinned,
-  }));
-}
-
-export async function enrichPastChatContext(params: {
-  db: ManagedMemoryContextDb;
-  userId: string;
-  chatRequest: ChatCompletionRequest;
-  isTemporary: boolean;
-  surface: CloudChatSurface;
-  policy: ManagedMemoryPolicy;
-  organizationId?: string | null;
-  conversationId?: string | null;
-  projectId?: string | null;
-}): Promise<{ injected: boolean; citations: PastChatCitation[] }> {
-  if (
-    !params.policy.searchPastChats ||
-    params.isTemporary ||
-    params.surface === 'api' ||
-    params.chatRequest.memory_enabled === false
-  ) {
-    return { injected: false, citations: [] };
-  }
-
-  const query = lastUserMessageText(params.chatRequest);
-  if (!query) return { injected: false, citations: [] };
-
-  const scope = await loadProjectMemoryScope(params.db, {
-    userId: params.userId,
-    projectId: params.projectId ?? null,
-  });
-  const recall = await resolvePastChatContext(params.db, {
-    userId: params.userId,
-    query,
-    organizationId: params.organizationId ?? null,
-    currentConversationId: params.conversationId ?? null,
-    scope,
-  });
-  if (!recall.prompt) return { injected: false, citations: [] };
-
-  params.chatRequest.messages.unshift({ role: 'system', content: recall.prompt });
-  return { injected: true, citations: recall.citations };
 }
 
 function lastUserMessageText(request: ChatCompletionRequest): string {
@@ -2579,7 +2547,11 @@ export async function processRequest(
 
   let requestId: string;
   try {
-    requestId = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
+    const idempotencyHeader = request.headers.get('idempotency-key');
+    requestId =
+      idempotencyHeader === null && resolveAuthenticatedSurface(request, auth) === 'api'
+        ? `agi.chat.api.${randomUUID()}`
+        : parseManagedUsageIdempotencyKey(idempotencyHeader);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return { ok: false, response: managedUsageErrorResponse(error, subscription) };
@@ -2812,6 +2784,7 @@ export async function processRequest(
         isTemporary: boolean;
         selectedRouteId: string | null;
         projectId: string | null;
+        projectContext: LoadedProjectContext | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
         projectHasKnowledgeFiles: boolean;
@@ -2822,6 +2795,7 @@ export async function processRequest(
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
         let projectBlocks: readonly ProjectContextBlock[] = [];
+        let loadedProjectContext: LoadedProjectContext | null = null;
         let projectHasKnowledgeFiles = false;
         try {
           const scoped = await scopedDbPromise;
@@ -2899,6 +2873,7 @@ export async function processRequest(
                   ),
                 };
               }
+              loadedProjectContext = projectContext;
               projectHasKnowledgeFiles = projectContext.knowledgeFiles.length > 0;
               const rendered = renderProjectContextBlocks(projectContext);
               projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
@@ -2935,6 +2910,7 @@ export async function processRequest(
             isTemporary: ownedRows[0].is_temporary,
             selectedRouteId: ownedRows[0].selected_route_id,
             projectId: ownedRows[0].project_id,
+            projectContext: loadedProjectContext,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
             projectHasKnowledgeFiles,
@@ -2965,6 +2941,7 @@ export async function processRequest(
         isTemporary: false,
         selectedRouteId: null,
         projectId: null,
+        projectContext: null,
         projectBlocks: [],
         projectHasKnowledgeFiles: false,
         studyInstruction: null,
@@ -3172,10 +3149,36 @@ export async function processRequest(
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
+  let turnContext: InteractiveTurnContext | null = null;
+  try {
+    const scoped = await scopedDbPromise;
+    turnContext = await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
+      resolveInteractiveTurnContext(scoped.db, {
+        turnId: requestId,
+        userId,
+        organizationId: scoped.organizationId,
+        projectId: conversationProjectId,
+        conversationId: chatRequest.conversation_id ?? null,
+        temporaryChat: conversationIsTemporary,
+        surface: chatSurface,
+        memoryEnabled: chatRequest.memory_enabled,
+        policy: managedMemoryPolicy,
+        query: lastUserMessageText(chatRequest),
+        projectContext: ownership.projectContext,
+        projectBlocks: ownership.projectBlocks,
+      }),
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId, conversationId: chatRequest.conversation_id },
+      'Turn context could not be assembled; continuing without account memory or past chats',
+    );
+  }
+
   // The project instruction is stable for the conversation and joins the cached
   // preamble below. What the project merely supplies to read varies with the
   // question, so each remaining block is carried at its own layer instead.
-  for (const block of ownership.projectBlocks) {
+  for (const block of turnContext?.projectBlocks ?? ownership.projectBlocks) {
     if (block.layer === 'project') continue;
     chatRequest.messages.unshift({ role: 'system', content: block.text });
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);
@@ -3222,62 +3225,16 @@ export async function processRequest(
     }
   }
 
-  let pastChatSources: PastChatCitation[] = [];
-  if (managedMemoryPolicy.searchPastChats) {
-    try {
-      const scoped = await scopedDbPromise;
-      const recall = await enrichPastChatContext({
-        db: scoped.db,
-        userId,
-        chatRequest,
-        isTemporary: conversationIsTemporary,
-        surface: chatSurface,
-        policy: managedMemoryPolicy,
-        organizationId: scoped.organizationId,
-        conversationId: chatRequest.conversation_id ?? null,
-        projectId: conversationProjectId,
-      });
-      if (recall.injected) {
-        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
-        pastChatSources = recall.citations;
-      }
-    } catch (error) {
-      logger.error(
-        { error, userId, conversationId: chatRequest.conversation_id },
-        'Past-chat recall failed; continuing without excerpts',
-      );
-    }
+  const pastChatSources: readonly PastChatCitation[] = turnContext?.pastChatSources ?? [];
+  if (turnContext?.pastChatPrompt) {
+    chatRequest.messages.unshift({ role: 'system', content: turnContext.pastChatPrompt });
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
   }
 
-  let loadedManagedMemories: readonly ManagedMemoryContextItem[] = [];
-  if (managedMemoryPolicy.enabled) {
-    try {
-      const scoped = await scopedDbPromise;
-      const preMemoryMessageCount = chatRequest.messages.length;
-      // A memory confined to a project must not appear in a loose chat, and a
-      // project set to exclude global memory must not see the account pool.
-      // `conversationProjectId` is the ownership lookup's row, not a fresh
-      // query, so the scoping answers to the same read as the 404 check above.
-      loadedManagedMemories = await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
-        enrichManagedMemoryContext({
-          db: scoped.db,
-          userId,
-          chatRequest,
-          isTemporary: conversationIsTemporary,
-          surface: chatSurface,
-          projectId: conversationProjectId,
-          organizationId: scoped.organizationId,
-        }),
-      );
-      if (chatRequest.messages.length > preMemoryMessageCount) {
-        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
-      }
-    } catch (error) {
-      logger.error(
-        { error, userId, conversationId: chatRequest.conversation_id },
-        'Managed memory load failed; continuing without account memory',
-      );
-    }
+  const loadedManagedMemories: readonly ManagedMemoryContextItem[] = turnContext?.memories ?? [];
+  if (turnContext?.memoryPrompt) {
+    applyManagedMemoryContext(chatRequest, turnContext.memoryPrompt);
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
   }
 
   if (isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled) {
@@ -4961,6 +4918,26 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
   }
 
+  if (
+    shouldOfferProductComparison(chatRequest, {
+      surface: chatSurface,
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+      userMessage: lastUserText,
+      tools: resolvedTools,
+    })
+  ) {
+    resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
+  }
+
+  const imageTools = imageToolsForTurn(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    planTier: subscription.plan_tier,
+  });
+  if (imageTools.length > 0) {
+    resolvedTools = [...(resolvedTools ?? []), ...imageTools];
+  }
+
   if (deviceHost) {
     const deviceTools = deviceStepToolDefs(deviceHost);
     if (deviceTools.length > 0) {
@@ -5324,6 +5301,7 @@ export async function processRequest(
             files: chatRequest.research_sources.files === true,
             allowDomains: chatRequest.research_sources.allow_domains ?? [],
             denyDomains: chatRequest.research_sources.deny_domains ?? [],
+            connectors: chatRequest.research_sources.connectors ?? [],
           },
         }
       : {}),

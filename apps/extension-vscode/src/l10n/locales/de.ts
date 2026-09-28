@@ -15,6 +15,370 @@ const de = {
   'subsystemHealth.detailsTooltip': 'Für Details klicken',
   'subsystemHealth.failuresTitle': 'AGI Workforce, Subsystemfehler',
   'subsystemHealth.failuresPlaceholder': 'In dieser Sitzung aufgezeichnete Fehler',
+  'chatError.keyRejected': 'Ihr Schlüssel wurde von {provider} abgelehnt.',
+  'chatError.notCoveredByPlan':
+    '{provider} meldet, dass diese Anfrage nicht von Ihrem Plan abgedeckt ist.',
+  'chatError.rateLimiting':
+    '{provider} begrenzt die Anzahl der Anfragen. Versuchen Sie es gleich noch einmal.',
+  'chatError.providerProblem':
+    '{provider} hatte ein Problem und konnte nicht antworten. Versuchen Sie es erneut.',
+  'chatError.providerRejected': '{provider} hat die Anfrage abgelehnt.',
+  'chatError.updateExtension': 'Erweiterung aktualisieren',
+  'chatError.stoppedPartWay': 'Die Antwort von {provider} brach mittendrin ab.',
+  'chatError.toolFailed':
+    'Das Tool {tool} ist fehlgeschlagen, deshalb wurde die Antwort abgebrochen.',
+  'chatError.couldNotReach':
+    'Keine Verbindung zu {provider}. Prüfen Sie Ihre Netzwerkverbindung, und versuchen Sie es erneut.',
+  'chatError.theModelProvider': 'dem Modellanbieter',
+  'chatError.tooLongForModel': 'Diese Unterhaltung ist länger, als {model} auf einmal lesen kann.',
+  'chatError.planRequired': 'Cloud-Chat erfordert den Plan {plan}.',
+  'chatError.runtimeSettings': 'Die lokale Laufzeit von AGI konnte ihre Einstellungen nicht lesen.',
+  'chatError.noPermission': 'AGI ist für diese Aktion nicht berechtigt.',
+  'chatError.runtimeNotRunning': 'Die lokale Laufzeit von AGI wird nicht ausgeführt.',
+  'chatError.aboutSeconds_one': 'etwa {count} Sekunde',
+  'chatError.aboutSeconds_other': 'etwa {count} Sekunden',
+  'chatError.aboutMinutes_one': 'etwa {count} Minute',
+  'chatError.aboutMinutes_other': 'etwa {count} Minuten',
+  'chatError.aboutHours_one': 'etwa {count} Stunde',
+  'chatError.aboutHours_other': 'etwa {count} Stunden',
+  'chatError.withReference': '{text} Referenz: {reference}',
+  'chatError.signInToRun':
+    'Melden Sie sich bei AGI an, um dieses Modell mit Ihrem Plan auszuführen.',
+  'chatError.planExcludesModel': 'Ihr Plan umfasst dieses Modell nicht.',
+  'chatError.usageLimitWait':
+    'Sie haben ein Nutzungslimit für Ihr Konto erreicht. In {wait} ist die Nutzung wieder möglich.',
+  'chatError.usageLimit':
+    'Sie haben ein Nutzungslimit für Ihr Konto erreicht. Prüfen Sie Ihre Nutzung, um zu sehen, wann es zurückgesetzt wird.',
+  'chatError.noProviderKey': 'AGI hat keinen Schlüssel, um dies bei {provider} auszuführen.',
+  'chatError.providerBusyWait':
+    'Bei {provider} gehen gerade zu viele Anfragen ein. Versuchen Sie es in {wait} erneut.',
+  'chatError.providerBusy':
+    'Bei {provider} gehen gerade zu viele Anfragen ein. Versuchen Sie es gleich noch einmal, oder wechseln Sie das Modell.',
+  'chatError.freeAllowanceWait':
+    'Das kostenlose Modell hat das Kontingent aufgebraucht, das alle im Free-Plan gemeinsam nutzen. Das ist also kein Limit Ihres Kontos. Versuchen Sie es in {wait} erneut.',
+  'chatError.freeAllowance':
+    'Das kostenlose Modell hat das Kontingent aufgebraucht, das alle im Free-Plan gemeinsam nutzen. Das ist also kein Limit Ihres Kontos. Es wird nach dem Zeitplan des Anbieters zurückgesetzt.',
+  'chatError.providerCouldNotAnswer': 'Von {provider} kam keine Antwort.',
+  'chatError.tooLong': 'Diese Unterhaltung ist länger, als das Modell auf einmal lesen kann.',
+  'chatError.outputLimit':
+    'Die Antwort hat die maximale Länge dieses Modells erreicht und wurde an dieser Stelle beendet. Bitten Sie um eine kürzere Antwort, oder teilen Sie die Anfrage auf.',
+  'chatError.safety':
+    'Das Sicherheitssystem hat diese Antwort gestoppt. Formulieren Sie die Anfrage um, oder versuchen Sie es mit einem anderen Modell.',
+  'chatError.network': 'Dieser Computer konnte den Anbieter nicht erreichen.',
+  'chatError.toolDenied':
+    'Der Durchgang wurde beendet, weil ein Tool nicht ausgeführt werden durfte.',
+  'chatError.interrupted': 'Der Durchgang wurde beendet.',
+  'chatError.timeout': 'Die Antwort von {provider} hat zu lange gedauert.',
+  'chatError.invalidRequest': 'AGI hat {provider} eine Anfrage gesendet, die abgelehnt wurde.',
+  'chatError.generic': 'AGI konnte die Antwort nicht abschließen.',
+  'chatError.theProvider': 'dem Anbieter',
+  'chatError.signInToProvider': 'Bei {provider} anmelden',
+  'chatError.signInToAgi': 'Bei AGI anmelden',
+  'chatError.upgradePlan': 'Plan upgraden',
+  'chatError.openSettings': 'Einstellungen öffnen',
+  'chatError.switchModel': 'Modell wechseln',
+  'chatNotice.noEditorForDiagnostics': 'Kein aktiver Editor für die Diagnose.',
+  'chatNotice.noDiagnostics': 'In der aktiven Datei wurden keine Diagnosen gefunden.',
+  'chatNotice.modelNotOnPlan':
+    'Dieses Modell ist mit Ihrem aktuellen Plan oder Ihrer Anbieterkonfiguration nicht verfügbar.',
+  'chatNotice.trustBeforeResume':
+    'Vertrauen Sie diesem Arbeitsbereich, bevor Sie eine Entwicklersitzung fortsetzen.',
+  'chatNotice.stopBeforeOpening':
+    'Beenden Sie die aktuelle Antwort, bevor Sie eine andere Entwicklersitzung öffnen.',
+  'chatNotice.historyUnavailable':
+    'Der Verlauf von Entwicklersitzungen ist in dieser Chatoberfläche nicht verfügbar.',
+  'chatNotice.sessionNotFound':
+    'Die Entwicklersitzung wurde im geöffneten Arbeitsbereich nicht gefunden.',
+  'chatNotice.differentSession':
+    'Die lokale Laufzeit hat eine andere Entwicklersitzung zurückgegeben.',
+  'chatNotice.workspaceMismatch':
+    'Der Arbeitsbereich der Entwicklersitzung stimmt nicht mit der zugehörigen lokalen Laufzeit überein.',
+  'chatNotice.modelUnavailableForSession':
+    'Diese Entwicklersitzung verwendet das Modell „{model}“, das im aktuellen Modellkatalog oder in der lokalen Laufzeit nicht verfügbar ist. Wählen Sie ein verfügbares Modell aus, und starten Sie dann eine neue Sitzung.',
+  'chatNotice.resumeFailed': 'Die Entwicklersitzung konnte nicht fortgesetzt werden.',
+  'chatNotice.approvalFailed': 'Die Genehmigungsantwort ist fehlgeschlagen.',
+  'chatNotice.trustBeforeStart':
+    'Vertrauen Sie diesem Arbeitsbereich, bevor Sie eine Entwicklersitzung starten.',
+  'chatNotice.openWorkspace':
+    'Öffnen Sie einen Arbeitsbereichsordner, bevor Sie eine Entwicklersitzung starten.',
+  'chatNotice.runtimeUnavailable': 'Die lokale AGI-Laufzeit ist nicht verfügbar.',
+  'chatNotice.reopenWorkspace':
+    'Öffnen Sie den Arbeitsbereich dieser Entwicklersitzung erneut, bevor Sie fortfahren.',
+  'chatNotice.localBoundary':
+    'AGI setzt eine Entwicklersitzung im Modus Local ohne geprüfte Übergabe nicht mit BYOK-, Managed-Cloud- oder Auto-Routing fort. Verwenden Sie „New Chat“ für eine neue Anbietersitzung, oder erstellen Sie in der AGI CLI eine geprüfte Fortsetzung.',
+  'chatNotice.eventOverflow':
+    'Die lokale Laufzeit hat vor der Bestätigung des Durchgangs zu viele Ereignisse ausgegeben. AGI hat den Durchgang unterbrochen, damit dessen Abschlussstatus nicht verloren geht.',
+  'chatNotice.overflowNotInterrupted':
+    'Der überlaufende lokale Durchgang konnte nicht unterbrochen werden: {reason}',
+  'chatNotice.cancellationFailed': 'Abbruch fehlgeschlagen.',
+  'chatNotice.runtimeFailed': 'Die lokale AGI-Laufzeit ist fehlgeschlagen.',
+  'chatNotice.turnFailed': 'Der lokale Durchgang der Entwicklersitzung ist fehlgeschlagen.',
+  'chatNotice.sessionRunningElsewhere':
+    'Diese Entwicklersitzung wird noch in einem anderen Client ausgeführt. Beenden Sie sie dort, oder warten Sie, bis sie inaktiv ist.',
+  'chatNotice.sessionAwaitingApprovalElsewhere':
+    'Diese Entwicklersitzung wartet in einem anderen Client auf eine Genehmigung. Klären Sie das dort, bevor Sie sie hier fortsetzen.',
+  'chatNotice.sessionArchived':
+    'Archivierte Entwicklersitzungen sind schreibgeschützt. Starten Sie eine neue Sitzung, um diese Arbeit fortzusetzen.',
+  'chatNotice.unverifiedBoundary':
+    'Diese ältere Entwicklersitzung hat keine verifizierte Local-, BYOK- oder Managed-Grenze. Starten Sie eine neue Sitzung, und wählen Sie den Anbieter erneut aus; AGI setzt sie nicht automatisch fort.',
+  'chatNotice.queuedNotStarted': 'Die Folgenachricht in der Warteschlange wurde nicht gestartet.',
+  'chatNotice.followUpCapacity_one':
+    'Die Warteschlange für Folgenachrichten ist voll ({count} ausstehend). Versuchen Sie es erneut, wenn der aktive Durchgang abgeschlossen ist.',
+  'chatNotice.followUpCapacity_other':
+    'Die Warteschlange für Folgenachrichten ist voll ({count} ausstehend). Versuchen Sie es erneut, wenn der aktive Durchgang abgeschlossen ist.',
+  'chatNotice.steerFailed': 'Der aktive Durchgang konnte nicht umgelenkt werden.',
+  'chatNotice.openFileForDiff':
+    'Öffnen Sie eine Datei im Editor, um diesen Codevorschlag zu überprüfen.',
+  'chatNotice.diffUnavailable':
+    'Der Diff-Anbieter ist nicht verfügbar. Laden Sie die Erweiterung neu.',
+  'webview.retry': 'Wiederholen',
+  'webview.details': 'Details',
+  'webview.copy': 'Kopieren',
+  'webview.copyResponse': 'Antwort kopieren',
+  'webview.copied': 'Kopiert',
+  'webview.copyFailed': 'Kopieren fehlgeschlagen',
+  'webview.goodResponse': 'Gute Antwort',
+  'webview.badResponse': 'Schlechte Antwort',
+  'webview.removeRating': 'Bewertung entfernen',
+  'webview.failed': 'Fehlgeschlagen',
+  'webview.newerDiffReplaced': 'Ein neuerer Änderungsvorschlag hat diese Anfrage ersetzt.',
+  'webview.couldNotOpenDiff': 'Die vorgeschlagenen Änderungen konnten nicht geöffnet werden.',
+  'webview.cloudSessionExpired': 'AGI-Cloud-Sitzung abgelaufen',
+  'webview.localStillAvailable': '· Local und Anbieter-BYOK bleiben verfügbar',
+  'webview.signInAgain': 'Erneut anmelden',
+  'webview.accountNeedsAttention': 'Konto erfordert Aufmerksamkeit',
+  'webview.sessionExpired': 'Sitzung abgelaufen',
+  'webview.tryAgain': 'Erneut versuchen',
+  'webview.checking': 'Wird geprüft…',
+  'webview.openWorkspaceToBegin': 'Öffnen Sie einen Arbeitsbereich, um zu beginnen',
+  'webview.restrictedMode': 'Der Arbeitsbereich befindet sich im eingeschränkten Modus',
+  'webview.runtimeNeedsSetup': 'Die Entwicklerlaufzeit muss eingerichtet werden',
+  'webview.openFolderToBegin': 'Öffnen Sie einen Ordner oder Arbeitsbereich, um zu beginnen.',
+  'webview.trustWorkspaceFirst':
+    'Vertrauen Sie diesem Arbeitsbereich, damit AGI Projektdateien oder Tools verwenden kann.',
+  'webview.cliUnavailable': 'Die AGI CLI ist nicht verfügbar.',
+  'webview.openFolder': 'Ordner öffnen',
+  'webview.manageTrust': 'Vertrauen verwalten',
+  'webview.installCli': 'AGI CLI installieren',
+  'webview.openSetup': 'Einrichtung öffnen',
+  'webview.activity': 'Aktivität',
+  'webview.starting': 'Wird gestartet…',
+  'webview.completed': 'Abgeschlossen',
+  'webview.completedWithErrors': 'Mit Fehlern abgeschlossen',
+  'webview.collapseDetails': 'Details zuklappen',
+  'webview.expandDetails': 'Details aufklappen',
+  'webview.lineDelta': '+{added} −{removed} Zeilen',
+  'webview.actions_one': '{count} Aktion',
+  'webview.actions_other': '{count} Aktionen',
+  'webview.errors_one': '{count} Fehler',
+  'webview.errors_other': '{count} Fehler',
+  'webview.runningCount_one': '{count} wird ausgeführt',
+  'webview.runningCount_other': '{count} werden ausgeführt',
+  'webview.completedCount_one': '{count} abgeschlossen',
+  'webview.completedCount_other': '{count} abgeschlossen',
+  'webview.linesWritten_one': '{count} Zeile geschrieben',
+  'webview.linesWritten_other': '{count} Zeilen geschrieben',
+  'diff.confirmWriteInFile_one':
+    'AGI Workforce: {count} ausstehende Änderung in {file} auf den Datenträger schreiben?',
+  'diff.confirmWriteInFile_other':
+    'AGI Workforce: {count} ausstehende Änderungen in {file} auf den Datenträger schreiben?',
+  'diff.confirmWrite_one':
+    'AGI Workforce: {count} ausstehende Änderung auf den Datenträger schreiben?',
+  'diff.confirmWrite_other':
+    'AGI Workforce: {count} ausstehende Änderungen auf den Datenträger schreiben?',
+  'diff.confirmDiscardInFile_one':
+    'AGI Workforce: {count} ausstehende Änderung in {file} verwerfen, ohne sie zu schreiben?',
+  'diff.confirmDiscardInFile_other':
+    'AGI Workforce: {count} ausstehende Änderungen in {file} verwerfen, ohne sie zu schreiben?',
+  'diff.confirmDiscard_one':
+    'AGI Workforce: {count} ausstehende Änderung verwerfen, ohne sie zu schreiben?',
+  'diff.confirmDiscard_other':
+    'AGI Workforce: {count} ausstehende Änderungen verwerfen, ohne sie zu schreiben?',
+  'diff.discardedInFile_one': 'AGI Workforce: {count} ausstehende Änderung in {file} verworfen.',
+  'diff.discardedInFile_other':
+    'AGI Workforce: {count} ausstehende Änderungen in {file} verworfen.',
+  'diff.discarded_one': 'AGI Workforce: {count} ausstehende Änderung verworfen.',
+  'diff.discarded_other': 'AGI Workforce: {count} ausstehende Änderungen verworfen.',
+  'diff.restoredInFile_one':
+    'AGI Workforce: {count} ausstehende Änderung in {file} wiederhergestellt.',
+  'diff.restoredInFile_other':
+    'AGI Workforce: {count} ausstehende Änderungen in {file} wiederhergestellt.',
+  'diff.restored_one': 'AGI Workforce: {count} ausstehende Änderung wiederhergestellt.',
+  'diff.restored_other': 'AGI Workforce: {count} ausstehende Änderungen wiederhergestellt.',
+  'diff.moreFiles_one': '• …und {count} weitere Datei',
+  'diff.moreFiles_other': '• …und {count} weitere Dateien',
+  'diff.nothingPending': 'AGI Workforce: Es gibt keine ausstehenden Änderungen zum Überprüfen.',
+  'diff.writeConsequence':
+    'Diese Änderungen werden auf Ihre Arbeitsstruktur angewendet. Sie werden vorher nicht anderweitig überprüft.',
+  'diff.discardConsequence':
+    'Die Vorschläge werden verworfen. Führen Sie „AGI Workforce: Restore Discarded Changes“ aus, um sie in dieser Sitzung zurückzuholen.',
+  'diff.writeChanges': 'Änderungen schreiben',
+  'diff.discardChanges': 'Änderungen verwerfen',
+  'diff.restoreDiscarded': 'Verworfene wiederherstellen',
+  'diff.reviewFirst': 'Zuerst überprüfen',
+  'runtime.reloaded':
+    'AGI Workforce: Die Laufzeitkonfiguration wurde neu geladen. Die Entwicklerlaufzeit des Arbeitsbereichs wird erneut geprüft.',
+  'runtime.restarted_one':
+    'AGI Workforce: Lokale Laufzeit in {count} Arbeitsbereich neu gestartet.',
+  'runtime.restarted_other':
+    'AGI Workforce: Lokale Laufzeit in {count} Arbeitsbereichen neu gestartet.',
+  'memory.nothingToForget': 'Keine gespeicherten Fakten zum Vergessen.',
+  'memory.forgetEverything': 'Alles vergessen',
+  'memory.confirmForgetAll_one':
+    'Den {count} gespeicherten Fakt in Ihrem AGI-Cloud-Konto löschen? Er verschwindet auch aus der Web-App, der CLI und der mobilen App, und dies kann nicht rückgängig gemacht werden.',
+  'memory.confirmForgetAll_other':
+    'Alle {count} gespeicherten Fakten aus Ihrem AGI-Cloud-Konto löschen? Sie verschwinden auch aus der Web-App, der CLI und der mobilen App, und dies kann nicht rückgängig gemacht werden.',
+  'memory.allForgotten': 'Alle gespeicherten Fakten wurden aus Ihrem Konto gelöscht.',
+  'memory.someKept': 'Einige Fakten wurden beibehalten. {reasons}',
+  'project.archived': 'Archiviert',
+  'project.files_one': '{count} Datei',
+  'project.files_other': '{count} Dateien',
+  'project.chats_one': '{count} Chat',
+  'project.chats_other': '{count} Chats',
+  'project.lastUsed': 'zuletzt verwendet: {date}',
+  'project.deleteEverywhere':
+    '„{title}“ verschwindet aus der Web-App, der CLI, der mobilen App und allen anderen Clients.',
+  'project.deleteKnowledge_one':
+    '{count} Wissensdatei wird mit dem Projekt gelöscht und kann nicht wiederhergestellt werden.',
+  'project.deleteKnowledge_other':
+    '{count} Wissensdateien werden mit dem Projekt gelöscht und können nicht wiederhergestellt werden.',
+  'project.keepConversations_one':
+    '{count} Unterhaltung bleibt erhalten, verlässt aber das Projekt und verliert dessen Anweisungen und Wissen.',
+  'project.keepConversations_other':
+    '{count} Unterhaltungen bleiben erhalten, verlassen aber das Projekt und verlieren dessen Anweisungen und Wissen.',
+  'billing.credits_one': '{count} Credit',
+  'billing.credits_other': '{count} Credits',
+  'billing.unsettledRequests_one': '{count} Anfrage noch nicht abgerechnet',
+  'billing.unsettledRequests_other': '{count} Anfragen noch nicht abgerechnet',
+  'billing.noneYet': 'noch keine',
+  'billing.noPublishedRate': 'kein veröffentlichter Preis',
+  'billing.withUnsettled': '{credits} ({unsettled})',
+  'billing.excludesUnpriced_one':
+    '{credits} (ausgenommen {count} Durchgang ohne veröffentlichten Preis)',
+  'billing.excludesUnpriced_other':
+    '{credits} (ausgenommen {count} Durchgänge ohne veröffentlichten Preis)',
+  'billing.turnBilled': 'AGI Workforce: Dieser Durchgang wurde mit {credits} abgerechnet',
+  'billing.turnBilledSoFar':
+    'AGI Workforce: Dieser Durchgang wurde bisher mit {credits} abgerechnet, {unsettled}',
+  'schedule.runsSoFar_one': 'Bisher {count} Ausführung',
+  'schedule.runsSoFar_other': 'Bisher {count} Ausführungen',
+  'composer.problems_one': '{count} Problem',
+  'composer.problems_other': '{count} Probleme',
+  'review.noIssues': 'AGI Workforce: Der Code sieht gut aus! Keine Probleme gefunden.',
+  'review.issuesFound_one':
+    'AGI Workforce: {count} Problem gefunden. Sehen Sie in der Ansicht „Probleme“ nach.',
+  'review.issuesFound_other':
+    'AGI Workforce: {count} Probleme gefunden. Sehen Sie in der Ansicht „Probleme“ nach.',
+  'commands.registrationFailed_one':
+    'AGI Workforce: {count} Befehl konnte nicht registriert werden ({commands}). Details finden Sie im AGI-Statusleisteneintrag zum Zustand der Subsysteme.',
+  'commands.registrationFailed_other':
+    'AGI Workforce: {count} Befehle konnten nicht registriert werden ({commands}). Details finden Sie im AGI-Statusleisteneintrag zum Zustand der Subsysteme.',
+  'usage.requests_one': '{count} Anfrage',
+  'usage.requests_other': '{count} Anfragen',
+  'usage.lastDays_one': 'letzter {count} Tag',
+  'usage.lastDays_other': 'letzte {count} Tage',
+  'usage.unsettledTurns_one':
+    '{count} Durchgang wird noch abgerechnet und ist noch nicht mitgezählt',
+  'usage.unsettledTurns_other':
+    '{count} Durchgänge werden noch abgerechnet und sind noch nicht mitgezählt',
+  'handoff.switchBranch':
+    'Diesen Arbeitsbereich auf {branch} wechseln und den Verlust nicht committeter Änderungen riskieren?',
+  'handoff.uncommittedFiles_one':
+    '{count} Datei hier hat Änderungen, die in keinem Commit gesichert sind. Das Auschecken von {branch} kann sie verwerfen, und das lässt sich nicht rückgängig machen.',
+  'handoff.uncommittedFiles_other':
+    '{count} Dateien hier haben Änderungen, die in keinem Commit gesichert sind. Das Auschecken von {branch} kann sie verwerfen, und das lässt sich nicht rückgängig machen.',
+  'handoff.andMore_one': 'und {count} weitere',
+  'handoff.andMore_other': 'und {count} weitere',
+  'cloud.repository': 'Repository: {repository}',
+  'cloud.branch': 'Branch: {branch}, wie nach {upstream} gepusht',
+  'cloud.model': 'Modell: {model}',
+  'cloud.network': 'Netzwerk: nur vertrauenswürdige Hosts, Paketregistrierungen und Code-Hosts',
+  'cloud.whatMoves': 'Was übertragen wird: die eingegebene Aufgabe und der gepushte Branch.',
+  'cloud.whatStays':
+    'Was hier bleibt: die Unterhaltung dieses Chats, lokale Tools und Server sowie alles, was nicht gepusht wurde.',
+  'cloud.unpushedCommits_one':
+    '{count} Commit auf {branch} ist nicht gepusht und fehlt daher in der Cloud.',
+  'cloud.unpushedCommits_other':
+    '{count} Commits auf {branch} sind nicht gepusht und fehlen daher in der Cloud.',
+  'cloud.uncommittedFiles_one':
+    '{count} Datei hat nicht committete Änderungen, die in der Cloud fehlen werden.',
+  'cloud.uncommittedFiles_other':
+    '{count} Dateien haben nicht committete Änderungen, die in der Cloud fehlen werden.',
+  'cloud.continueQuestion': 'Die Arbeit an {repository} in der Cloud fortsetzen?',
+  'sessionHandoff.protocolUnsupported':
+    'Diese Sitzung verwendet das Entwicklersitzungsprotokoll {requested}, diese Erweiterung dagegen {supported}. Aktualisieren Sie AGI für VS Code oder die AGI CLI, damit beide Seiten dasselbe Protokoll verwenden.',
+  'sessionHandoff.wrongDestination':
+    'Diese Sitzung wurde an die Umgebung {destination} übergeben, nicht an diesen Editor.',
+  'sessionHandoff.trustModeUnknown':
+    'Diese Sitzung gibt nicht an, ob sie als Local, BYOK oder Managed ausgeführt wurde, daher setzt dieser Editor sie nicht fort.',
+  'sessionHandoff.issuedAtUnreadable':
+    'Dieser Sitzungseintrag gibt nicht an, wann er ausgestellt wurde, daher kann dieser Editor nicht erkennen, ob er aktuell ist.',
+  'sessionHandoff.expired_one':
+    'Diese Sitzung wurde vor {count} Minute übergeben, und Einträge laufen nach {limit} ab. Übergeben Sie sie erneut über die AGI CLI.',
+  'sessionHandoff.expired_other':
+    'Diese Sitzung wurde vor {count} Minuten übergeben, und Einträge laufen nach {limit} ab. Übergeben Sie sie erneut über die AGI CLI.',
+  'sessionHandoff.expiryLimit_one': '{count} Minute',
+  'sessionHandoff.expiryLimit_other': '{count} Minuten',
+  'sessionHandoff.notYetIssued':
+    'Dieser Sitzungseintrag ist in die Zukunft datiert. Prüfen Sie die Uhr des Computers, auf dem er erstellt wurde.',
+  'sessionHandoff.alreadyAccepted':
+    'Dieser Editor hat diese Sitzung bereits übernommen. Öffnen Sie sie über „Sessions“, statt sie ein zweites Mal zu übergeben.',
+  'sessionHandoff.wrongAccount':
+    'Diese Sitzung gehört zu einem anderen AGI-Konto als dem, mit dem dieser Editor angemeldet ist.',
+  'sessionHandoff.wrongWorkspace':
+    'Diese Sitzung hat in {received} gearbeitet, in diesem Fenster ist jedoch {expected} geöffnet. Öffnen Sie zuerst diesen Ordner.',
+  'sessionHandoff.credentialInRecord':
+    'Dieser Sitzungseintrag enthält im Feld {field} offenbar Anmeldeinformationen, daher hat dieser Editor ihn abgelehnt. Melden Sie das, statt den Eintrag weiterzugeben.',
+  'sessionHandoff.source.cli': 'der AGI CLI',
+  'sessionHandoff.source.vscode': 'VS Code',
+  'sessionHandoff.source.desktop': 'der Desktop-App',
+  'sessionHandoff.source.unknown': 'einer anderen AGI-App',
+  'sessionHandoff.resource.backgroundShell': 'Hintergrund-Shell',
+  'sessionHandoff.resource.devServer': 'Entwicklungsserver',
+  'sessionHandoff.resource.mcpServer': 'MCP-Server',
+  'sessionHandoff.resource.sandbox': 'Sandbox',
+  'sessionHandoff.resource.fileWatcher': 'Dateiüberwachung',
+  'sessionHandoff.resource.terminal': 'Terminal',
+  'sessionHandoff.goal': 'Ziel: {goal}',
+  'sessionHandoff.folder': 'Ordner: {folder}',
+  'sessionHandoff.branch': 'Branch: {branch}',
+  'sessionHandoff.branchAt': 'Branch: {branch}, Commit {commit}',
+  'sessionHandoff.runsAs': 'Ausführungsmodus: {trust}',
+  'sessionHandoff.uncommittedStays':
+    'Der Ordner enthält nicht committete Änderungen, die unverändert auf dem Datenträger bleiben.',
+  'sessionHandoff.movesConversation': 'Die Unterhaltung mit ihrem vollständigen Verlauf',
+  'sessionHandoff.movesNewSession': 'Eine neue Sitzung, die aus diesem Thread gestartet wird',
+  'sessionHandoff.changedFiles_one': '{count} geänderte Datei: {files}',
+  'sessionHandoff.changedFiles_other': '{count} geänderte Dateien: {files}',
+  'sessionHandoff.andMore_one': ' und {count} weitere',
+  'sessionHandoff.andMore_other': ' und {count} weitere',
+  'sessionHandoff.planSteps_one': 'Ein Plan mit {count} Schritt',
+  'sessionHandoff.planSteps_other': 'Ein Plan mit {count} Schritten',
+  'sessionHandoff.checksRun_one': '{count} bereits ausgeführte Prüfung',
+  'sessionHandoff.checksRun_other': '{count} bereits ausgeführte Prüfungen',
+  'sessionHandoff.movesWithIt': 'Mit übertragen werden:',
+  'sessionHandoff.reask_one':
+    '{count} ausstehende Genehmigung wird hier erneut angefragt. Frühere Antworten werden nicht übernommen.',
+  'sessionHandoff.reask_other':
+    '{count} ausstehende Genehmigungen werden hier erneut angefragt. Frühere Antworten werden nicht übernommen.',
+  'sessionHandoff.restarted': 'Hier neu gestartet statt übertragen: {resources}.',
+  'sessionHandoff.interrupted':
+    'Der letzte Durchgang wurde unterbrochen und wird nicht von selbst fortgesetzt.',
+  'sessionHandoff.continueQuestion': 'Die Sitzung aus {source} in diesem Fenster fortsetzen?',
+  'sessionHandoff.startQuestion':
+    'In diesem Fenster eine Sitzung aus dem Thread in {source} starten?',
+  'webview.contextUsedUnknownWindow_one':
+    'Der letzte Durchgang hat {count} Token verwendet. Das Kontextfenster dieses Modells ist hier nicht bekannt.',
+  'webview.contextUsedUnknownWindow_other':
+    'Der letzte Durchgang hat {count} Token verwendet. Das Kontextfenster dieses Modells ist hier nicht bekannt.',
+  'webview.contextUsed_one':
+    'Kontext nach dem letzten Durchgang: {used} von {count} Token ({percent} %)',
+  'webview.contextUsed_other':
+    'Kontext nach dem letzten Durchgang: {used} von {count} Token ({percent} %)',
+  'webview.answerTokens_one': '{model} · {count} Token ({input} Eingabe, {output} Ausgabe)',
+  'webview.answerTokens_other': '{model} · {count} Token ({input} Eingabe, {output} Ausgabe)',
+  'webview.moreLinesHidden_one': '{count} weitere Zeile nicht angezeigt',
+  'webview.moreLinesHidden_other': '{count} weitere Zeilen nicht angezeigt',
 };
 
 export default de;

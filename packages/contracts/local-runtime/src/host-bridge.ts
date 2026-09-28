@@ -258,6 +258,8 @@ export interface HostUpdateAvailability {
   version: string;
   publishedAt?: string;
   downloadUrl: string;
+  installsAutomatically?: boolean;
+  readyToInstall?: boolean;
 }
 
 /**
