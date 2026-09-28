@@ -206,7 +206,11 @@ import type {
   TaskFamilySignals,
 } from '@agiworkforce/routing';
 import { buildFailoverRoutes, type FailoverRoute } from './failover-plan';
-import { modelRegistry, getRoutePricingForModel } from '@agiworkforce/model-registry';
+import {
+  getRoutePricingForModel,
+  modelRegistry,
+  providerKeepsInputsOutOfTraining,
+} from '@agiworkforce/model-registry';
 import {
   getCredentialCooldownSnapshot,
   getRouteHealthSnapshot,
@@ -269,6 +273,11 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
+import {
+  modelKeepsInputsOutOfTraining,
+  noTrainingChatModelFor,
+  readProviderTrainingOptOut,
+} from '@/lib/server/provider-training-opt-out';
 import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
 import {
   JsonSchemaResponseFormatSchema,
@@ -2377,6 +2386,22 @@ export function applyWorkspaceDefaultModel(
   if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
 }
 
+function noTrainingModelUnavailable(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: 'No model on your plan keeps your chats out of training right now.',
+          type: 'invalid_request_error',
+          code: 'no_training_model_available',
+        },
+      },
+      { status: 403 },
+    ),
+  };
+}
+
 // The free plan has no Auto. A client that still sends it is served the plan's
 // own model rather than refused, and the resolver never sees a priced route.
 export function applyFreePlanDefaultModel(
@@ -2537,7 +2562,28 @@ export async function processRequest(
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
+  const trainingOptOutPromise = scopedDbPromise
+    .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
+    .catch((error: unknown) => {
+      logger.warn(
+        { error, userId },
+        'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
+      );
+      return true;
+    });
+
+  const freeAutoSelection =
+    isFreePlanTier(subscription.plan_tier) && isAutoModeModelId(chatRequest.model);
   applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
+  if (
+    freeAutoSelection &&
+    !modelKeepsInputsOutOfTraining(chatRequest.model) &&
+    (await trainingOptOutPromise)
+  ) {
+    const noTrainingModel = noTrainingChatModelFor(subscription.plan_tier);
+    if (!noTrainingModel) return noTrainingModelUnavailable();
+    chatRequest.model = noTrainingModel;
+  }
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
     isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
@@ -2768,6 +2814,20 @@ export async function processRequest(
         studyInstruction: null,
       });
 
+  const customInstructionsPromise =
+    chatSurface === 'api' || chatRequest.personalization === false
+      ? null
+      : Promise.all([scopedDbPromise, ownershipLeg])
+          .then(([scoped, owned]) =>
+            buildCustomInstructionsPreamble(scoped.db, userId, {
+              projectId: owned.ok ? owned.projectId : null,
+            }),
+          )
+          .catch((error: unknown) => {
+            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+            return null;
+          });
+
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
       userId,
@@ -2883,19 +2943,6 @@ export async function processRequest(
   }
   const projectInstructionBlock =
     ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
-  const customInstructionsPromise =
-    chatSurface === 'api' || chatRequest.personalization === false
-      ? null
-      : scopedDbPromise
-          .then((scoped) =>
-            buildCustomInstructionsPreamble(scoped.db, userId, {
-              projectId: conversationProjectId,
-            }),
-          )
-          .catch((error: unknown) => {
-            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
-            return null;
-          });
 
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
@@ -3418,7 +3465,12 @@ export async function processRequest(
     return { ok: false, response: modelPolicyDenialResponse(MODEL_POLICY_UNAVAILABLE) };
   }
   const workspaceModelPolicy = workspaceModelPolicyRead.policy;
-  const availableProviderIds = listAvailableManagedProviderIds();
+  const trainingOptOut = await trainingOptOutPromise;
+  const managedProviderIds = listAvailableManagedProviderIds();
+  const availableProviderIds = trainingOptOut
+    ? new Set([...managedProviderIds].filter(providerKeepsInputsOutOfTraining))
+    : managedProviderIds;
+  if (trainingOptOut && availableProviderIds.size === 0) return noTrainingModelUnavailable();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
   // Only a workspace pinned AWAY from the region this deployment processes in
@@ -3883,6 +3935,27 @@ export async function processRequest(
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  if (
+    trainingOptOut &&
+    !isAutoModeModelId(requestedModel) &&
+    !modelKeepsInputsOutOfTraining(chatRequest.model)
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
+            type: 'invalid_request_error',
+            code: 'model_may_train',
           },
         },
         { status: 403 },
@@ -4944,11 +5017,13 @@ export async function processRequest(
   // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
   // stage's ranked tail, every member already verified zero-cost, so rotation
   // cannot leave the lane. The trial path stays rotation-free as before.
-  const failoverRoutes =
-    freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
+  const failoverRoutes = (
+    freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks)
+  ).filter((route) => !trainingOptOut || modelKeepsInputsOutOfTraining(route.modelKey));
 
   if (
     routeDecision.shadow &&
+    !trainingOptOut &&
     turnMayBeShadowMirrored({ temporaryChat: conversationIsTemporary, zeroDataRetentionOnly })
   ) {
     scheduleShadowDispatch({
