@@ -55,6 +55,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'usage',
     'voice',
   ],
+  '/share': ['schedules'],
 };
 
 export const UNMATCHED_SEGMENTS = '[unmatched]';
