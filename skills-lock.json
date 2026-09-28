@@ -212,6 +212,14 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:b1610c3e9befd4cddb01df472c3e94c09d098645aff2bf5938f99c8f95b3a673"
     },
+    "customer-escalation": {
+      "path": ".agents/skills/customer-escalation",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (customer-support/skills/customer-escalation)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:b5661060184ce1559590b1d6e6ce25b48a795a3d9fae011504b00d153416db7c"
+    },
     "customer-research": {
       "path": ".agents/skills/customer-research",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/customer-research)",
@@ -227,6 +235,14 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:c2001d48e29675009103092e17801daa63ffc615c6eaef9f6c8257fcd764e9f3"
+    },
+    "deal-review": {
+      "path": ".agents/skills/deal-review",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (sales/skills/deal-review)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:a003a05f574308d3c66d5cba02bd2d8d06aa9e36eb8bd99447b33df12cdd8484"
     },
     "design-taste-frontend": {
       "path": ".agents/skills/design-taste-frontend",
@@ -251,6 +267,14 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:81e3542b5e4a43d081456d03edebbce0010167480f3a95c53390cfc12f36d955"
+    },
+    "draft-response": {
+      "path": ".agents/skills/draft-response",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (customer-support/skills/draft-response)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:36867d0db06b452e68f56e0ce5d5fd0afe8f9312afba5f8b61504974ceeda4d5"
     },
     "emails": {
       "path": ".agents/skills/emails",
@@ -339,6 +363,14 @@
       "audience": "product",
       "declaredVersion": "1.1.0",
       "computedHash": "sha256-tree-v1:41b997472b79235ae2ca49b732c9a9bc090b5d7fe2e3fb954dfc8685b68ff2b9"
+    },
+    "interview-prep": {
+      "path": ".agents/skills/interview-prep",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (human-resources/skills/interview-prep)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:24fb0c0ea31901d11d2ab2c9196108941603be551b835b5d54ff0953b4f62ce0"
     },
     "launch": {
       "path": ".agents/skills/launch",
@@ -452,6 +484,14 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:27cebe322d30aaf7fb4da75fe9af2bd5a01750ccdcf0a77aa2a7c16f62c07ba1"
     },
+    "pipeline-review": {
+      "path": ".agents/skills/pipeline-review",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (sales/skills/pipeline-review)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:b2518fd00f067cf1e3a136cef943d7f0cc2e5d3237cab0d7d0d3ae353a9204bd"
+    },
     "popups": {
       "path": ".agents/skills/popups",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/popups)",
@@ -508,6 +548,14 @@
       "declaredVersion": "1.1.1",
       "computedHash": "sha256-tree-v1:c31239404ff7f77b56a72a1f2212d2154c7cda7ab7af49f11307374a28b60d34"
     },
+    "recruiting-pipeline": {
+      "path": ".agents/skills/recruiting-pipeline",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (human-resources/skills/recruiting-pipeline)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:30b8514bd67cd24937b8d99c0600f0e933af04753d1934fb378c2a83a8c34b57"
+    },
     "redesign-existing-projects": {
       "path": ".agents/skills/redesign-existing-projects",
       "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/redesign-skill)",
@@ -539,6 +587,14 @@
       "audience": "developer",
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:108544cf22d1a9398c2004fae3bb0cd2465294993e36fd99a61ddb16d4228539"
+    },
+    "review-contract": {
+      "path": ".agents/skills/review-contract",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (legal/skills/review-contract)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:13dc19ff57f52f47d3d3a4caed0b301d82cb618baf897f124a9f5604c7ce6c6c"
     },
     "revops": {
       "path": ".agents/skills/revops",
@@ -619,6 +675,22 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:7058bc70a85ac1e7aa7ad8b92f967e2a40aeb57d5ae0b4f7d9c301237d77d225"
+    },
+    "ticket-triage": {
+      "path": ".agents/skills/ticket-triage",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (customer-support/skills/ticket-triage)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:a5cd7b5dcf7543d6c92a318ef58810ddbc9864d7a806d9ea5e58cc4e36c62aa3"
+    },
+    "triage-nda": {
+      "path": ".agents/skills/triage-nda",
+      "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (legal/skills/triage-nda)",
+      "sourceType": "github",
+      "audience": "product",
+      "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
+      "computedHash": "sha256-tree-v1:d2c9de81b1645f76da0a5475996b248a412437d573e34c93218b4b3af755f3b6"
     },
     "typesafe-ai": {
       "path": ".agents/skills/typesafe-ai",

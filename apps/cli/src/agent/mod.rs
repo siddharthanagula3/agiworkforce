@@ -17,6 +17,7 @@ use crate::subagent;
 use crate::teams;
 
 mod chat;
+mod checkpoints;
 mod executor;
 mod history;
 mod prompt;
@@ -24,7 +25,9 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
+pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub use executor::ToolCall;
+pub(crate) use history::close_orphaned_tool_calls;
 pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
@@ -188,7 +191,8 @@ pub struct AgentSession {
     pub fast_mode: bool,
     #[allow(dead_code)]
     pub(crate) original_model: Option<String>,
-    pub(crate) checkpoints: Vec<Vec<Message>>,
+    pub(crate) checkpoints: Vec<checkpoints::Checkpoint>,
+    pub(crate) checkpoint_captures: std::collections::HashMap<String, Vec<PathBuf>>,
     #[allow(dead_code)]
     pub session_name: Option<String>,
     /// Stable, filesystem-safe identifier for this process-local session run.
@@ -677,6 +681,7 @@ impl AgentSession {
             fast_mode: false,
             original_model: None,
             checkpoints: Vec::new(),
+            checkpoint_captures: std::collections::HashMap::new(),
             session_name: None,
             runtime_session_id: session_id,
             allowed_tools: None,
@@ -807,7 +812,7 @@ impl AgentSession {
     /// answer is yes. Cheap when no shell is running: there is no file to
     /// read, so nothing is sent.
     pub(crate) async fn refresh_browser_availability(&mut self) {
-        if self.browser_available.is_some() {
+        if self.browser_available == Some(true) {
             return;
         }
         self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());
@@ -943,6 +948,46 @@ impl AgentSession {
             already_present,
             instructions_loaded: instructions.is_some(),
         })
+    }
+
+    pub fn remove_context_dir(&mut self, raw_path: &str) -> Result<PathBuf> {
+        let expanded = crate::path_security::expand_home(raw_path.trim());
+        let path = PathBuf::from(expanded);
+        let absolute = if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+        let resolved = absolute.canonicalize().unwrap_or(absolute);
+        let registered = crate::path_security::registered_additional_workspace_roots();
+        let Some(root) = registered
+            .iter()
+            .chain(self.additional_context_dirs.iter())
+            .find(|root| **root == resolved)
+            .cloned()
+        else {
+            anyhow::bail!(
+                "{} was not added with /add-dir or --add-dir",
+                resolved.display()
+            );
+        };
+        crate::path_security::unregister_additional_workspace_roots(std::slice::from_ref(&root));
+        self.additional_context_dirs.retain(|path| path != &root);
+        let opening = format!(
+            "<additional_directory_context path=\"{}\">",
+            escape_attr(&root)
+        );
+        self.messages.retain(|message| {
+            !(message.role == "system" && message.text_content().starts_with(&opening))
+        });
+        self.messages.push(Message::text(
+            "system",
+            format!(
+                "<additional_directory_removed path=\"{}\">\nThe user removed this directory from the workspace. Do not read or change files in it unless the user adds it again.\n</additional_directory_removed>",
+                escape_attr(&root)
+            ),
+        ));
+        Ok(root)
     }
 
     /// Activate any glob-scoped rules that match files entering the live turn
@@ -1341,6 +1386,7 @@ impl AgentSession {
         self.plan_approved = false;
         self.context_usage_anchor = None;
         self.checkpoints.clear();
+        self.checkpoint_captures.clear();
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.mcp_manager = None;

@@ -10,22 +10,19 @@ nothing is left.
 
 - Done when: The user can start a Deep Research task from the product and it runs as a research run.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:407-407`
 
 ## S35.02: Objective and deliverable selection.
 
 - Done when: Before a research run starts, the user states the objective and chooses the deliverable (e.g. summary vs full report, format).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -33,15 +30,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:407-407
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. (deliverable rides inside research_resume) | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:420-420`
 
 ## S35.04: Editable research plan.
 
 - Done when: The research plan is shown before searching and the user can edit its steps (add/remove/reword) before approving.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -49,14 +43,14 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:420-420
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. Edited steps travel as research_resume.approved_steps. | api |
 
-Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263-269`, `apps/mobile/app/(app)/chat/[id].tsx:563-563`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:420-420`
+Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263-269`, `apps/mobile/app/(app)/chat/[id].tsx:563-563`
 
 ## S35.05: Source-selection panel.
 
 - Done when: A panel lets the user choose which sources (web, sites, files, connected apps) a research run may use.
 - Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -66,7 +60,6 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. It offers files and allow/deny domains only. | api |
 
 Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:333-345`, `apps/web/features/chat/components/research/ResearchActivity.tsx:392-392`, `apps/web/features/chat/components/messages/MessageBubble.tsx:1834-1848`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-419`
 
@@ -74,7 +67,7 @@ Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:333-345`,
 
 - Done when: The user can restrict a research run to (or away from) chosen websites, and the run respects it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -82,15 +75,12 @@ Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:333-345`,
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:416-417`
 
 ## S35.07: Uploaded source intake.
 
 - Done when: The user can add their own uploaded files as sources for a research run.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -98,9 +88,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:416-417
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The chat endpoint accepts research (and research_sources/research_resume) for API keys, but these fields are missing from the published OpenAPI spec. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-415`
 
 ## S35.08: Connected source intake.
 
@@ -127,10 +114,9 @@ Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:149-149`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The Cloud tasks tree shows a research run's state but not its phase, search or source counts. | ui |
 | chrome | partial | The cloud-run list shows a research run's state (running, done) but not its phase, search or source counts. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:50-54`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.10: Search activity timeline.
 
@@ -172,49 +158,44 @@ Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:50
 
 - Done when: The report or run view groups findings under each research question/plan step.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server measures each planned question against the report and streams x_research_gaps, but no client parses it (parseResearchGapsEvent has no caller) and reports do not store it, so findings are never shown per question. | ui, persistence |
-| desktop | partial | Same as web (hosted): The server measures each planned question against the report and streams x_research_gaps, but no client parses it (parseResearchGapsEvent has no caller) and reports do not store it, so findings are never shown per question. | ui, persistence |
 | mobile | partial | The server streams per-question coverage (x_research_gaps) but mobile never reads it. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:383-395`, `apps/web/features/chat/components/research/ResearchPlan.tsx:68-68`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`
 
 ## S35.15: Research steering.
 
 - Done when: While research runs, the user can steer it (add guidance, change focus) and the run adapts.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
-| desktop | partial | Same as web (hosted): Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:272-272`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`
-
 ## S35.17: Pause and resume.
 
 - Done when: The user can pause a running research task and resume it later from where it stopped.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| desktop | partial | Same as web (hosted): The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| mobile | partial | Mobile can Stop and later Retry (which resumes gathered sources and completed steps), but has no Pause. | ui |
+| mobile | partial | partials/privacy 38a12b33a: a paused run shows as paused on mobile and Resume continues it. The mobile Pause control is in post-codex/p-privacy-s35.17-mobile-pause.patch because its handler lives in held files (app/(app)/chat/[id].tsx, MessageBubble.tsx); apply after Codex finishes | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:2024-2026`, `apps/web/features/chat/pages/WebChatPage.tsx:4656-4660`, `apps/web/features/chat/components/research/ResearchActivity.tsx:327-327`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:281-285`
+Code: `apps/mobile/src/features/chat/utils/researchRunState.ts:236-236`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:265-265`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:322-322`
 
 ## S35.18: Cancel research.
 
@@ -305,26 +286,24 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1078-1079`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Research runs appear in the Cloud tasks tree, but their reports cannot be read in VS Code. | ui |
 | chrome | partial | Research runs appear in the cloud-run list, but their reports cannot be opened or read in Chrome. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:50-54`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.26: Refresh or rerun research.
 
 - Done when: The user can refresh or rerun a finished research report to get updated results.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a failed or stopped run can be retried; a completed report cannot be refreshed or rerun. | ui |
-| desktop | partial | Same as web (hosted): Only a failed or stopped run can be retried; a completed report cannot be refreshed or rerun. | ui |
 | mobile | partial | Mobile can retry only a failed or stopped run; a completed report cannot be rerun. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:4624-4628`, `apps/web/features/chat/components/research/ResearchActivity.tsx:271-271`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:289-294`
+Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:289-294`
 
 ## S35.28: Export report.
 

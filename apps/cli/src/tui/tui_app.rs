@@ -580,6 +580,14 @@ impl TuiApp {
         if !crate::is_image_extension(path) {
             return Err(format!("{path} is not an image"));
         }
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
@@ -603,6 +611,14 @@ impl TuiApp {
 
     /// Stage whatever bitmap the system clipboard is holding.
     fn stage_clipboard_image(&mut self) -> Result<String, String> {
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let image = arboard::Clipboard::new()
             .and_then(|mut clipboard| clipboard.get_image())
             .map_err(|error| format!("no image on the clipboard ({error})"))?;
@@ -802,6 +818,12 @@ impl TuiApp {
                 self.active_overlay = None;
                 resume_session(&reference, self);
             }
+            ViewAction::SideAction(tag) if tag.starts_with("rewind:") => {
+                let arg = tag.trim_start_matches("rewind:").to_string();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                apply_rewind(self, &arg);
+            }
             ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
                 let path = tag.trim_start_matches("mention:").to_string();
                 self.insert_mention(&path);
@@ -993,6 +1015,7 @@ fn approval_choice_to_decision(
         ApprovalChoice::AlwaysAllow => ApprovalDecision::AlwaysAllow,
         ApprovalChoice::No => ApprovalDecision::Deny,
         ApprovalChoice::DenyAll => ApprovalDecision::Cancel,
+        ApprovalChoice::AllowAll => ApprovalDecision::AllowOnce,
     }
 }
 
@@ -1031,7 +1054,10 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
+) -> Result<(
+    crate::tui::widgets::approval_overlay::ApprovalChoice,
+    Option<String>,
+)> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
@@ -1055,13 +1081,48 @@ fn run_tui_approval_modal(
                         terminal.draw(|frame| {
                             draw_turn_chrome(frame, ctx);
                         })?;
-                        return Ok(overlay.result.unwrap_or(ApprovalChoice::No));
+                        let note = overlay.note();
+                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
-                Event::Paste(_) => {}
+                Event::Paste(text) => overlay.insert_note_text(&sanitize_terminal_text(&text)),
                 _ => {}
             }
+        }
+    }
+}
+
+fn run_tui_question_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
+    question: &str,
+    options: &[String],
+) -> Result<Option<String>> {
+    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
+
+    let mut overlay =
+        crate::tui::widgets::question_overlay::QuestionOverlayState::new(question, options);
+    loop {
+        terminal.draw(|frame| {
+            let chat_area = draw_turn_chrome(frame, ctx);
+            overlay.render_into(frame, chat_area);
+        })?;
+        if !event::poll(super::motion::FRAME_INTERVAL)? {
+            continue;
+        }
+        match event::read()? {
+            Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
+                ViewAction::Submit(_) | ViewAction::Close => {
+                    terminal.draw(|frame| {
+                        draw_turn_chrome(frame, ctx);
+                    })?;
+                    return Ok(overlay.answer.take());
+                }
+                ViewAction::Continue | ViewAction::SideAction(_) => {}
+            },
+            Event::Paste(text) => overlay.insert_text(&sanitize_terminal_text(&text)),
+            _ => {}
         }
     }
 }
@@ -2941,6 +3002,56 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
     });
 }
 
+fn open_checkpoint_picker(app: &mut TuiApp) {
+    use crate::tui::widgets::checkpoint_picker::{CheckpointEntry, CheckpointPickerView};
+
+    let summaries = app.session.checkpoint_summaries();
+    let entries: Vec<CheckpointEntry> = summaries
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(offset, summary)| CheckpointEntry {
+            steps: offset + 1,
+            label: sanitize_terminal_text(&format!(
+                "{}  {}  ({})",
+                summary.created_at.format("%H:%M"),
+                crate::repl::checkpoint_prompt_line(&summary.prompt),
+                crate::repl::checkpoint_files_label(summary.tracked_files)
+            ))
+            .into_owned(),
+            tracked_files: summary.tracked_files,
+        })
+        .collect();
+    app.open_overlay(Box::new(CheckpointPickerView::new(entries)));
+}
+
+fn apply_rewind(app: &mut TuiApp, arg: &str) {
+    let (message, rewound) = crate::repl::rewind_session(arg, &mut app.session);
+    let conversation_restored = rewound
+        .as_ref()
+        .is_some_and(|rewound| rewound.conversation_restored);
+    if conversation_restored {
+        rebuild_transcript_from_session(app);
+        app.tool_cells.clear();
+    }
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text: message.plain_message(),
+    });
+    let prompt = rewound
+        .filter(|rewound| rewound.conversation_restored && !rewound.prompt.trim().is_empty())
+        .map(|rewound| rewound.prompt);
+    if let Some(prompt) = prompt {
+        app.input = prompt;
+        app.cursor = app.input.len();
+        app.status_notice = Some((
+            "your prompt from that point is back in the composer".to_string(),
+            Instant::now(),
+        ));
+    }
+    app.sync_stats();
+}
+
 /// Rebuild the visible transcript from the session's own messages, so what the
 /// screen shows and what the model was sent cannot drift apart.
 fn rebuild_transcript_from_session(app: &mut TuiApp) {
@@ -3004,6 +3115,7 @@ fn open_command_popup(app: &mut TuiApp) {
         ("title", "Configure the terminal window title"),
         ("diff-review", "Review changed files hunk by hunk"),
         ("dictate", "Dictate into the composer without sending"),
+        ("find", "Search this conversation's messages"),
     ] {
         if !cmds.iter().any(|c| c.name == name) {
             cmds.push(PopupCmd::new(name, desc));
@@ -3136,6 +3248,40 @@ fn edit_turn_draft(input: &mut String, cursor: &mut usize, key: KeyEvent) -> Opt
     }
     None
 }
+
+fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
+    let query = query.trim();
+    if query.is_empty() {
+        return "Usage: /find <text>".to_string();
+    }
+    let needle = query.to_lowercase();
+    let mut hits = Vec::new();
+    for (index, message) in messages.iter().enumerate() {
+        let who = match message.role {
+            ChatRole::User => "you",
+            ChatRole::Assistant => "assistant",
+            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+        };
+        for line in message.text.lines() {
+            if line.to_lowercase().contains(&needle) {
+                let snippet: String = line.trim().chars().take(120).collect();
+                hits.push(format!("  #{:<3} {who:<9} {snippet}", index + 1));
+            }
+        }
+    }
+    if hits.is_empty() {
+        return format!("Nothing in this conversation matches '{query}'.");
+    }
+    let total = hits.len();
+    hits.truncate(FIND_RESULT_LIMIT);
+    let mut text = format!("{total} line(s) match '{query}':\n{}", hits.join("\n"));
+    if total > FIND_RESULT_LIMIT {
+        text.push_str(&format!("\n  … {} more", total - FIND_RESULT_LIMIT));
+    }
+    text
+}
+
+const FIND_RESULT_LIMIT: usize = 30;
 
 fn start_side_query(
     config: &crate::config::CliConfig,
@@ -3540,6 +3686,7 @@ enum SlashResult {
     RunTasks(String),
     RunWorktree(String),
     RunMcp(String),
+    RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3548,6 +3695,7 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
   /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
@@ -3639,6 +3787,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
+        "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
         "/plan" if matches!(arg, "accept" | "approve") => SlashResult::SystemMessage(
@@ -3988,9 +4138,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/rewind" => SlashResult::SystemMessage(
-            crate::repl::rewind_session_for_display(arg, &mut app.session).plain_message(),
-        ),
+        "/rewind" => {
+            if arg.trim().is_empty() {
+                open_checkpoint_picker(app);
+            } else {
+                apply_rewind(app, arg);
+            }
+            SlashResult::SystemMessage(String::new())
+        }
 
         // ── Tools & plugins ──
         "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
@@ -4099,6 +4254,20 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(crate::repl::init_project_for_display().plain_message())
         }
 
+        "/skills" if arg.starts_with("import") => {
+            let path = arg.trim_start_matches("import").trim();
+            SlashResult::SystemMessage(if path.is_empty() {
+                "Usage: /skills import <path to SKILL.md or its folder>".to_string()
+            } else {
+                match crate::skills::import_skill(std::path::Path::new(
+                    &crate::path_security::expand_home(path),
+                )) {
+                    Ok(target) => format!("Imported the skill to {}.", target.display()),
+                    Err(reason) => reason,
+                }
+            })
+        }
+
         "/skills" => {
             let skills = crate::skills::discover_skills();
             if skills.is_empty() {
@@ -4120,6 +4289,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             let (action, rest) = arg.split_once(' ').unwrap_or((arg, ""));
             match action {
                 "" => SlashResult::SystemMessage(ADD_CONTEXT_MENU.to_string()),
+                url if url.starts_with("https://") || url.starts_with("http://") => {
+                    SlashResult::RunAttachUrl(url.to_string())
+                }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
                     "No images staged for the next turn.".to_string()
                 } else {
@@ -4611,6 +4783,7 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    crate::tools::enable_interactive_questions();
     tokio::spawn(async {
         let Ok(release) = crate::update_check::fetch_latest_release().await else {
             return;
@@ -4815,6 +4988,17 @@ pub async fn run(
     .await;
 
     let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    if let Some(temperature) = config.default.temperature {
+        if crate::model_catalog::model_rejects_sampling_parameters(&app.session.model) {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!(
+                    "{} does not accept a temperature, so your configured {temperature} is not sent to it.",
+                    crate::model_catalog::display_name(&app.session.model)
+                ),
+            });
+        }
+    }
     app.mcp_elicitation_handler = mcp_elicitation_handler;
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
@@ -5239,6 +5423,11 @@ async fn run_event_loop(
                                     out: None,
                                 };
                                 let cwd = app.workspace_root();
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: "Generating the image...".to_string(),
+                                });
+                                render(terminal, app)?;
                                 let text =
                                     match crate::cloud::image::generate(privacy, &options, &cwd)
                                         .await
@@ -5301,6 +5490,21 @@ async fn run_event_loop(
                                 {
                                     Ok(text) | Err(text) => text,
                                 };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunAttachUrl(url) => {
+                                let text =
+                                    match crate::repl::attach_url_context(&url, &mut app.session)
+                                        .await
+                                    {
+                                        Ok(chars) => format!(
+                                        "Attached {url} ({chars} characters) to the conversation."
+                                    ),
+                                        Err(error) => format!("Could not attach {url}: {error:#}"),
+                                    };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -5567,9 +5771,14 @@ async fn send_message_with_prompt(
     )
     .await;
 
+    let attachments = if app.staged_images.is_empty() {
+        String::new()
+    } else {
+        format!("\n[attached: {}]", app.staged_images.join(", "))
+    };
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: transcript_text.to_string(),
+        text: format!("{transcript_text}{attachments}"),
     });
 
     // The session drains `pending_image_blocks` into this turn, so the chips
@@ -5715,20 +5924,38 @@ async fn send_message_with_prompt(
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
-                        let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        if let crate::tui::approval_broker::ApprovalRequestKind::Question {
+                            question,
+                            options,
+                        } = &req.kind
+                        {
+                            let answer =
+                                run_tui_question_modal(terminal, &approval_ctx, question, options)?;
+                            terminal.clear()?;
+                            let decision = if answer.is_some() {
+                                crate::tui::approval_broker::ApprovalDecision::AllowOnce
+                            } else {
+                                crate::tui::approval_broker::ApprovalDecision::Cancel
+                            };
+                            broker.complete_with_note(req.id, decision, answer).await;
+                            continue;
+                        }
+                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
                         terminal.clear()?;
                         broker
-                            .complete(req.id, approval_choice_to_decision(choice))
+                            .complete_with_note(req.id, approval_choice_to_decision(choice), note)
                             .await;
-                        if matches!(
-                            choice,
-                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll
-                        ) {
-                            // Stop prompting for the rest of this turn.
-                            broker.deny_all_remaining().await;
+                        match choice {
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll => {
+                                broker.deny_all_remaining().await;
+                            }
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::AllowAll => {
+                                broker.allow_all_remaining().await;
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -5866,6 +6093,19 @@ async fn send_message_with_prompt(
     app.session.on_tool_event = None;
     app.session.on_continuation_chunk = None;
     settle_running_tool_cells(&mut tool_cells);
+    let mut changed_files: Vec<String> = tool_cells
+        .iter()
+        .filter(|cell| {
+            cell.state == crate::tui::transcript_cell::TranscriptCellState::Complete
+                && matches!(
+                    cell.name.as_str(),
+                    "write_file" | "edit_file" | "multiedit" | "apply_patch" | "notebook_edit"
+                )
+                && !cell.summary.trim().is_empty()
+        })
+        .map(|cell| cell.summary.clone())
+        .collect();
+    changed_files.dedup();
     app.tool_cells = tool_cells;
 
     // Copy final streamed content into stream_buffer for last render
@@ -5890,6 +6130,16 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if !changed_files.is_empty() {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!(
+                        "Files changed this turn: {}. /diff shows what changed.",
+                        changed_files.join(", ")
+                    ),
+                });
+            }
 
             if app.config.ui.bell_on_finish == Some(true)
                 && turn_started.elapsed() >= BELL_AFTER_TURN_OF
@@ -7453,6 +7703,8 @@ mod tests {
             "task",
             "personalize",
             "tools",
+            "budget",
+            "continue",
             "fast",
             "new",
             "models",

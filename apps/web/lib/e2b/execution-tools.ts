@@ -27,6 +27,9 @@ const EXECUTION_TOOLS = new Set<string>([
 ]);
 
 const MAX_READ_FILE_BYTES = 200_000;
+const OFFICE_RENDERING_NOTE =
+  ' LibreOffice is installed: `soffice --headless --convert-to pdf <file>` renders a Word, ' +
+  'Excel or PowerPoint file to PDF with its layout, one page per slide for a deck.';
 
 const PATH_TOOLS = new Set<string>([
   WRITE_FILE_TOOL,
@@ -56,7 +59,7 @@ export function isExecutionTool(name: string): boolean {
   return EXECUTION_TOOLS.has(name);
 }
 
-export function e2bExecutionToolDefs(): Array<{
+export function e2bExecutionToolDefs(options: { officeRendering?: boolean } = {}): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }> {
@@ -68,7 +71,8 @@ export function e2bExecutionToolDefs(): Array<{
         description:
           'Execute code in a secure, persistent notebook-style sandbox. Use for ' +
           'computation, data processing, and running scripts. Returns cell output ' +
-          'or an exception traceback; notebook cells do not have process exit codes.',
+          'or an exception traceback; notebook cells do not have process exit codes.' +
+          (options.officeRendering ? OFFICE_RENDERING_NOTE : ''),
         parameters: {
           type: 'object',
           properties: {
@@ -218,6 +222,7 @@ export interface TurnCodeExecutionInput {
   e2bEnabled: boolean;
   toolsCapable: boolean;
   codeExecutionCapable: boolean;
+  officeRendering?: boolean;
 }
 
 export interface TurnCodeExecution {
@@ -235,7 +240,9 @@ export interface TurnCodeExecution {
 export function resolveTurnCodeExecutionTools(input: TurnCodeExecutionInput): TurnCodeExecution {
   const provider = input.provider.toLowerCase();
   if (input.e2bEnabled && providerRoutesToE2B(provider) && input.stream === true) {
-    const tools: unknown[] = input.toolsCapable ? e2bExecutionToolDefs() : [];
+    const tools: unknown[] = input.toolsCapable
+      ? e2bExecutionToolDefs({ officeRendering: input.officeRendering === true })
+      : [];
     return { tools, unavailable: tools.length === 0 };
   }
   if (!input.codeExecutionCapable) return { tools: [], unavailable: true };

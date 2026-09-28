@@ -1,3 +1,4 @@
+import { explainAutoRouteReason } from '@agiworkforce/types';
 import { getModelPresentationLabel } from './modelInfo';
 
 export const MODEL_ESCALATION_PREFIX = 'Moved to';
@@ -54,7 +55,8 @@ export function resolveModelEscalation(source: ModelEscalationSource): ModelEsca
 function formatEscalationLine(servedModelId: string, reason: string | null | undefined): string {
   const label = getModelPresentationLabel(servedModelId) || servedModelId;
   const trimmed = reason?.trim();
-  return trimmed
-    ? `${MODEL_ESCALATION_PREFIX} ${label}: ${trimmed}`
+  const explanation = explainAutoRouteReason(trimmed) ?? trimmed;
+  return explanation
+    ? `${MODEL_ESCALATION_PREFIX} ${label}: ${explanation}`
     : `${MODEL_ESCALATION_PREFIX} ${label}`;
 }

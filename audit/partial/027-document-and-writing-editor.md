@@ -32,14 +32,11 @@ nothing is left.
 
 - Done when: The user can create bulleted, numbered and checklist items in a document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lists and task lists render and are created by prompt or Markdown; ticking a checkbox in the preview is not wired, because each tick would record a new artifact version. | ui |
-| desktop | partial | Lists and task lists render and are created by prompt or Markdown; ticking a checkbox in the preview is not wired, because each tick would record a new artifact version. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:27-27`
 
 ## S27.08: Tables.
 
@@ -225,8 +222,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 - Done when: Before an email is sent on the user's behalf, they review the final message (recipients, subject, body) and confirm.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The code settles it without a credential: every MCP tool call is gated by require_confirmation, which chat.rs sets from !skip_permissions (on by default), and a denial fails closed (tools.rs:77-92). The prompt is generic (tool name, server, JSON args), not an email review, so the cell is partial like mobile, not unverified. |  |
 | chrome | partial | The code settles it: the managed completions loop routes any tool the policy does not auto-approve to an approval (tool-loop-routing.ts:54; undeclared connector tools never auto-approve), and the side panel records per-call decisions and resumes the run through RESOLVE_CHAT_APPROVAL (side_panel.ts:4321-4372). That is the same generic approval web and mobile got partial for. |  |

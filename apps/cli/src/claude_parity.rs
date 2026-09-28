@@ -38,6 +38,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "mcp",
         "output-style",
         "tools",
+        "budget",
+        "continue",
         "fallback",
         "replay",
         "insights",
@@ -52,6 +54,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "pricing",
         "remote-env",
         "add-dir",
+        "remove-dir",
         "files",
         "privacy-settings",
         "privacy-mode",
@@ -125,6 +128,11 @@ pub fn handle_shared_command(
         "/mcp" => ParityCommandResult::SystemMessage(render_mcp(session)),
         "/output-style" => ParityCommandResult::SystemMessage(handle_output_style(session, arg)),
         "/tools" => handle_tools(session, arg),
+        "/budget" => ParityCommandResult::SystemMessage(handle_budget(session, arg)),
+        "/continue" => ParityCommandResult::Prompt(
+            "Continue exactly where your last answer stopped. Do not repeat what you already wrote."
+                .to_string(),
+        ),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
@@ -144,6 +152,7 @@ pub fn handle_shared_command(
         "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(render_extra_usage()),
         "/remote-env" => ParityCommandResult::SystemMessage(render_remote_env()),
         "/add-dir" => ParityCommandResult::SystemMessage(handle_add_dir(session, arg)),
+        "/remove-dir" => ParityCommandResult::SystemMessage(handle_remove_dir(session, arg)),
         "/files" => ParityCommandResult::SystemMessage(handle_files(session, arg)),
         "/privacy-settings" => ParityCommandResult::SystemMessage(render_privacy_settings(session)),
         "/privacy-mode" | "/trust-boundary" => {
@@ -240,7 +249,14 @@ pub fn handle_shared_command(
 pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
     let dirs = split_shell_words(arg);
     if dirs.is_empty() {
-        return "Usage: /add-dir <directory> [more directories...]".to_string();
+        let roots = crate::path_security::registered_additional_workspace_roots();
+        if roots.is_empty() {
+            return "Usage: /add-dir <directory> [more directories...]\nNo directories are added yet.".to_string();
+        }
+        let mut lines = vec!["Added directories the agent may read and change:".to_string()];
+        lines.extend(roots.iter().map(|root| format!("  {}", root.display())));
+        lines.push("Remove one with /remove-dir <directory>.".to_string());
+        return lines.join("\n");
     }
 
     let mut lines = Vec::new();
@@ -268,6 +284,23 @@ pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
         }
     }
     lines.join("\n")
+}
+
+pub fn handle_remove_dir(session: &mut AgentSession, arg: &str) -> String {
+    let dirs = split_shell_words(arg);
+    if dirs.is_empty() {
+        return "Usage: /remove-dir <directory> [more directories...]\n/add-dir with no arguments lists the added directories.".to_string();
+    }
+    dirs.iter()
+        .map(|dir| match session.remove_context_dir(dir) {
+            Ok(root) => format!(
+                "removed: {} (the agent can no longer reach it)",
+                root.display()
+            ),
+            Err(error) => format!("not removed: {dir} ({error})"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub fn handle_files(session: &mut AgentSession, arg: &str) -> String {
@@ -675,6 +708,23 @@ pub fn render_companion(surface: &str) -> String {
     )
 }
 
+pub fn open_upgrade_page() -> String {
+    let url = format!(
+        "{}/pricing",
+        crate::tier_cache::default_api_base().trim_end_matches('/')
+    );
+    let opened =
+        crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
+    format!(
+        "{} {url}\n`agi plans` compares plans and their credits here in the terminal.",
+        if opened {
+            "Opened plans and upgrades in your browser:"
+        } else {
+            "Plans and upgrades:"
+        }
+    )
+}
+
 pub fn render_upgrade() -> String {
     "Upgrade options\n  Local/BYOK: use your own provider keys.\n  Managed cloud: authenticate with /login.\n  Extra usage: /extra-usage".to_string()
 }
@@ -976,6 +1026,36 @@ fn output_style_overview(session: &AgentSession) -> String {
             .to_string(),
     );
     lines.join("\n")
+}
+
+pub fn handle_budget(session: &mut AgentSession, arg: &str) -> String {
+    let arg = arg.trim();
+    let usd_per_credit = crate::cost_ledger::MICROUSD_PER_CREDIT / 1_000_000.0;
+    match arg {
+        "" => match session.max_budget_usd {
+            Some(usd) => format!(
+                "Each turn stops once it has spent {} credits. /budget off removes the cap.",
+                crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(usd))
+            ),
+            None => {
+                "No spend cap for this session. /budget <credits> sets one per turn.".to_string()
+            }
+        },
+        "off" | "none" => {
+            session.max_budget_usd = None;
+            "Spend cap removed.".to_string()
+        }
+        value => match value.parse::<f64>() {
+            Ok(credits) if credits.is_finite() && credits > 0.0 => {
+                session.max_budget_usd = Some(credits * usd_per_credit);
+                format!(
+                    "Each turn now stops once it has spent {} credits.",
+                    crate::cost_ledger::credit_amount(credits)
+                )
+            }
+            _ => "Usage: /budget <credits> | /budget off".to_string(),
+        },
+    }
 }
 
 struct ToolRun {
@@ -1281,10 +1361,10 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
             if let Some(app_version) = state.app_version.as_deref() {
                 lines.push(format!("  AGI Desktop: {app_version}"));
             }
-            lines.push(
-                "  Tools: browser_read_page, browser_click, browser_type, browser_navigate, browser_screenshot."
-                    .to_string(),
-            );
+            lines.push(format!(
+                "  Tools: {}.",
+                crate::platform::runtime::tool_catalog::BROWSER_TOOLS.join(", ")
+            ));
             lines.push(
                 "  The desktop app asks before the first action and records each one in its activity."
                     .to_string(),

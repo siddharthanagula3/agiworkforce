@@ -362,6 +362,20 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["ctx"],
         ),
         RegistryCommand::builtin_slash(
+            "continue",
+            "Continue an answer that was cut off",
+            false,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "budget",
+            "Cap what each turn may spend, in credits (/budget <credits> | off)",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "tools",
             "List the model's tools (/tools <name>, /tools log, /tools retry)",
             true,
@@ -500,6 +514,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         RegistryCommand::builtin_slash(
             "add-dir",
             "Add a directory to the current workspace context",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "remove-dir",
+            "Remove a directory added with /add-dir",
             true,
             true,
             vec![],

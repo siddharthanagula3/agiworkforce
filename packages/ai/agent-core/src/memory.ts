@@ -563,13 +563,14 @@ export function memoryConsolidationKey(value: string): string {
     .trim();
 }
 
-const MEMORY_CONFLICT_TOPICS: ReadonlyArray<{ topic: string; prefixes: readonly string[] }> = [
-  { topic: 'name', prefixes: ['user s name is', 'my name is'] },
-  { topic: 'residence', prefixes: ['user lives in', 'i live in'] },
-  { topic: 'employer', prefixes: ['user works at', 'i work at'] },
-  { topic: 'role', prefixes: ['user works as', 'i work as'] },
-  { topic: 'origin', prefixes: ['user is from', 'i am from', 'i m from'] },
-];
+export const MEMORY_CONFLICT_TOPICS: ReadonlyArray<{ topic: string; prefixes: readonly string[] }> =
+  [
+    { topic: 'name', prefixes: ['user s name is', 'my name is'] },
+    { topic: 'residence', prefixes: ['user lives in', 'i live in'] },
+    { topic: 'employer', prefixes: ['user works at', 'i work at'] },
+    { topic: 'role', prefixes: ['user works as', 'i work as'] },
+    { topic: 'origin', prefixes: ['user is from', 'i am from', 'i m from'] },
+  ];
 
 export interface MemoryConflictTopic {
   topic: string;
