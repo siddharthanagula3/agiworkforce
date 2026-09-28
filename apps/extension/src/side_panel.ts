@@ -68,10 +68,14 @@ import {
   deleteConversation,
   persistConversationSeed,
   upsertConversation,
+  updateConversationEntry,
   startNewConversation,
   BROWSER_STORE_KEY,
   type ConversationEntry,
+  type ConversationEntryChanges,
 } from './features/background/conversation-history';
+import { wirePopupMenu } from './features/side-panel/menu';
+import { createChromeShareLink } from './features/cloud-bridge/shareClient';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -195,6 +199,7 @@ import {
   Check,
   Plug,
   CircleHelp,
+  Ellipsis,
   renderIcon,
 } from './assets/icons';
 import {
@@ -1157,7 +1162,7 @@ function saveMessages(): void {
     });
 }
 
-function requestCloudConversationSync(): void {
+function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
   try {
@@ -1165,8 +1170,8 @@ function requestCloudConversationSync(): void {
       {
         type: 'SYNC_CONVERSATION',
         owner,
-        conversationId: _ctx.conversationId,
-        streaming: _ctx.isStreaming,
+        conversationId,
+        streaming: conversationId === _ctx.conversationId && _ctx.isStreaming,
       },
       () => {
         void chrome.runtime.lastError;
@@ -4315,19 +4320,114 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
-    .sp-drawer-history-delete {
-      background: none;
+    .sp-drawer-history-item { position: relative; flex-wrap: wrap; }
+    .sp-drawer-history-open[hidden] { display: none; }
+    .sp-drawer-history-more-wrap { position: relative; flex-shrink: 0; margin-right: 4px; }
+    .sp-drawer-history-more-wrap[hidden] { display: none; }
+    .sp-drawer-history-more {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-sm);
+      height: var(--control-sm);
       border: none;
+      border-radius: var(--corner-control);
+      background: none;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-drawer-history-more:hover,
+    .sp-drawer-history-more[aria-expanded='true'] { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-history-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      z-index: var(--z-dropdown);
+      display: flex;
+      flex-direction: column;
+      min-width: 168px;
+      padding: 4px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-3);
+    }
+    .sp-history-menu[hidden] { display: none; }
+    .sp-history-menu-item {
+      min-height: var(--control-md);
+      padding: 6px 10px;
+      border: none;
+      border-radius: var(--corner-control);
+      background: none;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
+      text-align: left;
+    }
+    .sp-history-menu-item:hover,
+    .sp-history-menu-item:focus-visible { background: var(--agi-ext-hover); }
+    .sp-history-menu-item.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-drawer-history-edit { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; padding: 6px 8px; }
+    .sp-drawer-history-edit-input {
+      flex: 1;
+      min-width: 0;
+      min-height: var(--control-md);
+      padding: 4px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-body-size);
+    }
+    .sp-drawer-history-edit-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-drawer-history-edit-btn {
+      flex-shrink: 0;
+      min-height: var(--control-md);
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    .sp-drawer-history-edit-btn.is-primary { border-color: var(--agi-ext-accent); background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); }
+    .sp-drawer-history-edit-btn.is-danger { border-color: var(--agi-ext-danger); background: var(--agi-ext-danger); color: var(--agi-ext-on-danger); }
+    .sp-drawer-history-edit-btn:disabled { cursor: wait; opacity: 0.55; }
+    .sp-drawer-history-confirm { flex: 1 1 100%; padding: 0 8px 4px; }
+    .sp-drawer-history-share-text {
+      margin: 0;
+      padding: 6px 0 0;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-drawer-history-confirm-text {
+      margin: 0;
+      padding: 6px 0 0;
       color: var(--agi-ext-danger-text);
       font-size: var(--type-caption-size);
-      cursor: pointer;
-      padding: 2px 4px;
-      margin-right: 4px;
-      border-radius: var(--corner-compact);
-      line-height: 1;
-      flex-shrink: 0;
+      line-height: var(--type-caption-height);
     }
-    .sp-drawer-history-delete:hover { background: var(--agi-ext-danger-bg); }
+    #sp-recents-archived {
+      min-height: var(--control-md);
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    #sp-recents-archived[hidden] { display: none; }
+    #sp-recents-archived[aria-pressed='true'] { border-color: var(--agi-ext-accent); color: var(--agi-ext-text); }
     /* Connection / pairing */
     .sp-drawer-pairing-row {
       display: flex;
@@ -4520,7 +4620,6 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); background: var(--agi-ext-danger-bg); }
     .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
-    .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
@@ -5750,6 +5849,7 @@ function injectStyles(): void {
       gap: 8px;
       padding: 10px 2px 12px;
     }
+    #sp-recents-header > #sp-recents-title { flex: 1; min-width: 0; }
     #sp-recents-title {
       color: var(--agi-ext-text);
       font-size: var(--type-h1-size);
@@ -9415,13 +9515,395 @@ function buildUI(): void {
   });
   let drawerHistoryEntries: ConversationEntry[] = [];
 
+  let showingArchived = false;
+
+  function showHistoryStatus(text: string): void {
+    drawerHistoryError.textContent = text;
+    drawerHistoryError.removeAttribute('hidden');
+  }
+
+  async function changeHistoryEntry(
+    entry: ConversationEntry,
+    changes: ConversationEntryChanges,
+    done: string,
+  ): Promise<void> {
+    const owner = _ctx.managedCloudOwner;
+    if (!owner) return;
+    const cloudConversationId = entry.cloudSync?.conversationId;
+    const cloudFlags = {
+      ...(changes.pinned !== undefined ? { pinned: changes.pinned } : {}),
+      ...(changes.archived !== undefined ? { archived: changes.archived } : {}),
+    };
+    try {
+      if (cloudConversationId && Object.keys(cloudFlags).length > 0) {
+        await createExtensionCloudChatClient(owner).updateConversation(
+          cloudConversationId,
+          cloudFlags,
+          { organizationId: entry.cloudSync?.organizationId ?? null },
+        );
+      }
+      await updateConversationEntry(owner, entry.id, changes);
+    } catch (error) {
+      console.warn('[SidePanel] history change failed:', error);
+      showHistoryStatus(t('spHistoryChangeFailed'));
+      return;
+    }
+    if (changes.customTitle !== undefined || changes.projectId !== undefined) {
+      requestCloudConversationSync(entry.id);
+    }
+    if (changes.projectId !== undefined && entry.id === _ctx.conversationId) {
+      adoptChatProject(changes.projectId ?? undefined);
+    }
+    if (changes.archived === true && entry.id === _ctx.conversationId) {
+      cancelCurrentManagedStream(false);
+      resetConversationView();
+    }
+    await refreshDrawerHistory();
+    showHistoryStatus(done);
+  }
+
+  function buildHistoryEditor(
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+    control: HTMLInputElement | HTMLSelectElement,
+    save: () => void,
+  ): void {
+    const editor = el('div', { class: 'sp-drawer-history-edit' });
+    const saveBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-primary' },
+      t('spHistorySave'),
+    );
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    const more = item.querySelector<HTMLElement>('.sp-drawer-history-more-wrap');
+    const close = (): void => {
+      editor.remove();
+      openButton.hidden = false;
+      if (more) more.hidden = false;
+      openButton.focus();
+    };
+    saveBtn.addEventListener('click', save);
+    cancelBtn.addEventListener('click', close);
+    control.addEventListener('keydown', (event: Event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === 'Enter') {
+        event.preventDefault();
+        save();
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
+    });
+    editor.appendChild(control);
+    editor.appendChild(saveBtn);
+    editor.appendChild(cancelBtn);
+    openButton.hidden = true;
+    if (more) more.hidden = true;
+    item.insertBefore(editor, openButton);
+    control.focus();
+  }
+
+  function startHistoryRename(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): void {
+    const input = el('input', {
+      class: 'sp-drawer-history-edit-input',
+      type: 'text',
+      maxlength: '200',
+      'aria-label': t('spHistoryRenameLabel'),
+    }) as HTMLInputElement;
+    input.value = entry.title;
+    buildHistoryEditor(item, openButton, input, () => {
+      const title = input.value.trim();
+      void changeHistoryEntry(entry, { customTitle: title ? title : null }, t('spHistoryRenamed'));
+    });
+    input.select();
+  }
+
+  function startHistoryMove(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): void {
+    const select = el('select', {
+      class: 'sp-drawer-history-edit-input',
+      'aria-label': t('spHistoryMoveLabel'),
+    }) as HTMLSelectElement;
+    select.appendChild(el('option', { value: '' }, t('spHistoryNoProject')));
+    select.disabled = true;
+    buildHistoryEditor(item, openButton, select, () => {
+      if (select.disabled) return;
+      const projectId = select.value || null;
+      const projectName = select.selectedOptions[0]?.textContent ?? '';
+      void changeHistoryEntry(
+        entry,
+        { projectId },
+        projectId ? t('spHistoryMoved', [projectName]) : t('spHistoryMovedOut'),
+      );
+    });
+    void listChromeProjects().then((result) => {
+      if (result.status === 'error') {
+        showHistoryStatus(result.message);
+        return;
+      }
+      for (const project of result.projects) {
+        select.appendChild(el('option', { value: project.id }, project.name));
+      }
+      select.value = entry.projectId ?? '';
+      select.disabled = false;
+      select.focus();
+    });
+  }
+
+  function confirmHistoryDelete(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLButtonElement,
+  ): void {
+    item.querySelector('.sp-drawer-history-confirm')?.remove();
+    const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
+    const question = el(
+      'p',
+      { class: 'sp-drawer-history-confirm-text', id: `sp-history-confirm-${entry.id}` },
+      entry.cloudSync?.conversationId
+        ? t('spHistoryDeleteConfirmAccount')
+        : t('spHistoryDeleteConfirmDevice'),
+    );
+    confirmRow.setAttribute('aria-labelledby', question.id);
+    const deleteBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-danger' },
+      t('spHistoryDelete'),
+    ) as HTMLButtonElement;
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    cancelBtn.addEventListener('click', () => {
+      confirmRow.remove();
+      trigger.focus();
+    });
+    confirmRow.addEventListener('keydown', (event: Event) => {
+      if ((event as KeyboardEvent).key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      confirmRow.remove();
+      trigger.focus();
+    });
+    deleteBtn.addEventListener('click', () => deleteHistoryEntry(entry, deleteBtn));
+    confirmRow.appendChild(question);
+    const actions = el('div', { class: 'sp-drawer-history-edit' });
+    actions.appendChild(deleteBtn);
+    actions.appendChild(cancelBtn);
+    confirmRow.appendChild(actions);
+    item.appendChild(confirmRow);
+    deleteBtn.focus();
+  }
+
+  function confirmHistoryShare(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLButtonElement,
+  ): void {
+    item.querySelector('.sp-drawer-history-confirm')?.remove();
+    const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
+    const question = el(
+      'p',
+      { class: 'sp-drawer-history-share-text', id: `sp-history-share-${entry.id}` },
+      t('spHistoryShareConfirm'),
+    );
+    confirmRow.setAttribute('aria-labelledby', question.id);
+    const createBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-primary' },
+      t('spHistoryShareCreate'),
+    ) as HTMLButtonElement;
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    const close = (): void => {
+      confirmRow.remove();
+      trigger.focus();
+    };
+    cancelBtn.addEventListener('click', close);
+    confirmRow.addEventListener('keydown', (event: Event) => {
+      if ((event as KeyboardEvent).key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    });
+    createBtn.addEventListener('click', () => {
+      createBtn.disabled = true;
+      void (async () => {
+        const auth = await getManagedCloudAuthContext();
+        if (!auth) throw new Error(t('spHistoryShareSignIn'));
+        const link = await createChromeShareLink(auth.token, {
+          title: entry.title,
+          messages: entry.messages.filter((message) => message.content.trim().length > 0),
+          ...(entry.cloudSync?.conversationId
+            ? { conversationId: entry.cloudSync.conversationId }
+            : {}),
+        });
+        await navigator.clipboard.writeText(link.url);
+        confirmRow.remove();
+        const expires = link.expiresAt ? new Date(link.expiresAt) : null;
+        showHistoryStatus(
+          expires && !Number.isNaN(expires.getTime())
+            ? t('spHistoryShareCopiedUntil', [expires.toLocaleDateString()])
+            : t('spHistoryShareCopied'),
+        );
+        trigger.focus();
+      })()
+        .catch((error: unknown) => {
+          showHistoryStatus(error instanceof Error ? error.message : t('spHistoryShareFailed'));
+        })
+        .finally(() => {
+          createBtn.disabled = false;
+        });
+    });
+    confirmRow.appendChild(question);
+    const actions = el('div', { class: 'sp-drawer-history-edit' });
+    actions.appendChild(createBtn);
+    actions.appendChild(cancelBtn);
+    confirmRow.appendChild(actions);
+    item.appendChild(confirmRow);
+    createBtn.focus();
+  }
+
+  function deleteHistoryEntry(entry: ConversationEntry, deleteBtn: HTMLButtonElement): void {
+    const deletingCurrentConversation = entry.id === _ctx.conversationId;
+    const deletionGeneration = _ctx.conversationGeneration;
+    if (deletingCurrentConversation) cancelCurrentManagedStream(false);
+    const owner = _ctx.managedCloudOwner;
+    if (!owner) return;
+    deleteBtn.disabled = true;
+    showHistoryStatus(t('spHistoryDeleting'));
+    void (async () => {
+      const cloudConversationId = entry.cloudSync?.conversationId;
+      if (cloudConversationId) {
+        const organizationId = entry.cloudSync?.organizationId;
+        if (organizationId === undefined) {
+          throw new Error('Could not prove the account workspace for this chat deletion');
+        }
+        const response = (await chrome.runtime.sendMessage({
+          type: 'DELETE_CLOUD_CONVERSATION',
+          owner,
+          cloudConversationId,
+          organizationId,
+        })) as { success?: boolean; error?: string } | undefined;
+        if (response?.success !== true) {
+          throw new Error(response?.error ?? 'Could not queue account chat deletion');
+        }
+      }
+      await deleteConversation(owner, entry.id);
+      if (
+        deletingCurrentConversation &&
+        _ctx.conversationId === entry.id &&
+        _ctx.conversationGeneration === deletionGeneration
+      ) {
+        resetConversationView();
+      }
+      await refreshDrawerHistory();
+      showHistoryStatus(t('spHistoryDeleted'));
+    })()
+      .catch((err) => {
+        console.warn('[SidePanel] history delete failed:', err);
+        showHistoryStatus(t('spHistoryDeleteFailed'));
+      })
+      .finally(() => {
+        deleteBtn.disabled = false;
+      });
+  }
+
+  function buildHistoryMenu(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): HTMLElement {
+    const wrapper = el('div', { class: 'sp-drawer-history-more-wrap' });
+    const moreBtn = el('button', {
+      class: 'sp-drawer-history-more',
+      type: 'button',
+      title: t('spHistoryMore'),
+      'aria-label': t('spHistoryMoreNamed', [entry.title]),
+    }) as HTMLButtonElement;
+    moreBtn.appendChild(renderIcon(Ellipsis, 14));
+    const menu = el('div', {
+      class: 'sp-history-menu',
+      role: 'menu',
+      'aria-label': t('spHistoryMoreNamed', [entry.title]),
+    });
+    const handle = wirePopupMenu(moreBtn, menu);
+    const addItem = (label: string, run: () => void, danger = false): void => {
+      const menuItem = el(
+        'button',
+        {
+          type: 'button',
+          role: 'menuitem',
+          class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+        },
+        label,
+      );
+      menuItem.addEventListener('click', () => {
+        handle.close();
+        run();
+      });
+      menu.appendChild(menuItem);
+    };
+    addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
+    addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
+    if (!entry.archived) {
+      addItem(entry.pinned ? t('spHistoryUnpin') : t('spHistoryPin'), () => {
+        void changeHistoryEntry(
+          entry,
+          { pinned: !entry.pinned },
+          entry.pinned ? t('spHistoryUnpinned') : t('spHistoryPinned'),
+        );
+      });
+      addItem(t('spHistoryMove'), () => startHistoryMove(entry, item, openButton));
+    }
+    if (entry.cloudSync?.conversationId) {
+      addItem(entry.archived ? t('spHistoryUnarchive') : t('spHistoryArchive'), () => {
+        void changeHistoryEntry(
+          entry,
+          { archived: !entry.archived },
+          entry.archived ? t('spHistoryUnarchived') : t('spHistoryArchivedDone'),
+        );
+      });
+    }
+    addItem(t('spHistoryDelete'), () => confirmHistoryDelete(entry, item, moreBtn), true);
+    wrapper.appendChild(moreBtn);
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
     drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD;
-    const filteredEntries = filterConversations(entries, drawerHistorySearch.value);
+    archivedToggle.hidden = !entries.some((entry) => entry.archived) && !showingArchived;
+    archivedToggle.setAttribute('aria-pressed', String(showingArchived));
+    const listed = entries.filter((entry) => Boolean(entry.archived) === showingArchived);
+    const ordered = [
+      ...listed.filter((entry) => entry.pinned),
+      ...listed.filter((entry) => !entry.pinned),
+    ];
+    const filteredEntries = filterConversations(ordered, drawerHistorySearch.value);
     if (filteredEntries.length === 0) {
-      const emptyLabel =
-        entries.length === 0 ? 'No saved conversations' : 'No matching conversations';
+      const emptyLabel = showingArchived
+        ? t('spHistoryArchivedEmpty')
+        : entries.length === 0
+          ? 'No saved conversations'
+          : 'No matching conversations';
       const empty = el('div', { class: 'sp-drawer-history-empty' }, emptyLabel);
       drawerHistoryList.appendChild(empty);
       return;
@@ -9453,87 +9935,19 @@ function buildUI(): void {
       openButton.appendChild(el('span', { class: 'sp-drawer-history-bullet' }));
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
-      const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
+      const date = el(
+        'div',
+        { class: 'sp-drawer-history-date' },
+        entry.pinned
+          ? `${t('spHistoryPinnedMarker')} · ${formatHistoryDate(entry.savedAt)}`
+          : formatHistoryDate(entry.savedAt),
+      );
       textCol.appendChild(title);
       textCol.appendChild(date);
       openButton.appendChild(textCol);
       item.appendChild(openButton);
 
-      const delBtn = iconButton(
-        { class: 'sp-drawer-history-delete', title: t('spHistoryDelete') },
-        Trash2,
-      ) as HTMLButtonElement;
-      let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!delBtn.classList.contains('is-confirm')) {
-          delBtn.classList.add('is-confirm');
-          delBtn.title = t('spHistoryDeleteConfirm');
-          delBtn.setAttribute('aria-label', t('spHistoryDeleteConfirm'));
-          drawerHistoryError.textContent = entry.cloudSync?.conversationId
-            ? t('spHistoryDeleteConfirmAccount')
-            : t('spHistoryDeleteConfirmDevice');
-          drawerHistoryError.removeAttribute('hidden');
-          deleteConfirmTimer = setTimeout(() => {
-            delBtn.classList.remove('is-confirm');
-            delBtn.title = t('spHistoryDelete');
-            delBtn.removeAttribute('aria-label');
-            drawerHistoryError.setAttribute('hidden', '');
-            deleteConfirmTimer = null;
-          }, DRAWER_DELETE_CONFIRM_MS);
-          return;
-        }
-        if (deleteConfirmTimer !== null) {
-          clearTimeout(deleteConfirmTimer);
-          deleteConfirmTimer = null;
-        }
-        const deletingCurrentConversation = entry.id === _ctx.conversationId;
-        const deletionGeneration = _ctx.conversationGeneration;
-        if (deletingCurrentConversation) cancelCurrentManagedStream(false);
-        const owner = _ctx.managedCloudOwner;
-        if (!owner) return;
-        delBtn.disabled = true;
-        drawerHistoryError.textContent = t('spHistoryDeleting');
-        drawerHistoryError.removeAttribute('hidden');
-        void (async () => {
-          const cloudConversationId = entry.cloudSync?.conversationId;
-          if (cloudConversationId) {
-            const organizationId = entry.cloudSync?.organizationId;
-            if (organizationId === undefined) {
-              throw new Error('Could not prove the account workspace for this chat deletion');
-            }
-            const response = (await chrome.runtime.sendMessage({
-              type: 'DELETE_CLOUD_CONVERSATION',
-              owner,
-              cloudConversationId,
-              organizationId,
-            })) as { success?: boolean; error?: string } | undefined;
-            if (response?.success !== true) {
-              throw new Error(response?.error ?? 'Could not queue account chat deletion');
-            }
-          }
-          await deleteConversation(owner, entry.id);
-          if (
-            deletingCurrentConversation &&
-            _ctx.conversationId === entry.id &&
-            _ctx.conversationGeneration === deletionGeneration
-          ) {
-            resetConversationView();
-          }
-          await refreshDrawerHistory();
-          drawerHistoryError.textContent = t('spHistoryDeleted');
-          drawerHistoryError.removeAttribute('hidden');
-        })()
-          .catch((err) => {
-            console.warn('[SidePanel] history delete failed:', err);
-            drawerHistoryError.textContent = t('spHistoryDeleteFailed');
-            drawerHistoryError.removeAttribute('hidden');
-          })
-          .finally(() => {
-            delBtn.disabled = false;
-          });
-      });
-      item.appendChild(delBtn);
+      item.appendChild(buildHistoryMenu(entry, item, openButton));
 
       openButton.addEventListener('click', () => {
         drawerHistoryError.textContent = t('spHistoryOpening');
@@ -9592,6 +10006,16 @@ function buildUI(): void {
   recentsSheet.setAttribute('aria-label', t('spRecentsTitle'));
   const recentsHeader = el('div', { id: 'sp-recents-header' });
   recentsHeader.appendChild(el('h2', { id: 'sp-recents-title' }, t('spRecentsTitle')));
+  const archivedToggle = el(
+    'button',
+    { id: 'sp-recents-archived', type: 'button', 'aria-pressed': 'false', hidden: '' },
+    t('spHistoryShowArchived'),
+  );
+  archivedToggle.addEventListener('click', () => {
+    showingArchived = !showingArchived;
+    renderDrawerHistory(drawerHistoryEntries);
+  });
+  recentsHeader.appendChild(archivedToggle);
   const recentsClose = el('button', { id: 'sp-recents-close', type: 'button' });
   recentsClose.setAttribute('aria-label', t('spRecentsClose'));
   recentsClose.appendChild(renderIcon(X, 14));
