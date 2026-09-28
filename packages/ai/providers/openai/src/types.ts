@@ -69,6 +69,11 @@ export interface OpenAIChatCompletionCreateParams {
   temperature?: number;
   top_p?: number;
   stop?: string[];
+  seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  logit_bias?: Record<string, number>;
+  user?: string;
   max_tokens?: number;
   max_completion_tokens?: number;
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
