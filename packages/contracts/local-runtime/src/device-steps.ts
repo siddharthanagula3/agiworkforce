@@ -251,6 +251,7 @@ export const MAX_DEVICE_HOST_HEADER_LENGTH = 4_000;
 export const MAX_DEVICE_STEP_ROOTS = 12;
 export const MAX_DEVICE_STEP_RESULT_LENGTH = 24_000;
 export const DEVICE_STEP_TTL_MINUTES = 15;
+export const MAX_DEVICE_REVIEW_LENGTH = 200;
 
 const MAX_FIELD_LENGTH = 200;
 
@@ -402,6 +403,7 @@ export interface DeviceStepRequest {
   ms?: number;
   region?: DeviceStepRegion;
   display?: number;
+  review?: string;
 }
 
 export class DeviceStepRefused extends Error {
@@ -479,7 +481,27 @@ function readRegion(value: unknown): DeviceStepRegion {
   };
 }
 
+export const DEVICE_REVIEWED_STEP_TOOLS: readonly DeviceStepTool[] = [
+  'device_click',
+  'device_drag',
+  'device_type',
+  'device_key',
+];
+
+function withReview(request: DeviceStepRequest, args: Record<string, unknown>): DeviceStepRequest {
+  if (!DEVICE_REVIEWED_STEP_TOOLS.includes(request.tool)) return request;
+  const review = readBoundedString(args['review'], MAX_DEVICE_REVIEW_LENGTH);
+  return review ? { ...request, review } : request;
+}
+
 function planScreenStep(tool: DeviceStepTool, args: Record<string, unknown>): DeviceStepRequest {
+  return withReview(planScreenStepFields(tool, args), args);
+}
+
+function planScreenStepFields(
+  tool: DeviceStepTool,
+  args: Record<string, unknown>,
+): DeviceStepRequest {
   switch (tool) {
     case 'device_screenshot': {
       const display = args['display'];

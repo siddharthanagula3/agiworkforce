@@ -7,6 +7,8 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   modelDisplayNameById,
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isCloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -142,6 +144,12 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
   }
   const model = typeof record['model'] === 'string' ? record['model'].trim() : '';
   if (!model) throw createError.validation('"model" is required');
+  const maxSteps = record['maxSteps'] ?? null;
+  if (maxSteps !== null && !isCloudCodeTurnStepBound(maxSteps)) {
+    throw createError.validation(
+      `"maxSteps" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}`,
+    );
+  }
   if (!getModelMetadataById(model)) {
     throw createError.validation('"model" must name a model from the catalog');
   }
@@ -171,6 +179,7 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
       planTier,
       idempotencyKey,
       signal: request.signal,
+      maxSteps,
     });
     return NextResponse.json(result);
   } catch (error) {

@@ -34,7 +34,10 @@ import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
 import { withManagedTurnSlot } from './lib/turn-slot';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
-import { applySecretHandlingToRequest } from './lib/secret-handling-gate';
+import {
+  applySecretHandlingToRequest,
+  applySecretHandlingToTexts,
+} from './lib/secret-handling-gate';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
@@ -122,6 +125,7 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
+  isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
@@ -459,6 +463,28 @@ async function dispatchChatCompletions(
   if (secretHandling.action === 'redacted') {
     processed.secretRedactionCount = secretHandling.matchCount;
   }
+  if (processed.researchResume?.guidance) {
+    const guidanceGate = await applySecretHandlingToTexts(userId, [
+      processed.researchResume.guidance,
+    ]);
+    if (guidanceGate.action === 'blocked') {
+      await refundFailedReservation(userId, processed, 'request_failure');
+      return NextResponse.json(
+        {
+          error: {
+            message:
+              'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.',
+            type: 'invalid_request_error',
+            code: 'secret_detected',
+          },
+        },
+        { status: 400, headers: getSecurityHeaders() },
+      );
+    }
+    if (guidanceGate.action === 'redacted') {
+      processed.researchResume.guidance = guidanceGate.texts[0];
+    }
+  }
 
   // Persist the external-side-effect boundary before any provider/tool loop
   // starts. A crash after this point is recovered customer-favorably by 0056;
@@ -577,14 +603,18 @@ async function dispatchChatCompletions(
           // loop (logged, never fatal) -- a storage outage must not destroy a
           // report the user is already reading.
           persistReport: async (report) => {
-            storedResearchReport = await saveResearchReport(runDb, {
-              userId,
-              requestId: processed.requestId,
-              conversationId: processed.conversationId ?? null,
-              model: processed.chatRequest.model,
-              provider: processed.provider,
-              ...report,
-            });
+            storedResearchReport = {
+              ...(await saveResearchReport(runDb, {
+                userId,
+                requestId: processed.requestId,
+                conversationId: processed.conversationId ?? null,
+                model: processed.chatRequest.model,
+                provider: processed.provider,
+                ...report,
+              })),
+              deliverable: report.deliverable,
+              sourceSelection: report.sourceSelection,
+            };
             await notifyResearchReportSettled(runDb, {
               userId,
               reportId: storedResearchReport.id,
@@ -608,12 +638,21 @@ async function dispatchChatCompletions(
                 priorSteps: processed.researchResume.steps,
                 approvedPlan: processed.researchResume.approvedSteps,
                 deliverable: processed.researchResume.deliverable,
+                ...(processed.researchResume.guidance
+                  ? { guidance: processed.researchResume.guidance }
+                  : {}),
               }
             : {}),
           // A first attempt shows its plan and waits for Start; the approved
           // plan the client sends back IS that decision, so it searches at once.
           requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
           domainPolicy: researchDomainPolicy,
+          sources: {
+            files: processed.researchSources?.files ?? false,
+            allowDomains: processed.researchSources?.allowDomains ?? [],
+            denyDomains: processed.researchSources?.denyDomains ?? [],
+            connectors: [],
+          },
           fileSources: researchFileSources,
           toolApprovalPolicy: researchToolApprovalPolicy,
           connectorPermissions: processed.conversationIsTemporary
@@ -621,6 +660,7 @@ async function dispatchChatCompletions(
             : researchConnectorPermissions,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
+          isPauseRequested: () => isCloudAgentRunPauseRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
           // request instead of billing a full research run nobody sees.
           signal: request.signal,

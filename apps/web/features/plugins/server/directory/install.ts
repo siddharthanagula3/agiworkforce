@@ -5,14 +5,34 @@ import { createHash } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { PluginMarketplaceInstallation } from '@agiworkforce/cloud-contracts';
 
-import { getMarketplaceInstallation } from '@/lib/services/plugin-marketplace-installation-service';
+import { pluginLabel, PluginDependencyError } from '@/lib/services/plugin-dependencies';
+import {
+  getMarketplaceInstallation,
+  installMarketplaceEntries,
+  installMarketplaceEntry,
+} from '@/lib/services/plugin-marketplace-installation-service';
+import { getMarketplaceSourceEntry } from '@/lib/services/plugin-marketplace-service';
+import {
+  dependencyAdmissions,
+  DependencySkillsUnavailableError,
+  directoryDependencies,
+  DirectorySourceUnavailableError,
+  installableSource,
+  installedDependencies,
+  planMarketplaceDependencies,
+  type DependencyContext,
+  type DependencyPlan,
+  type DependencyRoot,
+  type InstallableSource,
+  type InstalledDependency,
+} from './dependencies';
 import {
   shadowSourceName,
   INSTALL_BUILTIN_MESSAGE,
+  INSTALL_ENTRY_UNAVAILABLE_MESSAGE,
+  INSTALL_MANIFEST_UNAVAILABLE_MESSAGE,
   INSTALL_SKILLS_UNAVAILABLE_MESSAGE,
   INSTALL_UNKNOWN_MESSAGE,
-  RUNTIME_NOTE_NOT_INSPECTED,
-  RUNTIME_NOTE_SOURCE_UNKNOWN,
   SOURCE_FACET_BUILTIN,
 } from './constants';
 import { installedVersion } from './entries';
@@ -26,15 +46,30 @@ const SOURCE_STATUS_ACTIVE = 'active';
 const HASH_ALGORITHM = 'sha256';
 
 export type DirectoryInstallResult =
-  | { status: 'installed'; installation: PluginMarketplaceInstallation; skills: string[] }
+  | {
+      status: 'installed';
+      installation: PluginMarketplaceInstallation;
+      skills: string[];
+      dependencies: InstalledDependency[];
+    }
   | { status: 'missing'; message: string }
   | { status: 'builtin'; message: string }
   | { status: 'blocked'; message: string; installCommand: string | null }
-  | { status: 'skills-unavailable'; message: string };
+  | { status: 'not-permitted'; message: string }
+  | { status: 'skills-unavailable'; message: string }
+  | { status: 'source-unavailable'; message: string };
+
+export interface DirectoryDependencyAdmission {
+  pluginKey: string;
+  requiredBy: string;
+}
 
 export interface DirectoryInstallDependencies {
   fetchImpl?: DirectoryFetch;
   findRecord?: (idOrSlug: string) => Promise<PluginDirectoryEntry | null>;
+  admitDependencies?: (
+    dependencies: readonly DirectoryDependencyAdmission[],
+  ) => Promise<string | null>;
 }
 
 function contentHashFor(record: PluginDirectoryEntry, sha: string): string {
@@ -152,56 +187,237 @@ async function upsertInstallation(
   return rows[0]!.id;
 }
 
+async function writeDirectoryInstall(
+  tx: DatabaseAdapter,
+  userId: string,
+  source: InstallableSource,
+  skills: readonly InstalledDirectorySkill[],
+): Promise<string> {
+  const contentHash = contentHashFor(source.record, source.sha);
+  const sourceId = await ensureShadowSource(tx, userId, source.record, contentHash);
+  const entryId = await upsertShadowEntry(
+    tx,
+    sourceId,
+    source.record,
+    source.sha,
+    skills,
+    contentHash,
+  );
+  return upsertInstallation(
+    tx,
+    userId,
+    entryId,
+    installedVersion(source.record.version, source.sha),
+    skills,
+  );
+}
+
+async function writeDependencySkills(plan: DependencyPlan): Promise<void> {
+  for (const { source, skills } of plan.directory) {
+    await writeInstalledSkills(
+      installedSkillsCacheParams(source.repositoryUrl, source.record.id, source.sha, source.sha),
+      skills,
+    );
+  }
+}
+
+async function writeDependencyPlan(
+  tx: DatabaseAdapter,
+  userId: string,
+  plan: DependencyPlan,
+): Promise<Map<string, string>> {
+  const installationIds = new Map<string, string>();
+  const entryInstallations = await installMarketplaceEntries(
+    tx,
+    userId,
+    plan.entries.map(({ found }) => found.entry),
+  );
+  for (const { resolved, found } of plan.entries) {
+    const installationId = entryInstallations.get(found.entry.id);
+    if (installationId) installationIds.set(resolved.label, installationId);
+  }
+  for (const { resolved, source, skills } of plan.directory) {
+    installationIds.set(resolved.label, await writeDirectoryInstall(tx, userId, source, skills));
+  }
+  for (const { resolved, installationId } of plan.enable) {
+    await tx.execute(
+      `update public.plugin_marketplace_installations
+          set enabled = true, updated_at = now()
+        where id = $1 and user_id = $2`,
+      [installationId, userId],
+    );
+    installationIds.set(resolved.label, installationId);
+  }
+  return installationIds;
+}
+
+function dependencyContext(
+  db: DatabaseAdapter,
+  userId: string,
+  deps: DirectoryInstallDependencies,
+): DependencyContext {
+  return {
+    db,
+    userId,
+    fetchImpl: deps.fetchImpl ?? fetch,
+    findRecord: deps.findRecord ?? findPluginDirectoryRecord,
+  };
+}
+
+async function planDependencies(
+  context: DependencyContext,
+  root: () => Promise<DependencyRoot>,
+  installCommand: string | null,
+): Promise<{ plan: DependencyPlan } | { refused: DirectoryInstallResult }> {
+  try {
+    return { plan: await planMarketplaceDependencies(context, await root()) };
+  } catch (error) {
+    if (error instanceof PluginDependencyError) {
+      return { refused: { status: 'blocked', message: error.message, installCommand } };
+    }
+    if (error instanceof DirectorySourceUnavailableError) {
+      return { refused: { status: 'source-unavailable', message: error.message } };
+    }
+    if (error instanceof DependencySkillsUnavailableError) {
+      return { refused: { status: 'skills-unavailable', message: error.message } };
+    }
+    throw error;
+  }
+}
+
+async function admitDependencies(
+  plan: DependencyPlan,
+  deps: DirectoryInstallDependencies,
+): Promise<string | null> {
+  if (plan.resolved.length === 0 || !deps.admitDependencies) return null;
+  return deps.admitDependencies(dependencyAdmissions(plan));
+}
+
 export async function installDirectoryPlugin(
   db: DatabaseAdapter,
   userId: string,
   pluginId: string,
   deps: DirectoryInstallDependencies = {},
 ): Promise<DirectoryInstallResult> {
-  const record = await (deps.findRecord ?? findPluginDirectoryRecord)(pluginId);
+  const context = dependencyContext(db, userId, deps);
+  const record = await context.findRecord(pluginId);
   if (!record) return { status: 'missing', message: INSTALL_UNKNOWN_MESSAGE };
   if (record.sourceFacet === SOURCE_FACET_BUILTIN) {
     return { status: 'builtin', message: INSTALL_BUILTIN_MESSAGE };
   }
-  const location = record.sourceLocation;
-  if (!record.runtime.webInstallable || !location || !record.marketplace?.repositoryUrl) {
-    return {
-      status: 'blocked',
-      message: record.runtime.note ?? RUNTIME_NOTE_SOURCE_UNKNOWN,
-      installCommand: record.installCommand,
-    };
+  const checked = installableSource(record);
+  if (!checked.ok) {
+    return { status: 'blocked', message: checked.note, installCommand: record.installCommand };
   }
-  const sha = location.sha;
-  if (!sha) {
-    return {
-      status: 'blocked',
-      message: RUNTIME_NOTE_NOT_INSPECTED,
-      installCommand: record.installCommand,
-    };
-  }
+  const root = checked.source;
 
   const skills = await fetchPluginSkillFiles(
-    { ...location, sha },
+    { ...root.location, sha: root.sha },
     record.runtime.components.skillPaths,
-    deps.fetchImpl,
+    context.fetchImpl,
   );
   if (skills.length === 0) {
     return { status: 'skills-unavailable', message: INSTALL_SKILLS_UNAVAILABLE_MESSAGE };
   }
+
+  const rootLabel = pluginLabel(record.id, root.marketplaceName);
+  const planned = await planDependencies(
+    context,
+    async () => ({
+      name: record.id,
+      marketplace: root.marketplaceName,
+      allowlist: record.marketplace?.allowCrossMarketplaceDependenciesOn ?? [],
+      plugin: { kind: 'directory', source: root },
+      dependencies: await directoryDependencies(
+        root,
+        context.fetchImpl,
+        `${rootLabel} declares dependencies the web app cannot read, so install it from the released CLI.`,
+        INSTALL_MANIFEST_UNAVAILABLE_MESSAGE,
+      ),
+    }),
+    record.installCommand,
+  );
+  if ('refused' in planned) return planned.refused;
+  const { plan } = planned;
+  const refusal = await admitDependencies(plan, deps);
+  if (refusal) return { status: 'not-permitted', message: refusal };
+
   await writeInstalledSkills(
-    installedSkillsCacheParams(record.marketplace.repositoryUrl, record.id, sha, sha),
+    installedSkillsCacheParams(root.repositoryUrl, record.id, root.sha, root.sha),
     skills,
   );
+  await writeDependencySkills(plan);
 
-  const contentHash = contentHashFor(record, sha);
-  const installationId = await db.transaction(async (tx) => {
-    const sourceId = await ensureShadowSource(tx, userId, record, contentHash);
-    const entryId = await upsertShadowEntry(tx, sourceId, record, sha, skills, contentHash);
-    return upsertInstallation(tx, userId, entryId, installedVersion(record.version, sha), skills);
+  const written = await db.transaction(async (tx) => {
+    const installationIds = await writeDependencyPlan(tx, userId, plan);
+    const installationId = await writeDirectoryInstall(tx, userId, root, skills);
+    return { installationId, installationIds };
   });
-  const installation = await getMarketplaceInstallation(db, userId, installationId);
+
+  const installation = await getMarketplaceInstallation(db, userId, written.installationId);
   if (!installation) return { status: 'missing', message: INSTALL_UNKNOWN_MESSAGE };
-  return { status: 'installed', installation, skills: skills.map((skill) => skill.name) };
+  return {
+    status: 'installed',
+    installation,
+    skills: skills.map((skill) => skill.name),
+    dependencies: installedDependencies(plan, written.installationIds),
+  };
+}
+
+export async function installMarketplaceEntryPlugin(
+  db: DatabaseAdapter,
+  userId: string,
+  entryId: string,
+  deps: DirectoryInstallDependencies = {},
+): Promise<DirectoryInstallResult> {
+  const found = await getMarketplaceSourceEntry(db, userId, entryId);
+  if (!found) {
+    return { status: 'blocked', message: INSTALL_ENTRY_UNAVAILABLE_MESSAGE, installCommand: null };
+  }
+  const { entry } = found;
+  const rootLabel = pluginLabel(entry.pluginKey, found.sourceName);
+  const declared = found.dependencies;
+  if (!declared) {
+    return {
+      status: 'blocked',
+      message: `${rootLabel} declares dependencies that cannot be read, so it was not installed.`,
+      installCommand: null,
+    };
+  }
+
+  const context = dependencyContext(db, userId, deps);
+  const planned = await planDependencies(
+    context,
+    async () => ({
+      name: entry.pluginKey,
+      marketplace: found.sourceName,
+      allowlist: found.allowlist,
+      plugin: { kind: 'entry', found },
+      dependencies: declared,
+    }),
+    null,
+  );
+  if ('refused' in planned) return planned.refused;
+  const { plan } = planned;
+  const refusal = await admitDependencies(plan, deps);
+  if (refusal) return { status: 'not-permitted', message: refusal };
+
+  await writeDependencySkills(plan);
+  const written = await db.transaction(async (tx) => {
+    const installationIds = await writeDependencyPlan(tx, userId, plan);
+    const installation = await installMarketplaceEntry(tx, userId, entryId);
+    return { installation, installationIds };
+  });
+
+  if (!written.installation) {
+    return { status: 'blocked', message: INSTALL_ENTRY_UNAVAILABLE_MESSAGE, installCommand: null };
+  }
+  return {
+    status: 'installed',
+    installation: written.installation,
+    skills: entry.declaredSkills,
+    dependencies: installedDependencies(plan, written.installationIds),
+  };
 }
 
 interface RemovedInstallationRow {

@@ -1,4 +1,5 @@
 import type {
+  DeveloperAgentMode,
   DeveloperMessage,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
@@ -17,6 +18,16 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_turn_start',
   'developer_turn_interrupt',
   'developer_approval_answer',
+  'developer_session_changes',
+  'developer_session_discard',
+  'developer_skills_list',
+  'developer_skill_set_enabled',
+  'developer_skill_consent',
+  'developer_plugins_list',
+  'developer_plugin_set_enabled',
+  'developer_branches_list',
+  'developer_branch_switch',
+  'developer_branch_push',
 ] as const;
 
 export type DeveloperSessionCommand = (typeof DEVELOPER_SESSION_COMMANDS)[number];
@@ -146,6 +157,7 @@ export interface DeveloperRuntimeModels {
   models: DeveloperModelOption[];
   hostModels: DeveloperHostModel[];
   defaultModelId: string | null;
+  defaultAgentMode: DeveloperAgentMode | null;
   managedSignedIn: boolean;
 }
 
@@ -183,6 +195,8 @@ export type DeveloperSessionEvent =
       outcome: DeveloperTurnOutcome;
       response: string;
       failure: DeveloperTurnFailure | null;
+      inputTokens: number;
+      outputTokens: number;
     }
   | {
       type: 'tool-queued';
@@ -255,6 +269,83 @@ export interface DeveloperTurnRequest {
   threadId: string;
   text: string;
   model?: string;
+  agentMode?: DeveloperAgentMode;
+}
+
+export const WORKING_TREE_CHANGE_STATES = [
+  'added',
+  'modified',
+  'deleted',
+  'renamed',
+  'untracked',
+  'conflicted',
+] as const;
+export type WorkingTreeChangeState = (typeof WORKING_TREE_CHANGE_STATES)[number];
+
+export interface WorkingTreeChange {
+  path: string;
+  state: WorkingTreeChangeState;
+  originalPath: string | null;
+}
+
+export interface LocalBranchPush {
+  branch: string;
+  remoteUrl: string;
+  baseBranch: string | null;
+}
+
+export interface LocalBranches {
+  current: string | null;
+  branches: string[];
+  remoteUrl: string | null;
+  baseBranch: string | null;
+}
+
+export interface WorkingTreeChanges {
+  files: WorkingTreeChange[];
+  diff: string;
+  diffTruncated: boolean;
+  folderPrefix: string;
+}
+
+const PORCELAIN_PATH_INDEX = 3;
+const PORCELAIN_RENAME_SEPARATOR = ' -> ';
+const PORCELAIN_CONFLICT_CODES = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+
+function unquotePorcelainPath(value: string): string {
+  if (!value.startsWith('"') || !value.endsWith('"') || value.length < 2) return value;
+  try {
+    return JSON.parse(value) as string;
+  } catch {
+    return value.slice(1, -1);
+  }
+}
+
+function porcelainChangeState(codes: string): WorkingTreeChangeState {
+  if (codes.startsWith('?')) return 'untracked';
+  if (PORCELAIN_CONFLICT_CODES.has(codes)) return 'conflicted';
+  const primary = codes.trim().charAt(0);
+  if (primary === 'A') return 'added';
+  if (primary === 'D') return 'deleted';
+  if (primary === 'R' || primary === 'C') return 'renamed';
+  return 'modified';
+}
+
+export function parseWorkingTreeStatus(output: string): WorkingTreeChange[] {
+  const changes: WorkingTreeChange[] = [];
+  for (const line of output.split('\n')) {
+    if (line.length <= PORCELAIN_PATH_INDEX) continue;
+    const rest = line.slice(PORCELAIN_PATH_INDEX);
+    const separator = rest.indexOf(PORCELAIN_RENAME_SEPARATOR);
+    const path = unquotePorcelainPath(
+      (separator >= 0 ? rest.slice(separator + PORCELAIN_RENAME_SEPARATOR.length) : rest).trim(),
+    );
+    if (!path) continue;
+    const originalPath =
+      separator >= 0 ? unquotePorcelainPath(rest.slice(0, separator).trim()) || null : null;
+    changes.push({ path, state: porcelainChangeState(line.slice(0, 2)), originalPath });
+  }
+  return changes;
 }
 
 export interface DeveloperApprovalAnswer {

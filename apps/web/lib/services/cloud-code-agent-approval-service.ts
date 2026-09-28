@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
 import { CLOUD_CODE_RUN_COMMAND_TOOL } from './cloud-code-agent-tools';
 import { truncateToolOutput } from './cloud-code-agent-loop';
+import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import {
   executePersistedAgentTurn,
   type CloudCodeAgentTurnOutcome,
@@ -15,6 +16,7 @@ import {
   CloudCodeConflictError,
   CloudCodeNotFoundError,
   CloudCodeUnavailableError,
+  cloudCodeSessionBaseBranch,
   getCloudCodeSession,
   validateCloudCodeSessionId,
   type CloudCodeOwner,
@@ -152,6 +154,20 @@ function rebuildTurnMessages(goal: string, steps: StepRow[]): ProviderMessage[] 
   return messages;
 }
 
+function approvedToolCall(row: { command: string; tool_name: string; tool_args: unknown }): {
+  toolName: string;
+  args: Record<string, unknown>;
+} {
+  if (row.tool_name === CLOUD_CODE_RUN_COMMAND_TOOL) {
+    return { toolName: row.tool_name, args: { command: row.command } };
+  }
+  const args =
+    row.tool_args && typeof row.tool_args === 'object' && !Array.isArray(row.tool_args)
+      ? (row.tool_args as Record<string, unknown>)
+      : {};
+  return { toolName: row.tool_name, args };
+}
+
 export interface DecideCloudCodeAgentApprovalInput {
   db: DatabaseAdapter;
   owner: CloudCodeOwner;
@@ -223,18 +239,18 @@ async function resolveCloudCodeAgentApproval(
     throw new CloudCodeUnavailableError('This turn has no recorded model and cannot be resumed');
   }
 
-  const decided = await db.query<{ command: string }>(
+  const decided = await db.query<{ command: string; tool_name: string; tool_args: unknown }>(
     `update cloud_code_agent_approvals
         set state = $3, decided_at = now()
       where turn_id = $1
         and step_index = $2
         and state = 'pending'
         and expires_at > now()
-      returning command`,
+      returning command, tool_name, tool_args`,
     [turnId, stepIndex, decision === 'approve' ? 'approved' : 'rejected'],
   );
-  const approvedCommand = decided[0]?.command;
-  if (!approvedCommand) {
+  const approved = decided[0];
+  if (!approved) {
     const existing = await db.query<{ state: string; is_expired: boolean }>(
       `select state, expires_at <= now() as is_expired
          from cloud_code_agent_approvals
@@ -279,17 +295,21 @@ async function resolveCloudCodeAgentApproval(
     [turnId],
   );
   const initialStepIndex = stepRows.reduce((max, step) => Math.max(max, step.step_index), 0);
-  const messages = rebuildTurnMessages(turn.goal, stepRows);
+  const messages = rebuildTurnMessages(
+    cloudCodeGoalPrompt(turn.goal, cloudCodeSessionBaseBranch(session)),
+    stepRows,
+  );
 
   const approvalToolUseId = `approval-${stepIndex}`;
+  const approvedTool = approvedToolCall(approved);
   messages.push({
     role: 'assistant',
     content: [
       {
         type: 'tool_use',
         id: approvalToolUseId,
-        name: CLOUD_CODE_RUN_COMMAND_TOOL,
-        input: { command: approvedCommand },
+        name: approvedTool.toolName,
+        input: approvedTool.args,
       },
     ],
   });
@@ -314,7 +334,8 @@ async function resolveCloudCodeAgentApproval(
     priorMessages: messages,
     preApproved: {
       toolUseId: approvalToolUseId,
-      command: approvedCommand,
+      toolName: approvedTool.toolName,
+      args: approvedTool.args,
       approved: decision === 'approve',
     },
     initialStepIndex,
