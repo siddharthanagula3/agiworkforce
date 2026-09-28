@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
 import type {
   CustomConnectorPreset,
   DirectoryAdapter,
@@ -603,7 +604,7 @@ export function useConnectorsSettingsAdapter({
   const startCustomConnectorSignIn = useCallback(
     async (shortId: string, name: string) => {
       const target = withConnectorReturnPath(
-        `/api/connectors/oauth/start?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
+        `${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
         currentConnectorReturnPath(),
       );
       if (!target) throw new Error(`Could not connect ${name}.`);
