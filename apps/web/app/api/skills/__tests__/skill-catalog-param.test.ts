@@ -27,6 +27,13 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockAuthUser }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn().mockReturnValue({}) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockUserScopedDb }));
+vi.mock('@/lib/services/workspace-plugin-access', async () => {
+  const { listEnabledPluginIds } = await import('@/lib/services/plugin-installation-service');
+  return {
+    workspaceAllowsPlugins: vi.fn(async () => true),
+    listPermittedPluginIds: listEnabledPluginIds,
+  };
+});
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mockListEnabledPluginIds,
