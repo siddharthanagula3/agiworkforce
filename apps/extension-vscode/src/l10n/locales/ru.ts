@@ -492,6 +492,14 @@ const ru = {
   'webview.moreLinesHidden_few': 'Скрыты еще {count} строки',
   'webview.moreLinesHidden_many': 'Скрыто еще {count} строк',
   'webview.moreLinesHidden_other': 'Скрыто еще {count} строки',
+  'mcp.connected_one':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмент.',
+  'mcp.connected_few':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмента.',
+  'mcp.connected_many':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструментов.',
+  'mcp.connected_other':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмента.',
 };
 
 export default ru;

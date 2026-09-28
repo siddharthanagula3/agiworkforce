@@ -114,6 +114,7 @@ import {
   CliCapabilityAdapter,
   openArtifactsSurface,
   openCapabilitySurface,
+  manageHooks,
   manageMcpServers,
   managePlugins,
   manageSkills,
@@ -2529,7 +2530,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
-    register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
+    register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),

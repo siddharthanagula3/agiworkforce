@@ -435,6 +435,11 @@ const pt = {
   'webview.moreLinesHidden_one': 'Mais {count} linha não exibida',
   'webview.moreLinesHidden_many': 'Mais {count} de linhas não exibidas',
   'webview.moreLinesHidden_other': 'Mais {count} linhas não exibidas',
+  'mcp.connected_one': 'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} ferramenta.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} de ferramentas.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} ferramentas.',
 };
 
 export default pt;

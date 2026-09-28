@@ -28,9 +28,14 @@ import type {
   AccountStatusResponse,
   AccountTokenResponse,
   ContextInstructionsResponse,
+  HookAddParams,
   HookListResponse,
+  HookRemoveParams,
+  McpAddParams,
   McpLoginResponse,
   McpServerListResponse,
+  McpServerToolsResponse,
+  PluginInstallParams,
   PluginListResponse,
   SettingsReadResponse,
   SettingsWriteParams,
@@ -62,6 +67,8 @@ const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
 // opens one too, so neither fits the default request timeout.
 const ACCOUNT_LOGIN_WAIT_TIMEOUT_MS = 15 * 60_000;
 const MCP_LOGIN_TIMEOUT_MS = 5 * 60_000;
+const MCP_PROBE_TIMEOUT_MS = 90_000;
+const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
 const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
@@ -137,6 +144,8 @@ const capabilitiesSchema = z.object({
   threadDelete: z.boolean().optional(),
   reconnect: z.boolean().optional(),
   writerLease: z.boolean().optional(),
+  installs: z.boolean().optional(),
+  mcpTools: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -389,10 +398,63 @@ const hookListResponseSchema = z.object({
         scope: z.enum(['user', 'plugin']),
         trusted: z.boolean(),
         source: z.string().max(16_384).optional(),
+        position: z.number().int().positive().optional(),
       }),
     )
     .max(2_000),
 });
+const mcpServerTestResponseSchema = z.object({
+  name: z.string().min(1).max(200),
+  connected: z.boolean(),
+  elapsedMs: z.number().int().nonnegative(),
+  toolCount: z.number().int().nonnegative(),
+  error: z.string().max(8_192).optional(),
+});
+const mcpServerToolsResponseSchema = z.object({
+  name: z.string().min(1).max(200),
+  tools: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(8_192),
+        inputSchema: z.unknown(),
+      }),
+    )
+    .max(2_000),
+  prompts: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(8_192),
+        arguments: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(200),
+              description: z.string().max(4_000),
+              required: z.boolean(),
+            }),
+          )
+          .max(200)
+          .default([]),
+      }),
+    )
+    .max(2_000)
+    .default([]),
+  resources: z
+    .array(
+      z.object({
+        uri: z.string().min(1).max(16_384),
+        name: z.string().min(1).max(400),
+        description: z.string().max(8_192).optional(),
+        mimeType: z.string().max(200).optional(),
+      }),
+    )
+    .max(5_000)
+    .default([]),
+  warnings: z.array(z.string().max(8_192)).max(20).default([]),
+});
+
+export type McpServerProbe = z.infer<typeof mcpServerTestResponseSchema>;
 const settingsReadResponseSchema = z.object({
   defaultModel: z.string().max(200).optional(),
   defaultEffort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -1091,6 +1153,76 @@ export class LocalRuntimeClient {
     const connection = await this.readyConnection();
     return hookListResponseSchema.parse(
       await connection.request('hooks/list', {}),
+    ) as HookListResponse;
+  }
+
+  async installSkill(source: string): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/install', { source }, INSTALL_TIMEOUT_MS),
+    ) as SkillListResponse;
+  }
+
+  async removeSkill(name: string): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/remove', { name }),
+    ) as SkillListResponse;
+  }
+
+  async installPlugin(params: PluginInstallParams): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/install', params, INSTALL_TIMEOUT_MS),
+    ) as PluginListResponse;
+  }
+
+  async removePlugin(id: string): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/remove', { id }),
+    ) as PluginListResponse;
+  }
+
+  async addMcpServer(params: McpAddParams): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/add', params),
+    ) as McpServerListResponse;
+  }
+
+  async removeMcpServer(name: string): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/remove', { name }),
+    ) as McpServerListResponse;
+  }
+
+  async testMcpServer(name: string): Promise<McpServerProbe> {
+    const connection = await this.readyConnection();
+    return mcpServerTestResponseSchema.parse(
+      await connection.request('mcp/test', { name }, MCP_PROBE_TIMEOUT_MS),
+    );
+  }
+
+  async listMcpServerTools(name: string): Promise<McpServerToolsResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerToolsResponseSchema.parse(
+      await connection.request('mcp/tools', { name }, MCP_PROBE_TIMEOUT_MS),
+    ) as McpServerToolsResponse;
+  }
+
+  async addHook(params: HookAddParams): Promise<HookListResponse> {
+    const connection = await this.readyConnection();
+    return hookListResponseSchema.parse(
+      await connection.request('hooks/add', params),
+    ) as HookListResponse;
+  }
+
+  async removeHook(params: HookRemoveParams): Promise<HookListResponse> {
+    const connection = await this.readyConnection();
+    return hookListResponseSchema.parse(
+      await connection.request('hooks/remove', params),
     ) as HookListResponse;
   }
 
