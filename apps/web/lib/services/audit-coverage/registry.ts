@@ -51,6 +51,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'device/poll/route.ts', reason: 'no_governed_state' },
   { route: 'devices/heartbeat/route.ts', reason: 'no_governed_state' },
   { route: 'feedback/route.ts', reason: 'own_content' },
+  { route: 'files/uploads/[uploadId]/parts/route.ts', reason: 'own_content' },
   { route: 'files/uploads/[uploadId]/route.ts', reason: 'own_content' },
   { route: 'files/uploads/route.ts', reason: 'own_content' },
   { route: 'github/issues/route.ts', reason: 'own_content' },
