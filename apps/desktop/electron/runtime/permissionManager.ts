@@ -23,8 +23,10 @@ import {
 } from './permissionCore';
 import { systemPermissionStatuses } from './systemPermissions';
 
-const persisted = new Map<string, PermissionDecision>();
-const session = new Map<string, PermissionDecision>();
+type StoredDecision = PermissionDecision & { label?: string };
+
+const persisted = new Map<string, StoredDecision>();
+const session = new Map<string, StoredDecision>();
 let loaded = false;
 
 function storePath(): string {
@@ -91,10 +93,14 @@ export function recordDecision(
   state: 'granted' | 'denied',
   duration: PermissionGrantDuration,
   acknowledgedHighRisk = false,
+  label?: string,
 ): PermissionDecision {
   load();
   const effective = normalizeGrantDuration(capability, duration, acknowledgedHighRisk);
-  const decision = buildDecision(capability, scope, state, effective, Date.now());
+  const decision: StoredDecision = {
+    ...buildDecision(capability, scope, state, effective, Date.now()),
+    ...(label ? { label } : {}),
+  };
   const key = permissionKey(capability, scope);
 
   if (isPersistable(decision)) {
@@ -299,8 +305,11 @@ const REVIEW_PHRASES: Partial<Record<DesktopCapability, string>> = {
   'browser.cdp': "read the paired browser's page internals",
 };
 
-export function describePermissionDecision(decision: PermissionDecision): string {
+export function describePermissionDecision(decision: StoredDecision): string {
   const phrase = REVIEW_PHRASES[decision.capability];
+  if (decision.capability === 'application.control' && decision.scope.kind === 'application') {
+    return `control ${decision.label ?? decision.scope.target ?? 'an application'}`;
+  }
   if (decision.scope.kind === 'application' && decision.scope.target) {
     return `${phrase ?? CAPABILITY_LABELS[decision.capability]}, when ${decision.scope.target} asks`;
   }
@@ -327,7 +336,11 @@ export interface PermissionQuestion {
   subject?: string;
   /** Object of the question, when the capability label alone reads wrong. */
   objectPhrase?: string;
+  targetLabel?: string;
+  offerNeverAllow?: boolean;
 }
+
+const NEVER_ALLOW_LABEL = 'Never allow';
 
 /**
  * Asks once and records the answer, returning the stored state rather than a
@@ -344,9 +357,10 @@ export async function requestPermission(
   if (existing !== 'prompt') return existing;
 
   const highRisk = isHighRiskCapability(capability);
+  const neverAllow = highRisk && question.offerNeverAllow === true;
   const allowSession = `${TOOL_APPROVAL_ACTION_LABELS.allow} this session`;
   const buttons = highRisk
-    ? [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession]
+    ? [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession, ...(neverAllow ? [NEVER_ALLOW_LABEL] : [])]
     : [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession, TOOL_APPROVAL_ACTION_LABELS.alwaysAllow];
 
   const options = {
@@ -369,11 +383,15 @@ export async function requestPermission(
     : await dialog.showMessageBox(options);
 
   if (result.response === 0) {
-    recordDecision(capability, scope, 'denied', 'session');
+    recordDecision(capability, scope, 'denied', 'session', false, question.targetLabel);
+    return 'denied';
+  }
+  if (neverAllow && result.response === 2) {
+    recordDecision(capability, scope, 'denied', 'always', true, question.targetLabel);
     return 'denied';
   }
 
   const duration: PermissionGrantDuration = result.response === 2 ? 'always' : 'session';
-  recordDecision(capability, scope, 'granted', duration);
+  recordDecision(capability, scope, 'granted', duration, false, question.targetLabel);
   return 'granted';
 }
