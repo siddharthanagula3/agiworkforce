@@ -1188,6 +1188,23 @@ impl CliDeveloperSessionHost {
         previous: Option<&ManagedSessionAutoRouting>,
         account_tier: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
+        self.resolve_auto_thread_model_with_speed(
+            requested,
+            task_type,
+            previous,
+            account_tier,
+            previous.is_some_and(|state| state.speed_first),
+        )
+    }
+
+    fn resolve_auto_thread_model_with_speed(
+        &self,
+        requested: &str,
+        task_type: DeveloperRoutingTaskType,
+        previous: Option<&ManagedSessionAutoRouting>,
+        account_tier: &str,
+        speed_first: bool,
+    ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
         let trust_mode = if let Some(previous) = previous {
             previous.trust_mode
         } else {
@@ -1195,13 +1212,14 @@ impl CliDeveloperSessionHost {
         };
         let tier = auto_routing_tier(trust_mode, account_tier);
         let routing_task_type = registry_task_type(task_type);
-        let selection = crate::model_catalog::resolve_auto_model_with_context(
+        let selection = crate::model_catalog::resolve_auto_model_with_speed(
             requested,
             routing_task_type,
             tier,
             trust_mode,
             previous.map(|state| state.model_key.as_str()),
             previous.map(|state| registry_task_type(state.task_type)),
+            speed_first,
         )
         .map_err(DeveloperSessionHostError::invalid_request)?;
 
@@ -1222,6 +1240,7 @@ impl CliDeveloperSessionHost {
                 model_key: selection.model_key,
                 task_type,
                 trust_mode,
+                speed_first,
             }),
             fallback_model_ids,
         })
@@ -2332,11 +2351,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         .routing_task_type
                         .or_else(|| previous_auto.as_ref().map(|state| state.task_type))
                         .unwrap_or(DeveloperRoutingTaskType::Coding);
-                    let resolved = self.resolve_auto_thread_model(
+                    let speed_first = match params.routing_profile {
+                        Some(profile) => matches!(profile, DeveloperRoutingProfile::Speed),
+                        None => {
+                            params.model.is_none()
+                                && previous_auto
+                                    .as_ref()
+                                    .is_some_and(|state| state.speed_first)
+                        }
+                    };
+                    let resolved = self.resolve_auto_thread_model_with_speed(
                         &selection,
                         task_type,
                         previous_auto.as_ref(),
                         account_tier,
+                        speed_first,
                     )?;
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
@@ -6111,6 +6140,7 @@ mod tests {
             model_key: previous_route.model_key,
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+            speed_first: false,
         };
 
         let resolved = host

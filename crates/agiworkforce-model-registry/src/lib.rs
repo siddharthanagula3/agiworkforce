@@ -135,6 +135,7 @@ pub struct AutoRoutingRequest<'a> {
     pub us_only: bool,
     pub estimated_input_tokens: Option<u64>,
     pub estimated_output_tokens: Option<u64>,
+    pub prefer_slots: &'a [String],
 }
 
 impl Default for AutoRoutingRequest<'_> {
@@ -153,6 +154,7 @@ impl Default for AutoRoutingRequest<'_> {
             us_only: false,
             estimated_input_tokens: None,
             estimated_output_tokens: None,
+            prefer_slots: &[],
         }
     }
 }
@@ -282,6 +284,8 @@ struct Registry {
 struct RegistryModel {
     identity: RegistryIdentity,
     lifecycle: RegistryLifecycle,
+    #[serde(default)]
+    speed: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -385,6 +389,14 @@ struct RegistryLimits {
 #[derive(Debug, Deserialize)]
 struct RegistryPolicies {
     auto: AutoPolicy,
+    #[serde(default)]
+    release: Option<RegistryRelease>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegistryRelease {
+    policy_version: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -403,7 +415,7 @@ struct AutoPolicy {
     aliases: HashMap<String, AutoAlias>,
     continuity: ContinuityPolicy,
     tasks: HashMap<String, AutoTaskPolicy>,
-    slots: HashMap<String, AutoSlot>,
+    slots: AutoSlots,
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,6 +456,49 @@ struct AutoTaskPolicy {
     required_harness_features: Vec<String>,
     minimum_context_tokens: Option<u64>,
     preferred_slots: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug)]
+struct AutoSlots {
+    by_id: HashMap<String, AutoSlot>,
+    order: Vec<String>,
+}
+
+impl std::ops::Deref for AutoSlots {
+    type Target = HashMap<String, AutoSlot>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.by_id
+    }
+}
+
+impl<'de> Deserialize<'de> for AutoSlots {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct SlotsVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SlotsVisitor {
+            type Value = AutoSlots;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("the Auto routing slots")
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut entries: A,
+            ) -> Result<AutoSlots, A::Error> {
+                let mut by_id = HashMap::new();
+                let mut order = Vec::new();
+                while let Some((slot_id, slot)) = entries.next_entry::<String, AutoSlot>()? {
+                    order.push(slot_id.clone());
+                    by_id.insert(slot_id, slot);
+                }
+                Ok(AutoSlots { by_id, order })
+            }
+        }
+
+        deserializer.deserialize_map(SlotsVisitor)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -574,6 +629,57 @@ pub fn route_pricing(route_id: &str) -> Result<Option<RoutePricing>, RegistryErr
         cache_class: route.cache_class,
         commercial_status: route.commercial_status,
     }))
+}
+
+pub fn routing_policy_version() -> Result<Option<u64>, RegistryError> {
+    Ok(registry()?
+        .policies
+        .release
+        .as_ref()
+        .map(|release| release.policy_version))
+}
+
+const SPEED_ORDER: [&str; 2] = ["very-fast", "fast"];
+
+pub fn speed_first_slots() -> Result<Vec<String>, RegistryError> {
+    let registry = registry()?;
+    let slots = &registry.policies.auto.slots;
+    let mut ranked = slots
+        .order
+        .iter()
+        .filter_map(|slot_id| {
+            let model_key = &slots.get(slot_id)?.model_key;
+            let speed = registry.models.get(model_key)?.speed.as_deref()?;
+            let rank = SPEED_ORDER
+                .iter()
+                .position(|candidate| *candidate == speed)?;
+            Some((rank, slot_id.clone()))
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_by_key(|(rank, _)| *rank);
+    Ok(ranked.into_iter().map(|(_, slot_id)| slot_id).collect())
+}
+
+fn apply_slot_preference(
+    ordered_slots: &[String],
+    prefer_slots: &[String],
+    allowed_slots: &HashSet<String>,
+) -> Vec<String> {
+    let promoted = prefer_slots
+        .iter()
+        .filter(|slot_id| allowed_slots.contains(*slot_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    promoted
+        .iter()
+        .cloned()
+        .chain(
+            ordered_slots
+                .iter()
+                .filter(|slot_id| !promoted.contains(slot_id))
+                .cloned(),
+        )
+        .collect()
 }
 
 pub fn serving_harness_id(
@@ -1313,6 +1419,8 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
         .get(effective_profile.as_key())
         .map(Vec::as_slice)
         .unwrap_or_default();
+    let ordered_slots =
+        apply_slot_preference(preferred_slots, request.prefer_slots, &allowed_slots);
 
     if let Some(current_model_key) = request.current_model_key
         && policy.continuity.prefer_current_model_when_eligible
@@ -1338,7 +1446,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 task,
                 policy,
                 &allowed_slots,
-                preferred_slots,
+                &ordered_slots,
                 &tier_slot_order,
                 fallback_slot,
                 current_model_key,
@@ -1361,7 +1469,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
     }
 
     let mut reasons = Vec::new();
-    for slot_id in preferred_slots {
+    for slot_id in &ordered_slots {
         if !allowed_slots.contains(slot_id) {
             reasons.push(format!(
                 "routing slot {slot_id} is not allowed for tier {tier}"
@@ -1386,7 +1494,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 task,
                 policy,
                 &allowed_slots,
-                preferred_slots,
+                &ordered_slots,
                 &tier_slot_order,
                 fallback_slot,
                 model_key,
@@ -1428,7 +1536,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 task,
                 policy,
                 &allowed_slots,
-                preferred_slots,
+                &ordered_slots,
                 &tier_slot_order,
                 fallback_slot,
                 model_key,

@@ -5898,6 +5898,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     model_key: route.model_key.clone(),
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+                    speed_first: false,
                 },
                 tier: tier.clone(),
             });
