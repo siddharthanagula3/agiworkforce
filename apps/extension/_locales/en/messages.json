@@ -2212,5 +2212,73 @@
         "example": "Checkout flow"
       }
     }
+  },
+  "spComposerPlaceholderQueue": {
+    "message": "Reply to send it after this answer",
+    "description": "Composer placeholder while an answer is streaming; pressing Enter queues the message"
+  },
+  "spQueuedListLabel": {
+    "message": "Queued messages",
+    "description": "Accessible name of the list of messages waiting to be sent after the current answer"
+  },
+  "spQueuedLead": {
+    "message": "Queued",
+    "description": "Label before a message that will be sent after the current answer"
+  },
+  "spQueuedLeadNumbered": {
+    "message": "Queued $INDEX$ of $TOTAL$",
+    "description": "Label before one of several messages waiting to be sent after the current answer",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "spQueuedEdit": {
+    "message": "Edit",
+    "description": "Button that moves a queued message back into the composer"
+  },
+  "spQueuedEditAria": {
+    "message": "Edit queued message: $TEXT$",
+    "description": "Accessible name of the edit button on a queued message",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "And the second one?"
+      }
+    }
+  },
+  "spQueuedCancel": {
+    "message": "Cancel",
+    "description": "Button that removes a queued message without sending it"
+  },
+  "spQueuedCancelAria": {
+    "message": "Cancel queued message: $TEXT$",
+    "description": "Accessible name of the cancel button on a queued message",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "And the second one?"
+      }
+    }
+  },
+  "spQueuedReturned": {
+    "message": "Your queued message was not sent because the chat changed. It is back in the composer.",
+    "description": "Notice when queued messages are returned to the composer instead of being sent"
+  },
+  "spQueuedFull": {
+    "message": "You can queue up to $COUNT$ messages. Wait for the answer, or cancel one.",
+    "description": "Notice when the queue of messages waiting for the current answer is full",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      }
+    }
   }
 }
