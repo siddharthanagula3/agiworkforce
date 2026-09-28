@@ -28,7 +28,6 @@ vi.mock('../../hooks/use-model-policy', () => ({
 
 vi.mock('../../hooks/use-workspace-roles', () => ({
   usePolicyOverrides: () => mocks.overrides(),
-  usePolicyDiagnosis: () => ({ data: undefined, isLoading: false, error: null }),
   useWorkspaceRoles: () => ({ data: { roles: [] } }),
   useWorkspaceGroups: () => ({ data: { groups: [] } }),
   useUpsertPolicyOverride: () => ({ mutate: mocks.upsertOverride, isPending: false, error: null }),
