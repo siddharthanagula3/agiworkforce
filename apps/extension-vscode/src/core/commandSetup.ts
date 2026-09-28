@@ -1150,7 +1150,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.selectModel', async (options?: unknown) => {
-      const currentModel = normalizeConfiguredModelId(Config.model());
+      const currentModel = normalizeConfiguredModelId(sidebarProvider.activeModel());
 
       const pickerTier = await resolveTier(context);
       const route = sidebarProvider.activeRoute();
@@ -1219,12 +1219,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         if (choice !== SWITCH_MODEL_ANYWAY) return;
       }
 
-      await vscode.workspace
-        .getConfiguration('agiWorkforce')
-        .update('model', picked.modelId, vscode.ConfigurationTarget.Global);
+      const scope = await sidebarProvider.selectModel(picked.modelId);
 
       telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.modelId });
-      vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.modelId}`);
+      vscode.window.showInformationMessage(
+        scope === 'conversation'
+          ? `AGI Workforce: this chat now uses ${modelDisplayLabel(picked.modelId)}. New chats still start with ${modelDisplayLabel(normalizeConfiguredModelId(Config.model()))}.`
+          : `AGI Workforce: new chats now use ${modelDisplayLabel(picked.modelId)}.`,
+      );
     }),
 
     register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
@@ -1576,7 +1578,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.openActionSheet', async () => {
-      const currentModel = normalizeConfiguredModelId(Config.model());
+      const currentModel = normalizeConfiguredModelId(sidebarProvider.activeModel());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
 

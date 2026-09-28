@@ -700,6 +700,8 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private readonly _activeModelChanged = new vscode.EventEmitter<string>();
+  readonly onDidChangeActiveModel = this._activeModelChanged.event;
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -727,6 +729,50 @@ export class ChatStateManager {
 
   get meterCollapsed(): boolean {
     return this._meterCollapsed;
+  }
+
+  activeModel(): string {
+    return this._activeModel;
+  }
+
+  private _setActiveModel(model: string): void {
+    if (model === this._activeModel) return;
+    this._activeModel = model;
+    this._activeModelChanged.fire(model);
+  }
+
+  async selectModel(modelId: string): Promise<'conversation' | 'default'> {
+    const model = this._normalizeModelSelection(modelId);
+    const scope = this._thread === undefined ? 'default' : 'conversation';
+    if (scope === 'default') {
+      await vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .update('model', model, vscode.ConfigurationTarget.Global);
+    }
+    this._setActiveModel(model);
+    this._showModel(model);
+    await this._pushUsageMeterOnBoundaryChange();
+    return scope;
+  }
+
+  private _showModel(model: string): void {
+    this._post({ type: 'model', payload: { model } });
+    this._postProviderBadge(model);
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._effort ?? Config.agentEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
+  private _followDefaultModel(): void {
+    const model = this._normalizeModelSelection(Config.model());
+    if (model === this._activeModel) return;
+    this._setActiveModel(model);
+    this._showModel(model);
   }
 
   get mode(): AgentMode | undefined {
@@ -758,8 +804,11 @@ export class ChatStateManager {
           this._post({ type: 'hideOnboarding' });
         }
         await this._discoverLocalModels(this._thread?.runtime);
-        const model = this._thread?.model ?? this._normalizeModelSelection(Config.model());
-        this._activeModel = model;
+        const model =
+          this._thread === undefined
+            ? this._normalizeModelSelection(Config.model())
+            : this._activeModel;
+        this._setActiveModel(model);
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
         this.pushFollowUpBehavior();
@@ -827,7 +876,7 @@ export class ChatStateManager {
         await this._discoverLocalModels();
         if (this._runtimeReady) {
           const model = this._normalizeModelSelection(this._activeModel);
-          this._activeModel = model;
+          this._setActiveModel(model);
           this._post({ type: 'model', payload: { model } });
           this._postProviderBadge(model);
         }
@@ -835,17 +884,7 @@ export class ChatStateManager {
       }
 
       case 'getModel': {
-        const model = normalizeConfiguredModelId(Config.model());
-        this._post({ type: 'model', payload: { model } });
-        this._postProviderBadge(model);
-        this._post({
-          type: 'effortChanged',
-          payload: {
-            effort: this._effort ?? Config.agentEffort(),
-            supportsEffort: this.modelSupportsEffort(model),
-            efforts: this.modelEffortLevels(model),
-          },
-        });
+        this._showModel(this._activeModel);
         break;
       }
 
@@ -930,6 +969,8 @@ export class ChatStateManager {
         this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
+        this._followDefaultModel();
+        await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 
@@ -967,6 +1008,8 @@ export class ChatStateManager {
         this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
+        this._followDefaultModel();
+        await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 
@@ -1101,7 +1144,7 @@ export class ChatStateManager {
           break;
         }
         if (msg.payload.kind === 'switch-model') {
-          await vscode.commands.executeCommand('agi-workforce.selectModel');
+          await this.handleMessage({ type: 'openModelPopover' });
           break;
         }
         if (msg.payload.kind === 'update-extension') {
@@ -1165,7 +1208,7 @@ export class ChatStateManager {
         if (await setAgentEffortWithConsent(this._context, effort)) {
           this._effort = effort;
         }
-        const model = normalizeConfiguredModelId(Config.model());
+        const model = this._activeModel;
         this._post({
           type: 'effortChanged',
           payload: {
@@ -1208,7 +1251,7 @@ export class ChatStateManager {
 
       case 'openModelPopover': {
         const localModels = await this._discoverLocalModels();
-        const currentModel = this._normalizeModelSelection(Config.model());
+        const currentModel = this._activeModel;
         const tier = await resolveTier(this._context);
         const allItems = buildGroupedQuickPickItems(tier);
         const groups: Array<{
@@ -1336,21 +1379,7 @@ export class ChatStateManager {
           );
           break;
         }
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('model', normalized, vscode.ConfigurationTarget.Global);
-        this._activeModel = normalized;
-        this._post({ type: 'model', payload: { model: normalized } });
-        this._postProviderBadge(normalized);
-        this._post({
-          type: 'effortChanged',
-          payload: {
-            effort: this._effort ?? Config.agentEffort(),
-            supportsEffort: this.modelSupportsEffort(normalized),
-            efforts: this.modelEffortLevels(normalized),
-          },
-        });
-        await this._pushUsageMeterOnBoundaryChange();
+        await this.selectModel(normalized);
         break;
       }
 
@@ -1805,7 +1834,7 @@ export class ChatStateManager {
           MODEL_UNAVAILABLE,
         );
       }
-      this._activeModel = model;
+      this._setActiveModel(model);
       this._startNewEpoch();
       this._dropQueuedSends('Queued follow-up cancelled when another session was opened.');
       this._pendingAttachments.splice(0);
@@ -1930,19 +1959,8 @@ export class ChatStateManager {
   }
 
   public syncActiveModelFromConfiguration(): void {
-    const model = this._normalizeModelSelection(Config.model());
-    if (model === this._activeModel) return;
-    this._activeModel = model;
-    this._post({ type: 'model', payload: { model } });
-    this._postProviderBadge(model);
-    this._post({
-      type: 'effortChanged',
-      payload: {
-        effort: this._effort ?? Config.agentEffort(),
-        supportsEffort: this.modelSupportsEffort(model),
-        efforts: this.modelEffortLevels(model),
-      },
-    });
+    if (this._thread !== undefined) return;
+    this._followDefaultModel();
   }
 
   /**
@@ -2087,6 +2105,7 @@ export class ChatStateManager {
   dispose(): void {
     for (const listener of this._editorContextListeners) listener.dispose();
     this._editorContextListeners.length = 0;
+    this._activeModelChanged.dispose();
   }
 
   /**
@@ -2148,18 +2167,10 @@ export class ChatStateManager {
     this._effort = undefined;
     this._post({ type: 'conversationCleared' });
 
-    const mode = Config.agentMode();
-    const effort = Config.agentEffort();
-    this._post({ type: 'modeChanged', payload: { mode } });
-    const model = normalizeConfiguredModelId(Config.model());
-    this._post({
-      type: 'effortChanged',
-      payload: {
-        effort,
-        supportsEffort: this.modelSupportsEffort(model),
-        efforts: this.modelEffortLevels(model),
-      },
-    });
+    this._post({ type: 'modeChanged', payload: { mode: Config.agentMode() } });
+    this._setActiveModel(this._normalizeModelSelection(Config.model()));
+    this._showModel(this._activeModel);
+    void this._pushUsageMeterOnBoundaryChange();
   }
 
   cancelInFlight(): void {
@@ -2719,7 +2730,7 @@ export class ChatStateManager {
       );
       return false;
     }
-    this._activeModel = requestedModel;
+    this._setActiveModel(requestedModel);
     const requestedProviderBoundary = samePersistedLocalModel
       ? (this._thread?.providerBoundary ?? this._providerBoundaryForModel(requestedModel))
       : this._providerBoundaryForRequestedModel(requestedModel, this._thread?.trustMode);
