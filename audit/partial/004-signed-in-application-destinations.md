@@ -314,17 +314,14 @@ Code: `apps/web/shared/stores/media-store.ts:29-41`, `packages/ui/unified-chat/s
 
 - Done when: A notebook workspace holds a set of sources and notes that the user reads, annotates and chats over, with generated outputs (NotebookLM-style).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
-| desktop | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1122-1127`, `apps/web/features/notebook/NotebookPanel.tsx:12-32`
 
 ## S4.32: Research report reader.
 
