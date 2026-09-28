@@ -108,6 +108,8 @@ import { approvalToolIdentity, approvalToolLabel } from '../permissions/approval
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
+import { OPEN_PROJECT_COMMAND } from '../projects/projectsTree';
+import { resolveStartSuggestions, type StartSuggestions } from './startSuggestions';
 import {
   buildWorkspaceReferenceInputs,
   isWorkspaceFileReference,
@@ -248,6 +250,7 @@ export type WebviewToExtMessage =
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
   | { type: 'regenerate' }
+  | { type: 'openSuggestedProject'; payload: { projectId: string } }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
 export type ExtToWebviewMessage =
@@ -287,6 +290,7 @@ export type ExtToWebviewMessage =
   | { type: 'conversationCleared' }
   | { type: 'sessionBinding'; payload: { epoch: number } }
   | { type: 'activeProject'; payload: { name: string | null } }
+  | { type: 'startSuggestions'; payload: StartSuggestions }
   | {
       type: 'recentConversations';
       payload: {
@@ -753,6 +757,7 @@ export class ChatStateManager {
 
         await this.refreshAccountPresentation();
         await this.pushRecentConversations();
+        void this.pushStartSuggestions();
         this.pushActiveProject();
         this.pushEditorContext();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
@@ -1002,6 +1007,11 @@ export class ChatStateManager {
 
       case 'requestSlashCommands': {
         await this._pushSlashCommands();
+        break;
+      }
+
+      case 'openSuggestedProject': {
+        await vscode.commands.executeCommand(OPEN_PROJECT_COMMAND, msg.payload.projectId);
         break;
       }
 
@@ -1497,6 +1507,13 @@ export class ChatStateManager {
     const active =
       this._workspaceState === undefined ? undefined : getActiveCloudProject(this._workspaceState);
     this._post({ type: 'activeProject', payload: { name: active?.name ?? null } });
+  }
+
+  public async pushStartSuggestions(): Promise<void> {
+    this._post({
+      type: 'startSuggestions',
+      payload: await resolveStartSuggestions(this._secrets, this._cliCapabilities),
+    });
   }
 
   public async pushRecentConversations(): Promise<void> {
