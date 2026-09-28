@@ -35,9 +35,9 @@ Code: `packages/contracts/types/src/message-block-kinds.ts:6-6`, `packages/contr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The registry compiles to TS and Rust with a CI check and a repo-wide model-id literal scan, but RouteEconomicsPanel restates capability sources and 4 web/mobile files restate provider identity (baselined in check-client-inference). | surface-only |
+| platform | partial | partials/platform 26d3c444c8: the web media service types image and video providers from cloud-contracts and the company hub store from Provider in @agiworkforce/types; both left the check-client-inference baseline (97 to 95). Still baselined: RouteEconomicsPanel restates capability sources (web admin), LandingSections.tsx and RouteFlow.tsx restate provider identity (web marketing), apps/mobile/lib/providerStreamClient.ts (mobile, post-codex), and apps/desktop OnboardingWizard.tsx, types/media.ts and types/provider.ts (p-electron). | surface-only |
 
-Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, `scripts/check-no-hardcoded-model-ids.mjs:497-503`, `scripts/check-client-inference.baseline.json:592-595`
+Code: `apps/web/features/media/services/media-api-service.ts:18-18`, `apps/web/features/media/services/media-api-service.ts:41-41`, `apps/web/shared/stores/company-hub-store.ts:10-10`
 
 ## S101.07: Shared capability resolution.
 
@@ -90,9 +90,9 @@ Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts:223-2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform f853f758d0, 2d9751cdd2: client-runtime carries the one bounded, spec-following SSE decoder (Chrome's, with event and id kept) and readServerSentEvents, and the web guest chat reads through it. check:sse-readers fails a client that frames SSE by hand. Pending with owners: web useChatStream, mobile streaming, Chrome boundedSseDecoder, VS Code utils/api and desktop cloudApi. Retry and reconnect logic is still per client | surface-only |
+| platform | partial | partials/platform 5a5cc103fb: readServerSentEvents takes acceptUnterminatedFinalFrame, so a client whose server may close without a blank line keeps the last event; the mobile adoption is saved as post-codex/p-platform-S101.12-mobile-sse-reader.patch. Chrome has adopted the shared decoder. Pending with owners in check:sse-readers: web useChatStream (p-mcp-web), mobile streaming (post-codex patch), VS Code utils/api (p-sessions), desktop cloudApi (p-electron). Retry and reconnect stay per client. | surface-only |
 
-Code: `packages/client/client-runtime/src/sse.ts:18-18`, `packages/client/client-runtime/src/sse.ts:145-145`, `apps/web/features/chat/guest/guest-chat-stream.ts:94-94`, `scripts/check-sse-readers.mjs:54-54`
+Code: `packages/client/client-runtime/src/sse.ts:18-18`, `packages/client/client-runtime/src/sse.ts:140-140`, `packages/client/client-runtime/src/sse.ts:150-150`, `scripts/check-sse-readers.mjs:54-54`
 
 ## S101.13: Shared conversation-state logic.
 
@@ -310,17 +310,6 @@ Code: `scripts/check-config-keys.mjs:19-20`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Crypto envelopes live inside the web app, not a package; VS Code keeps its own redactSecrets beside the shared one; the no-AAD ratchet still admits two legacy call sites. | surface-only |
+| platform | partial | partials/platform 60e1244ae2, 391224e764: redactSecrets lives in @agiworkforce/utils, isPathInside in the local-runtime contract and the envelope in apps/web/lib/crypto, the only place a raw cipher may run (Web Push exempt, RFC 8291). The envelope stays in the web app because check:package-runtimes proves no client bundle root imports it. Left, recorded with owner and fix in check:security-helpers: four second redactSecrets copies (VS Code telemetry, p-sessions; web support handoff transcript, p-auth; web secrets audit; Guardian adapters), and the two legacy no-associated-data call sites check:crypto-context-binding still admits (connector-secret-reseal.ts, cmek-lifecycle.ts) until their re-seal completes. | surface-only |
 
-Code: `apps/extension-vscode/src/core/telemetry.ts:44-48`, `packages/platform/utils/src/logger.ts:239-243`, `scripts/check-crypto-context-binding.mjs:32-39`
-
-## S101.38: Explicit browser-only, server-only, and native-only exports.
-
-- Done when: Shared packages declare browser-only, server-only and native-only entry points explicitly.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | No package declares browser, node or react-native export conditions or imports server-only; runtime splits are ad hoc subpaths (identity ./browser, client-runtime ./node). | surface-only |
-
-Code: `packages/platform/identity/package.json:9-12`, `packages/client/client-runtime/package.json:9-12`
+Code: `scripts/check-security-helpers.mjs:19-19`, `scripts/check-security-helpers.mjs:28-28`, `scripts/check-security-helpers.mjs:110-110`, `scripts/check-package-runtimes.mjs:32-32`
