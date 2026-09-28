@@ -8,6 +8,13 @@ import {
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
+
+export interface LiveVoiceToolOutcome {
+  callId: string;
+  label: string;
+  output: string;
+  isError: boolean;
+}
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
@@ -108,6 +115,8 @@ export interface LiveVoiceSessionCallbacks {
   /** A spoken claim of a completed action with no tool result behind it. */
   onUnverifiedClaim?: (turn: LiveTranscriptTurn) => void;
   onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
+  /** A function tool's result, so the surface can show what the voice turn got back. */
+  onToolResult?: (outcome: LiveVoiceToolOutcome) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
@@ -289,6 +298,13 @@ export class LiveVoiceSession {
         this.publishToolActivity();
       },
       onToolCompleted: (name) => this.completedTools.push(name),
+      onToolResult: (result) =>
+        this.callbacks.onToolResult?.({
+          callId: result.callId,
+          label: this.describeTool(result.name).label,
+          output: result.output,
+          isError: result.isError,
+        }),
     });
   }
 

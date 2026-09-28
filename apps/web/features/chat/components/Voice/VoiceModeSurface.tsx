@@ -32,6 +32,11 @@ const LABEL = {
   cameraPreview: 'Preview of what your camera is sharing',
   cameraSharing: 'Your camera is being shared with this call.',
   approvalTitle: 'Waiting for your approval',
+  stopTask: 'Stop the task',
+  stopTaskHint: 'Stops the running action and keeps the call open.',
+  slowTool: 'is taking longer than usual',
+  toolResults: 'What the actions returned',
+  toolFailed: 'Did not complete',
 } as const;
 
 const ESCAPE = 'Escape';
@@ -254,6 +259,62 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {session.toolActivity.length > 0 ? (
+        <div data-testid="voice-tool-activity" className="flex w-full max-w-md flex-col gap-2">
+          {session.toolActivity.map((activity) => (
+            <div
+              key={activity.delegationId}
+              className="flex items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm text-[var(--chat-text-primary)]"
+            >
+              {activity.state === 'running' ? (
+                <Spinner size="sm" className="h-4 w-4 shrink-0" />
+              ) : (
+                <CircleAlert
+                  className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                {activity.state === 'timed_out'
+                  ? `${activity.label} ${LABEL.slowTool}`
+                  : activity.label}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            data-testid="voice-stop-task"
+            onClick={session.cancelBackendWork}
+            title={LABEL.stopTaskHint}
+            className="min-h-11 self-center rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+          >
+            {LABEL.stopTask}
+          </button>
+        </div>
+      ) : null}
+      {session.toolOutcomes.length > 0 ? (
+        <details data-testid="voice-tool-results" className="w-full max-w-md text-sm">
+          <summary className="cursor-pointer text-[var(--chat-text-secondary)]">
+            {LABEL.toolResults}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-2">
+            {session.toolOutcomes.map((outcome) => (
+              <li
+                key={outcome.callId}
+                className="rounded-lg border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-2"
+              >
+                <p className="font-medium text-[var(--chat-text-primary)]">
+                  {outcome.label}
+                  {outcome.isError ? ` · ${LABEL.toolFailed}` : null}
+                </p>
+                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-[var(--chat-text-secondary)]">
+                  {outcome.output}
+                </pre>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {session.toolApprovals.map((approval) => (
         <ApprovalCard
           key={approval.callId}
