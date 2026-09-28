@@ -3,6 +3,7 @@ import 'server-only';
 import {
   fetchLatestDesktopRelease,
   isTrustedGitHubReleaseAssetUrl,
+  resolveDesktopReleaseRepository,
   type StableDesktopRelease,
 } from './github-desktop-releases';
 
@@ -26,10 +27,54 @@ export interface CliReleaseDownload {
   sizeBytes: number | null;
 }
 
+export interface CliReleaseNotes {
+  summary: string | null;
+  url: string;
+}
+
 export interface CliReleaseAvailability {
   version: string;
   publishedAt: string;
   downloads: CliReleaseDownload[];
+  releaseNotes: CliReleaseNotes;
+}
+
+const RELEASE_SUMMARY_MAX_CHARS = 280;
+const RELEASE_SUMMARY_MAX_ITEMS = 3;
+
+function plainReleaseLine(line: string): string {
+  return line
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+by @[\w-]+(?:\s+in\s+\S+)?\s*$/, '')
+    .replace(/[`*_>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function summarizeCliReleaseNotes(markdown: string): string | null {
+  const items = markdown
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => !/^\s*#{1,6}\s/.test(line) && !/^\s*\*\*Full Changelog\*\*/i.test(line))
+    .map(plainReleaseLine)
+    .filter((line) => line.length > 0)
+    .slice(0, RELEASE_SUMMARY_MAX_ITEMS);
+  if (items.length === 0) return null;
+  const summary = items.join('; ');
+  if (summary.length <= RELEASE_SUMMARY_MAX_CHARS) return summary;
+  const cut = summary.slice(0, RELEASE_SUMMARY_MAX_CHARS);
+  const wordEnd = cut.lastIndexOf(' ');
+  return `${cut.slice(0, wordEnd > 0 ? wordEnd : cut.length)}…`;
+}
+
+function cliReleaseNotes(release: StableDesktopRelease): CliReleaseNotes {
+  const { owner, repo } = resolveDesktopReleaseRepository();
+  return {
+    summary: summarizeCliReleaseNotes(release.notes),
+    url: `https://github.com/${owner}/${repo}/releases/tag/${encodeURIComponent(release.tagName)}`,
+  };
 }
 
 const ARCHIVE_BASENAMES: Record<CliReleasePlatform, readonly string[]> = {
@@ -105,5 +150,10 @@ export async function fetchCliReleaseAvailability(): Promise<CliReleaseAvailabil
   );
   if (downloads.length === 0) return null;
 
-  return { version: release.version, publishedAt: release.publishedAt, downloads };
+  return {
+    version: release.version,
+    publishedAt: release.publishedAt,
+    downloads,
+    releaseNotes: cliReleaseNotes(release),
+  };
 }
