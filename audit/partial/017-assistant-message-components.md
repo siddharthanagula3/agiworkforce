@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: Assistant turns are distinguishable from the user's visually and to assistive tech, ideally naming the assistant/model (R-n).
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Assistant turns differ only by styling in the sidebar; add a per-message author/model label that screen readers announce (the provider badge sits in the header). | ui |
 | chrome | partial | Assistant bubbles are only left-aligned; add a per-message author/model label for screen readers (the served model is stored on the message but never shown). | ui |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:517-520`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5041-5045`, `apps/extension/src/features/side-panel/bubbles.ts:225-227`, `apps/extension/src/side_panel.ts:627-632`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:225-227`, `apps/extension/src/side_panel.ts:627-632`, `apps/extension/src/side_panel.ts:4427-4427`
 
 ## S17.06: Source citations.
 
@@ -28,10 +27,9 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:517-
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | With 'Browse web' on, the prompt only asks the model to write source URLs into its text; add structured citation markers/links from search results. | ui |
 | chrome | partial | Sources appear only as links on search steps inside the agent-activity timeline; answers have no inline citation markers. | ui |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2405-2408`, `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extension/src/side_panel.ts:4427-4427`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extension/src/side_panel.ts:4427-4427`
 
 ## S17.07: Sources footer.
 
@@ -56,10 +54,9 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extensi
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Files the agent writes show only as tool rows naming the path; add a per-answer list of produced files with an open action. | ui |
-| vscode | partial | Edited/created files surface as diff proposals to accept or reject; there is no file card on the answer itself. | ui |
 | chrome | partial | Generated files arrive and are stored on the message but the bubble never renders them; only artifact steps inside the activity timeline get an 'Open or download' link. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5377-5383`, `apps/extension/src/side_panel.ts:10791-10796`
+Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`
 
 ## S17.09: Artifact launch cards.
 
@@ -109,9 +106,8 @@ Code: `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/featur
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Only MCP elicitation forms and approval prompts are interactive in the terminal; answer cards (choices, maps) are not rendered. | ui |
-| vscode | partial | Only plan cards and tool-approval cards are interactive; answer cards (choices, maps, actions) are not supported. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5580`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5401-5409`
+Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`
 
 ## S17.14: Follow-up suggestions.
 
@@ -124,7 +120,6 @@ Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-96
 | desktop | partial | Same as web (hosted): Follow-up suggestions are off by default (FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false, never overridden); they appear only after a web-searched answer. Turn them on for ordinary answers. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the native @agi Chat participant offers follow-ups, and they are three fixed commands (/explain, /fix, /tests) regardless of the answer; the sidebar offers none. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1280-1288`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
@@ -145,15 +140,14 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`
 
 - Done when: A completed answer can be regenerated in place, producing a new attempt for the same prompt.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the command-palette 'Retry Last Message' re-sends the last prompt as a new turn; add a Regenerate control on the answer. | ui |
 | chrome | partial | Retry is offered only on failed or stopped answers; a completed answer cannot be regenerated. | ui |
 
-Code: `apps/extension-vscode/src/features/chat/retry.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2385-2389`, `apps/extension/src/features/side-panel/bubbles.ts:185-208`, `apps/extension/src/side_panel.ts:4974-4997`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:185-208`, `apps/extension/src/side_panel.ts:4974-4997`
 
 ## S17.20: Retry failed answer.
 
@@ -381,13 +375,12 @@ Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/featur
 
 - Done when: For each answer the user can see which model actually answered and its usage (tokens/cost/time).
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The answering model is shown per answer; token/cost usage is shown only as tokens-per-second for on-device models, not for cloud answers. | ui |
 | cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
-| vscode | partial | Only the header provider badge and a session token counter (status bar) exist; add per-answer model and usage. | ui |
 | chrome | partial | The served model is stamped on each answer but never displayed, and no usage is shown; render model and usage per answer. | ui |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1113-1124`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`, `apps/cli/src/tui/tui_app.rs:3897-3910`

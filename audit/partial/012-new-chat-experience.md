@@ -235,10 +235,9 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 | desktop | partial | Same as web: only visible inside the account menu. | ui |
 | mobile | partial | Show the active workspace on the new-chat screen; today it is visible only under Settings > Workspace. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Name the personal/organization workspace; the header shows the Local/BYOK/Managed boundary and, in a tooltip, the signed-in account and plan only. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:76-76`, `apps/web/features/workspaces/components/WorkspaceMenuItems.tsx:72-80`, `apps/mobile/src/features/settings/index.tsx:450-456`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2871-2876`
+Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:76-76`, `apps/web/features/workspaces/components/WorkspaceMenuItems.tsx:72-80`, `apps/mobile/src/features/settings/index.tsx:450-456`
 
 ## S12.20: Default-Project selection.
 
@@ -256,6 +255,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448
 
 - Done when: The new-chat screen explains the available modes and gives examples of what each is for.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -263,7 +263,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448
 | desktop | partial | Same as web: titles only, no examples. | ui |
 | mobile | partial | Add examples; today one line explains Local vs Cloud. | ui |
 | cli | partial | Add examples; the welcome names the access modes and the Shift+Tab mode switch only. | ui |
-| vscode | partial | Add examples; each permission mode has a one-line description only. | ui |
 | chrome | partial | Add examples; Quick and Auto each have a one-line description only. | ui |
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:251-254`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:270-273`, `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app.rs:1476-1488`
@@ -272,14 +271,13 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:251-254`, 
 
 - Done when: An unsent draft typed in a new chat is restored when the user returns (after navigation or reload).
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | restorablePendingDraft() returns '' unless a popstate preceded the mount, and the reload claim is spent once per document, so a push back to /chat (sidebar Chat) mounts an empty composer; the parked text stays in sessionStorage only for Back. Matches live LQA-02 at this SHA. |  |
 | desktop | partial | restorablePendingDraft() returns '' unless a popstate preceded the mount, and the reload claim is spent once per document, so a push back to /chat (sidebar Chat) mounts an empty composer; the parked text stays in sessionStorage only for Back. Matches live LQA-02 at this SHA. Desktop renders the same hosted web code. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Save the unsent text so it survives a window reload; today it survives only hiding the panel (retainContextWhenHidden). | persistence |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3184-3199`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3137-3156`, `apps/web/features/chat/components/Composer/ComposerInput.tsx:128-138`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`
@@ -294,7 +292,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3184-3199`
 | --- | --- | --- | --- |
 | web | partial | Let signed-out visitors try chat within guest limits; today /chat sends anyone signed out straight to sign-in. | ui, handler |
 | desktop | partial | Same as web: signed-out users are redirected to sign-in. | ui, handler |
-| vscode | partial | Let VS Code users chat without an account from inside the extension; today Local/your-key use needs the separately installed AGI CLI (not yet on npm) with a local model server or provider key set up in the CLI. | ui |
 | chrome | partial | Offer limited guest chat; today signed-out users get a sign-in gate and a disabled composer. | ui, handler |
 
-Code: `apps/web/app/chat/layout.tsx:18-20`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2521-2521`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4420-4420`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2828-2834`
+Code: `apps/web/app/chat/layout.tsx:18-20`, `apps/extension/src/side_panel.ts:440-457`
