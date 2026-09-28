@@ -44,7 +44,9 @@ import {
   REFRESH_SCHEDULES_COMMAND,
   RESUME_SCHEDULE_COMMAND,
   RUN_SCHEDULE_NOW_COMMAND,
+  SCHEDULE_RUN_OUTPUT_SCHEME,
   SHOW_SCHEDULE_RUNS_COMMAND,
+  ScheduleRunOutputProvider,
   SchedulesTreeProvider,
   readScheduleCommandArgument,
   resolveSchedulesClient,
@@ -631,7 +633,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }
     await act(resolution.client, task);
   };
-  const scheduleActionHost = { onChanged: () => schedulesTreeProvider.refresh() };
+  const scheduleRunOutputs = new ScheduleRunOutputProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      SCHEDULE_RUN_OUTPUT_SCHEME,
+      scheduleRunOutputs,
+    ),
+    scheduleRunOutputs,
+  );
+  const scheduleActionHost = {
+    onChanged: () => schedulesTreeProvider.refresh(),
+    outputs: scheduleRunOutputs,
+  };
   const projectDetailHost = {
     webOrigin: getCloudWebOrigin(),
     workspaceState: context.workspaceState,
