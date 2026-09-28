@@ -345,7 +345,11 @@
     "runningTools_one": "도구 {{count}}개 실행 중",
     "runningTools_other": "도구 {{count}}개 실행 중",
     "runningToolsOf_one": "도구 실행 중 {{running}}/{{count}}: {{name}}",
-    "runningToolsOf_other": "도구 실행 중 {{running}}/{{count}}: {{name}}"
+    "runningToolsOf_other": "도구 실행 중 {{running}}/{{count}}: {{name}}",
+    "guestDailyLimit_one": "계정 없이 하루에 메시지를 {{count}}개까지 보낼 수 있습니다.",
+    "guestDailyLimit_other": "계정 없이 하루에 메시지를 {{count}}개까지 보낼 수 있습니다.",
+    "guestMessagesLeft_one": "계정 없이 오늘 보낼 수 있는 메시지가 {{count}}개 남았습니다.",
+    "guestMessagesLeft_other": "계정 없이 오늘 보낼 수 있는 메시지가 {{count}}개 남았습니다."
   },
   "markdownTable": {
     "label": "표",

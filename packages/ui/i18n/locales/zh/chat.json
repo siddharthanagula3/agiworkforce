@@ -345,7 +345,11 @@
     "runningTools_one": "正在运行 {{count}} 个工具",
     "runningTools_other": "正在运行 {{count}} 个工具",
     "runningToolsOf_one": "正在运行工具 {{running}}/{{count}}：{{name}}",
-    "runningToolsOf_other": "正在运行工具 {{running}}/{{count}}：{{name}}"
+    "runningToolsOf_other": "正在运行工具 {{running}}/{{count}}：{{name}}",
+    "guestDailyLimit_one": "没有账户时，每天可发送 {{count}} 条消息。",
+    "guestDailyLimit_other": "没有账户时，每天可发送 {{count}} 条消息。",
+    "guestMessagesLeft_one": "没有账户时，今天还可发送 {{count}} 条消息。",
+    "guestMessagesLeft_other": "没有账户时，今天还可发送 {{count}} 条消息。"
   },
   "markdownTable": {
     "label": "表格",

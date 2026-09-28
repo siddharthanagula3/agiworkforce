@@ -345,7 +345,11 @@
     "runningTools_one": "{{count}} 個のツールを実行中",
     "runningTools_other": "{{count}} 個のツールを実行中",
     "runningToolsOf_one": "ツールを実行中 {{running}}/{{count}}: {{name}}",
-    "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}"
+    "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}",
+    "guestDailyLimit_one": "アカウントなしで送信できるのは1日 {{count}} 件までです。",
+    "guestDailyLimit_other": "アカウントなしで送信できるのは1日 {{count}} 件までです。",
+    "guestMessagesLeft_one": "アカウントなしで今日送信できるのはあと {{count}} 件です。",
+    "guestMessagesLeft_other": "アカウントなしで今日送信できるのはあと {{count}} 件です。"
   },
   "markdownTable": {
     "label": "表",
