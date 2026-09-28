@@ -117,9 +117,8 @@ import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import type { StreamChunk } from '@agiworkforce/types';
-import { getModelMetadataById, getTierPolicy, isFreeBillingPlanTier } from '@agiworkforce/types';
-import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
-import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
+import { connectorsAllowedForTurn } from './lib/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -775,28 +774,9 @@ async function dispatchChatCompletions(
     // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
-    const connectorsSwitchedOff = await readKillSwitchGate(
-      buildFlagSubject(request, {
-        userId,
-        workspaceId: processed.organizationId ?? null,
-        role: null,
-        plan: processed.subscriptionTier ?? null,
-        surface: processed.chatSurface,
-      }),
-    ).then(
-      (gate) => !gate.capabilityAllowed('canUseConnectors'),
-      (gateError: unknown) => {
-        logger.error(
-          { error: gateError, userId },
-          'Kill-switch gate unreadable; connectors are offered as shipped',
-        );
-        return false;
-      },
-    );
     const userConnectorToolsEnabled =
-      Boolean(getTierPolicy(processed.subscriptionTier).allowMCP) &&
-      !connectorsSwitchedOff &&
-      processed.chatRequest.connector_tools_enabled !== false;
+      processed.chatRequest.connector_tools_enabled !== false &&
+      (await connectorsAllowedForTurn(request, userId, processed));
     const operatorTools = modelSupportsTools
       ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
       : [];
