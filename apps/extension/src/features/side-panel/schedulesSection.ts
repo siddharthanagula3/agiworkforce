@@ -36,7 +36,13 @@ export const SCHEDULES_SECTION_CSS = `
     gap: 8px;
     padding: 8px 14px 4px;
   }
-  .sp-schedules-title { flex: 1; font-size: var(--type-caption-size); color: var(--agi-ext-text); }
+  .sp-schedules-title {
+    flex: 1;
+    font-size: var(--type-caption-size);
+    font-weight: 600;
+    line-height: var(--type-caption-height);
+    color: var(--agi-ext-text);
+  }
   .sp-schedules-status {
     padding: 0 14px 6px;
     font-size: var(--type-caption-size);
@@ -274,7 +280,7 @@ export function buildSchedulesSection(
 
   const sectionEl = el('div', { class: 'sp-schedules', id: 'sp-schedules' });
   const head = el('div', { class: 'sp-schedules-head' });
-  head.appendChild(el('div', { class: 'sp-schedules-title' }, t('spSchedulesTitle')));
+  head.appendChild(el('h2', { class: 'sp-schedules-title' }, t('spSchedulesTitle')));
   const newBtn = el(
     'button',
     {
