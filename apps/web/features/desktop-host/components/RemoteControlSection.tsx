@@ -8,6 +8,7 @@ import {
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
+import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
@@ -18,8 +19,11 @@ const INTRO =
   'Pair your phone to follow AGI Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
 const HOW_TO_PAIR =
   'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
+const BROWSER_PAIRING =
+  'To send tasks from a browser instead, copy a link and open it in a browser signed in to this account. The link works once, like the code.';
 const PAIR_FAILED = 'Pairing could not start.';
 const STOP_FAILED = 'Remote Control could not be stopped.';
+const COPY_LINK_FAILED = 'The link could not be copied. Pair from the phone instead, or try again.';
 const RECONNECTING = 'Connection lost. Reconnecting so your phone can pick up where it left off.';
 const DISCONNECT_CONSEQUENCE =
   'The phone is disconnected from this computer and can no longer follow or steer its sessions. To connect it again, pair it with a new code.';
@@ -81,6 +85,7 @@ export function RemoteControlSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
@@ -101,6 +106,7 @@ export function RemoteControlSection() {
 
   const qrPayload = state?.status === 'waiting' ? state.qrPayload : null;
   useEffect(() => {
+    setLinkCopied(false);
     if (!qrPayload) {
       setQrImage(null);
       return undefined;
@@ -137,6 +143,17 @@ export function RemoteControlSection() {
       setBusy(false);
     }
   }, []);
+
+  const onCopyLink = useCallback(async () => {
+    if (!qrPayload) return;
+    try {
+      await navigator.clipboard.writeText(browserPairingLink(window.location.origin, qrPayload));
+      setError(null);
+      setLinkCopied(true);
+    } catch {
+      setError(COPY_LINK_FAILED);
+    }
+  }, [qrPayload]);
 
   const onStop = useCallback(async () => {
     setBusy(true);
@@ -186,6 +203,17 @@ export function RemoteControlSection() {
               {state.pairingCode}
             </span>
           ) : null}
+          <p className="text-xs text-muted-foreground">{BROWSER_PAIRING}</p>
+          <div className="flex items-center gap-2">
+            <button type="button" className={BUTTON_CLASS} onClick={() => void onCopyLink()}>
+              Copy link for a browser
+            </button>
+            {linkCopied ? (
+              <span className="text-xs text-muted-foreground" role="status">
+                Link copied
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

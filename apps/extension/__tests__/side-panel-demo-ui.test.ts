@@ -15,7 +15,7 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain("historyBtn.addEventListener('click', openRecents)");
     expect(source).toContain("id: 'sp-recents'");
     expect(source).toContain("id: 'sp-drawer-history-search'");
-    expect(source).toContain('filterConversations(entries, drawerHistorySearch.value)');
+    expect(source).toContain('filterConversations(ordered, drawerHistorySearch.value)');
     expect(source).toContain(
       'drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD',
     );
@@ -44,8 +44,8 @@ describe('Chrome side-panel demo surface', () => {
   });
 
   it('does not let a delayed delete clear a newer restored conversation', () => {
-    const start = source.indexOf("delBtn.addEventListener('click'");
-    const end = source.indexOf('item.appendChild(delBtn)', start);
+    const start = source.indexOf('function deleteHistoryEntry(');
+    const end = source.indexOf('function buildHistoryMenu(', start);
     const deleteBody = source.slice(start, end);
 
     expect(deleteBody).toContain('const deletionGeneration = _ctx.conversationGeneration');

@@ -47,6 +47,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   translateUiPlural,
+  useDialogKeyboard,
 } from '@agiworkforce/ui';
 import { MarkdownContent, useChatProjectStore } from '@agiworkforce/unified-chat';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
@@ -62,7 +63,6 @@ import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
 import { formatSourceDate } from '../../utils/research-sources';
 import { toUserMessage } from '@/lib/user-error-message';
-import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
 
 // ============================================================================
 // Markdown assembly (export payload)
@@ -396,7 +396,7 @@ export function ResearchReportView({
   }, [headings, reading]);
 
   const closeReader = useCallback(() => setReading(false), []);
-  useOverlayDialog(readerRef, reading, closeReader);
+  useDialogKeyboard({ open: reading, onClose: closeReader, panelRef: readerRef });
 
   useEffect(() => {
     if (wasReadingRef.current && !reading) readerToggleRef.current?.focus();

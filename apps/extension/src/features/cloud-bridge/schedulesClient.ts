@@ -38,6 +38,9 @@ export type ChromeScheduleRunResult = { status: 'success'; replay: boolean } | C
 export type ChromeScheduleApprovalResult =
   { status: 'success'; run: ManagedCloudScheduleRun | null } | ChromeSchedulesError;
 
+export type ChromeScheduleRunsResult =
+  { status: 'success'; runs: ManagedCloudScheduleRun[]; hasMore: boolean } | ChromeSchedulesError;
+
 function createDefaultClient(token: string): ManagedCloudSchedulesClient {
   return createManagedCloudSchedulesClient({
     baseUrl: FREE_TRIAL_GATEWAY,
@@ -145,6 +148,22 @@ export async function runChromeScheduleNow(
   );
   if (result.status === 'error') return result;
   return { status: 'success', replay: result.value.replay };
+}
+
+export async function listChromeScheduleRuns(
+  scheduleId: string,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleRunsResult> {
+  const result = await withSchedulesClient(dependencies, options.signal, (client) =>
+    client.listRuns(scheduleId, {
+      limit: CHROME_SCHEDULE_PAGE_SIZE,
+      offset: 0,
+      ...(options.signal ? { signal: options.signal } : {}),
+    }),
+  );
+  if (result.status === 'error') return result;
+  return { status: 'success', runs: result.value.runs, hasMore: result.value.hasMore };
 }
 
 export async function readChromeScheduleApproval(
