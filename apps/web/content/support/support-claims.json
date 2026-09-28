@@ -3546,7 +3546,7 @@
       "doc": "account-security",
       "section": "Second factors",
       "kind": "prose",
-      "sentence": "Hardware security keys, SMS MFA and trusted-device lists are not part of the current account contract, so they are not offered rather than silently ignored.",
+      "sentence": "Hardware security keys and SMS MFA are not part of the current account contract, so they are not offered rather than silently ignored.",
       "implementation": ["apps/web/features/auth"],
       "reason": "Which second factors exist is decided at the identity provider, not in this repository, so nothing here can assert that a factor is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
     },

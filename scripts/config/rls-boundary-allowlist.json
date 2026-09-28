@@ -146,8 +146,16 @@
       "reason": "reached only from the platform-admin service-health route gated by requirePlatformAdmin, the audit, checkpoint, device, queue and knowledge-file reads are deliberately cross-tenant aggregates that return counts, rates and latency percentiles, never a row or a user id"
     },
     {
+      "path": "apps/web/lib/connectors/mcp-custom-connections.ts",
+      "reason": "getCustomConnectorOAuthClient serves token refresh, discovery and the authorization callback, none of which carries the request connection, so it wraps the schema-owner pool in createClaimedUserScopedDb bound to the connector's owner in the personal workspace and the read runs under RLS as that user; every other statement in the module runs on the caller's scoped db"
+    },
+    {
       "path": "apps/web/lib/connectors/mcp-state-store.ts",
       "reason": "mcp_app_payloads and mcp_task_bindings had row-level security disabled and no grants at all for the app_rls role, so a scoped statement was refused outright; the grants, row-level security and policies now exist as draft migration 0173 (NOT YET APPLIED in production) and this file can move to getUserScopedDb once it is applied"
+    },
+    {
+      "path": "apps/web/lib/developer-api/project-spend.ts",
+      "reason": "the project spend check runs in the gateway's auth gate before any request-scoped connection exists; every statement runs under RLS through createClaimedUserScopedDb bound to the key's owner, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
       "path": "apps/web/lib/feature-flags/flag-store.ts",
@@ -212,6 +220,10 @@
     {
       "path": "apps/web/lib/services/cogs-ledger-service.ts",
       "reason": "operator cost reconciliation, deliberately cross-account: it reads settled managed_usage_requests rows for every account in a time window to compare them with provider cost events, so there is no single owner to bind a policy role to"
+    },
+    {
+      "path": "apps/web/lib/services/developer-webhook-service.ts",
+      "reason": "a webhook's first delivery attempt runs after the response, when the request connection is gone; it runs under RLS through createClaimedUserScopedDb bound to the endpoint's owner, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
       "path": "apps/web/lib/services/entitlement-resolution.ts",

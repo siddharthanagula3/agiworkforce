@@ -76,18 +76,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2257
 
 Code: `apps/extension-vscode/package.json:638-639`
 
-## S34.07: Public web search.
-
-- Done when: A chat can search the public web and answer from the results.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The "search the web" option only prefixes the prompt; the search runs in the local CLI and needs SEARCH_API_KEY set in its environment. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/cli/src/features/exec/tools/web/mod.rs:286-294`
-
 ## S34.15: Date-range filters.
 
 - Done when: The user can limit a search to a date range and get only results inside it.
@@ -205,18 +193,6 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 | chrome | partial | Only agent activity steps can be expanded to show up to 20 source links; answers have no sources list. | ui |
 
 Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
-
-## S34.27: Open original source.
-
-- Done when: From a citation or source card the user can open the original page/document.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | URLs in answers render as links (markdown-it linkify), but there are no citations or source cards to open from. | ui |
-
-Code: `apps/extension-vscode/src/webview/render.ts:5-7`
 
 ## S34.31: Search-result freshness information.
 

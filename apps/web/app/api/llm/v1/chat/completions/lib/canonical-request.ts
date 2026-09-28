@@ -22,6 +22,7 @@ import { getRoutePricing } from '@agiworkforce/model-registry';
 import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
+import { applyRequestParameters } from './request-parameters';
 
 type InternalMessage = ProcessedRequest['llmRequest']['messages'][number];
 
@@ -59,12 +60,17 @@ function splitTools(tools: unknown[] | undefined): {
   return { functionTools, rawVendorTools };
 }
 
-function gatewayUpstreamModelId(modelId: string, provider: string | undefined): string | undefined {
+function dispatchRoute(modelId: string, provider: string | undefined) {
   if (!provider) return undefined;
   const modelKey = normalizeModelId(modelId) ?? modelId;
-  const route =
+  return (
     getRegistryRoute(`${provider}/${modelKey}`) ??
-    getRegistryRoute(`${normalizeProviderId(provider) ?? provider}/${modelKey}`);
+    getRegistryRoute(`${normalizeProviderId(provider) ?? provider}/${modelKey}`)
+  );
+}
+
+function gatewayUpstreamModelId(modelId: string, provider: string | undefined): string | undefined {
+  const route = dispatchRoute(modelId, provider);
   if (!route) return undefined;
   if (!getGatewayHarness(route.harnessId) && route.isDefault) return undefined;
   return route.providerModelId;
@@ -135,6 +141,12 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
+  applyRequestParameters(
+    chatRequest,
+    llmRequest.requestParameters,
+    llmRequest.model,
+    dispatchRoute(llmRequest.model, processed.provider)?.harnessId,
+  );
   if (
     llmRequest.responseFormat &&
     getModelMetadataById(llmRequest.model)?.capabilities.json === true
