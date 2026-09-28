@@ -16,6 +16,7 @@ const { getOptionalAuthUserMock, getOrCreateAnonSessionMock, getIdentityUserMock
 );
 
 vi.mock('@/lib/api-auth', () => ({
+  getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: (...args: unknown[]) => getOptionalAuthUserMock(...args),
   getClerkAuthUser: vi.fn(),
   assertAccountActive: vi.fn(),
