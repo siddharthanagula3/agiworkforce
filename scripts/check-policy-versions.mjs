@@ -8,6 +8,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { runPolicyArchiveCheck } from './lib/policy-archive.mjs';
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const CONSTANTS = 'apps/web/lib/legal-constants.ts';
@@ -181,6 +183,14 @@ function main() {
   const flag = process.argv.indexOf('--root');
   const root = flag >= 0 ? path.resolve(process.argv[flag + 1]) : repoRoot;
   const failures = runPolicyVersionsCheck(root);
+  if (failures.length === 0) {
+    const registry = JSON.parse(fs.readFileSync(path.join(root, REGISTRY), 'utf8'));
+    const routes = readConstantObject(
+      fs.readFileSync(path.join(root, CONSTANTS), 'utf8'),
+      'CANONICAL_POLICY_ROUTES',
+    );
+    failures.push(...runPolicyArchiveCheck(root, registry, routes));
+  }
   if (failures.length > 0) {
     console.error('Published policy text and its dates have drifted apart:\n');
     for (const failure of failures) console.error(`  - ${failure}`);

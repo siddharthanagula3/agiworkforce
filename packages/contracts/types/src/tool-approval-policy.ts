@@ -34,7 +34,7 @@ export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
 export type ToolApprovalActionVerb = keyof typeof TOOL_APPROVAL_ACTION_LABELS;
 
 export const TOOL_APPROVAL_HIGH_RISK_NOTICE =
-  'High risk. Check the request below before you allow it.';
+  'Private data from this chat could be sent outside AGI Workforce. Check where it goes before you allow it.';
 
 export interface ToolApprovalPolicyOption {
   policy: ToolApprovalPolicy;

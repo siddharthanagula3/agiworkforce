@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -116,8 +116,8 @@ GitHub built-ins are declared, so `get_pull_request_diff` runs under
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. The
 three Memory tools are offered only on the web, desktop and mobile apps, only
-while Memory is on and the chat is not temporary, and they go through the same
-admission and never-remember list as `/remember` and `/forget`. Public
+while Memory is on and the chat is not temporary. A memory the model saves
+passes the same write admission and never-remember list as `/remember`. Public
 copy must say so in the same breath as any claim about approval, or the sentence
 reads worse than the reality.
 

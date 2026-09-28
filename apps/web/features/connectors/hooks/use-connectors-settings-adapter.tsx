@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import type {
+  CustomConnectorPreset,
   DirectoryAdapter,
   DirectoryConnectorDetail,
   SettingsDataAdapter,
   SettingsNavBadge,
 } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { ConnectorAccountSelector } from '@/features/connectors/components/ConnectorAccountSelector';
+import { ConnectorAccountSummary } from '@/features/connectors/components/ConnectorAccountSummary';
 import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
 import { ConnectorHealthDashboard } from '@/features/connectors/components/ConnectorHealthDashboard';
@@ -28,6 +29,7 @@ import {
   connectBankAccountsWithPlaid,
   plaidLinkRoutesOf,
 } from '@/features/connectors/lib/plaid-link';
+import { accountUrlConnector } from '@/lib/connectors/account-url-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -305,7 +307,19 @@ export type ConnectorsSettingsAdapterSlice = Pick<
   | 'customConnectorAuthTokenSupported'
   | 'customConnectorOAuthClientSupported'
   | 'customConnectorOAuthRedirectUri'
+  | 'customConnectorPreset'
 >;
+
+function accountUrlPreset(connectorId: unknown): CustomConnectorPreset | null {
+  const connector = typeof connectorId === 'string' ? accountUrlConnector(connectorId) : null;
+  if (!connector) return null;
+  return {
+    name: connector.name,
+    urlFormat: connector.urlFormat,
+    hint: `Paste the URL of your ${connector.name} MCP server. ${connector.name} does not register clients on its own, so sign in with an OAuth client your administrator created, with the redirect URI below, or with a personal access token as the bearer token.`,
+    documentationUrl: connector.documentationUrl,
+  };
+}
 
 export interface ToolPermissionsConnector {
   id: string;
@@ -332,6 +346,7 @@ function toolPermissionsTargetFor(
 export interface ConnectorsSettingsAdapterParams {
   open: boolean;
   authedHeaders: (base?: Record<string, string>) => Promise<Record<string, string>>;
+  onOpenCustomConnector?: () => void;
   directorySkillActions?: {
     onCreateSkill?: () => void;
     onEditSkill?: (name: string) => void;
@@ -341,6 +356,7 @@ export interface ConnectorsSettingsAdapterParams {
 
 export interface ConnectorsSettingsAdapterResult {
   adapter: ConnectorsSettingsAdapterSlice;
+  clearCustomConnectorPreset: () => void;
   directoryAdapter: DirectoryAdapter;
   navBadges: Partial<Record<string, SettingsNavBadge>> | undefined;
   toolPermissionsConnector: ToolPermissionsConnector | null;
@@ -350,9 +366,14 @@ export interface ConnectorsSettingsAdapterResult {
 export function useConnectorsSettingsAdapter({
   open,
   authedHeaders,
+  onOpenCustomConnector,
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
   const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
+  const [customConnectorPreset, setCustomConnectorPreset] = useState<CustomConnectorPreset | null>(
+    null,
+  );
+  const clearCustomConnectorPreset = useCallback(() => setCustomConnectorPreset(null), []);
   // OAuth grants the server reports as expired or revoked. `/api/connectors`
   // has always returned this per row; nothing outside the Connectors page read
   // it, so a connector could stop working and the only way to find out was to
@@ -639,9 +660,16 @@ export function useConnectorsSettingsAdapter({
           oauthStartPath?: string;
           installStartPath?: string;
           credentialsPath?: string;
+          accountUrlConnector?: string;
         } | null;
         if (res.status === 409 && body?.credentialsPath) {
           setApiKeyConnectorId(id);
+          return;
+        }
+        const preset = res.status === 409 ? accountUrlPreset(body?.accountUrlConnector) : null;
+        if (preset && onOpenCustomConnector) {
+          setCustomConnectorPreset(preset);
+          onOpenCustomConnector();
           return;
         }
         const plaidRoutes = res.status === 409 ? plaidLinkRoutesOf(body) : null;
@@ -698,7 +726,7 @@ export function useConnectorsSettingsAdapter({
         { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
       ]);
     },
-    [authedHeaders, customConnectors, startCustomConnectorSignIn],
+    [authedHeaders, customConnectors, onOpenCustomConnector, startCustomConnectorSignIn],
   );
 
   const setGithubPrReview = useCallback(
@@ -904,7 +932,7 @@ export function useConnectorsSettingsAdapter({
         ) : null}
         {detail.connected ? (
           <>
-            <ConnectorAccountSelector connectorId={connectorId} connectorName={detail.name} />
+            <ConnectorAccountSummary connectorId={connectorId} />
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
             <McpResourceList connectorId={connectorId} />
             {connectorId === 'github' && githubInstallations.length > 0 ? (
@@ -983,7 +1011,9 @@ export function useConnectorsSettingsAdapter({
       customConnectorAuthTokenSupported: true,
       customConnectorOAuthClientSupported: true,
       ...(oauthRedirectUri ? { customConnectorOAuthRedirectUri: oauthRedirectUri } : {}),
+      customConnectorPreset,
     },
+    clearCustomConnectorPreset,
     directoryAdapter,
     navBadges,
     toolPermissionsConnector,

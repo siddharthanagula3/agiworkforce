@@ -26,6 +26,7 @@ import {
   VENUE,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Terms of service',
@@ -260,7 +261,7 @@ export default function TermsPage() {
                 By installing the software or creating an account you accept them. Managed Cloud is
                 in public alpha; section 06 says what that means for what you can rely on.
               </strong>{' '}
-              Last updated: {POLICY_LAST_UPDATED.terms}.
+              Last updated: {POLICY_LAST_UPDATED.terms}. <PolicyVersionsLink policy="terms" />
             </>
           }
           ctas={[]}

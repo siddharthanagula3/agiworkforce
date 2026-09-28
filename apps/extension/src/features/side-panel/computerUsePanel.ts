@@ -463,6 +463,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-approval.expired .sp-cu-approval-allow,
+  .sp-cu-approval.expired .sp-cu-approval-task,
   .sp-cu-approval.expired .sp-cu-approval-deny {
     cursor: not-allowed;
     opacity: 0.5;
@@ -491,6 +492,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-approval-btns {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
@@ -505,6 +507,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     cursor: pointer;
   }
 
+  .sp-cu-approval-task,
   .sp-cu-approval-deny {
     background: none;
     border: 1px solid var(--agi-ext-border);
@@ -517,6 +520,11 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-approval-allow:hover {
     background: var(--agi-ext-accent-hover);
+  }
+
+  .sp-cu-approval-task:hover {
+    border-color: var(--agi-ext-accent);
+    color: var(--agi-ext-text);
   }
 
   .sp-cu-approval-deny:hover {
@@ -676,6 +684,8 @@ const RUN_RECOVERED_MESSAGE =
 export type ComputerUseTaskSite =
   { kind: 'none' | 'restricted' } | { kind: 'ready' | 'needs-approval'; origin: string };
 
+export type ComputerUseApprovalDecision = 'allow' | 'allow-for-task' | 'skip';
+
 export interface ComputerUsePanelAPI {
   panelEl: HTMLElement;
   appendStep(step: AgentLoopStep): void;
@@ -686,7 +696,8 @@ export interface ComputerUsePanelAPI {
   showApprovalCard(
     toolName: string,
     description: string,
-    resolve: (allowed: boolean) => void,
+    canAllowForTask: boolean,
+    resolve: (decision: ComputerUseApprovalDecision) => void,
   ): void;
   onRunAutofill(handler: () => void): void;
   onStartTask(handler: (goal: string) => void): void;
@@ -739,7 +750,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const askLabel = document.createElement('label');
   askLabel.className = 'sp-cu-ask-toggle';
   askLabel.title =
-    'When enabled, the agent pauses and asks you to confirm each action before executing it.';
+    'When on, the agent asks before it clicks, types, opens a page or downloads. Reading the page never waits for you.';
 
   const askCheckbox = document.createElement('input');
   askCheckbox.type = 'checkbox';
@@ -1407,7 +1418,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   function showApprovalCard(
     toolName: string,
     description: string,
-    resolve: (allowed: boolean) => void,
+    canAllowForTask: boolean,
+    resolve: (decision: ComputerUseApprovalDecision) => void,
   ): void {
     const approvalId = ++approvalCardSequence;
     const card = document.createElement('div');
@@ -1433,6 +1445,11 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     allowBtn.className = 'sp-cu-approval-allow';
     allowBtn.textContent = 'Allow';
 
+    const allowForTaskBtn = document.createElement('button');
+    allowForTaskBtn.className = 'sp-cu-approval-task';
+    allowForTaskBtn.textContent = 'Allow for this task';
+    allowForTaskBtn.title = `Allow ${toolName} without asking again until this task ends.`;
+
     const denyBtn = document.createElement('button');
     denyBtn.className = 'sp-cu-approval-deny';
     denyBtn.textContent = 'Skip';
@@ -1446,6 +1463,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       card.classList.add('expired');
       card.setAttribute('role', 'status');
       allowBtn.disabled = true;
+      allowForTaskBtn.disabled = true;
       denyBtn.disabled = true;
       cardTitle.textContent = `Skipped (no response): ${toolName}`;
       cardDesc.textContent =
@@ -1457,20 +1475,22 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       // The loop already resolved DENY on its own timer; this is presentation only.
     }, APPROVAL_TIMEOUT_MS);
 
-    function cleanup(allowed: boolean): void {
+    function cleanup(decision: ComputerUseApprovalDecision): void {
       if (settled) return;
       const shouldRestoreFocus = card.contains(document.activeElement);
       settled = true;
       clearTimeout(expiry);
       card.remove();
       if (shouldRestoreFocus) stopBtn.focus();
-      resolve(allowed);
+      resolve(decision);
     }
 
-    allowBtn.addEventListener('click', () => cleanup(true));
-    denyBtn.addEventListener('click', () => cleanup(false));
+    allowBtn.addEventListener('click', () => cleanup('allow'));
+    allowForTaskBtn.addEventListener('click', () => cleanup('allow-for-task'));
+    denyBtn.addEventListener('click', () => cleanup('skip'));
 
     btns.appendChild(allowBtn);
+    if (canAllowForTask) btns.appendChild(allowForTaskBtn);
     btns.appendChild(denyBtn);
     card.appendChild(cardTitle);
     card.appendChild(cardDesc);
