@@ -150,6 +150,7 @@ export async function readWorkingTreeChanges(
     files: parseWorkingTreeStatus(status),
     diff: diff.slice(0, WORKING_TREE_DIFF_LIMIT),
     diffTruncated: diff.length > WORKING_TREE_DIFF_LIMIT,
+    folderPrefix: (await gitOrNull(directory, ['rev-parse', '--show-prefix'])) ?? '',
   };
 }
 

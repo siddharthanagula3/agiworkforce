@@ -1460,6 +1460,35 @@ svg + .menuRowLabel {
   flex-direction: column;
 }
 
+.fileEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.fileEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fileEditorInput {
+  min-height: 320px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  font-family: var(--chat-font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  tab-size: 2;
+}
+
 .extensionRow {
   display: flex;
   align-items: center;

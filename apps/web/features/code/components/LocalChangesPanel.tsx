@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw, Undo2, X } from '@agiworkforce/icons';
+import { ChevronDown, ChevronRight, Pencil, RefreshCw, Undo2, X } from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import type { WorkingTreeChange, WorkingTreeChanges } from '@agiworkforce/local-runtime-contract';
 import {
@@ -13,6 +13,7 @@ import { CODE_COPY, changeStateLabel } from '../code-surface';
 import { diffByPath } from '../code-diff';
 import { LOCAL_CODE_COPY } from '../local-code';
 import { DiffBody } from './CodeChangesPanel';
+import { LocalFileEditor } from './LocalFileEditor';
 import { LocalPullRequest } from './LocalPullRequest';
 import { LocalTerminal } from './LocalTerminal';
 import styles from '../CloudCodePage.module.css';
@@ -23,11 +24,13 @@ function LocalChangedFile({
   change,
   body,
   busy,
+  onEdit,
   onDiscard,
 }: {
   change: WorkingTreeChange;
   body: string | undefined;
   busy: boolean;
+  onEdit: (() => void) | null;
   onDiscard: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -62,6 +65,17 @@ function LocalChangedFile({
         ) : (
           <div className={styles['fileRow']}>{label}</div>
         )}
+        {onEdit && (
+          <button
+            type="button"
+            className={styles['headerButton']}
+            aria-label={`${LOCAL_CODE_COPY.editFile} ${change.path}`}
+            disabled={busy}
+            onClick={onEdit}
+          >
+            <Pencil size={GLYPH_SIZE} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           className={styles['headerButton']}
@@ -94,6 +108,7 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmAction();
 
   const load = useCallback(async () => {
@@ -135,6 +150,10 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
   };
 
   const diffs = diffByPath(changes?.diff ?? '');
+  const folderPath = (path: string): string | null => {
+    const prefix = changes?.folderPrefix ?? '';
+    return path.startsWith(prefix) ? path.slice(prefix.length) : null;
+  };
 
   return (
     <aside className={styles['changes']} aria-label={CODE_COPY.changesHeading}>
@@ -192,10 +211,24 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
                 change={change}
                 body={diffs.get(change.path)}
                 busy={busy}
+                onEdit={
+                  change.state !== 'deleted' && folderPath(change.path) !== null
+                    ? () => setEditing(folderPath(change.path))
+                    : null
+                }
                 onDiscard={() => discard(change.path)}
               />
             ))}
           </div>
+        )}
+
+        {editing !== null && (
+          <LocalFileEditor
+            rootId={rootId}
+            path={editing}
+            onSaved={() => void load()}
+            onClose={() => setEditing(null)}
+          />
         )}
 
         {changes?.diffTruncated && (

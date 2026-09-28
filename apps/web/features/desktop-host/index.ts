@@ -58,6 +58,7 @@ export {
   startLocalChat,
   startLocalCommand,
   writeLocalCommandPolicy,
+  writeWorkspaceText,
   writeLocalModelSettings,
   type LocalChatDelta,
   type LocalChatRun,

@@ -66,6 +66,13 @@ export const LOCAL_CODE_COPY = {
   changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
   discardFailed: 'That change could not be discarded.',
   commandFailed: 'That command could not be run.',
+  editFile: 'Edit',
+  closeFile: 'Close the file',
+  openingFile: 'Opening the file',
+  saveFile: 'Save',
+  fileReadFailed: 'That file could not be opened.',
+  fileSaveFailed: 'That file could not be saved.',
+  fileTooLarge: 'This file is too large to edit here. Open it in your editor instead.',
   pushAndOpenPullRequest: 'Push and open a pull request',
   pullRequestOnGitHub: 'Open a pull request on GitHub',
   pullRequestNotConnected:
