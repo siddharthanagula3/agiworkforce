@@ -73,6 +73,8 @@ const SNAP_POINTS = ['75%'];
 const LIBRARY_PICKER_SIZE = 12;
 const CLOUD_ATTACH_RETENTION_NOTE =
   'Files you attach are uploaded to AGI Cloud and kept in your Library until you delete them.';
+const TEMPORARY_ATTACH_RETENTION_NOTE =
+  'Files you attach to a temporary chat stay out of your Library and are deleted with the chat.';
 
 interface LibraryPick {
   id: string;
@@ -106,6 +108,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const { colors: themeColors } = useTheme();
   const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
   const localConversations = useChatStore((s) => s.conversations);
@@ -470,7 +473,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               color: themeColors.textMuted,
             }}
           >
-            {CLOUD_ATTACH_RETENTION_NOTE}
+            {isTemporaryChat ? TEMPORARY_ATTACH_RETENTION_NOTE : CLOUD_ATTACH_RETENTION_NOTE}
           </Text>
         ) : null}
 
