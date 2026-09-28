@@ -9,9 +9,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
@@ -49,7 +47,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

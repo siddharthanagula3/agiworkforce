@@ -8,9 +8,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -67,7 +65,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);

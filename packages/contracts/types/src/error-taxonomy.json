@@ -12,7 +12,7 @@
       "retryable": false,
       "providerDetail": "hidden",
       "suggestedAction": "request_access",
-      "codes": ["FORBIDDEN", "PERMISSION_REQUIRED", "DISABLED_BY_ROLE"]
+      "codes": ["FORBIDDEN", "ACCOUNT_UNAVAILABLE", "PERMISSION_REQUIRED", "DISABLED_BY_ROLE"]
     },
     "policy": {
       "why": "an administrator or a jurisdiction refused it, not the principal's role",
