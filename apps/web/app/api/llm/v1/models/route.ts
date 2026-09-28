@@ -17,6 +17,7 @@ import {
 } from '@/lib/server/model-catalogue';
 import {
   getMinimumRequiredTier,
+  getModelMetadataById,
   getPickerModelsForRuntimeProfile,
   normalizeSubscriptionAccessTier,
   resolveMaxOutputTokens,
@@ -46,6 +47,7 @@ type OpenAiCompatibleModel = {
   max_output: number;
   capabilities: Record<string, boolean | null>;
   deprecation_date: string | null;
+  image_detail?: string[];
 };
 
 const PUBLISHED_CAPABILITIES = {
@@ -86,6 +88,7 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     return null;
   }
 
+  const imageDetail = getModelMetadataById(model.id)?.imageInput?.detailValues;
   return {
     id: model.id,
     object: 'model',
@@ -99,6 +102,7 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     max_output: resolveMaxOutputTokens(model.id),
     capabilities: publishedCapabilities(model.id),
     deprecation_date: model.deprecatedOn,
+    ...(imageDetail ? { image_detail: [...imageDetail] } : {}),
   };
 }
 
