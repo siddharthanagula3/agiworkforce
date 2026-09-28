@@ -15,8 +15,7 @@ import {
   type GetObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { objectChecksum } from '../checksum';
-import { bindPresignedUpload } from '../presign';
+import { bindPresignedUpload, bindPresignedUploadPart } from '../presign';
 import { type ObjectStorageConfig } from '../config';
 import {
   ObjectStorageConfigError,
@@ -29,6 +28,7 @@ import {
   type ObjectStore,
   type PendingMultipartUpload,
   type PresignPutInput,
+  type PresignUploadPartInput,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
@@ -42,8 +42,9 @@ const PRECONDITION_FAILED_ERROR_NAME = 'PreconditionFailed';
 const PRECONDITION_FAILED_STATUS = 412;
 const COPY_METADATA_DIRECTIVE = 'COPY';
 const SIGNABLE_UPLOAD_HEADERS = ['content-length', 'content-type'];
+const SIGNABLE_PART_HEADERS = ['content-length'];
 const KEY_SEPARATOR = '/';
-const CHECKSUM_ALGORITHM = 'SHA256';
+const CHECKSUM_ON_DEMAND = 'WHEN_REQUIRED';
 const REGION_METADATA_KEY = 'agi-region';
 const ENCRYPTION_METADATA_KEY = 'agi-encryption';
 
@@ -71,6 +72,7 @@ export function createS3Client(config: ObjectStorageConfig, timeouts: S3ClientTi
     endpoint,
     forcePathStyle: config.forcePathStyle,
     credentials: { accessKeyId, secretAccessKey },
+    requestChecksumCalculation: CHECKSUM_ON_DEMAND,
     requestHandler: {
       connectionTimeout: timeouts.connectionTimeoutMs,
       requestTimeout: timeouts.requestTimeoutMs,
@@ -272,7 +274,6 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           Key: input.key,
           ContentType: input.contentType,
           Metadata: objectMetadata(input.metadata),
-          ChecksumAlgorithm: CHECKSUM_ALGORITHM,
           ...encryptionHeaders(),
         }),
       );
@@ -283,7 +284,6 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
     },
 
     async uploadPart(input: UploadPartInput): Promise<UploadedPart> {
-      const checksumSha256 = input.checksumSha256 ?? objectChecksum(input.body);
       const response = await client.send(
         new UploadPartCommand({
           Bucket: input.bucket,
@@ -292,15 +292,33 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           PartNumber: input.partNumber,
           Body: input.body,
           ContentLength: input.body.byteLength,
-          ChecksumSHA256: checksumSha256,
+          ...(input.checksumSha256 ? { ChecksumSHA256: input.checksumSha256 } : {}),
         }),
       );
       return {
         partNumber: input.partNumber,
         etag: response.ETag ?? '',
         size: input.body.byteLength,
-        checksumSha256: response.ChecksumSHA256 ?? checksumSha256,
+        checksumSha256: response.ChecksumSHA256 ?? input.checksumSha256 ?? '',
       };
+    },
+
+    async presignUploadPart(input: PresignUploadPartInput): Promise<string> {
+      const bound = bindPresignedUploadPart(input);
+      return getSignedUrl(
+        client,
+        new UploadPartCommand({
+          Bucket: input.bucket,
+          Key: input.key,
+          UploadId: input.uploadId,
+          PartNumber: bound.partNumber,
+          ContentLength: bound.contentLength,
+        }),
+        {
+          expiresIn: bound.expiresInSeconds,
+          signableHeaders: new Set(SIGNABLE_PART_HEADERS),
+        },
+      );
     },
 
     async listUploadedParts(handle: MultipartUploadHandle): Promise<UploadedPart[]> {
@@ -334,7 +352,7 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
               .map((part) => ({
                 PartNumber: part.partNumber,
                 ETag: part.etag,
-                ChecksumSHA256: part.checksumSha256,
+                ...(part.checksumSha256 ? { ChecksumSHA256: part.checksumSha256 } : {}),
               })),
           },
         }),

@@ -7,6 +7,8 @@ import {
   CircleSlash,
   FileText,
   ListChecks,
+  MessageSquare,
+  Pause,
   Play,
   RefreshCw,
   Search,
@@ -53,6 +55,25 @@ function StepIcon({ step, colors }: { step: ResearchStep; colors: ColorScheme })
 
 function PlanStepRow({ step }: { step: ResearchStep }) {
   const colors = useThemeColors();
+  if (step.type === 'analyze') {
+    return (
+      <View
+        accessible
+        accessibilityLabel={`Your guidance: ${step.description}`}
+        style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 4 }}
+      >
+        <View style={{ width: 14, alignItems: 'center', paddingTop: 2 }}>
+          <MessageSquare size={13} color={colors.agentActive} />
+        </View>
+        <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
+          {step.description}
+        </Text>
+        <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase' }}>
+          Your guidance
+        </Text>
+      </View>
+    );
+  }
   return (
     <View
       accessible
@@ -177,13 +198,14 @@ export function ResearchRunCard({
   const label = research.label || RESEARCH_PHASE_LABELS[research.phase];
   const failed = research.phase === 'error';
   const interrupted = research.phase === 'interrupted';
+  const paused = research.phase === 'paused';
   const complete = research.phase === 'complete';
   const awaitingApproval = research.phase === 'awaiting_approval';
 
   const counts = researchCountsSummary(research);
   const steps = research.steps ?? [];
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
-  const canRetry = Boolean(onRetry) && (failed || interrupted) && !isStreaming;
+  const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
   const canStop = Boolean(onStop) && active;
 
   const tint = failed ? colors.agentError : complete ? colors.agentSuccess : colors.agentActive;
@@ -207,6 +229,8 @@ export function ResearchRunCard({
           <AlertCircle size={14} color={tint} />
         ) : interrupted ? (
           <Square size={13} color={colors.textMuted} />
+        ) : paused ? (
+          <Pause size={13} color={tint} />
         ) : complete ? (
           <Check size={14} color={tint} />
         ) : awaitingApproval ? (
@@ -235,6 +259,11 @@ export function ResearchRunCard({
 
       {interrupted ? (
         <Text style={{ fontSize: 11, color: colors.textMuted }}>Stopped before it finished.</Text>
+      ) : null}
+      {paused ? (
+        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+          Paused. Resume to continue from where it stopped.
+        </Text>
       ) : null}
       {failed && research.error && research.error !== label ? (
         <Text style={{ fontSize: 11, color: colors.textSecondary }}>{research.error}</Text>
@@ -287,8 +316,10 @@ export function ResearchRunCard({
           ) : null}
           {canRetry ? (
             <ActionButton
-              label={isResuming ? 'Retrying…' : 'Retry'}
-              icon={RefreshCw}
+              label={
+                failed ? (isResuming ? 'Retrying…' : 'Retry') : isResuming ? 'Resuming…' : 'Resume'
+              }
+              icon={failed ? RefreshCw : Play}
               disabled={isResuming}
               onPress={() => onRetry?.()}
               testID="research-run-retry"

@@ -107,7 +107,9 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   // degrade to "no meter" rather than propagating.
   let limitBytes: number | null = null;
   try {
-    limitBytes = getKnowledgeStorageLimitBytes(await resolveEntitledPlanTier(db, userId));
+    limitBytes = getKnowledgeStorageLimitBytes(
+      await resolveEntitledPlanTier(db, userId, { workspaceOrganizationId: organizationId }),
+    );
   } catch (error) {
     logger.warn({ error, userId }, 'Knowledge storage meter: plan read failed');
   }
