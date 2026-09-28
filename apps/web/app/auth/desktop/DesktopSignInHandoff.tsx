@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { desktopSignInLink } from '@agiworkforce/local-runtime-contract';
+import { DESKTOP_SIGN_IN_PATH, desktopSignInLink } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { AUTH_ERROR_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useSession } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const GRANT_PATH = '/api/auth/desktop/grant';
@@ -47,7 +48,13 @@ async function requestGrant(challenge: string): Promise<string> {
   return code;
 }
 
+function signInUrlFor(challenge: string): string {
+  const returnTo = `${DESKTOP_SIGN_IN_PATH}?${new URLSearchParams({ challenge }).toString()}`;
+  return `/login?${new URLSearchParams({ redirectTo: returnTo }).toString()}`;
+}
+
 export function DesktopSignInHandoff({ challenge }: { challenge: string | null }) {
+  const session = useSession();
   const [state, setState] = useState<HandoffState>({ kind: 'preparing' });
   const started = useRef(false);
 
@@ -63,10 +70,14 @@ export function DesktopSignInHandoff({ challenge }: { challenge: string | null }
   }, [challenge]);
 
   useEffect(() => {
-    if (challenge === null || started.current) return;
+    if (challenge === null || !session.isLoaded || started.current) return;
     started.current = true;
+    if (!session.isSignedIn) {
+      window.location.assign(signInUrlFor(challenge));
+      return;
+    }
     void handOff().then(setState);
-  }, [challenge, handOff]);
+  }, [challenge, handOff, session.isLoaded, session.isSignedIn]);
 
   if (challenge === null) {
     return (
