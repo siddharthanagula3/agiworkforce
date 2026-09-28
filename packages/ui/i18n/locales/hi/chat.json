@@ -439,7 +439,11 @@
     "videoModeAttachments_one": "वीडियो जनरेशन केवल आपके प्रॉम्प्ट से काम करता है। अटैच की गई फ़ाइलें वीडियो मॉडल को नहीं भेजी जातीं। अगर आप यह फ़ाइल चैट मॉडल को भेजना चाहते हैं, तो पहले वीडियो मोड से बाहर निकलें।",
     "videoModeAttachments_other": "वीडियो जनरेशन केवल आपके प्रॉम्प्ट से काम करता है। अटैच की गई फ़ाइलें वीडियो मॉडल को नहीं भेजी जातीं। अगर आप ये फ़ाइलें चैट मॉडल को भेजना चाहते हैं, तो पहले वीडियो मोड से बाहर निकलें।",
     "viewSources_one": "{{count}} स्रोत देखें",
-    "viewSources_other": "{{count}} स्रोत देखें"
+    "viewSources_other": "{{count}} स्रोत देखें",
+    "savedMemoriesUsed_one": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
+    "savedMemoriesUsed_other": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
+    "moreSavedMemories_one": "{{count}} और",
+    "moreSavedMemories_other": "{{count}} और"
   },
   "markdownTable": {
     "label": "तालिका",

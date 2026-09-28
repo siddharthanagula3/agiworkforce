@@ -439,7 +439,11 @@
     "videoModeAttachments_one": "動画生成はプロンプトのみを使用します。添付されたファイルは動画モデルには送信されません。このファイルをチャットモデルに送信する場合は、先に動画モードを終了してください。",
     "videoModeAttachments_other": "動画生成はプロンプトのみを使用します。添付されたファイルは動画モデルには送信されません。このファイルをチャットモデルに送信する場合は、先に動画モードを終了してください。",
     "viewSources_one": "{{count}} 件のソースを表示",
-    "viewSources_other": "{{count}} 件のソースを表示"
+    "viewSources_other": "{{count}} 件のソースを表示",
+    "savedMemoriesUsed_one": "保存されたメモリを {{count}} 件使用",
+    "savedMemoriesUsed_other": "保存されたメモリを {{count}} 件使用",
+    "moreSavedMemories_one": "ほか {{count}} 件",
+    "moreSavedMemories_other": "ほか {{count}} 件"
   },
   "markdownTable": {
     "label": "表",

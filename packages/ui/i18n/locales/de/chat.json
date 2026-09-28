@@ -439,7 +439,11 @@
     "videoModeAttachments_one": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Datei an das Chat-Modell senden möchten.",
     "videoModeAttachments_other": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Dateien an das Chat-Modell senden möchten.",
     "viewSources_one": "{{count}} Quelle ansehen",
-    "viewSources_other": "{{count}} Quellen ansehen"
+    "viewSources_other": "{{count}} Quellen ansehen",
+    "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",
+    "savedMemoriesUsed_other": "{{count}} gespeicherte Erinnerungen verwendet",
+    "moreSavedMemories_one": "Und {{count}} weitere",
+    "moreSavedMemories_other": "Und {{count}} weitere"
   },
   "markdownTable": {
     "label": "Tabelle",

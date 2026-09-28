@@ -97,6 +97,7 @@ import {
 import { TranscriptNotice } from './TranscriptNotice';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
+import { CitationMemories } from './CitationMemories';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -571,6 +572,7 @@ interface Message {
     /** Project knowledge passages this turn read, each with where it came from. */
     projectSources?: ProjectFileCitation[];
     pastChatSources?: StoreMessageMetadata['pastChatSources'];
+    memoryCitations?: StoreMessageMetadata['memoryCitations'];
     /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
     citations?: Array<{
       type?: string;
@@ -2988,6 +2990,12 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && (message.metadata?.pastChatSources?.length ?? 0) > 0 && (
             <div className="mt-2">
               <CitationPastChats citations={message.metadata?.pastChatSources ?? []} />
+            </div>
+          )}
+
+          {!isUser && message.metadata?.memoryCitations && (
+            <div className="mt-2">
+              <CitationMemories citations={message.metadata.memoryCitations} />
             </div>
           )}
 
