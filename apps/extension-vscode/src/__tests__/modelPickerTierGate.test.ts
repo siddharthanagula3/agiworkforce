@@ -54,6 +54,11 @@ describe('isModelReachableForTier', () => {
   it('allows a flagship model on max', () => {
     expect(isModelReachableForTier(CLOUD_MODEL, 'max')).toBe(true);
   });
+
+  it('admits Auto on a paid plan and keeps it off Free', () => {
+    expect(isModelReachableForTier('auto', 'pro')).toBe(true);
+    expect(isModelReachableForTier('auto', 'free')).toBe(false);
+  });
 });
 
 function headingAbove(
