@@ -10,53 +10,49 @@ nothing is left.
 
 - Done when: The user can tell the assistant what to call them, and replies address them that way.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a preferred name on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a preferred name on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.02: Background information.
 
 - Done when: The user can give the assistant background about themselves that it keeps in mind.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the role and instructions on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the role and instructions on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.03: Role or profession.
 
 - Done when: The user can state their role or profession and replies are tailored to it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a role on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a role on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.05: Desired response style.
 
 - Done when: The user can choose the response style they want, and replies follow that one choice.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a response style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a response style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.06: Response-length preference.
 
@@ -74,105 +70,97 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a more or less formal register and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a formal style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a formal style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.08: Tone presets.
 
 - Done when: The user can pick from named tone/style presets, and one chosen preset governs replies.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a style preset on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a style preset on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.09: Warmth preference.
 
 - Done when: The user can ask for warmer or cooler tone and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the warmth level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the warmth level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.10: Enthusiasm preference.
 
 - Done when: The user can ask for more or less enthusiasm and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the enthusiasm level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the enthusiasm level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.11: Heading/list preference.
 
 - Done when: The user can say whether replies should use headings and lists or prose, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set heading/list preference on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set heading/list preference on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.12: Emoji preference.
 
 - Done when: The user can ask for more or less emoji and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the emoji level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the emoji level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.13: Technical-depth preference.
 
 - Done when: The user can set how technical replies should be, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a technical level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a technical level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.14: Language preference.
 
 - Done when: The user can set the language replies are written in (separate from the interface language), and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set a response language on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a response language on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.16: Persistent custom instructions.
 
@@ -252,14 +240,13 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:771-775`, `apps/mobile/stores/chat/ch
 
 - Done when: The user can choose an explanatory style that explains reasoning and context, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the Explanatory style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the Explanatory style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.25: Learning-oriented output style.
 
@@ -277,14 +264,13 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a concise style and replies are short and direct.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Set the Concise style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the Concise style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
 
 ## S40.27: Custom output-style creation.
 
