@@ -37,6 +37,7 @@ export interface LocalSessionState {
   sending: boolean;
   stopping: boolean;
   error: string | null;
+  contextTokens: number | null;
   send: (text: string, model?: string, agentMode?: DeveloperAgentMode) => Promise<void>;
   stop: () => Promise<void>;
   decideApproval: (approved: boolean) => Promise<void>;
@@ -59,6 +60,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextTokens, setContextTokens] = useState<number | null>(null);
   const turnRef = useRef<LocalTurn>(EMPTY_LOCAL_TURN);
 
   turnRef.current = turn;
@@ -207,6 +209,8 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
       }
       if (event.type === 'turn-finished') {
         setApproval(null);
+        const used = event.inputTokens + event.outputTokens;
+        if (used > 0) setContextTokens(used);
         setTurn((current) => ({
           ...current,
           outcome: event.outcome,
@@ -288,6 +292,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
     sending,
     stopping,
     error,
+    contextTokens,
     send,
     stop,
     decideApproval,
