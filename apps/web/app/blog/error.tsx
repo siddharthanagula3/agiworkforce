@@ -54,7 +54,7 @@ export default function BlogError({
       <div className="mt-12 pt-6 border-t border-border w-full max-w-sm">
         <p className="text-muted-foreground text-sm">
           If this problem persists,{' '}
-          <Link href="/contact" className="text-primary hover:text-primary/80">
+          <Link href="/contact" className="text-primary hover:underline">
             contact our support team
           </Link>
         </p>

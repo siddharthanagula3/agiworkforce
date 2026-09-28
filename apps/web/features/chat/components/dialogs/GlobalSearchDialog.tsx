@@ -601,11 +601,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           onClick={() => handleSuggestionClick(search.query)}
                           className="group flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/5 px-3 py-1.5 text-sm transition-colors hover:bg-primary/10 hover:border-primary/30"
                         >
-                          <TrendingUp className="h-3 w-3 text-primary/70 group-hover:text-primary" />
+                          <TrendingUp className="h-3 w-3 text-primary" />
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           <Badge
                             variant="outline"
-                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-primary/70"
+                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-muted-foreground"
                           >
                             {search.searchCount} searches
                           </Badge>
