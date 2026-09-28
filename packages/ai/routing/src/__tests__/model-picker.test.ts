@@ -20,7 +20,7 @@ import {
   resolvePlanLockLabel,
   type ModelPickerShortListInput,
   type ModelPickerSourceModel,
-} from '../modelPicker';
+} from '../model-picker';
 
 const AUTO_GUIDANCE = 'auto guidance fixture';
 const autoContinuityGuidance = (displayName: string) => `stays on ${displayName}`;
