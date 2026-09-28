@@ -27,6 +27,7 @@ import {
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
   type DeveloperTurnRequest,
+  type LocalBranches,
   type ShellPolicy,
   type ShellRunResult,
   type WorkingTreeChanges,
@@ -450,6 +451,14 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function listLocalBranches(rootId: string): Promise<LocalBranches | null> {
+  return invoke<LocalBranches | null>('developer_branches_list', { rootId });
+}
+
+export function switchLocalBranch(rootId: string, branch: string): Promise<string> {
+  return invoke<string>('developer_branch_switch', { rootId, branch });
 }
 
 export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {

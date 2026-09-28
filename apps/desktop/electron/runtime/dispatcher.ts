@@ -103,7 +103,13 @@ import {
   statPath,
   writeTextFile,
 } from './filesystemService';
-import { discardWorkingTreeChanges, readWorkingTreeChanges, readWorkspaceGit } from './gitService';
+import {
+  discardWorkingTreeChanges,
+  listLocalBranches,
+  readWorkingTreeChanges,
+  readWorkspaceGit,
+  switchLocalBranch,
+} from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
   answerDeveloperApproval,
@@ -452,6 +458,14 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   developer_session_discard: {
     capability: 'filesystem.write',
     reason: 'Discarding a change puts files in this folder back to their last committed version.',
+  },
+  developer_branches_list: {
+    capability: 'filesystem.read',
+    reason: "Listing branches reads this folder's git repository.",
+  },
+  developer_branch_switch: {
+    capability: 'filesystem.write',
+    reason: 'Switching branches changes the files in this folder to that branch.',
   },
   developer_skills_list: {
     capability: 'filesystem.read',
@@ -987,6 +1001,10 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_branches_list':
+      return listLocalBranches(resolveRoot(args).path);
+    case 'developer_branch_switch':
+      return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
     case 'developer_skills_list':
       return listDeveloperSkills(requireString(args, 'rootId'));
     case 'developer_skill_set_enabled':

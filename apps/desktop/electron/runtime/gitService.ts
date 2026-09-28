@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   parseWorkingTreeStatus,
+  type LocalBranches,
   type WorkingTreeChanges,
   type WorkspaceGitState,
   type WorkspaceRoot,
@@ -20,6 +21,7 @@ const GIT_TIMEOUT_MS = 15_000;
 const GIT_MAX_BUFFER = 8 * 1024 * 1024;
 const WORKING_TREE_DIFF_LIMIT = 200_000;
 const STATUS_ARGS = ['status', '--porcelain=v1', '--untracked-files=all'];
+const LOCAL_BRANCH_LIMIT = 500;
 
 /**
  * Runs git with an argument array.
@@ -179,4 +181,31 @@ export async function discardWorkingTreeChanges(
   }
   if (cleaned.length > 0) await git(root, ['clean', '-f', '--quiet', '--', ...cleaned]);
   return chosen.map((change) => change.path);
+}
+
+export async function listLocalBranches(directory: string): Promise<LocalBranches | null> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) return null;
+  const listed = await git(root, [
+    'for-each-ref',
+    `--count=${LOCAL_BRANCH_LIMIT}`,
+    '--sort=-committerdate',
+    '--format=%(refname:short)',
+    'refs/heads',
+  ]);
+  return {
+    current: await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
+    branches: listed.split('\n').filter(Boolean),
+  };
+}
+
+export async function switchLocalBranch(directory: string, branch: string): Promise<string> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) throw new Error('This folder is not a git repository, so it has no branches.');
+  const known = await git(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+  if (!known.split('\n').includes(branch)) {
+    throw new Error(`${branch} is not a branch in this repository.`);
+  }
+  await git(root, ['switch', branch]);
+  return branch;
 }

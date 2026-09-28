@@ -875,6 +875,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     adding: local.adding,
     onAddFolder: () => void local.addFolder(),
     onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
+    onBranchSwitched: local.refresh,
   };
 
   const unavailableNotice = availability

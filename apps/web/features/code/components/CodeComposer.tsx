@@ -54,6 +54,8 @@ import { useDictation } from '@features/chat/hooks/use-dictation';
 import { MicrophonePrivacyNotice } from '@features/chat/components/MicrophonePrivacyNotice';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
+import { toUserMessage } from '@/lib/user-error-message';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -145,6 +147,7 @@ export interface CodeLocalState {
   adding: boolean;
   onAddFolder: () => void;
   onModelChange: (modelId: string) => void;
+  onBranchSwitched: () => void;
 }
 
 export function draftRepositoryLabel(draft: CodeDraft): string {
@@ -866,6 +869,127 @@ function BranchChip({
   );
 }
 
+function LocalBranchChip({
+  rootId,
+  branch,
+  disabled,
+  onSwitched,
+}: {
+  rootId: string;
+  branch: string;
+  disabled: boolean;
+  onSwitched: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [search, setSearch] = useState('');
+  const [switching, setSwitching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const searchFieldId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setBranches(null);
+    setError(null);
+    listLocalBranches(rootId)
+      .then((listed) => {
+        if (!cancelled) setBranches(listed?.branches ?? []);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(toUserMessage(cause, CODE_COPY.branchLoadFailed));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, rootId]);
+
+  const choose = async (next: string) => {
+    if (next === branch) {
+      setOpen(false);
+      return;
+    }
+    setSwitching(true);
+    setError(null);
+    try {
+      await switchLocalBranch(rootId, next);
+      onSwitched();
+      setOpen(false);
+    } catch (cause: unknown) {
+      setError(toUserMessage(cause, CODE_COPY.branchSwitchFailed));
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const needle = search.trim().toLowerCase();
+  const matches = (branches ?? []).filter((name) => name.toLowerCase().includes(needle));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={styles['chip']}
+          aria-label={CODE_COPY.branchEdit}
+          disabled={disabled}
+        >
+          <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+          <span>{branch}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        sideOffset={POPOVER_OFFSET}
+        style={{ width: POPOVER_WIDTH }}
+        className="p-0"
+        aria-label={CODE_COPY.branchEdit}
+      >
+        <div className={styles['popover']}>
+          {error !== null && (
+            <span className={styles['formHelp']} role="alert">
+              {error}
+            </span>
+          )}
+          <div className={styles['repositoryList']} aria-label={CODE_COPY.branchListLabel}>
+            {branches === null && error === null && (
+              <div className={styles['repositoryEmpty']}>
+                <Spinner size="sm" aria-label={CODE_COPY.branchLoading} />
+              </div>
+            )}
+            {matches.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={styles['repositoryRow']}
+                aria-current={name === branch ? 'true' : undefined}
+                disabled={switching}
+                onClick={() => void choose(name)}
+              >
+                <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                <span className={styles['repositoryName']}>{name}</span>
+              </button>
+            ))}
+          </div>
+          <span className={styles['formHelp']}>{CODE_COPY.branchSwitchHelp}</span>
+          <div className={styles['repositorySearch']}>
+            <Search size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            <input
+              id={searchFieldId}
+              className={styles['repositorySearchInput']}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={CODE_COPY.branchSearchLabel}
+              aria-label={CODE_COPY.branchSearchLabel}
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function RepositoryChips({
   draft,
   onDraftChange,
@@ -1274,10 +1398,12 @@ export function CodeComposer({
             />
             {draft.environment === 'local' ? (
               folder?.branch && (
-                <span className={`${styles['chip']} ${styles['chipStatic']}`}>
-                  <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-                  <span>{folder.branch}</span>
-                </span>
+                <LocalBranchChip
+                  rootId={folder.rootId}
+                  branch={folder.branch}
+                  disabled={disabled || busy}
+                  onSwitched={local.onBranchSwitched}
+                />
               )
             ) : (
               <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
