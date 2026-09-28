@@ -572,7 +572,11 @@ export function useConnectorsSettingsAdapter({
         connectorId: c.connectorId,
         ...(c.connectedAt ? { connectedAt: c.connectedAt } : {}),
         ...(c.needsReauthorization
-          ? { status: 'warning' as const, warningLabel: CONNECTOR_REAUTHORIZATION_COPY }
+          ? {
+              status: 'warning' as const,
+              warningLabel: CONNECTOR_REAUTHORIZATION_COPY,
+              needsReauthorization: true,
+            }
           : c.health === 'not-responding'
             ? { status: 'warning' as const, warningLabel: CONNECTOR_NOT_RESPONDING_COPY }
             : {}),
@@ -585,7 +589,11 @@ export function useConnectorsSettingsAdapter({
         connectorId: `${CUSTOM_CONNECTOR_ID_PREFIX}${c.id}`,
         connectedAt: c.createdAt,
         ...(customSignInPending(c)
-          ? { status: 'warning' as const, warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY }
+          ? {
+              status: 'warning' as const,
+              warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY,
+              needsReauthorization: true,
+            }
           : {}),
       });
     }

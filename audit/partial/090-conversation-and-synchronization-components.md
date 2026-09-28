@@ -13,6 +13,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Attempts are recorded as durable runs only when the turn uses tools or AGI Work; a plain tool-less chat turn leaves no attempt record, only the final message and a usage row. | handler |
+| platform | partial | partials/chat-gates 28353d9562 and aaeca0122b (migration 0329 is a placeholder number): every managed turn, plain chat included, already reserved a managed_usage_requests row with its own id, provider and model; it now also records the conversation it answered, whether the attempt completed, failed or was cancelled, and the failure class (the stream error code the turn reported, or the provider failure category). The stream, tool loop, durable workflow and refund paths all pass it, it is written once, and a finalization that only pauses for input records nothing. Free-plan turns are not covered: a free-trial turn settles in free_daily_usage_reservations (it has outcome, provider and model but no conversation or failure class, and a cancelled stream settles as failed), and a free-pool turn is unmetered and leaves no per-request row. Waiting on a lead ruling for those. | handler |
 
-Code: `apps/web/lib/services/cloud-agent-run-service.ts:650-653`, `apps/web/app/api/llm/v1/chat/completions/route.ts:776-779`
+Code: `apps/web/db/neon/0329_managed_usage_attempt_record.sql:24-24`, `apps/web/lib/services/managed-usage-request-service.ts:587-639`, `apps/web/lib/services/managed-usage-request-service.ts:729-729`, `apps/web/lib/services/managed-usage-request-service.ts:1024-1024`

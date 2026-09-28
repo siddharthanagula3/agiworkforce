@@ -223,3 +223,17 @@ tools, memory or saved history, and a line saying that messaging means
 accepting the Terms and Privacy Policy. Per-device, per-IP and global daily
 caps come from configuration, bot protection applies, and a kill switch keeps
 it off until it is switched on after the final checks.
+
+## D-2026-09-28-10 Grant, screen, layout and desktop sign-in extras follow ChatGPT and Claude
+
+Neither ChatGPT nor Claude has one action that revokes every optional grant;
+each connector, folder or permission is withdrawn on its own, so none is built
+(S86.25). Both leave screen-sharing preferences to the operating system's
+Screen Recording switch, and so does the desktop app (S86.22). Tiled and stacked
+session layouts exist only for coding sessions in Claude's desktop app, so they
+are built for /code on the web and desktop and not for chat, the phone, the CLI
+or Chrome (S7.08, S7.09). Both desktop apps finish a company identity provider
+sign-in in the system browser and hand the session back to the app, so the
+desktop app does the same (S3.09, S3.10). ChatGPT's voice mode steers a coding
+task, so voice control of a /code session is built (S48.40). Checked
+2026-09-28.

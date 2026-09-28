@@ -226,23 +226,11 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/extensio
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S3.29: Desktop permission setup.
-
-- Done when: The app walks the user through the local permissions it needs (folders, commands, screen control) with guidance, and records the grants.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Electron has no walkthrough and no settings list of local grants: folders are approved from the composer folder dialog and other grants (commands, clipboard, computer use) are asked at first use; the Local access settings page renders only in the internal Tauri shell (hostHasLocalMode is true only for shell "tauri"), so grants cannot be reviewed or removed. | ui |
-
-Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:703-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`, `apps/desktop/electron/runtime/computerUseService.ts:240-265`
-
 ## S3.31: Mobile device pairing.
 
 - Done when: A phone can be paired with the desktop app by QR or short code, and the pairing is bound to the signed-in account.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

@@ -68,16 +68,15 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:172-180`, `a
 
 - Done when: The user can choose which tools the task may use before it runs.
 - Wave: 3
-- Already works on: web, cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | the desktop managed composer (unified-chat ChatInput) has no AGI Work scope fields to send excludedTools; the server side is ready | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | VS Code offers only permission modes (ask/auto/plan/bypass); it cannot enable or disable individual tools. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:820-820`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
 
 ## S60.07: Execution-location selection.
 
@@ -177,32 +176,30 @@ Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same as web: parallel group renderer is never fed. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Subagents can run, but the TUI has no subagent or parallel indicator (TranscriptCellKind::Subagent is never used). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:738-752`, `apps/cli/src/subagent.rs:247-253`, `apps/cli/src/tui/transcript_cell.rs:19-25`
+Code: `apps/cli/src/subagent.rs:247-253`, `apps/cli/src/tui/transcript_cell.rs:19-25`
 
 ## S60.18: Clarification request.
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
-- Already works on: web, cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same as web: the clarify tool is never offered on AGI Work turns. | handler |
 | mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome shows "Waiting on connector details" for a run but cannot answer it; no clarifying questions. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3007-3009`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:700-720`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:693-705`
+Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:693-705`
 
 ## S60.20: Task steering.
 
@@ -323,14 +320,11 @@ Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 - Done when: The user can share a task (its plan, steps and results) with someone else.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | desktop share needs the conversation's messages loaded; wire shareConversation in DesktopTasks after opening the conversation | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/desktop/src/features/v3/DesktopShellV3.tsx:477-477`

@@ -2,37 +2,21 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
-import {
-  readManagedTurnSlots,
-  withRateLimitHandler,
-  type ManagedTurnSlotReading,
-} from '@/lib/rate-limit';
+import type { AccountUsageLimitsResponse, ManagedTurnSlotReading } from '@agiworkforce/types';
+import { readManagedTurnSlots, withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { readFileStorageMeter, type FileStorageMeter } from '@/lib/server/file-storage';
+import { readFileStorageMeter } from '@/lib/server/file-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import { readTierUnitUsage, type TierUnitUsage } from '@/lib/services/tier-unit-quota-service';
-import {
-  readMonthlyImageUsage,
-  type MonthlyImageUsage,
-} from '@/lib/services/account-usage-history-service';
+import { readTierUnitUsage } from '@/lib/services/tier-unit-quota-service';
+import { readMonthlyImageUsage } from '@/lib/services/account-usage-history-service';
 
 export const runtime = 'nodejs';
-
-export interface UsageLimitsResponse {
-  planTier: string;
-  periodStart: string;
-  resetAt: string;
-  units: TierUnitUsage[];
-  images: MonthlyImageUsage;
-  responses: ManagedTurnSlotReading | null;
-  storage: FileStorageMeter;
-}
 
 async function readRunningResponses(
   userId: string,
@@ -69,7 +53,7 @@ async function handler(request: NextRequest) {
         organizationId: scoped.organizationId,
       }),
     ]);
-    const body: UsageLimitsResponse = {
+    const body: AccountUsageLimitsResponse = {
       planTier,
       periodStart: period.periodStart,
       resetAt: period.resetAt,

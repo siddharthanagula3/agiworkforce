@@ -260,7 +260,8 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'outlook',
     name: 'Outlook',
-    capabilitySummary: 'email search, calendar events, and message sending',
+    capabilitySummary:
+      'mail search and reading, calendar events, and sending mail or invites after you approve',
     category: 'Productivity',
     authType: 'oauth',
     phase: 1,
@@ -282,7 +283,7 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'onedrive',
     name: 'OneDrive',
-    capabilitySummary: 'file reads, writes, and search',
+    capabilitySummary: 'file search and reading documents as text',
     category: 'Productivity',
     authType: 'oauth',
     phase: 1,
@@ -316,7 +317,7 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'teams',
     name: 'Microsoft Teams',
-    capabilitySummary: 'message sending, channel management, and conversation search',
+    capabilitySummary: 'reading your chats and listing your teams and channels',
     category: 'Productivity',
     authType: 'oauth',
     phase: 2,
@@ -1034,7 +1035,7 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'sharepoint',
     name: 'SharePoint',
-    capabilitySummary: 'file and site reads, writes, and management',
+    capabilitySummary: 'site and document search and reading documents as text',
     category: 'Storage',
     authType: 'oauth',
     phase: 4,
