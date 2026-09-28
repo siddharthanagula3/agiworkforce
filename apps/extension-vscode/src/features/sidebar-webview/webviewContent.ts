@@ -4155,6 +4155,7 @@ export function getWebviewContent(
       if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -4257,7 +4258,25 @@ export function getWebviewContent(
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -4593,6 +4612,7 @@ export function getWebviewContent(
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -5510,6 +5530,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
