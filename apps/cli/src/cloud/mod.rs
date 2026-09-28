@@ -9,6 +9,7 @@ pub mod artifacts;
 pub mod chat;
 pub mod client;
 pub mod code_sessions;
+pub mod connectors;
 pub mod devices;
 pub mod handshake;
 pub mod image;
