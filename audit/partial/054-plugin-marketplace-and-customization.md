@@ -16,37 +16,31 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | One surface menu opens Skills, Plugins, MCP servers and Hooks, but each is a read-only list with no management. | handler |
+| vscode | partial | Skills and plugins are managed in place and MCP servers can be signed in to; adding or removing a plugin, MCP server or hook still needs the agi CLI because the app-server has no install or remove calls (p-desktop-cli). | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-33`, `apps/extension-vscode/src/core/commandSetup.ts:2310-2310`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`
+Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:145-145`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:109-109`
 
 ## S54.02: Plugins tab.
 
 - Done when: A Plugins section lists available and installed plugins.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Read-only list of installed plugins; no actions. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-33`, `apps/extension-vscode/src/core/commandSetup.ts:2310-2310`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`, `apps/cli/src/app_server/surfaces.rs:153-160`
 
 ## S54.03: Skills tab.
 
 - Done when: A Skills section sits beside plugins in the customization area.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Read-only Skills list only. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-30`, `apps/extension-vscode/src/core/commandSetup.ts:2309-2309`, `apps/cli/src/app_server/surfaces.rs:93-106`
 
 ## S54.05: Public marketplace.
 
@@ -153,15 +147,12 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:456-462`, `packages/ui/
 
 - Done when: A plugin shows the skills it includes, and they become usable when installed.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Plugin skills load in the CLI runtime and show in the Skills list, but the Plugins list never shows what a plugin includes. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2309-2309`, `apps/cli/src/skills.rs:160-175`
 
 ## S54.15: Included connectors.
 
@@ -296,16 +287,15 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/fea
 
 - Done when: A user can turn an installed plugin off and on without uninstalling it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The runtime can toggle a plugin through its app-server API, but no agi command or slash command does it; users must edit the disabled list by hand. | ui |
-| vscode | partial | The runtime client has setPluginEnabled but nothing in VS Code calls it. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/app_server/surfaces.rs:194-201`, `apps/cli/src/tui/tui_app.rs:3762-3790`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1043-1043`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`
+Code: `apps/cli/src/app_server/surfaces.rs:194-201`, `apps/cli/src/tui/tui_app.rs:3762-3790`
 
 ## S54.25: Update.
 

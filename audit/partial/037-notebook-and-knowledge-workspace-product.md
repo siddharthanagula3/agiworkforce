@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: A notebook has a title and description the user can set and later edit.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | VS Code asks only for a name at creation; the description and renaming are edited on the web. | ui |
 | chrome | partial | The side panel names a project at creation only; it cannot rename it or set or edit a description. | ui |
 
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:235-235`, `apps/extension-vscode/src/features/projects/projectActions.ts:116-116`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
 
 ## S37.04: Source rail.
 
@@ -29,10 +28,9 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:235-235`, `
 | --- | --- | --- | --- |
 | mobile | partial | Sources are a tab on the project screen, not beside the conversation. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only in the project quick pick; there is no source panel beside the chat. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-137`, `apps/extension-vscode/src/features/projects/projectActions.ts:78-78`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-48`
+Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-137`
 
 ## S37.06: Add files.
 
@@ -89,14 +87,13 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: The notebook has instructions that apply to every chat in it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Instructions can be typed at creation and are prepended to VS Code turns while the project is in use, but cannot be edited in VS Code afterwards. | ui |
 | chrome | partial | Chrome sets instructions only while creating a project and cannot edit them later. | ui |
 
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:252-252`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/extension/src/side_panel.ts:6421-6421`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/extension/src/side_panel.ts:6421-6421`
 
 ## S37.16: Saved chat responses.
 
