@@ -4555,6 +4555,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
+        "/search" => {
+            if arg.is_empty() {
+                SlashResult::SystemMessage(
+                    "Usage: /search <question>, answer from a web search".to_string(),
+                )
+            } else {
+                app.session.search_next_turn = true;
+                SlashResult::SendPrompt(arg.to_string())
+            }
+        }
+
         // ── Review ──
         "/review" => {
             // Trigger code review by sending a review prompt to the LLM
@@ -7914,6 +7925,7 @@ mod tests {
             "imagine",
             "theme",
             "btw",
+            "search",
             "ctx",
             "review",
             "effort",

@@ -130,6 +130,7 @@ fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse
 struct PreparedInput {
     text: String,
     images: Vec<ContentBlock>,
+    search: bool,
 }
 
 struct TurnSetupSnapshot {
@@ -938,11 +939,15 @@ impl CliDeveloperSessionHost {
             }
         }
 
+        let mut search = false;
         if let Some(index) = typed_parts
             .into_iter()
             .find(|index| text_parts[*index].trim_start().starts_with('/'))
         {
-            if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
+            if let Some(question) = surfaces::search_command(&text_parts[index])? {
+                search = true;
+                text_parts[index] = question;
+            } else if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
                 text_parts[index] = expanded;
             }
         }
@@ -952,7 +957,11 @@ impl CliDeveloperSessionHost {
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
-        Ok(PreparedInput { text, images })
+        Ok(PreparedInput {
+            text,
+            images,
+            search,
+        })
     }
 
     fn content_block_from_local_image(
@@ -2507,6 +2516,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
                 agent.pending_image_blocks = input.images;
+                agent.search_next_turn = input.search;
                 agent.quiet = true;
                 agent.on_tool_approval = Some(ToolApprovalSink(approval_callback(
                     task_thread_id.clone(),

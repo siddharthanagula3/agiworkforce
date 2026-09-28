@@ -254,6 +254,7 @@ pub struct AgentSession {
     /// both the images and the text prompt in a single multipart user turn.
     /// Consumed (drained) by `send()` and empty thereafter.
     pub pending_image_blocks: Vec<models::ContentBlock>,
+    pub search_next_turn: bool,
     /// When `true`, all streaming chunks (including continuation/retry/fallback
     /// turns) are emitted as `MessageDelta` JSONL events to stdout instead of
     /// raw `print!`.  Set by the caller that also sets `json_session_id`.
@@ -727,6 +728,7 @@ impl AgentSession {
             auto_routing_tier: None,
             cloud_project: None,
             pending_image_blocks: Vec::new(),
+            search_next_turn: false,
             json_events: false,
             json_session_id: String::new(),
             sdk_stream_context: None,
