@@ -35,6 +35,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/lib/e2b/runtime.ts:889-893`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | billing/no-yearly df61037ce2: chat.system@3 (unpinned, internal channel) tells models about window.agi.complete and window.agi.storage. Left: connected apps inside published artifacts, which Claude documents (support.claude.com/en/articles/9487310, fetched 2026-09-28: artifacts read and write the viewer's own connected apps after the viewer approves the apps and tools, and Team and Enterprise owners can turn it off); being built next | handler |
+| platform | partial | billing/no-yearly 234af98ee3: chat.system@3 (unpinned, internal channel) tells models about window.agi.complete and window.agi.storage. Left: connected apps inside published artifacts, which Claude documents (support.claude.com/en/articles/9487310, fetched 2026-09-28: artifacts read and write the viewer's own connected apps after the viewer approves the apps and tools, and Team and Enterprise owners can turn it off); being built next | handler |
 
 Code: `apps/web/lib/prompts/chat-system-prompt.ts:130-130`, `apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts:218-218`
