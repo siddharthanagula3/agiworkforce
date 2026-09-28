@@ -176,14 +176,11 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 - Done when: A workspace curates its own private catalogue of plugins, skills or servers that members browse and install, separate from the public directory.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | There is no workspace-owned plugin or skill marketplace: marketplace sources are registered per user; the workspace can only publish MCP servers to its members and allow-list plugins. | ui, persistence |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/mcp/page.tsx:12-17`, `apps/web/features/workspace-console/components/WorkspaceMcpServers.tsx:276-282`, `apps/web/app/api/settings/organization/mcp/route.ts:132-152`, `apps/web/lib/services/plugin-marketplace-service.ts:804-811`
 
 ## S87.19: Shared Project administration.
 
