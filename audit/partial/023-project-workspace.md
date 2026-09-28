@@ -209,14 +209,14 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Workspace > Sharing now names members (display name or email); the project page still has no member list for the people who can open the project. | ui |
-| desktop | partial | Workspace > Sharing now names members (display name or email); the project page still has no member list for the people who can open the project. | ui |
+| web | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
+| desktop | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-315`, `apps/web/app/api/settings/organization/shared/route.ts:73-73`
+Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:120-120`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-318`
 
 ## S23.22: Member roles.
 
@@ -235,33 +235,27 @@ Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-31
 
 - Done when: An owner or manager can add a person to a specific project and remove them from it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Removal works per project (set a member to "No access"), but there is no per-project invite: the only way in is inviting someone to the whole workspace, after which they see every shared project. | ui, handler |
-| desktop | partial | Same as web: per-project removal via "No access"; no per-project invite, only whole-workspace invites. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:317-338`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:141-147`, `apps/web/features/settings/sections/TeamSection.tsx:685-707`
 
 ## S23.24: Shared Project links.
 
 - Done when: A user can get a link to a project that opens it for the people it is shared with.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Share" only copies the project URL; it opens for the owner and, if the project was separately shared from Workspace > Sharing, for org members. Nothing tells the user that, there is no link audience choice, and the project page itself has no share control. | ui |
-| desktop | partial | "Share" only copies the project URL; it opens for the owner and, if the project was separately shared from Workspace > Sharing, for org members. Nothing tells the user that, there is no link audience choice, and the project page itself has no share control. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/ProjectCard.tsx:211-223`, `apps/web/app/chat/projects/page.tsx:484-484`, `apps/web/app/chat/projects/page.tsx:135-143`, `apps/web/app/api/projects/[id]/route.ts:113-124`
 
 ## S23.29: Duplicate a Project.
 
