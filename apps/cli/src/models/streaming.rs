@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use agiworkforce_llm::{
     stream_chat, Auth, ChatOutcome, ChatRequest, Dialect, LlmError, OpenAiOpts, ProviderSpec,
-    StreamEvent,
+    StreamEvent, ToolChoice,
 };
 
 use crate::config::CliConfig;
@@ -32,9 +32,45 @@ use crate::errors::CliError;
 use super::managed_approvals::{self, ManagedApprovalPause};
 use super::{
     provider_dispatch::{resolve_key, try_subscription_auth},
-    CompletionResult, Message, OllamaMode, Provider, StreamCallback, ToolDefinition,
-    STREAM_IDLE_TIMEOUT,
+    CompletionResult, ContentBlock, Message, MessageContent, OllamaMode, Provider, StreamCallback,
+    ToolDefinition, STREAM_IDLE_TIMEOUT,
 };
+
+pub const WEB_SEARCH_TOOL: &str = "web_search";
+
+const REQUIRED_SEARCH_NUDGE: &str = "This turn requires live web results. Call the web search tool before you answer, base the answer on what it returns, and cite the pages you used. Do not answer from memory alone, and do not tell the user to search for themselves. If a search returns nothing usable, say so plainly instead of substituting your own recollection.";
+
+tokio::task_local! {
+    static SEARCH_TURN: ();
+}
+
+pub(crate) async fn searching<F: std::future::Future>(future: F) -> F::Output {
+    SEARCH_TURN.scope((), future).await
+}
+
+fn search_turn() -> bool {
+    SEARCH_TURN.try_with(|_| ()).is_ok()
+}
+
+fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
+    let mut nudged = messages.to_vec();
+    if let Some(last_user) = nudged
+        .iter_mut()
+        .rev()
+        .find(|message| message.role == "user")
+    {
+        match &mut last_user.content {
+            MessageContent::Text(text) => {
+                text.push_str("\n\n");
+                text.push_str(REQUIRED_SEARCH_NUDGE);
+            }
+            MessageContent::Blocks(blocks) => blocks.push(ContentBlock::Text {
+                text: REQUIRED_SEARCH_NUDGE.to_string(),
+            }),
+        }
+    }
+    nudged
+}
 
 /// Deadline for establishing a provider connection.
 ///
@@ -384,12 +420,27 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
             .collect(),
         extra_body: crate::cloud::bound_conversation()
             .map(|conversation_id| {
-                vec![(
+                (
                     "conversation_id".to_string(),
                     serde_json::Value::String(conversation_id),
-                )]
+                )
             })
-            .unwrap_or_default(),
+            .into_iter()
+            .chain(
+                search_turn()
+                    .then(|| {
+                        [
+                            ("web_search".to_string(), serde_json::Value::Bool(true)),
+                            (
+                                "search_requested".to_string(),
+                                serde_json::Value::Bool(true),
+                            ),
+                        ]
+                    })
+                    .into_iter()
+                    .flatten(),
+            )
+            .collect(),
     })
 }
 
@@ -509,6 +560,19 @@ async fn run_spec_observing(
         }
         (_, effort) => effort.map(|e| e.openai_effort_str()),
     };
+    let searching = search_turn()
+        && spec.id != super::provider_name(&Provider::ManagedCloud)
+        && tools.is_some_and(|tools| tools.iter().any(|tool| tool.name == WEB_SEARCH_TOOL));
+    let forced_search = searching
+        && crate::model_catalog::accepts_forced_tool_choice(model)
+        && !(matches!(spec.dialect, Dialect::Anthropic) && thinking_budget.is_some());
+    let nudged;
+    let messages = if searching && !forced_search {
+        nudged = with_search_nudge(messages);
+        nudged.as_slice()
+    } else {
+        messages
+    };
     let req = ChatRequest {
         model: &wire_model,
         messages,
@@ -516,7 +580,7 @@ async fn run_spec_observing(
         temperature: effective_temperature(model, temperature),
         tools,
         thinking_budget,
-        tool_choice: None,
+        tool_choice: forced_search.then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
         anthropic_thinking: None,
         effort: None,
         top_p: None,
@@ -550,6 +614,11 @@ fn stream_event_handler<'a>(
         }
         StreamEvent::Vendor { event, data } if event == crate::sources::SEARCH_RESULTS_EVENT => {
             crate::sources::record(crate::sources::from_search_results_delta(&data))
+        }
+        StreamEvent::Vendor { event, data }
+            if event == crate::cloud::connectors::TOOL_RESULT_EVENT =>
+        {
+            crate::cloud::connectors::observe_tool_result(&data)
         }
         StreamEvent::Vendor { event, data } => {
             if let Some(pause) = pause.as_deref_mut() {
@@ -620,12 +689,18 @@ async fn run_managed_cloud(
     )
     .await
     {
-        Err(error) if !spec.extra_body.is_empty() && hosted_conversation_missing(&error) => {
+        Err(error)
+            if spec
+                .extra_body
+                .iter()
+                .any(|(key, _)| key == "conversation_id")
+                && hosted_conversation_missing(&error) =>
+        {
             if let Some(conversation_id) = crate::cloud::bound_conversation() {
                 crate::cloud::forget_hosted_conversation(&conversation_id);
             }
             spec = managed_cloud_spec(jwt)?;
-            spec.extra_body.clear();
+            spec.extra_body.retain(|(key, _)| key != "conversation_id");
             run_spec_observing(
                 client,
                 &spec,

@@ -838,10 +838,11 @@ const QUOTA_WARNING_HEADER: &str = "x-quota-warning";
 const QUOTA_WARNING_EVENT: &str = "quota_warning";
 const AGENT_RUN_ID_HEADER: &str = "x-agi-agent-run-id";
 pub const AGENT_RUN_ID_EVENT: &str = "agent_run_id";
-pub const FORWARDED_DELTA_EXTENSIONS: [&str; 3] = [
+pub const FORWARDED_DELTA_EXTENSIONS: [&str; 4] = [
     "x_tool_approval_request",
     "x_agent_event",
     "x_search_results",
+    "x_tool_result",
 ];
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
