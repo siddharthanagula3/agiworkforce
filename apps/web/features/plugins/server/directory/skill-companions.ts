@@ -13,6 +13,10 @@ import {
   readOwnedEntryFile,
 } from '@/lib/services/plugin-owned-source-service';
 import {
+  listCommunitySkillCompanions,
+  readCommunityPluginFile,
+} from '@/lib/services/plugin-submission-service';
+import {
   GITHUB_API_USER_AGENT,
   GITHUB_TOKEN_ENV_VAR,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
@@ -112,6 +116,17 @@ export function organizationSkillFileAccess(
     list: (directory, limit) =>
       listOrganizationSkillCompanions(db, organizationId, pluginId, directory, limit),
     read: (path) => readOrganizationPluginFile(db, organizationId, pluginId, path),
+  });
+}
+
+export function communitySkillFileAccess(
+  db: DatabaseAdapter,
+  submissionId: string,
+  skillFilePath: string,
+): SkillToolFileAccess {
+  return storedSkillFileAccess(skillFilePath, {
+    list: (directory, limit) => listCommunitySkillCompanions(db, submissionId, directory, limit),
+    read: (path) => readCommunityPluginFile(db, submissionId, path),
   });
 }
 

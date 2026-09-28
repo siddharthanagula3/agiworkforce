@@ -538,7 +538,10 @@
         "plugin_package_scans",
         "plugin_registry_entries",
         "plugin_registry_lifecycle_events",
-        "plugin_registry_versions"
+        "plugin_registry_versions",
+        "plugin_submission_files",
+        "plugin_submission_installs",
+        "plugin_submissions"
       ]
     },
     {

@@ -6,9 +6,12 @@ import type { ReactNode } from 'react';
 
 import {
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
+  type CommunityPlugin,
+  type CommunityPluginPatch,
   type ManagedSkillSummary,
   type MemberOrganizationPluginPatch,
   type MemberOrganizationPluginsResponse,
+  type PluginSubmissionSummary,
 } from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type {
@@ -49,7 +52,11 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import { PLUGIN_TARGET_WORKSPACE, type PluginInstallationTarget } from '@/features/plugins/routes';
+import {
+  PLUGIN_TARGET_COMMUNITY,
+  PLUGIN_TARGET_WORKSPACE,
+  type PluginInstallationTarget,
+} from '@/features/plugins/routes';
 
 import {
   buildSettingsBrowseHash,
@@ -90,6 +97,10 @@ import {
   PLUGIN_REPAIR_RELOAD_LABEL,
   PLUGIN_UPDATE_FAILED_COPY,
   PLUGIN_CUSTOMIZE_FAILED_COPY,
+  PLUGIN_SUBMISSION_WITHDRAWN_NOTICE,
+  PLUGIN_SUBMIT_FAILED_COPY,
+  PLUGIN_SUBMITTED_NOTICE,
+  PLUGIN_WITHDRAW_FAILED_COPY,
   PLUGIN_CUSTOMIZE_PATH,
   PLUGIN_EDIT_FAILED_COPY,
   PLUGIN_EDIT_LOAD_FAILED_COPY,
@@ -146,9 +157,13 @@ import {
   fetchPluginVersions,
   fetchPluginDirectoryPage,
   fetchPluginInstallState,
+  fetchCommunityPlugins,
+  fetchPluginSubmissions,
   fetchUserMarketplaces,
   fetchWorkspacePlugins,
   initialPluginSection,
+  latestSubmissionFor,
+  submitPluginForReview,
   installPlugin as requestPluginInstall,
   marketplaceRequest,
   pluginDirectoryHref,
@@ -156,10 +171,13 @@ import {
   toPluginManageRows,
   toPluginRequest,
   toPluginSection,
+  toCommunityPluginDetail,
   toUserMarketplaceDetail,
   toWorkspacePluginDetail,
   uninstallPlugin as requestPluginUninstall,
+  updateCommunityPlugin,
   updateWorkspacePlugin,
+  withdrawPluginSubmission as requestSubmissionWithdrawal,
   userMarketplaceSourceId,
   withInstallBlock,
   type PluginInstallOutcome,
@@ -237,6 +255,8 @@ interface PluginPageState {
   user: UserMarketplaceState;
   installs: PluginInstallState;
   workspace: MemberOrganizationPluginsResponse;
+  community: CommunityPlugin[];
+  submissions: PluginSubmissionSummary[];
 }
 
 const EMPTY_PLUGIN_PAGE: PluginPageState = {
@@ -247,6 +267,8 @@ const EMPTY_PLUGIN_PAGE: PluginPageState = {
   user: EMPTY_USER_MARKETPLACES,
   installs: EMPTY_INSTALL_STATE,
   workspace: EMPTY_WORKSPACE_PLUGINS,
+  community: [],
+  submissions: [],
 };
 
 function pluginQueryKey(query: DirectoryQuery): string {
@@ -640,6 +662,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         user: page.user,
         installs: page.installs,
         workspace: page.workspace,
+        community: page.community,
       });
       const notice = [page.installs.notice, pluginRegistryNotice.current].filter(Boolean).join(' ');
       const next: DirectorySection = {
@@ -658,6 +681,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           user: page.user,
           installs: page.installs,
           workspace: page.workspace,
+          community: page.community,
         }),
         loading: next.loading === true,
         error: next.error ?? null,
@@ -672,13 +696,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const primePlugins = useCallback((): Promise<void> => {
     if (pluginPrime.current) return pluginPrime.current;
     const promise = (async () => {
-      const [builtin, partner, installs, user, workspace] = await Promise.all([
-        fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_BUILTIN)),
-        fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_PARTNER)),
-        fetchPluginInstallState(),
-        fetchUserMarketplaces(),
-        fetchWorkspacePlugins(),
-      ]);
+      const [builtin, partner, installs, user, workspace, community, submissions] =
+        await Promise.all([
+          fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_BUILTIN)),
+          fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_PARTNER)),
+          fetchPluginInstallState(),
+          fetchUserMarketplaces(),
+          fetchWorkspacePlugins(),
+          fetchCommunityPlugins(),
+          fetchPluginSubmissions(),
+        ]);
       pluginPageRef.current = {
         ...pluginPageRef.current,
         builtin: builtin.entries,
@@ -687,6 +714,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         installs,
         user,
         workspace,
+        community,
+        submissions,
       };
     })().catch((error: unknown) => {
       pluginPrime.current = null;
@@ -815,6 +844,37 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     publishPlugins({});
   }, [publishPlugins]);
 
+  const refreshCommunity = useCallback(async () => {
+    const [community, submissions] = await Promise.all([
+      fetchCommunityPlugins(),
+      fetchPluginSubmissions(),
+    ]);
+    pluginPageRef.current = { ...pluginPageRef.current, community, submissions };
+    publishPlugins({});
+  }, [publishPlugins]);
+
+  const findCommunityPlugin = useCallback(
+    (id: string) => pluginPageRef.current.community.find((plugin) => plugin.id === id),
+    [],
+  );
+
+  const changeCommunityPlugin = useCallback(
+    async (id: string, patch: CommunityPluginPatch, failureCopy: string) => {
+      try {
+        await updateCommunityPlugin(id, patch, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : failureCopy,
+        );
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshCommunity();
+    },
+    [refreshCommunity],
+  );
+
   const findWorkspacePlugin = useCallback(
     (id: string) => pluginPageRef.current.workspace.plugins.find((plugin) => plugin.id === id),
     [],
@@ -922,8 +982,19 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             userEntry,
             page.user.sources.find((source) => source.id === userEntry.sourceId),
             page.installs,
+            latestSubmissionFor(page.submissions, userEntry.id),
           ),
         );
+      }
+      const communityPlugin = findCommunityPlugin(id);
+      if (communityPlugin) {
+        setSettingsPluginId(communityPlugin.installed ? id : null);
+        setSettingsTarget(
+          communityPlugin.installed ? { kind: PLUGIN_TARGET_COMMUNITY, pluginId: id } : null,
+        );
+        setSettingsSkills(communityPlugin.skills);
+        setSettingsEnabled(communityPlugin.enabled);
+        return toCommunityPluginDetail(communityPlugin);
       }
       const workspacePlugin = findWorkspacePlugin(id);
       if (workspacePlugin) {
@@ -945,6 +1016,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       primePlugins,
       findPluginRecord,
       findUserEntry,
+      findCommunityPlugin,
       findWorkspacePlugin,
       selectSettingsTarget,
       ensureSkillCatalog,
@@ -1107,6 +1179,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const installPlugin = useCallback(
     async (id: string): Promise<string | undefined> => {
+      if (findCommunityPlugin(id)) {
+        await changeCommunityPlugin(
+          id,
+          { installed: true, enabled: true },
+          PLUGIN_INSTALL_FAILED_COPY,
+        );
+        return undefined;
+      }
       const workspacePlugin = findWorkspacePlugin(id);
       if (workspacePlugin) {
         await changeWorkspacePlugin(
@@ -1153,6 +1233,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       );
     },
     [
+      findCommunityPlugin,
+      changeCommunityPlugin,
       findWorkspacePlugin,
       changeWorkspacePlugin,
       findPluginRecord,
@@ -1192,6 +1274,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const removePlugin = useCallback(
     async (id: string) => {
+      if (findCommunityPlugin(id)) {
+        await changeCommunityPlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
+        return;
+      }
       if (findWorkspacePlugin(id)) {
         await changeWorkspacePlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
         return;
@@ -1220,7 +1306,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
     },
-    [findWorkspacePlugin, changeWorkspacePlugin, findPluginRecord, refreshPluginInstalls],
+    [
+      findCommunityPlugin,
+      changeCommunityPlugin,
+      findWorkspacePlugin,
+      changeWorkspacePlugin,
+      findPluginRecord,
+      refreshPluginInstalls,
+    ],
   );
 
   const runSkillDelete = useCallback(
@@ -1440,6 +1533,40 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [findPluginRecord, refreshPluginInstalls, refreshUserMarketplaces],
   );
 
+  const submitPlugin = useCallback(
+    async (id: string): Promise<string> => {
+      try {
+        await submitPluginForReview(id, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : PLUGIN_SUBMIT_FAILED_COPY,
+        );
+      }
+      await refreshCommunity();
+      return PLUGIN_SUBMITTED_NOTICE;
+    },
+    [refreshCommunity],
+  );
+
+  const withdrawPluginSubmission = useCallback(
+    async (id: string): Promise<string> => {
+      const submission = latestSubmissionFor(pluginPageRef.current.submissions, id);
+      if (!submission) throw new Error(PLUGIN_WITHDRAW_FAILED_COPY);
+      try {
+        await requestSubmissionWithdrawal(submission.id, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : PLUGIN_WITHDRAW_FAILED_COPY,
+        );
+      }
+      await refreshCommunity();
+      return PLUGIN_SUBMISSION_WITHDRAWN_NOTICE;
+    },
+    [refreshCommunity],
+  );
+
   const uploadSkillFile = useCallback(
     async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
       const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
@@ -1559,6 +1686,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       if (settingsTarget.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();
+      else if (settingsTarget.kind === PLUGIN_TARGET_COMMUNITY) await refreshCommunity();
       else await refreshPluginInstalls();
     },
     [
@@ -1567,6 +1695,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       pluginSettingsState,
       refreshPluginInstalls,
       refreshWorkspacePlugins,
+      refreshCommunity,
     ],
   );
 
@@ -1695,6 +1824,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             loadPluginDraft,
             updatePlugin,
             customizePlugin,
+            submitPlugin,
+            withdrawPluginSubmission,
           }
         : {}),
       ...(pluginSettings ? { pluginSettings } : {}),
@@ -1737,6 +1868,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       loadPluginDraft,
       updatePlugin,
       customizePlugin,
+      submitPlugin,
+      withdrawPluginSubmission,
       pluginSettings,
       setPluginEnabled,
       setPluginVersion,
