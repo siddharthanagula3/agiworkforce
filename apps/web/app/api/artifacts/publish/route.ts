@@ -414,7 +414,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
     return handleListVersions(request, versionsToken);
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   let artifacts;
   try {
     artifacts = await listPublishedArtifacts(db, { userId });
@@ -429,6 +429,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
       shareUrl: buildPublishedArtifactUrl(artifact.token),
       sandboxed: requiresSandboxedRender(artifact.kind),
     })),
+    workspace: await describeWorkspaceAudience(db, organizationId),
   });
 }
 
