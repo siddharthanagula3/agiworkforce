@@ -1,4 +1,4 @@
--- Reversal of 0330 : Free usage reservations stop recording the attempt's
+-- Reversal of 0331 : Free usage reservations stop recording the attempt's
 -- conversation and how it ended, and free-pool turns stop writing a row.
 --
 -- WHAT THIS COSTS: every recorded conversation link, attempt outcome and error
@@ -26,6 +26,6 @@ alter table public.free_daily_usage_reservations
     check (reserved_microusd > 0);
 
 delete from public.schema_migrations
- where filename = '0330_free_usage_attempt_record.sql';
+ where filename = '0331_free_usage_attempt_record.sql';
 
 commit;

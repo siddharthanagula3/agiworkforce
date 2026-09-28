@@ -201,6 +201,16 @@ const ALLOWLIST = [
       'the Library, which clears the flag, is never in the candidate set.',
   },
   {
+    match: /lib\/slack\/slack-installations\.ts$/,
+    tables: ['slack_installations'],
+    reason:
+      'a Slack installation belongs to a Slack workspace, not to an account: a signed Slack ' +
+      'event names only the Slack team, so the installation and its sealed bot token are found ' +
+      'by team id or by the id a link or run already carries, on the service role, and only ' +
+      'the account that installed it may remove it, which the uninstall statement constrains by ' +
+      'installed_by_user_id. Members read the rows they may see through the app_rls policy.',
+  },
+  {
     match: /lib\/services\/semantic-decisions\/trace-service\.ts$/,
     tables: ['semantic_decision_traces'],
     reason:

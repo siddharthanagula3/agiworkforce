@@ -175,6 +175,14 @@ export const contracts = {
     },
     urlKeys: ['SIGNALING_HTTP_URL', 'SIGNALING_WS_URL'],
   },
+  scanner: {
+    productionExample: 'services/upload-scanner/.env.example',
+    developmentExample: 'services/upload-scanner/.env.example',
+    required: {
+      production: ['UPLOAD_SCAN_WEBHOOK_TOKEN'],
+      development: ['UPLOAD_SCAN_WEBHOOK_TOKEN'],
+    },
+  },
 };
 
 const platformProvidedKeys = new Set([

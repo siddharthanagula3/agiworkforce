@@ -19,6 +19,7 @@ import { fetchTierInfo, parseTierInfoResponse } from '../utils/api';
 import { resolveUsageMeter } from '../data/usageMeter';
 import { buildUsageMeterPayload } from '../features/sidebar-webview/ChatStateManager';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 vi.mock('../utils/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils/api')>();
@@ -79,7 +80,7 @@ function executeWebviewScript(): void {
 
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage: vi.fn() }),
+    value: () => vscodeApiStub({ postMessage: vi.fn() }),
   });
 
   const inlineScript = Array.from(parsed.querySelectorAll('script')).find((script) =>

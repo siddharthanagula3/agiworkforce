@@ -719,6 +719,27 @@
       },
       "completedAt": "completed_at"
     },
+    "slack_assistant_runs": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "an answer is one step; while it runs the person sees the working reaction on their message in Slack"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing stops an answer once Slack delivered the message; it ends within the answer budget or waits for an approval that expires"
+      },
+      "retry": {
+        "none": "a redelivery from Slack is deduplicated on the event id and a failed answer is final; asking again in Slack is a new row"
+      },
+      "result": { "none": "the answer is posted to Slack and is not kept here" },
+      "error": "error",
+      "requestId": "event_id",
+      "cost": {
+        "none": "what an answer spends is the managed usage request keyed on this run, not a column here"
+      },
+      "completedAt": "completed_at"
+    },
     "video_generation_jobs": {
       "operationId": "id",
       "startedAt": "provider_started_at",
@@ -735,7 +756,12 @@
       "completedAt": "terminal_at"
     }
   },
-  "notOperations": [],
+  "notOperations": [
+    {
+      "table": "slack_link_requests",
+      "why": "the single-use link a Slack user who is not linked yet is sent; nothing runs and nobody waits on it, it is used once or it expires"
+    }
+  ],
   "concurrency": {
     "projects": {
       "table": "user_projects",
