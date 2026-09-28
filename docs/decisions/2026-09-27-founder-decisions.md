@@ -99,6 +99,13 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
   in VS Code has no projects, library, AGI Work, schedule creation, account
   connection, model catalog or billing; it hands those to the web.
+- **Research, notebook and IDE extras (S36.24, S37.16, S37.17, S37.35, S54.18 outside
+  Claude Code, S66.08, S66.12, S66.16, S66.29, S66.38 in VS Code, S98.26).** No
+  curated per-answer evidence set, saved answers, notes or notebook export (as
+  S23.27, S23.10, S23.31), no plugin hooks where no user shell runs, no second
+  file tree, editor, terminal, task or test panel inside VS Code, and publisher
+  identity checked in the owner's review of each submission, as ChatGPT's app
+  review does.
 - **VS Code artifacts (S26.14, S26.29, S26.31 in VS Code).** Neither Claude Code
   nor Codex in VS Code previews, exports or publishes artifacts; VS Code lists
   them and opens a published artifact's link.

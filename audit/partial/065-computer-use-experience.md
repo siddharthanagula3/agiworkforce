@@ -61,10 +61,9 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1000-1005`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Steps are described in words ("Clicked at 412, 300") under the screenshot, but nothing marks the pointer or click point on screen or on the image. | ui |
 | chrome | partial | The log names each click ("Click at (x, y)" or selector); nothing marks the target on the page. | ui |
 
-Code: `packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx:420-428`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1025-1031`
+Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1025-1031`
 
 ## S65.09: Current-application indicator.
 
@@ -106,14 +105,13 @@ Code: `apps/desktop/electron/runtime/dispatcher.ts:421-424`, `apps/web/features/
 
 - Done when: The user grants the agent specific local folders and can revoke them.
 - Wave: 2
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Folders can be granted (workspace_pick_root), but the only review and revoke screen, Local access, mounts only in the internal Tauri shell, so Electron users cannot revoke a granted folder. | ui, mount |
-| cli | partial | /add-dir is a real grant (path_security roots gate validate_workspace_path), but the criterion also needs revoke: there is no /remove-dir or any command that unregisters one directory; unregister_additional_workspace_roots runs only when a privacy handoff resets the session. Remaining: add a /remove-dir that unregisters the root. |  |
 
-Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`, `apps/cli/src/claude_parity.rs:238-246`
+Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`
 
 ## S65.14: Clicking and typing.
 
@@ -157,10 +155,9 @@ Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only by generic clicks and typing on the screenshot; there is no file-dialog action that picks a path directly. | handler |
 | chrome | partial | The agent can open a page's upload button (with approval) but the user must choose the file in Chrome's picker; it cannot drive the dialog. | handler |
 
-Code: `apps/desktop/electron/runtime/dispatcher.ts:829-867`, `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
+Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
 
 ## S65.18: Background application operation where supported.
 

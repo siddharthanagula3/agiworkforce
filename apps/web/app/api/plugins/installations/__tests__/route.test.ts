@@ -7,6 +7,7 @@ const {
   getNeonDbMock,
   userScopedDbMock,
   installWebPluginMock,
+  planWebPluginInstallMock,
   listPluginInstallationsMock,
   setWebPluginEnabledMock,
   uninstallWebPluginMock,
@@ -20,6 +21,7 @@ const {
   getNeonDbMock: vi.fn(),
   userScopedDbMock: vi.fn(),
   installWebPluginMock: vi.fn(),
+  planWebPluginInstallMock: vi.fn(),
   listPluginInstallationsMock: vi.fn(),
   setWebPluginEnabledMock: vi.fn(),
   uninstallWebPluginMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('@/lib/services/connector-policy-gate', () => ({
 }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   installWebPlugin: installWebPluginMock,
+  planWebPluginInstall: planWebPluginInstallMock,
   listPluginInstallations: listPluginInstallationsMock,
   setWebPluginEnabled: setWebPluginEnabledMock,
   uninstallWebPlugin: uninstallWebPluginMock,
@@ -114,6 +117,7 @@ beforeEach(() => {
     reason: '',
     organizationId: null,
   });
+  planWebPluginInstallMock.mockResolvedValue({ root: {}, dependencies: [] });
 });
 
 describe('GET /api/plugins/installations', () => {
@@ -141,7 +145,12 @@ describe('POST /api/plugins/installations (install)', () => {
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.installation).toEqual(INSTALLATION);
-    expect(installWebPluginMock).toHaveBeenCalledWith(expect.anything(), 'user-1', 'research-pack');
+    expect(installWebPluginMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'research-pack',
+      expect.anything(),
+    );
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),

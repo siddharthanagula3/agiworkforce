@@ -17,15 +17,17 @@ use agiworkforce_protocol::developer_session::{
     HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
     HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
     LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerListResponse, ModelListParams, PendingApprovalSnapshot,
-    PluginListResponse, PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillListResponse, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadStartParams,
-    ThreadStatus, ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
-    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    McpServerConfiguredStatus, McpServerListResponse, MemoryAddParams, MemoryAddResponse,
+    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
+    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -41,6 +43,7 @@ use uuid::Uuid;
 
 use super::account;
 use super::surfaces;
+use super::threads;
 use crate::agent::{AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink};
 use crate::config::CliConfig;
 use crate::context;
@@ -91,6 +94,8 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
 ///.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
+const DEFAULT_SEARCH_HITS: usize = 20;
+const MAX_SEARCH_HITS: usize = 50;
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
@@ -124,6 +129,7 @@ struct TurnSetupSnapshot {
     auto_approve_safe: bool,
     thinking_budget_tokens: Option<u32>,
     effort: Option<crate::design_system::Effort>,
+    max_turns: Option<usize>,
     message_count: usize,
     attachment_count: usize,
     fallback_chain: Option<crate::routing::fallback::FallbackChain>,
@@ -143,6 +149,7 @@ impl TurnSetupSnapshot {
             auto_approve_safe: agent.auto_approve_safe,
             thinking_budget_tokens: agent.thinking_budget_tokens,
             effort: agent.effort,
+            max_turns: agent.max_turns,
             message_count: agent.messages.len(),
             attachment_count: agent.attached_context_files.len(),
             fallback_chain: agent.fallback_chain.clone(),
@@ -161,6 +168,7 @@ impl TurnSetupSnapshot {
         agent.auto_approve_safe = self.auto_approve_safe;
         agent.thinking_budget_tokens = self.thinking_budget_tokens;
         agent.effort = self.effort;
+        agent.max_turns = self.max_turns;
         agent.messages.truncate(self.message_count);
         agent.attached_context_files.truncate(self.attachment_count);
         agent.fallback_chain = self.fallback_chain;
@@ -385,6 +393,12 @@ impl CliDeveloperSessionHost {
             thread_delete: true,
             reconnect: true,
             writer_lease: true,
+            thread_unarchive: true,
+            thread_search: true,
+            fork_at_message: true,
+            prompt_commands: true,
+            max_turns: true,
+            memory: true,
         }
     }
 
@@ -840,6 +854,7 @@ impl CliDeveloperSessionHost {
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
+        let text = surfaces::expand_prompt_command(&text)?.unwrap_or(text);
         Ok(PreparedInput { text, images })
     }
 
@@ -1286,6 +1301,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let _admission = self.admit_request().await?;
         let host_models = self.host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
+        let local_servers = probes
+            .iter()
+            .filter_map(surfaces::local_server_status)
+            .collect();
         let models = crate::local_models::discovered_models(&probes)
             .into_iter()
             .filter_map(|model| {
@@ -1303,6 +1322,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(LocalModelListResponse {
             models,
             host_models,
+            local_servers,
         })
     }
 
@@ -1489,23 +1509,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(internal_error)?
         .map_err(not_found_error)?;
         self.validate_session_workspace(&session)?;
-        let eligible_count = session
+        let transcript: Vec<_> = session
             .messages
             .iter()
-            .filter(|message| !message.role.eq_ignore_ascii_case("system"))
-            .count();
+            .filter(|message| threads::is_transcript_message(message))
+            .collect();
+        let eligible_count = transcript.len();
         let mut messages_newest_first = Vec::new();
         let mut serialized_bytes = 2usize; // JSON array brackets.
         let mut transcript_truncated = false;
-        for message in session
-            .messages
-            .iter()
-            .rev()
-            .filter(|message| !message.role.eq_ignore_ascii_case("system"))
-        {
+        for (index, message) in transcript.iter().enumerate().rev() {
             let projected = DeveloperMessage {
                 role: message.role.clone(),
                 text: message.text_content(),
+                index: u32::try_from(index).ok(),
             };
             let projected_bytes = serde_json::to_vec(&projected)
                 .map_err(internal_error)?
@@ -1559,20 +1576,36 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let title = clean_title(params.title);
         let created_by = source_to_stored(source_from_client(&client)).to_string();
         let client_name = client.name.clone();
+        let through_message_index = params.through_message_index;
         let resolved = tokio::task::spawn_blocking(move || {
-            let forked = store.fork(ManagedSessionReference::SessionId(source_id))?;
-            let mut session = store.load(forked.reference.clone())?;
+            let reference = ManagedSessionReference::SessionId(source_id);
+            if let Some(index) = through_message_index {
+                let source = store.load(reference.clone()).map_err(not_found_error)?;
+                if threads::transcript_position(&source.messages, index).is_none() {
+                    return Err(DeveloperSessionHostError::invalid_request(format!(
+                        "This thread has no message at index {index} to fork through"
+                    )));
+                }
+            }
+            let forked = store.fork(reference).map_err(not_found_error)?;
+            let mut session = store
+                .load(forked.reference.clone())
+                .map_err(not_found_error)?;
+            if let Some(index) = through_message_index {
+                threads::keep_through_message(&mut session.messages, index);
+            }
             if title.is_some() {
                 session.title = title;
             }
             session.created_by = Some(created_by);
             session.client = Some(client_name);
-            store.save(&session)?;
-            store.resolve(ManagedSessionReference::SessionId(session.session_id))
+            store.save(&session).map_err(internal_error)?;
+            store
+                .resolve(ManagedSessionReference::SessionId(session.session_id))
+                .map_err(not_found_error)
         })
         .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
+        .map_err(internal_error)??;
         let summary = self.resolved_summary(resolved).await;
         self.emit("thread/forked", serde_json::json!({ "thread": summary }));
         Ok(summary)
@@ -1707,6 +1740,87 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let _ = self.notifications.send(notification);
         }
         Ok(())
+    }
+
+    async fn unarchive_thread(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let store = self.store.clone();
+        let thread_id = params.thread_id;
+        let id_for_event = thread_id.clone();
+        tokio::task::spawn_blocking(move || {
+            store.unarchive(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        self.emit(
+            "thread/unarchived",
+            serde_json::json!({ "threadId": id_for_event }),
+        );
+        Ok(())
+    }
+
+    async fn search_threads(
+        &self,
+        params: ThreadSearchParams,
+    ) -> Result<ThreadSearchResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let needle = threads::lowered(params.query.trim());
+        if needle.is_empty() {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "thread/search needs a query",
+            ));
+        }
+        let limit = params
+            .limit
+            .map_or(DEFAULT_SEARCH_HITS, |limit| limit as usize)
+            .clamp(1, MAX_SEARCH_HITS);
+        let store = self.store.clone();
+        let workspace_root = self.workspace_root.clone();
+        let include_archived = params.include_archived;
+        let found = tokio::task::spawn_blocking(move || {
+            let mut found = Vec::new();
+            for summary in store.list()? {
+                if summary.workspace_root.as_deref() != Some(workspace_root.as_path())
+                    || (!include_archived && summary.archived_at.is_some())
+                {
+                    continue;
+                }
+                let title_matched = summary
+                    .title
+                    .as_deref()
+                    .is_some_and(|title| threads::lowered(title).contains(&needle));
+                let Ok(session) = store.load(ManagedSessionReference::SessionId(
+                    summary.session_id.clone(),
+                )) else {
+                    continue;
+                };
+                let matches = threads::transcript_matches(&session.messages, &needle);
+                if title_matched || !matches.is_empty() {
+                    found.push((summary, title_matched, matches));
+                    if found.len() == limit {
+                        break;
+                    }
+                }
+            }
+            anyhow::Ok(found)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+        let mut hits = Vec::with_capacity(found.len());
+        for (summary, title_matched, matches) in found {
+            hits.push(ThreadSearchHit {
+                thread: self.thread_summary(summary).await,
+                title_matched,
+                matches,
+            });
+        }
+        Ok(ThreadSearchResponse { hits })
     }
 
     async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
@@ -1897,6 +2011,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
         let prepared = self.prepare_input(params.input)?;
         let client_turn_id = validated_client_turn_id(params.client_turn_id)?;
+        let max_turns = validated_max_turns(params.max_turns)?;
         let session = self.load_agent(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
         // Keeping this guard through session setup prevents a losing concurrent.
@@ -1979,6 +2094,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.set_managed_auto_routing(None);
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
+                agent.max_turns = max_turns;
                 if !context_files.is_empty() {
                     let report = agent.attach_context_files(
                         context_files
@@ -2769,6 +2885,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         surfaces::run_command(&self.workspace_root, &params.name, params.args.as_deref())
     }
 
+    async fn add_memory(
+        &self,
+        params: MemoryAddParams,
+    ) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let added =
+            tokio::task::spawn_blocking(move || surfaces::add_memory(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit(
+            "memory/added",
+            serde_json::json!({ "scope": added.scope, "path": added.path }),
+        );
+        Ok(added)
+    }
+
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
         // Flip admission before waiting for the exclusive lifecycle guard so a
         // queued WebSocket request cannot slip in behind shutdown.
@@ -2953,6 +3086,16 @@ fn trust_mode_of(privacy_mode: crate::agent::PrivacyMode) -> DeveloperSessionTru
         crate::agent::PrivacyMode::Local => DeveloperSessionTrustMode::Local,
         crate::agent::PrivacyMode::Byok => DeveloperSessionTrustMode::Byok,
         crate::agent::PrivacyMode::Managed => DeveloperSessionTrustMode::Managed,
+    }
+}
+
+fn validated_max_turns(requested: Option<u32>) -> Result<Option<usize>, DeveloperSessionHostError> {
+    match requested {
+        Some(0) => Err(DeveloperSessionHostError::invalid_request(
+            "maxTurns must be at least 1",
+        )),
+        Some(turns) => usize::try_from(turns).map(Some).map_err(invalid_request),
+        None => Ok(None),
     }
 }
 
@@ -4238,6 +4381,7 @@ mod tests {
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
+                max_turns: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -5280,6 +5424,7 @@ mod tests {
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
+                max_turns: None,
             })
             .await
             .expect("next Auto turn");
@@ -5445,6 +5590,7 @@ mod tests {
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
+                max_turns: None,
             })
             .await;
         if result.is_ok() {
@@ -6430,6 +6576,7 @@ mod tests {
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
+                max_turns: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -6659,6 +6806,7 @@ mod tests {
                 reasoning_effort: None,
                 context_files: None,
                 client_turn_id: None,
+                max_turns: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -6773,6 +6921,7 @@ mod tests {
             reasoning_effort: None,
             context_files: None,
             client_turn_id: client_turn_id.map(str::to_string),
+            max_turns: None,
         };
 
         let replayed = host

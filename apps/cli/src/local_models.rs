@@ -16,11 +16,21 @@ pub struct DiscoveredLocalModel {
     pub source: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalProbeHealth {
+    Running,
+    Unreachable,
+    Faulty,
+    Blocked,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalProviderProbe {
     pub provider: String,
     pub base_url: String,
     pub running: bool,
+    pub health: LocalProbeHealth,
     pub models: Vec<DiscoveredLocalModel>,
     pub error: Option<String>,
 }
@@ -118,22 +128,26 @@ pub async fn probe_ollama(client: &reqwest::Client, base_url: &str) -> LocalProv
                     provider: "ollama".to_string(),
                     base_url: safe_base,
                     running: true,
+                    health: LocalProbeHealth::Running,
                     models,
                     error: None,
                 }
             }
             Err(error) => failed_probe(
+                LocalProbeHealth::Faulty,
                 "ollama",
                 safe_base,
                 format!("invalid /api/tags JSON: {error}"),
             ),
         },
         Ok(resp) => failed_probe(
+            LocalProbeHealth::Faulty,
             "ollama",
             safe_base,
             format!("/api/tags returned HTTP {}", resp.status()),
         ),
         Err(error) => failed_probe(
+            LocalProbeHealth::Unreachable,
             "ollama",
             safe_base,
             format!(
@@ -173,22 +187,26 @@ pub async fn probe_openai_compatible_local(
                     provider: provider.to_string(),
                     base_url: safe_base,
                     running: true,
+                    health: LocalProbeHealth::Running,
                     models,
                     error: None,
                 }
             }
             Err(error) => failed_probe(
+                LocalProbeHealth::Faulty,
                 provider,
                 safe_base,
                 format!("invalid /v1/models JSON: {error}"),
             ),
         },
         Ok(resp) => failed_probe(
+            LocalProbeHealth::Faulty,
             provider,
             safe_base,
             format!("/v1/models returned HTTP {}", resp.status()),
         ),
         Err(error) => failed_probe(
+            LocalProbeHealth::Unreachable,
             provider,
             safe_base,
             format!("not reachable: {error}. Start the local server and load a model."),
@@ -403,6 +421,7 @@ fn is_safe_local_base_url(base_url: &str) -> bool {
 
 fn blocked_probe(provider: &str, base_url: String) -> LocalProviderProbe {
     failed_probe(
+        LocalProbeHealth::Blocked,
         provider,
         base_url,
         "blocked unsafe local model URL; use http://localhost, http://127.0.0.1, or http://[::1]"
@@ -410,11 +429,17 @@ fn blocked_probe(provider: &str, base_url: String) -> LocalProviderProbe {
     )
 }
 
-fn failed_probe(provider: &str, base_url: String, error: String) -> LocalProviderProbe {
+fn failed_probe(
+    health: LocalProbeHealth,
+    provider: &str,
+    base_url: String,
+    error: String,
+) -> LocalProviderProbe {
     LocalProviderProbe {
         provider: provider.to_string(),
         base_url,
         running: false,
+        health,
         models: Vec::new(),
         error: Some(error),
     }

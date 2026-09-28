@@ -1,6 +1,7 @@
-import { type PresignPutInput } from './types';
+import { type PresignPutInput, type PresignUploadPartInput } from './types';
 
 export const PRESIGNED_URL_MAX_TTL_SECONDS = 3_600;
+export const MAX_MULTIPART_PART_NUMBER = 10_000;
 
 const MILLISECONDS_PER_SECOND = 1_000;
 const SIGV4_DATE_PARAM = 'X-Amz-Date';
@@ -19,22 +20,56 @@ export interface BoundPresignUpload {
  * holder of the URL chooses both, and the key then serves whatever they sent.
  * An unbounded lifetime is the same hole left open forever.
  */
-export function bindPresignedUpload(input: PresignPutInput): BoundPresignUpload {
-  if (!Number.isSafeInteger(input.contentLength) || input.contentLength <= 0) {
+function boundContentLength(contentLength: number): number {
+  if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {
     throw new Error('A presigned upload must bind a positive content length.');
   }
-  const contentType = input.contentType.trim();
-  if (!contentType) {
-    throw new Error('A presigned upload must bind a content type.');
-  }
-  const expiresInSeconds = input.expiresInSeconds;
+  return contentLength;
+}
+
+function boundLifetime(expiresInSeconds: number): number {
   if (!Number.isSafeInteger(expiresInSeconds) || expiresInSeconds <= 0) {
     throw new Error('A presigned upload must expire; give it a positive lifetime in seconds.');
   }
   if (expiresInSeconds > PRESIGNED_URL_MAX_TTL_SECONDS) {
     throw new Error(`A presigned upload may not outlive ${PRESIGNED_URL_MAX_TTL_SECONDS} seconds.`);
   }
-  return { contentType, contentLength: input.contentLength, expiresInSeconds };
+  return expiresInSeconds;
+}
+
+export function bindPresignedUpload(input: PresignPutInput): BoundPresignUpload {
+  const contentLength = boundContentLength(input.contentLength);
+  const contentType = input.contentType.trim();
+  if (!contentType) {
+    throw new Error('A presigned upload must bind a content type.');
+  }
+  return { contentType, contentLength, expiresInSeconds: boundLifetime(input.expiresInSeconds) };
+}
+
+export interface BoundPresignUploadPart {
+  partNumber: number;
+  contentLength: number;
+  expiresInSeconds: number;
+}
+
+export function bindPresignedUploadPart(input: PresignUploadPartInput): BoundPresignUploadPart {
+  if (
+    !Number.isSafeInteger(input.partNumber) ||
+    input.partNumber < 1 ||
+    input.partNumber > MAX_MULTIPART_PART_NUMBER
+  ) {
+    throw new Error(
+      `A presigned part must name a part number between 1 and ${MAX_MULTIPART_PART_NUMBER}.`,
+    );
+  }
+  if (!input.uploadId) {
+    throw new Error('A presigned part must name the multipart upload it belongs to.');
+  }
+  return {
+    partNumber: input.partNumber,
+    contentLength: boundContentLength(input.contentLength),
+    expiresInSeconds: boundLifetime(input.expiresInSeconds),
+  };
 }
 
 function sigv4SignedAt(value: string): number | null {

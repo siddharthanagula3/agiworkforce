@@ -11,6 +11,7 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gate';
+import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
 
 export const runtime = 'nodejs';
@@ -108,20 +109,26 @@ export async function GET(request: NextRequest) {
       .map((row) => row.id);
 
     let rowsPurged = 0;
+    let derivedRecordsPurged = 0;
     if (purgeableIds.length > 0) {
       // Carried again: a hold placed between the two statements has to win.
       const purgeExclusion = legalHoldExclusion('file', {
         alias: 'target',
         nextParamIndex: 2,
       });
-      const purged = await db.query<{ id: string }>(
+      const purged = await db.query<{ id: string; user_id: string }>(
         `delete from public.media_assets target
           where target.id = any($1::uuid[])
             and ${purgeExclusion.sql}
-          returning target.id`,
+          returning target.id, target.user_id`,
         [purgeableIds, ...purgeExclusion.params],
       );
       rowsPurged = purged.length;
+      derivedRecordsPurged = await purgeDerivedRecords(
+        db,
+        'media_assets',
+        purged.map((row) => ({ owner: row.user_id, key: String(row.id) })),
+      );
     }
 
     // Counted, never named: whose files they are is not for a log.
@@ -131,6 +138,7 @@ export async function GET(request: NextRequest) {
         objectsDeleted,
         objectsFailed: failedPathnames.length,
         rowsPurged,
+        derivedRecordsPurged,
         heldFromPurge,
         multipart,
       },
@@ -145,6 +153,7 @@ export async function GET(request: NextRequest) {
       objectsDeleted,
       objectsFailed: failedPathnames.length,
       purged: rowsPurged,
+      derivedRecordsPurged,
       heldFromPurge,
       multipart,
     });

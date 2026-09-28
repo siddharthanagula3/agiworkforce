@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { deriveResearchGaps } from '@/app/api/llm/v1/chat/completions/lib/research-loop';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   isResearchReportStatus,
@@ -173,6 +174,10 @@ function rowToReport(row: ResearchReportRow): PersistedResearchReport {
   if (durationMs !== undefined) report.totalDurationMs = durationMs;
   const keyFindings = normalizeKeyFindings(row.key_findings);
   if (keyFindings.length > 0) report.keyFindings = keyFindings;
+  if (status === 'completed' && report.steps) {
+    const gaps = deriveResearchGaps(report.steps, report.content);
+    if (gaps.length > 0) report.gaps = gaps;
+  }
   if (row.error) report.error = row.error;
   if (row.model) report.model = row.model;
   if (row.provider) report.provider = row.provider;

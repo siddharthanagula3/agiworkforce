@@ -67,15 +67,12 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `a
 
 - Done when: Before connecting, the user sees in plain language what the connector can read and what it can change.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code tooltips list raw granted scope strings with no read/write explanation. | ui |
-
-Code: `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52-61`
 
 ## S55.09: API-key authorization.
 

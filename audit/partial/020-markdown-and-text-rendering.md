@@ -35,14 +35,13 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extensi
 
 - Done when: Numbered lists render with their numbers (respecting the start value) and list indentation.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | The cited handler is the markdown-it instance, which does emit <ol start>; the webview stylesheet then sets list-style: disc on every li with no ol-scoped rule (grep: no ol selector in webviewContent.ts), and a declaration on the li outranks the inherited decimal type, so the numbers the criterion asks for never appear. |  |
 | chrome | partial | Numbered items become bare <li> elements with no <ol>, so their numbers are dropped. | ui |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5051-5051`, `apps/extension-vscode/src/webview/render.ts:5-5`, `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:119-119`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:687-687`, `apps/extension/src/features/side-panel/markdown.ts:119-119`
 
 ## S20.06: Nested lists.
 
