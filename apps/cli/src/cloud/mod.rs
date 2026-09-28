@@ -127,6 +127,54 @@ impl CloudSession {
     }
 }
 
+tokio::task_local! {
+    static BOUND_CONVERSATION: String;
+}
+
+pub(crate) async fn bound_to<F: std::future::Future>(
+    conversation_id: Option<String>,
+    future: F,
+) -> F::Output {
+    match conversation_id {
+        Some(conversation_id) => BOUND_CONVERSATION.scope(conversation_id, future).await,
+        None => future.await,
+    }
+}
+
+pub(crate) fn bound_conversation() -> Option<String> {
+    BOUND_CONVERSATION.try_with(Clone::clone).ok()
+}
+
+pub async fn ensure_hosted_conversation(
+    privacy: PrivacyMode,
+    snapshot: &chat::SessionSnapshot,
+) -> Result<String, CloudError> {
+    let conversation_id = chat::conversation_id_for(&snapshot.session_id);
+    let known = CloudSession::open(privacy)?
+        .state
+        .conversations
+        .versions
+        .contains_key(&conversation_id);
+    if !known {
+        sync_session(privacy, snapshot).await?;
+    }
+    Ok(conversation_id)
+}
+
+pub(crate) fn forget_hosted_conversation(conversation_id: &str) {
+    if let Ok(mut session) = CloudSession::open(PrivacyMode::Managed) {
+        if session
+            .state
+            .conversations
+            .versions
+            .remove(conversation_id)
+            .is_some()
+        {
+            session.persist();
+        }
+    }
+}
+
 /// Push one CLI session into the account's chat history and return how many
 /// messages the hosted side stored.
 pub async fn sync_session(

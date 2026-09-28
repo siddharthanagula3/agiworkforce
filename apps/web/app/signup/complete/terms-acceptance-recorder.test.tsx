@@ -21,6 +21,8 @@ vi.mock('@/lib/client/csrf', () => ({
   })),
 }));
 
+import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { ContinueWithCurrentTerms, RecordTermsAcceptance } from './RecordTermsAcceptance';
 import SignupCompletePage from './page';
@@ -166,6 +168,42 @@ describe('signup terms recorder', () => {
       '/api/terms/accept',
       expect.objectContaining({ body: expect.stringContaining('"web-login"') }),
     );
+  });
+
+  it('asks an account made from sign-in to confirm 18 or older before recording the terms', async () => {
+    window.localStorage.clear();
+    mocks.useSignUp.mockReturnValue({
+      fetchStatus: 'idle',
+      signUp: {
+        status: 'complete',
+        createdUserId: 'new-user',
+        createdSessionId: 'new-session',
+        legalAcceptedAt: null,
+      },
+    });
+    render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" />);
+
+    const confirm = await screen.findByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+
+    await userEvent.click(confirm);
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/terms/accept',
+      expect.objectContaining({ body: expect.stringContaining('"web-login"') }),
+    );
+  });
+
+  it('asks for the age when the page says the account never accepted the terms', async () => {
+    render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" confirmAge />);
+
+    expect(
+      await screen.findByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }),
+    ).toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('consumes the pre-auth marker without rewriting a current acceptance', async () => {

@@ -184,9 +184,9 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | The drawer copies source to the clipboard (the whole source message, see S26.30) but cannot save a file. | ui |
+| chrome | partial | Saving the source as a file needs the same derived artifact block (S26.30), waiting on the @agiworkforce/artifacts dependency. | ui |
 
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:210-210`
 
 ## S28.25: Export project archive.
 

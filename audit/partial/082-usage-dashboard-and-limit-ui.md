@@ -98,9 +98,9 @@ Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | knowledge storage used and its limit are account-wide but only returned by the per-project knowledge-files route, which the shared mobile knowledge client does not parse, and the mobile project screens are Codex-held; left for after Codex lands | ui |
+| mobile | partial | billing/no-yearly 6274fc7fc2 and 712711dc93: /api/usage/limits returns account-wide file storage through p-platform's readFileStorageMeter, and parseAccountUsageAllowances reads it. The mobile File storage card on the usage screen is in post-codex/no-yearly-s82-mobile-usage.patch (checked with git apply --check against the Codex working copy); the cell is done once Codex applies it | ui |
 
-Code: `apps/web/app/api/projects/[id]/knowledge-files/route.ts:108-108`
+Code: `apps/web/app/api/usage/limits/route.ts:50-50`, `packages/contracts/types/src/account-usage-wire.ts:199-199`, `packages/contracts/types/src/account-usage-client.ts:151-151`
 
 ## S82.12: Active-job count.
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
 
 const signInState = vi.hoisted(() => ({
   status: 'needs_first_factor' as string,
@@ -79,6 +80,10 @@ function renderScreen(mode: AuthMode, passkeySignIn = false) {
 
 function emailField(): HTMLInputElement {
   return screen.getByLabelText('Email address') as HTMLInputElement;
+}
+
+async function confirmAge() {
+  await userEvent.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
 }
 
 async function submitEmail(email = EMAIL) {
@@ -181,7 +186,7 @@ describe('sign-up screen', () => {
     renderScreen('signup');
     const field = emailField();
 
-    expect(field).toHaveFocus();
+    expect(field).not.toHaveFocus();
     expect(field).toHaveAttribute('type', 'email');
     expect(field).toHaveAttribute('name', 'email');
     expect(field).toHaveAttribute('inputmode', 'email');
@@ -191,6 +196,7 @@ describe('sign-up screen', () => {
 
   it('submits on Enter without reaching for the button', async () => {
     renderScreen('signup');
+    await confirmAge();
 
     await userEvent.type(emailField(), `${EMAIL}{Enter}`);
 
@@ -206,6 +212,7 @@ describe('sign-up screen', () => {
     const gate = held<typeof ok>();
     signUpState.create.mockReturnValue(gate.promise);
     renderScreen('signup');
+    await confirmAge();
 
     await submitEmail();
 
@@ -222,6 +229,7 @@ describe('sign-up screen', () => {
       }),
     );
     renderScreen('signup');
+    await confirmAge();
 
     await submitEmail();
 
@@ -238,6 +246,7 @@ describe('sign-up screen', () => {
       }),
     );
     renderScreen('signup');
+    await confirmAge();
 
     await submitEmail();
 
@@ -253,6 +262,7 @@ describe('sign-up screen', () => {
       error: { errors: [{ code: 'too_many_requests' }], status: 429, retryAfter: 2 },
     });
     renderScreen('signup');
+    await confirmAge();
 
     await submitEmail();
 
@@ -265,6 +275,7 @@ describe('sign-up screen', () => {
       vendorError({ code: 'form_identifier_exists', meta: { paramName: 'email_address' } }),
     );
     renderScreen('signup');
+    await confirmAge();
 
     await submitEmail();
 
@@ -276,6 +287,7 @@ describe('sign-up screen', () => {
 
   it('hands a provider sign-up to the callback the page chose and says it is going there', async () => {
     renderScreen('signup');
+    await confirmAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
 
@@ -391,7 +403,10 @@ describe('sign-in screen', () => {
     expect(
       await screen.findByRole('heading', { name: 'This account is suspended' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contact support' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Appeal this suspension' })).toHaveAttribute(
+      'href',
+      '/appeal',
+    );
   });
 
   it('sends an address its organization has taken over to that organization, not to a code', async () => {

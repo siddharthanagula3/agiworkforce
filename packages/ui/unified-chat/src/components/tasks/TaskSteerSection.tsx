@@ -3,6 +3,7 @@ import {
   MAX_CLOUD_AGENT_RUN_STEER_LENGTH,
   isCloudAgentRunSteerable,
   type CloudAgentRun,
+  type CloudAgentRunSteer,
 } from '@agiworkforce/cloud-contracts';
 import { Button, Spinner } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
@@ -12,12 +13,14 @@ import { isLiveTaskState, runWorkState } from './task-display';
 export interface TaskSteerSectionProps {
   run: CloudAgentRun;
   onSteer?(message: string): Promise<void>;
+  onSendAsMessage?(steer: CloudAgentRunSteer): Promise<void>;
 }
 
-export function TaskSteerSection({ run, onSteer }: TaskSteerSectionProps) {
+export function TaskSteerSection({ run, onSteer, onSendAsMessage }: TaskSteerSectionProps) {
   const inputId = useId();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const queued = run.pendingSteers ?? [];
   const steerable = Boolean(onSteer) && isCloudAgentRunSteerable(run);
@@ -45,6 +48,19 @@ export function TaskSteerSection({ run, onSteer }: TaskSteerSectionProps) {
     }
   };
 
+  const sendAsMessage = async (steer: CloudAgentRunSteer) => {
+    if (!onSendAsMessage || resendingId) return;
+    setResendingId(steer.id);
+    setError(null);
+    try {
+      await onSendAsMessage(steer);
+    } catch (err) {
+      setError(toUserMessageWithStatus(err, 'Your message was not sent. Try again.'));
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   return (
     <section
       data-testid="task-steer"
@@ -64,8 +80,24 @@ export function TaskSteerSection({ run, onSteer }: TaskSteerSectionProps) {
               <p className="mt-0.5 text-caption text-muted-foreground">
                 {live
                   ? 'Queued. The agent reads it at its next step.'
-                  : 'The task stopped before the agent read this.'}
+                  : 'Not read before the task finished'}
               </p>
+              {!live && onSendAsMessage ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-1.5 h-7 text-xs"
+                  disabled={resendingId !== null}
+                  onClick={() => void sendAsMessage(steer)}
+                  data-testid="task-steer-send-new"
+                >
+                  {resendingId === steer.id ? (
+                    <Spinner size="sm" aria-label="Sending your message" />
+                  ) : null}
+                  Send as new message
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -106,12 +138,12 @@ export function TaskSteerSection({ run, onSteer }: TaskSteerSectionProps) {
               Send
             </Button>
           </div>
-          {error ? (
-            <p role="alert" className="mt-1.5 text-xs text-danger-text">
-              {error}
-            </p>
-          ) : null}
         </form>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-1.5 text-xs text-danger-text">
+          {error}
+        </p>
       ) : null}
     </section>
   );

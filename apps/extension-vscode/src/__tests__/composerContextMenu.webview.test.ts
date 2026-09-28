@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 let postedMessages: unknown[] = [];
 
@@ -36,11 +37,12 @@ function executeWebviewScript(): void {
   postedMessages = [];
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({
-      postMessage: (message: unknown) => {
-        postedMessages.push(message);
-      },
-    }),
+    value: () =>
+      vscodeApiStub({
+        postMessage: (message: unknown) => {
+          postedMessages.push(message);
+        },
+      }),
   });
 
   const inlineScript = Array.from(parsed.querySelectorAll('script')).find((script) =>
@@ -198,6 +200,6 @@ describe('composer context menu', () => {
       .map((item) => item.getAttribute('data-context-kind'))
       .filter((kind) => kind !== null);
 
-    expect(kinds).toEqual(['open-files', 'problems']);
+    expect(kinds).toEqual(['open-files', 'problems', 'url']);
   });
 });

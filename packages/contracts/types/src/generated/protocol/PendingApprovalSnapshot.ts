@@ -22,4 +22,5 @@ export type PendingApprovalSnapshot = {
    */
   reversible?: boolean;
   proposedContent?: string;
+  alwaysAllowSaved: boolean;
 };

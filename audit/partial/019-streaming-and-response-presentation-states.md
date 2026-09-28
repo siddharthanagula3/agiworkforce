@@ -33,15 +33,14 @@ Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `a
 
 - Done when: When the assistant needs information from the user mid-task, it shows a waiting-for-input state with a way to answer.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only Deep Research asks for plan confirmation mid-task (research card); other input requests are not shown. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Waiting for p-platform to move the connector input-request form model into a shared package (S101.22); the side panel form will be built on it. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:847-847`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`
 
 ## S19.11: Streaming structured output.
 
