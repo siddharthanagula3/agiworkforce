@@ -3414,5 +3414,59 @@
   "spAttachmentUploadsOff": {
     "message": "File uploads aren’t available for this account.",
     "description": "The account's capability document denies file uploads, so an attached file was not added"
+  },
+  "spSchedulesRuns": {
+    "message": "Runs",
+    "description": "Button and heading for a schedule's past runs"
+  },
+  "spSchedulesRunsLabel": {
+    "message": "Runs of $NAME$",
+    "description": "Accessible name of a schedule's run history",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesPrompt": {
+    "message": "Prompt",
+    "description": "Heading over the prompt a schedule sends"
+  },
+  "spSchedulesRunsLoading": {
+    "message": "Loading runs…",
+    "description": "Shown while a schedule's runs load"
+  },
+  "spSchedulesRunsEmpty": {
+    "message": "This schedule hasn’t run yet.",
+    "description": "Shown when a schedule has no runs"
+  },
+  "spScheduleRunSucceeded": {
+    "message": "Finished",
+    "description": "Status of a schedule run that completed"
+  },
+  "spScheduleRunFailed": {
+    "message": "Failed",
+    "description": "Status of a schedule run that failed"
+  },
+  "spScheduleRunTimedOut": {
+    "message": "Timed out",
+    "description": "Status of a schedule run that ran out of time"
+  },
+  "spScheduleRunCancelled": {
+    "message": "Cancelled",
+    "description": "Status of a schedule run that was cancelled"
+  },
+  "spScheduleRunAwaitingApproval": {
+    "message": "Waiting for approval",
+    "description": "Status of a schedule run paused for an approval"
+  },
+  "spScheduleRunRunning": {
+    "message": "Running",
+    "description": "Status of a schedule run in progress"
+  },
+  "spScheduleRunNoAnswer": {
+    "message": "This run finished without an answer to show.",
+    "description": "A finished schedule run carried no answer text"
   }
 }
