@@ -627,6 +627,13 @@ const pt = {
   'pluginUpdate.updated': 'AGI Workforce: {name} foi atualizado.',
   'pluginUpdate.updatedTo': 'AGI Workforce: {name} foi atualizado para {to}.',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} foi atualizado de {from} para {to}.',
+  'chatError.usageLimitResetsAt':
+    'Você atingiu um limite de uso da sua conta. Ele será redefinido em {time}.',
+  'chatError.continueWith': 'Continuar com {model}',
+  'chatError.addCredits': 'Adicionar créditos',
+  'chatError.comparePlans': 'Comparar planos',
+  'chatError.seeUsage': 'Ver seu uso',
+  'chatError.seeOptions': 'Ver suas opções',
 };
 
 export default pt;

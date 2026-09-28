@@ -513,6 +513,13 @@ const en = {
   'pluginUpdate.updated': 'AGI Workforce: {name} was updated.',
   'pluginUpdate.updatedTo': 'AGI Workforce: {name} was updated to {to}.',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} was updated from {from} to {to}.',
+  'chatError.usageLimitResetsAt':
+    'You have reached a usage limit on your account. It resets {time}.',
+  'chatError.continueWith': 'Continue with {model}',
+  'chatError.addCredits': 'Add credits',
+  'chatError.comparePlans': 'Compare plans',
+  'chatError.seeUsage': 'See your usage',
+  'chatError.seeOptions': 'See your options',
 };
 
 export default en;

@@ -734,6 +734,9 @@ const turnFailureSchema = z.object({
   // decided once, where the failure becomes words, not twice.
   retryAfterSeconds: z.number().int().positive().optional().catch(undefined),
   requestId: z.string().min(1).max(200).optional().catch(undefined),
+  alternativeModel: z.string().min(1).max(200).optional().catch(undefined),
+  resetsAt: z.string().min(1).max(64).optional().catch(undefined),
+  recoveryHref: z.string().min(1).max(2_048).optional().catch(undefined),
 });
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),

@@ -455,6 +455,12 @@ const ko = {
   'pluginUpdate.updatedTo': 'AGI Workforce: {name}을(를) {to}(으)로 업데이트했습니다.',
   'pluginUpdate.updatedFromTo':
     'AGI Workforce: {name}을(를) {from}에서 {to}(으)로 업데이트했습니다.',
+  'chatError.usageLimitResetsAt': '계정의 사용 한도에 도달했습니다. {time}에 초기화됩니다.',
+  'chatError.continueWith': '{model}(으)로 계속',
+  'chatError.addCredits': '크레딧 추가',
+  'chatError.comparePlans': '요금제 비교',
+  'chatError.seeUsage': '사용량 보기',
+  'chatError.seeOptions': '옵션 보기',
 };
 
 export default ko;

@@ -3720,7 +3720,8 @@ export function getWebviewContent(
       block.appendChild(headline);
 
       var canRetry = presentation.retryable === true && lastSendPayload !== null;
-      if (canRetry || presentation.detail || presentation.action) {
+      var canContinueElsewhere = Boolean(presentation.alternative) && lastSendPayload !== null;
+      if (canRetry || canContinueElsewhere || presentation.detail || presentation.action) {
         var actions = document.createElement('div');
         actions.className = 'error-actions';
         if (canRetry) {
@@ -3734,6 +3735,23 @@ export function getWebviewContent(
             resendLastTurn(block);
           });
           actions.appendChild(retry);
+        }
+        if (canContinueElsewhere) {
+          var continueWith = document.createElement('button');
+          continueWith.type = 'button';
+          continueWith.className = 'error-retry';
+          continueWith.dataset.action = 'continue-with-model';
+          continueWith.textContent = presentation.alternative.label;
+          continueWith.addEventListener('click', function () {
+            if (continueWith.disabled) return;
+            continueWith.disabled = true;
+            vscode.postMessage({
+              type: 'selectModel',
+              payload: { modelId: presentation.alternative.model },
+            });
+            resendLastTurn(block, presentation.alternative.model);
+          });
+          actions.appendChild(continueWith);
         }
         if (presentation.action) {
           var unlock = document.createElement('button');
@@ -3790,7 +3808,7 @@ export function getWebviewContent(
       return block;
     }
 
-    function resendLastTurn(errorBlock) {
+    function resendLastTurn(errorBlock, model) {
       if (lastSendPayload === null || runtimeBlock !== null) return;
       if (errorBlock && errorBlock.parentNode) errorBlock.parentNode.removeChild(errorBlock);
       var retryPayload = {};
@@ -3800,6 +3818,7 @@ export function getWebviewContent(
         }
       }
       delete retryPayload.followUpBehavior;
+      if (model) retryPayload.model = model;
       retryPayload.clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       lastSendPayload = retryPayload;
       showTyping();

@@ -522,6 +522,13 @@ const hi = {
   'pluginUpdate.updated': 'AGI Workforce: {name} अपडेट हो गया।',
   'pluginUpdate.updatedTo': 'AGI Workforce: {name} {to} पर अपडेट हो गया।',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} {from} से {to} पर अपडेट हो गया।',
+  'chatError.usageLimitResetsAt':
+    'आपने अपने खाते की उपयोग सीमा पूरी कर ली है। यह {time} को रीसेट होगी।',
+  'chatError.continueWith': '{model} के साथ जारी रखें',
+  'chatError.addCredits': 'क्रेडिट जोड़ें',
+  'chatError.comparePlans': 'प्लान की तुलना करें',
+  'chatError.seeUsage': 'अपना उपयोग देखें',
+  'chatError.seeOptions': 'अपने विकल्प देखें',
 };
 
 export default hi;

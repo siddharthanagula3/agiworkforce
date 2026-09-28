@@ -767,6 +767,12 @@ const ar = {
   'pluginUpdate.updated': 'AGI Workforce: تم تحديث {name}.',
   'pluginUpdate.updatedTo': 'AGI Workforce: تم تحديث {name} إلى {to}.',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: تم تحديث {name} من {from} إلى {to}.',
+  'chatError.usageLimitResetsAt': 'لقد بلغت حدًا للاستخدام في حسابك. يُعاد ضبطه في {time}.',
+  'chatError.continueWith': 'المتابعة باستخدام {model}',
+  'chatError.addCredits': 'إضافة أرصدة',
+  'chatError.comparePlans': 'مقارنة الخطط',
+  'chatError.seeUsage': 'عرض استخدامك',
+  'chatError.seeOptions': 'عرض الخيارات',
 };
 
 export default ar;

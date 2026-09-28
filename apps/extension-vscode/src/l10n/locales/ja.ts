@@ -467,6 +467,12 @@ const ja = {
   'pluginUpdate.updated': 'AGI Workforce: {name} を更新しました。',
   'pluginUpdate.updatedTo': 'AGI Workforce: {name} を {to} に更新しました。',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} を {from} から {to} に更新しました。',
+  'chatError.usageLimitResetsAt': 'アカウントの使用上限に達しました。{time} にリセットされます。',
+  'chatError.continueWith': '{model} で続ける',
+  'chatError.addCredits': 'クレジットを追加',
+  'chatError.comparePlans': 'プランを比較',
+  'chatError.seeUsage': '使用状況を見る',
+  'chatError.seeOptions': '選択肢を見る',
 };
 
 export default ja;

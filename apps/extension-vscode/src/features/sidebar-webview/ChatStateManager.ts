@@ -43,6 +43,7 @@ import {
 import {
   presentChatError,
   presentTurnFailure,
+  safeRecoveryHref,
   type ChatErrorHint,
   type ChatErrorPresentation,
 } from './errorPresentation';
@@ -290,7 +291,8 @@ export type WebviewToExtMessage =
           | 'upgrade-plan'
           | 'open-settings'
           | 'switch-model'
-          | 'update-extension';
+          | 'update-extension'
+          | 'open-recovery';
         provider?: string;
       };
     }
@@ -803,6 +805,7 @@ export class ChatStateManager {
   private _skillCommands: ReadonlySet<string> = new Set();
   private _promptCommands: ReadonlySet<string> = new Set();
   private _webSearchLogins: readonly string[] = [];
+  private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
   private readonly _sessionApprovals = new Set<string>();
   private readonly _pendingApprovals = new Map<
@@ -1310,6 +1313,14 @@ export class ChatStateManager {
         }
         if (msg.payload.kind === 'update-extension') {
           await vscode.commands.executeCommand('extension.open', EXTENSION_ID);
+          break;
+        }
+        if (msg.payload.kind === 'open-recovery') {
+          if (this._recoveryHref === undefined) {
+            await vscode.commands.executeCommand('agi-workforce.openUpgrade');
+          } else {
+            await vscode.env.openExternal(vscode.Uri.parse(this._recoveryHref));
+          }
           break;
         }
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
@@ -3905,6 +3916,7 @@ export class ChatStateManager {
     }
     this._expirePendingApprovals(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
+      this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });
     } else {
       // A runtime too old to send `failure` says nothing about the cause, so the
