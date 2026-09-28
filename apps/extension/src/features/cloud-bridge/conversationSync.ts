@@ -1,15 +1,21 @@
-import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+  ManagedCloudChatHttpError,
+} from '@agiworkforce/cloud-contracts';
 import {
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
+  conversationFlagsNeedSync,
   conversationProjectNeedsSync,
   getConversation,
   isCloudPersistenceEligible,
+  listConversations,
   listConversationsNeedingCloudSync,
   pendingCloudMessages,
   recordCloudMessagesSynced,
   recordCloudSyncState,
+  updateConversationEntry,
   type ConversationEntry,
   type HistoryMessage,
 } from '../background/conversation-history';
@@ -37,6 +43,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const RETRY_AFTER_RATE_LIMIT_MS = 60_000;
 const RETRY_AFTER_SERVER_ERROR_MS = 5 * 60_000;
 const MAX_TOMBSTONES = 100;
+const FLAG_PULL_MAX_PAGES = 20;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CloudSyncTombstone {
@@ -229,10 +236,12 @@ async function flushEligibleConversation(
     (candidate.cloudSync.organizationId === undefined ||
       candidate.cloudSync.createAcknowledged !== true);
   const needsProjectUpdate = conversationProjectNeedsSync(candidate);
+  const needsFlagUpdate = conversationFlagsNeedSync(candidate);
   if (
     selectFlushableMessages(candidate, streaming).length === 0 &&
     !needsTitleUpdate &&
     !needsProjectUpdate &&
+    !needsFlagUpdate &&
     !needsWorkspaceRecovery
   ) {
     return;
@@ -422,6 +431,21 @@ async function flushEligibleConversation(
       );
     } catch (error) {
       await handleFlushError(owner, conversationId, error);
+      return;
+    }
+  }
+
+  const latest = await getConversation(owner, conversationId);
+  if (latest && conversationFlagsNeedSync(latest)) {
+    const flags = { pinned: latest.pinned === true, archived: latest.archived === true };
+    try {
+      await client.updateConversation(cloudConversationId, flags, { signal, organizationId });
+      await recordCloudSyncState(owner, conversationId, {
+        syncedPinned: flags.pinned,
+        syncedArchived: flags.archived,
+      });
+    } catch (error) {
+      await handleFlushError(owner, conversationId, error);
     }
   }
 }
@@ -522,6 +546,59 @@ async function readTombstones(): Promise<CloudSyncTombstone[]> {
     logger.debug('Failed to read cloud sync tombstones', error);
     return [];
   }
+}
+
+export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Promise<boolean> {
+  const byOrganization = new Map<string | null, Map<string, ConversationEntry>>();
+  for (const entry of await listConversations(owner)) {
+    const cloudId = entry.cloudSync?.conversationId;
+    const organizationId = entry.cloudSync?.organizationId;
+    if (!cloudId || organizationId === undefined || entry.cloudSync?.createAcknowledged !== true) {
+      continue;
+    }
+    const bound = byOrganization.get(organizationId) ?? new Map<string, ConversationEntry>();
+    bound.set(cloudId, entry);
+    byOrganization.set(organizationId, bound);
+  }
+  const client = createExtensionCloudChatClient(owner);
+  let changed = false;
+  for (const [organizationId, bound] of byOrganization) {
+    let offset = 0;
+    for (let page = 0; page < FLAG_PULL_MAX_PAGES && bound.size > 0; page += 1) {
+      const result = await client.listConversations(
+        { archived: 'include', limit: MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE, offset },
+        { organizationId },
+      );
+      for (const conversation of result.conversations) {
+        const entry = bound.get(conversation.id);
+        if (!entry) continue;
+        bound.delete(conversation.id);
+        if (conversationFlagsNeedSync(entry)) continue;
+        if (
+          (entry.pinned === true) !== conversation.pinned ||
+          (entry.archived === true) !== conversation.archived
+        ) {
+          await updateConversationEntry(owner, entry.id, {
+            pinned: conversation.pinned,
+            archived: conversation.archived,
+          });
+          changed = true;
+        }
+        if (
+          entry.cloudSync?.syncedPinned !== conversation.pinned ||
+          entry.cloudSync?.syncedArchived !== conversation.archived
+        ) {
+          await recordCloudSyncState(owner, entry.id, {
+            syncedPinned: conversation.pinned,
+            syncedArchived: conversation.archived,
+          });
+        }
+      }
+      if (!result.hasMore) break;
+      offset = result.nextOffset;
+    }
+  }
+  return changed;
 }
 
 export async function queueCloudConversationDeletion(

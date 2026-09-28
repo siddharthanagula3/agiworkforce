@@ -23,6 +23,7 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 - Done when: A document (chat artifact or uploaded file) is turned into a presentation the user can open and keep working on.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -31,9 +32,8 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 | mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The office tool is offered only when the prompt names an Office file; the source can only be the page or pasted text; no deck view. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:686-687`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.03: Spreadsheet → chart → report.
 
@@ -241,14 +241,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 
 - Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
 - Wave: 2
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
-| chrome | partial | A disallowed selection falls back to Auto without naming a model, the reset time is only in Usage settings, and the copy states upgrades need the waitlist. | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `apps/web/lib/server/mobile-iap-catalog.ts:25-25`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:190-190`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:944-944`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `apps/web/lib/server/mobile-iap-catalog.ts:25-25`
 
 ## S110.27: Disconnected integration → reconnect and resume.
 
