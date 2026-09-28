@@ -45,6 +45,7 @@ type OpenAiCompatibleModel = {
   context_window: number;
   max_output: number;
   capabilities: Record<string, boolean | null>;
+  deprecation_date: string | null;
 };
 
 const PUBLISHED_CAPABILITIES = {
@@ -97,6 +98,7 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     context_window: contextWindow,
     max_output: resolveMaxOutputTokens(model.id),
     capabilities: publishedCapabilities(model.id),
+    deprecation_date: model.deprecatedOn,
   };
 }
 
