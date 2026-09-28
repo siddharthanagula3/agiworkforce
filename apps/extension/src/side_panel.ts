@@ -249,6 +249,7 @@ import {
   fetchAccountMemoryConflicts,
   fetchActiveMemoryWorkspace,
   fetchMemoryExclusions,
+  fetchMemoryPreferences,
   isAccountMemory,
   MEMORY_COMMAND_HINT,
   MEMORY_EXCLUSION_MAX_CHARS,
@@ -258,8 +259,10 @@ import {
   restoreAccountMemory,
   runAccountMemoryCommand,
   saveMemoryExclusions,
+  saveMemoryPreferences,
   type AccountMemory,
   type AccountMemoryConflict,
+  type MemoryPreferences,
   type MemoryCommandKind,
   type MemoryCommandRequest,
   type MemoryCommandResult,
@@ -270,6 +273,7 @@ import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimi
 import {
   capabilityAllowed,
   fetchCapabilityDocument,
+  saveAccountDisplayName,
   type CapabilityDocument,
 } from './features/cloud-bridge/capabilityDocument';
 import {
@@ -339,6 +343,7 @@ import {
 } from './features/cloud-bridge/managedModelPicker';
 import {
   isManagedCloudBroadcastOwnedBy,
+  managedCloudOwnerKey,
   normalizeManagedCloudOwner,
   sameManagedCloudOwner,
   type ManagedCloudOwner,
@@ -355,6 +360,7 @@ const extensionSendQueue = getExtensionSendQueue();
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
+let refreshOnboardingAccount: () => void = () => undefined;
 let capabilityDocument: CapabilityDocument | null = null;
 let applyCapabilityGates: () => void = () => undefined;
 
@@ -5267,6 +5273,72 @@ function injectStyles(): void {
       max-width: 300px;
       flex-shrink: 0;
     }
+    .sp-ob-body:empty { display: none; }
+    .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+    .sp-drawer-memory-preferences[hidden] { display: none; }
+    .sp-drawer-memory-preference {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-drawer-memory-preference input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-preference input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-ob-action {
+      min-height: var(--control-lg);
+      padding: 6px 16px;
+      border: none;
+      border-radius: var(--corner-field);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+    }
+    .sp-ob-action[hidden],
+    .sp-ob-field[hidden] { display: none; }
+    .sp-ob-field { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); }
+    .sp-ob-label { color: var(--agi-ext-text); font-size: var(--type-caption-size); font-weight: 600; line-height: var(--type-caption-height); }
+    .sp-ob-input {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: var(--control-lg);
+      padding: 6px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-body-size);
+    }
+    .sp-ob-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-ob-choices { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); max-height: 220px; overflow-y: auto; }
+    .sp-ob-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: min(300px, 100%);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: left;
+    }
+    .sp-ob-check input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
+    .sp-ob-check input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-ob-error {
+      margin: 0 0 8px;
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: center;
+    }
+    .sp-ob-error[hidden] { display: none; }
+    @media (pointer: coarse) {
+      .sp-ob-check { min-height: 44px; }
+    }
 
     /* footer: step dots + nav buttons */
     #sp-onboarding-footer {
@@ -8169,7 +8241,7 @@ function refreshPageHostname(): void {
 }
 
 function buildOnboardingOverlay(onComplete: () => void): void {
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
   let currentStep = 0;
 
   const flaskSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -8189,20 +8261,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
   </svg>`;
 
-  const browserStackSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="6" y="18" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
-    <rect x="12" y="12" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
-    <rect x="18" y="8" width="56" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <line x1="18" y1="19" x2="74" y2="19" stroke="var(--agi-ext-border)" stroke-width="1"/>
-    <circle cx="25" cy="14" r="2.5" fill="var(--agi-ext-accent)"/>
-    <line x1="30" y1="26" x2="50" y2="26" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="30" y1="33" x2="60" y2="33" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="30" y1="40" x2="54" y2="40" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <polyline points="24,25 27,28 31,22" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="24,32 27,35 31,29" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="24,39 27,42 31,36" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-
   const tabGroupSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="8" y="28" width="64" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
     <rect x="10" y="14" width="22" height="16" rx="4" fill="var(--agi-ext-accent)" opacity="0.85"/>
@@ -8212,17 +8270,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <line x1="16" y1="44" x2="64" y2="44" stroke="var(--agi-ext-border)" stroke-width="1"/>
     <rect x="14" y="50" width="52" height="8" rx="2" fill="var(--agi-ext-surface)"/>
     <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
-  </svg>`;
-
-  const shortcutMenuSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="10" y="16" width="60" height="48" rx="8" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <text x="16" y="27" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif" font-weight="600">WORKFLOWS</text>
-    <rect x="14" y="32" width="52" height="13" rx="4" fill="var(--agi-ext-hover)"/>
-    <circle cx="21" cy="38.5" r="3" fill="var(--agi-ext-accent)" opacity="0.22"/>
-    <path d="M21.7 34.8 18.8 39h2l-.5 3.2 3-4.5h-2.1l.5-2.9z" fill="var(--agi-ext-accent)"/>
-    <text x="27" y="41" font-size="7" fill="var(--agi-ext-text)" font-family="-apple-system,sans-serif">Saved shortcuts</text>
-    <rect x="14" y="50" width="52" height="9" rx="4" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-accent)" stroke-width="1"/>
-    <text x="40" y="56.5" font-size="6.5" text-anchor="middle" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create shortcut</text>
   </svg>`;
 
   const pinHintSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -8261,7 +8308,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     class: 'sp-ob-step active',
     'data-step': '0',
     role: 'group',
-    'aria-label': 'Step 1 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
     'aria-hidden': 'false',
   });
   step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
@@ -8334,31 +8381,214 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   step0.appendChild(rows0);
   body.appendChild(step0);
 
-  const step1 = el('div', {
+  const setupName = el('input', {
+    class: 'sp-ob-input',
+    id: 'sp-ob-name',
+    type: 'text',
+    autocomplete: 'name',
+  }) as HTMLInputElement;
+  const setupAccountStatus = el('p', { class: 'sp-ob-body', role: 'status' });
+  const setupSignIn = el(
+    'button',
+    { class: 'sp-ob-action', type: 'button' },
+    t('spSetupAccountSignIn'),
+  );
+  const setupNameField = el(
+    'div',
+    { class: 'sp-ob-field' },
+    el('label', { class: 'sp-ob-label', for: 'sp-ob-name' }, t('spSetupNameLabel')),
+    setupName,
+  );
+  const stepAccount = el('div', {
     class: 'sp-ob-step',
     'data-step': '1',
     role: 'group',
-    'aria-label': 'Step 2 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['2', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
-  const step1Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step1Hero, browserStackSvg);
-  step1.appendChild(step1Hero);
-  step1.appendChild(el('div', { class: 'sp-ob-title' }, 'Automate your repetitive tasks'));
-  step1.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'AGI can take on multi-step work like QA testing, researching sales leads, and data entry across multiple sites. You can focus elsewhere knowing AGI is working in the background.',
-    ),
-  );
-  body.appendChild(step1);
+  stepAccount.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupAccountTitle')));
+  stepAccount.appendChild(setupAccountStatus);
+  stepAccount.appendChild(setupSignIn);
+  stepAccount.appendChild(setupNameField);
+  body.appendChild(stepAccount);
+  setupSignIn.addEventListener('click', () => {
+    setupSignIn.disabled = true;
+    void openClerkSignIn()
+      .catch((error: unknown) => {
+        setupAccountStatus.textContent =
+          error instanceof Error ? error.message : t('spSetupAccountSignedOut');
+      })
+      .finally(() => {
+        setupSignIn.disabled = false;
+      });
+  });
 
-  const step2 = el('div', {
+  const setupModels = el('div', {
+    class: 'sp-ob-choices',
+    role: 'radiogroup',
+    'aria-labelledby': 'sp-ob-model-title',
+  });
+  const setupModelNote = el('p', { class: 'sp-ob-body' });
+  const stepModel = el('div', {
     class: 'sp-ob-step',
     'data-step': '2',
     role: 'group',
-    'aria-label': 'Step 3 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['3', String(TOTAL_STEPS)]),
+    'aria-hidden': 'true',
+  });
+  stepModel.appendChild(
+    el('div', { class: 'sp-ob-title', id: 'sp-ob-model-title' }, t('spSetupModelTitle')),
+  );
+  stepModel.appendChild(setupModelNote);
+  stepModel.appendChild(setupModels);
+  body.appendChild(stepModel);
+
+  const setupRemember = el('input', {
+    type: 'checkbox',
+    id: 'sp-ob-memory-remember',
+  }) as HTMLInputElement;
+  const setupSearchPast = el('input', {
+    type: 'checkbox',
+    id: 'sp-ob-memory-search',
+  }) as HTMLInputElement;
+  const setupMemoryNote = el('p', { class: 'sp-ob-body', role: 'status' });
+  const stepMemory = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '3',
+    role: 'group',
+    'aria-label': t('spOnboardingStepLabel', ['4', String(TOTAL_STEPS)]),
+    'aria-hidden': 'true',
+  });
+  stepMemory.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupMemoryTitle')));
+  stepMemory.appendChild(el('p', { class: 'sp-ob-body' }, t('spSetupMemoryBody')));
+  stepMemory.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-check' },
+      setupRemember,
+      el('label', { for: 'sp-ob-memory-remember' }, t('spSetupMemoryRemember')),
+    ),
+  );
+  stepMemory.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-check' },
+      setupSearchPast,
+      el('label', { for: 'sp-ob-memory-search' }, t('spSetupMemorySearch')),
+    ),
+  );
+  stepMemory.appendChild(setupMemoryNote);
+  body.appendChild(stepMemory);
+
+  const setupState: {
+    ownerKey: string | null;
+    loadedName: string;
+    memory: MemoryPreferences | null;
+    model: string;
+  } = { ownerKey: null, loadedName: '', memory: null, model: _ctx.selectedModel };
+
+  function renderSetupModels(signedIn: boolean): void {
+    const options = signedIn ? regenerateModelOptions() : [];
+    const choices =
+      options.length > 0 ? options : [{ value: 'auto', label: t('spSetupModelAuto') }];
+    if (!choices.some((choice) => choice.value === setupState.model)) setupState.model = 'auto';
+    setupModelNote.textContent = signedIn ? t('spSetupModelBody') : t('spSetupModelSignedOut');
+    setupModels.replaceChildren();
+    for (const choice of choices) {
+      const id = `sp-ob-model-${choice.value.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+      const radio = el('input', {
+        type: 'radio',
+        name: 'sp-ob-model',
+        id,
+        value: choice.value,
+      }) as HTMLInputElement;
+      radio.checked = choice.value === setupState.model;
+      radio.addEventListener('change', () => {
+        if (radio.checked) setupState.model = choice.value;
+      });
+      setupModels.appendChild(
+        el('div', { class: 'sp-ob-check' }, radio, el('label', { for: id }, choice.label)),
+      );
+    }
+  }
+
+  function renderSetupMemory(signedIn: boolean): void {
+    const memory = setupState.memory;
+    const usable = signedIn && memory !== null && memory.organizationAllows;
+    setupRemember.disabled = !usable;
+    setupSearchPast.disabled = !usable;
+    setupMemoryNote.textContent = !signedIn
+      ? t('spSetupMemorySignedOut')
+      : memory && !memory.organizationAllows
+        ? t('spSetupMemoryOrgOff')
+        : '';
+  }
+
+  refreshOnboardingAccount = () => {
+    const owner = _ctx.managedCloudOwner;
+    const signedIn = owner !== null && managedModelAccess !== null;
+    const ownerKey = owner ? managedCloudOwnerKey(owner) : null;
+    setupSignIn.hidden = signedIn;
+    setupNameField.hidden = !signedIn;
+    setupAccountStatus.textContent = signedIn
+      ? t('spSetupAccountSignedIn', [setupState.loadedName || t('spCloudAccountFallbackName')])
+      : t('spSetupAccountSignedOut');
+    renderSetupModels(signedIn);
+    renderSetupMemory(signedIn);
+    if (!signedIn || ownerKey === setupState.ownerKey) return;
+    setupState.ownerKey = ownerKey;
+    void getClerkAccountProfile()
+      .then((profile) => {
+        if (setupState.ownerKey !== ownerKey) return;
+        setupState.loadedName = profile?.displayName ?? '';
+        if (!setupName.value) setupName.value = setupState.loadedName;
+        setupAccountStatus.textContent = t('spSetupAccountSignedIn', [
+          profile?.displayName ?? profile?.email ?? t('spCloudAccountFallbackName'),
+        ]);
+      })
+      .catch(() => undefined);
+    void getManagedCloudAuthContext()
+      .then(async (auth) => {
+        if (!auth || setupState.ownerKey !== ownerKey) return;
+        const preferences = await fetchMemoryPreferences(auth.token);
+        if (setupState.ownerKey !== ownerKey) return;
+        setupState.memory = preferences;
+        setupRemember.checked = preferences.memory;
+        setupSearchPast.checked = preferences.searchPastChats;
+        renderSetupMemory(true);
+      })
+      .catch(() => {
+        setupMemoryNote.textContent = t('spSetupMemoryUnavailable');
+      });
+  };
+
+  async function saveSetupChoices(): Promise<void> {
+    if (setupState.model !== _ctx.selectedModel) applyModelSelection(setupState.model);
+    const auth = await getManagedCloudAuthContext();
+    if (!auth) return;
+    const name = setupName.value.trim();
+    if (!setupNameField.hidden && name && name !== setupState.loadedName) {
+      await saveAccountDisplayName(auth.token, name);
+    }
+    const memory = setupState.memory;
+    if (
+      memory &&
+      memory.organizationAllows &&
+      (memory.memory !== setupRemember.checked ||
+        memory.searchPastChats !== setupSearchPast.checked)
+    ) {
+      await saveMemoryPreferences(auth.token, {
+        memory: setupRemember.checked,
+        searchPastChats: setupSearchPast.checked,
+      });
+    }
+  }
+
+  const step2 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '4',
+    role: 'group',
+    'aria-label': t('spOnboardingStepLabel', ['5', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
   const step2Hero = el('div', { class: 'sp-ob-hero' });
@@ -8374,31 +8604,11 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   body.appendChild(step2);
 
-  const step3 = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '3',
-    role: 'group',
-    'aria-label': 'Step 4 of 5',
-    'aria-hidden': 'true',
-  });
-  const step3Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step3Hero, shortcutMenuSvg);
-  step3.appendChild(step3Hero);
-  step3.appendChild(el('div', { class: 'sp-ob-title' }, 'Use Workflows to save time'));
-  step3.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'Shortcuts make repeated instructions one click away. Open Workflows from the AGI menu to create, run, and manage them.',
-    ),
-  );
-  body.appendChild(step3);
-
   const step4 = el('div', {
     class: 'sp-ob-step',
-    'data-step': '4',
+    'data-step': '5',
     role: 'group',
-    'aria-label': 'Step 5 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['6', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
   const step4Hero = el('div', { class: 'sp-ob-hero' });
@@ -8425,7 +8635,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     'aria-valuemin': '1',
     'aria-valuemax': String(TOTAL_STEPS),
     'aria-valuenow': '1',
-    'aria-valuetext': `Step 1 of ${TOTAL_STEPS}`,
+    'aria-valuetext': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
   });
   const dots: HTMLElement[] = [];
   for (let i = 0; i < TOTAL_STEPS; i++) {
@@ -8446,7 +8656,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   const nextBtn = el(
     'button',
-    { class: 'sp-ob-btn-next', 'aria-label': 'Continue, step 1 of 5' },
+    {
+      class: 'sp-ob-btn-next',
+      'aria-label': t('spOnboardingContinueAria', ['1', String(TOTAL_STEPS)]),
+    },
     'I understand',
   );
   navRow.appendChild(backBtn);
@@ -8458,6 +8671,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     t('spOnboardingUnderstand'),
     t('spNext'),
     t('spNext'),
+    t('spNext'),
     t('spOnboardingLetsGo'),
     t('spOnboardingDone'),
   ];
@@ -8467,6 +8681,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     t('spOnboardingContinueAria', ['2', total]),
     t('spOnboardingContinueAria', ['3', total]),
     t('spOnboardingContinueAria', ['4', total]),
+    t('spOnboardingContinueAria', ['5', total]),
     t('spOnboardingDismissAria'),
   ];
 
@@ -8482,6 +8697,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   }
 
   function goToStep(step: number): void {
+    refreshOnboardingAccount();
     const steps = body.querySelectorAll<HTMLElement>('.sp-ob-step');
     steps.forEach((s, i) => {
       s.classList.toggle('active', i === step);
@@ -8492,7 +8708,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     });
     currentStep = step;
     dotsRow.setAttribute('aria-valuenow', String(step + 1));
-    dotsRow.setAttribute('aria-valuetext', `Step ${step + 1} of ${TOTAL_STEPS}`);
+    dotsRow.setAttribute(
+      'aria-valuetext',
+      t('spOnboardingStepLabel', [String(step + 1), String(TOTAL_STEPS)]),
+    );
     if (step === 0) {
       backBtn.setAttribute('hidden', '');
     } else {
@@ -8503,12 +8722,29 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     nextBtn.focus();
   }
 
+  const setupError = el('p', { class: 'sp-ob-error', role: 'alert', hidden: '' });
+  footer.insertBefore(setupError, navRow);
+
   nextBtn.addEventListener('click', () => {
     if (currentStep < TOTAL_STEPS - 1) {
       goToStep(currentStep + 1);
-    } else {
-      dismiss();
+      return;
     }
+    nextBtn.disabled = true;
+    setupError.hidden = true;
+    nextBtn.textContent = t('spSetupSaving');
+    void saveSetupChoices()
+      .then(() => dismiss())
+      .catch((error: unknown) => {
+        setupError.textContent = t('spSetupSaveFailed', [
+          error instanceof Error ? error.message : t('spSetupSaveFailedGeneric'),
+        ]);
+        setupError.hidden = false;
+        nextBtn.textContent = stepLabels[currentStep] ?? t('spOnboardingDone');
+      })
+      .finally(() => {
+        nextBtn.disabled = false;
+      });
   });
 
   backBtn.addEventListener('click', () => {
@@ -10830,6 +11066,79 @@ function buildUI(): void {
   const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
   memorySection.appendChild(memoryScope);
 
+  const memoryRememberToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-memory-remember',
+  }) as HTMLInputElement;
+  const memorySearchToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-memory-search',
+  }) as HTMLInputElement;
+  const memoryPreferenceStatus = el('p', {
+    class: 'sp-drawer-memory-help',
+    role: 'status',
+    hidden: '',
+  });
+  const memoryPreferencesBlock = el(
+    'div',
+    { class: 'sp-drawer-memory-preferences', hidden: '' },
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      memoryRememberToggle,
+      el('label', { for: 'sp-drawer-memory-remember' }, t('spSetupMemoryRemember')),
+    ),
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      memorySearchToggle,
+      el('label', { for: 'sp-drawer-memory-search' }, t('spSetupMemorySearch')),
+    ),
+    memoryPreferenceStatus,
+  );
+  memorySection.appendChild(memoryPreferencesBlock);
+  let memoryPreferenceSnapshot: MemoryPreferences | null = null;
+
+  function setMemoryPreferenceStatus(text: string): void {
+    memoryPreferenceStatus.textContent = text;
+    memoryPreferenceStatus.hidden = !text;
+  }
+
+  function renderMemoryPreferences(preferences: MemoryPreferences): void {
+    memoryPreferenceSnapshot = preferences;
+    memoryRememberToggle.checked = preferences.memory;
+    memorySearchToggle.checked = preferences.searchPastChats;
+    memoryRememberToggle.disabled = !preferences.organizationAllows;
+    memorySearchToggle.disabled = !preferences.organizationAllows;
+    setMemoryPreferenceStatus(preferences.organizationAllows ? '' : t('spSetupMemoryOrgOff'));
+    memoryPreferencesBlock.hidden = false;
+  }
+
+  function saveDrawerMemoryPreference(): void {
+    const previous = memoryPreferenceSnapshot;
+    if (!previous) return;
+    const next = {
+      memory: memoryRememberToggle.checked,
+      searchPastChats: memorySearchToggle.checked,
+    };
+    memoryRememberToggle.disabled = true;
+    memorySearchToggle.disabled = true;
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await saveMemoryPreferences(auth.token, next);
+      renderMemoryPreferences({ ...previous, ...next });
+      setMemoryPreferenceStatus(t('spMemoryPreferenceSaved'));
+    })().catch((error: unknown) => {
+      renderMemoryPreferences(previous);
+      setMemoryPreferenceStatus(
+        error instanceof Error ? error.message : t('spMemoryPreferenceSaveFailed'),
+      );
+    });
+  }
+  memoryRememberToggle.addEventListener('change', saveDrawerMemoryPreference);
+  memorySearchToggle.addEventListener('change', saveDrawerMemoryPreference);
+
   const memoryAddBtn = el(
     'button',
     {
@@ -11135,6 +11444,7 @@ function buildUI(): void {
 
   function setDrawerMemoryExtrasHidden(hidden: boolean): void {
     memoryScope.hidden = hidden;
+    if (hidden) memoryPreferencesBlock.hidden = true;
     exclusionsBlock.hidden = hidden;
     conflictsBlock.hidden = hidden;
   }
@@ -11354,6 +11664,14 @@ function buildUI(): void {
     }
     setDrawerMemoryExtrasHidden(false);
     await Promise.all([
+      fetchMemoryPreferences(auth.token)
+        .then(renderMemoryPreferences)
+        .catch(() => {
+          memoryPreferencesBlock.hidden = false;
+          memoryRememberToggle.disabled = true;
+          memorySearchToggle.disabled = true;
+          setMemoryPreferenceStatus(t('spSetupMemoryUnavailable'));
+        }),
       fetchActiveMemoryWorkspace(auth.token)
         .then((workspace) => {
           memoryScope.textContent =
@@ -11978,6 +12296,7 @@ function buildUI(): void {
     if (!token) {
       capabilityDocument = null;
       applyCapabilityGates();
+      refreshOnboardingAccount();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
@@ -12063,6 +12382,7 @@ function buildUI(): void {
     capabilityDocument = document;
     applyCapabilityGates();
     managedModelAccess = access;
+    refreshOnboardingAccount();
     signInAwaitingCompletion = false;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);

@@ -3624,5 +3624,115 @@
   "spHistoryShareSignIn": {
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
+  },
+  "spOnboardingStepLabel": {
+    "message": "Step $STEP$ of $TOTAL$",
+    "description": "Names a first-run setup step and how many there are",
+    "placeholders": {
+      "step": {
+        "content": "$1",
+        "example": "2"
+      },
+      "total": {
+        "content": "$2",
+        "example": "6"
+      }
+    }
+  },
+  "spSetupAccountTitle": {
+    "message": "Your account",
+    "description": "Heading of the first-run setup step that signs in"
+  },
+  "spSetupAccountSignedOut": {
+    "message": "Sign in to use AGI Cloud from the side panel. You can also sign in later from the menu.",
+    "description": "First-run setup text while signed out"
+  },
+  "spSetupAccountSignIn": {
+    "message": "Sign in",
+    "description": "Opens sign-in from the first-run setup"
+  },
+  "spSetupAccountSignedIn": {
+    "message": "Signed in as $NAME$.",
+    "description": "First-run setup text once signed in",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Ada Lovelace"
+      }
+    }
+  },
+  "spSetupNameLabel": {
+    "message": "What should AGI call you?",
+    "description": "Label of the first-run setup name field"
+  },
+  "spSetupModelTitle": {
+    "message": "Choose a default model",
+    "description": "Heading of the first-run setup step that picks the model new chats start with"
+  },
+  "spSetupModelBody": {
+    "message": "New chats start with this model. You can switch any time from the model menu.",
+    "description": "Explains the default model choice"
+  },
+  "spSetupModelSignedOut": {
+    "message": "Sign in to choose a model. Until then, Auto picks one for each message.",
+    "description": "Model step text while signed out"
+  },
+  "spSetupModelAuto": {
+    "message": "Auto",
+    "description": "The automatic model choice"
+  },
+  "spSetupMemoryTitle": {
+    "message": "Memory",
+    "description": "Heading of the first-run setup step about memory"
+  },
+  "spSetupMemoryBody": {
+    "message": "AGI can remember details you share and use them in later chats. You decide whether it does, and you can change it any time under Settings in the menu.",
+    "description": "Explains memory during first-run setup"
+  },
+  "spSetupMemoryRemember": {
+    "message": "Remember details across chats",
+    "description": "Turns saved memory on or off"
+  },
+  "spSetupMemorySearch": {
+    "message": "Search past chats for context",
+    "description": "Lets AGI search earlier chats when answering"
+  },
+  "spSetupMemorySignedOut": {
+    "message": "Sign in to choose how AGI uses memory.",
+    "description": "Memory step text while signed out"
+  },
+  "spSetupMemoryOrgOff": {
+    "message": "Your workspace has turned memory off.",
+    "description": "The workspace does not allow memory"
+  },
+  "spSetupMemoryUnavailable": {
+    "message": "Your memory settings could not be loaded. You can change them later under Settings.",
+    "description": "Loading memory settings failed"
+  },
+  "spSetupSaving": {
+    "message": "Saving…",
+    "description": "The final setup button while choices are saved"
+  },
+  "spSetupSaveFailed": {
+    "message": "Your choices could not be saved: $REASON$",
+    "description": "Saving first-run setup choices failed",
+    "placeholders": {
+      "reason": {
+        "content": "$1",
+        "example": "Network error."
+      }
+    }
+  },
+  "spSetupSaveFailedGeneric": {
+    "message": "try again, or skip and change them later.",
+    "description": "Fallback reason when setup saving fails without a message"
+  },
+  "spMemoryPreferenceSaved": {
+    "message": "Memory setting saved.",
+    "description": "Confirms a memory switch in the menu was saved"
+  },
+  "spMemoryPreferenceSaveFailed": {
+    "message": "The memory setting could not be saved. Try again.",
+    "description": "Saving a memory switch failed"
   }
 }
