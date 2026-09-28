@@ -24,4 +24,6 @@ export type AccountStatusResponse = {
    */
   cached: boolean;
   source: AccountSource;
+  webSearchKey?: string;
+  webSearchLogins?: Array<string>;
 };

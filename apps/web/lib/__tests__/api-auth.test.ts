@@ -318,7 +318,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       apiKeyScope: 'inference:write',
     });
 
-    expect(authResult).toEqual({ userId: 'user-round-trip' });
+    expect(authResult).toEqual({ userId: 'user-round-trip', apiKeyId: 'key-1' });
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
@@ -337,7 +337,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       getClerkAuthUser(makeBearerRequest(created.full_key), {
         apiKeyScope: 'models:read',
       }),
-    ).resolves.toEqual({ userId: 'scoped-user' });
+    ).resolves.toEqual({ userId: 'scoped-user', apiKeyId: 'key-1' });
 
     await expect(
       getClerkAuthUser(makeBearerRequest(created.full_key), {
@@ -366,7 +366,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     await expect(
       getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'usage:read' }),
-    ).resolves.toEqual({ userId: 'legacy-user' });
+    ).resolves.toEqual({ userId: 'legacy-user', apiKeyId: 'key-1' });
     await expect(getClerkAuthUser(makeBearerRequest(rawKey))).rejects.toMatchObject({
       statusCode: 403,
     });
@@ -473,7 +473,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         apiKeyScope: 'inference:write',
       });
 
-      expect(result).toEqual({ userId: 'user-a-bearer' });
+      expect(result).toEqual({ userId: 'user-a-bearer', apiKeyId: 'key-1' });
       expect(mockAuth).not.toHaveBeenCalled();
     });
 
@@ -491,7 +491,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         apiKeyScope: 'inference:write',
       });
 
-      expect(result).toEqual({ userId: 'same-user' });
+      expect(result).toEqual({ userId: 'same-user', apiKeyId: 'key-1' });
       expect(mockAuth).not.toHaveBeenCalled();
     });
   });

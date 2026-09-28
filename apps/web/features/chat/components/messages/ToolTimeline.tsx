@@ -19,6 +19,7 @@ import {
   Search,
   TerminalSquare,
 } from '@agiworkforce/icons';
+import { translateUi, translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -346,32 +347,60 @@ function buildCompactSummary(tools: ToolEntry[]): string {
       case 'connector': {
         if (connectorNames.size === 1) {
           const only = [...connectorNames][0]!;
-          return n === 1
-            ? `used the ${only} integration`
-            : `used the ${only} integration ${n} times`;
+          return translateUiPlural(
+            'chat',
+            'counts.toolSummaryIntegrationUses',
+            n,
+            {
+              one: 'used the {{name}} integration',
+              other: 'used the {{name}} integration {{count}} times',
+            },
+            { name: only },
+          );
         }
-        return `used ${connectorNames.size} integrations`;
+        return translateUiPlural('chat', 'counts.toolSummaryIntegrations', connectorNames.size, {
+          one: 'used {{count}} integration',
+          other: 'used {{count}} integrations',
+        });
       }
       case 'shell':
-        return n === 1 ? 'ran a command' : `ran ${n} commands`;
+        return translateUiPlural('chat', 'counts.toolSummaryCommands', n, {
+          one: 'ran a command',
+          other: 'ran {{count}} commands',
+        });
       case 'file-write':
-        return n === 1 ? 'created a file' : `created ${n} files`;
+        return translateUiPlural('chat', 'counts.toolSummaryCreatedFiles', n, {
+          one: 'created a file',
+          other: 'created {{count}} files',
+        });
       case 'file-edit':
-        return n === 1 ? 'edited a file' : `edited ${n} files`;
+        return translateUiPlural('chat', 'counts.toolSummaryEditedFiles', n, {
+          one: 'edited a file',
+          other: 'edited {{count}} files',
+        });
       case 'file-read':
-        return n === 1 ? 'read a file' : `read ${n} files`;
+        return translateUiPlural('chat', 'counts.toolSummaryReadFiles', n, {
+          one: 'read a file',
+          other: 'read {{count}} files',
+        });
       case 'web-search':
-        return n === 1 ? 'searched the web' : 'searched the web';
+        return translateUi('chat', 'toolSummary.searchedWeb', 'searched the web');
       case 'web-fetch':
-        return n === 1 ? 'fetched a page' : `fetched ${n} pages`;
+        return translateUiPlural('chat', 'counts.toolSummaryFetchedPages', n, {
+          one: 'fetched a page',
+          other: 'fetched {{count}} pages',
+        });
       case 'codebase-search':
-        return n === 1 ? 'searched the codebase' : 'searched the codebase';
+        return translateUi('chat', 'toolSummary.searchedCodebase', 'searched the codebase');
       case 'list':
-        return n === 1 ? 'listed a directory' : `listed ${n} directories`;
+        return translateUiPlural('chat', 'counts.toolSummaryListedDirectories', n, {
+          one: 'listed a directory',
+          other: 'listed {{count}} directories',
+        });
     }
   }
 
-  if (order.length === 0) return 'Used tools';
+  if (order.length === 0) return translateUi('chat', 'toolSummary.usedTools', 'Used tools');
 
   const phrases = order.map((b) => phrase(b, counts.get(b)!));
 
@@ -494,7 +523,10 @@ function TimelineStepRow({
       ) : null}
       {hasSources && (
         <div className="pl-7 mt-1 text-xs text-muted-foreground">
-          {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
+          {translateUiPlural('chat', 'counts.sources', searchSources!.length, {
+            one: '{{count}} source',
+            other: '{{count}} sources',
+          })}
         </div>
       )}
       {tool.status === 'awaiting_input' && renderInputRequest ? (
@@ -596,8 +628,18 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
 
   const denied = tools.filter(isDeniedToolEntry).length;
   const failed = tools.filter((t) => t.status === 'failed' && !isDeniedToolEntry(t)).length;
-  if (failed > 0) return `${failed} tool ${failed === 1 ? 'call' : 'calls'} failed`;
-  if (denied > 0) return `You denied ${denied} tool ${denied === 1 ? 'call' : 'calls'}`;
+  if (failed > 0) {
+    return translateUiPlural('chat', 'counts.toolCallsFailed', failed, {
+      one: '{{count}} tool call failed',
+      other: '{{count}} tool calls failed',
+    });
+  }
+  if (denied > 0) {
+    return translateUiPlural('chat', 'counts.toolCallsDenied', denied, {
+      one: 'You denied {{count}} tool call',
+      other: 'You denied {{count}} tool calls',
+    });
+  }
 
   if (tools.some((t) => t.status === 'pending')) return 'Tool calls queued';
   return 'Tool run complete';

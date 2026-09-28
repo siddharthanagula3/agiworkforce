@@ -1001,7 +1001,7 @@ describe('useDirectoryAdapter plugins', () => {
       'Partner plugins',
       'Marketplace plugins',
     ]);
-    expect(calls).toContain('GET /api/plugins?source=marketplace&sort=installs&limit=100');
+    expect(calls).toContain('GET /api/plugins?source=marketplace&sort=name&limit=100');
     expect(calls.some((call) => call.startsWith('GET /api/plugins?sort='))).toBe(false);
 
     await act(async () => {
@@ -1032,8 +1032,8 @@ describe('useDirectoryAdapter plugins', () => {
     expect(result.current.plugins?.entries.map((entry) => entry.id)).toEqual(['data-pack']);
     expect(result.current.plugins?.catalogHeading).toBe('Built-in packs');
     expect(calls.filter((call) => call.startsWith('GET /api/plugins?'))).toEqual([
-      'GET /api/plugins?source=builtin&sort=installs&limit=100',
-      'GET /api/plugins?source=partner&sort=installs&limit=100',
+      'GET /api/plugins?source=builtin&sort=name&limit=100',
+      'GET /api/plugins?source=partner&sort=name&limit=100',
     ]);
   });
 
@@ -1543,7 +1543,8 @@ describe('an uploaded or authored plugin reaches the installed table without a r
 
   it('refetches the install state, so the manage table gains the row', async () => {
     const calls = stubAfterUpload();
-    const { result } = renderHook(() => useDirectoryAdapter());
+    const onCreateSkill = vi.fn();
+    const { result } = renderHook(() => useDirectoryAdapter({ onCreateSkill }));
     await act(async () => {
       await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
     });
@@ -1565,7 +1566,8 @@ describe('an uploaded or authored plugin reaches the installed table without a r
 
   it('reports what was installed to the dialog', async () => {
     stubAfterUpload();
-    const { result } = renderHook(() => useDirectoryAdapter());
+    const onCreateSkill = vi.fn();
+    const { result } = renderHook(() => useDirectoryAdapter({ onCreateSkill }));
     await act(async () => {
       await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
     });
@@ -1596,7 +1598,8 @@ describe('an uploaded or authored plugin reaches the installed table without a r
           422,
         ),
     });
-    const { result } = renderHook(() => useDirectoryAdapter());
+    const onCreateSkill = vi.fn();
+    const { result } = renderHook(() => useDirectoryAdapter({ onCreateSkill }));
     await expect(
       result.current.uploadPluginArchive?.(new File([new Uint8Array([1])], 'broken.zip')),
     ).rejects.toThrow('That file is not a readable zip archive.');

@@ -11,6 +11,16 @@ import {
   type McpUiResourceCsp,
   type McpUiResourcePermissions,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
+import {
+  ConnectorCapabilityCatalogSchema,
+  ConnectorMcpOperationResponseSchema,
+  connectorCapabilitiesPath,
+  connectorErrorMessage,
+  connectorMcpPath,
+  type ConnectorCapabilityCatalog,
+  type ConnectorMcpOperationRequest,
+  type ConnectorMcpOperationResponse,
+} from '@agiworkforce/cloud-contracts';
 import { TriangleAlert } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 
@@ -49,19 +59,36 @@ function base64Url(value: string): string {
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '');
 }
 
-async function mcpOperation(connectorId: string, body: Record<string, unknown>): Promise<unknown> {
+const MCP_APP_REQUEST_FAILED = 'MCP App request failed';
+
+async function mcpOperation(
+  connectorId: string,
+  body: ConnectorMcpOperationRequest,
+): Promise<ConnectorMcpOperationResponse> {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`/api/connectors/${encodeURIComponent(connectorId)}/mcp`, {
+  const response = await fetch(connectorMcpPath(connectorId), {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
     body: JSON.stringify(body),
   });
-  const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok) {
-    throw new Error(typeof json?.['error'] === 'string' ? json['error'] : 'MCP App request failed');
-  }
-  return json;
+  const json: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(connectorErrorMessage(json, MCP_APP_REQUEST_FAILED));
+  const parsed = ConnectorMcpOperationResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(MCP_APP_REQUEST_FAILED);
+  return parsed.data;
+}
+
+async function fetchCapabilityCatalog(
+  connectorId: string,
+): Promise<ConnectorCapabilityCatalog | null> {
+  const response = await fetch(connectorCapabilitiesPath(connectorId), {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok) return null;
+  const parsed = ConnectorCapabilityCatalogSchema.safeParse(await response.json());
+  return parsed.success ? parsed.data : null;
 }
 
 function extractAppResource(value: unknown, expectedUri: string): AppResource {
@@ -153,12 +180,12 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
         bridgeRef.current = bridge;
         bridge.oncalltool = async (params) => {
           const call = async (approved: boolean) =>
-            (await mcpOperation(body.connectorId, {
+            mcpOperation(body.connectorId, {
               operation: 'callTool',
               name: params.name,
               arguments: params.arguments ?? {},
               approved,
-            })) as { approvalRequired?: boolean; result?: unknown };
+            });
           let response = await call(false);
           if (response.approvalRequired) {
             const approved = await requestApproval(params.name);
@@ -173,38 +200,23 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
           return response.result as never;
         };
         bridge.onreadresource = async (params) => {
-          const response = (await mcpOperation(body.connectorId, {
+          const response = await mcpOperation(body.connectorId, {
             operation: 'readResource',
             uri: params.uri,
-          })) as { result?: unknown };
+          });
           return response.result as never;
         };
         bridge.onlistresources = async () => {
-          const response = await fetch(
-            `/api/connectors/${encodeURIComponent(body.connectorId)}/capabilities`,
-            { credentials: 'include', cache: 'no-store' },
-          );
-          if (!response.ok) return { resources: [] };
-          const catalog = (await response.json()) as { resources?: unknown[] };
-          return { resources: catalog.resources ?? [] } as never;
+          const catalog = await fetchCapabilityCatalog(body.connectorId);
+          return { resources: catalog?.resources ?? [] } as never;
         };
         bridge.onlistresourcetemplates = async () => {
-          const response = await fetch(
-            `/api/connectors/${encodeURIComponent(body.connectorId)}/capabilities`,
-            { credentials: 'include', cache: 'no-store' },
-          );
-          if (!response.ok) return { resourceTemplates: [] };
-          const catalog = (await response.json()) as { resourceTemplates?: unknown[] };
-          return { resourceTemplates: catalog.resourceTemplates ?? [] } as never;
+          const catalog = await fetchCapabilityCatalog(body.connectorId);
+          return { resourceTemplates: catalog?.resourceTemplates ?? [] } as never;
         };
         bridge.onlistprompts = async () => {
-          const response = await fetch(
-            `/api/connectors/${encodeURIComponent(body.connectorId)}/capabilities`,
-            { credentials: 'include', cache: 'no-store' },
-          );
-          if (!response.ok) return { prompts: [] };
-          const catalog = (await response.json()) as { prompts?: unknown[] };
-          return { prompts: catalog.prompts ?? [] } as never;
+          const catalog = await fetchCapabilityCatalog(body.connectorId);
+          return { prompts: catalog?.prompts ?? [] } as never;
         };
         bridge.onopenlink = async ({ url }) => {
           const parsed = new URL(url);

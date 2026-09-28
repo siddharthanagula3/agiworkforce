@@ -148,17 +148,13 @@ Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 - Done when: A plugin shows the connectors it includes, and they work when installed.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail lists declared MCP servers and required curated connectors (with Connect), but web never runs a plugin's own MCP servers. | handler |
-| desktop | partial | Same as web. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`
 
 ## S54.16: Included agents.
 
@@ -180,17 +176,13 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 - Done when: A plugin shows the commands it includes, and they are usable when installed.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows only a count/flag for commands; web installs only a plugin's skills, so its commands never run. | handler |
-| desktop | partial | Same as web: commands shown, never run. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/features/plugins/server/directory/install.ts:155-204`
 
 ## S54.18: Included hooks.
 
@@ -258,17 +250,16 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 - Done when: A user can authenticate the connections a plugin bundles.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Required curated connectors get a Connect button in plugin settings; a plugin's own bundled MCP servers are never run or authenticated on web. | handler |
-| desktop | partial | Required curated connectors get a Connect button in plugin settings; a plugin's own bundled MCP servers are never run or authenticated on web. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Plugin MCP servers join the MCP config and agi mcp login can authorize a remote server by name, but plugins have no sign-in step of their own. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1342-1345`, `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
+Code: `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
 
 ## S54.24: Enable/disable.
 
