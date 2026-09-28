@@ -291,6 +291,14 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/platform/utils/src/markdownSource.ts',
         ),
+        '@agiworkforce/utils/control-receipts': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/remoteControl/controlReceipts.ts',
+        ),
+        '@agiworkforce/utils/remote-control': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/remoteControl/index.ts',
+        ),
         '@agiworkforce/utils': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/index.ts',

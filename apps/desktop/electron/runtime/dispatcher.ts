@@ -99,7 +99,7 @@ import {
   stepSignature,
 } from './computerUseLoop';
 import { deviceIdentity } from './deviceIdentity';
-import { RemoteControlRefused } from '../remote/remoteControlHost';
+import { RemoteControlRefused } from '@agiworkforce/utils/remote-control';
 import {
   remoteControlAvailable,
   remoteControlState,
