@@ -500,6 +500,7 @@ impl ExtensionManager {
                             headers: std::collections::HashMap::new(),
                             timeout_secs: http_config.timeout_secs as u64,
                             verify_ssl: true,
+                            ..Default::default()
                         },
                     ))
                 } else {
