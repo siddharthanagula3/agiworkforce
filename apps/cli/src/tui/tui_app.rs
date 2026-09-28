@@ -3013,13 +3013,19 @@ fn open_checkpoint_picker(app: &mut TuiApp) {
         .map(|(offset, summary)| CheckpointEntry {
             steps: offset + 1,
             label: sanitize_terminal_text(&format!(
-                "{}  {}  ({})",
+                "{}  {}  ({}{})",
                 summary.created_at.format("%H:%M"),
                 crate::repl::checkpoint_prompt_line(&summary.prompt),
-                crate::repl::checkpoint_files_label(summary.tracked_files)
+                crate::repl::checkpoint_files_label(summary.tracked_files),
+                if summary.conversation_available() {
+                    ""
+                } else {
+                    "; code only"
+                }
             ))
             .into_owned(),
             tracked_files: summary.tracked_files,
+            conversation_available: summary.conversation_available(),
         })
         .collect();
     app.open_overlay(Box::new(CheckpointPickerView::new(entries)));
