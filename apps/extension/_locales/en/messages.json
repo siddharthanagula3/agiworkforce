@@ -2108,5 +2108,109 @@
   "spRecentProjectsTitle": {
     "message": "Start in a project",
     "description": "Heading above recent projects a new chat can start in"
+  },
+  "spShortcutPromptPlaceholder": {
+    "message": "Summarize the following in 3 bullet points:\n\n$INPUT$",
+    "description": "Example prompt in the shortcut dialog; the placeholder marks where the user's own text goes",
+    "placeholders": {
+      "input": {
+        "content": "$1",
+        "example": "{{input}}"
+      }
+    }
+  },
+  "spShortcutInputHint": {
+    "message": "Put $INPUT$ where the text you type after the command should go. Without it, your text is added at the end.",
+    "description": "Help under the prompt field of the shortcut dialog",
+    "placeholders": {
+      "input": {
+        "content": "$1",
+        "example": "{{input}}"
+      }
+    }
+  },
+  "spShortcutCommandHint": {
+    "message": "Type $COMMAND$ in chat to use it.",
+    "description": "Shows the slash command a prompt shortcut will get from its name",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/daily-research"
+      }
+    }
+  },
+  "spShortcutEditTitle": {
+    "message": "Edit shortcut",
+    "description": "Title of the shortcut dialog when editing a saved prompt shortcut"
+  },
+  "spShortcutSaveChanges": {
+    "message": "Save changes",
+    "description": "Save button of the shortcut dialog when editing"
+  },
+  "spShortcutNameUnusable": {
+    "message": "Give the shortcut a name with letters or numbers, so you can type it after /.",
+    "description": "Shortcut dialog error when the name cannot become a slash command"
+  },
+  "spShortcutNameTaken": {
+    "message": "$COMMAND$ is already a command or another shortcut. Choose a different name.",
+    "description": "Shortcut dialog error when the name's slash command is already used",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/summarize"
+      }
+    }
+  },
+  "spShortcutPromptMissing": {
+    "message": "Write the prompt this shortcut sends.",
+    "description": "Shortcut dialog error when the prompt is empty"
+  },
+  "spShortcutUpdated": {
+    "message": "$NAME$ updated.",
+    "description": "Workflows status after a prompt shortcut is edited",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      }
+    }
+  },
+  "spShortcutEdit": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of the edit button on a prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      }
+    }
+  },
+  "spShortcutDeleteAgain": {
+    "message": "Select again to delete",
+    "description": "Accessible name of a shortcut's delete button while it waits for confirmation"
+  },
+  "spShortcutDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. $COMMAND$ stops working in chat, and the shortcut cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      },
+      "command": {
+        "content": "$2",
+        "example": "/daily-research"
+      }
+    }
+  },
+  "spWorkflowDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. Its recorded steps cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a recorded workflow or unnamed prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Checkout flow"
+      }
+    }
   }
 }
