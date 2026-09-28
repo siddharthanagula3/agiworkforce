@@ -260,19 +260,19 @@ export async function takeChallenge(
 
 export async function storePendingRecoveryKeys(
   db: DatabaseAdapter,
-  userId: string,
-  hashes: readonly string[],
-  ttlMinutes: number,
+  input: { userId: string; sessionId: string; hashes: readonly string[]; ttlMinutes: number },
 ): Promise<number> {
   const [row] = await db.query<{ pending_recovery_keys_expire_at: Timestamp }>(
     `insert into public.account_security_enrollments
-       (user_id, pending_recovery_key_hashes, pending_recovery_keys_expire_at)
-     values ($1, $2::text[], now() + make_interval(mins => $3::integer))
+       (user_id, pending_recovery_key_hashes, pending_recovery_keys_expire_at,
+        pending_recovery_session_id)
+     values ($1, $2::text[], now() + make_interval(mins => $3::integer), $4)
      on conflict (user_id) do update
        set pending_recovery_key_hashes = excluded.pending_recovery_key_hashes,
-           pending_recovery_keys_expire_at = excluded.pending_recovery_keys_expire_at
+           pending_recovery_keys_expire_at = excluded.pending_recovery_keys_expire_at,
+           pending_recovery_session_id = excluded.pending_recovery_session_id
      returning pending_recovery_keys_expire_at`,
-    [userId, hashes, ttlMinutes],
+    [input.userId, input.hashes, input.ttlMinutes, input.sessionId],
   );
   if (!row) throw new Error('pending recovery keys were not stored');
   return toMs(row.pending_recovery_keys_expire_at);
@@ -280,21 +280,22 @@ export async function storePendingRecoveryKeys(
 
 export async function promotePendingRecoveryKeys(
   db: DatabaseAdapter,
-  userId: string,
-  mode: 'enroll' | 'replace',
+  input: { userId: string; sessionId: string; mode: 'enroll' | 'replace' },
 ): Promise<number | null> {
   const [row] = await db.query<{ enrolled_at: Timestamp }>(
     `update public.account_security_enrollments
         set recovery_key_hashes = pending_recovery_key_hashes,
             pending_recovery_key_hashes = null,
             pending_recovery_keys_expire_at = null,
+            pending_recovery_session_id = null,
             enrolled_at = case when $2::text = 'enroll' then now() else enrolled_at end
       where user_id = $1
         and pending_recovery_key_hashes is not null
         and pending_recovery_keys_expire_at > now()
+        and pending_recovery_session_id = $3
         and (case when $2::text = 'enroll' then enrolled_at is null else enrolled_at is not null end)
       returning enrolled_at`,
-    [userId, mode],
+    [input.userId, input.mode, input.sessionId],
   );
   return row ? toMsOrNull(row.enrolled_at) : null;
 }
@@ -304,6 +305,7 @@ const CLEARED_ENROLLMENT = `
   recovery_key_hashes = '{}',
   pending_recovery_key_hashes = null,
   pending_recovery_keys_expire_at = null,
+  pending_recovery_session_id = null,
   recovery_started_at = null,
   recovery_unlocks_at = null,
   recovery_session_id = null,

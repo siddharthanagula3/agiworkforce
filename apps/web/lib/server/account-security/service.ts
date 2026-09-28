@@ -347,12 +347,12 @@ export async function prepareRecoveryKeys(
 ): Promise<AccountSecurityRecoveryKeysResponse> {
   await enrolledOrAvailable(caller);
   const { keys, hashes } = generateRecoveryKeys(ACCOUNT_SECURITY_POLICY.recoveryKeyCount);
-  const expiresAt = await storePendingRecoveryKeys(
-    caller.db,
-    caller.userId,
+  const expiresAt = await storePendingRecoveryKeys(caller.db, {
+    userId: caller.userId,
+    sessionId: caller.sessionId,
     hashes,
-    ACCOUNT_SECURITY_POLICY.pendingRecoveryKeysMinutes,
-  );
+    ttlMinutes: ACCOUNT_SECURITY_POLICY.pendingRecoveryKeysMinutes,
+  });
   return { recoveryKeys: keys, expiresAt: iso(expiresAt) };
 }
 
@@ -360,10 +360,14 @@ export async function confirmReplacementRecoveryKeys(
   caller: AccountSecurityCaller,
   request: NextRequest,
 ): Promise<void> {
-  const replaced = await promotePendingRecoveryKeys(caller.db, caller.userId, 'replace');
+  const replaced = await promotePendingRecoveryKeys(caller.db, {
+    userId: caller.userId,
+    sessionId: caller.sessionId,
+    mode: 'replace',
+  });
   if (replaced === null) {
     throw createError.conflict(
-      'These recovery keys expired or Advanced Account Security is off. Generate new recovery keys and try again.',
+      'These recovery keys expired, were generated on another device, or Advanced Account Security is off. Generate new recovery keys here and try again.',
     );
   }
   await emitIdentitySecurityEvent(caller.db, {
@@ -511,7 +515,11 @@ export async function enrollAccountSecurity(
 
   const undoToken = newOpaqueToken();
   const enrolled = await caller.db.transaction(async (tx) => {
-    const enrolledAt = await promotePendingRecoveryKeys(tx, caller.userId, 'enroll');
+    const enrolledAt = await promotePendingRecoveryKeys(tx, {
+      userId: caller.userId,
+      sessionId: caller.sessionId,
+      mode: 'enroll',
+    });
     if (enrolledAt === null) return null;
     const undoExpiresAt = await armEnrollmentUndo(tx, {
       userId: caller.userId,
@@ -524,7 +532,7 @@ export async function enrollAccountSecurity(
   });
   if (!enrolled) {
     throw createError.conflict(
-      'Your recovery keys expired, or Advanced Account Security is already on. Generate new recovery keys and try again.',
+      'Your recovery keys expired, were generated on another device, or Advanced Account Security is already on. Generate new recovery keys here and try again.',
     );
   }
   await rememberEnrollment(caller.userId, enrolled.enrolledAt);

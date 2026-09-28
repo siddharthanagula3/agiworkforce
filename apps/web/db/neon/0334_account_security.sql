@@ -12,7 +12,8 @@
 -- Shape  : account_security_enrollments is one row per person who started or
 --          finished enrolling: when they enrolled (null while setting up), the
 --          hashes of their unused recovery keys, keys generated but not yet
---          confirmed as saved, and the recovery hold a used key starts.
+--          confirmed as saved with the session that generated them, and the
+--          recovery hold a used key starts.
 --          account_security_credentials holds each registered passkey or
 --          security key's public key and signature counter; no private
 --          material ever reaches the server. account_security_sessions records
@@ -39,6 +40,9 @@ create table if not exists public.account_security_enrollments (
   pending_recovery_key_hashes text[]
     check (pending_recovery_key_hashes is null or cardinality(pending_recovery_key_hashes) <= 16),
   pending_recovery_keys_expire_at timestamptz,
+  pending_recovery_session_id text check (
+    pending_recovery_session_id is null or char_length(pending_recovery_session_id) between 1 and 200
+  ),
   recovery_started_at timestamptz,
   recovery_unlocks_at timestamptz,
   recovery_session_id text check (recovery_session_id is null or char_length(recovery_session_id) <= 200),
@@ -53,6 +57,7 @@ create table if not exists public.account_security_enrollments (
   ),
   constraint account_security_pending_keys_shape check (
     (pending_recovery_key_hashes is null) = (pending_recovery_keys_expire_at is null)
+    and (pending_recovery_key_hashes is null) = (pending_recovery_session_id is null)
   ),
   constraint account_security_recovery_hold_shape check (
     (recovery_started_at is null and recovery_unlocks_at is null and recovery_session_id is null)
