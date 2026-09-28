@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 
 export const AgentModeSchema = z.enum(['ask', 'auto', 'plan', 'bypass']);
 export const EffortSchema = z.enum(['low', 'medium', 'high', 'max']);
@@ -189,6 +190,7 @@ const respondToApproval = z.object({
   payload: z.object({
     requestId: z.string().min(1).max(200),
     decision: ApprovalDecisionSchema,
+    guidance: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
   }),
 });
 
