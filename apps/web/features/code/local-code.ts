@@ -1,3 +1,4 @@
+import { translateUiPlural } from '@agiworkforce/ui';
 import {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
@@ -305,7 +306,10 @@ export const LOCAL_MODEL_EVIDENCE_LABELS: Record<LocalModelChoice['evidence'], s
 export const LOCAL_MODEL_SETUP_HEADING = 'Needs setup on this machine';
 
 export function localModelSetupCount(setup: LocalProviderSetup): string {
-  return setup.count === 1 ? '1 model' : `${setup.count} models`;
+  return translateUiPlural('settings', 'counts.models', setup.count, {
+    one: '{{count}} model',
+    other: '{{count}} models',
+  });
 }
 
 /**
@@ -558,7 +562,10 @@ function diffStep(diff: LocalTurnDiff, index: number): CloudCodeAgentStep {
   return {
     index,
     toolName: 'turn_diff',
-    label: `Changed ${count} ${count === 1 ? 'file' : 'files'}`,
+    label: translateUiPlural('chat', 'counts.changedFiles', count, {
+      one: 'Changed {{count}} file',
+      other: 'Changed {{count}} files',
+    }),
     output: diff.unifiedDiff,
     isError: false,
   };

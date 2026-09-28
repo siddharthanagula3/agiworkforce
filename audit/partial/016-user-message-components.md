@@ -72,28 +72,26 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.r
 
 - Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
-| vscode | partial | Only a failed turn can be re-sent (error-block Retry); a sent message has no Resend action. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3414-3431`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`
 
 ## S16.10: Branch-from-message action.
 
 - Done when: From a chosen user message the user can start a new branch conversation that contains the thread up to that message.
 - Wave: 2
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Wire a "Branch from here" action to the existing forkConversation store action (it already accepts forkPointMessageId); no screen calls it. | ui, mount |
-| vscode | partial | Fork from a chosen message; the agi-workforce.forkConversation command only forks a whole developer session at its latest point. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatMessageStore.ts:242-242`, `apps/mobile/stores/chat/chatMessageStore.ts:271-272`, `apps/extension-vscode/src/core/commandSetup.ts:1210-1224`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:908-908`
+Code: `apps/mobile/stores/chat/chatMessageStore.ts:242-242`, `apps/mobile/stores/chat/chatMessageStore.ts:271-272`
 
 ## S16.11: Message-version navigation.
 
@@ -144,11 +142,8 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The "queued" badge is the only pending marker and it is set solely by the offline queue (isOnline false and cloud mode). An online send appends the user row with no pending/sending state; the auditor's own note admits "online sends show only the streaming indicator", which is the case the criterion names ("not yet accepted by the service"). Partial with miss states; remaining: show a sending state on online user rows until the server accepts the turn. Same standard the auditor applied to web (partial). |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`, `apps/mobile/app/(app)/chat/[id].tsx:478-490`, `apps/mobile/app/(app)/chat/[id].tsx:1434-1434`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`
 
 ## S16.16: Retry-send action.
 

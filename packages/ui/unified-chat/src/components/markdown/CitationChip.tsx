@@ -1,3 +1,4 @@
+import { translateUiPlural } from '@agiworkforce/ui';
 import { createContext, useContext, useState } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Globe } from 'lucide-react';
@@ -155,12 +156,19 @@ export function CitationChip({ items }: { items: readonly CitationItem[] }) {
 
   const extraCount = items.length - 1;
   const siteName = citationSiteName(first.citation);
-  const ariaLabel =
-    items.length === 1
-      ? `Source ${first.index}: ${first.citation.title || siteName}`
-      : `Sources ${items.map((item) => item.index).join(', ')}: ${items
-          .map((item) => citationSiteName(item.citation))
-          .join(', ')}`;
+  const ariaLabel = translateUiPlural(
+    'chat',
+    'counts.citationSources',
+    items.length,
+    { one: 'Source {{indices}}: {{sites}}', other: 'Sources {{indices}}: {{sites}}' },
+    {
+      indices: items.map((item) => item.index).join(', '),
+      sites:
+        extraCount === 0
+          ? first.citation.title || siteName
+          : items.map((item) => citationSiteName(item.citation)).join(', '),
+    },
+  );
 
   return (
     <Tooltip.Root>

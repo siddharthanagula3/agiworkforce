@@ -29,6 +29,7 @@ export interface UnauditedRoute {
 export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'analytics/events/route.ts', reason: 'own_content' },
   { route: 'artifacts/publish/[token]/route.ts', reason: 'own_content' },
+  { route: 'artifacts/runtime/[token]/storage/route.ts', reason: 'own_content' },
   { route: 'auth/device/code/route.ts', reason: 'no_governed_state' },
   { route: 'auth/device/token/route.ts', reason: 'no_governed_state' },
   { route: 'beta/apply/route.ts', reason: 'pre_account' },
@@ -132,6 +133,11 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   },
   { route: 'developers/webhooks/[endpointId]/test/route.ts', reason: 'dedicated_record' },
   { route: 'llm/v1/chat/completions/guest/route.ts', reason: 'pre_account' },
+  { route: 'llm/v1/chat/completions/runs/[runId]/steer/route.ts', reason: 'own_content' },
+  {
+    route: 'llm/v1/chat/completions/runs/[runId]/steer/[steerId]/route.ts',
+    reason: 'own_content',
+  },
 ] as const;
 
 export interface RequiredRouteAuditEvents {

@@ -237,6 +237,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
         requestId: 'req-test-001',
       },
       outcome: 'completed',
+      attempt: { outcome: 'completed' },
       provider: 'openai',
       model: 'fixture-model',
       cost: { tokenMicrousd: 1_234, toolMicrousd: 0 },

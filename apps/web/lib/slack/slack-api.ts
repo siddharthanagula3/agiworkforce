@@ -248,6 +248,7 @@ const SlackMessageSchema = z.object({
   thread_ts: z.string().optional(),
   user: z.string().optional(),
   bot_id: z.string().optional(),
+  app_id: z.string().optional(),
   subtype: z.string().optional(),
   text: z.string().optional(),
   files: z.array(z.object({ name: z.string().optional() }).passthrough()).optional(),
@@ -274,6 +275,7 @@ export async function readSlackThread(
   input: { channel: string; threadTs: string; before: string; keep: number; maxPages: number },
 ): Promise<SlackMessage[]> {
   let cursor: string | null = null;
+  let root: SlackMessage | null = null;
   let kept: SlackMessage[] = [];
   for (let page = 0; page < input.maxPages; page += 1) {
     const payload = await callSlack(
@@ -288,11 +290,13 @@ export async function readSlackThread(
         cursor: cursor ?? undefined,
       },
     );
-    kept = [...kept, ...readMessages('conversations.replies', payload)].slice(-input.keep);
+    const messages = readMessages('conversations.replies', payload);
+    root ??= messages.find((message) => message.ts === input.threadTs) ?? null;
+    kept = [...kept, ...messages].slice(-input.keep);
     cursor = nextCursor(payload);
     if (!cursor) break;
   }
-  return kept;
+  return root && !kept.some((message) => message.ts === root?.ts) ? [root, ...kept] : kept;
 }
 
 export async function readSlackHistory(

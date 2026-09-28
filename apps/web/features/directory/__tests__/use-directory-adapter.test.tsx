@@ -436,8 +436,10 @@ describe('useDirectoryAdapter connector credentials', () => {
           status: 409,
           json: () =>
             Promise.resolve({
-              credentialsPath: '/api/connectors/a/credentials',
+              error: 'Needs an API key',
               message: 'Needs an API key',
+              connectorId: 'a',
+              credentialsPath: '/api/connectors/a/credentials',
             }),
         });
       }

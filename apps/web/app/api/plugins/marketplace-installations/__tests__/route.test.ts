@@ -55,6 +55,7 @@ vi.mock('@/lib/workspace-audit', () => ({
 }));
 vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   installMarketplaceEntry: installMarketplaceEntryMock,
+  installMarketplaceEntries: vi.fn(async () => new Map<string, string>()),
   listMarketplaceInstallations: listMarketplaceInstallationsMock,
   setMarketplaceInstallationEnabled: setMarketplaceInstallationEnabledMock,
   getMarketplaceInstallationSettings: getMarketplaceInstallationSettingsMock,
@@ -65,6 +66,7 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
   getMarketplaceEntryForUser: marketplaceEntryMock,
+  getMarketplaceSourceEntry: vi.fn(async () => null),
   assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
   approveMarketplaceInstallationPermissions: vi.fn(async () => []),
 }));
@@ -226,7 +228,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     installMarketplaceEntryPluginMock.mockResolvedValue({
       status: 'installed',
       installation: INSTALLATION,
-      skills: [],
+      skills: ['code-review'],
       dependencies: [],
     });
     const response = await POST(
@@ -234,6 +236,12 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     );
     expect(response.status).toBe(201);
     expect((await response.json()).installation).toEqual(INSTALLATION);
+    expect(installMarketplaceEntryPluginMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      ENTRY_ID,
+      expect.anything(),
+    );
     expect(installDirectoryPluginMock).not.toHaveBeenCalled();
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -332,7 +340,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
   it('409s when the entry is not installable', async () => {
     installMarketplaceEntryPluginMock.mockResolvedValue({
       status: 'blocked',
-      message: 'This plugin is not available to install.',
+      message: 'This plugin is no longer in its marketplace.',
       installCommand: null,
     });
     const response = await POST(

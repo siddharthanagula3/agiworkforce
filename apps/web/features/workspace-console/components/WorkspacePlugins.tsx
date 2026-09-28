@@ -8,6 +8,7 @@ import {
   Spinner,
   useConfirmAction,
   type DirectoryScanCaution,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import {
   ORGANIZATION_PLUGINS_ADMIN_PATH,
@@ -459,12 +460,21 @@ export function WorkspacePlugins() {
                       {plugin.name}
                     </p>
                     <p className="mt-0.5 text-xs" style={{ color: 'var(--text-3)' }}>
-                      {`Version ${plugin.version} · ${plugin.skills.length === 1 ? '1 skill' : `${plugin.skills.length} skills`}`}
+                      {`Version ${plugin.version} · ${translateUiPlural('common', 'counts.skills', plugin.skills.length, { one: '{{count}} skill', other: '{{count}} skills' })}`}
                       {retired ? ' · Retired' : ` · ${preferenceLabel(plugin.installPreference)}`}
                     </p>
                     {plugin.scanVerdict === 'review' ? (
                       <p className="mt-0.5 text-xs" style={{ color: 'var(--text-3)' }}>
-                        {`Published with ${plugin.scanFindings.length === 1 ? 'a scan finding' : `${plugin.scanFindings.length} scan findings`} an administrator accepted.`}
+                        {translateUiPlural(
+                          'settings',
+                          'counts.acceptedScanFindings',
+                          plugin.scanFindings.length,
+                          {
+                            one: 'Published with a scan finding an administrator accepted.',
+                            other:
+                              'Published with {{count}} scan findings an administrator accepted.',
+                          },
+                        )}
                       </p>
                     ) : null}
                   </div>

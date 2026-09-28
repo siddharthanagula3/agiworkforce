@@ -228,6 +228,81 @@ fn user_approved_policy_path() -> Result<PathBuf> {
         .join("user-approved.rules"))
 }
 
+pub(crate) fn can_persist_allow_command(command: &str) -> bool {
+    shell_segments(command).is_some_and(
+        |segments| matches!(segments.as_slice(), [segment] if segment_argv(segment).is_some()),
+    )
+}
+
+pub(crate) struct UserApprovedRule {
+    pub line: String,
+    pub prefix: Vec<String>,
+    pub allow: bool,
+}
+
+pub(crate) fn user_approved_rules() -> Result<Vec<UserApprovedRule>> {
+    let path = user_approved_policy_path()?;
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("reading {}", path.display()));
+        }
+    };
+    Ok(contents
+        .lines()
+        .filter_map(parse_user_approved_rule)
+        .collect())
+}
+
+fn parse_user_approved_rule(line: &str) -> Option<UserApprovedRule> {
+    static RULE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let rule = RULE.get_or_init(|| {
+        regex::Regex::new(r#"^prefix_rule\(pattern=(\[.*\]), decision="(allow|forbidden)"\)$"#)
+            .expect("user-approved rule pattern")
+    });
+    let captures = rule.captures(line.trim())?;
+    let prefix: Vec<String> = serde_json::from_str(&captures[1]).ok()?;
+    (!prefix.is_empty()).then(|| UserApprovedRule {
+        line: line.to_string(),
+        prefix,
+        allow: &captures[2] == "allow",
+    })
+}
+
+pub(crate) fn remove_user_approved_rule(line: &str) -> Result<bool> {
+    use std::io::{Read, Seek, Write};
+
+    let path = user_approved_policy_path()?;
+    let mut file = match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error).with_context(|| format!("opening {}", path.display())),
+    };
+    file.lock()
+        .with_context(|| format!("locking {}", path.display()))?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .with_context(|| format!("reading {}", path.display()))?;
+    let kept: Vec<&str> = contents.lines().filter(|kept| *kept != line).collect();
+    if kept.len() == contents.lines().count() {
+        return Ok(false);
+    }
+    let mut rewritten = kept.join("\n");
+    if !rewritten.is_empty() {
+        rewritten.push('\n');
+    }
+    file.set_len(0)
+        .and_then(|()| file.rewind())
+        .and_then(|()| file.write_all(rewritten.as_bytes()))
+        .with_context(|| format!("rewriting {}", path.display()))?;
+    Ok(true)
+}
+
 pub async fn persist_allow_command(command: &str) -> Result<()> {
     let path = user_approved_policy_path()?;
     persist_allow_command_to(path, command).await

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 17,
+    "policyVersion": 19,
     "records": [
       {
         "version": 1,
@@ -162,6 +162,22 @@
         "channel": "internal",
         "effectiveOn": "2026-09-27",
         "reason": "names PDFs and Word, Excel and PowerPoint files, which url_fetch now reads as text; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 18,
+        "artifact": "prompt",
+        "id": "chat.system@3",
+        "channel": "internal",
+        "effectiveOn": "2026-09-28",
+        "reason": "tells the model that published HTML and React artifacts can call window.agi.complete and window.agi.storage, with their limits and the viewer's consent prompt; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 19,
+        "artifact": "prompt",
+        "id": "chat.system@4",
+        "channel": "internal",
+        "effectiveOn": "2026-09-28",
+        "reason": "adds the connectors option to window.agi.complete, which lets a published artifact read and change data in the viewer's own connected apps after the viewer approves them; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

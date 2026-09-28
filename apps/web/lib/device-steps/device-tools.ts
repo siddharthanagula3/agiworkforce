@@ -166,6 +166,52 @@ function parametersFor(
         },
         required: ['rootId', 'command'],
       };
+    case 'device_start_command':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          command: {
+            type: 'string',
+            description: 'The command line to start, such as npm run dev.',
+          },
+          path: {
+            type: 'string',
+            description: 'Subfolder to start in, relative to the folder. Omit to start at the top.',
+          },
+        },
+        required: ['rootId', 'command'],
+      };
+    case 'device_command_output':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          runId: {
+            type: 'string',
+            description: 'The runId device_start_command returned.',
+          },
+          input: {
+            type: 'string',
+            maxLength: MAX_DEVICE_TYPE_LENGTH,
+            description:
+              'Text to type into the command before reading, such as an answer to its prompt. End it with a newline to press Enter.',
+          },
+        },
+        required: ['rootId', 'runId'],
+      };
+    case 'device_command_stop':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          runId: {
+            type: 'string',
+            description: 'The runId device_start_command returned.',
+          },
+        },
+        required: ['rootId', 'runId'],
+      };
     case 'device_screenshot':
       return {
         type: 'object',

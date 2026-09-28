@@ -267,6 +267,8 @@ export function ResearchActivity({
   const guidanceRead = (research.steps ?? []).filter(isResearchGuidanceStep).length;
   const [steerSentAfter, setSteerSentAfter] = useState<number | null>(null);
   const steerQueued = steerSentAfter !== null && guidanceRead <= steerSentAfter;
+  const [sentGuidance, setSentGuidance] = useState<string | null>(null);
+  const [sendingAsMessage, setSendingAsMessage] = useState(false);
   const [resumeGuidance, setResumeGuidance] = useState('');
 
   const requestPause = async () => {
@@ -282,10 +284,21 @@ export function ResearchActivity({
     setSteerOpen(false);
     if (await runAction(messageId, { kind: 'steer', guidance })) {
       setSteerDraft('');
+      setSentGuidance(guidance);
       return;
     }
     setSteerSentAfter(null);
     setSteerOpen(true);
+  };
+
+  const sendGuidanceAsMessage = async () => {
+    if (!runAction || !messageId || !sentGuidance) return;
+    setSendingAsMessage(true);
+    const sent = await runAction(messageId, { kind: 'sendAsNew', guidance: sentGuidance });
+    setSendingAsMessage(false);
+    if (!sent) return;
+    setSentGuidance(null);
+    setSteerSentAfter(null);
   };
 
   const resume = () => {
@@ -390,7 +403,13 @@ export function ResearchActivity({
   const showSteerInput = steerable && steerOpen;
   const showSteerQueued = steerable && steerQueued;
   const showResumeGuidance = canResume && controllable;
-  const controlRows = showSteerInput || showSteerQueued || showResumeGuidance;
+  const showSteerUnread =
+    controllable &&
+    !isStreaming &&
+    (complete || failed || interrupted) &&
+    steerQueued &&
+    sentGuidance !== null;
+  const controlRows = showSteerInput || showSteerQueued || showResumeGuidance || showSteerUnread;
 
   return (
     <div className="mb-3">
@@ -537,6 +556,32 @@ export function ResearchActivity({
           Your guidance is applied when the current step finishes, and the plan updates to follow
           it.
         </p>
+      )}
+
+      {showSteerUnread && (
+        <div
+          className={cn(
+            'flex flex-col gap-2 border border-t-0 border-border/30 bg-muted/10 px-3 py-2 text-xs sm:flex-row sm:items-center',
+            steps.length === 0 && !showResumeGuidance && 'rounded-b-lg',
+          )}
+          data-testid="research-steer-unread"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-foreground">Not read before the task finished</p>
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">
+              {sentGuidance}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void sendGuidanceAsMessage()}
+            disabled={sendingAsMessage}
+            className={CONTROL_BUTTON_CLASS}
+            data-testid="research-steer-send-new"
+          >
+            {sendingAsMessage ? 'Sending…' : 'Send as new message'}
+          </button>
+        </div>
       )}
 
       {showResumeGuidance && (

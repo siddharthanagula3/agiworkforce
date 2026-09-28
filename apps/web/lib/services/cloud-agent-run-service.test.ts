@@ -31,6 +31,11 @@ import {
   releaseCloudAgentApprovalCheckpoint,
   saveCloudAgentApprovalCheckpoint,
   transitionCloudAgentRun,
+  CloudAgentRunSteerNotFoundError,
+  CloudAgentRunSteerStillReadableError,
+  queueCloudAgentRunSteer,
+  takeCloudAgentRunSteers,
+  withdrawCloudAgentRunSteer,
 } from './cloud-agent-run-service';
 
 const TERMINAL_STATE_VALUES = [...TERMINAL_AGENT_TASK_STATES];
@@ -1287,6 +1292,88 @@ describe('cloud agent run service', () => {
           inputRequests: { path: { type: 'string' } },
         },
       ]);
+    });
+  });
+
+  describe('messages sent to a running task', () => {
+    const ORGANIZATION_ID = '0190a000-0000-7000-8000-0000000000aa';
+    const STEER = {
+      id: '0190a000-0000-7000-8000-0000000000bb',
+      text: 'Also cover the third quarter',
+      queued_at: '2026-07-17T20:00:02.000Z',
+    };
+
+    it('queues and takes a message only within the run owner and its workspace', async () => {
+      vi.mocked(db.query).mockImplementation(async (_sql: string, params?: unknown[]) => [
+        { ...RUN_ROW, pending_steer: [{ ...STEER, id: params?.[3] }] },
+      ]);
+
+      await queueCloudAgentRunSteer(db, {
+        userId: 'user-1',
+        organizationId: ORGANIZATION_ID,
+        runId: RUN_ROW.id,
+        text: STEER.text,
+      });
+      const [queueSql, queueParams] = vi.mocked(db.query).mock.calls[0] as [string, unknown[]];
+      expect(queueSql).toContain('organization_id is not distinct from $7::uuid');
+      expect(queueParams[6]).toBe(ORGANIZATION_ID);
+
+      vi.mocked(db.query).mockResolvedValueOnce([{ pending_steer: [STEER] }]);
+      await expect(
+        takeCloudAgentRunSteers(db, {
+          userId: 'user-1',
+          organizationId: null,
+          runId: RUN_ROW.id,
+        }),
+      ).resolves.toEqual([{ id: STEER.id, text: STEER.text, queuedAt: STEER.queued_at }]);
+      const [takeSql, takeParams] = vi.mocked(db.query).mock.calls[1] as [string, unknown[]];
+      expect(takeSql).toContain('organization_id is not distinct from $3::uuid');
+      expect(takeParams[2]).toBeNull();
+    });
+
+    it('withdraws an unread message from a finished run', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([
+        { ...RUN_ROW, state: 'ready_for_review', pending_steer: null },
+      ]);
+
+      const run = await withdrawCloudAgentRunSteer(db, {
+        userId: 'user-1',
+        organizationId: ORGANIZATION_ID,
+        runId: RUN_ROW.id,
+        steerId: STEER.id,
+      });
+
+      expect(run.pendingSteers).toBeUndefined();
+      const [sql, params] = vi.mocked(db.query).mock.calls[0] as [string, unknown[]];
+      expect(sql).toContain('not (state = any($5::text[]))');
+      expect(sql).toContain('organization_id is not distinct from $3::uuid');
+      expect(params[4]).toEqual(expect.arrayContaining([...EXECUTOR_HELD_TASK_STATES, 'paused']));
+    });
+
+    it('leaves a message a live or paused task can still read, and refuses an unknown one', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'paused' }]);
+      await expect(
+        withdrawCloudAgentRunSteer(db, {
+          userId: 'user-1',
+          organizationId: null,
+          runId: RUN_ROW.id,
+          steerId: STEER.id,
+        }),
+      ).rejects.toBeInstanceOf(CloudAgentRunSteerStillReadableError);
+
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'completed' }]);
+      await expect(
+        withdrawCloudAgentRunSteer(db, {
+          userId: 'user-1',
+          organizationId: null,
+          runId: RUN_ROW.id,
+          steerId: STEER.id,
+        }),
+      ).rejects.toBeInstanceOf(CloudAgentRunSteerNotFoundError);
     });
   });
 });

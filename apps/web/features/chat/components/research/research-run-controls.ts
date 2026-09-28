@@ -4,7 +4,10 @@ import { createContext, useContext } from 'react';
 import type { ResearchConnectorOption } from './ResearchActivity';
 
 export type ResearchRunAction =
-  { kind: 'pause' } | { kind: 'resume'; guidance?: string } | { kind: 'steer'; guidance: string };
+  | { kind: 'pause' }
+  | { kind: 'resume'; guidance?: string }
+  | { kind: 'steer'; guidance: string }
+  | { kind: 'sendAsNew'; guidance: string };
 
 export type ResearchRunActionHandler = (
   messageId: string,

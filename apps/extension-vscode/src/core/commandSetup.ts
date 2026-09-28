@@ -102,6 +102,11 @@ import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
 import { submitFeedback, type FeedbackKind } from '../features/feedback/submitFeedback';
 import { t, tPlural, type PluralKey } from '../l10n';
+import {
+  SHOW_ARCHIVED_SESSIONS_COMMAND,
+  showArchivedSessions,
+  showSessionsHistory,
+} from '../features/trees/sessionPickers';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -115,9 +120,12 @@ import {
   openArtifactsSurface,
   openCapabilitySurface,
   manageHooks,
+  manageSavedApprovals,
   manageMcpServers,
   managePlugins,
   manageSkills,
+  MCP_SERVER_DETAILS_SCHEME,
+  McpServerDetailsProvider,
   openCloudTasksSurface,
   openConnectorsSurface,
   openContextSurface,
@@ -396,18 +404,6 @@ async function runGitToOutputChannel(args: string[], cwd: string, title: string)
   }
 }
 
-function sessionHistoryRelativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60_000);
-  const hours = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
-
 async function readHostModels(
   localRuntimes: LocalRuntimePool,
   refresh: boolean,
@@ -583,6 +579,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
+  const mcpServerDetails = new McpServerDetailsProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      MCP_SERVER_DETAILS_SCHEME,
+      mcpServerDetails,
+    ),
+    mcpServerDetails,
+  );
   const acceptedHandoffs = new Set<string>();
 
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
@@ -1322,43 +1326,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await continueThisSessionInTheTerminal(sidebarProvider);
     }),
 
-    register('agi-workforce.showSessionsHistory', async () => {
-      const conversations = await conversationTreeProvider.getThreads();
+    register('agi-workforce.showSessionsHistory', () =>
+      showSessionsHistory(conversationTreeProvider),
+    ),
 
-      if (conversations.length === 0) {
-        const choice = await vscode.window.showInformationMessage(
-          'AGI Workforce: No conversation history yet. Start a new chat!',
-          'New Chat',
-        );
-        if (choice === 'New Chat') {
-          await vscode.commands.executeCommand('agi-workforce.newConversation');
-        }
-        return;
-      }
-
-      const items: (vscode.QuickPickItem & { conversationId?: string })[] = conversations.map(
-        (conv) => {
-          const relativeTime = sessionHistoryRelativeTime(Date.parse(conv.updatedAt));
-          return {
-            label: `$(comment) ${conv.title}`,
-            description: relativeTime,
-            detail: `${conv.status} · ${conv.model ?? 'configured model'} · ${conv.cwd ?? 'workspace'}`,
-            conversationId: conv.id,
-          };
-        },
-      );
-
-      const pick = await vscode.window.showQuickPick(items, {
-        title: 'AGI Workforce, Sessions History',
-        placeHolder: 'Search sessions…',
-        matchOnDescription: true,
-        matchOnDetail: true,
-      });
-
-      if (pick?.conversationId !== undefined) {
-        await vscode.commands.executeCommand('agi-workforce.openConversation', pick.conversationId);
-      }
-    }),
+    register(SHOW_ARCHIVED_SESSIONS_COMMAND, () => showArchivedSessions(conversationTreeProvider)),
 
     register('agi-workforce.exportDiagnostics', async () => {
       const token = await getAccountToken(context.secrets);
@@ -2552,8 +2524,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
-    register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
+    register('agi-workforce.showMcpServers', () =>
+      manageMcpServers(cliCapabilities, mcpServerDetails),
+    ),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
+    register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),

@@ -97,29 +97,23 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`
 
 - Done when: The user can inspect a server's capabilities (protocol, tools, resources, prompts, extensions).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No view of a server's protocol version, capabilities, resources or prompts (needs McpManager accessors in apps/cli/src/mcp, p-mcp-rust). | ui |
-| vscode | partial | The server list shows transport, scope and auth status only; no capability view. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3614-3614`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:341-353`
 
 ## S58.12: Server health and logs.
 
 - Done when: Each server shows its health and the user can read recent logs or call history.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-| cli | partial | Per-server logs are still only in --debug=mcp output. | ui |
-| vscode | partial | Only auth status per server; no health history or logs. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `apps/cli/src/lib.rs:342-344`, `crates/agiworkforce-mcp/src/client.rs:296-296`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:341-353`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 ## S58.13: Enable/disable server.
 

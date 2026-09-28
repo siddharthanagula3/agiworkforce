@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/unified-chat';
-import { Switch, useConfirmAction } from '@agiworkforce/ui';
+import { Switch, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 
 import { MemoryConflicts } from '@/features/settings/components/MemoryConflicts';
 import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
@@ -92,7 +92,11 @@ export function MemorySection() {
     if (memoryCount === 0) return;
     confirm({
       title: 'Delete all memory facts?',
-      description: `This cannot be undone. All ${memoryCount} ${memoryCount === 1 ? 'fact' : 'facts'} would have to be added again. Your chats are not deleted.`,
+      description: translateUiPlural('settings', 'counts.deleteAllMemoryFacts', memoryCount, {
+        one: 'This cannot be undone. All {{count}} fact would have to be added again. Your chats are not deleted.',
+        other:
+          'This cannot be undone. All {{count}} facts would have to be added again. Your chats are not deleted.',
+      }),
       confirmLabel: 'Forget everything',
       destructive: true,
       onConfirm: async () => {
@@ -218,7 +222,10 @@ export function MemorySection() {
           }}
         >
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }} role="status">
-            {memoryCount} saved {memoryCount === 1 ? 'memory' : 'memories'}
+            {translateUiPlural('settings', 'counts.savedMemories', memoryCount, {
+              one: '{{count}} saved memory',
+              other: '{{count}} saved memories',
+            })}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
             <button

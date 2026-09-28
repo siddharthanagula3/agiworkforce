@@ -1,6 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CONNECTOR_REF_PATTERN,
+  type ConnectorCapabilityCatalog,
+  type ConnectorToolParameter,
+} from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -13,16 +18,7 @@ import { resolveConnectorToolMetadata } from '@/app/api/llm/v1/chat/completions/
 
 export const runtime = 'nodejs';
 
-const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
-
-interface ToolParameterSummary {
-  name: string;
-  required: boolean;
-  type?: string;
-  description?: string;
-}
-
-function toolParameters(inputSchema: Record<string, unknown>): ToolParameterSummary[] {
+function toolParameters(inputSchema: Record<string, unknown>): ConnectorToolParameter[] {
   const properties = inputSchema['properties'];
   if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return [];
   const required = new Set(
@@ -55,7 +51,7 @@ async function handleGet(
 
   const { connectorId: encodedRef } = await context.params;
   const connectorRef = encodedRef;
-  if (!CONNECTOR_REF_RE.test(connectorRef)) {
+  if (!CONNECTOR_REF_PATTERN.test(connectorRef)) {
     throw createError.validation('Invalid connector identifier');
   }
 
@@ -111,7 +107,7 @@ async function handleGet(
       })),
       apps: server.apps,
       discoveryErrors: server.discoveryErrors,
-    },
+    } satisfies ConnectorCapabilityCatalog,
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

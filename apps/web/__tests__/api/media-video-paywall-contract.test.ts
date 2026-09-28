@@ -1,11 +1,10 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_WEB = join(__dirname, '..', '..');
 const VIDEO_ROUTE = join(REPO_WEB, 'app/api/media/video/generate/route.ts');
-const IMAGE_ROUTE = join(REPO_WEB, 'app/api/media/image/generate/route.ts');
+const IMAGE_GENERATION = join(REPO_WEB, 'app/api/media/image/lib/managed-image-generation.ts');
 const PAYWALL_HOOK = join(REPO_WEB, 'lib/hooks/useMediaGeneration.ts');
 
 const PAYWALL_CODE = 'plan_upgrade_required';
@@ -17,8 +16,8 @@ describe('media paywall contract', () => {
 
   it.each([
     ['video', VIDEO_ROUTE],
-    ['image', IMAGE_ROUTE],
-  ])('the %s route returns a paywall-detectable 403 on tier refusal', (_label, path) => {
+    ['image', IMAGE_GENERATION],
+  ])('the %s generation returns a paywall-detectable 403 on tier refusal', (_label, path) => {
     const source = readFileSync(path, 'utf8');
 
     expect(source).toContain("canUseBillingPlanCapability(userTier, '");

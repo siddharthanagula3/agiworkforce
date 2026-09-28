@@ -23,6 +23,7 @@ vi.mock('../snapshot-cache', () => ({
 vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   getMarketplaceInstallation: (...args: unknown[]) => mocks.getMarketplaceInstallation(...args),
   installMarketplaceEntries: async () => new Map<string, string>(),
+  installMarketplaceEntry: async () => null,
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';

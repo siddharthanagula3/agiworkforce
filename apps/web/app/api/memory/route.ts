@@ -6,8 +6,15 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
-
-const MAX_MEMORY_CATEGORY_CHARS = 200;
+import {
+  MANAGED_MEMORY_MAX_CATEGORY_CHARS,
+  MANAGED_MEMORY_MAX_CONTENT_CHARS,
+  MANAGED_MEMORY_MAX_PAGE_SIZE,
+  isManagedMemorySource,
+  type ManagedMemoryDeleteAllResponse,
+  type ManagedMemoryListResponse,
+  type ManagedMemoryWriteResponse,
+} from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
@@ -39,7 +46,10 @@ async function handleGetMemories(request: NextRequest) {
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
-  const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
+  const limit = Math.max(
+    1,
+    Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, MANAGED_MEMORY_MAX_PAGE_SIZE),
+  );
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
   let rows: MemoryRow[];
@@ -90,7 +100,7 @@ async function handleGetMemories(request: NextRequest) {
       createdAt: m.created_at,
       updatedAt: m.updated_at,
     })),
-  });
+  } satisfies ManagedMemoryListResponse);
 }
 
 async function handleCreateMemory(request: NextRequest) {
@@ -120,8 +130,10 @@ async function handleCreateMemory(request: NextRequest) {
     throw createError.validation('Content is required');
   }
 
-  if (body.content.length > 10_000) {
-    throw createError.validation('Content must be 10,000 characters or less');
+  if (body.content.length > MANAGED_MEMORY_MAX_CONTENT_CHARS) {
+    throw createError.validation(
+      `Content must be ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`,
+    );
   }
 
   if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
@@ -135,9 +147,9 @@ async function handleCreateMemory(request: NextRequest) {
     if (typeof body.category !== 'string') {
       throw createError.validation('category must be a string');
     }
-    if (body.category.trim().length > MAX_MEMORY_CATEGORY_CHARS) {
+    if (body.category.trim().length > MANAGED_MEMORY_MAX_CATEGORY_CHARS) {
       throw createError.validation(
-        `category must be ${MAX_MEMORY_CATEGORY_CHARS} characters or less`,
+        `category must be ${MANAGED_MEMORY_MAX_CATEGORY_CHARS} characters or less`,
       );
     }
   }
@@ -163,8 +175,7 @@ async function handleCreateMemory(request: NextRequest) {
     projectId = project.id;
   }
 
-  const validSources = ['mobile', 'desktop', 'web', 'auto'];
-  const source = validSources.includes(body.source ?? '') ? body.source : 'web';
+  const source = isManagedMemorySource(body.source) ? body.source : 'web';
 
   const content = body.content.trim();
   await assertMemoryWriteAllowed(db, { userId, content });
@@ -175,7 +186,7 @@ async function handleCreateMemory(request: NextRequest) {
       userId,
       content,
       category: body.category?.trim() ?? null,
-      source: source ?? 'web',
+      source,
       pinned: body.pinned === true,
       projectId,
       organizationId: organizationId ?? null,
@@ -207,7 +218,7 @@ async function handleCreateMemory(request: NextRequest) {
       merged: row.outcome === 'merged',
       supersededIds: row.superseded_ids ?? [],
       supersededBy: row.superseded_by ?? null,
-    },
+    } satisfies ManagedMemoryWriteResponse,
     { status: row.outcome === 'merged' ? 200 : 201 },
   );
 }
@@ -235,7 +246,7 @@ async function handleDeleteAllMemories(request: NextRequest) {
     throw createError.internal('Failed to delete memories');
   }
 
-  return NextResponse.json({ deleted });
+  return NextResponse.json({ deleted } satisfies ManagedMemoryDeleteAllResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGetMemories));
