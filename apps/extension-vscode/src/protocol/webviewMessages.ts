@@ -242,6 +242,7 @@ const resolveTurnFailure = z.object({
       'open-settings',
       'switch-model',
       'update-extension',
+      'open-recovery',
     ]),
     provider: z
       .string()

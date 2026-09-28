@@ -687,6 +687,13 @@ const ru = {
   'pluginUpdate.updated': 'AGI Workforce: {name} обновлён.',
   'pluginUpdate.updatedTo': 'AGI Workforce: {name} обновлён до {to}.',
   'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} обновлён с {from} до {to}.',
+  'chatError.usageLimitResetsAt':
+    'Вы достигли лимита использования в своём аккаунте. Он сбросится {time}.',
+  'chatError.continueWith': 'Продолжить с {model}',
+  'chatError.addCredits': 'Пополнить кредиты',
+  'chatError.comparePlans': 'Сравнить тарифы',
+  'chatError.seeUsage': 'Посмотреть использование',
+  'chatError.seeOptions': 'Посмотреть варианты',
 };
 
 export default ru;

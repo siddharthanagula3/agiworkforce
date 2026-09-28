@@ -406,6 +406,12 @@ const zh = {
   'pluginUpdate.updated': 'AGI Workforce：{name} 已更新。',
   'pluginUpdate.updatedTo': 'AGI Workforce：{name} 已更新到 {to}。',
   'pluginUpdate.updatedFromTo': 'AGI Workforce：{name} 已从 {from} 更新到 {to}。',
+  'chatError.usageLimitResetsAt': '你的账户已达到使用上限，将于 {time} 重置。',
+  'chatError.continueWith': '改用 {model} 继续',
+  'chatError.addCredits': '添加额度',
+  'chatError.comparePlans': '比较方案',
+  'chatError.seeUsage': '查看用量',
+  'chatError.seeOptions': '查看选项',
 };
 
 export default zh;
