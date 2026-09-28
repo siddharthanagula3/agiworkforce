@@ -44,7 +44,7 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 | mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The projects drawer keeps conversationsByProjectId and, when a project row is open, renders its conversations under it via buildConversationList (projectsDrawer.ts:287, 333-350, 466-481) with a "Conversations" subtitle. That is the same shape the auditor scored partial on mobile ("only the project screen lists its chats"); the recent-chats list itself is not grouped by project, so partial with miss ui. |  |
+| chrome | partial | projects drawer lists a project's chats; the recents list is not grouped. Parity check pending (lead decision list). | ui |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
