@@ -43,7 +43,7 @@ async function openSession(address: ClamdAddress, signal: AbortSignal): Promise<
       received.push(data.subarray(0, end));
       resolve(Buffer.concat(received).toString('utf8').trim());
     });
-    socket.once('error', reject);
+    socket.on('error', reject);
     socket.once('close', () => reject(new Error('clamd closed the connection without a reply')));
   }).finally(() => {
     settled = true;
