@@ -1,6 +1,9 @@
 export const SHELL_COMMANDS = [
   'shell_run',
   'shell_cancel',
+  'shell_start',
+  'shell_read',
+  'shell_stop',
   'shell_policy_read',
   'shell_policy_write',
 ] as const;
@@ -42,6 +45,11 @@ export const SHELL_TIMEOUT_DEFAULT_MS = 120_000;
 export const SHELL_TIMEOUT_MAX_MS = 600_000;
 export const MAX_SHELL_OUTPUT_BYTES = 1_000_000;
 export const MAX_SHELL_COMMAND_LENGTH = 4_000;
+export const MAX_SHELL_INPUT_LENGTH = 4_000;
+export const BACKGROUND_SHELL_ROWS = 40;
+export const BACKGROUND_SHELL_COLUMNS = 120;
+export const BACKGROUND_SHELL_FIRST_OUTPUT_MS = 1_500;
+export const BACKGROUND_SHELL_READ_SETTLE_MS = 500;
 
 export interface ShellPolicy {
   /** Program names that run inside an approved folder without a second prompt. */
@@ -83,6 +91,17 @@ export interface ShellRunResult {
   truncated: boolean;
   timedOut: boolean;
   durationMs: number;
+}
+
+export interface BackgroundShellOutput {
+  runId: string;
+  command: string;
+  program: string;
+  output: string;
+  running: boolean;
+  exitCode: number | null;
+  truncated: boolean;
+  terminal: boolean;
 }
 
 export class ShellCommandRefused extends Error {

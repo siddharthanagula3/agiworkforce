@@ -25,11 +25,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Source rows show only domain and title; the snippet is received but never displayed, and there is no preview on the chip. | ui |
+| mobile | partial | The source list shows each result's title, site and snippet before it opens, and the citation chip preview shows title and site; the chip shows the snippet once post-codex/chat-gates-s22.02-mobile-citation-snippet.patch is applied (MessageBubble is held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:181-181`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:18-18`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`, `apps/mobile/src/features/chat/components/CitationChip.tsx:39-39`
 
 ## S22.03: Search-result lists.
 
@@ -173,46 +173,37 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 
 - Done when: Mind-map answers render as a drawn mind map.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.32: Flowcharts.
 
 - Done when: Flowchart answers render as a drawn flowchart diagram.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.33: Timelines.
 
 - Done when: Timeline answers render as a drawn timeline.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagrams are drawn only for mermaid artifacts opened full screen; a ```mermaid block in a chat answer shows as code. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:62-62`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:25-25`
 
 ## S22.36: Interactive demonstrations.
 

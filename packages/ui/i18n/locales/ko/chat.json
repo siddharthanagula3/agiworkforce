@@ -72,6 +72,7 @@
     "runtimeSignInAction": "로그인",
     "runtimeConsentLabel": "AI 권한",
     "runtimeConsent": "이 앱이 내 계정으로 AI를 사용하려고 합니다. 각 요청은 요금제 사용량에 포함됩니다.",
+    "runtimeConsentConnectors": "이 앱이 내 계정으로 AI를 사용하고 {{apps}}의 데이터를 읽거나 변경하려고 합니다. 앱은 해당 앱이 반환하는 내용을 볼 수 있으며, 각 요청은 요금제 사용량에 포함됩니다.",
     "runtimeAllow": "허용",
     "runtimeDecline": "허용 안 함"
   },
