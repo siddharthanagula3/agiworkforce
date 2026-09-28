@@ -48,9 +48,9 @@ Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
+| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`
+Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S88.05: Product feedback.
 
@@ -60,10 +60,10 @@ Code: `apps/cli/src/claude_parity.rs:129-131`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
+| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`
+Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S88.06: Feature request.
 
@@ -73,22 +73,10 @@ Code: `apps/cli/src/claude_parity.rs:129-131`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
+| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`
-
-## S88.07: User-reviewable diagnostic bundle.
-
-- Done when: A user can produce a diagnostic bundle, see what it contains, and choose to share it with support.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI has a redacted support-diagnostics builder, but nothing calls it; users only get the doctor report. | mount |
-
-Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
+Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S88.10: Service-status integration.
 

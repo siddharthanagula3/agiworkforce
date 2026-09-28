@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S7.01: Centered new-chat layout.
-
-- Done when: An empty new chat shows its start view (greeting, prompt entry or suggestions) centred in the available area rather than an empty transcript.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The TUI shows a welcome block, but it is drawn top-left in the transcript area; centre it in the empty chat area. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1460-1463`, `apps/cli/src/tui/tui_app.rs:1448-1448`
-
 ## S7.03: Full-width data-analysis layout.
 
 - Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.

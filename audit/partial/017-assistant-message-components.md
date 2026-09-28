@@ -300,14 +300,13 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 - Done when: For each answer the user can see which model actually answered and its usage (tokens/cost/time).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | An answer shows its tokens and time under the model line from the usage the server persists (tokensUsed, inputTokens, outputTokens, totalDurationMs), in post-codex/chat-gates-s17.36-mobile-answer-usage.patch. Cost is not shown, as users see credits. | ui |
-| cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
 
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:3897-3910`, `apps/cli/src/tui/tui_app.rs:3324-3331`
+Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`
 
 ## S17.38: Refusal state.
 

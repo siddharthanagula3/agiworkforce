@@ -144,33 +144,31 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533
 
 - Done when: After a task completes, the user saves it as a reusable Skill that then appears in their Skills and can be invoked later.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
 | desktop | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Skills are only auto-learned from patterns across three sessions; no command saves the finished task as a skill. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4382-4382`, `apps/web/features/chat/components/PluginDraftCard.tsx:20-20`, `apps/cli/src/agent/chat.rs:1062-1062`
+Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4382-4382`, `apps/web/features/chat/components/PluginDraftCard.tsx:20-20`
 
 ## S110.15: Completed task → scheduled routine.
 
 - Done when: After a task completes, the user turns it into a scheduled routine that later runs the same work successfully on its schedule.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can create a routine only when asked with a fresh prompt (cron_create); no command turns a finished task into one. Routine runs no longer fail: production is migrated through 0323, so 0284's columns exist (the 'NOT YET APPLIED' header in 0284_context_manifest_accounting.sql is stale). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`
 
 ## S110.21: Mobile request → authorized local-host execution.
 

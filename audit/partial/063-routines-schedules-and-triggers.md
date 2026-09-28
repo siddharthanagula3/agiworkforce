@@ -24,17 +24,15 @@ Code: `apps/mobile/app/(app)/schedules/index.tsx:286-286`
 
 - Done when: From a finished task or chat turn, one action turns that work into a saved routine.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can create a schedule with its cron_create tool when asked, but there is no command that turns a finished task into a routine. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`, `apps/cli/src/platform/runtime/tool_catalog.rs:327-327`
 
 ## S63.04: Routine name and description.
 

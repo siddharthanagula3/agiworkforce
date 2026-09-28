@@ -174,14 +174,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 - Done when: Images are processed at a resolution suited to the task, with a high-detail vs reduced-detail choice honoured end to end.
 - Wave: 3
-- Already works on: api
+- Already works on: cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Images are always resized to fit before sending; there is no high-detail option. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`

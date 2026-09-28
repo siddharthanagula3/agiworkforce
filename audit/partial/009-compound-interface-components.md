@@ -129,14 +129,11 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-3
 
 - Done when: The user can browse their images and videos as a gallery and open one in a larger viewer.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only this session's generated images show as chips and `/image open` opens the last one; add a list of past images and videos. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 ## S9.20: Activity feed.
 
@@ -269,18 +266,6 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`,
 | vscode | partial | The header pill names the trust boundary and the mode picker sets autonomy, but nothing lists what a session may do (tools, folders, commands) in one place. | ui |
 
 Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
-
-## S9.33: Integration connection card.
-
-- Done when: Each integration shows a card with its connection state (connected, expired, not connected) and the action to connect or disconnect.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Configured servers now show their real state; the account's cloud connectors with a connect action are still not listed. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:4021-4021`
 
 ## S9.34: Capability-warning card.
 

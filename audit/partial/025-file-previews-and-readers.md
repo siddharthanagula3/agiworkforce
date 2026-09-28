@@ -22,14 +22,11 @@ nothing is left.
 
 - Done when: Plain-text files open in a readable in-product view.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.03: Markdown reader.
 
@@ -39,10 +36,10 @@ Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
+| cli | partial | agi library show prints Markdown as plain text; render it formatted, for example through tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.04: Source-code reader.
 
@@ -52,10 +49,10 @@ Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
+| cli | partial | agi library show prints code as plain text; add syntax highlighting, for example the syntect path in tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.05: Image viewer.
 
@@ -182,14 +179,13 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 
 - Done when: Users can download the original file.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show --out` saves an artifact's content to disk; uploaded or Library files cannot be downloaded. | ui |
 | chrome | partial | Only files generated in a chat can be opened or downloaded from their chat bubble; there is no file store to download originals from. | ui |
 
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:441-454`
 
 ## S25.27: Download converted representation.
 

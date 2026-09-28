@@ -194,14 +194,13 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 
 - Done when: A Library destination lists everything the account produced or uploaded (files, images, videos, documents, artifacts) with filters and open/download actions.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts list` lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
 | chrome | partial | The Artifacts drawer lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
 
-Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
+Code: `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
 
 ## S4.24: Shared-with-me resources.
 
@@ -407,6 +406,6 @@ Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
+| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | surface-only |
 
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`
+Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`

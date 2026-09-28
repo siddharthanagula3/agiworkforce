@@ -426,11 +426,11 @@ Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
+| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
 
 ## S10.46: Diagnostic-sharing consent.
 
@@ -448,14 +448,11 @@ Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/fe
 
 - Done when: A data-export dialog requests a copy of the account's data and delivers it as a download.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI cannot download the account data export; it can only write the current session with /export in the --no-tui REPL and dump its own settings with `agi sync export`. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 ## S10.48: Account-deletion request.
 

@@ -133,28 +133,22 @@ Code: `apps/mobile/src/features/settings/data-controls/index.tsx:167-195`, `apps
 
 - Done when: The user can list the chat links (and published pages) they have shared and revoke any of them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI can publish and unpublish artifact pages (agi artifacts publish/unpublish) but cannot list or revoke shared chat links. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1998-2000`
 
 ## S85.20: Data export.
 
 - Done when: The user can download a copy of their account data (chats, memory, files, settings) from the surface.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI cannot download the account data export; it can only write the current session with /export in the --no-tui REPL and dump its own settings with `agi sync export`. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 ## S85.22: Import Memory.
 

@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A sent message shows its quoted reply and the skill it ran with as chips above the bubble; the skill is recorded as sendReplay.skillName, the key the web reads. In post-codex/chat-gates-s16.04-mobile-sent-context-chips.patch. | ui |
-| cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
 
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:4926-4929`
+Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`
 
 ## S16.05: Timestamp.
 
