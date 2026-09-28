@@ -290,7 +290,7 @@ import { createExtensionCloudChatClient } from './features/cloud-bridge/conversa
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   capabilityAllowed,
-  fetchCapabilityDocument,
+  fetchAccountSummary,
   saveAccountDisplayName,
   type CapabilityDocument,
 } from './features/cloud-bridge/capabilityDocument';
@@ -380,6 +380,7 @@ const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
 let refreshOnboardingAccount: () => void = () => undefined;
 let capabilityDocument: CapabilityDocument | null = null;
+let accountDisplayName: string | null = null;
 let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
@@ -4918,6 +4919,21 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
+    .sp-cloud-name-edit {
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--agi-ext-accent-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .sp-cloud-name-edit[hidden],
+    .sp-cloud-name-editor[hidden] { display: none; }
+    .sp-cloud-name-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .sp-cloud-name-actions { display: flex; gap: 6px; }
     .sp-cloud-signout-btn {
       background: transparent;
       border: 1px solid var(--agi-ext-border-strong);
@@ -8719,10 +8735,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     void getClerkAccountProfile()
       .then((profile) => {
         if (setupState.ownerKey !== ownerKey) return;
-        setupState.loadedName = profile?.displayName ?? '';
+        setupState.loadedName = accountDisplayName ?? profile?.displayName ?? '';
         if (!setupName.value) setupName.value = setupState.loadedName;
         setupAccountStatus.textContent = t('spSetupAccountSignedIn', [
-          profile?.displayName ?? profile?.email ?? t('spCloudAccountFallbackName'),
+          setupState.loadedName || profile?.email || t('spCloudAccountFallbackName'),
         ]);
       })
       .catch(() => undefined);
@@ -12215,6 +12231,85 @@ function buildUI(): void {
   userTierEl.textContent = t('spCloudFreeTier');
   userInfoEl.appendChild(userLabelEl);
   userInfoEl.appendChild(userTierEl);
+  const nameEditBtn = el(
+    'button',
+    { type: 'button', class: 'sp-cloud-name-edit' },
+    t('spAccountNameEdit'),
+  ) as HTMLButtonElement;
+  const nameEditor = el('form', { class: 'sp-cloud-name-editor', hidden: '' });
+  const nameInput = el('input', {
+    type: 'text',
+    class: 'sp-wf-form-input',
+    id: 'sp-cloud-name-input',
+    autocomplete: 'name',
+    'aria-label': t('spAccountNameLabel'),
+  }) as HTMLInputElement;
+  const nameSaveBtn = el(
+    'button',
+    { type: 'submit', class: 'sp-drawer-memory-add-btn' },
+    t('spAccountNameSave'),
+  ) as HTMLButtonElement;
+  const nameCancelBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spAccountNameCancel'),
+  ) as HTMLButtonElement;
+  const nameStatus = el('div', { class: 'sp-drawer-toggle-status', role: 'status' });
+  nameEditor.append(
+    nameInput,
+    el('div', { class: 'sp-cloud-name-actions' }, nameSaveBtn, nameCancelBtn),
+  );
+  userInfoEl.appendChild(nameEditBtn);
+  userInfoEl.appendChild(nameEditor);
+  userInfoEl.appendChild(nameStatus);
+
+  function closeNameEditor(): void {
+    nameEditor.hidden = true;
+    nameEditBtn.hidden = false;
+    nameEditBtn.focus();
+  }
+
+  nameEditBtn.addEventListener('click', () => {
+    nameInput.value = accountDisplayName ?? '';
+    nameStatus.textContent = '';
+    nameEditBtn.hidden = true;
+    nameEditor.hidden = false;
+    nameInput.focus();
+    nameInput.select();
+  });
+  nameCancelBtn.addEventListener('click', closeNameEditor);
+  nameEditor.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeNameEditor();
+  });
+  nameEditor.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameStatus.textContent = t('spAccountNameRequired');
+      return;
+    }
+    nameSaveBtn.disabled = true;
+    nameStatus.textContent = t('spPersonalizationSaving');
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await saveAccountDisplayName(auth.token, name);
+      accountDisplayName = name;
+      userLabelEl.textContent = name;
+      nameStatus.textContent = t('spAccountNameSaved');
+      closeNameEditor();
+    })()
+      .catch((error: unknown) => {
+        nameStatus.textContent =
+          error instanceof Error ? error.message : t('spAccountNameSaveFailed');
+      })
+      .finally(() => {
+        nameSaveBtn.disabled = false;
+      });
+  });
   const signoutBtn = el(
     'button',
     { class: 'sp-cloud-signout-btn', id: 'sp-cloud-signout-btn' },
@@ -12688,7 +12783,7 @@ function buildUI(): void {
       return;
     }
 
-    const capabilityDocumentPromise = fetchCapabilityDocument(token).catch(() => null);
+    const accountSummaryPromise = fetchAccountSummary(token).catch(() => null);
     const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const currentAccountProfile =
@@ -12739,9 +12834,10 @@ function buildUI(): void {
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
 
-    const document = await capabilityDocumentPromise;
+    const accountSummary = await accountSummaryPromise;
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-    capabilityDocument = document;
+    capabilityDocument = accountSummary?.capabilityDocument ?? null;
+    accountDisplayName = accountSummary?.displayName ?? currentAccountProfile?.displayName ?? null;
     applyCapabilityGates();
     managedModelAccess = access;
     refreshOnboardingAccount();
@@ -12764,9 +12860,7 @@ function buildUI(): void {
     cloudLinkHint.style.display = '';
     cloudLinkRow.style.display = 'flex';
     userLabelEl.textContent =
-      currentAccountProfile?.displayName ??
-      currentAccountProfile?.email ??
-      t('spCloudAccountFallbackName');
+      accountDisplayName ?? currentAccountProfile?.email ?? t('spCloudAccountFallbackName');
     userLabelEl.title = currentAccountProfile?.email ?? '';
     avatarEl.textContent = currentAccountProfile?.initials ?? t('spCloudAvatarFallback');
     userTierEl.textContent = formatManagedTierLabel(

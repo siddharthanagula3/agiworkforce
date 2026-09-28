@@ -4066,5 +4066,33 @@
   "spPersonalizationUnavailable": {
     "message": "Your personalization could not be loaded.",
     "description": "Status when the account personalization cannot be read"
+  },
+  "spAccountNameEdit": {
+    "message": "Edit name",
+    "description": "Button in the account area that opens the display name editor"
+  },
+  "spAccountNameLabel": {
+    "message": "Your name",
+    "description": "Accessible name of the display name field"
+  },
+  "spAccountNameSave": {
+    "message": "Save",
+    "description": "Button that saves the edited display name to the account"
+  },
+  "spAccountNameCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the display name editor without saving"
+  },
+  "spAccountNameRequired": {
+    "message": "Enter a name.",
+    "description": "Status when the display name is saved empty"
+  },
+  "spAccountNameSaved": {
+    "message": "Name saved to your account.",
+    "description": "Status after the display name is saved"
+  },
+  "spAccountNameSaveFailed": {
+    "message": "Your name could not be saved. Try again.",
+    "description": "Status when saving the display name fails without a reason"
   }
 }
