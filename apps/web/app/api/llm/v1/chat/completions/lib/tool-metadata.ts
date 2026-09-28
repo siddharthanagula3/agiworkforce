@@ -42,7 +42,7 @@
  */
 
 import { deviceStepCapability, isDeviceStepTool } from '@agiworkforce/local-runtime-contract';
-import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
+import { CONNECTOR_RECONNECT_TOOL_NAME, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   getConnectorExecutionChannel,
@@ -448,6 +448,14 @@ const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, T
     gmail: GMAIL_TOOL_METADATA,
   });
 
+const CONNECTOR_RECONNECT_METADATA: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: false,
+  createsEgressPath: false,
+  declared: true,
+});
+
 export const UNKNOWN_TOOL_METADATA: ToolMetadata = Object.freeze({
   actionClass: 'write',
   reversible: false,
@@ -462,6 +470,7 @@ export function resolveToolMetadata(name: string): ToolMetadata {
 
   const parsed = parseQualifiedToolName(name);
   if (parsed) {
+    if (parsed.toolName === CONNECTOR_RECONNECT_TOOL_NAME) return CONNECTOR_RECONNECT_METADATA;
     const connector = CONNECTOR_TOOL_METADATA[parsed.serverId]?.[parsed.toolName];
     if (connector) return connector;
   }

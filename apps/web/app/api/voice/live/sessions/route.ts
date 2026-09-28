@@ -18,7 +18,15 @@ import {
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
+import { isAppError } from '@/lib/errors';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  getTierPolicy,
+  isModelLive,
+} from '@agiworkforce/types';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -156,7 +164,6 @@ async function handleCreateLiveSession(request: NextRequest) {
     gateHeaders,
   );
   if (modelPolicyResponse) return modelPolicyResponse;
-
   let body: z.infer<typeof CreateLiveSessionSchema>;
   try {
     body = CreateLiveSessionSchema.parse(await request.json());
@@ -261,6 +268,25 @@ async function handleCreateLiveSession(request: NextRequest) {
       if (gateResponse) return gateResponse;
     }
     planTier = entitlement.plan;
+    await assertCapabilityAvailable(
+      buildFlagSubject(request, {
+        userId,
+        workspaceId: scoped.organizationId,
+        role: null,
+        plan: planTier,
+        surface: resolveCloudChatSurface(request),
+      }),
+      'canUseVoice',
+      'Voice',
+    );
+    if (!getTierPolicy(planTier).allowVoice) {
+      return voiceJsonError(
+        request,
+        403,
+        'voice_not_in_plan',
+        'Voice conversations are not included in your plan.',
+      );
+    }
     const block = await planVoiceSessionBlock({
       db: scoped.db,
       userId,
@@ -296,6 +322,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       quotaFeature: LIVE_VOICE_FEATURE,
     });
   } catch (error) {
+    if (isAppError(error)) throw error;
     if (error instanceof ManagedUsageRequestError) {
       return voiceUsageErrorResponse(request, error, limitResets);
     }
