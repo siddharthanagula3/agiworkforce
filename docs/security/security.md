@@ -107,7 +107,10 @@ undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
 egress, which no policy auto-approves, so it asks under every policy. The three
 GitHub built-ins are declared, so `get_pull_request_diff` runs under
 `auto_approve_read_only` while `post_issue_comment` and
-`post_pull_request_review` ask under every policy.
+`post_pull_request_review` ask under every policy. The two Gmail actions AGI adds
+beside Google's Gmail server are declared the same way: `read_attachments`
+reads, and `send_draft` is a non-reversible external send, so it asks under
+every policy.
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. The
