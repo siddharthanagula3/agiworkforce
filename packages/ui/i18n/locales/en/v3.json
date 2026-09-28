@@ -410,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Sketches are session-only for now, closing the app clears the board."
+    "sessionOnlyNotice": "Sketches are session-only for now, closing the app clears the board.",
+    "elementCount_one": "{{count}} element",
+    "elementCount_other": "{{count}} elements"
   }
 }

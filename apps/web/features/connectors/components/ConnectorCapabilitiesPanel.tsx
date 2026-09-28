@@ -13,6 +13,9 @@ import { publishMcpContextSelection } from '../lib/mcp-context-selection';
 
 const CAPABILITY_DISCOVERY_COPY = 'Discovering live MCP capabilities…';
 
+const NO_TOOL_DESCRIPTION_COPY = 'The server gives no description for this tool.';
+const NO_TOOL_PARAMETERS_COPY = 'This tool takes no parameters.';
+
 function itemHint(item: { name: string; title?: string; description?: string }): string {
   return item.description ?? item.title ?? item.name;
 }
@@ -147,6 +150,7 @@ export function ConnectorCapabilitiesPanel({
 }) {
   const { catalog, loading, error, retry } = useConnectorCapabilities(connectorRef, connected);
   const [pendingPromptName, setPendingPromptName] = useState<string | null>(null);
+  const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
   const [promptArguments, setPromptArguments] = useState<Record<string, string>>({});
   if (!connected) return null;
   if (loading) {
@@ -177,6 +181,7 @@ export function ConnectorCapabilitiesPanel({
   if (!catalog) return null;
 
   const modelTools = catalog.tools.filter((tool) => tool.visibility !== 'app');
+  const selectedTool = modelTools.find((tool) => tool.name === selectedToolName) ?? null;
   const nothingPublished =
     modelTools.length === 0 &&
     catalog.resources.length === 0 &&
@@ -204,7 +209,14 @@ export function ConnectorCapabilitiesPanel({
         </p>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        <CapabilityGroup title="Tools" items={modelTools} icon={<Wrench className="h-3 w-3" />} />
+        <CapabilityGroup
+          title="Tools"
+          items={modelTools}
+          icon={<Wrench className="h-3 w-3" />}
+          onSelect={(item) =>
+            setSelectedToolName((current) => (current === item.name ? null : item.name))
+          }
+        />
         <CapabilityGroup
           title="Resources"
           items={catalog.resources}
@@ -249,6 +261,42 @@ export function ConnectorCapabilitiesPanel({
           }
         />
       </div>
+      {selectedTool ? (
+        <section
+          className="space-y-2 rounded-lg border border-border/80 p-3"
+          aria-label={`Tool ${selectedTool.name}`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="break-all font-mono text-xs font-semibold text-foreground">
+              {selectedTool.name}
+            </h4>
+            <button
+              type="button"
+              onClick={() => setSelectedToolName(null)}
+              className="shrink-0 text-caption font-medium text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {selectedTool.description ?? selectedTool.title ?? NO_TOOL_DESCRIPTION_COPY}
+          </p>
+          {selectedTool.parameters.length > 0 ? (
+            <ul className="space-y-1">
+              {selectedTool.parameters.map((parameter) => (
+                <li key={parameter.name} className="text-xs text-muted-foreground">
+                  <span className="font-mono text-foreground">{parameter.name}</span>
+                  {parameter.type ? ` (${parameter.type})` : ''}
+                  {parameter.required ? ', required' : ', optional'}
+                  {parameter.description ? `: ${parameter.description}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">{NO_TOOL_PARAMETERS_COPY}</p>
+          )}
+        </section>
+      ) : null}
       {pendingPromptName ? (
         <form
           className="space-y-2 rounded-lg border border-border/80 p-3"

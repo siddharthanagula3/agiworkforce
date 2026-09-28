@@ -61,10 +61,9 @@ describe('WorkspaceConnectorPolicy plugin and MCP host lists', () => {
     fireEvent.change(screen.getByLabelText('Plugin key'), { target: { value: 'shadow-sync' } });
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
 
-    fireEvent.change(screen.getByLabelText('MCP server host'), {
-      target: { value: '*.corp.example' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Approve host' }));
+    const hostInput = screen.getByLabelText('MCP server host');
+    fireEvent.change(hostInput, { target: { value: '*.corp.example' } });
+    fireEvent.keyDown(hostInput, { key: 'Enter' });
 
     expect(
       within(screen.getByRole('list', { name: 'Approved plugins' })).getByText('acme-review'),
@@ -86,10 +85,11 @@ describe('WorkspaceConnectorPolicy plugin and MCP host lists', () => {
     policy();
     render(<WorkspaceConnectorPolicy />);
 
-    fireEvent.change(screen.getByLabelText('MCP server host'), {
-      target: { value: 'https://mcp.example.com/sse' },
-    });
-    expect(screen.getByRole('button', { name: 'Approve host' })).toBeDisabled();
+    const hostInput = screen.getByLabelText('MCP server host');
+    fireEvent.change(hostInput, { target: { value: 'https://mcp.example.com/sse' } });
+    fireEvent.keyDown(hostInput, { key: 'Enter' });
+    expect(screen.getByRole('alert')).toHaveTextContent(/was not added/);
+    expect(screen.queryByRole('list', { name: 'Approved hosts' })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Plugin key'), { target: { value: 'not valid!' } });
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
@@ -102,7 +102,7 @@ describe('WorkspaceConnectorPolicy plugin and MCP host lists', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove mcp.corp.example from approved hosts' }),
     );
-    expect(screen.getByText('No host restriction.')).toBeInTheDocument();
+    expect(screen.getByText(/No host restriction\./)).toBeInTheDocument();
     unmount();
 
     policy({ allowedMcpHosts: ['mcp.corp.example'] }, false);

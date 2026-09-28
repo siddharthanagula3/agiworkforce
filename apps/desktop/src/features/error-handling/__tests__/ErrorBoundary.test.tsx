@@ -153,7 +153,7 @@ describe('ErrorBoundary', () => {
 
       expect(screen.getByText('Something went wrong')).toBeInTheDocument();
 
-      const resetButton = screen.getByText('Reset View');
+      const resetButton = screen.getByText('Reset view');
       fireEvent.click(resetButton);
 
       rerender(<TestWrapper shouldError={false} />);
@@ -178,7 +178,7 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      const reloadButton = screen.getByText('Reload Page');
+      const reloadButton = screen.getByText('Reload page');
       fireEvent.click(reloadButton);
 
       expect(reloadMock).toHaveBeenCalled();
@@ -202,17 +202,17 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      const copyButton = screen.getByText('Copy Error');
+      const copyButton = screen.getByText('Copy error');
       fireEvent.click(copyButton);
 
       await waitFor(() => {
         expect(writeTextMock).toHaveBeenCalled();
-        expect(screen.getByText('Copied!')).toBeInTheDocument();
+        expect(screen.getByText('Copied')).toBeInTheDocument();
       });
 
       await waitFor(
         () => {
-          expect(screen.getByText('Copy Error')).toBeInTheDocument();
+          expect(screen.getByText('Copy error')).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
@@ -232,7 +232,7 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      const reportButton = await screen.findByText('Report Error');
+      const reportButton = await screen.findByText('Report error');
       fireEvent.click(reportButton);
 
       await waitFor(() => {
@@ -300,7 +300,7 @@ describe('ErrorBoundary', () => {
       );
 
       await waitFor(() => {
-        expect(screen.queryByText('Report Error')).not.toBeInTheDocument();
+        expect(screen.queryByText('Report error')).not.toBeInTheDocument();
       });
 
       consoleError.mockRestore();
@@ -347,7 +347,7 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      const copyButton = screen.getByText('Copy Error');
+      const copyButton = screen.getByText('Copy error');
       fireEvent.click(copyButton);
 
       await waitFor(() => {

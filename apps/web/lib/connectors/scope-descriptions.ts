@@ -35,6 +35,10 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   },
 
   'gmail.readonly': { sentence: 'Reads your Gmail messages and attachments.', access: READ },
+  'gmail.compose': {
+    sentence: 'Creates and edits drafts in your Gmail account and can send them.',
+    access: WRITE,
+  },
   'gmail.send': { sentence: 'Sends email from your Gmail account.', access: WRITE },
 
   'calendar.readonly': { sentence: 'Reads your calendar events.', access: READ },
@@ -290,6 +294,15 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
 
 export function describeConnectorScope(scope: string): ScopeDescription | null {
   return SCOPE_DESCRIPTIONS[canonicalConnectorScope(scope)] ?? null;
+}
+
+export function describeGrantedConnectorScopes(
+  scopes: readonly string[],
+): { scope: string; sentence: string; access: 'read' | 'write' }[] {
+  return scopes.map((scope) => ({
+    scope,
+    ...(describeConnectorScope(scope) ?? undescribedScope(scope)),
+  }));
 }
 
 /**

@@ -3,14 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describeRejection, safeResolveWorkspacePath } from '../../utils/pathSafety';
 import { buildInstructionContextSnapshot, type InstructionContextSnapshot } from '../instructions';
+import { projectInstructionFolder } from '../../data/projectInstructions';
 
 const GROUP_INSTRUCTIONS = 'instructions';
 const GROUP_PINNED = 'pinned';
 const GROUP_AUTO = 'auto';
 
 export type WorkspaceContextFileResult =
-  | { ok: true; uri: vscode.Uri }
-  | { ok: false; message: string };
+  { ok: true; uri: vscode.Uri } | { ok: false; message: string };
 
 export async function validateWorkspaceContextFile(
   uri: vscode.Uri,
@@ -127,11 +127,20 @@ export class ContextPanelProvider
   private readonly _pinnedFiles: Set<string> = new Set();
   private _autoFiles: Map<string, { languageId: string; isActive: boolean }> = new Map();
   private _instructionContext: InstructionContextSnapshot | undefined;
+  private _instructionFolder: string | undefined;
+  private readonly _editorListener: vscode.Disposable;
   private _disposed = false;
 
   constructor(private readonly _extensionContext?: vscode.ExtensionContext) {
     this._refreshAutoFiles();
+    this._instructionFolder = projectInstructionFolder()?.uri.fsPath;
     void this.refreshInstructionContext();
+    this._editorListener = vscode.window.onDidChangeActiveTextEditor(() => {
+      const folder = projectInstructionFolder()?.uri.fsPath;
+      if (folder === this._instructionFolder) return;
+      this._instructionFolder = folder;
+      void this.refreshInstructionContext();
+    });
   }
 
   addFile(uri: vscode.Uri): void {
@@ -202,6 +211,7 @@ export class ContextPanelProvider
 
   dispose(): void {
     this._disposed = true;
+    this._editorListener.dispose();
     this._onDidChangeTreeData.dispose();
   }
 

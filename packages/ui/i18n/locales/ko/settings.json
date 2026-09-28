@@ -99,5 +99,17 @@
     "groupSettings": "설정",
     "groupCustomize": "맞춤 설정",
     "groupDesktop": "데스크톱 앱"
+  },
+  "counts": {
+    "customCommands_one": "사용자 지정 명령 {{count}}개",
+    "customCommands_other": "사용자 지정 명령 {{count}}개",
+    "allArchivedChats_one": "보관된 채팅 {{count}}개 전체",
+    "allArchivedChats_other": "보관된 채팅 {{count}}개 전체",
+    "followUps_one": "후속 질문 {{count}}개",
+    "followUps_other": "후속 질문 {{count}}개",
+    "members_one": "멤버 {{count}}명",
+    "members_other": "멤버 {{count}}명",
+    "models_one": "모델 {{count}}개",
+    "models_other": "모델 {{count}}개"
   }
 }

@@ -90,6 +90,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:125-129`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Sessions are stored, but mobile never sends its surface so its sessions are recorded as web, and GET /sessions/active has no caller, so nothing resumes from the record. | handler |
+| platform | partial | mobile now records its surface (9635039ad); GET /sessions/active still has no caller that resumes from the record | handler |
 
-Code: `apps/web/app/api/voice/live/sessions/lib/voice-session-store.ts:133-137`, `apps/web/app/api/voice/live/sessions/route.ts:210-210`, `apps/web/db/neon/0260_voice_sessions.sql:27-35`
+Code: `apps/mobile/src/features/voice/services/liveVoiceSession.ts:238-238`

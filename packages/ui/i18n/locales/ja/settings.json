@@ -99,5 +99,17 @@
     "groupSettings": "設定",
     "groupCustomize": "カスタマイズ",
     "groupDesktop": "デスクトップアプリ"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} 個のカスタムコマンド",
+    "customCommands_other": "{{count}} 個のカスタムコマンド",
+    "allArchivedChats_one": "アーカイブ済みのチャット {{count}} 件すべて",
+    "allArchivedChats_other": "アーカイブ済みのチャット {{count}} 件すべて",
+    "followUps_one": "{{count}} 件のフォローアップ",
+    "followUps_other": "{{count}} 件のフォローアップ",
+    "members_one": "{{count}} 人のメンバー",
+    "members_other": "{{count}} 人のメンバー",
+    "models_one": "{{count}} 個のモデル",
+    "models_other": "{{count}} 個のモデル"
   }
 }

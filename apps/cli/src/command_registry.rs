@@ -248,6 +248,7 @@ fn append_tui_shortcuts(help: &mut String) {
         "  {:<14} Edit the prompt in $VISUAL or $EDITOR",
         "Ctrl-G/Ctrl-E"
     );
+    let _ = writeln!(help, "  {:<14} Show or hide full tool output", "Ctrl-O");
     let _ = writeln!(
         help,
         "  {:<14} While a turn runs: queue a message, or /btw to ask aside",

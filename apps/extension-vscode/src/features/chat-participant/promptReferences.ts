@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { validateWorkspaceContextFile } from '../trees/contextPanelProvider';
 
 const MAX_REFERENCE_COUNT = 8;
-const MAX_TOTAL_REFERENCE_CHARS = 20_000;
+export const MAX_TOTAL_REFERENCE_CHARS = 20_000;
 
 interface LocationValue {
   uri: vscode.Uri;

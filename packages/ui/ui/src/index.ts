@@ -16,7 +16,15 @@ export {
   toUserMessage,
   toUserMessageWithStatus,
 } from './lib/network-error';
-export { useUiTranslation, type UiNamespace, type UiTranslate, type UiTranslation } from './i18n';
+export {
+  useUiTranslation,
+  type PluralCopy,
+  type UiNamespace,
+  type UiTranslate,
+  type UiTranslatePlural,
+  type UiTranslation,
+} from './i18n';
+export { translateUi, translateUiPlural } from './lib/translate';
 export { isApplePlatform, primaryModifierLabel, shortcutLabel } from './platformKeys';
 export { lucideToolIcon } from './toolIcon';
 export {
@@ -284,6 +292,8 @@ export {
   TrustBadge,
   type TrustBadgeBoundary,
   type TrustBadgeProps,
+  ChipInput,
+  type ChipInputProps,
 } from './primitives';
 export {
   Sidebar,
@@ -363,6 +373,12 @@ export {
 
 export { useConfirmAction } from './primitives/ConfirmAction';
 export type { ConfirmActionRequest } from './primitives/ConfirmAction';
+export {
+  useUnsavedChangesGuard,
+  confirmNavigation,
+  hasUnsavedChanges,
+  type UnsavedChangesGuardOptions,
+} from './primitives/UnsavedChanges';
 export { useMenuKeyboard } from './primitives/useMenuKeyboard';
 export {
   useCombobox,
