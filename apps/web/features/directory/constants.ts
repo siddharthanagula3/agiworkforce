@@ -234,6 +234,15 @@ export const UPLOAD_PLUGIN_DONE_TITLE = 'Plugin installed';
 export const UPLOAD_SKILL_DONE_TITLE = 'Skill added';
 export const CREATE_PLUGIN_DONE_TITLE = 'Plugin created';
 
+const OMITTED_FILES_SHOWN = 3;
+
+export function uploadOmittedFilesLine(paths: readonly string[]): string {
+  const shown = paths.slice(0, OMITTED_FILES_SHOWN).join(', ');
+  const more =
+    paths.length > OMITTED_FILES_SHOWN ? ` and ${paths.length - OMITTED_FILES_SHOWN} more` : '';
+  return `Left out ${paths.length === 1 ? 'a file that is' : `${paths.length} files that are`} not text: ${shown}${more}. Skills can bundle text files such as references and scripts.`;
+}
+
 export function uploadSkillCountLine(count: number): string {
   return count === 1
     ? '1 skill is now available in chat.'

@@ -92,7 +92,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'skills',
     effect: 'account-wide',
-    tables: ['user_skills'],
+    tables: ['user_skills', 'user_skill_files'],
     why: 'a skill is authored by a reader and carries no workspace column, so the switch does not take it away',
     transferable: false,
     copyable: true,
