@@ -79,6 +79,9 @@ export interface VoiceSessionController {
   enter: () => void;
   exit: () => void;
   toggleMute: () => void;
+  pause: () => void;
+  resume: () => void;
+  paused: boolean;
   cancelPending: () => void;
   submitTyped: (text: string) => void;
   retry: () => void;
@@ -119,6 +122,7 @@ const controller = {
   stableTimer: null as number | null,
   budget: null as SessionBudget | null,
   budgetTimer: null as number | null,
+  paused: false,
 };
 
 /**
@@ -338,6 +342,8 @@ export function endLiveVoiceSession(reason: string): void {
 }
 
 export function exitVoiceSession(): void {
+  controller.paused = false;
+  useVoiceSessionStore.getState().setPaused(false);
   endLiveVoiceSession('close_requested');
   useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
 }
@@ -401,6 +407,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
             liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
             if (session) void settleSession(session, closed);
+            if (controller.paused) return;
             if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
               store.dispatch({
                 type: VOICE_SESSION_EVENT.fail,
@@ -482,6 +489,7 @@ export function useVoiceSession({
   const toolActivity = useVoiceSessionStore((store) => store.toolActivity);
   const toolOutcomes = useVoiceSessionStore((store) => store.toolOutcomes);
   const toolApprovals = useVoiceSessionStore((store) => store.toolApprovals);
+  const paused = useVoiceSessionStore((store) => store.paused);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
   const reconnect = useSyncExternalStore(
@@ -574,11 +582,34 @@ export function useVoiceSession({
 
   const exit = useCallback(() => exitVoiceSession(), []);
 
+  const pause = useCallback(() => {
+    if (controller.paused) return;
+    controller.paused = true;
+    useVoiceSessionStore.getState().setPaused(true);
+    endLiveVoiceSession('paused');
+    dispatch({ type: VOICE_SESSION_EVENT.mute });
+  }, [dispatch]);
+
+  const resume = useCallback(() => {
+    if (!controller.paused) return;
+    controller.paused = false;
+    useVoiceSessionStore.getState().setPaused(false);
+    dispatch({ type: VOICE_SESSION_EVENT.unmute });
+    startLiveVoiceSession(currentVoiceSettings()).then(
+      (session) => setDeviceName(session.microphoneLabel),
+      () => undefined,
+    );
+  }, [dispatch]);
+
   const toggleMute = useCallback(() => {
+    if (controller.paused) {
+      resume();
+      return;
+    }
     const next = !muted;
     controller.session?.setMuted(next);
     dispatch({ type: next ? VOICE_SESSION_EVENT.mute : VOICE_SESSION_EVENT.unmute });
-  }, [muted, dispatch]);
+  }, [muted, dispatch, resume]);
 
   const cancelPending = useCallback(() => {
     dispatch({ type: VOICE_SESSION_EVENT.cancelUtterance });
@@ -628,6 +659,9 @@ export function useVoiceSession({
     enter,
     exit,
     toggleMute,
+    pause,
+    resume,
+    paused,
     cancelPending,
     submitTyped,
     retry,
