@@ -439,17 +439,8 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     // user's signed-in Chrome and brings page content back into the
     // conversation.
     if opts.privacy_mode == crate::agent::PrivacyMode::Local
-        && matches!(
-            canonical_name,
-            "web_search"
-                | "web_fetch"
-                | "advisor"
-                | "browser_read_page"
-                | "browser_click"
-                | "browser_type"
-                | "browser_navigate"
-                | "browser_screenshot"
-        )
+        && (matches!(canonical_name, "web_search" | "web_fetch" | "advisor")
+            || crate::platform::runtime::tool_catalog::is_browser_tool(canonical_name))
     {
         return Ok(ToolResult {
             tool_name: canonical_name.to_string(),
@@ -610,8 +601,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
-        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
-        | "browser_screenshot" => execute_browser_command(canonical_name, &call.args).await,
+        browser if crate::platform::runtime::tool_catalog::is_browser_tool(browser) => {
+            execute_browser_command(browser, &call.args).await
+        }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         "apply_patch" => {
@@ -767,6 +759,14 @@ fn trust_boundary_approval(
         "browser_navigate" => computer_use(
             argument("url").unwrap_or_default(),
             "The agent wants to open an address in your signed-in Chrome.",
+        ),
+        "browser_console" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to read the console messages of the page open in your signed-in Chrome.",
+        ),
+        "browser_network" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to read the network requests of the page open in your signed-in Chrome.",
         ),
         "web_fetch" => {
             let url = argument("url").unwrap_or_default();
@@ -1345,9 +1345,41 @@ fn browser_command_args(
             }
         }
         "browser_navigate" => copy_string("url"),
+        "browser_console" => {
+            copy_string("pattern");
+            copy_string("level");
+        }
+        "browser_network" => {
+            copy_string("pattern");
+            copy_string("resourceType");
+            if args.get("failedOnly").is_some_and(|value| value == "true") {
+                out.insert("failedOnly".to_string(), Value::Bool(true));
+            }
+        }
         _ => {}
     }
+    if matches!(command, "browser_console" | "browser_network") {
+        if let Some(limit) = args
+            .get("limit")
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .filter(|limit| *limit > 0)
+        {
+            out.insert("limit".to_string(), Value::from(limit));
+        }
+    }
     out
+}
+
+fn browser_capture_is_empty(command: &str, value: &Value) -> bool {
+    let key = match command {
+        "browser_console" => "console",
+        "browser_network" => "network",
+        _ => return false,
+    };
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .is_none_or(Vec::is_empty)
 }
 
 async fn execute_browser_command(
@@ -1363,14 +1395,31 @@ async fn execute_browser_command(
         crate::browser_bridge::ClientIdentity::for_cli(std::env::current_dir().ok(), None);
     let payload = Value::Object(browser_command_args(command, args));
     match crate::browser_bridge::run_command(command, payload, identity).await {
-        Ok(value) => Ok(ToolResult {
-            tool_name: command.to_string(),
-            success: true,
-            output: match &value {
+        Ok(value) => {
+            if let Some(reason) = ["url", "origin"]
+                .into_iter()
+                .filter_map(|key| value.get(key).and_then(Value::as_str))
+                .find_map(crate::permissions::url_blocked_by_domain_rule)
+            {
+                return Ok(ToolResult {
+                    tool_name: command.to_string(),
+                    success: false,
+                    output: format!("The active tab is on a blocked site, so its content was not read. {reason}"),
+                });
+            }
+            let mut output = match &value {
                 Value::String(text) => text.clone(),
                 other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
-            },
-        }),
+            };
+            if browser_capture_is_empty(command, &value) {
+                output.push_str("\n\nNothing is recorded for this tab. The extension records console messages and network requests only while it watches the page: ask the user to press Watch page in the AGI Workforce side panel on this tab, reproduce the problem, then read again.");
+            }
+            Ok(ToolResult {
+                tool_name: command.to_string(),
+                success: true,
+                output,
+            })
+        }
         Err(failure) => Ok(ToolResult {
             tool_name: command.to_string(),
             success: false,

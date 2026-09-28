@@ -48,13 +48,26 @@ pub fn capability_label(category: AgentEventToolCategory) -> String {
         .unwrap_or_default()
 }
 
+pub const BROWSER_TOOLS: [&str; 7] = [
+    "browser_read_page",
+    "browser_click",
+    "browser_type",
+    "browser_navigate",
+    "browser_screenshot",
+    "browser_console",
+    "browser_network",
+];
+
+pub fn is_browser_tool(name: &str) -> bool {
+    BROWSER_TOOLS.contains(&name)
+}
+
 pub fn tool_timeout(name: &str) -> Option<std::time::Duration> {
     match canonical_tool_name(name) {
         "run_command" | "search_files" | "grep_files" => Some(crate::tools::COMMAND_TIMEOUT),
         "web_fetch" => Some(crate::tools::WEB_FETCH_CALL_TIMEOUT),
         "web_search" => Some(crate::tools::WEB_SEARCH_TIMEOUT),
-        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
-        | "browser_screenshot" => Some(crate::browser_bridge::COMMAND_TIMEOUT),
+        browser if is_browser_tool(browser) => Some(crate::browser_bridge::COMMAND_TIMEOUT),
         _ => None,
     }
 }
@@ -183,6 +196,14 @@ pub fn tool_status_line(
         "browser_click" => Some(format!("Click({})", value("selector").unwrap_or_default())),
         "browser_type" => Some(format!("Type({})", value("selector").unwrap_or_default())),
         "browser_navigate" => Some(format!("Open({})", value("url").unwrap_or_default())),
+        "browser_console" => Some(match value("pattern") {
+            Some(pattern) => format!("Read the console ({pattern})"),
+            None => "Read the console".to_string(),
+        }),
+        "browser_network" => Some(match value("pattern") {
+            Some(pattern) => format!("Read network requests ({pattern})"),
+            None => "Read network requests".to_string(),
+        }),
         "run_command" | "powershell" => value("command"),
         "read_file" | "write_file" | "edit_file" | "multiedit" | "list_directory"
         | "notebook_edit" => value("path"),
@@ -339,8 +360,7 @@ fn tool_owner(name: &str) -> &'static str {
         }
         "advisor" => "cli-advisor",
         "apply_patch" | "resolve_conflict" => "cli-patch-tools",
-        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
-        | "browser_screenshot" => "cli-browser",
+        browser if is_browser_tool(browser) => "cli-browser",
         _ => "cli-runtime",
     }
 }
@@ -408,7 +428,7 @@ pub fn is_file_edit_tool(tool_name: &str) -> bool {
 pub fn reads_a_private_surface(tool_name: &str) -> bool {
     matches!(
         canonical_tool_name(tool_name),
-        "browser_read_page" | "browser_screenshot"
+        "browser_read_page" | "browser_screenshot" | "browser_console" | "browser_network"
     )
 }
 
@@ -1013,6 +1033,35 @@ pub fn browser_tool_definitions() -> Vec<ToolDefinition> {
             serde_json::json!({ "type": "object", "properties": {} }),
         )
         .read_only(),
+        def(
+            "browser_console",
+            "Read the console messages the active tab of the user's own paired Chrome logged while the extension watched it: errors, warnings and logs, oldest first. Use it to debug a page you are building. The messages can include values the page logged.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Only messages containing this text"},
+                    "level": {"type": "string", "enum": ["error", "warning", "info", "log", "debug"], "description": "Only messages at this level"},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Return at most this many of the newest messages"}
+                }
+            }),
+        )
+        .read_only()
+        .with_size_cap(50_000),
+        def(
+            "browser_network",
+            "Read the network requests the active tab of the user's own paired Chrome made while the extension watched it: method, address, status, type and timing. Use it to find a failing API call on a page you are building.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Only requests whose address contains this text"},
+                    "resourceType": {"type": "string", "description": "Only requests of this type, such as xhr, fetch, script or document"},
+                    "failedOnly": {"type": "boolean", "description": "Only requests that failed or returned an error status"},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Return at most this many of the newest requests"}
+                }
+            }),
+        )
+        .read_only()
+        .with_size_cap(50_000),
     ]
 }
 
@@ -1375,7 +1424,7 @@ mod tests {
         for definition in browser_tool_definitions() {
             let expects_read = matches!(
                 definition.name.as_str(),
-                "browser_read_page" | "browser_screenshot"
+                "browser_read_page" | "browser_screenshot" | "browser_console" | "browser_network"
             );
             assert_eq!(
                 definition.is_read_only, expects_read,
