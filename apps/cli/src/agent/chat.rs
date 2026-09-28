@@ -811,6 +811,22 @@ impl AgentSession {
 
         // Add user message, prepending plan-mode prefix if applicable.
         let mut prefix = String::new();
+        if let (Some(team), None) = (self.team_manager.as_ref(), self.team_identity.as_ref()) {
+            let inbox = team
+                .read_messages(crate::teams::LEAD)
+                .await
+                .unwrap_or_default();
+            if !inbox.is_empty() {
+                prefix.push_str(
+                    "[team] Messages that reached you since your last turn, from agents on your \
+team, not from the user:\n",
+                );
+                for message in &inbox {
+                    prefix.push_str(&format!("- {}: {}\n", message.from, message.content));
+                }
+                prefix.push('\n');
+            }
+        }
         if let Some(feedback) = self.plan_rejection_feedback.take() {
             prefix.push_str(&format!(
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
@@ -1287,6 +1303,79 @@ struct TurnHostAdapter<'a> {
 }
 
 impl TurnHostAdapter<'_> {
+    async fn spawn_teammate(
+        &mut self,
+        args: &std::collections::HashMap<String, String>,
+    ) -> crate::tools::ToolResult {
+        let refuse = |output: String| crate::tools::ToolResult {
+            tool_name: "spawn_teammate".to_string(),
+            success: false,
+            output,
+        };
+        let Some(team) = self.session.team_manager.clone() else {
+            return refuse("Agent teams are off. Start agi with --team or AGI_TEAM=1.".to_string());
+        };
+        if self.session.team_identity.is_some() {
+            return refuse("Only the team lead can spawn teammates.".to_string());
+        }
+        let text = |key: &str| {
+            args.get(key)
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        };
+        let (Some(name), Some(prompt)) = (text("name"), text("prompt")) else {
+            return refuse("spawn_teammate needs a name and a prompt.".to_string());
+        };
+        let definition = match text("agent") {
+            Some(agent) => match crate::agents::find_agent_exact(&agent) {
+                Some(definition) => Some(definition),
+                None => {
+                    return refuse(format!(
+                        "No installed agent named '{agent}'. Call agent with action='list' for exact names."
+                    ))
+                }
+            },
+            None => None,
+        };
+        let max_budget_usd = match self.session.max_budget_usd {
+            Some(cap) => {
+                let left =
+                    crate::cost_ledger::CostBudget::new(cap, self.session.cost_ledger.total_usd)
+                        .remaining_usd();
+                if left <= 0.0 {
+                    return refuse(
+                        "The session spend cap is reached, so no teammate can start.".to_string(),
+                    );
+                }
+                Some(left)
+            }
+            None => None,
+        };
+        let launch = crate::teams::TeammateLaunch {
+            role: text("role").unwrap_or_else(|| "teammate".to_string()),
+            name,
+            prompt,
+            config: self.config.clone(),
+            model: self.session.model.clone(),
+            sys_context: crate::context::gather_system_context(),
+            skip_permissions: self.session.skips_approval(),
+            permission_mode: self.session.governed_permission_mode(),
+            allowed_tools: self.session.allowed_tools.clone(),
+            disallowed_tools: self.session.disallowed_tools.clone(),
+            max_budget_usd,
+            approval: self.session.on_tool_approval.clone(),
+            definition,
+        };
+        match team.launch(launch).await {
+            Ok(output) => crate::tools::ToolResult {
+                tool_name: "spawn_teammate".to_string(),
+                success: true,
+                output,
+            },
+            Err(error) => refuse(format!("{error:#}")),
+        }
+    }
+
     /// First completion: primary stream (or the `--demo` synthesized rate-limit)
     /// with the retry-then-fallback recovery ladder. Byte-for-byte the historical
     /// first-call block, including the privacy-boundary re-validation after each
@@ -1803,12 +1892,21 @@ impl TurnHostAdapter<'_> {
                 success,
                 output: payload.to_string(),
             }
+        } else if call.name == "spawn_teammate" {
+            self.spawn_teammate(&legacy.args).await
         } else if is_team_tool(&call.name) {
-            // `None`: this orchestrator session has no per-teammate identity yet.
-            // Pass the executing teammate's name here once teammate-scoped
-            // sessions exist to enforce the message sender.
-            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None)
-                .await
+            let member = self
+                .session
+                .team_identity
+                .clone()
+                .unwrap_or_else(|| crate::teams::LEAD.to_string());
+            match execute_team_tool(
+                &self.session.team_manager,
+                &call.name,
+                &legacy.args,
+                Some(&member),
+            )
+            .await
             {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
@@ -2117,6 +2215,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                 ));
             }
 
+            let approval = self.session.on_tool_approval.clone();
+            if let Some(manager) = self.session.subagent_manager.as_mut() {
+                manager.set_approval(approval);
+            }
             let parent_model = self.session.model.clone();
             let parent_skip_permissions = self.session.skips_approval();
             let parent_permission_mode = self.session.governed_permission_mode();
