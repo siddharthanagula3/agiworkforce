@@ -1,0 +1,13 @@
+AGI Workforce bundles this skill from a third-party project.
+
+Skill: interview-prep
+Upstream: https://github.com/anthropics/knowledge-work-plugins
+Commit: da38ec1ee89d41e5380e652a97382695003396e7
+Path: human-resources/skills/interview-prep
+Publisher: Anthropic, the author the human-resources plugin declares.
+License: Apache License 2.0. The human-resources plugin has no LICENSE file of its own and is covered by the repository's root LICENSE; the LICENSE in this directory reproduces the same Apache License 2.0 text that the other plugins in that repository carry.
+
+Changes made by AGI Workforce: a top-level version field set to the upstream
+commit was added to the SKILL.md frontmatter, and SKILL.md was formatted with
+this repository's Prettier configuration. The instructions are otherwise
+unchanged.

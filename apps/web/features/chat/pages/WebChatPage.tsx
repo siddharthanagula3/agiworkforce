@@ -22,6 +22,7 @@ import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  createManagedCloudAgentRunClient,
   managedCloudConversationPath,
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
@@ -134,6 +135,7 @@ import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import { useStreamStallReport } from '../hooks/use-stream-stall-report';
+import { useSearchJumpHighlight } from '../hooks/use-text-match-highlight';
 import {
   Sheet,
   SheetContent,
@@ -178,6 +180,8 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { NewChatStarters } from '../components/NewChat/NewChatStarters';
+import { useNewChatDefaultModel } from '../hooks/use-new-chat-default-model';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { CODE_ROUTES } from '@/features/code/code-surface';
@@ -247,6 +251,10 @@ import type {
   ResearchPlanDecision,
   ResearchPlanOptions,
 } from '../components/research/ResearchActivity';
+import {
+  ResearchRunActionProvider,
+  type ResearchRunActionHandler,
+} from '../components/research/research-run-controls';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
@@ -263,7 +271,11 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
-import { approvedResearchSteps, completedResearchSteps } from '../utils/research-plan';
+import {
+  approvedResearchSteps,
+  completedResearchSteps,
+  researchResumeSources,
+} from '../utils/research-plan';
 import { notifyJobComplete, useLocalModelSelection } from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
@@ -949,6 +961,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
   const urlConversationId = params?.['sessionId'] as string | undefined;
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
+  useSearchJumpHighlight(highlightMessageId, searchParams?.get('highlightQuery') ?? null);
   const openSearchParam = searchParams?.get('search') ?? null;
   const openShareParam = searchParams?.get('share') ?? null;
   const starterPromptParam = searchParams?.get('starterPrompt') ?? null;
@@ -1175,6 +1188,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     AttachmentUploadAttempt[]
   >([]);
   const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
+  const attachmentUploadControllersRef = useRef(new Map<string, AbortController>());
 
   const updateAttachmentUploadStatus = useCallback(
     (attemptId: string, status: ManagedCloudChatAttachmentUploadStatus) => {
@@ -1701,6 +1715,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setSelectedModelId(resolveSelectableModelId(persistedModel));
     setModelSubstitution(describeModelSubstitution(persistedModel));
   }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
+  useNewChatDefaultModel(displayedConversationId ?? null);
 
   const projectDefaultModelAppliedRef = useRef<string | null>(null);
   const activeProjectDefaultModelId = activeProjectId
@@ -2027,6 +2042,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         options.conversationId || urlConversationId || bareChatSessionId || null;
       let resolvedUserMessageId: string | null = options.userMessageId ?? null;
       let attachmentsUploaded = false;
+      const uploadController = new AbortController();
+      const uploadAttemptId = options.attachmentUploadAttemptId;
+      if (uploadAttemptId) {
+        attachmentUploadControllersRef.current.set(uploadAttemptId, uploadController);
+      }
+      const releaseUploadController = () => {
+        const controllers = attachmentUploadControllersRef.current;
+        if (!uploadAttemptId || controllers.get(uploadAttemptId) !== uploadController) return;
+        controllers.delete(uploadAttemptId);
+      };
       // Nothing reached a model, so the text is the user's again. Parking it on
       // the conversation it was written for is what survives the create →
       // navigate remount that puts a different composer instance on screen.
@@ -2153,6 +2178,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? await uploadChatAttachments(options.attachments, {
               ...(existingConvId ? { conversationId: existingConvId } : {}),
               temporary: temporaryIntent,
+              signal: uploadController.signal,
               ...(options.attachmentUploadAttemptId
                 ? {
                     onStatus: (status) =>
@@ -2161,6 +2187,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 : {}),
             })
           : undefined;
+        releaseUploadController();
+        if (uploadController.signal.aborted) {
+          releaseUnresolvedPlaceholder();
+          return abandonSend();
+        }
         attachmentsUploaded = Boolean(options.attachments?.length);
         const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
         if (options.attachmentUploadAttemptId) {
@@ -2239,6 +2270,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         announceDesktopCompletion();
         return true;
       } catch (error) {
+        if (uploadController.signal.aborted) {
+          releaseUnresolvedPlaceholder();
+          return abandonSend();
+        }
         const message = toUserMessage(error, 'Could not attach the selected files.');
         if (options.attachmentUploadAttemptId && !attachmentsUploaded) {
           failAttachmentUploadAttempt(options.attachmentUploadAttemptId, message);
@@ -2253,6 +2288,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // so the reconciler reads a consistent displayed id and never misfires.
         releaseSendGuard();
         releaseSendWindow();
+        releaseUploadController();
       }
     },
     [
@@ -2301,11 +2337,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRemoveAttachmentUpload = useCallback(
     (index: number) => {
-      if (
-        !attachmentUploadAttempt ||
-        !attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')
-      ) {
-        return;
+      if (!attachmentUploadAttempt) return;
+      if (!attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')) {
+        const controller = attachmentUploadControllersRef.current.get(attachmentUploadAttempt.id);
+        if (!controller) return;
+        controller.abort();
       }
       const remaining = attachmentUploadAttempt.files.filter((_, fileIndex) => fileIndex !== index);
       setAttachmentUploadAttempts((current) =>
@@ -4173,6 +4209,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // Remove the query param without adding a history entry.
         const url = new URL(window.location.href);
         url.searchParams.delete('highlightMessage');
+        url.searchParams.delete('highlightQuery');
         router.replace(url.pathname + url.search);
       }, 400);
       return () => clearTimeout(removeParams);
@@ -4771,17 +4808,33 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
-      await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
-        sendMessage(userMsg.content, {
-          model: targetModelId,
-          conversationId: displayedConversationId,
-          attachments: userMsg.attachments,
-          ...replayOptions,
-          onTurnCommitted,
-        }),
-      );
+      const replaceTurn = () =>
+        sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: targetModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            ...replayOptions,
+            onTurnCommitted,
+          }),
+        );
+      const discarded = userRetryIndex >= 0 ? plan.rollbackIds.length - 1 : 0;
+      if (discarded > 0) {
+        confirmDestructive({
+          title: 'Retry this message?',
+          description:
+            discarded === 1
+              ? 'The reply below it is deleted and cannot be recovered.'
+              : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+          confirmLabel: 'Retry',
+          onConfirm: () => void replaceTurn(),
+        });
+        return;
+      }
+      await replaceTurn();
     },
     [
+      confirmDestructive,
       displayedConversation,
       displayedConversationId,
       displayedMessages,
@@ -4813,10 +4866,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRegenerateWithModel = useCallback(
     async (id: string, modelId: string) => {
-      if (!(await handleConversationModelChange(modelId))) return;
-      await handleRegenerateMessage(id, modelId);
+      await handleRegenerateMessage(id, resolveSelectableModelId(modelId));
     },
-    [handleConversationModelChange, handleRegenerateMessage],
+    [handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(
@@ -4853,13 +4905,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
   const handleRetryResearch = useCallback(
-    async (id: string) => {
+    async (id: string, guidance?: string) => {
       if (!displayedConversationId || isStreaming) return;
       const assistantMsg = displayedMessages.find((m) => m.id === id);
       const research = assistantMsg?.metadata?.research;
       // Only an ended, unsuccessful run is retryable; anything else has no
       // Retry control rendered and must not be startable from here either.
-      if (!research || (research.phase !== 'error' && research.phase !== 'interrupted')) return;
+      if (
+        !research ||
+        (research.phase !== 'error' &&
+          research.phase !== 'interrupted' &&
+          research.phase !== 'paused')
+      ) {
+        return;
+      }
       const plan = planRegenerateRollback(displayedMessages, id);
       if (!plan) return;
       const userMsg = displayedMessages[plan.userIndex];
@@ -4887,12 +4946,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             attachments: userMsg.attachments,
             research: true,
             researchResume: {
-              sources: research.sourcesForRetry ?? [],
+              sources: researchResumeSources(
+                research.sourcesForRetry,
+                assistantMsg?.metadata?.searchResults,
+              ),
               steps: completedResearchSteps(research.steps),
               // Steps the failed run never reached are already approved, so the
               // retry resumes them instead of asking for the same plan twice.
               approvedSteps: approvedResearchSteps(research.steps),
+              ...(research.runConfig ? { deliverable: research.runConfig.deliverable } : {}),
+              ...(guidance ? { guidance } : {}),
             },
+            ...(research.runConfig ? { researchSources: research.runConfig.sources } : {}),
             onTurnCommitted,
           }),
         );
@@ -4913,6 +4978,64 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       setChatError,
     ],
   );
+
+  const pauseResearchRun = useCallback(
+    async (id: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      if (!runId) {
+        toast.error('This research cannot be paused. Stop it instead to keep what it found.');
+        return false;
+      }
+      try {
+        await createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        }).pauseRun(runId);
+        return true;
+      } catch {
+        toast.error('Could not pause this research. It is still running.');
+        return false;
+      }
+    },
+    [displayedMessages, getToken],
+  );
+
+  const pendingResearchGuidanceRef = useRef(new Map<string, string>());
+
+  const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
+    async (id, action) => {
+      if (action.kind === 'pause') return pauseResearchRun(id);
+      if (action.kind === 'steer') {
+        pendingResearchGuidanceRef.current.set(id, action.guidance);
+        if (await pauseResearchRun(id)) return true;
+        pendingResearchGuidanceRef.current.delete(id);
+        return false;
+      }
+      await handleRetryResearch(id, action.guidance);
+      return true;
+    },
+    [handleRetryResearch, pauseResearchRun],
+  );
+
+  useEffect(() => {
+    if (isStreaming) return;
+    for (const [id, guidance] of pendingResearchGuidanceRef.current) {
+      const phase = displayedMessages.find((m) => m.id === id)?.metadata?.research?.phase;
+      if (phase === 'paused') {
+        pendingResearchGuidanceRef.current.delete(id);
+        void handleRetryResearch(id, guidance);
+        return;
+      }
+      if (phase !== 'planning' && phase !== 'searching' && phase !== 'synthesizing') {
+        pendingResearchGuidanceRef.current.delete(id);
+        if (phase === 'complete') {
+          toast.info(
+            'The research finished before your guidance could be applied. Ask a follow-up to take it further.',
+          );
+        }
+      }
+    }
+  }, [displayedMessages, handleRetryResearch, isStreaming]);
 
   /**
    * Send a follow-up question about a saved research report as an ordinary
@@ -5234,7 +5357,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       })),
     [chatMessages],
   );
-  const showWorkSession = hasWorkSession(displayedMessages, composerToggles?.workMode);
+  const showWorkSession =
+    hasMessages || hasWorkSession(displayedMessages, composerToggles?.workMode);
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
   }, [showWorkSession, setWorkSessionPanelOpen]);
@@ -6048,7 +6172,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
-                  {!compact && !voiceModeActive && <GreetingBanner />}
+                  {!compact && !voiceModeActive && <GreetingBanner showWorkspace />}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
@@ -6101,6 +6225,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           : {})}
                       />
                     )}
+                    {!compact && !voiceModeActive && (
+                      <NewChatStarters
+                        workMode={composerToggles.workMode}
+                        onPrompt={setComposerPrefill}
+                        onFocusComposer={handleFocusComposer}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -6118,44 +6249,46 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <ToolInputProvider value={resolveToolInput}>
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                          <ChatMessageList
-                            messages={chatMessages}
-                            transcriptPatch={chatMessageProjection.patch}
-                            currentTier={currentTier}
-                            conversationId={displayedConversationId}
-                            isLoading={isLoading && !isStreaming}
-                            isUserTyping={isUserTyping}
-                            onRegenerate={handleRegenerateMessage}
-                            onRetryResearch={handleRetryResearch}
-                            onResearchPlanDecision={handleResearchPlanDecision}
-                            onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                            retryingResearchMessageId={retryingResearchMessageId}
-                            onContinue={handleContinueMessage}
-                            onEdit={handleEditMessage}
-                            onDelete={handleDeleteMessage}
-                            onDeleteVariant={handleDeleteVariant}
-                            countVariantFollowers={countVariantFollowers}
-                            onReact={handleReactMessage}
-                            onPin={handlePinMessage}
-                            branchGroupsByMessageId={branchGroupsByMessageId}
-                            branchingMessageId={branchingMessageId}
-                            onBranch={createBranch}
-                            onSwitchBranch={switchBranch}
-                            variantInfoByMessageId={variantInfoByMessageId}
-                            onSelectVariant={handleSelectVariant}
-                            activeLeafId={activeLeafId}
-                            variantAnchorMessageId={variantAnchorMessageId}
-                            isConversationStreaming={isStreaming}
-                            onRegenerateImage={handleRegenerateImageInPlace}
-                            onResumeVideo={handleResumeVideo}
-                            onRetryVideo={handleRetryVideo}
-                            onSendMessage={setComposerPrefill}
-                            onPaywallUpgrade={handlePaywallRecovery}
-                            onPaywallDismiss={handlePaywallDismiss}
-                            onRegenerateWithModel={handleRegenerateWithModel}
-                            regenerateModelOptions={regenerateModelOptions}
-                            turnErrorActive={turnErrorNotice !== null}
-                          />
+                          <ResearchRunActionProvider value={handleResearchRunAction}>
+                            <ChatMessageList
+                              messages={chatMessages}
+                              transcriptPatch={chatMessageProjection.patch}
+                              currentTier={currentTier}
+                              conversationId={displayedConversationId}
+                              isLoading={isLoading && !isStreaming}
+                              isUserTyping={isUserTyping}
+                              onRegenerate={handleRegenerateMessage}
+                              onRetryResearch={handleRetryResearch}
+                              onResearchPlanDecision={handleResearchPlanDecision}
+                              onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                              retryingResearchMessageId={retryingResearchMessageId}
+                              onContinue={handleContinueMessage}
+                              onEdit={handleEditMessage}
+                              onDelete={handleDeleteMessage}
+                              onDeleteVariant={handleDeleteVariant}
+                              countVariantFollowers={countVariantFollowers}
+                              onReact={handleReactMessage}
+                              onPin={handlePinMessage}
+                              branchGroupsByMessageId={branchGroupsByMessageId}
+                              branchingMessageId={branchingMessageId}
+                              onBranch={createBranch}
+                              onSwitchBranch={switchBranch}
+                              variantInfoByMessageId={variantInfoByMessageId}
+                              onSelectVariant={handleSelectVariant}
+                              activeLeafId={activeLeafId}
+                              variantAnchorMessageId={variantAnchorMessageId}
+                              isConversationStreaming={isStreaming}
+                              onRegenerateImage={handleRegenerateImageInPlace}
+                              onResumeVideo={handleResumeVideo}
+                              onRetryVideo={handleRetryVideo}
+                              onSendMessage={setComposerPrefill}
+                              onPaywallUpgrade={handlePaywallRecovery}
+                              onPaywallDismiss={handlePaywallDismiss}
+                              onRegenerateWithModel={handleRegenerateWithModel}
+                              regenerateModelOptions={regenerateModelOptions}
+                              turnErrorActive={turnErrorNotice !== null}
+                            />
+                          </ResearchRunActionProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
                     </ToolInputProvider>

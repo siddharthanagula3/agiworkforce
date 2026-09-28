@@ -10,7 +10,7 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { normalizeResearchDeliverable } from '@agiworkforce/types';
+import { normalizeResearchDeliverable, RESEARCH_GUIDANCE_MAX_CHARS } from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -55,6 +55,7 @@ import {
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
+  classifyAttachedSearchTool,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
@@ -74,6 +75,17 @@ import {
   type RequiredExecutionEnforcement,
 } from '@/lib/code-execution/required-execution';
 import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
+import {
+  ITINERARY_CARD_KIND,
+  asksForItinerary,
+  isItineraryTool,
+  itineraryToolDefinition,
+} from '@/lib/places/itinerary-tool';
+import {
+  PRODUCT_COMPARISON_CARD_KIND,
+  asksForProductComparison,
+  productComparisonToolDefinition,
+} from '@/lib/services/product-comparison-tool-service';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -206,6 +218,7 @@ import {
   planResponseBudget,
   buildRoutingDecisionTrace,
   resolveAutoRoute,
+  speedFirstSlots,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
 import type {
@@ -287,7 +300,6 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
-import { speedFirstSlots } from './routing-profile-selection';
 import {
   modelKeepsInputsOutOfTraining,
   noTrainingChatModelFor,
@@ -541,6 +553,7 @@ export const ChatCompletionRequestSchema = z
           .max(50)
           .optional(),
         deliverable: z.unknown().optional(),
+        guidance: z.string().trim().min(1).max(RESEARCH_GUIDANCE_MAX_CHARS).optional(),
       })
       .optional(),
     code_execution: z.boolean().optional(),
@@ -940,6 +953,58 @@ export function applyMapSearchCardCapability(
   }
 }
 
+const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+  'web',
+  'desktop',
+  'mobile',
+  'chrome',
+]);
+
+export function applyItineraryToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    placesAvailable: boolean;
+  },
+): boolean {
+  if (
+    !CARD_TOOL_SURFACES.has(params.surface) ||
+    !params.toolsCapable ||
+    !request.stream ||
+    !params.placesAvailable ||
+    !asksForItinerary(params.userMessage) ||
+    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND)
+  ) {
+    return false;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isItineraryTool(tool.function.name)),
+    itineraryToolDefinition(),
+  ];
+  return true;
+}
+
+export function shouldOfferProductComparison(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    tools: readonly unknown[] | undefined;
+  },
+): boolean {
+  return (
+    CARD_TOOL_SURFACES.has(params.surface) &&
+    params.toolsCapable &&
+    request.stream === true &&
+    classifyAttachedSearchTool(params.tools) !== null &&
+    asksForProductComparison(params.userMessage) &&
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
+  );
+}
+
 export function validationRefusalMessage(error: z.ZodError): string {
   const issue = error.issues[0];
   if (issue === undefined) return 'The request did not match the chat completions schema.';
@@ -1136,6 +1201,7 @@ export type ProcessedRequest = {
     approvedSteps: ResearchStep[];
     /** What the reader asked the approved run to produce. */
     deliverable: ResearchDeliverableSpec;
+    guidance?: string;
   };
   /** §24: the sources and site restriction this research run was given. */
   webSearchDomainPolicy?: ResearchDomainPolicy;
@@ -4252,20 +4318,28 @@ export async function processRequest(
     };
   }
 
+  const placesAvailable =
+    placesBackendConfigured() &&
+    (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall()));
   const placesRequirement = resolvePlacesRequirement({
     userMessage: lastUserText,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     stream: chatRequest.stream,
-    backendConfigured:
-      placesBackendConfigured() &&
-      (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall())),
+    backendConfigured: placesAvailable,
+  });
+
+  const itineraryOffered = applyItineraryToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+    placesAvailable,
   });
 
   applyMapSearchCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
-    placesSearchOffered: placesRequirement.offered,
+    placesSearchOffered: placesRequirement.offered || itineraryOffered,
   });
 
   const ambientToolsAllowed =
@@ -4917,6 +4991,17 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
   }
 
+  if (
+    shouldOfferProductComparison(chatRequest, {
+      surface: chatSurface,
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+      userMessage: lastUserText,
+      tools: resolvedTools,
+    })
+  ) {
+    resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
+  }
+
   if (deviceHost) {
     const deviceTools = deviceStepToolDefs(deviceHost);
     if (deviceTools.length > 0) {
@@ -4924,7 +5009,7 @@ export async function processRequest(
     }
   }
   const placesEnforcement = resolveRequiredPlacesEnforcement({
-    required: placesRequirement.required,
+    required: placesRequirement.required && !itineraryOffered,
     requestedToolChoice: chatRequest.tool_choice,
     model: chatRequest.model,
     tools: resolvedTools,
@@ -5290,6 +5375,9 @@ export async function processRequest(
             steps: (chatRequest.research_resume.steps ?? []) as ResearchStep[],
             approvedSteps: (chatRequest.research_resume.approved_steps ?? []) as ResearchStep[],
             deliverable: normalizeResearchDeliverable(chatRequest.research_resume.deliverable),
+            ...(chatRequest.research_resume.guidance
+              ? { guidance: chatRequest.research_resume.guidance }
+              : {}),
           },
         }
       : {}),

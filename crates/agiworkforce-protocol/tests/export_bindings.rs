@@ -142,6 +142,22 @@ fn export_typescript_bindings() {
         .expect("export developer-session command run params graph");
     agiworkforce_protocol::developer_session::SlashCommandRunResponse::export_all_to(dir)
         .expect("export developer-session command run graph");
+    agiworkforce_protocol::developer_session::ThreadSearchParams::export_all_to(dir)
+        .expect("export developer-session thread search params graph");
+    agiworkforce_protocol::developer_session::ThreadSearchResponse::export_all_to(dir)
+        .expect("export developer-session thread search graph");
+    agiworkforce_protocol::developer_session::MemoryAddParams::export_all_to(dir)
+        .expect("export developer-session memory add params graph");
+    agiworkforce_protocol::developer_session::MemoryAddResponse::export_all_to(dir)
+        .expect("export developer-session memory add graph");
+    agiworkforce_protocol::developer_session::ThreadCheckpointsResponse::export_all_to(dir)
+        .expect("export developer-session checkpoint list graph");
+    agiworkforce_protocol::developer_session::ThreadRewindParams::export_all_to(dir)
+        .expect("export developer-session rewind params graph");
+    agiworkforce_protocol::developer_session::ThreadRewindResponse::export_all_to(dir)
+        .expect("export developer-session rewind graph");
+    agiworkforce_protocol::developer_session::ThreadPlanNotification::export_all_to(dir)
+        .expect("export developer-session plan notification graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so

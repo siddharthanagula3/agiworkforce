@@ -60,6 +60,11 @@ pub mod method {
     pub const THREAD_HANDOFF: &str = "thread/handoff";
     pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
     pub const THREAD_ARCHIVE: &str = "thread/archive";
+    pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
+    pub const THREAD_SEARCH: &str = "thread/search";
+    pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
+    pub const THREAD_REWIND: &str = "thread/rewind";
+    pub const THREAD_PLAN: &str = "thread/plan";
     pub const THREAD_DELETE: &str = "thread/delete";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
     pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
@@ -90,6 +95,7 @@ pub mod method {
     pub const SETTINGS_WRITE: &str = "settings/write";
     pub const COMMANDS_LIST: &str = "commands/list";
     pub const COMMANDS_RUN: &str = "commands/run";
+    pub const MEMORY_ADD: &str = "memory/add";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -332,6 +338,20 @@ pub struct AppServerCapabilities {
     /// Threads carry a writer lease, and `thread/writer/*` hand it over.
     #[serde(default, skip_serializing_if = "is_false")]
     pub writer_lease: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_unarchive: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_search: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub fork_at_message: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub prompt_commands: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub max_turns: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub memory: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -521,6 +541,9 @@ pub struct ThreadStartResponse {
 pub struct DeveloperMessage {
     pub role: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub index: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -539,6 +562,123 @@ pub struct ThreadReadResponse {
     /// `kind` is `created` is a file the thread generated.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<DeveloperSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<DeveloperPlanStep>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub todos: Vec<DeveloperTodo>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperStepStatus {
+    Pending,
+    InProgress,
+    Done,
+    Blocked,
+    Skipped,
+    Superseded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperPlanStep {
+    pub description: String,
+    pub status: DeveloperStepStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperTodo {
+    pub content: String,
+    pub status: DeveloperStepStatus,
+    pub priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPlanNotification {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub plan: Option<Vec<DeveloperPlanStep>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub todos: Option<Vec<DeveloperTodo>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpoint {
+    pub checkpoint_index: u32,
+    pub created_at: String,
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    pub tracked_files: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpointsResponse {
+    pub checkpoints: Vec<ThreadCheckpoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ThreadRewindRestore {
+    Both,
+    Conversation,
+    Code,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub checkpoint_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub restore: Option<ThreadRewindRestore>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct RewindSkippedFile {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindResponse {
+    pub thread: ThreadSummary,
+    pub prompt: String,
+    pub conversation_restored: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restored_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<RewindSkippedFile>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -766,6 +906,44 @@ pub struct ThreadListResponse {
     pub next_cursor: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSearchParams {
+    pub query: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<u32>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub include_archived: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSearchMatch {
+    pub message_index: u32,
+    pub role: String,
+    pub snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSearchHit {
+    pub thread: ThreadSummary,
+    pub title_matched: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub matches: Vec<ThreadSearchMatch>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSearchResponse {
+    pub hits: Vec<ThreadSearchHit>,
+}
+
 /// One model discovered from a local-only runtime owned by the CLI.
 ///
 /// The developer client receives only the provider and model identifier needed
@@ -842,6 +1020,30 @@ pub struct LocalModelListResponse {
     /// Every route this host knows about with its verdict.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub host_models: Vec<HostModelSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_servers: Vec<LocalServerStatus>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum LocalServerHealth {
+    Running,
+    NotRunning,
+    Unhealthy,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct LocalServerStatus {
+    pub provider: LocalModelProvider,
+    pub health: LocalServerHealth,
+    pub model_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -879,6 +1081,9 @@ pub struct ThreadForkParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub through_message_index: Option<u32>,
 }
 
 /// Per-turn permission posture selected by an interactive developer surface.
@@ -1054,6 +1259,9 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub client_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_turns: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -1872,6 +2080,33 @@ pub struct SlashCommandRunResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub payload: Option<Value>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum MemoryScope {
+    User,
+    Project,
+    Local,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MemoryAddParams {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<MemoryScope>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MemoryAddResponse {
+    pub scope: MemoryScope,
+    pub path: String,
 }
 
 /// Where a session's work was running, and where a handoff sends it.

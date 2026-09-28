@@ -8,6 +8,7 @@ import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
   type Skill,
+  type SkillToolFileAccess,
 } from '@agiworkforce/skills';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -32,7 +33,9 @@ vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
 }));
 
 const directorySkills = vi.hoisted(() => ({
-  findInstalledDirectorySkill: vi.fn(async () => null as Skill | null),
+  findInstalledDirectorySkillWithFiles: vi.fn(
+    async () => null as { skill: Skill; access: SkillToolFileAccess } | null,
+  ),
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => directorySkills);
 
@@ -330,15 +333,21 @@ describe('managed Cloud Skill tool loop', () => {
 
   it('loads a skill from an installed directory plugin after the caller skills miss', async () => {
     userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
-    directorySkills.findInstalledDirectorySkill.mockResolvedValueOnce({
-      name: 'session-report',
-      description: 'Generate a session report.',
-      body: 'Summarise tokens, cache hits and subagents.',
-      contentHash: 'sha256:0000',
-      filePath: 'plugins/session-report/skills/session-report/SKILL.md',
-      source: 'extra',
-      metadata: {},
-      frontmatter: { plugin: 'session-report' },
+    directorySkills.findInstalledDirectorySkillWithFiles.mockResolvedValueOnce({
+      skill: {
+        name: 'session-report',
+        description: 'Generate a session report.',
+        body: 'Summarise tokens, cache hits and subagents.',
+        contentHash: 'sha256:0000',
+        filePath: 'plugins/session-report/skills/session-report/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: { plugin: 'session-report' },
+      },
+      access: {
+        listFiles: async () => [],
+        readFile: async () => ({ ok: false, reason: 'not_found' }),
+      },
     });
     provider.stream
       .mockResolvedValueOnce(toolCallStream('session-report'))
@@ -348,7 +357,7 @@ describe('managed Cloud Skill tool loop', () => {
       runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
     );
 
-    expect(directorySkills.findInstalledDirectorySkill).toHaveBeenCalledWith(
+    expect(directorySkills.findInstalledDirectorySkillWithFiles).toHaveBeenCalledWith(
       expect.anything(),
       'caller-1',
       'session-report',

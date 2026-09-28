@@ -93,7 +93,7 @@ describe('WorkSessionPanel header (agentic-modes-gap-04)', () => {
 });
 
 describe('WorkSessionPanel header in a plain chat', () => {
-  it('never claims to be a work session, and holds two sections', () => {
+  it('never claims to be a work session, and inspects files, context and sources', () => {
     render(<WorkSessionPanel messages={messages(true)} open onClose={vi.fn()} />);
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(CHAT_DOCK_FALLBACK_TITLE);
@@ -102,7 +102,7 @@ describe('WorkSessionPanel header in a plain chat', () => {
     expect(screen.getByText(CHAT_DOCK_FILES_LABEL)).toBeTruthy();
     expect(screen.getByText(TASK_DOCK_SOURCES_LABEL)).toBeTruthy();
     expect(screen.queryByText(TASK_DOCK_OUTPUTS_LABEL)).toBeNull();
-    expect(screen.queryByText(TASK_DOCK_CONTEXT_LABEL)).toBeNull();
+    expect(screen.getByText(TASK_DOCK_CONTEXT_LABEL)).toBeTruthy();
   });
 
   it('titles the dock with the active conversation', () => {

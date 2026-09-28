@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
+import type {
+  DeveloperAgentMode,
+  LocalDeveloperSession,
+} from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
   answerDeveloperApproval,
@@ -34,7 +37,8 @@ export interface LocalSessionState {
   sending: boolean;
   stopping: boolean;
   error: string | null;
-  send: (text: string, model?: string) => Promise<void>;
+  contextTokens: number | null;
+  send: (text: string, model?: string, agentMode?: DeveloperAgentMode) => Promise<void>;
   stop: () => Promise<void>;
   decideApproval: (approved: boolean) => Promise<void>;
 }
@@ -56,6 +60,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextTokens, setContextTokens] = useState<number | null>(null);
   const turnRef = useRef<LocalTurn>(EMPTY_LOCAL_TURN);
 
   turnRef.current = turn;
@@ -204,6 +209,8 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
       }
       if (event.type === 'turn-finished') {
         setApproval(null);
+        const used = event.inputTokens + event.outputTokens;
+        if (used > 0) setContextTokens(used);
         setTurn((current) => ({
           ...current,
           outcome: event.outcome,
@@ -221,7 +228,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
   }, [rootId, threadId, load]);
 
   const send = useCallback(
-    async (text: string, model?: string) => {
+    async (text: string, model?: string, agentMode?: DeveloperAgentMode) => {
       if (!rootId || !threadId || text.trim() === '') return;
       setSending(true);
       setError(null);
@@ -232,6 +239,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           threadId,
           text,
           ...(model ? { model } : {}),
+          ...(agentMode ? { agentMode } : {}),
         });
         setTurn((current) => ({ ...current, turnId }));
       } catch (cause: unknown) {
@@ -284,6 +292,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
     sending,
     stopping,
     error,
+    contextTokens,
     send,
     stop,
     decideApproval,

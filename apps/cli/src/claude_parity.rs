@@ -54,6 +54,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "pricing",
         "remote-env",
         "add-dir",
+        "remove-dir",
         "files",
         "privacy-settings",
         "privacy-mode",
@@ -151,6 +152,7 @@ pub fn handle_shared_command(
         "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(render_extra_usage()),
         "/remote-env" => ParityCommandResult::SystemMessage(render_remote_env()),
         "/add-dir" => ParityCommandResult::SystemMessage(handle_add_dir(session, arg)),
+        "/remove-dir" => ParityCommandResult::SystemMessage(handle_remove_dir(session, arg)),
         "/files" => ParityCommandResult::SystemMessage(handle_files(session, arg)),
         "/privacy-settings" => ParityCommandResult::SystemMessage(render_privacy_settings(session)),
         "/privacy-mode" | "/trust-boundary" => {
@@ -247,7 +249,14 @@ pub fn handle_shared_command(
 pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
     let dirs = split_shell_words(arg);
     if dirs.is_empty() {
-        return "Usage: /add-dir <directory> [more directories...]".to_string();
+        let roots = crate::path_security::registered_additional_workspace_roots();
+        if roots.is_empty() {
+            return "Usage: /add-dir <directory> [more directories...]\nNo directories are added yet.".to_string();
+        }
+        let mut lines = vec!["Added directories the agent may read and change:".to_string()];
+        lines.extend(roots.iter().map(|root| format!("  {}", root.display())));
+        lines.push("Remove one with /remove-dir <directory>.".to_string());
+        return lines.join("\n");
     }
 
     let mut lines = Vec::new();
@@ -275,6 +284,23 @@ pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
         }
     }
     lines.join("\n")
+}
+
+pub fn handle_remove_dir(session: &mut AgentSession, arg: &str) -> String {
+    let dirs = split_shell_words(arg);
+    if dirs.is_empty() {
+        return "Usage: /remove-dir <directory> [more directories...]\n/add-dir with no arguments lists the added directories.".to_string();
+    }
+    dirs.iter()
+        .map(|dir| match session.remove_context_dir(dir) {
+            Ok(root) => format!(
+                "removed: {} (the agent can no longer reach it)",
+                root.display()
+            ),
+            Err(error) => format!("not removed: {dir} ({error})"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub fn handle_files(session: &mut AgentSession, arg: &str) -> String {
@@ -1335,10 +1361,10 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
             if let Some(app_version) = state.app_version.as_deref() {
                 lines.push(format!("  AGI Desktop: {app_version}"));
             }
-            lines.push(
-                "  Tools: browser_read_page, browser_click, browser_type, browser_navigate, browser_screenshot."
-                    .to_string(),
-            );
+            lines.push(format!(
+                "  Tools: {}.",
+                crate::platform::runtime::tool_catalog::BROWSER_TOOLS.join(", ")
+            ));
             lines.push(
                 "  The desktop app asks before the first action and records each one in its activity."
                     .to_string(),

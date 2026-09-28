@@ -8,11 +8,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
-  getManagedSkillDirectoryForPlugins,
-  readManagedSkillFile,
+  findSelectableSkillWithFiles,
   readManagedSkillFileBytes,
 } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { hashSkillContent } from '@agiworkforce/skills';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +37,19 @@ function contentDisposition(path: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
+function downloadResponse(path: string, bytes: Uint8Array, contentHash: string): NextResponse {
+  return new NextResponse(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      'Content-Type': DOWNLOAD_CONTENT_TYPE,
+      'Content-Disposition': contentDisposition(path),
+      'Cache-Control': 'private, no-store',
+      ETag: `"${contentHash}"`,
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 async function handleReadFile(
   request: NextRequest,
   context: { params: Promise<{ name: string; path: string[] }> },
@@ -50,10 +63,13 @@ async function handleReadFile(
     throw createError.validation('A file path is required');
   }
 
-  const enabledPluginIds = await listEnabledPluginIds(db, userId);
-  const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
-  const skill = directory.find((candidate) => candidate.name === name);
-  if (!skill) {
+  const found = await findSelectableSkillWithFiles({
+    db,
+    userId,
+    name,
+    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+  });
+  if (!found) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
 
@@ -61,27 +77,22 @@ async function handleReadFile(
   const wantsDownload =
     new URL(request.url).searchParams.get(DOWNLOAD_PARAM) === DOWNLOAD_PARAM_VALUE;
 
-  if (wantsDownload) {
-    const downloaded = await readManagedSkillFileBytes(skill, requestedPath);
+  if (wantsDownload && found.managed) {
+    const downloaded = await readManagedSkillFileBytes(found.skill, requestedPath);
     if (!downloaded.ok) {
       if (downloaded.reason === 'too_large') {
         throw createError.payloadTooLarge('This file is too large to download.');
       }
       throw createError.notFound('File not found');
     }
-    return new NextResponse(new Uint8Array(downloaded.file.bytes), {
-      status: 200,
-      headers: {
-        'Content-Type': DOWNLOAD_CONTENT_TYPE,
-        'Content-Disposition': contentDisposition(downloaded.file.path),
-        'Cache-Control': 'private, no-store',
-        ETag: `"${downloaded.file.contentHash}"`,
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+    return downloadResponse(
+      downloaded.file.path,
+      downloaded.file.bytes,
+      downloaded.file.contentHash,
+    );
   }
 
-  const result = await readManagedSkillFile(skill, requestedPath);
+  const result = await found.access.readFile(found.skill, requestedPath);
   if (!result.ok) {
     if (result.reason === 'binary') {
       throw new AppError(
@@ -91,12 +102,26 @@ async function handleReadFile(
       );
     }
     if (result.reason === 'too_large') {
-      throw createError.payloadTooLarge('This file is too large to preview.');
+      throw createError.payloadTooLarge(
+        wantsDownload
+          ? 'This file is too large to download.'
+          : 'This file is too large to preview.',
+      );
     }
     throw createError.notFound('File not found');
   }
 
-  return NextResponse.json({ file: result.file });
+  if (wantsDownload) {
+    const bytes = Buffer.from(result.content, 'utf8');
+    return downloadResponse(result.path, bytes, hashSkillContent(bytes));
+  }
+  return NextResponse.json({
+    file: {
+      path: result.path,
+      size: Buffer.byteLength(result.content, 'utf8'),
+      content: result.content,
+    },
+  });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleReadFile));

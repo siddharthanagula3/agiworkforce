@@ -6,13 +6,20 @@ import {
   assertLocalTurnCarriesNoAttachments,
   getHostBridge,
   type ApplicationOpenResult,
+  type BackgroundActivity,
+  type BackgroundWorkKind,
   type BrowserPairingState,
   type ClipboardSnapshot,
+  type ComputerUseStatus,
+  type DesktopPermissionsReview,
   type DeviceRegistryProfile,
+  type PermissionDecision,
+  type SystemPermissionKind,
   type RemoteControlStartRequest,
   type RemoteControlState,
   type FileEntry,
   type FileBinaryContent,
+  type FileSearchMatch,
   type FileTextContent,
   type LocalChatMessage,
   type LocalChatResult,
@@ -27,12 +34,16 @@ import {
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
   type DeveloperTurnRequest,
+  type LocalBranchPush,
+  type LocalBranches,
   type ShellPolicy,
   type ShellRunResult,
+  type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary } from '@agiworkforce/types';
+import type { PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -75,6 +86,10 @@ export function readWorkspaceText(rootId: string, path: string): Promise<FileTex
   return invoke<FileTextContent>('file_read_text', { rootId, path });
 }
 
+export function writeWorkspaceText(rootId: string, path: string, text: string): Promise<unknown> {
+  return invoke<unknown>('file_write_text', { rootId, path, text });
+}
+
 export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {
   return invoke<boolean>('workspace_revoke_root', { rootId });
 }
@@ -89,6 +104,27 @@ export function listWorkspaceFiles(rootId: string, path: string): Promise<FileEn
 
 export function readWorkspaceFileBytes(rootId: string, path: string): Promise<FileBinaryContent> {
   return invoke<FileBinaryContent>('file_read_bytes', { rootId, path });
+}
+
+export function findWorkspaceFilesByName(
+  rootId: string,
+  query: string,
+  path: string,
+): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>('file_glob', {
+    rootId,
+    pattern: `**${query}*`,
+    path,
+    ignoreCase: true,
+  });
+}
+
+export function searchWorkspaceText(
+  rootId: string,
+  query: string,
+  path: string,
+): Promise<FileSearchMatch[]> {
+  return invoke<FileSearchMatch[]>('file_grep', { rootId, query, path, ignoreCase: true });
 }
 
 function decodeBase64(base64: string): ArrayBuffer {
@@ -108,7 +144,7 @@ function decodeBase64(base64: string): ArrayBuffer {
  */
 export async function readWorkspaceFile(
   rootId: string,
-  entry: FileEntry,
+  entry: Pick<FileEntry, 'name' | 'path'>,
   mimeType: string,
 ): Promise<File> {
   const content = await readWorkspaceFileBytes(rootId, entry.path);
@@ -238,6 +274,66 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
 
 export function readDeviceRegistryProfile(): Promise<DeviceRegistryProfile> {
   return invoke<DeviceRegistryProfile>(DEVICE_REGISTRY_PROFILE_COMMAND);
+}
+
+export function readComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_status');
+}
+
+export function setComputerUseEnabled(enabled: boolean): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_set_enabled', { enabled });
+}
+
+export function stopComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_stop');
+}
+
+export function takeOverComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_take_over');
+}
+
+export function handBackComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_hand_back');
+}
+
+export function finishComputerUse(): Promise<ComputerUseStatus> {
+  return invoke<ComputerUseStatus>('computer_use_finish');
+}
+
+export function onComputerUseChanged(listener: (status: ComputerUseStatus) => void): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'computer-use-changed') listener(event.status);
+  });
+}
+
+export function openSystemPermissionSettings(permission: SystemPermissionKind): Promise<boolean> {
+  return invoke<boolean>('system_permission_open', { permission });
+}
+
+export function readDesktopPermissions(): Promise<DesktopPermissionsReview> {
+  return invoke<DesktopPermissionsReview>('permission_review');
+}
+
+export function revokeDesktopPermission(
+  decision: Pick<PermissionDecision, 'capability' | 'scope'>,
+): Promise<DesktopPermissionsReview> {
+  return invoke<DesktopPermissionsReview>('permission_revoke', {
+    capability: decision.capability,
+    scope: decision.scope,
+  });
+}
+
+export function readBackgroundActivity(): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_activity');
+}
+
+export function stopBackgroundWork(
+  kind: BackgroundWorkKind,
+  id?: string,
+): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_stop', { kind, ...(id ? { id } : {}) });
 }
 
 export function readRemoteControl(): Promise<RemoteControlState> {
@@ -448,6 +544,54 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function listLocalBranches(rootId: string): Promise<LocalBranches | null> {
+  return invoke<LocalBranches | null>('developer_branches_list', { rootId });
+}
+
+export function pushLocalBranch(rootId: string): Promise<LocalBranchPush> {
+  return invoke<LocalBranchPush>('developer_branch_push', { rootId });
+}
+
+export function switchLocalBranch(rootId: string, branch: string): Promise<string> {
+  return invoke<string>('developer_branch_switch', { rootId, branch });
+}
+
+export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+  return invoke<SkillSummary[]>('developer_skills_list', { rootId });
+}
+
+export function setDeveloperSkillEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_skill_set_enabled', { rootId, name, enabled });
+}
+
+export function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+  return invoke<boolean>('developer_skill_consent', { rootId, granted });
+}
+
+export function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {
+  return invoke<PluginSummary[]>('developer_plugins_list', { rootId });
+}
+
+export function setDeveloperPluginEnabled(
+  rootId: string,
+  id: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_plugin_set_enabled', { rootId, id, enabled });
+}
+
+export function readDeveloperSessionChanges(rootId: string): Promise<WorkingTreeChanges | null> {
+  return invoke<WorkingTreeChanges | null>('developer_session_changes', { rootId });
+}
+
+export function discardDeveloperSessionChanges(rootId: string, paths: string[]): Promise<string[]> {
+  return invoke<string[]>('developer_session_discard', { rootId, paths });
 }
 
 export function interruptDeveloperTurn(

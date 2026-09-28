@@ -1,24 +1,42 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { objectChecksum, type UploadedPart } from '@agiworkforce/object-storage';
+import {
+  ManagedCloudProjectKnowledgeFileSchema,
+  ManagedCloudResumableUploadCompleteRequestSchema,
+  RESUMABLE_UPLOAD_SESSION_PARAM,
+  type ManagedCloudResumableUploadCompleteResponse,
+} from '@agiworkforce/cloud-contracts';
+import type { UploadedPart } from '@agiworkforce/object-storage';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { upsertVideoMediaAsset } from '@/lib/server/media-assets';
-import { authenticatedMediaUrl } from '@/lib/server/media-storage';
+import { resolveProductAnalyticsSurface } from '@/lib/server/product-analytics';
 import {
-  assertPartNumber,
-  assertPartSize,
-  isResumableMimeType,
+  completeChatAttachmentUpload,
+  findCompletedChatAttachment,
+  resolveTemporaryChatUpload,
+  resolveUploadSourceSurface,
+} from '@/lib/server/chat-attachment-completion';
+import {
+  findProjectKnowledgeFileByChecksum,
+  registerProjectKnowledgeFile,
+} from '@/lib/server/project-knowledge-files';
+import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import {
+  assertSessionPartNumber,
+  missingParts,
+  readResumableUploadSession,
   resumableUploadTarget,
+  sessionHandle,
+  sessionPartCount,
+  sessionPartLength,
   storedBytes,
-  MAX_RESUMABLE_UPLOAD_BYTES,
-  RESUMABLE_PART_SIZE_BYTES,
+  type ResumableUploadSession,
   type ResumableUploadTarget,
 } from '../resumable-upload';
 
@@ -26,66 +44,37 @@ export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ uploadId: string }> };
 
-const FIRST_PART = 1;
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const CompleteUploadSchema = z.object({
-  assetId: z.string().regex(UUID_RE),
-  mimeType: z.string().min(1).max(255),
-  fileName: z.string().min(1).max(255),
-});
-
-interface ResolvedSession {
-  userId: string;
-  organizationId: string | null;
-  assetId: string;
-  mimeType: 'video/mp4' | 'video/webm' | 'video/quicktime';
-  uploadId: string;
-}
-
-async function resolveSession(
+async function sessionFor(
   request: NextRequest,
   context: RouteContext,
-  input: { assetId: string | null; mimeType: string | null },
-): Promise<ResolvedSession & { db: Awaited<ReturnType<typeof getUserScopedDb>>['db'] }> {
+  token: string | null | undefined,
+): Promise<{
+  db: ScopedDb;
+  userId: string;
+  organizationId: string | null;
+  session: ResumableUploadSession;
+}> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { uploadId } = await context.params;
-
-  if (!uploadId || uploadId.length > 512) throw createError.notFound('Upload not found');
-  if (!input.assetId || !UUID_RE.test(input.assetId)) {
-    throw createError.validation('An upload names the asset it is filling.');
-  }
-  if (!input.mimeType || !isResumableMimeType(input.mimeType)) {
-    throw createError.validation('Resumable uploads carry video content.');
-  }
-
-  return {
-    db,
-    userId,
-    organizationId,
-    assetId: input.assetId,
-    mimeType: input.mimeType,
-    uploadId,
-  };
+  if (!uploadId || uploadId.length > 1024) throw createError.notFound('Upload not found');
+  const session = await readResumableUploadSession(token, { userId, organizationId, uploadId });
+  return { db, userId, organizationId, session };
 }
 
-function queryInput(request: NextRequest): { assetId: string | null; mimeType: string | null } {
-  const params = new URL(request.url).searchParams;
-  return { assetId: params.get('assetId'), mimeType: params.get('mimeType') };
+function sessionToken(request: NextRequest): string | null {
+  return new URL(request.url).searchParams.get(RESUMABLE_UPLOAD_SESSION_PARAM);
 }
 
-/**
- * A session the host no longer holds is the ordinary end of an upload that was
- * cancelled, abandoned or swept away, not a fault. The pending listing is read
- * only after a call has already failed, so a healthy upload never pays for it
- * and a storage outage is still reported as one.
- */
-async function sessionIsClosed(target: ResumableUploadTarget, uploadId: string): Promise<boolean> {
+async function sessionIsClosed(
+  target: ResumableUploadTarget,
+  session: ResumableUploadSession,
+): Promise<boolean> {
   const pending = await target.store
-    .listPendingMultipartUploads(target.bucket, target.key)
+    .listPendingMultipartUploads(target.bucket, session.key)
     .catch(() => null);
-  return pending !== null && !pending.some((upload) => upload.uploadId === uploadId);
+  return pending !== null && !pending.some((upload) => upload.uploadId === session.uploadId);
 }
 
 function uploadNoLongerOpen(): never {
@@ -96,183 +85,240 @@ function uploadNoLongerOpen(): never {
 
 async function onOpenSession<T>(
   target: ResumableUploadTarget,
-  uploadId: string,
+  session: ResumableUploadSession,
   run: () => Promise<T>,
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    if (await sessionIsClosed(target, uploadId)) uploadNoLongerOpen();
+    if (await sessionIsClosed(target, session)) uploadNoLongerOpen();
     throw error;
   }
 }
 
-async function handleListParts(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const session = await resolveSession(request, context, queryInput(request));
+async function handleProgress(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const { userId, session } = await sessionFor(request, context, sessionToken(request));
 
-  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', session.userId);
+  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  const parts = await onOpenSession(target, session.uploadId, () =>
-    target.store.listUploadedParts({
-      bucket: target.bucket,
-      key: target.key,
-      uploadId: session.uploadId,
-    }),
+  const target = resumableUploadTarget();
+  const parts = await onOpenSession(target, session, () =>
+    target.store.listUploadedParts(sessionHandle(target, session)),
   );
 
   return NextResponse.json({
     uploadId: session.uploadId,
-    partSizeBytes: RESUMABLE_PART_SIZE_BYTES,
-    parts,
+    partBytes: session.partBytes,
+    parts: parts.map((part) => ({ partNumber: part.partNumber, size: part.size })),
     bytesStored: storedBytes(parts),
   });
 }
 
-async function handleUploadPart(
-  request: NextRequest,
-  context: RouteContext,
-): Promise<NextResponse> {
-  const session = await resolveSession(request, context, queryInput(request));
+async function handleRelayPart(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const { userId, session } = await sessionFor(request, context, sessionToken(request));
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'uploads-resumable-part', session.userId);
+  const rateLimitResponse = await withRateLimit(request, 'uploads-resumable-part', userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const partNumber = assertPartNumber(
+  const partNumber = assertSessionPartNumber(
+    session,
     Number(new URL(request.url).searchParams.get('partNumber') ?? Number.NaN),
   );
   const body = new Uint8Array(await request.arrayBuffer());
-  assertPartSize(partNumber, body.byteLength);
-  // Fails fast so a rejected object is not carried to 256 MB first. Only part
-  // one leads the object; the assembled bytes are inspected at completion.
-  await refuseUnsafeUpload(body, session.mimeType, { leadsObject: partNumber === FIRST_PART });
+  if (body.byteLength !== sessionPartLength(session, partNumber)) {
+    throw createError.validation(
+      `Part ${partNumber} must carry ${sessionPartLength(session, partNumber)} bytes.`,
+    );
+  }
 
-  const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  const part = await onOpenSession(target, session.uploadId, () =>
-    target.store.uploadPart({
-      bucket: target.bucket,
-      key: target.key,
-      uploadId: session.uploadId,
-      partNumber,
-      body,
-      checksumSha256: objectChecksum(body),
-    }),
+  const target = resumableUploadTarget();
+  const part = await onOpenSession(target, session, () =>
+    target.store.uploadPart({ ...sessionHandle(target, session), partNumber, body }),
   );
 
-  return NextResponse.json({ part });
+  return NextResponse.json({ part: { partNumber: part.partNumber, size: part.size } });
 }
 
-/**
- * The only place the whole object exists. A per-part scan cannot see a
- * signature or a secret that straddles a part boundary, so the assembled bytes
- * are read back once and the object is purged when they are refused.
- */
-async function inspectAssembledObject(
-  target: ReturnType<typeof resumableUploadTarget>,
-  fileName: string,
-  mimeType: string,
-): Promise<void> {
-  const object = await target.store.get(target.bucket, target.key);
-  if (!object) throw createError.internal('The completed upload could not be read back.');
+async function assembleParts(
+  target: ResumableUploadTarget,
+  session: ResumableUploadSession,
+): Promise<'assembled' | 'closed'> {
+  const handle = sessionHandle(target, session);
+  let parts: UploadedPart[];
   try {
-    await refuseUnsafeUpload(object.data, mimeType, { leadsObject: true, filename: fileName });
+    parts = await target.store.listUploadedParts(handle);
   } catch (error) {
-    await target.store.delete(target.bucket, target.key);
+    if (await sessionIsClosed(target, session)) return 'closed';
+    throw error;
+  }
+  const missing = missingParts(session, parts);
+  if (missing.length > 0) {
+    throw createError.conflict(
+      `Part ${missing[0]} of this upload has not arrived yet. Resume the upload to send it.`,
+    );
+  }
+  const partCount = sessionPartCount(session);
+  await onOpenSession(target, session, () =>
+    target.store.completeMultipartUpload({
+      ...handle,
+      parts: parts.filter((part) => part.partNumber <= partCount),
+    }),
+  );
+  return 'assembled';
+}
+
+function knowledgeFileCompletion(file: unknown): ManagedCloudResumableUploadCompleteResponse {
+  const parsed = ManagedCloudProjectKnowledgeFileSchema.safeParse(file);
+  if (!parsed.success) {
+    throw createError.internal('The project source was stored but could not be described.');
+  }
+  return { kind: 'knowledge-file', file: parsed.data };
+}
+
+async function finishedUpload(
+  db: ScopedDb,
+  scope: { userId: string; organizationId: string | null },
+  session: ResumableUploadSession,
+  completion: { conversationId?: string | undefined; temporary?: boolean | undefined },
+): Promise<ManagedCloudResumableUploadCompleteResponse | null> {
+  if (session.kind === 'knowledge-file') {
+    if (!session.projectId) return null;
+    const file = await findProjectKnowledgeFileByChecksum(
+      { db, ...scope, projectId: session.projectId },
+      session.checksumSha256,
+    );
+    return file ? knowledgeFileCompletion(file) : null;
+  }
+  const temporaryChat = await resolveTemporaryChatUpload({
+    db,
+    ...scope,
+    conversationId: completion.conversationId,
+    temporary: completion.temporary,
+  });
+  const attachment = await findCompletedChatAttachment({
+    db,
+    ...scope,
+    storageKey: session.key,
+    fileName: session.fileName,
+    byteCount: session.byteCount,
+    temporaryChat,
+  });
+  return attachment ? { kind: 'chat-attachment', attachment } : null;
+}
+
+async function finishKnowledgeFile(
+  db: ScopedDb,
+  scope: { userId: string; organizationId: string | null },
+  session: ResumableUploadSession,
+): Promise<ManagedCloudResumableUploadCompleteResponse> {
+  const projectId = session.projectId;
+  if (!projectId || !session.sourceSurface) throw createError.notFound('Upload not found');
+  const projectScope = { db, ...scope, projectId };
+  try {
+    const registration = await registerProjectKnowledgeFile(projectScope, {
+      fileName: session.fileName,
+      mimeType: session.mimeType,
+      byteCount: session.byteCount,
+      checksumSha256: session.checksumSha256,
+      sourceSurface: session.sourceSurface,
+      storageUri: session.key,
+    });
+    if (registration.status === 'unavailable') {
+      throw createError.capabilityUnavailable('Project sources are not available yet.');
+    }
+    return knowledgeFileCompletion(registration.file);
+  } catch (error) {
+    if (isAppError(error) && error.statusCode < 500) {
+      await deleteProjectKnowledgeObject(session.key).catch((deleteError: unknown) => {
+        logger.error(
+          { err: deleteError, userId: scope.userId, projectId, key: session.key },
+          '[uploads] an assembled project source that failed registration was not deleted',
+        );
+      });
+    }
     throw error;
   }
 }
 
-async function handleCompleteUpload(
-  request: NextRequest,
-  context: RouteContext,
-): Promise<NextResponse> {
-  const body = await request.json().catch(() => null);
-  const parsed = CompleteUploadSchema.safeParse(body);
+async function handleComplete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const parsed = ManagedCloudResumableUploadCompleteRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
   }
-  const session = await resolveSession(request, context, {
-    assetId: parsed.data.assetId,
-    mimeType: parsed.data.mimeType,
-  });
+  const { db, userId, organizationId, session } = await sessionFor(
+    request,
+    context,
+    parsed.data.session,
+  );
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', session.userId);
+  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  const handle = { bucket: target.bucket, key: target.key, uploadId: session.uploadId };
-  const parts: UploadedPart[] = await onOpenSession(target, session.uploadId, () =>
-    target.store.listUploadedParts(handle),
-  );
-  if (parts.length === 0) {
-    throw createError.validation('No part of this upload has been stored yet.');
-  }
-  const byteSize = storedBytes(parts);
-  if (byteSize > MAX_RESUMABLE_UPLOAD_BYTES) {
-    await target.store.abortMultipartUpload(handle);
-    throw createError.validation('The upload is larger than the limit for a single file.');
+  const target = resumableUploadTarget();
+  if ((await assembleParts(target, session)) === 'closed') {
+    const finished = await finishedUpload(db, { userId, organizationId }, session, parsed.data);
+    if (finished) return NextResponse.json(finished);
+    if (!(await target.store.head(target.bucket, session.key))) uploadNoLongerOpen();
   }
 
-  await onOpenSession(target, session.uploadId, () =>
-    target.store.completeMultipartUpload({ ...handle, parts }),
-  );
-  await inspectAssembledObject(target, parsed.data.fileName, session.mimeType);
+  if (session.kind === 'knowledge-file') {
+    return NextResponse.json(await finishKnowledgeFile(db, { userId, organizationId }, session));
+  }
 
-  const id = await upsertVideoMediaAsset(
-    {
-      id: session.assetId,
-      userId: session.userId,
-      organizationId: session.organizationId,
-      mimeType: session.mimeType,
-      storageUrl: authenticatedMediaUrl(session.assetId),
-      storagePathname: target.key,
-      byteSize,
-      prompt: '',
-      provider: 'upload',
-      model: '',
-      sourceSurface: 'web',
-      metadata: { filename: parsed.data.fileName },
-    },
-    session.db,
-  );
-
-  return NextResponse.json({ id, url: authenticatedMediaUrl(id), byteSize, parts: parts.length });
+  const attachment = await completeChatAttachmentUpload({
+    db,
+    userId,
+    organizationId,
+    sourceSurface: resolveUploadSourceSurface(request),
+    analyticsSurface: resolveProductAnalyticsSurface(request),
+    storageKey: session.key,
+    fileName: session.fileName,
+    mimeType: session.mimeType,
+    byteCount: session.byteCount,
+    conversationId: parsed.data.conversationId,
+    temporary: parsed.data.temporary,
+    checksumSha256: session.checksumSha256,
+  });
+  const response: ManagedCloudResumableUploadCompleteResponse = {
+    kind: 'chat-attachment',
+    attachment,
+  };
+  return NextResponse.json(response);
 }
 
-async function handleAbortUpload(
-  request: NextRequest,
-  context: RouteContext,
-): Promise<NextResponse> {
-  const session = await resolveSession(request, context, queryInput(request));
+async function handleAbort(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const { userId, session } = await sessionFor(request, context, sessionToken(request));
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', session.userId);
+  const rateLimitResponse = await withRateLimit(request, 'uploads-presign', userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
+  const target = resumableUploadTarget();
   try {
-    await target.store.abortMultipartUpload({
-      bucket: target.bucket,
-      key: target.key,
-      uploadId: session.uploadId,
-    });
+    await target.store.abortMultipartUpload(sessionHandle(target, session));
   } catch (error) {
-    if (!(await sessionIsClosed(target, session.uploadId))) throw error;
+    if (!(await sessionIsClosed(target, session))) throw error;
   }
 
   return NextResponse.json({ aborted: true });
 }
 
-export const GET = withErrorHandler(handleListParts);
-export const PUT = withErrorHandler(handleUploadPart);
-export const POST = withErrorHandler(handleCompleteUpload);
-export const DELETE = withErrorHandler(handleAbortUpload);
+export const GET = withCorsRoute(withErrorHandler(handleProgress));
+export const PUT = withErrorHandler(handleRelayPart);
+export const POST = withCorsRoute(withErrorHandler(handleComplete));
+export const DELETE = withCorsRoute(withErrorHandler(handleAbort));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

@@ -55,6 +55,15 @@ export interface PresignPutInput {
   expiresInSeconds: number;
 }
 
+export interface PresignUploadPartInput {
+  bucket: string;
+  key: string;
+  uploadId: string;
+  partNumber: number;
+  contentLength: number;
+  expiresInSeconds: number;
+}
+
 export interface CreateMultipartUploadInput {
   bucket: string;
   key: string;
@@ -137,6 +146,8 @@ export interface ObjectStore {
   abortMultipartUpload?(handle: MultipartUploadHandle): Promise<void>;
 
   listPendingMultipartUploads?(bucket: string, prefix?: string): Promise<PendingMultipartUpload[]>;
+
+  presignUploadPart?(input: PresignUploadPartInput): Promise<string>;
 }
 
 export type MultipartObjectStore = ObjectStore &
@@ -149,6 +160,7 @@ export type MultipartObjectStore = ObjectStore &
       | 'completeMultipartUpload'
       | 'abortMultipartUpload'
       | 'listPendingMultipartUploads'
+      | 'presignUploadPart'
     >
   >;
 
@@ -159,6 +171,7 @@ const MULTIPART_OPERATIONS = [
   'completeMultipartUpload',
   'abortMultipartUpload',
   'listPendingMultipartUploads',
+  'presignUploadPart',
 ] as const;
 
 export function supportsMultipartUploads(store: ObjectStore): store is MultipartObjectStore {

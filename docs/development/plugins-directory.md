@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-06
+Last updated: 2026-09-27
 
 How the plugin directory behind `GET /api/plugins` is built, refreshed and
 installed from, and what each source contributes. The code lives under
@@ -118,8 +118,9 @@ installs a web-installable directory plugin for the signed-in account:
    `plugin_marketplace_entries` row shadows the plugin with the sha in its
    version build metadata, and a `plugin_marketplace_installations` row records
    the install with every fetched skill enabled.
-3. The response is `{ installation, skills }`; `installation.pluginKey` is the
-   directory id.
+3. The response is `{ installation, skills, dependencies }`;
+   `installation.pluginKey` is the directory id, and `dependencies` lists the
+   plugins installed or turned back on with it (see Dependencies).
 
 Shadow sources and entries are hidden from `GET /api/plugins/marketplaces` and
 its `entries` route so the account's own registered marketplaces stay separate.
@@ -223,6 +224,58 @@ pack declares. That was privilege widening by string match: the manifest is unve
 user-supplied, a bare name collision was enough, the grant produced no installation row,
 and nothing in Settings showed it had happened. It is gone, and
 `plugin-installation-service.test.ts` pins the refusal.
+
+## Dependencies
+
+A plugin can declare the plugins it depends on, as Claude Code plugins do
+(code.claude.com/docs/en/plugin-dependencies, /plugins/install and
+/plugins/troubleshooting, read 2026-09-27). Installing it installs and enables
+each declared dependency in the same step, the install response lists the ones
+it installed or turned back on under `dependencies`, and the directory shows
+them in the install notice.
+
+- **Where they are declared.** A built-in pack declares plugin names in the
+  `dependencies` of its embedded manifest. A directory plugin declares them in its
+  marketplace entry and in its own `.claude-plugin/plugin.json`, which the install
+  reads at the pinned sha. An entry in an account's registered marketplace
+  declares them in that marketplace's manifest; sync keeps them in
+  `plugin_marketplace_entries.dependencies` (migration 0326). A declaration is a
+  name, `name@marketplace`, or an object with `name`, `marketplace` and `version`.
+  A manifest whose declarations cannot be read is refused at registration.
+- **Resolution.** Breadth first from the plugin being installed, with the CLI's
+  limits (eight levels, thirty-two plugins including that one). A plugin is
+  identified as `name@marketplace`, and one seen twice resolves once, so a cycle
+  ends. `resolvePluginDependencies` in `apps/web/lib/services/plugin-dependencies.ts`
+  is the one resolver; `features/plugins/server/directory/dependencies.ts` plans
+  marketplace installs on top of it and the registry path plans its own.
+- **Same marketplace by default.** A dependency resolves in the marketplace of
+  the plugin that declares it. One from another marketplace is accepted when the
+  account already has it installed and enabled, or when the marketplace of the
+  plugin being installed lists that marketplace in
+  `allowCrossMarketplaceDependenciesOn`; only that root marketplace's list
+  counts. Sync keeps the list in
+  `plugin_marketplace_sources.allow_cross_marketplace_dependencies_on`, and the
+  directory ingest carries the official marketplace's on each record. An allowed
+  marketplace resolves in the directory when it is a directory marketplace and in
+  the account's registered source of that name otherwise; one the account has not
+  added is refused with a message that says to add it. Anything else is refused
+  with Claude Code's wording, which names the dependency, the plugin that needs it
+  and the marketplace that is not in the allowlist. A built-in pack resolves its
+  dependencies among built-in packs only.
+- **The same gates.** Every dependency passes workspace policy (a blocked one
+  refuses the install and names both plugins). A dependency from a registered
+  marketplace needs a passing scan, and a built-in pack needs suspension,
+  signature, scan and permission review, exactly as the plugin itself does.
+- **Checked before written.** Everything is resolved and checked before the first
+  installation row is written, and marketplace installs write the plugin and its
+  dependencies in one transaction. A dependency already installed and enabled is
+  left alone; one installed but turned off is turned back on, unless it was turned
+  off for a permission review, which refuses the install until that review is done.
+- **What stays different.** A dependency with a `version` range refuses the web
+  install, because the web app installs the version its marketplace lists and
+  does not evaluate ranges. Uninstalling a plugin leaves the dependencies it
+  pulled in, as Claude Code does until `claude plugin prune`. A plugin uploaded as
+  an archive or authored in the product installs without resolving dependencies.
 
 ## Which table an install goes through
 
