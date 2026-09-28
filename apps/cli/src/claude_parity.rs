@@ -1361,10 +1361,10 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
             if let Some(app_version) = state.app_version.as_deref() {
                 lines.push(format!("  AGI Desktop: {app_version}"));
             }
-            lines.push(
-                "  Tools: browser_read_page, browser_click, browser_type, browser_navigate, browser_screenshot."
-                    .to_string(),
-            );
+            lines.push(format!(
+                "  Tools: {}.",
+                crate::platform::runtime::tool_catalog::BROWSER_TOOLS.join(", ")
+            ));
             lines.push(
                 "  The desktop app asks before the first action and records each one in its activity."
                     .to_string(),
