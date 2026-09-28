@@ -4,6 +4,7 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';
+import { formatSourcePublishedDate } from '@/src/features/chat/utils/sourcePublishedDate';
 
 function badgePalette(colors: ColorScheme): readonly string[] {
   return [
@@ -22,18 +23,10 @@ function badgeColorFor(hostname: string, colors: ColorScheme): string {
   return palette[hash % palette.length]!;
 }
 
-function publishedLabel(raw: string | undefined): string | null {
-  const value = raw?.trim();
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value.length > 32 ? null : value;
-  return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
 export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
   const hostname = hostnameOf(result.url);
-  const published = publishedLabel(result.publishedDate);
+  const published = formatSourcePublishedDate(result.publishedDate);
 
   const handlePress = async () => {
     if (isValidExternalHttpUrl(result.url)) {

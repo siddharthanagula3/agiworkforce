@@ -212,6 +212,7 @@ const platformProvidedKeys = new Set([
   'VERCEL_ENV',
   'VERCEL_GIT_COMMIT_SHA',
   'VERCEL_REGION',
+  'VISUAL',
 ]);
 
 const sourceScans = [

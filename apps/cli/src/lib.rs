@@ -1585,6 +1585,8 @@ enum PluginSubcommand {
     Enable { name: String },
     /// Turn an installed plugin off without removing it.
     Disable { name: String },
+    /// Update a plugin installed from git to its latest commit.
+    Update { name: String },
     /// Sign a plugin directory with a publisher's Ed25519 key.
     Sign {
         /// Plugin directory containing its manifest.
@@ -2153,11 +2155,14 @@ async fn handle_image_command(
         return Ok(());
     }
     if command.clear_defaults {
-        output::print_info(&cloud::image::clear_defaults().map_err(|error| anyhow::anyhow!(error))?);
+        output::print_info(
+            &cloud::image::clear_defaults().map_err(|error| anyhow::anyhow!(error))?,
+        );
     }
     if command.save_defaults {
         output::print_info(
-            &cloud::image::save_defaults(&command.settings).map_err(|error| anyhow::anyhow!(error))?,
+            &cloud::image::save_defaults(&command.settings)
+                .map_err(|error| anyhow::anyhow!(error))?,
         );
     }
     if !command.retry && !command.again && command.prompt.is_none() {
@@ -4834,6 +4839,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     fmt_tag,
                                     terminal_text::sanitize_terminal_text(&signature.label())
                                 );
+                                let root = path
+                                    .file_name()
+                                    .and_then(|name| name.to_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+                                for notice in
+                                    installs::install_dependencies(&root).await.notices(&root)
+                                {
+                                    println!("{}", terminal_text::sanitize_terminal_text(&notice));
+                                }
                                 Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
@@ -4853,6 +4868,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                     PluginSubcommand::Disable { name } => {
                         println!("{}", installs::set_plugin_enabled(name, false)?);
+                        Ok(())
+                    }
+                    PluginSubcommand::Update { name } => {
+                        let updated = installs::update_plugin(name)?;
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(&installs::describe_update(
+                                name, &updated
+                            ))
+                        );
                         Ok(())
                     }
                     PluginSubcommand::Remove { name } => {

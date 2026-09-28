@@ -1,6 +1,8 @@
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
+
 export const MAX_IMPORT_TEXT_CHARS = 200_000;
 export const MAX_IMPORT_ITEMS = 500;
-export const MAX_IMPORT_ITEM_CHARS = 10_000;
+export const MAX_IMPORT_ITEM_CHARS = MANAGED_MEMORY_MAX_CONTENT_CHARS;
 export const MAX_IMPORT_SOURCE_NAME_CHARS = 60;
 
 export const IMPORT_SOURCE_PREFIX = 'imported:';

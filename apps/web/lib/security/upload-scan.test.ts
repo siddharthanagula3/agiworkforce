@@ -188,6 +188,34 @@ describe('scanUploadBytes, external scanner requirement', () => {
       vi.unstubAllGlobals();
     }
   });
+  it('asks for the password to be removed when the scanner could not open the file', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              safe: false,
+              detail: 'ClamAV detected Heuristics.Encrypted.PDF',
+              reason: 'encrypted',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+    try {
+      const { refuseUnsafeUpload } = await import('./upload-scan');
+      const refusal = await refuseUnsafeUpload(PDF, 'application/pdf', {
+        leadsObject: true,
+        filename: 'statement.pdf',
+      }).catch((error: unknown) => error);
+      expect((refusal as Error).message).toContain('Remove the password and upload it again.');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('the external scanner opt-out', () => {

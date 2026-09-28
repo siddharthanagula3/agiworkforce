@@ -332,5 +332,6 @@
   "0331_free_usage_attempt_record.sql": "589deed501648bf938547572062e9f7118643700a3e7972b3b8c001f061700a8",
   "0332_custom_connector_plugin_source.sql": "33e63fc05d812039069b56fcc19d966421a6137305aad1e632273004e5b979b5",
   "0333_slack_run_cancel_and_delete.sql": "90262568cefca06dfd029c9ebd023fd5e943fba1516ff2bfee6843843fe74432",
-  "0334_desktop_sign_in_grants.sql": "c6a6ddc8b1305762e68b76b1f2bbcb880627f9c960591a469854d28302a3730b"
+  "0334_desktop_sign_in_grants.sql": "c6a6ddc8b1305762e68b76b1f2bbcb880627f9c960591a469854d28302a3730b",
+  "0335_cloud_code_plan_turns.sql": "7b85058cfb0d1349be9bfb0784009145d80aad7bf39ff39918da92ab30520db5"
 }
