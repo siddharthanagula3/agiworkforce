@@ -31,6 +31,7 @@ import { ProjectArtifactsPanel } from '@/features/projects/components/ProjectArt
 import { ProjectWorkPanel } from '@/features/projects/components/ProjectWorkPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { ProjectShareDialog } from '@/features/projects/components/ProjectShareDialog';
+import { ProjectStudio } from '@/features/projects/components/ProjectStudio';
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
@@ -1291,7 +1292,18 @@ export default function ProjectDetailPage() {
             ) : tab === 'work' ? (
               <ProjectWorkPanel projectId={project.id} projectName={project.name} />
             ) : tab === 'sources' ? (
-              <SourcesPanel projectId={project.id} readOnly={!canEditProject} />
+              <>
+                <ProjectStudio
+                  onCreate={({ prompt, officeCreationEnabled }) =>
+                    handleProjectSend(prompt, undefined, undefined, {
+                      workMode: 'chat',
+                      projectId: project.id,
+                      ...(officeCreationEnabled ? { officeCreationEnabled: true } : {}),
+                    })
+                  }
+                />
+                <SourcesPanel projectId={project.id} readOnly={!canEditProject} />
+              </>
             ) : billingIsLoading || !billingInitialized ? (
               <SchedulesEntitlementLoading />
             ) : (

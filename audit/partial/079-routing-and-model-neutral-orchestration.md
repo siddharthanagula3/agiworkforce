@@ -151,17 +151,13 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 
 - Done when: One prompt can be sent to several models and the answers compared.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /models page compares model specs side by side, but there is no way to send one prompt to several models and compare the answers. | ui |
-| desktop | partial | The /models page compares model specs side by side, but there is no way to send one prompt to several models and compare the answers. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/models/components/ModelCatalogueBrowser.tsx:305-309`
 
 ## S79.26: User-visible routing explanation.
 

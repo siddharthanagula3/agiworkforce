@@ -22,14 +22,13 @@ Code: `apps/cli/src/tui/tui_app.rs:1460-1463`, `apps/cli/src/tui/tui_app.rs:1448
 
 - Done when: Message text is constrained to a readable column width that stays centred when the window is wide.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Messages fill the webview width; in the wide "Open Chat in Editor" tab lines run the full editor width. Cap the message column and centre it. | ui |
 | chrome | partial | b21db27be: messages in a centred 768px column; composer still full panel width | composer width |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:482-484`, `apps/extension-vscode/src/providers/chatEditorPanel.ts:48-50`, `apps/extension/src/side_panel.ts:1237-1237`, `apps/extension/src/side_panel.ts:4138-4138`
+Code: `apps/extension/src/side_panel.ts:1237-1237`, `apps/extension/src/side_panel.ts:4138-4138`
 
 ## S7.03: Full-width data-analysis layout.
 
@@ -40,9 +39,8 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:482-
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts, including tables, open in a full-screen modal on the phone, but there is no wide data layout for tablets or for tables inside answers. | ui |
-| vscode | partial | Tabular artifacts open as plain text in a full-width editor tab; there is no table or chart view. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:100-102`, `apps/extension-vscode/src/core/commandSetup.ts:2285-2285`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
 
 ## S7.04: Conversation plus artifact split view.
 

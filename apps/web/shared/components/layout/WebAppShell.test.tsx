@@ -385,16 +385,18 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
   getWorstUsagePercent: (usage: { percent: number } | null) => usage?.percent ?? 0,
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
-  AGI_WORK_MODE: 'agiwork',
-  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      updateConversation: vi.fn(),
-      loadingConversationIds: [],
-      streamingConversationIds: [],
-      workModeByConversation: {},
-    }),
-}));
+vi.mock('@shared/stores/web-chat-store', () => {
+  const state = {
+    updateConversation: vi.fn(),
+    loadingConversationIds: [],
+    streamingConversationIds: [],
+    workModeByConversation: {},
+  };
+  return {
+    AGI_WORK_MODE: 'agiwork',
+    useChatStore: (selector: (value: typeof state) => unknown) => selector(state),
+  };
+});
 
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: () => ({

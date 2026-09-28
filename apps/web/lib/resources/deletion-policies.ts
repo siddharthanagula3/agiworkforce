@@ -35,6 +35,13 @@ export interface DerivedIndexRelation {
   readonly column: string;
 }
 
+export interface DerivedRecordRelation {
+  readonly table: string;
+  readonly ownerColumn: string;
+  readonly columns: readonly string[];
+  readonly basis: string;
+}
+
 export interface ResourceDeletionPolicy {
   /** Canonical resource name, the same word every surface uses. */
   readonly resource: string;
@@ -54,6 +61,7 @@ export interface ResourceDeletionPolicy {
    * asserts against the migration rather than trusting this list.
    */
   readonly derivedIndexes: readonly DerivedIndexRelation[];
+  readonly derivedRecords: readonly DerivedRecordRelation[];
   readonly externalObjects: ExternalObjectReference | null;
   /** Records deliberately kept after the resource is purged. */
   readonly retainedAfterPurge: readonly string[];
@@ -100,6 +108,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [{ table: RETRIEVAL_DOCUMENTS, column: 'conversation_id' }],
+    derivedRecords: [],
     externalObjects: null,
     retainedAfterPurge: ['security_audit_logs', 'provider_cost_events'],
     basis:
@@ -124,6 +133,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [],
+    derivedRecords: [],
     externalObjects: null,
     retainedAfterPurge: ['provider_cost_events'],
     basis:
@@ -147,6 +157,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [{ table: RETRIEVAL_DOCUMENTS, column: 'artifact_id' }],
+    derivedRecords: [],
     externalObjects: null,
     retainedAfterPurge: [],
     basis:
@@ -176,6 +187,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [],
+    derivedRecords: [],
     externalObjects: null,
     retainedAfterPurge: ['security_audit_logs'],
     basis:
@@ -200,6 +212,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [{ table: RETRIEVAL_DOCUMENTS, column: 'project_knowledge_file_id' }],
+    derivedRecords: [],
     externalObjects: { column: 'storage_uri', sweep: null },
     retainedAfterPurge: [],
     basis:
@@ -229,6 +242,15 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
       },
     ],
     derivedIndexes: [{ table: RETRIEVAL_DOCUMENTS, column: 'media_asset_id' }],
+    derivedRecords: [
+      {
+        table: 'file_lineage',
+        ownerColumn: 'user_id',
+        columns: ['child_file_id', 'parent_file_id'],
+        basis:
+          'A lineage edge names its files by text id so one edge can span surfaces, so no foreign key removes it; the purge deletes every edge that names the purged file on either side.',
+      },
+    ],
     externalObjects: { column: 'storage_pathname', sweep: 'cron/purge-deleted-media' },
     retainedAfterPurge: ['provider_cost_events'],
     basis:
@@ -302,6 +324,33 @@ export function resourcePurgeStatement(
       ...(holdExclusion?.params ?? []),
     ],
   };
+}
+
+export function derivedRecordPurgeStatements(
+  policy: ResourceDeletionPolicy,
+  purged: ReadonlyArray<{ readonly owner: string; readonly key: string }>,
+): readonly ResourcePurgeStatement[] {
+  if (purged.length === 0) return [];
+  const owners = purged.map((row) => row.owner);
+  const keys = purged.map((row) => row.key);
+  return policy.derivedRecords.map((record) => {
+    const table = assertIdentifier(record.table, 'derived record table');
+    const owner = assertIdentifier(record.ownerColumn, 'derived record owner column');
+    const matches = record.columns
+      .map(
+        (column) =>
+          `derived.${assertIdentifier(column, 'derived record column')} = purged.purge_key`,
+      )
+      .join(' or ');
+    return {
+      sql: `delete from public.${table} as derived
+    using unnest($1::text[], $2::text[]) as purged(owner_id, purge_key)
+    where derived.${owner} = purged.owner_id
+      and (${matches})
+   returning derived.${owner} as owner_id`,
+      params: [owners, keys],
+    };
+  });
 }
 
 /**

@@ -6,7 +6,7 @@ export interface ResponsesInputTextContent {
 export interface ResponsesInputImageContent {
   type: 'input_image';
   image_url: string;
-  detail?: 'auto' | 'low' | 'high';
+  detail?: 'auto' | 'low' | 'high' | 'original';
 }
 
 export interface ResponsesInputFileContent {
@@ -16,9 +16,7 @@ export interface ResponsesInputFileContent {
 }
 
 export type ResponsesInputContent =
-  | ResponsesInputTextContent
-  | ResponsesInputImageContent
-  | ResponsesInputFileContent;
+  ResponsesInputTextContent | ResponsesInputImageContent | ResponsesInputFileContent;
 
 export interface ResponsesInputMessage {
   type?: 'message';
@@ -40,9 +38,7 @@ export interface ResponsesFunctionCallOutputItem {
 }
 
 export type ResponsesInputItem =
-  | ResponsesInputMessage
-  | ResponsesFunctionCallItem
-  | ResponsesFunctionCallOutputItem;
+  ResponsesInputMessage | ResponsesFunctionCallItem | ResponsesFunctionCallOutputItem;
 
 export interface ResponsesFunctionTool {
   type: 'function';
@@ -62,11 +58,7 @@ export type ResponsesTool = ResponsesFunctionTool | ResponsesNativeTool;
 export type ResponsesHostedToolChoice = { type: string };
 
 export type ResponsesToolChoice =
-  | 'auto'
-  | 'none'
-  | 'required'
-  | { type: 'function'; name: string }
-  | ResponsesHostedToolChoice;
+  'auto' | 'none' | 'required' | { type: 'function'; name: string } | ResponsesHostedToolChoice;
 
 export interface ResponsesReasoningConfig {
   effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -92,6 +84,11 @@ export interface ResponsesCreateParams {
   metadata?: Record<string, string>;
   include?: Array<'web_search_call.action.sources'>;
   prompt_cache_key?: string;
+  text?: {
+    format:
+      | { type: 'json_object' }
+      | { type: 'json_schema'; name: string; schema: Record<string, unknown>; strict: boolean };
+  };
 }
 
 interface BaseEvent {

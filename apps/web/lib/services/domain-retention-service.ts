@@ -9,6 +9,7 @@ import {
   type RetentionDomain,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
@@ -182,6 +183,7 @@ function objectBackedSweeper(options: {
   candidatesSql: string;
   deleteSql: string;
   deleteObjects: DomainObjectDeleter;
+  derivedFrom?: string;
 }): DomainSweeper {
   return {
     countHeld: (db, context) =>
@@ -207,11 +209,20 @@ function objectBackedSweeper(options: {
       const removed =
         removable.length === 0
           ? []
-          : await db.query<{ id: string }>(options.deleteSql, [
+          : await db.query<{ id: string; user_id?: string }>(options.deleteSql, [
               removable,
               context.organizationId,
               context.resourceType,
             ]);
+      if (options.derivedFrom) {
+        await purgeDerivedRecords(
+          db,
+          options.derivedFrom,
+          removed.flatMap((row) =>
+            row.user_id ? [{ owner: row.user_id, key: String(row.id) }] : [],
+          ),
+        );
+      }
       return {
         recordsDeleted: removed.length,
         objectsDeleted: deleted,
@@ -371,8 +382,9 @@ export function createDomainSweepers(
       deleteSql: `delete from public.media_assets target
                    where target.id = any($1::uuid[])
                      and ${notHeldById('target')}
-                   returning target.id`,
+                   returning target.id, target.user_id`,
       deleteObjects: media,
+      derivedFrom: 'media_assets',
     }),
     artifacts: artifactsSweeper(),
     connector_data: rowsOnlySweeper({

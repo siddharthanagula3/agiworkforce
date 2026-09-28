@@ -239,18 +239,6 @@ Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S8.42: Avatars.
-
-- Done when: Message authors are distinguished visually and for assistive technology (R-n: avatar or equivalent marker plus an accessible label).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | User and assistant messages differ by CSS class and background only; there is no avatar or accessible author label. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:491-495`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3446-3449`
-
 ## S8.44: Skeleton loaders.
 
 - Done when: Skeleton placeholders stand in for content while it loads.
