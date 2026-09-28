@@ -82,6 +82,16 @@ export const MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH = 200;
 export const MAX_CLOUD_AGENT_RUN_STEER_LENGTH = 4_000;
 export const MAX_CLOUD_AGENT_PENDING_STEERS = 10;
 
+const STEER_PROGRESS_ID_PREFIX = 'steer:';
+
+export function cloudAgentRunSteerProgressId(steerId: string): string {
+  return `${STEER_PROGRESS_ID_PREFIX}${steerId}`;
+}
+
+export function isCloudAgentRunSteerProgressId(progressId: string): boolean {
+  return progressId.startsWith(STEER_PROGRESS_ID_PREFIX);
+}
+
 export const CloudAgentRunSteerSchema = z.object({
   id: z.string().uuid(),
   text: z.string().min(1).max(MAX_CLOUD_AGENT_RUN_STEER_LENGTH),
