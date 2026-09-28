@@ -805,6 +805,11 @@ enum Command {
         #[command(subcommand)]
         action: Option<HooksSubcommand>,
     },
+    /// List daemon triggers (~/.agiworkforce/triggers.json) or narrow which events start one.
+    Triggers {
+        #[command(subcommand)]
+        action: Option<TriggersSubcommand>,
+    },
     /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
     ///
     /// The handler speaks the protocol and answers initialize/tools/list, but
@@ -1437,6 +1442,30 @@ enum McpSubcommand {
     Remove {
         /// Registry name of the server to remove.
         name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TriggersSubcommand {
+    /// Show every trigger and its filter.
+    List,
+    /// Narrow which events start a trigger.
+    Filter {
+        /// Trigger id from `agi triggers list`.
+        id: String,
+        /// Event that may start it: a webhook's X-GitHub-Event, X-GitLab-Event or
+        /// X-Event-Type value, or create, modify or remove for a file watcher. Repeatable.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// Webhook payload condition as /json/pointer=value, e.g. /sender/login=octocat. Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+        /// Ignore repeats for this many seconds after a run starts (0 turns it off).
+        #[arg(long)]
+        quiet_for: Option<u64>,
+        /// Remove the existing filter before applying these options.
+        #[arg(long)]
+        clear: bool,
     },
 }
 
@@ -3759,6 +3788,20 @@ pub async fn run_main() -> Result<()> {
                 Ok(())
             }
             Command::Hooks { action } => run_hooks_command(action.as_ref()),
+            Command::Triggers { action } => {
+                let text = match action {
+                    None | Some(TriggersSubcommand::List) => daemon::list_triggers()?,
+                    Some(TriggersSubcommand::Filter {
+                        id,
+                        events,
+                        conditions,
+                        quiet_for,
+                        clear,
+                    }) => daemon::set_trigger_filter(id, events, conditions, *quiet_for, *clear)?,
+                };
+                println!("{text}");
+                Ok(())
+            }
             Command::Mcp { action } => run_mcp_registry_command(action).await,
             Command::McpServer => app_server::run_mcp_server().await,
             Command::Completion { shell } => {
