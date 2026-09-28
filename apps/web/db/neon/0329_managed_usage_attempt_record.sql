@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0325: every managed generation attempt records how it ended
+-- Migration 0329: every managed generation attempt records how it ended
 --
 -- Why    : each managed turn, a plain chat turn included, already reserves one
 --          managed_usage_requests row under its request id, with the provider
@@ -38,7 +38,7 @@ create index if not exists idx_managed_usage_requests_conversation
 comment on column public.managed_usage_requests.conversation_id is
   'The conversation this generation attempt answered, set when the request is reserved for a conversation the caller owns. Cleared when the conversation is deleted.';
 comment on column public.managed_usage_requests.attempt_outcome is
-  'How the generation attempt ended: completed, failed or cancelled. Written once by the first finalization; null for attempts that predate 0325 or never finalized.';
+  'How the generation attempt ended: completed, failed or cancelled. Written once by the first finalization; null for attempts that predate 0329 or never finalized.';
 comment on column public.managed_usage_requests.attempt_error_class is
   'The provider failure category of a failed attempt, such as rate_limit or api_timeout. Null when the attempt did not fail or its failure carried no category.';
 
