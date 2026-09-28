@@ -264,3 +264,40 @@ export async function findInstalledDirectorySkill(
   const skills = await listInstalledDirectorySkills(db, userId, fetchImpl);
   return skills.find((skill) => skill.name === name) ?? null;
 }
+
+export type InstalledPluginMatch = { entryId: string } | { pluginKey: string };
+
+function matchesInstalledPlugin(row: InstalledEntryRow, match: InstalledPluginMatch): boolean {
+  return 'entryId' in match ? row.entry_id === match.entryId : row.plugin_key === match.pluginKey;
+}
+
+export async function listInstalledPluginSkillsWithFiles(
+  db: DatabaseAdapter,
+  userId: string,
+  match: InstalledPluginMatch,
+  fetchImpl?: DirectoryFetch,
+): Promise<SkillWithFileAccess[]> {
+  const row = (await listInstalledEntries(db, userId)).find((candidate) =>
+    matchesInstalledPlugin(candidate, match),
+  );
+  if (!row) return [];
+  const repositoryUrl = row.repository_url;
+  if (repositoryUrl === null) {
+    const stored = await listOwnedEntryFiles(db, userId, [row.entry_id]);
+    return storedDirectorySkills(row, stored.get(row.entry_id) ?? []).map((skill) => ({
+      skill: toSkill(row.plugin_key, skill),
+      access: ownedSkillFileAccess(db, userId, row.entry_id, skill.path),
+    }));
+  }
+  const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl);
+  if (!planned) return [];
+  return planned.skills.map((skill) => ({
+    skill: toSkill(row.plugin_key, skill),
+    access: repositorySkillFileAccess(
+      planned.plan.location,
+      planned.plan.revision,
+      skill.path,
+      fetchImpl,
+    ),
+  }));
+}
