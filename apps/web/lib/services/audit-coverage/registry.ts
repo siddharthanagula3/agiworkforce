@@ -108,6 +108,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'telemetry/client/route.ts', reason: 'no_governed_state' },
   { route: 'terms/accept/route.ts', reason: 'dedicated_record' },
   { route: 'upgrade/preview/route.ts', reason: 'no_governed_state' },
+  { route: 'uploads/chat-attachment/complete/route.ts', reason: 'own_content' },
   { route: 'uploads/chat-attachment/put/route.ts', reason: 'own_content' },
   { route: 'uploads/knowledge-file/put/route.ts', reason: 'own_content' },
   { route: 'uploads/local-project-knowledge/route.ts', reason: 'own_content' },
