@@ -404,10 +404,10 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   release_events:
     'Hash-chained release audit trail. actor names the operator or workflow behind a promotion, not a customer, and deleting a row breaks the chain.',
   account_security_settings: 'Cascades from profiles.',
-  account_security_enrollments: 'Cascades from profiles (0334).',
-  account_security_credentials: 'Cascades from profiles (0334).',
-  account_security_sessions: 'Cascades from profiles (0334).',
-  account_security_challenges: 'Cascades from profiles (0334).',
+  account_security_enrollments: 'Cascades from profiles.',
+  account_security_credentials: 'Cascades from profiles.',
+  account_security_sessions: 'Cascades from profiles.',
+  account_security_challenges: 'Cascades from profiles.',
   support_ticket_escalations: 'Cascades from support_tickets.',
 };
 

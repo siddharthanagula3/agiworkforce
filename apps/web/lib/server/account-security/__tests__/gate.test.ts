@@ -3,11 +3,15 @@ import { NextRequest } from 'next/server';
 
 const ACCOUNT = 'user_advanced_security';
 const SESSION = 'sess_signed_in_with_password';
+const DESKTOP_SESSION = 'sess_redeemed_in_the_desktop_window';
+const CHALLENGE = 'c'.repeat(43);
 
 const state = vi.hoisted(() => ({
+  sessionId: 'sess_signed_in_with_password',
   enrolledAt: null as Date | null,
   verifiedSessions: new Set<string>(),
   noteSessionSighting: vi.fn(),
+  createDesktopSignInGrant: vi.fn(async () => 'desktop-grant-code'),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -22,8 +26,14 @@ vi.mock('@/lib/security-audit', () => ({
   logAuthFailure: vi.fn(async () => undefined),
   recordAuditEvent: vi.fn(async () => undefined),
 }));
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/server/session-sightings', () => ({
   noteSessionSighting: (...args: unknown[]) => state.noteSessionSighting(...args),
+}));
+vi.mock('@/lib/server/desktop-sign-in', () => ({
+  isDesktopSignInChallenge: (value: unknown) => typeof value === 'string' && value.length === 43,
+  createDesktopSignInGrant: (...args: unknown[]) => state.createDesktopSignInGrant(...args),
 }));
 vi.mock('@/lib/server/identity', () => {
   const provider = {
@@ -45,7 +55,7 @@ vi.mock('@/lib/server/identity', () => {
     getIdentityProvider: () => provider,
     getRequestIdentity: async () => ({
       subject: 'user_advanced_security',
-      sessionId: 'sess_signed_in_with_password',
+      sessionId: state.sessionId,
       organizationId: null,
       organizationRole: null,
       isSignedIn: true,
@@ -87,6 +97,7 @@ vi.mock('@/lib/server/neon-db', () => {
   return { getNeonDb: () => db };
 });
 
+import { POST as grantDesktopSignIn } from '@/app/api/auth/desktop/grant/route';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isPasskeyRequiredError } from '../gate';
 
@@ -94,11 +105,28 @@ function browserRequest(): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/chat/conversations');
 }
 
+function desktopGrantRequest(): NextRequest {
+  return new NextRequest('https://agiworkforce.com/api/auth/desktop/grant', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ challenge: CHALLENGE }),
+  });
+}
+
+async function refusalOf(work: Promise<unknown>): Promise<unknown> {
+  return work.then(
+    () => null,
+    (error: unknown) => error,
+  );
+}
+
 describe('the Advanced Account Security gate on a signed-in session', () => {
   beforeEach(() => {
+    state.sessionId = SESSION;
     state.enrolledAt = null;
     state.verifiedSessions.clear();
     state.noteSessionSighting.mockReset();
+    state.createDesktopSignInGrant.mockClear();
   });
 
   it('lets a session through when the account has not enrolled', async () => {
@@ -108,10 +136,7 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
   it('refuses every request from an enrolled account until that session passes a passkey check', async () => {
     state.enrolledAt = new Date(Date.now() - 60 * 1000);
 
-    const refusal = await getClerkAuthUser(browserRequest()).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    const refusal = await refusalOf(getClerkAuthUser(browserRequest()));
 
     expect(isPasskeyRequiredError(refusal)).toBe(true);
     expect(refusal).toMatchObject({
@@ -127,5 +152,30 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
     state.verifiedSessions.add(SESSION);
 
     await expect(getClerkAuthUser(browserRequest())).resolves.toMatchObject({ userId: ACCOUNT });
+  });
+
+  it('refuses a desktop sign-in grant from an enrolled browser session that has not passed the check', async () => {
+    state.enrolledAt = new Date(Date.now() - 60 * 1000);
+
+    const response = await grantDesktopSignIn(desktopGrantRequest());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'PASSKEY_REQUIRED', details: { reason: 'passkey_required' } },
+    });
+    expect(state.createDesktopSignInGrant).not.toHaveBeenCalled();
+  });
+
+  it('grants the desktop sign-in once the browser session passed, and gates the session it starts', async () => {
+    state.enrolledAt = new Date(Date.now() - 60 * 1000);
+    state.verifiedSessions.add(SESSION);
+
+    const response = await grantDesktopSignIn(desktopGrantRequest());
+    expect(response.status).toBe(200);
+    expect(state.createDesktopSignInGrant).toHaveBeenCalledWith(ACCOUNT, CHALLENGE);
+
+    state.sessionId = DESKTOP_SESSION;
+    const refusal = await refusalOf(getClerkAuthUser(browserRequest()));
+    expect(isPasskeyRequiredError(refusal)).toBe(true);
   });
 });
