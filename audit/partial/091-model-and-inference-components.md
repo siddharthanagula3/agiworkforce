@@ -13,9 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | json_object is enforced with a system directive and output extraction for every provider; json_schema is refused rather than translated to native structured output. | handler |
+| platform | partial | partials/chat-gates 74e515dab, anchored after merge 05a3bc8a0: json_object and json_schema now reach OpenAI (response_format on chat completions, text.format on responses) and Gemini (responseMimeType plus responseJsonSchema on tool-less turns) as native structured output when the registry marks the dispatched model structuredOutput. Anthropic and the OpenAI-compatible providers still get the enforced directive plus validation; queued as S91.13 in this lane's batch 5. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:392-396`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/json-schema-mode.ts:58-58`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:5090-5090`, `apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts:140-140`, `packages/ai/providers/openai/src/translate.ts:298-298`
 
 ## S91.23: Exact-selection enforcement.
 
