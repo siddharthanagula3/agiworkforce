@@ -106,6 +106,7 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import { replaceComposerText } from './features/side-panel/composerText';
 import {
   dictationLanguageChoices,
   readDictationLanguage,
@@ -5943,11 +5944,10 @@ function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
 function restoreTurnToComposer(userMsg: ChatMessage): void {
   const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   if (!input) return;
-  input.value = userMsg.content;
+  replaceComposerText(input, userMsg.content);
   autoResizeInput(input);
   composerContextNotice = t('spRetryNeedsAttachments');
   updateAttachmentPreview();
-  input.focus();
 }
 
 function canReplayTurn(): boolean {
@@ -11217,9 +11217,8 @@ function buildUI(): void {
   function acceptSlash(index: number): void {
     const picked = slashMatches[index];
     if (!picked) return;
-    inputEl.value = `${picked[0]} `;
+    replaceComposerText(inputEl, `${picked[0]} `);
     closeSlashMenu();
-    inputEl.focus();
     autoResizeInput(inputEl);
     updateSendButton();
   }
@@ -12556,7 +12555,10 @@ function checkPendingChat(): void {
     if (!canAdmitComposerMessage(admissionProbe)) {
       const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
       if (input && !input.value.trim()) {
-        input.value = pending.type === 'summarize' ? '/summarize' : pendingChatPrompt(pending);
+        replaceComposerText(
+          input,
+          pending.type === 'summarize' ? '/summarize' : pendingChatPrompt(pending),
+        );
         autoResizeInput(input);
         updateSendButton();
         chrome.storage.session.remove('agi_pending_chat').catch(() => {});
