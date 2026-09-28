@@ -27,6 +27,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Data Processing Addendum',
@@ -469,7 +470,8 @@ export default function DpaPage() {
                 AGI processes nothing, and it does not make AGI a processor of your prompt content
                 under BYOK, where you contract the model provider directly.
               </strong>{' '}
-              Last updated: {POLICY_LAST_UPDATED.dpa}. Managed Cloud is in public alpha.
+              Last updated: {POLICY_LAST_UPDATED.dpa}. Managed Cloud is in public alpha.{' '}
+              <PolicyVersionsLink policy="dpa" />
             </>
           }
           ctas={[]}

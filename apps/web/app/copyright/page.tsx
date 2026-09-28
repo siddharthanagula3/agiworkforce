@@ -19,6 +19,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Copyright and IP complaints',
@@ -103,7 +104,8 @@ export default function CopyrightPage() {
               <Link href="/acceptable-use" className="agi-ds-link">
                 acceptable use policy
               </Link>
-              . Last updated: {POLICY_LAST_UPDATED.copyright}.
+              . Last updated: {POLICY_LAST_UPDATED.copyright}.{' '}
+              <PolicyVersionsLink policy="copyright" />
             </>
           }
           ctas={[{ href: '/copyright/report', label: 'Send a notice' }]}
