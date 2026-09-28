@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/server/side-call-training-policy', () => ({
+  sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
+}));
+
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', () => ({

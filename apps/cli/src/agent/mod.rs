@@ -496,6 +496,15 @@ impl AgentSession {
         if provider_privacy_mode(&provider) != PrivacyMode::Managed {
             return;
         }
+        if linked_cloud_project().is_some() {
+            if let Err(error) = crate::cloud::refresh_projects(PrivacyMode::Managed).await {
+                if !error.is_boundary() {
+                    crate::output::print_warn(&format!(
+                        "using the project instructions this device already had: {error}"
+                    ));
+                }
+            }
+        }
         match crate::cloud::refresh_memory(PrivacyMode::Managed).await {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
@@ -590,11 +599,27 @@ impl AgentSession {
             .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
             .unwrap_or_default();
 
-        let combined_memory = [memory_context, persistent_memory, account_memory]
-            .into_iter()
-            .filter(|block| !block.trim().is_empty())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let project_instructions = crate::config::CliConfig::config_dir()
+            .ok()
+            .map(|home| {
+                crate::cloud::project_instructions_context(
+                    privacy_mode,
+                    &home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
+            .unwrap_or_default();
+
+        let combined_memory = [
+            memory_context,
+            persistent_memory,
+            account_memory,
+            project_instructions,
+        ]
+        .into_iter()
+        .filter(|block| !block.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
 
         let system_message = Message::text(
             "system",

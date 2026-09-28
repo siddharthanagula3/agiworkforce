@@ -220,6 +220,39 @@ const threadReadResponseSchema = z.object({
     )
     .max(10_000),
   transcriptTruncated: z.boolean(),
+  approvals: z
+    .array(
+      z.object({
+        requestId: z.string(),
+        kind: z.string(),
+        summary: z.string(),
+        outcome: z.enum([
+          'allow_once',
+          'allow_session',
+          'always_allow',
+          'deny',
+          'cancel',
+          'timeout',
+        ]),
+        requestedAt: z.string(),
+        decidedAt: z.string(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+  fileChanges: z
+    .array(
+      z.object({
+        path: z.string(),
+        kind: z.enum(['created', 'modified']),
+        tool: z.string(),
+        toolCallId: z.string(),
+        changedAt: z.string(),
+        reason: z.string().optional(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
 });
 const hostModelSummarySchema = z.object({
   id: z.string().min(1),

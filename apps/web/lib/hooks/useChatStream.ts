@@ -190,6 +190,7 @@ import {
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
+import type { RoutingProfileChoice } from '@agiworkforce/types';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
 
 interface SendMessageOptions {
@@ -219,6 +220,7 @@ interface SendMessageOptions {
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
   memoryCommand?: MemoryCommandReport;
+  routingProfile?: RoutingProfileChoice;
   research?: boolean;
   /** §24: what this research run may read, chosen on the plan card. */
   researchSources?: {
@@ -3751,6 +3753,10 @@ export function useChatStream(): UseChatStreamReturn {
                   ? false
                   : undefined,
               memory_command: options.memoryCommand,
+              routing_profile:
+                options.routingProfile && options.routingProfile !== 'auto'
+                  ? options.routingProfile
+                  : undefined,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),

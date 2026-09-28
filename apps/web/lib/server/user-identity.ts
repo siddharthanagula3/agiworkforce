@@ -225,6 +225,7 @@ const FULL_ACCOUNT_PERSONALIZATION: AccountPersonalizationScope = {
 
 export async function readProjectPersonalizationScope(
   db: DatabaseAdapter,
+  userId: string,
   projectId: string | null | undefined,
 ): Promise<AccountPersonalizationScope> {
   if (!projectId) return FULL_ACCOUNT_PERSONALIZATION;
@@ -232,9 +233,26 @@ export async function readProjectPersonalizationScope(
     `select (to_jsonb(p)->>'uses_account_instructions')::boolean as instructions,
             (to_jsonb(p)->>'uses_account_style')::boolean as response_style
        from public.user_projects p
-      where p.id = $1::uuid and p.deleted_at is null
+      where p.id = $1::uuid
+        and p.deleted_at is null
+        and (
+          p.user_id = $2
+          or exists (
+            select 1
+              from public.organization_shared_projects s
+              join public.organization_members m
+                on m.organization_id = s.organization_id
+              left join public.organization_project_access a
+                on a.organization_id = s.organization_id
+               and a.project_id = s.project_id
+               and a.user_id = $2
+             where s.project_id = p.id
+               and m.user_id = $2
+               and coalesce(a.access, s.default_access) <> 'none'
+          )
+        )
       limit 1`,
-    [projectId],
+    [projectId, userId],
   );
   return {
     instructions: row?.instructions !== false,
@@ -255,7 +273,7 @@ export async function buildCustomInstructionsPreamble(
   const [namespace, personalization, scope] = await Promise.all([
     readIdentityNamespace(db, userId),
     readSettingsNamespace(db, userId, PERSONALIZATION_SETTINGS_NAMESPACE),
-    readProjectPersonalizationScope(db, options.projectId),
+    readProjectPersonalizationScope(db, userId, options.projectId),
   ]);
   if (!scope.instructions && !scope.responseStyle) return null;
   if (!scope.instructions) {

@@ -24,10 +24,10 @@ export function PairBody() {
           </h1>
         </div>
         <Prose>
-          Open AGI Desktop, go to Mobile companion, and generate a pairing code. Scan the QR code
-          with the AGI app on your phone, or choose Enter code manually and type the code in.
-          Pairing links your desktop to the app on your phone, so it cannot be completed in a
-          browser.
+          Open AGI Desktop, go to Settings, Capabilities, Remote Control, and choose Pair a phone.
+          Scan the QR code with the AGI app on your phone, or choose Enter code manually and type
+          the code in. Pairing links your desktop to the app on your phone, so it cannot be
+          completed in a browser.
         </Prose>
         <ButtonRow>
           <Button href="/download" variant="secondary">

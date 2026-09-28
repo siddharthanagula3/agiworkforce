@@ -10,15 +10,14 @@ nothing is left.
 
 - Done when: A notebook has a title and description the user can set and later edit.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI sets a name and --description only at creation; there is no rename or description-edit command. | ui |
 | vscode | partial | VS Code asks only for a name at creation; the description and renaming are edited on the web. | ui |
 | chrome | partial | The side panel names a project at creation only; it cannot rename it or set or edit a description. | ui |
 
-Code: `apps/cli/src/lib.rs:983-993`, `apps/extension-vscode/src/features/projects/projectActions.ts:235-235`, `apps/extension-vscode/src/features/projects/projectActions.ts:116-116`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:235-235`, `apps/extension-vscode/src/features/projects/projectActions.ts:116-116`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
 
 ## S37.04: Source rail.
 
@@ -91,15 +90,14 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: The notebook has instructions that apply to every chat in it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A directory linked to an account project (agi projects link) never receives that project's own instructions; only local AGENTS.md/CLAUDE.md files apply. | handler |
 | vscode | partial | Instructions can be typed at creation and are prepended to VS Code turns while the project is in use, but cannot be edited in VS Code afterwards. | ui |
 | chrome | partial | Chrome sets instructions only while creating a project and cannot edit them later. | ui |
 
-Code: `apps/cli/src/agent/prompt.rs:503-503`, `apps/cli/src/cloud/projects.rs:138-138`, `apps/extension-vscode/src/features/projects/projectActions.ts:252-252`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:252-252`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/extension/src/side_panel.ts:6421-6421`
 
 ## S37.16: Saved chat responses.
 
@@ -305,12 +303,11 @@ Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `
 
 - Done when: A notebook and its sources and notes are available in every app the user signs into.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI lists and creates account projects but shows none of their sources, notes or chats. | ui |
 | vscode | partial | VS Code shows projects and their knowledge files read-only; nothing else from the notebook. | ui |
 | chrome | partial | The Chrome side panel lists projects and recent chat titles, but not their sources or notes. | ui |
 
-Code: `apps/cli/src/lib.rs:1831-1831`, `apps/cli/src/cloud/mod.rs:202-202`, `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`
+Code: `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-48`, `apps/extension/src/features/side-panel/projectsDrawer.ts:489-489`
