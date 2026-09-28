@@ -1,13 +1,17 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { billingPlanCapabilityPlanLabels, canUseBillingPlanCapability } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityPlanLabels,
+  canUseBillingPlanCapability,
+  productLinkPath,
+} from '@agiworkforce/types';
 
-import { MEMBERSHIP_STATUSES_THAT_MAY_ACT } from '@/lib/server/workspace-scope';
+import { listWorkspaceMemberships } from '@/lib/services/active-workspace-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 
 import { isSlackAppConfigured } from './slack-config';
-import type { SlackOverview } from './slack-contract';
+import type { SlackLinkWorkspace, SlackOverview } from './slack-contract';
 import { listSlackWorkspacesInstalledBy } from './slack-installations';
 import { listSlackAccountLinks } from './slack-links';
 import { listPendingSlackApprovals } from './slack-runs';
@@ -27,23 +31,23 @@ export async function slackPlanAllowed(
   return canUseBillingPlanCapability(entitlement.plan, 'slack_app');
 }
 
-export async function readWorkspaceName(
+export const PERSONAL_WORKSPACE_NAME = 'Personal';
+
+export async function listSlackLinkWorkspaces(
   db: DatabaseAdapter,
   userId: string,
-  organizationId: string | null,
-): Promise<string | null> {
-  if (!organizationId) return null;
-  const [row] = await db.query<{ name: string }>(
-    `select organization.name
-       from organizations as organization
-       join organization_members as member on member.organization_id = organization.id
-      where organization.id = $1
-        and member.user_id = $2
-        and member.status = any($3::text[])
-      limit 1`,
-    [organizationId, userId, MEMBERSHIP_STATUSES_THAT_MAY_ACT],
+): Promise<SlackLinkWorkspace[]> {
+  const memberships = await listWorkspaceMemberships(db, userId);
+  const workspaces = [
+    { id: null, name: PERSONAL_WORKSPACE_NAME },
+    ...memberships.map((membership) => ({ id: membership.id, name: membership.name })),
+  ];
+  return Promise.all(
+    workspaces.map(async (workspace) => ({
+      ...workspace,
+      planAllowed: await slackPlanAllowed(db, userId, workspace.id),
+    })),
   );
-  return row?.name ?? null;
 }
 
 export async function loadSlackOverview(
@@ -73,6 +77,7 @@ export async function loadSlackOverview(
       runId: approval.runId,
       teamName: approval.teamName,
       surface: approval.surface,
+      taskPath: approval.agentRunId ? productLinkPath('work', approval.agentRunId) : null,
       requestedAt: approval.requestedAt,
       expiresAt: approval.expiresAt,
       toolCalls: approval.toolCalls,

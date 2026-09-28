@@ -154,13 +154,24 @@ function ApprovalItem({
     <li style={{ ...rowStyle, alignItems: 'flex-start' }}>
       <div style={{ minWidth: 0, flex: '1 1 20rem' }}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-1)' }}>
-          {approval.surface === 'channel' ? 'A channel mention' : 'A direct message'} in{' '}
-          {approval.teamName}
+          {approval.taskPath
+            ? 'A task from a channel mention'
+            : approval.surface === 'channel'
+              ? 'A channel mention'
+              : 'A direct message'}{' '}
+          in {approval.teamName}
         </p>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
           Asked {formatDateTime(approval.requestedAt)} · Expires{' '}
           {formatDateTime(approval.expiresAt)}
         </p>
+        {approval.taskPath ? (
+          <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12 }}>
+            <a href={approval.taskPath} style={{ color: 'var(--text-1)' }}>
+              View task
+            </a>
+          </p>
+        ) : null}
         <ul style={{ margin: 'var(--space-2) 0 0', padding: 0, listStyle: 'none' }}>
           {approval.toolCalls.map((call) => (
             <li key={call.id} style={{ marginTop: 'var(--space-2)' }}>
@@ -435,7 +446,7 @@ export function SlackSection() {
                         confirm({
                           title: `Disconnect your Slack account in ${link.teamName}?`,
                           description:
-                            'AGI Workforce stops answering this Slack account, and any answer waiting for your approval from it is dropped. Answers already posted stay in Slack. You can link it again by messaging the app.',
+                            'AGI Workforce stops answering this Slack account, and the record of its Slack answers is deleted, including any answer still waiting for your approval. Answers already posted stay in Slack, and tasks it started stay in your tasks. You can link it again by messaging the app.',
                           confirmLabel: 'Disconnect',
                           destructive: true,
                           onConfirm: () => unlink(link.id, link.teamName),

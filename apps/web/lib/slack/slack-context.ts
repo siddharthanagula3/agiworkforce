@@ -13,7 +13,7 @@ import {
 import { SLACK_CONTEXT_LIMITS } from './slack-config';
 import type { SlackAssistantSurface } from './slack-events';
 
-const READABLE_SUBTYPES = new Set(['thread_broadcast', 'file_share', 'me_message']);
+const READABLE_SUBTYPES = new Set(['thread_broadcast', 'file_share', 'me_message', 'bot_message']);
 const USER_MENTION_RE = /<@([UW][A-Z0-9]+)(?:\|[^>]*)?>/g;
 
 export interface SlackTurnRequest {
@@ -21,6 +21,7 @@ export interface SlackTurnRequest {
   channelId: string;
   requesterId: string;
   botUserId: string;
+  appId: string;
   text: string;
   ts: string;
   threadTs: string | null;
@@ -82,8 +83,8 @@ function speakerOf(
   message: SlackMessage,
   request: SlackTurnRequest,
 ): ContextMessage['speaker'] | null {
-  if (message.user === request.botUserId) return 'assistant';
-  if (message.bot_id) return null;
+  if (message.user === request.botUserId || message.app_id === request.appId) return 'assistant';
+  if (message.bot_id || message.subtype === 'bot_message') return null;
   if (message.user === request.requesterId) return 'requester';
   return message.user ? 'other' : null;
 }
