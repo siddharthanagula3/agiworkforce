@@ -151,11 +151,11 @@ Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | needs recorded samples of each live voice (owner asset); the live API has no preview endpoint | ui |
+| web | partial | owner supplies samples: Play sample loads <NEXT_PUBLIC_LIVE_VOICE_SAMPLE_BASE_URL>/<voice>.mp3 and hides when missing (2fe34c28e) | ui |
 | desktop | partial | Same as web: no live-voice sample. | ui |
 | mobile | partial | Settings previews on-device voices, which the companion uses, but live voice ignores the chosen voice (starts with voice null). | handler |
 
-Code: `apps/web/features/chat/lib/live-voices.ts:9-9`, `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
+Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:1-1`, `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`
 
 ## S48.17: Language selection.
 

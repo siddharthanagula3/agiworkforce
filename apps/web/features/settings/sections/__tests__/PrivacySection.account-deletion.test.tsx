@@ -20,6 +20,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
+vi.mock('../../components/UsOnlyRoutingPanel', () => ({
+  UsOnlyRoutingPanel: () => null,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));

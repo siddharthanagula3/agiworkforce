@@ -122,6 +122,25 @@ export function createWebCloudPublisher(
   };
 }
 
+export async function fetchArtifactPublication(
+  artifactId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<WebPublishDetails | null> {
+  const response = await fetchImpl('/api/artifacts/publish', { credentials: 'include' });
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => null)) as {
+    artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
+    workspace?: unknown;
+  } | null;
+  const published = body?.artifacts?.find((entry) => entry.artifactId === artifactId);
+  if (!published || typeof published.shareUrl !== 'string') return null;
+  return {
+    shareUrl: published.shareUrl,
+    visibility: published.visibility === 'organization' ? 'organization' : 'public',
+    workspace: readWorkspace(body?.workspace),
+  };
+}
+
 export type PublishedArtifactAudience = 'public' | 'organization';
 
 export interface ArtifactAudienceChange {
