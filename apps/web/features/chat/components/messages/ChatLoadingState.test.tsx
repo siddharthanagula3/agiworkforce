@@ -34,7 +34,7 @@ describe('MessageBubbleSkeleton', () => {
     const { container } = render(<MessageBubbleSkeleton />);
     const column = container.querySelector('.mx-auto.flex.max-w-3xl');
     expect(column).toBeInTheDocument();
-    expect(column).toHaveClass('px-4');
+    expect(column).toHaveClass('px-gutter-compact');
   });
 
   it('applies flex-row-reverse for user messages', () => {
