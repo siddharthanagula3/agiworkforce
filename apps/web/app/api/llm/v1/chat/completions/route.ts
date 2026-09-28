@@ -48,6 +48,7 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { extractUserQuery, runResearchLoop } from './lib/research-loop';
+import { readResearchConnectorSources } from '@/lib/services/research-connector-source-service';
 import { createResearchDomainPolicy } from './lib/research-sources';
 import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
 import {
@@ -580,6 +581,7 @@ async function dispatchChatCompletions(
         allow: processed.researchSources?.allowDomains,
         deny: processed.researchSources?.denyDomains,
       });
+      const researchConnectorIds = processed.researchSources?.connectors ?? [];
       const researchFileSources = processed.researchSources?.files
         ? await searchResearchFileSources(runDb, {
             userId,
@@ -651,8 +653,22 @@ async function dispatchChatCompletions(
             files: processed.researchSources?.files ?? false,
             allowDomains: processed.researchSources?.allowDomains ?? [],
             denyDomains: processed.researchSources?.denyDomains ?? [],
-            connectors: [],
+            connectors: researchConnectorIds,
           },
+          ...(researchConnectorIds.length > 0
+            ? {
+                readConnectorSources: (queries: readonly string[]) =>
+                  readResearchConnectorSources({
+                    userId,
+                    organizationId: processed.organizationId ?? null,
+                    planTier: processed.subscriptionTier ?? null,
+                    connectorIds: researchConnectorIds,
+                    queries,
+                    isToolDenied: researchConnectorPermissions.isConnectorToolDenied,
+                    signal: request.signal,
+                  }),
+              }
+            : {}),
           fileSources: researchFileSources,
           toolApprovalPolicy: researchToolApprovalPolicy,
           connectorPermissions: processed.conversationIsTemporary
