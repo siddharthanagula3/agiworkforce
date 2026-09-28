@@ -44,6 +44,7 @@ import {
   imageProviderCostMicrousd,
   ImageProviderHttpError,
   isRetryableImageFailure,
+  editImagesSha256,
   resolveImageRefBytes,
   sha256HexFromBytes,
   type GeneratedImage,
@@ -54,6 +55,7 @@ import { scheduleImageGenerationJobDrive } from './image-job-drive-queue';
 export interface ImageJobInlineEdit {
   sourceBytes: Uint8Array;
   maskBytes?: Uint8Array;
+  referenceBytes?: Uint8Array[];
 }
 
 export interface ImageJobAttemptOutcome {
@@ -249,7 +251,8 @@ async function resolveEditContext(input: {
   if (input.inlineEdit) {
     if (
       job.sourceImageSha256 &&
-      sha256HexFromBytes(input.inlineEdit.sourceBytes) !== job.sourceImageSha256
+      editImagesSha256(input.inlineEdit.sourceBytes, input.inlineEdit.referenceBytes) !==
+        job.sourceImageSha256
     ) {
       throw new Error('The source image supplied for this retry is not the one that was charged.');
     }
@@ -264,11 +267,14 @@ async function resolveEditContext(input: {
       operation: job.operation,
       sourceBytes: input.inlineEdit.sourceBytes,
       ...(input.inlineEdit.maskBytes ? { maskBytes: input.inlineEdit.maskBytes } : {}),
+      ...(input.inlineEdit.referenceBytes?.length
+        ? { referenceBytes: input.inlineEdit.referenceBytes }
+        : {}),
       transparentBackground: job.plan.transparentBackground,
     };
   }
 
-  if (!job.plan.sourceAssetId) {
+  if (!job.plan.sourceAssetId || job.plan.referencesInline) {
     throw new Error(
       'This edit was started from an uploaded image, so a retry has to be sent with that image again.',
     );
@@ -281,10 +287,16 @@ async function resolveEditContext(input: {
   const maskBytes = job.plan.maskAssetId
     ? await resolveImageRefBytes({ asset_id: job.plan.maskAssetId }, job.userId, input.db)
     : undefined;
+  const referenceBytes = await Promise.all(
+    (job.plan.referenceAssetIds ?? []).map((assetId) =>
+      resolveImageRefBytes({ asset_id: assetId }, job.userId, input.db),
+    ),
+  );
   return {
     operation: job.operation,
     sourceBytes,
     ...(maskBytes ? { maskBytes } : {}),
+    ...(referenceBytes.length > 0 ? { referenceBytes } : {}),
     transparentBackground: job.plan.transparentBackground,
   };
 }
@@ -593,6 +605,7 @@ async function executeImageGenerationJobAttempt(input: {
       n: job.imageCount,
       catalogModel,
       edit,
+      transparentBackground: job.plan.transparentBackground,
     });
     if (result.images.length === 0) {
       throw new Error(`${job.provider} image provider returned no usable image output`);
