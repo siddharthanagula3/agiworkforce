@@ -84,6 +84,7 @@ import {
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
+import { describeAttachmentTruncation } from '@/lib/chat-attachment-truncation-notice';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
 import { VoiceActivityAffordance } from '@/features/chat/components/Voice/VoiceActivityAffordance';
 import {
@@ -476,6 +477,7 @@ interface Message {
     /** The model id the composer asked for, which Auto may have routed away from. */
     requestedModel?: string;
     secretRedactionCount?: number;
+    truncatedAttachments?: string[];
     provider?: string;
     cost?: number;
     reasoningTokens?: number;
@@ -757,6 +759,9 @@ const MessageBubbleComponent = function MessageBubble({
   const [secretRedactionNoticeDismissed, setSecretRedactionNoticeDismissed] = useState(false);
   const secretRedactionNotice = describeSecretRedactionNotice(
     message.metadata?.secretRedactionCount,
+  );
+  const attachmentTruncationNotice = describeAttachmentTruncation(
+    message.metadata?.truncatedAttachments,
   );
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
@@ -2503,6 +2508,17 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
+          {isUser && attachmentTruncationNotice && (
+            <p
+              role="status"
+              data-testid="attachment-truncation-notice"
+              className="mt-1.5 flex items-start gap-1.5 text-caption text-muted-foreground"
+            >
+              <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>{attachmentTruncationNotice}</span>
+            </p>
+          )}
+
           {deliverables.length > 0 && (
             <div
               data-testid="deliverable-cards"
@@ -3538,6 +3554,8 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.sendReplay === next?.sendReplay &&
     prev?.mcpContext === next?.mcpContext &&
     prev?.metadataNotSaved === next?.metadataNotSaved &&
+    prev?.secretRedactionCount === next?.secretRedactionCount &&
+    prev?.truncatedAttachments === next?.truncatedAttachments &&
     toolEntriesEqual(prev?.tools, next?.tools)
   );
 }

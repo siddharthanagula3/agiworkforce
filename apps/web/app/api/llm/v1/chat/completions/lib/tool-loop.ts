@@ -368,6 +368,7 @@ import {
   isPlacesSearchTool,
 } from '@/lib/places/places-tool';
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
+import { isForcedToolChoiceFor } from '@/lib/required-tool-call';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
@@ -5548,7 +5549,8 @@ export async function* runToolLoop(
         processed.chatRequest?.tool_choice === undefined &&
         (isRequiredExecutionToolChoice(llmRequest.tool_choice) ||
           isRequiredSearchToolChoice(llmRequest.tool_choice) ||
-          isRequiredPlacesToolChoice(llmRequest.tool_choice))
+          isRequiredPlacesToolChoice(llmRequest.tool_choice) ||
+          isForcedToolChoiceFor(llmRequest.tool_choice, MANAGED_OFFICE_FILE_TOOL_NAME))
           ? { tool_choice: 'auto' as const }
           : {}),
         ...(step > 1 &&
