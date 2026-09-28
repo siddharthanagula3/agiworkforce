@@ -4717,6 +4717,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     fmt_tag,
                                     terminal_text::sanitize_terminal_text(&signature.label())
                                 );
+                                let root = path
+                                    .file_name()
+                                    .and_then(|name| name.to_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+                                for notice in
+                                    installs::install_dependencies(&root).await.notices(&root)
+                                {
+                                    println!("{}", terminal_text::sanitize_terminal_text(&notice));
+                                }
                                 Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {

@@ -3263,10 +3263,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<PluginListResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         let workspace_root = self.workspace_root.clone();
-        let changed =
+        let root = crate::features::plugins::plugins::derive_plugin_install_name(
+            params.source.trim(),
+            params.name.as_deref(),
+        )
+        .ok();
+        let mut changed =
             tokio::task::spawn_blocking(move || surfaces::install_plugin(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
+        if let Some(root) = root {
+            let setup = crate::installs::install_dependencies(&root).await;
+            if !setup.installed.is_empty() || !setup.enabled.is_empty() {
+                changed = surfaces::list_plugins(&self.workspace_root);
+            }
+            changed.notices = setup.notices(&root);
+        }
         self.emit("plugins/changed", serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
