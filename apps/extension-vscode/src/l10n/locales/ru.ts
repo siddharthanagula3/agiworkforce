@@ -492,6 +492,30 @@ const ru = {
   'webview.moreLinesHidden_few': 'Скрыты еще {count} строки',
   'webview.moreLinesHidden_many': 'Скрыто еще {count} строк',
   'webview.moreLinesHidden_other': 'Скрыто еще {count} строки',
+  'mcp.connected_one':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмент.',
+  'mcp.connected_few':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмента.',
+  'mcp.connected_many':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструментов.',
+  'mcp.connected_other':
+    'AGI Workforce: сервер {name} подключился за {ms} мс и предоставляет {count} инструмента.',
+  'checkpoints.trackedFiles_one': '{count} отслеживаемый файл',
+  'checkpoints.trackedFiles_few': '{count} отслеживаемых файла',
+  'checkpoints.trackedFiles_many': '{count} отслеживаемых файлов',
+  'checkpoints.trackedFiles_other': '{count} отслеживаемого файла',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: не удалось восстановить {count} файл: {files}',
+  'checkpoints.skippedFiles_few': 'AGI Workforce: не удалось восстановить {count} файла: {files}',
+  'checkpoints.skippedFiles_many': 'AGI Workforce: не удалось восстановить {count} файлов: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: не удалось восстановить {count} файла: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} файл возвращён к контрольной точке.',
+  'checkpoints.filesRestored_few': 'AGI Workforce: {count} файла возвращены к контрольной точке.',
+  'checkpoints.filesRestored_many': 'AGI Workforce: {count} файлов возвращено к контрольной точке.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} файла возвращено к контрольной точке.',
+  'webview.sources_one': '{count} источник',
+  'webview.sources_few': '{count} источника',
+  'webview.sources_many': '{count} источников',
+  'webview.sources_other': '{count} источника',
 };
 
 export default ru;

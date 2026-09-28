@@ -437,6 +437,24 @@ const it = {
   'webview.moreLinesHidden_one': '{count} riga in più non mostrata',
   'webview.moreLinesHidden_many': '{count} di righe in più non mostrate',
   'webview.moreLinesHidden_other': '{count} righe in più non mostrate',
+  'mcp.connected_one': 'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumento.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} di strumenti.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumenti.',
+  'checkpoints.trackedFiles_one': '{count} file tracciato',
+  'checkpoints.trackedFiles_many': '{count} di file tracciati',
+  'checkpoints.trackedFiles_other': '{count} file tracciati',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: impossibile ripristinare {count} di file: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} file è tornato al checkpoint.',
+  'checkpoints.filesRestored_many': 'AGI Workforce: {count} di file sono tornati al checkpoint.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} file sono tornati al checkpoint.',
+  'webview.sources_one': '{count} fonte',
+  'webview.sources_many': '{count} di fonti',
+  'webview.sources_other': '{count} fonti',
 };
 
 export default it;

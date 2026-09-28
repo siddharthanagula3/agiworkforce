@@ -294,6 +294,14 @@ const ja = {
     '最後のターン後のコンテキスト: {count} 個のトークン中 {used} 個を使用 ({percent}%)',
   'webview.answerTokens_other': '{model} · {count} 個のトークン (入力 {input}、出力 {output})',
   'webview.moreLinesHidden_other': 'ほか {count} 行は非表示',
+  'mcp.connected_other':
+    'AGI Workforce: {name} に {ms} ミリ秒で接続しました。{count} 個のツールを利用できます。',
+  'checkpoints.trackedFiles_other': '追跡中のファイル {count} 個',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} 個のファイルを復元できませんでした: {files}',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} 個のファイルをチェックポイントの状態に戻しました。',
+  'webview.sources_other': '{count} 件のソース',
 };
 
 export default ja;
