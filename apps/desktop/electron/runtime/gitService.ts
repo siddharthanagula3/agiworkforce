@@ -1,6 +1,13 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { WorkspaceGitState, WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import {
+  parseWorkingTreeStatus,
+  type LocalBranchPush,
+  type LocalBranches,
+  type WorkingTreeChanges,
+  type WorkspaceGitState,
+  type WorkspaceRoot,
+} from '@agiworkforce/local-runtime-contract';
 import {
   countPorcelainStatus,
   describeGitHead,
@@ -13,6 +20,11 @@ const run = promisify(execFile);
 
 const GIT_TIMEOUT_MS = 15_000;
 const GIT_MAX_BUFFER = 8 * 1024 * 1024;
+const WORKING_TREE_DIFF_LIMIT = 200_000;
+const STATUS_ARGS = ['status', '--porcelain=v1', '--untracked-files=all'];
+const LOCAL_BRANCH_LIMIT = 500;
+const PUSH_TIMEOUT_MS = 120_000;
+const PUSH_REMOTE = 'origin';
 
 /**
  * Runs git with an argument array.
@@ -26,12 +38,17 @@ const GIT_MAX_BUFFER = 8 * 1024 * 1024;
  * a leading space; trimming both ends shifts every status left by one and
  * reports it as staged.
  */
-async function git(cwd: string, args: string[]): Promise<string> {
+async function git(
+  cwd: string,
+  args: string[],
+  options: { timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
   const { stdout } = await run('git', args, {
     cwd,
-    timeout: GIT_TIMEOUT_MS,
+    timeout: options.timeoutMs ?? GIT_TIMEOUT_MS,
     maxBuffer: GIT_MAX_BUFFER,
     windowsHide: true,
+    ...(options.env ? { env: options.env } : {}),
   });
   return stdout.trimEnd();
 }
@@ -120,4 +137,110 @@ export async function readWorkingTreeDiff(
 ): Promise<string | null> {
   if (paths.length === 0) return null;
   return gitOrNull(directory, ['diff', '--no-color', '--no-ext-diff', 'HEAD', '--', ...paths]);
+}
+
+export async function readWorkingTreeChanges(
+  directory: string,
+): Promise<WorkingTreeChanges | null> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) return null;
+  const status = await git(root, STATUS_ARGS);
+  const diff = (await gitOrNull(root, ['diff', '--no-color', '--no-ext-diff', 'HEAD'])) ?? '';
+  return {
+    files: parseWorkingTreeStatus(status),
+    diff: diff.slice(0, WORKING_TREE_DIFF_LIMIT),
+    diffTruncated: diff.length > WORKING_TREE_DIFF_LIMIT,
+    folderPrefix: (await gitOrNull(directory, ['rev-parse', '--show-prefix'])) ?? '',
+  };
+}
+
+export async function discardWorkingTreeChanges(
+  directory: string,
+  paths: readonly string[],
+): Promise<string[]> {
+  const root = await findRepositoryRoot(directory);
+  if (!root)
+    throw new Error('This folder is not a git repository, so there is nothing to discard.');
+  const changed = new Map(
+    parseWorkingTreeStatus(await git(root, STATUS_ARGS)).map((change) => [change.path, change]),
+  );
+  const chosen = paths.map((path) => {
+    const change = changed.get(path);
+    if (!change) throw new Error(`${path} has no changes to discard.`);
+    if (change.state === 'conflicted') {
+      throw new Error(`${path} has a merge conflict. Resolve it before discarding it.`);
+    }
+    return change;
+  });
+
+  const removed = chosen
+    .filter((change) => change.state === 'added' || change.state === 'renamed')
+    .map((change) => change.path);
+  const restored = chosen.flatMap((change) => {
+    if (change.state === 'modified' || change.state === 'deleted') return [change.path];
+    return change.state === 'renamed' && change.originalPath ? [change.originalPath] : [];
+  });
+  const cleaned = chosen
+    .filter((change) => change.state === 'untracked')
+    .map((change) => change.path);
+
+  if (removed.length > 0) await git(root, ['rm', '-f', '--quiet', '--', ...removed]);
+  if (restored.length > 0) {
+    await git(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...restored]);
+  }
+  if (cleaned.length > 0) await git(root, ['clean', '-f', '--quiet', '--', ...cleaned]);
+  return chosen.map((change) => change.path);
+}
+
+export async function listLocalBranches(directory: string): Promise<LocalBranches | null> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) return null;
+  const listed = await git(root, [
+    'for-each-ref',
+    `--count=${LOCAL_BRANCH_LIMIT}`,
+    '--sort=-committerdate',
+    '--format=%(refname:short)',
+    'refs/heads',
+  ]);
+  return {
+    current: await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
+    branches: listed.split('\n').filter(Boolean),
+    remoteUrl: await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]),
+    baseBranch: await remoteDefaultBranch(root),
+  };
+}
+
+async function remoteDefaultBranch(root: string): Promise<string | null> {
+  const remoteHead = await gitOrNull(root, [
+    'symbolic-ref',
+    '--short',
+    '--quiet',
+    `refs/remotes/${PUSH_REMOTE}/HEAD`,
+  ]);
+  return remoteHead ? remoteHead.slice(PUSH_REMOTE.length + 1) : null;
+}
+
+export async function switchLocalBranch(directory: string, branch: string): Promise<string> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) throw new Error('This folder is not a git repository, so it has no branches.');
+  const known = await git(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+  if (!known.split('\n').includes(branch)) {
+    throw new Error(`${branch} is not a branch in this repository.`);
+  }
+  await git(root, ['switch', branch]);
+  return branch;
+}
+
+export async function pushLocalBranch(directory: string): Promise<LocalBranchPush> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) throw new Error('This folder is not a git repository, so there is nothing to push.');
+  const branch = await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']);
+  if (!branch) throw new Error('Check out a branch before opening a pull request.');
+  const remoteUrl = await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]);
+  if (!remoteUrl) throw new Error('This repository has no origin remote to push to.');
+  await git(root, ['push', '--set-upstream', PUSH_REMOTE, branch], {
+    timeoutMs: PUSH_TIMEOUT_MS,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  });
+  return { branch, remoteUrl, baseBranch: await remoteDefaultBranch(root) };
 }
