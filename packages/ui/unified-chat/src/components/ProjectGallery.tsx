@@ -424,7 +424,7 @@ export function ProjectGallery({
                 active={project.id === activeProjectId}
                 {...(projectHref ? { href: projectHref(project) } : {})}
                 onSelect={handleSelect}
-                onShare={onShareProject}
+                onShare={project.space === 'health' ? undefined : onShareProject}
                 onEdit={onEditProject}
                 onArchive={onArchiveProject ? handleArchive : undefined}
                 onDelete={onDeleteProject ? handleDelete : undefined}

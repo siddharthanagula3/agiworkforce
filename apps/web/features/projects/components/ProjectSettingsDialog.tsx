@@ -188,10 +188,13 @@ export function ProjectSettingsDialog({
     }
   };
 
+  const isHealthSpace = project.space === 'health';
   const requestDelete = () =>
     confirm({
-      title: 'Delete project?',
-      description: `“${project.name}” and its knowledge files will be permanently deleted, including the uploaded file contents. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+      title: isHealthSpace ? 'Delete Health?' : 'Delete project?',
+      description: isHealthSpace
+        ? 'Health, its chats, its files and its memories will be permanently deleted, including the uploaded file contents. Connected health records stay connected until you disconnect them. This action cannot be undone.'
+        : `“${project.name}” and its knowledge files will be permanently deleted, including the uploaded file contents. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
       confirmLabel: 'Delete',
       onConfirm: handleDelete,
     });
@@ -389,7 +392,7 @@ export function ProjectSettingsDialog({
               onClick={requestDelete}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
-              Delete project
+              {isHealthSpace ? 'Delete Health' : 'Delete project'}
             </Button>
 
             {/*
@@ -398,17 +401,19 @@ export function ProjectSettingsDialog({
               bitten by, a capability that exists and no user can reach.
             */}
             <div className="order-2 col-span-2 grid grid-cols-2 gap-2 sm:order-none sm:flex sm:items-center">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="w-full sm:w-auto"
-                disabled={isDuplicating}
-                onClick={() => void handleDuplicate()}
-              >
-                <Copy className="mr-1.5 h-4 w-4" />
-                {isDuplicating ? 'Duplicating…' : 'Duplicate'}
-              </Button>
+              {isHealthSpace ? null : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  disabled={isDuplicating}
+                  onClick={() => void handleDuplicate()}
+                >
+                  <Copy className="mr-1.5 h-4 w-4" />
+                  {isDuplicating ? 'Duplicating…' : 'Duplicate'}
+                </Button>
+              )}
               {/*
                 This is intentionally a document link, not App Router
                 navigation: the route returns Content-Disposition: attachment,
