@@ -49,7 +49,7 @@ export interface AccountUsageAllowanceUnit {
 export interface AccountUsageAllowances {
   resetAt: string;
   units: AccountUsageAllowanceUnit[];
-  images: { images: number; requests: number };
+  images: { images: number; requests: number; credits: number };
   responses: { active: number; limit: number } | null;
 }
 
@@ -138,6 +138,7 @@ export function parseAccountUsageAllowances(value: unknown): AccountUsageAllowan
     images: {
       images: images['images'],
       requests: isFiniteNumber(images['requests']) ? images['requests'] : 0,
+      credits: isFiniteNumber(images['credits']) ? images['credits'] : 0,
     },
     responses:
       isRecord(responses) &&
