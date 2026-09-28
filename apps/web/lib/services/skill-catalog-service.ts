@@ -535,6 +535,7 @@ export interface SelectableSkillCatalogParams {
   loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
   loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
   includeNetworkBackedDirectorySkills?: boolean;
+  pluginsAllowed?: boolean;
 }
 
 const EMPTY_PLUGIN_IDS: ReadonlySet<string> = new Set();
@@ -568,7 +569,7 @@ export async function loadSelectableSkillCatalog(
       readOptionalSkillSource('user-skills', NO_SKILLS, () =>
         listUserSkillsAsManagedSkills(params.db, params.userId),
       ),
-      params.includeNetworkBackedDirectorySkills === false
+      params.includeNetworkBackedDirectorySkills === false || params.pluginsAllowed === false
         ? Promise.resolve(NO_SKILLS)
         : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
             listInstalledDirectorySkills(params.db, params.userId),
