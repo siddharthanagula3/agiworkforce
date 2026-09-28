@@ -11,6 +11,7 @@ import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
 async function handleRevoke(request: NextRequest, context: { params: Promise<{ keyId: string }> }) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-delete');
@@ -26,10 +27,11 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
     throw createError.validation('Invalid key ID');
   }
 
-  const [existing] = await db.query<Pick<ApiKeyRow, 'id' | 'user_id' | 'revoked_at'>>(
-    `select id, user_id, revoked_at from public.api_keys where id = $1 limit 1`,
-    [keyId],
-  );
+  const [existing] = await db.query<
+    Pick<ApiKeyRow, 'id' | 'user_id' | 'name' | 'project_id' | 'revoked_at'>
+  >(`select id, user_id, name, project_id, revoked_at from public.api_keys where id = $1 limit 1`, [
+    keyId,
+  ]);
 
   if (!existing) {
     throw createError.notFound('API key not found');
@@ -52,6 +54,13 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
     eventType: 'api_key_revoked',
     request,
     detail: { resourceType: 'api_key', resourceId: keyId },
+  });
+
+  await queueDeveloperWebhookEvent(db, userId, 'api_key.revoked', {
+    id: keyId,
+    name: existing.name,
+    project_id: existing.project_id ?? null,
+    reason: 'deleted',
   });
 
   return NextResponse.json({ message: 'API key revoked' });

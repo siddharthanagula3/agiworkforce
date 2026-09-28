@@ -8,6 +8,7 @@ import type { DeveloperRateLimit } from '../types';
 import { ProjectsPanel } from './ProjectsPanel';
 import { RateLimitsPanel } from './RateLimitsPanel';
 import { RequestPlayground } from './RequestPlayground';
+import { WebhooksPanel } from './WebhooksPanel';
 
 const REFERENCE_LINKS = [
   {
@@ -19,6 +20,11 @@ const REFERENCE_LINKS = [
     href: '/api-docs#migrating',
     label: 'Migration guides',
     description: 'From the OpenAI or Anthropic API, and between models',
+  },
+  {
+    href: '/api-docs#webhooks',
+    label: 'Webhooks',
+    description: 'Event payloads, signatures and retries',
   },
   {
     href: '/api-docs#deprecations',
@@ -59,6 +65,7 @@ export function DeveloperConsolePage({
         <ApiKeysManager />
         <ProjectsPanel />
         <RequestPlayground />
+        <WebhooksPanel />
         <RateLimitsPanel rateLimits={rateLimits} />
         <Card className="border-border bg-card">
           <CardHeader>

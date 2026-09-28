@@ -169,6 +169,11 @@
     --info-fill: #1a689e;
     --info-on-fill: var(--n-0);
 
+    --diff-added-fill: #dcf5e4;
+    --diff-added-text: #0f5a32;
+    --diff-removed-fill: #fde6e6;
+    --diff-removed-text: #8f1d22;
+
     /* ---- layer 2: mode-invariant ---------------------------------------- */
     /* One radius ladder for every surface. The size-named --chat-radius-* and
      * --radius-* families are indirections into these rungs, so a rung moves in
@@ -382,6 +387,11 @@
     --info-text: #63b3e0; /* 7.20 */
     --info-fill: #1a689e;
     --info-on-fill: var(--n-0);
+
+    --diff-added-fill: #0f2e1d;
+    --diff-added-text: #7fd6a8;
+    --diff-removed-fill: #3a1216;
+    --diff-removed-text: #f5a3a8;
 
     --elevation-1: 0 1px 2px rgb(0 0 0 / 0.5);
     --elevation-2: 0 2px 4px rgb(0 0 0 / 0.4), 0 4px 12px -4px rgb(0 0 0 / 0.6);
