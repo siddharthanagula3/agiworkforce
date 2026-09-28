@@ -2084,5 +2084,29 @@
   "spReconnecting": {
     "message": "Reconnecting…",
     "description": "Status while the panel reattaches to an answer after the connection dropped"
+  },
+  "spSuggestionsLabel": {
+    "message": "Suggestions for this page",
+    "description": "Accessible name of the prompt suggestions on an empty chat"
+  },
+  "spSuggestionSummarize": {
+    "message": "Summarize this page",
+    "description": "Suggested prompt on an empty chat that summarizes the open page"
+  },
+  "spSuggestionExplain": {
+    "message": "Explain this page in simple terms",
+    "description": "Suggested prompt on an empty chat that explains the open page"
+  },
+  "spSuggestionExtract": {
+    "message": "Pull out the names, dates and numbers",
+    "description": "Suggested prompt on an empty chat that extracts structured data from the open page"
+  },
+  "spSuggestionTranslate": {
+    "message": "Translate this page",
+    "description": "Suggested prompt on an empty chat that translates the open page"
+  },
+  "spRecentProjectsTitle": {
+    "message": "Start in a project",
+    "description": "Heading above recent projects a new chat can start in"
   }
 }

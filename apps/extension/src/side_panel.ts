@@ -182,6 +182,7 @@ import {
   type ActiveProjectSelection,
   type ProjectsDrawerAPI,
 } from './features/side-panel/projectsDrawer';
+import { listChromeProjects } from './features/cloud-bridge/projectsClient';
 import {
   buildArtifactsDrawerSection,
   ARTIFACTS_DRAWER_CSS,
@@ -531,7 +532,11 @@ function setManagedCloudChatState(
     else input.placeholder = t('spComposerPlaceholder');
   }
   updateSendButton();
-  if (becameReady) checkPendingChat();
+  updateEmptyStateActions();
+  if (becameReady) {
+    void refreshRecentProjects();
+    checkPendingChat();
+  }
 }
 
 interface UsageBanner {
@@ -1205,6 +1210,7 @@ function clearPendingPageContext(): void {
 function resetConversationView(): void {
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
+  void refreshRecentProjects();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   clearPendingPageContext();
@@ -1250,6 +1256,9 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
+  recentProjects = [];
+  recentProjectsGeneration += 1;
+  renderRecentProjects();
   if (previousOwner) {
     _ctx.selectedModel = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
@@ -1594,6 +1603,48 @@ function injectStyles(): void {
       text-align: center;
     }
     #sp-empty.hidden { display: none; }
+    .sp-empty-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: min(100%, 360px);
+      margin-top: 6px;
+      text-align: left;
+    }
+    .sp-empty-actions[hidden] { display: none; }
+    .sp-empty-actions-title {
+      margin: 8px 0 0;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 500;
+    }
+    .sp-empty-actions-list { display: flex; flex-direction: column; gap: 6px; }
+    .sp-empty-action {
+      display: flex;
+      width: 100%;
+      min-height: 40px;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-empty-action:hover { background: var(--agi-ext-hover); }
+    .sp-empty-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-empty-action > .agi-icon { color: var(--agi-ext-text-muted); }
+    .sp-empty-action[aria-pressed='true'] { border-color: var(--agi-ext-focus); }
+    .sp-empty-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (pointer: coarse) {
+      .sp-empty-action { min-height: 44px; }
+    }
     #sp-empty-icon {
       display: none;
       align-items: center;
@@ -5226,12 +5277,75 @@ function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
   return button;
 }
 
+const RECENT_PROJECT_LIMIT = 3;
+let recentProjects: ActiveProjectSelection[] = [];
+let recentProjectsGeneration = 0;
+let chooseChatProject: (project: ActiveProjectSelection | null) => void = () => {};
+
+function updateEmptyStateActions(): void {
+  const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
+  const pageBlocked = document.getElementById('sp-blocked')?.classList.contains('visible') === true;
+  const suggestions = document.getElementById('sp-empty-suggestions');
+  if (suggestions) suggestions.hidden = !ready || pageBlocked;
+  const projects = document.getElementById('sp-empty-projects');
+  if (projects) projects.hidden = !ready || recentProjects.length === 0;
+}
+
+function renderRecentProjects(): void {
+  const list = document.getElementById('sp-empty-projects-list');
+  if (!list) return;
+  clearChildren(list);
+  for (const project of recentProjects) {
+    const button = el('button', {
+      class: 'sp-empty-action',
+      type: 'button',
+      'aria-pressed': String(_ctx.activeProject?.id === project.id),
+    });
+    button.appendChild(renderIcon(Folder, 15));
+    button.appendChild(el('span', { class: 'sp-empty-action-label' }, project.name));
+    button.addEventListener('click', () => {
+      chooseChatProject(_ctx.activeProject?.id === project.id ? null : project);
+      document.getElementById('sp-input')?.focus();
+    });
+    list.appendChild(button);
+  }
+  updateEmptyStateActions();
+}
+
+async function refreshRecentProjects(): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  const generation = ++recentProjectsGeneration;
+  if (!owner || managedCloudChatState !== 'ready') {
+    recentProjects = [];
+    renderRecentProjects();
+    return;
+  }
+  const result = await listChromeProjects();
+  if (
+    generation !== recentProjectsGeneration ||
+    !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+  ) {
+    return;
+  }
+  recentProjects =
+    result.status === 'success'
+      ? [...result.projects]
+          .sort((left, right) =>
+            (right.lastUsedAt ?? right.updatedAt).localeCompare(left.lastUsedAt ?? left.updatedAt),
+          )
+          .slice(0, RECENT_PROJECT_LIMIT)
+          .map((project) => ({ id: project.id, name: project.name }))
+      : [];
+  renderRecentProjects();
+}
+
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const emptyEl = document.getElementById('sp-empty');
 
   if (_ctx.messages.length === 0) {
     if (emptyEl) emptyEl.classList.remove('hidden');
+    updateEmptyStateActions();
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = false;
@@ -5769,7 +5883,7 @@ function pageReference(source: PageContextSource): SidePanelPageReference {
   return { url: source.url, title: source.title || pageChipLabel(source.url) };
 }
 
-function sendMessage(text: string): void {
+function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
   const prompt = resolveComposerPrompt(
     text,
@@ -5810,7 +5924,7 @@ function sendMessage(text: string): void {
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
     role: 'user',
-    content: capturePage && slashCmd ? slashCmd.display : prompt,
+    content: displayText ?? (capturePage && slashCmd ? slashCmd.display : prompt),
     timestamp: Date.now(),
     runtime: 'managed-cloud',
     ...(attachments.length > 0 ? { attachments } : {}),
@@ -6736,6 +6850,7 @@ function setBlockedState(blocked: boolean): void {
       : t('spContextBtnUnavailable');
   }
   updateSendButton();
+  updateEmptyStateActions();
 }
 
 function refreshPageHostname(): void {
@@ -7700,6 +7815,7 @@ function buildUI(): void {
 
   function renderProjectChip(): void {
     const project = _ctx.activeProject;
+    renderRecentProjects();
     if (!project) {
       projectChip.hidden = true;
       return;
@@ -10197,6 +10313,46 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
+  const suggestionGroup = el('div', {
+    id: 'sp-empty-suggestions',
+    class: 'sp-empty-actions',
+    role: 'group',
+    'aria-label': t('spSuggestionsLabel'),
+    hidden: '',
+  });
+  const suggestions: Array<[string, string]> = [
+    ['/summarize', t('spSuggestionSummarize')],
+    ['/explain', t('spSuggestionExplain')],
+    ['/extract', t('spSuggestionExtract')],
+    ['/translate', t('spSuggestionTranslate')],
+  ];
+  for (const [command, label] of suggestions) {
+    const suggestion = el('button', { class: 'sp-empty-action', type: 'button' });
+    suggestion.appendChild(renderIcon(FileText, 15));
+    suggestion.appendChild(el('span', { class: 'sp-empty-action-label' }, label));
+    suggestion.addEventListener('click', () => sendMessage(command, label));
+    suggestionGroup.appendChild(suggestion);
+  }
+  emptyState.appendChild(suggestionGroup);
+  const recentProjectsGroup = el('div', {
+    id: 'sp-empty-projects',
+    class: 'sp-empty-actions',
+    role: 'group',
+    'aria-labelledby': 'sp-empty-projects-title',
+    hidden: '',
+  });
+  recentProjectsGroup.appendChild(
+    el(
+      'h2',
+      { class: 'sp-empty-actions-title', id: 'sp-empty-projects-title' },
+      t('spRecentProjectsTitle'),
+    ),
+  );
+  recentProjectsGroup.appendChild(
+    el('div', { id: 'sp-empty-projects-list', class: 'sp-empty-actions-list' }),
+  );
+  emptyState.appendChild(recentProjectsGroup);
+  chooseChatProject = (project) => selectActiveProject(project);
   msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', {
