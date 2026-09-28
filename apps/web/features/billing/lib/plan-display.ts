@@ -99,7 +99,7 @@ const COMPARED_LIMITS: ReadonlyArray<{
   format: (value: number) => string;
 }> = [
   { key: 'projects', label: 'Projects', format: formatCount },
-  { key: 'knowledgeStorageBytes', label: 'Knowledge storage', format: formatStorage },
+  { key: 'knowledgeStorageBytes', label: 'File storage', format: formatStorage },
   { key: 'customMcpServers', label: 'Custom MCP servers', format: formatCount },
   { key: 'maxConcurrentTurns', label: 'Chats at once', format: formatCount },
   { key: 'maxConnectorTools', label: 'Connector tools', format: formatCount },

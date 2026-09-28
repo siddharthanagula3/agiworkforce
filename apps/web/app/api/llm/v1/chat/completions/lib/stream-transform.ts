@@ -138,6 +138,7 @@ async function settleStreamBilling(input: {
   usage: StreamBillingUsage;
   outcome?: 'completed' | 'failed';
   cancelled?: boolean;
+  errorClass?: string | undefined;
   latencyMs?: number;
 }): Promise<void> {
   const { processed, userId, provider, model, usage } = input;
@@ -259,6 +260,10 @@ async function settleStreamBilling(input: {
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: billedOutcome,
+      attempt:
+        input.cancelled === true
+          ? { outcome: 'cancelled' }
+          : { outcome: input.outcome ?? 'completed', errorClass: input.errorClass },
       actualCostMicrousd: billedCostMicrousd,
       providerCostMicrousd,
       usage: {
@@ -938,6 +943,7 @@ export async function buildAdapterStreamResponse(
   const sourceCollector = new AssistantTurnSourceCollector();
   let toolCallsSeen = 0;
   let lastStopReason: string | null = null;
+  let lastErrorCode: string | undefined;
 
   /**
    * A turn the reader can keep. Tool calls, artifacts and grounded sources all
@@ -1006,6 +1012,7 @@ export async function buildAdapterStreamResponse(
           }
           if (chunk.type === 'tool-use-start') toolCallsSeen += 1;
           if (chunk.type === 'stop') lastStopReason = chunk.reason;
+          if (chunk.type === 'error') lastErrorCode = chunk.code;
           try {
             collectGeneratedFileRefs(chunk, generatedFileRefs);
           } catch {
@@ -1093,6 +1100,7 @@ export async function buildAdapterStreamResponse(
               providerElapsedMs: Date.now() - streamStartedAt,
             },
             outcome: 'failed',
+            errorClass: classifyError(streamError).category,
             ...(request.signal.aborted ? { cancelled: true } : {}),
           });
         } catch (reconciliationError) {
@@ -1205,6 +1213,7 @@ export async function buildAdapterStreamResponse(
             providerElapsedMs: Date.now() - streamStartedAt,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
+          errorClass: lastErrorCode,
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
         });
       } catch (reconciliationError) {

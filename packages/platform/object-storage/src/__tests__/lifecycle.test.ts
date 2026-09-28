@@ -79,6 +79,7 @@ describe('abortOrphanedMultipartUploads', () => {
       delete: vi.fn(),
       copyIfMatch: vi.fn(),
       presignPut: vi.fn(),
+      presignGet: vi.fn(),
     };
 
     await expect(abortOrphanedMultipartUploads(store, { bucket: BUCKET })).resolves.toEqual({

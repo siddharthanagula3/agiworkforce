@@ -119,5 +119,32 @@ export const LibraryListResponseSchema = z.object({
   has_more: z.boolean(),
   next_offset: z.number().int().nonnegative().nullable(),
   storage_used_bytes: z.number().nonnegative().optional(),
+  storage_limit_bytes: z.number().nonnegative().optional(),
 });
 export type LibraryListResponse = z.infer<typeof LibraryListResponseSchema>;
+
+export const MEDIA_JOB_STATUSES = ['queued', 'running', 'failed', 'done', 'cancelled'] as const;
+export const MEDIA_JOB_KINDS = ['image', 'video'] as const;
+export const MEDIA_JOB_HISTORY_MAX = 50;
+
+export const MediaJobEntrySchema = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(MEDIA_JOB_KINDS),
+  status: z.enum(MEDIA_JOB_STATUSES),
+  prompt: z.string(),
+  model: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  error: z.string().nullable(),
+  retryable: z.boolean(),
+  cancellable: z.boolean(),
+  progress: z.number().int().min(0).max(100).nullable(),
+  result_urls: z.array(z.string()),
+  conversation_id: z.string().uuid().nullable(),
+});
+export type MediaJobEntry = z.infer<typeof MediaJobEntrySchema>;
+
+export const MediaJobListResponseSchema = z.object({
+  jobs: z.array(MediaJobEntrySchema).max(MEDIA_JOB_HISTORY_MAX),
+});
+export type MediaJobListResponse = z.infer<typeof MediaJobListResponseSchema>;

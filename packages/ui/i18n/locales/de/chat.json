@@ -67,7 +67,13 @@
     "sharedFrom": "Geteilt über AGI",
     "sharedWithWorkspace": "Mit deinem Arbeitsbereich geteilt",
     "renderFailed": "Dieses Artefakt konnte nicht dargestellt werden: {{error}}",
-    "svgUnavailable": "Dieses SVG enthielt nichts, was sicher angezeigt werden konnte."
+    "svgUnavailable": "Dieses SVG enthielt nichts, was sicher angezeigt werden konnte.",
+    "runtimeSignIn": "Melde dich an, um die KI und die gespeicherten Daten dieser App zu nutzen.",
+    "runtimeSignInAction": "Anmelden",
+    "runtimeConsentLabel": "KI-Berechtigung",
+    "runtimeConsent": "Diese App möchte KI mit deinem Konto nutzen. Jede Anfrage zählt zur Nutzung deines Tarifs.",
+    "runtimeAllow": "Zulassen",
+    "runtimeDecline": "Nicht zulassen"
   },
   "sidebar": {
     "activeConversation": "Aktive Unterhaltung",

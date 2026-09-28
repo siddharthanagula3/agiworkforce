@@ -24,9 +24,21 @@ import type {
   DeveloperApprovalAnswer,
   DeveloperSessionEvent,
   DeveloperSessionList,
+  DeveloperSessionTranscript,
   DeveloperTurnRequest,
 } from '@agiworkforce/local-runtime-contract';
-import type { DeveloperSessionActivity } from '../runtime/developerSessionService';
+import type { DeveloperSessionFileChange } from '@agiworkforce/types/protocol';
+
+export interface DeveloperSessionActivity {
+  transcript: DeveloperSessionTranscript;
+  branch: string | null;
+  fileChanges: DeveloperSessionFileChange[];
+  activeTurn: {
+    turnId: string;
+    partialResponse: string;
+    pendingApprovals: Array<{ requestId: string; summary: string; detail: string }>;
+  } | null;
+}
 
 export interface CodeRemoteDependencies {
   send: (action: string, payload: Record<string, unknown>) => Promise<boolean>;

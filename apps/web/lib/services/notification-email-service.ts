@@ -175,3 +175,64 @@ export async function sendSecurityAlertEmail(
   }
   return result;
 }
+
+export interface DataExportReadyEmailInput {
+  to: string;
+  downloadUrls: readonly string[];
+  expiresAt: string;
+  idempotencyKey: string;
+}
+
+export async function sendDataExportReadyEmail(
+  input: DataExportReadyEmailInput,
+): Promise<SendEmailResult> {
+  const from = notificationsFromEmail();
+  if (!isNotificationEmailConfigured()) {
+    return {
+      delivered: false,
+      reason: 'not_configured',
+      detail: 'RESEND_API_KEY and AGI_NOTIFICATIONS_FROM_EMAIL are required',
+    };
+  }
+
+  const partCount = input.downloadUrls.length;
+  const links = input.downloadUrls.map((url, index) => ({
+    url,
+    label: partCount === 1 ? 'Download your export' : `Download part ${index + 1} of ${partCount}`,
+  }));
+  const statement =
+    partCount === 1
+      ? 'Your data export is ready. It holds your account data and the files you stored with us.'
+      : `Your data export is ready in ${partCount} parts. Together they hold your account data and the files you stored with us.`;
+  const expiry = `The ${partCount === 1 ? 'link expires' : 'links expire'} on ${new Date(input.expiresAt).toUTCString()}. After that, request a new export from Settings.`;
+  const footer = 'You are receiving this because you requested a data export.';
+
+  const result = await sendTransactionalEmail({
+    from,
+    to: input.to,
+    subject: 'Your data export is ready',
+    text: [
+      statement,
+      '',
+      ...links.map((link) => `${link.label}: ${link.url}`),
+      '',
+      expiry,
+      '',
+      footer,
+    ].join('\n'),
+    html: [
+      `<p>${escapeHtml(statement)}</p>`,
+      ...links.map(
+        (link) => `<p><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`,
+      ),
+      `<p>${escapeHtml(expiry)}</p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${escapeHtml(footer)}</p>`,
+    ].join(''),
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  if (!result.delivered && result.reason !== 'not_configured') {
+    logger.warn({ reason: result.reason }, '[notifications] data export email failed to send');
+  }
+  return result;
+}

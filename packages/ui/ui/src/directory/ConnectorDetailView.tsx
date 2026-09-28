@@ -9,6 +9,7 @@ import { ConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   CHIP_PREVIEW_COUNT,
   CONNECTED_LABEL,
+  RECONNECT_LABEL,
   CONNECTOR_ADDED_LABEL,
   CONNECTOR_ADD_API_KEY_LABEL,
   CONNECTOR_AUTHOR_LABEL,
@@ -36,6 +37,7 @@ import {
   CONNECTOR_REQUIRED_BY_PLUGINS_COPY,
   CONNECTOR_TRUST_COPY,
   connectorAuthorizationPendingCopy,
+  connectorReconnectCopy,
   connectorNotConnectedCopy,
   CONNECTOR_URL_LABEL,
   CONNECTOR_WEBSITE_LABEL,
@@ -246,6 +248,7 @@ export function ConnectorDetailView({
   }, [detail.id]);
 
   const connected = detail.connected === true;
+  const reconnect = connected && detail.needsReauthorization === true && onConnect !== undefined;
   const mode = resolveMode(detail);
   const listed = !connected && detail.listingNote !== undefined;
   const actionable = !listed && ACTIONABLE_MODES.has(mode);
@@ -286,10 +289,16 @@ export function ConnectorDetailView({
             ) : null
           }
           primaryLabel={
-            connected ? CONNECTED_LABEL : (detail.connectLabel ?? PRIMARY_LABEL_BY_MODE[mode])
+            reconnect
+              ? RECONNECT_LABEL
+              : connected
+                ? CONNECTED_LABEL
+                : (detail.connectLabel ?? PRIMARY_LABEL_BY_MODE[mode])
           }
-          primaryDone={connected}
-          onPrimary={actionable && !credentialForm ? primaryAction : undefined}
+          primaryDone={connected && !reconnect}
+          onPrimary={
+            reconnect ? onConnect : actionable && !credentialForm ? primaryAction : undefined
+          }
           statusNote={actionable || listed ? undefined : PRIMARY_LABEL_BY_MODE[mode]}
           {...(connected && onDisconnect
             ? { onRemove: onDisconnect, removeLabel: CONNECTOR_DISCONNECT_LABEL }
@@ -300,6 +309,12 @@ export function ConnectorDetailView({
       </div>
 
       {credentialForm ? <div data-testid="connector-credential-form">{credentialForm}</div> : null}
+
+      {reconnect ? (
+        <Notice>
+          <p>{connectorReconnectCopy(detail.name)}</p>
+        </Notice>
+      ) : null}
 
       {listed ? (
         <Notice>

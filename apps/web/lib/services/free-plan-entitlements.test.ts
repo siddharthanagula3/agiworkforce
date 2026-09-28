@@ -4,8 +4,8 @@ vi.mock('server-only', () => ({}));
 
 import {
   getCustomRemoteMcpLimit,
-  getKnowledgeStorageLimitBytes,
-  getKnowledgeStorageLimitErrorMessage,
+  getFileStorageLimitBytes,
+  getFileStorageLimitErrorMessage,
   getProjectLimit,
   getProjectLimitErrorMessage,
   getCustomRemoteMcpLimitErrorMessage,
@@ -58,30 +58,30 @@ describe('managed cloud resource entitlements', () => {
     expect(isUserResourceLimitError({ code: '23505', message: 'unique violation' })).toBe(false);
   });
 
-  describe('knowledge storage quota', () => {
+  describe('file storage quota', () => {
     it.each([
       ['free', 100 * 1024 ** 2],
       ['basic', 1024 ** 3],
       ['pro', 10 * 1024 ** 3],
       ['team', 25 * 1024 ** 3],
     ] as const)('caps %s at a finite byte allowance', (plan, expected) => {
-      expect(getKnowledgeStorageLimitBytes(plan)).toBe(expected);
+      expect(getFileStorageLimitBytes(plan)).toBe(expected);
     });
 
     it.each(['max', 'max_15x', 'enterprise'] as const)(
       'leaves %s uncapped rather than zero',
       (plan) => {
-        expect(getKnowledgeStorageLimitBytes(plan)).toBeNull();
+        expect(getFileStorageLimitBytes(plan)).toBeNull();
       },
     );
 
     it('fails closed for an unknown plan', () => {
-      expect(getKnowledgeStorageLimitBytes('not-a-plan')).toBe(0);
+      expect(getFileStorageLimitBytes('not-a-plan')).toBe(0);
     });
 
     it('names the plan and its allowance in the limit message', () => {
-      expect(getKnowledgeStorageLimitErrorMessage('basic', 1024 ** 3)).toContain('Basic');
-      expect(getKnowledgeStorageLimitErrorMessage('basic', 1024 ** 3)).toContain('1 GB');
+      expect(getFileStorageLimitErrorMessage('basic', 1024 ** 3)).toContain('Basic');
+      expect(getFileStorageLimitErrorMessage('basic', 1024 ** 3)).toContain('1 GB');
     });
   });
 });
