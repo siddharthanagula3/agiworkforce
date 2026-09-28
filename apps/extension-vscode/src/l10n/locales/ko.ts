@@ -285,6 +285,13 @@ const ko = {
     '마지막 턴 이후 컨텍스트: 토큰 {count}개 중 {used}개 사용({percent}%)',
   'webview.answerTokens_other': '{model} · 토큰 {count}개(입력 {input}, 출력 {output})',
   'webview.moreLinesHidden_other': '표시되지 않은 줄 {count}개',
+  'mcp.connected_other':
+    'AGI Workforce: {name}에 {ms}ms 만에 연결되었습니다. 도구 {count}개를 제공합니다.',
+  'checkpoints.trackedFiles_other': '추적 중인 파일 {count}개',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: 파일 {count}개를 복원하지 못했습니다: {files}',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: 파일 {count}개를 체크포인트 시점으로 되돌렸습니다.',
+  'webview.sources_other': '출처 {count}개',
 };
 
 export default ko;

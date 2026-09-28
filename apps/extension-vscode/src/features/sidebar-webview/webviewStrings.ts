@@ -47,6 +47,7 @@ export function webviewStrings() {
     contextUsed: pluralForms('webview.contextUsed'),
     answerTokens: pluralForms('webview.answerTokens'),
     moreLinesHidden: pluralForms('webview.moreLinesHidden'),
+    sources: pluralForms('webview.sources'),
   };
 }
 
