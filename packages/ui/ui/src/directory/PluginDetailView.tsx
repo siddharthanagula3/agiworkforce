@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, CopyPlus, Pencil, Terminal } from 'lucide-react';
+import { Check, Copy, CopyPlus, Pencil, Send, Terminal } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -42,6 +42,11 @@ import {
   CUSTOMIZE_PLUGIN_HINT,
   CUSTOMIZE_PLUGIN_LABEL,
   EDIT_PLUGIN_LABEL,
+  SUBMISSION_REVIEW_NOTE_LABEL,
+  SUBMIT_PLUGIN_HINT,
+  SUBMIT_PLUGIN_LABEL,
+  SUBMIT_PLUGIN_UPDATE_LABEL,
+  WITHDRAW_SUBMISSION_LABEL,
   PLUGIN_CATEGORY_LABEL,
   PLUGIN_COMMUNITY_NOTE,
   PLUGIN_PERMISSIONS_COPY,
@@ -582,6 +587,8 @@ export function PluginDetailView({
   onRepair,
   onEdit,
   onCustomize,
+  onSubmit,
+  onWithdrawSubmission,
   busy,
 }: {
   detail: DirectoryPluginDetail;
@@ -600,6 +607,8 @@ export function PluginDetailView({
   onRepair?: (repair: DirectoryPluginRepair) => void;
   onEdit?: () => void;
   onCustomize?: () => void;
+  onSubmit?: () => void;
+  onWithdrawSubmission?: () => void;
   busy?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -612,6 +621,7 @@ export function PluginDetailView({
 
   const installed = detail.installed === true;
   const installable = detail.installable !== false;
+  const locked = detail.locked === true;
   const publisherProfile = detail.publisherProfile;
   const worksWith = detail.worksWith ?? EMPTY_VALUES;
   const moreInfo: { label: string; href: string }[] = [
@@ -661,7 +671,7 @@ export function PluginDetailView({
           primaryDone={installed}
           onPrimary={installable ? onInstall : undefined}
           statusNote={showCli ? (detail.availabilityNote ?? PLUGIN_DESKTOP_ONLY_LABEL) : undefined}
-          {...(installed && onUninstall
+          {...(installed && onUninstall && detail.removable !== false
             ? { onRemove: onUninstall, removeLabel: UNINSTALL_LABEL }
             : {})}
           onCopyLink={onCopyLink}
@@ -699,7 +709,48 @@ export function PluginDetailView({
         </div>
       ) : null}
 
+      {onSubmit || detail.submission ? (
+        <div className="flex flex-col gap-2">
+          {detail.submission ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="text-sm text-foreground">{detail.submission.statusLabel}</span>
+              {detail.submission.withdrawable && onWithdrawSubmission ? (
+                <button
+                  type="button"
+                  onClick={onWithdrawSubmission}
+                  disabled={busy}
+                  className={cn(DIRECTORY_CREATE_BUTTON, 'disabled:opacity-60')}
+                >
+                  {WITHDRAW_SUBMISSION_LABEL}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {detail.submission?.note ? (
+            <p className="text-xs text-muted-foreground">
+              {`${SUBMISSION_REVIEW_NOTE_LABEL}: ${detail.submission.note}`}
+            </p>
+          ) : null}
+          {onSubmit ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={busy}
+                className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
+              >
+                <Send aria-hidden className="size-3.5" />
+                {detail.submission ? SUBMIT_PLUGIN_UPDATE_LABEL : SUBMIT_PLUGIN_LABEL}
+              </button>
+              <span className="text-xs text-muted-foreground">{SUBMIT_PLUGIN_HINT}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {detail.community ? <p className={DETAIL_NOTICE}>{PLUGIN_COMMUNITY_NOTE}</p> : null}
+
+      {detail.managedNote ? <p className={DETAIL_NOTICE}>{detail.managedNote}</p> : null}
 
       {installed && settings?.repairs && onRepair ? (
         <RepairList repairs={settings.repairs} busy={busy === true} onRepair={onRepair} />
@@ -727,7 +778,7 @@ export function PluginDetailView({
             </span>
           </div>
         </div>
-      ) : installed && onSetEnabled ? (
+      ) : installed && onSetEnabled && !locked ? (
         <EnabledRow
           id={detail.id}
           enabled={detail.enabled !== false}
@@ -739,7 +790,7 @@ export function PluginDetailView({
       {showsTabs ? (
         <ContentsTabs
           settings={settings}
-          onSetSkillEnabled={onSetSkillEnabled}
+          onSetSkillEnabled={locked ? undefined : onSetSkillEnabled}
           onOpenConnector={onOpenConnector}
         />
       ) : null}

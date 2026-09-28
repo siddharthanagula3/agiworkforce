@@ -20,6 +20,22 @@
       ]
     },
     {
+      "id": "escalation-never-falls-through-to-allow",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "An escalation never falls through to an allow.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts#resolveToolCallGate"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.test.ts",
+          "name": "never lets an escalation fall through to an allow, even on a run that can pause"
+        }
+      ]
+    },
+    {
       "id": "approval-mode-follows-account-policy",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",

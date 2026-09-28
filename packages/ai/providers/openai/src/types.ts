@@ -19,8 +19,12 @@ export interface OpenAIChatUserMessagePartImage {
   type: 'image_url';
   image_url: { url: string; detail?: 'auto' | 'low' | 'high' | 'original' };
 }
+export interface OpenAIChatUserMessagePartFile {
+  type: 'file';
+  file: { filename: string; file_data: string };
+}
 export type OpenAIChatUserMessagePart =
-  OpenAIChatUserMessagePartText | OpenAIChatUserMessagePartImage;
+  OpenAIChatUserMessagePartText | OpenAIChatUserMessagePartImage | OpenAIChatUserMessagePartFile;
 
 export interface OpenAIChatUserMessageParam {
   role: 'user';

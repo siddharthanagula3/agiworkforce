@@ -1,0 +1,45 @@
+import terms_2026_08_11 from './terms/2026-08-11.json';
+import privacy_2026_09_21 from './privacy/2026-09-21.json';
+import privacy_2026_09_22 from './privacy/2026-09-22.json';
+import acceptableUse_2026_08_05 from './acceptableUse/2026-08-05.json';
+import acceptableUse_2026_09_22 from './acceptableUse/2026-09-22.json';
+import cookies_2026_09_12 from './cookies/2026-09-12.json';
+import subprocessors_2026_09_21 from './subprocessors/2026-09-21.json';
+import refunds_2026_08_13 from './refunds/2026-08-13.json';
+import accessibility_2026_08_05 from './accessibility/2026-08-05.json';
+import copyright_2026_08_06 from './copyright/2026-08-06.json';
+import agentPermissions_2026_09_02 from './agentPermissions/2026-09-02.json';
+import agentPermissions_2026_09_22 from './agentPermissions/2026-09-22.json';
+
+export const ARCHIVED_POLICY_TEXT = {
+  terms: {
+    '2026-08-11': terms_2026_08_11,
+  },
+  privacy: {
+    '2026-09-21': privacy_2026_09_21,
+    '2026-09-22': privacy_2026_09_22,
+  },
+  acceptableUse: {
+    '2026-08-05': acceptableUse_2026_08_05,
+    '2026-09-22': acceptableUse_2026_09_22,
+  },
+  cookies: {
+    '2026-09-12': cookies_2026_09_12,
+  },
+  subprocessors: {
+    '2026-09-21': subprocessors_2026_09_21,
+  },
+  refunds: {
+    '2026-08-13': refunds_2026_08_13,
+  },
+  accessibility: {
+    '2026-08-05': accessibility_2026_08_05,
+  },
+  copyright: {
+    '2026-08-06': copyright_2026_08_06,
+  },
+  agentPermissions: {
+    '2026-09-02': agentPermissions_2026_09_02,
+    '2026-09-22': agentPermissions_2026_09_22,
+  },
+} as const;

@@ -458,6 +458,20 @@ const es = {
   'webview.sources_one': '{count} fuente',
   'webview.sources_many': '{count} de fuentes',
   'webview.sources_other': '{count} fuentes',
+  'sessionSync.continuedIn':
+    'Esta sesión continuó en {client}. Aquí se muestran sus mensajes más recientes.',
+  'sessionSync.continuedElsewhere':
+    'Esta sesión continuó en otra aplicación. Aquí se muestran sus mensajes más recientes.',
+  'sessionSync.heldBy': '{client} está usando esta sesión.',
+  'sessionSync.takeOverDetail':
+    'Tome el control para enviar su mensaje desde aquí. Si {client} sigue respondiendo, deténgalo allí primero: si dos aplicaciones escriben a la vez, quedan dos copias de la sesión.',
+  'sessionSync.takeOver': 'Tomar el control y enviar',
+  'sessionSync.notSent':
+    'No enviado: {client} está usando esta sesión. Envíe de nuevo para tomar el control desde aquí.',
+  'sessionSync.takeOverFailed':
+    'No se pudo tomar el control de esta sesión. Envíe de nuevo para reintentarlo.',
+  'sessionSync.stopBeforeTerminal':
+    'Detenga la respuesta en curso antes de continuar esta sesión en la terminal.',
 };
 
 export default es;

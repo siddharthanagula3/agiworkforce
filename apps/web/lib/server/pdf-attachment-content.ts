@@ -3,6 +3,7 @@ import 'server-only';
 import { deflateSync } from 'node:zlib';
 
 import { logger } from '@/lib/logger';
+import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 export const MAX_PDF_TEXT_CHARS = 200_000;
 
@@ -31,6 +32,7 @@ export interface PdfAttachmentContent {
   pagesOmitted: boolean;
   /** Pages with no text layer that did not fit the image budget and reach no caller. */
   scannedPagesOmitted: number[];
+  pageCount: number;
 }
 
 type PdfAttachmentFailureReason = 'corrupt' | 'encrypted';
@@ -135,8 +137,7 @@ function toRgb(bitmap: {
 function boundText(value: string): string | null {
   const normalized = value.replace(/\r\n?/g, '\n').trim();
   if (normalized.length < MIN_TEXT_CHARS) return null;
-  if (normalized.length <= MAX_PDF_TEXT_CHARS) return normalized;
-  return `${normalized.slice(0, MAX_PDF_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  return truncateExtractedText(normalized, MAX_PDF_TEXT_CHARS);
 }
 
 /**
@@ -258,7 +259,14 @@ export async function extractPdfAttachmentContent(
             .join('\n\n'),
         )
       : null;
-    return { text, pages, pageImages, pagesOmitted, scannedPagesOmitted };
+    return {
+      text,
+      pages,
+      pageImages,
+      pagesOmitted,
+      scannedPagesOmitted,
+      pageCount: document.numPages,
+    };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
     if (error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION) {

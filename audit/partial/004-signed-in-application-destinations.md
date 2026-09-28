@@ -153,16 +153,14 @@ Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features
 
 - Done when: An approvals inbox gathers every pending approval across the user's tasks and lets them approve or reject each.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
-| desktop | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Approve/Reject buttons appear on each waiting run in the Work runs tab (filters are Active/All only); add an inbox or filter for runs awaiting a decision. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:57-61`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:391-408`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:722-726`
 
 ## S4.18: Routine details.
 
@@ -449,19 +447,6 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
-
-## S4.43: Developer console.
-
-- Done when: A developer console lets the user create/revoke API keys, see API usage per key, read API docs and try requests.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S4.44: Help and feedback.
 

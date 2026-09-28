@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
@@ -366,6 +367,7 @@ type SendMeta = {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   /** Deep Research mode: server injects research system prompt and forces web search. */
   researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
@@ -587,6 +589,7 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     routeLane ||
     m.requestedModel ||
     m.secretRedactionCount ||
+    m.truncatedAttachments?.length ||
     m.turnDetachable !== undefined ||
     tokensUsed !== undefined
       ? {
@@ -597,6 +600,9 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
           ...(m.requestedModel ? { requestedModel: m.requestedModel } : {}),
           ...(m.turnDetachable !== undefined ? { turnDetachable: m.turnDetachable } : {}),
           ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
+          ...(m.truncatedAttachments?.length
+            ? { truncatedAttachments: m.truncatedAttachments }
+            : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
           ...(tokensUsed !== undefined ? { tokensUsed } : {}),
@@ -1533,7 +1539,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (composerToggles?.webSearchEnabled) names.push('Web search');
     if (composerToggles?.researchEnabled) names.push('Deep Research');
     if (composerToggles?.codeExecutionEnabled) names.push('Run code');
-    if (composerToggles?.officeCreationEnabled) names.push('Office files');
+    if (composerToggles?.officeCreationEnabled) {
+      names.push(
+        composerToggles.officeOutputFormat
+          ? CHAT_OUTPUT_FORMAT_LABEL[composerToggles.officeOutputFormat]
+          : 'Office files',
+      );
+    }
     if (thinkingEnabled) names.push('Extended thinking');
     if (composerToggles?.selectedSkillName)
       names.push(`Skill: ${composerToggles.selectedSkillName}`);
@@ -2229,6 +2241,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             thinkingEnabled: options.meta?.thinkingEnabled,
             codeExecution: options.meta?.codeExecutionEnabled,
             officeCreation: options.meta?.officeCreationEnabled,
+            officeFormat: options.meta?.officeOutputFormat,
             workMode: options.meta?.workMode,
             agiWorkGoal: options.meta?.agiWorkGoal,
             research: options.meta?.researchEnabled,

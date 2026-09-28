@@ -12,6 +12,7 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Subprocessors',
@@ -271,7 +272,8 @@ export default function SubprocessorsPage() {
                 </Link>
                 , and customers have 30 days from publication to object.
               </strong>{' '}
-              Last updated: {POLICY_LAST_UPDATED.subprocessors}.
+              Last updated: {POLICY_LAST_UPDATED.subprocessors}.{' '}
+              <PolicyVersionsLink policy="subprocessors" />
             </>
           }
           ctas={[]}
