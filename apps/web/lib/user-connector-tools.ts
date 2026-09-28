@@ -31,12 +31,15 @@ import {
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
+  GitHubWriteOutcomeUnknownError,
   getInstallationAccessToken,
   getPrDiff,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
+  issueCommentPostedSince,
   postIssueComment,
   postPrReview,
+  pullRequestReviewPostedSince,
 } from '@/lib/github-app';
 import { openCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import {
@@ -384,6 +387,51 @@ function asInteger(value: unknown): number | null {
   return null;
 }
 
+async function writeWithReconciledOutcome(input: {
+  userId: string;
+  toolName: string;
+  target: string;
+  write: () => Promise<void>;
+  wasPosted: (since: Date) => Promise<boolean>;
+  success: string;
+}): Promise<ConnectorExecResult> {
+  const startedAt = new Date();
+  try {
+    await input.write();
+    return { handled: true, content: input.success, isError: false };
+  } catch (error) {
+    if (!(error instanceof GitHubWriteOutcomeUnknownError)) throw error;
+  }
+  try {
+    if (await input.wasPosted(startedAt)) {
+      logger.warn(
+        { userId: input.userId, toolName: input.toolName },
+        '[user-connector] github write outcome reconciled: it landed',
+      );
+      return { handled: true, content: input.success, isError: false };
+    }
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName },
+      '[user-connector] github write outcome reconciled: it did not land',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time, and ${input.target} shows nothing was posted. It is safe to try again.`,
+      isError: true,
+    };
+  } catch (error) {
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName, error },
+      '[user-connector] github write outcome could not be reconciled',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time and it could not be confirmed whether anything was posted on ${input.target}. Check ${input.target} before trying again, so it is not posted twice.`,
+      isError: true,
+    };
+  }
+}
+
 async function executeGithubTool(
   userId: string,
   toolName: string,
@@ -435,12 +483,14 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postIssueComment(token, owner, repo, issueNumber, body);
-      return {
-        handled: true,
-        content: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${issueNumber}`,
+        write: () => postIssueComment(token, owner, repo, issueNumber, body),
+        wasPosted: (since) => issueCommentPostedSince(token, owner, repo, issueNumber, body, since),
+        success: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
+      });
     }
 
     if (toolName === 'post_pull_request_review') {
@@ -453,12 +503,15 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postPrReview(token, owner, repo, pullNumber, body, 'COMMENT');
-      return {
-        handled: true,
-        content: `Posted review on ${owner}/${repo}#${pullNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${pullNumber}`,
+        write: () => postPrReview(token, owner, repo, pullNumber, body, 'COMMENT'),
+        wasPosted: (since) =>
+          pullRequestReviewPostedSince(token, owner, repo, pullNumber, body, since),
+        success: `Posted review on ${owner}/${repo}#${pullNumber}.`,
+      });
     }
 
     return { handled: true, content: `Unknown GitHub tool: ${toolName}`, isError: true };
