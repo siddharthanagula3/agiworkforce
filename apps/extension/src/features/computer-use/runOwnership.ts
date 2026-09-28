@@ -4,6 +4,7 @@ export type ComputerUseCancellationReason =
   | 'account_changed'
   | 'debugger_detached'
   | 'panel_closed'
+  | 'site_access_withdrawn'
   | 'superseded'
   | 'tab_intent_changed'
   | 'tab_removed'

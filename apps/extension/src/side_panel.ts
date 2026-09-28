@@ -81,6 +81,13 @@ import {
   requestApprovedSiteHostPermission,
 } from './features/options/site-allowlist';
 import {
+  BROWSER_CONTROL_CONSENT_STORAGE_KEY,
+  grantBrowserControlConsent,
+  hasBrowserControlConsent,
+  removeBrowserControlHostPermission,
+  requestBrowserControlHostPermission,
+} from './features/computer-use/browserControlConsent';
+import {
   backgroundConversationId,
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
@@ -7074,12 +7081,15 @@ function dropPageContextOnNavigation(tabId: number | undefined, url: string): vo
   updateAttachmentPreview();
 }
 
+let refreshComputerUseSiteHook: () => void = () => {};
+
 function updateActivePage(url: string, tabId?: number): void {
   dropPageContextOnNavigation(tabId, url);
   activePageSource = typeof tabId === 'number' ? { tabId, url } : null;
   currentPageHostname = pageChipLabel(url);
   setBlockedState(isRestrictedPageUrl(url));
   updateContextButton();
+  refreshComputerUseSiteHook();
 }
 
 function autoResizeInput(ta: HTMLTextAreaElement): void {
@@ -10599,6 +10609,7 @@ function buildUI(): void {
     }
     if (tab === 'computer-use') {
       cuPanel.refreshAuthChip();
+      refreshComputerUseSiteHook();
     }
     // The runs list polls the gateway. Deactivating stops the timer and drops
     // every rendered row, so a hidden tab costs nothing and holds no data.
@@ -11509,6 +11520,110 @@ function buildUI(): void {
     }
   });
 
+  async function startComputerUseRun(goal: string, tabId: number): Promise<void> {
+    const requestedRunId = `cu_run_${crypto.randomUUID()}`;
+    cuPanel.setRunState(true, requestedRunId);
+
+    let startResponse:
+      { success?: boolean; runId?: string; runGeneration?: number; error?: string } | undefined;
+    try {
+      startResponse = (await chrome.runtime.sendMessage({
+        type: 'AGI_START_COMPUTER_USE',
+        runId: requestedRunId,
+        goal,
+        tabId,
+      })) as typeof startResponse;
+    } catch (error) {
+      if (!cuPanel.ownsRun(requestedRunId)) return;
+      cuPanel.setRunState(false, requestedRunId);
+      cuPanel.showHandoffBanner(
+        error instanceof Error ? error.message : 'Computer use could not start. Please try again.',
+        'error',
+      );
+      return;
+    }
+
+    if (!cuPanel.ownsRun(requestedRunId)) return;
+    if (startResponse?.success === true && startResponse.runId === requestedRunId) {
+      cuPanel.setRunState(true, startResponse.runId, startResponse.runGeneration);
+      return;
+    }
+    cuPanel.setRunState(false, requestedRunId);
+    cuPanel.showHandoffBanner(
+      startResponse?.error ?? 'Computer use could not start. Please try again.',
+      'error',
+    );
+  }
+
+  let computerUseSiteGeneration = 0;
+  async function refreshComputerUseSite(): Promise<void> {
+    const generation = ++computerUseSiteGeneration;
+    let tab: chrome.tabs.Tab | undefined;
+    try {
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    } catch {
+      tab = undefined;
+    }
+    const url = tab?.url ?? '';
+    const origin = isRestrictedPageUrl(url) ? null : normalizeApprovedSiteOrigin(url);
+    if (!origin) {
+      if (generation === computerUseSiteGeneration) {
+        cuPanel.setTaskSite({ kind: url ? 'restricted' : 'none' });
+      }
+      return;
+    }
+    const [allowlist, controlled] = await Promise.all([
+      drawerReadAllowlist(),
+      hasBrowserControlConsent(origin).catch(() => false),
+    ]);
+    if (generation !== computerUseSiteGeneration) return;
+    cuPanel.setTaskSite({
+      kind: allowlist.includes(origin) && controlled ? 'ready' : 'needs-approval',
+      origin,
+    });
+  }
+  refreshComputerUseSiteHook = () => void refreshComputerUseSite();
+
+  cuPanel.onApproveSite((origin) => {
+    const hostGranted = requestBrowserControlHostPermission(origin);
+    void hostGranted.then(async (granted) => {
+      if (!granted) {
+        cuPanel.showHandoffBanner(
+          `Chrome did not grant site access for ${origin}, so browser control was not enabled.`,
+          'error',
+        );
+        return;
+      }
+      try {
+        const list = await drawerReadAllowlist();
+        if (!list.includes(origin)) await drawerWriteAllowlist([...list, origin]);
+        await grantBrowserControlConsent(origin);
+      } catch (error) {
+        await removeBrowserControlHostPermission(origin);
+        cuPanel.showHandoffBanner(
+          error instanceof Error ? error.message : 'This site could not be approved.',
+          'error',
+        );
+        return;
+      }
+      await refreshComputerUseSite();
+      cuPanel.hideHandoffBanner();
+      cuPanel.focusTask();
+    });
+  });
+
+  cuPanel.onStartTask((goal) => {
+    void (async () => {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!activeTab?.id) {
+        cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
+        return;
+      }
+      cuPanel.hideHandoffBanner();
+      await startComputerUseRun(goal, activeTab.id);
+    })();
+  });
+
   cuPanel.onRunAutofill(() => {
     void (async () => {
       const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -11550,41 +11665,7 @@ function buildUI(): void {
           `Switching to computer use…`,
       );
       switchTab('computer-use');
-
-      const requestedRunId = `cu_run_${crypto.randomUUID()}`;
-      cuPanel.setRunState(true, requestedRunId);
-
-      let startResponse:
-        { success?: boolean; runId?: string; runGeneration?: number; error?: string } | undefined;
-      try {
-        startResponse = (await chrome.runtime.sendMessage({
-          type: 'AGI_START_COMPUTER_USE',
-          runId: requestedRunId,
-          goal,
-          tabId: activeTabId,
-        })) as typeof startResponse;
-      } catch (error) {
-        if (!cuPanel.ownsRun(requestedRunId)) return;
-        cuPanel.setRunState(false, requestedRunId);
-        cuPanel.showHandoffBanner(
-          error instanceof Error
-            ? error.message
-            : 'Computer use could not start. Please try again.',
-          'error',
-        );
-        return;
-      }
-
-      if (!cuPanel.ownsRun(requestedRunId)) return;
-      if (startResponse?.success === true && startResponse.runId === requestedRunId) {
-        cuPanel.setRunState(true, startResponse.runId, startResponse.runGeneration);
-        return;
-      }
-      cuPanel.setRunState(false, requestedRunId);
-      cuPanel.showHandoffBanner(
-        startResponse?.error ?? 'Computer use could not start. Please try again.',
-        'error',
-      );
+      await startComputerUseRun(goal, activeTabId);
     })();
   });
 
@@ -13648,6 +13729,12 @@ async function releaseContextHandoffTo(
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[BROWSER_STORE_KEY]) {
     void refreshActivePersistenceState();
+  }
+  if (
+    area === 'local' &&
+    (changes[SP_SITE_ALLOWLIST_KEY] || changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY])
+  ) {
+    refreshComputerUseSiteHook();
   }
   if (area === 'local' && changes[SHORTCUTS_STORAGE_KEY]) {
     promptShortcuts = promptShortcutsFromSaved(changes[SHORTCUTS_STORAGE_KEY].newValue);
