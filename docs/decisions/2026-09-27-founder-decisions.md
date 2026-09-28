@@ -95,4 +95,5 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **Image and video edit controls** (S43.10, S43.15-16, S44.08-10, S45.12-14,
   S45.20-21, S45.25-27, S46.10-13, S47.11). ChatGPT and Gemini edit and generate
   by prompt; Claude has no image generation. The select-an-area edit tool is
-  built, because ChatGPT has one.
+  built, because ChatGPT has one. Per-image cost and remaining image counts
+  (S44.14, S44.15) and adding videos to projects (S46.34) are declined too.

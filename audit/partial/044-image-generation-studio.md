@@ -81,51 +81,6 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 Code: `apps/cli/src/lib.rs:950-953`, `apps/cli/src/cloud/image.rs:277-283`
 
-## S44.08: Size/resolution selector.
-
-- Done when: User picks the output size or resolution of the image.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route and hook accept size (256-1792px presets) but the composer never offers or sends it. | ui |
-| desktop | partial | Hosted web: no size control. | ui |
-| mobile | partial | Route accepts size; the Add-to-chat sheet offers only model and aspect ratio. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useMediaGeneration.ts:89-91`, `packages/contracts/cloud-contracts/src/managed-media.ts:91-93`
-
-## S44.09: Quality selector.
-
-- Done when: User picks a quality level (standard/HD) for the image.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route maps quality standard/hd to the OpenAI quality; no web control sends it. | ui |
-| desktop | partial | Hosted web: no quality control. | ui |
-| mobile | partial | Route supports quality; mobile offers no control. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:94-96`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:455-458`
-
-## S44.10: Output-count selector.
-
-- Done when: User picks how many images to generate and sees all of them.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route generates up to 4 (n) but the composer sends none and the hook keeps only images[0]. | ui |
-| desktop | partial | Hosted web: one image per turn. | ui |
-| mobile | partial | Route supports n up to 4; mobile sends one and shows one. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useMediaGeneration.ts:319-322`, `packages/contracts/cloud-contracts/src/managed-media.ts:93-95`
-
 ## S44.11: Background transparency option.
 
 - Done when: User asks for a transparent background on the generated image.
@@ -155,36 +110,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4776-4790`
 | chrome | missing | Not built on this surface. |  |
 
 Code: `packages/contracts/cloud-contracts/src/managed-media.ts:95-97`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:563-567`, `apps/cli/src/cloud/image.rs:27-38`
-
-## S44.14: Generation-cost indication.
-
-- Done when: Before or after generating, the user sees what the image costs (credits or money).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The route estimates cost to reserve credits, but no screen shows the cost of an image. | ui |
-| desktop | partial | Hosted web: cost never displayed. | ui |
-| mobile | partial | Server estimates cost; mobile shows none (cost_estimate typed but unread). | ui |
-| cli | partial | Server estimates cost; the CLI prints only model and provider. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/generate/route.ts:719-722`, `apps/mobile/src/features/image/services/imagegen.ts:18-20`, `apps/cli/src/lib.rs:1751-1753`
-
-## S44.15: Remaining-generation allowance.
-
-- Done when: User sees how many image generations remain in their allowance before hitting a limit.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Allowance is enforced at reservation; only a paywall after refusal, never a remaining count. | ui |
-| desktop | partial | Hosted web: no remaining count. | ui |
-| mobile | partial | Server enforces; mobile shows no remaining image count. | ui |
-| cli | partial | Server enforces; the CLI shows no remaining image count. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/generate/route.ts:771-780`
 
 ## S44.16: Generation queue.
 
