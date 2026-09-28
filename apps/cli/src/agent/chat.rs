@@ -549,7 +549,7 @@ impl AgentSession {
             }
         });
 
-        let selection = match crate::model_catalog::resolve_auto_model_with_context(
+        let selection = match crate::model_catalog::resolve_auto_model_with_speed(
             &previous.selection,
             task_type,
             &tier,
@@ -558,6 +558,7 @@ impl AgentSession {
             Some(crate::routing::classify::registry_task_type(
                 previous.task_type,
             )),
+            previous.speed_first,
         ) {
             Ok(selection) => selection,
             Err(error) => {
@@ -613,6 +614,7 @@ impl AgentSession {
             model_key: selection.model_key,
             task_type: crate::routing::classify::developer_task_type(task_type),
             trust_mode: previous.trust_mode,
+            speed_first: previous.speed_first,
         }));
     }
 
@@ -3343,6 +3345,7 @@ mod tests {
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+                speed_first: false,
             },
         ));
         session

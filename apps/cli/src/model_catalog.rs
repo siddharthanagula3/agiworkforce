@@ -647,6 +647,31 @@ pub fn resolve_auto_model_with_context(
     current_model_key: Option<&str>,
     previous_task_type: Option<RoutingTaskType>,
 ) -> Result<CliAutoModelSelection, String> {
+    resolve_auto_model_with_speed(
+        selection,
+        task_type,
+        tier,
+        trust_mode,
+        current_model_key,
+        previous_task_type,
+        false,
+    )
+}
+
+pub fn resolve_auto_model_with_speed(
+    selection: &str,
+    task_type: RoutingTaskType,
+    tier: &str,
+    trust_mode: TrustMode,
+    current_model_key: Option<&str>,
+    previous_task_type: Option<RoutingTaskType>,
+    speed_first: bool,
+) -> Result<CliAutoModelSelection, String> {
+    let prefer_slots = if speed_first {
+        agiworkforce_model_registry::speed_first_slots().map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
     let runtime_profile_id = match trust_mode {
         TrustMode::ManagedCloud => "cli/managed-chat",
         TrustMode::Byok => "cli/byok-chat",
@@ -660,6 +685,7 @@ pub fn resolve_auto_model_with_context(
         current_model_key,
         previous_task_type,
         runtime_profile_id: Some(runtime_profile_id),
+        prefer_slots: &prefer_slots,
         ..AutoRoutingRequest::default()
     };
 

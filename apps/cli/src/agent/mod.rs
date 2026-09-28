@@ -1868,11 +1868,18 @@ impl AgentSession {
             .managed_auto_routing()
             .map(|state| crate::routing::classify::registry_task_type(state.task_type))
             .unwrap_or(RoutingTaskType::SimpleChat);
-        match crate::model_catalog::resolve_auto_model(
+        let speed_first = matches!(
+            profile,
+            agiworkforce_protocol::developer_session::DeveloperRoutingProfile::Speed
+        );
+        match crate::model_catalog::resolve_auto_model_with_speed(
             selection,
             task_type,
             &tier,
             TrustMode::ManagedCloud,
+            None,
+            None,
+            speed_first,
         ) {
             Ok(route) => {
                 self.model = route.provider_model_id.clone();
@@ -1884,6 +1891,7 @@ impl AgentSession {
                         model_key: route.model_key,
                         task_type: crate::routing::classify::developer_task_type(task_type),
                         trust_mode: TrustMode::ManagedCloud,
+                        speed_first,
                     },
                 ));
                 format!(
@@ -2939,6 +2947,7 @@ mod tests {
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
                 trust_mode: agiworkforce_model_registry::TrustMode::Local,
+                speed_first: false,
             },
         ));
         let source_before = std::fs::read(&source_path).expect("read Local source");
