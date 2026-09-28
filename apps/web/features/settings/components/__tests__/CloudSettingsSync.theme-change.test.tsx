@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { useAppTheme } from '@shared/hooks/useAppTheme';
 
-const session = { isLoaded: true, isSignedIn: true };
+const session = { isLoaded: true, isSignedIn: true, userId: 'user-1' };
 const preferences = {
   fetchStoredPreferenceNamespace: vi.fn(async (namespace: string) =>
     namespace === 'appearance' ? { theme: 'light' } : { locale: 'en' },

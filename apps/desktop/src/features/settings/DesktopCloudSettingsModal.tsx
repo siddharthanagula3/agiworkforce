@@ -74,6 +74,7 @@ import {
   customConnectorSignInUrl,
   getCustomConnectorOAuthRedirectUri,
   type CloudConnectorEntry,
+  type CloudConnectorGrantedPermission,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
 import { listCloudSkills } from '../../api/cloudSkills';
@@ -714,8 +715,41 @@ function toDisplayConnectorId(connector: CloudConnectorEntry): string {
 }
 
 const CUSTOM_CONNECTOR_SIGN_IN_COPY = 'Sign-in required';
+const CONNECTOR_REAUTHORIZATION_COPY =
+  'Needs to be reconnected. Reconnecting signs in again and keeps its settings and tool permissions.';
 const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
   'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
+
+const GRANTED_PERMISSIONS_HEADING = 'Permissions granted';
+const PERMISSION_ACCESS_LABEL: Record<CloudConnectorGrantedPermission['access'], string> = {
+  read: 'Read',
+  write: 'Write',
+};
+
+function GrantedPermissions({
+  permissions,
+}: {
+  permissions: readonly CloudConnectorGrantedPermission[];
+}) {
+  return (
+    <section
+      aria-label={GRANTED_PERMISSIONS_HEADING}
+      className="space-y-1.5 rounded-lg border border-border p-3"
+    >
+      <h4 className="text-xs font-semibold text-foreground">{GRANTED_PERMISSIONS_HEADING}</h4>
+      <ul className="space-y-1.5">
+        {permissions.map((permission) => (
+          <li key={permission.scope} className="flex items-start justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">{permission.sentence}</span>
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
+              {PERMISSION_ACCESS_LABEL[permission.access]}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function customSignInPending(connector: CloudConnectorEntry): boolean {
   return (
@@ -824,8 +858,26 @@ export function DesktopCloudSettingsModal({
         connectedAt: c.connectedAt || undefined,
         ...(customSignInPending(c)
           ? { status: 'warning' as const, warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY }
-          : { status: 'connected' as const }),
+          : c.needsReauthorization === true
+            ? {
+                status: 'warning' as const,
+                warningLabel: CONNECTOR_REAUTHORIZATION_COPY,
+                needsReauthorization: true,
+              }
+            : { status: 'connected' as const }),
       })),
+    [cloudConnectors],
+  );
+
+  const renderConnectorScopes = useCallback(
+    (connectorId: string) => {
+      const permissions = cloudConnectors?.find(
+        (connector) => toDisplayConnectorId(connector) === connectorId,
+      )?.grantedPermissions;
+      return permissions && permissions.length > 0 ? (
+        <GrantedPermissions permissions={permissions} />
+      ) : null;
+    },
     [cloudConnectors],
   );
 
@@ -1210,6 +1262,7 @@ export function DesktopCloudSettingsModal({
       sectionContent={sectionContent}
       navGroups={DESKTOP_CLOUD_SETTINGS_NAV}
       adapter={adapter}
+      renderConnectorScopes={renderConnectorScopes}
       title="Settings"
     />
   );

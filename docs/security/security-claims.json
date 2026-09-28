@@ -52,6 +52,41 @@
       ]
     },
     {
+      "id": "memory-tools-offered-only-on-the-apps",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "The three Memory tools are offered only on the web, desktop and mobile apps and the Chrome extension, only while Memory is on and the chat is not temporary.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#applyMemoryToolCapability",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#AMBIENT_TOOL_SURFACES",
+        "apps/web/lib/services/memory-commands.ts#MEMORY_COMMAND_CLIENT_SURFACES"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "offers the memory tools only on the apps and the Chrome extension, only with Memory on and never in a temporary chat"
+        }
+      ]
+    },
+    {
+      "id": "model-saved-memory-passes-write-admission",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "A memory the model saves passes the same write admission and never-remember list as `/remember`.",
+      "implementation": [
+        "apps/web/lib/server/tools/memory-tools.ts#createMemoryCommandPorts",
+        "apps/web/lib/services/memory-commands.ts#memoryWriteAdmission",
+        "apps/web/lib/services/managed-memory-context-service.ts#memoryWriteAdmission"
+      ],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-memory-write-gate.mjs"
+        }
+      ]
+    },
+    {
       "id": "website-default-skips-eligible-approvals",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",

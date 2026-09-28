@@ -2,16 +2,23 @@ import { CLOUD_API_BASE_URL } from './cloudApi';
 import { WEB_APP_URL } from './config';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
+export interface CloudConnectorGrantedPermission {
+  scope: string;
+  sentence: string;
+  access: 'read' | 'write';
+}
+
 export interface CloudConnectorEntry {
   id: string;
   connectorId: string;
   authType: string;
   connectedAt: string;
   updatedAt: string;
-  source: 'user' | 'github-app' | 'custom';
+  source: 'user' | 'github-app' | 'custom' | 'oauth';
   name?: string;
   toolConnectorId?: string;
   needsReauthorization?: boolean;
+  grantedPermissions?: CloudConnectorGrantedPermission[];
 }
 
 export interface ListConnectorsResult {
@@ -66,10 +73,27 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
     typeof record['updatedAt'] !== 'string' ||
     (record['source'] !== 'user' &&
       record['source'] !== 'github-app' &&
-      record['source'] !== 'custom')
+      record['source'] !== 'custom' &&
+      record['source'] !== 'oauth')
   ) {
     return null;
   }
+  const grantedPermissions = Array.isArray(record['grantedPermissions'])
+    ? record['grantedPermissions'].flatMap((permission: unknown) => {
+        const candidate = permission as Record<string, unknown> | null;
+        return typeof candidate?.['scope'] === 'string' &&
+          typeof candidate['sentence'] === 'string' &&
+          (candidate['access'] === 'read' || candidate['access'] === 'write')
+          ? [
+              {
+                scope: candidate['scope'],
+                sentence: candidate['sentence'],
+                access: candidate['access'],
+              },
+            ]
+          : [];
+      })
+    : [];
   return {
     id: record['id'],
     connectorId: record['connectorId'],
@@ -82,6 +106,7 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
       ? { toolConnectorId: record['toolConnectorId'] }
       : {}),
     ...(record['needsReauthorization'] === true ? { needsReauthorization: true } : {}),
+    ...(grantedPermissions.length > 0 ? { grantedPermissions } : {}),
   };
 }
 

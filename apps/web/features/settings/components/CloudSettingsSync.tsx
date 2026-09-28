@@ -52,6 +52,8 @@ export function CloudSettingsSync() {
   const motion = useSettingsStore((state) => state.motion);
   const highContrast = useSettingsStore((state) => state.highContrast);
   const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
+  const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
+  const followUpBehavior = useSettingsStore((state) => state.followUpBehavior);
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
   const voiceSpeed = useSettingsStore((state) => state.voiceSpeed);
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds);
@@ -171,6 +173,8 @@ export function CloudSettingsSync() {
       motion,
       highContrast,
       codeBlockWrap,
+      followUpSuggestionsEnabled,
+      followUpBehavior,
       dictationEnabled,
       voiceSpeed: voiceSpeed ?? 'normal',
       hiddenNavIds: hiddenNavIds ?? [],
@@ -195,6 +199,8 @@ export function CloudSettingsSync() {
     chatTextSize,
     codeBlockWrap,
     dictationEnabled,
+    followUpBehavior,
+    followUpSuggestionsEnabled,
     hiddenNavIds,
     highContrast,
     hydratedAt,
