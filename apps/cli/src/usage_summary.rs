@@ -175,6 +175,14 @@ fn web_link(path: &str) -> String {
     format!("{}{path}", tier_cache::default_api_base())
 }
 
+pub fn recovery_link(href: &str) -> String {
+    if href.starts_with("https://") {
+        href.to_string()
+    } else {
+        web_link(href)
+    }
+}
+
 pub fn recovery_sentence(href: &str) -> String {
     let url = web_link(href);
     match href {
@@ -188,6 +196,7 @@ pub fn recovery_sentence(href: &str) -> String {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct UsageLimitContext {
     pub resets_in: Option<String>,
+    pub resets_at: Option<String>,
     pub alternative_model: Option<String>,
 }
 
@@ -234,8 +243,11 @@ pub fn usage_limit_context_from(
     } else {
         None
     };
+    let reset_at = limit_window_reset(usage, code);
+    let resets_in = reset_at.and_then(|reset_at| time_until(reset_at, now));
     UsageLimitContext {
-        resets_in: limit_window_reset(usage, code).and_then(|reset_at| time_until(reset_at, now)),
+        resets_at: resets_in.as_ref().and(reset_at).map(str::to_string),
+        resets_in,
         alternative_model,
     }
 }

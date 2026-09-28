@@ -10,10 +10,35 @@ const COMPATIBILITY = 'packages/contracts/types/src/client-capability-manifest.t
 const DEGRADATION_TEST =
   'packages/ui/unified-chat/src/lib/__tests__/contentBlockDegradation.test.ts';
 const SCANNED_ROOTS = Object.freeze([
-  'packages/contracts/types/src',
-  'packages/ui/unified-chat/src',
+  'packages',
+  'apps/web/app',
+  'apps/web/features',
+  'apps/web/shared',
+  'apps/web/components',
+  'apps/web/lib',
+  'apps/mobile',
+  'apps/extension/src',
+  'apps/extension-vscode/src',
+  'apps/desktop/src',
+  'apps/desktop/electron',
 ]);
-const SKIPPED_DIRS = new Set(['node_modules', 'dist', '.turbo']);
+const SKIPPED_DIRS = new Set([
+  'node_modules',
+  'dist',
+  '.turbo',
+  '.next',
+  'build',
+  'coverage',
+  '__tests__',
+  '__mocks__',
+  '__fixtures__',
+]);
+const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
+
+export const SEPARATE_VOCABULARIES = Object.freeze({
+  'packages/contracts/cloud-contracts/src/library.ts':
+    'Library item kinds (image, video, file) name what a stored file is, not a block in a message, and happen to share three words with MESSAGE_KINDS.',
+});
 
 // Reading a kind out of the vocabulary and acting on it, rather than restating
 // the list, is what keeps a newly declared block from reaching a build blind.
@@ -34,7 +59,7 @@ function* sourceFiles(root, relative) {
     if (entry.name.startsWith('.') || SKIPPED_DIRS.has(entry.name)) continue;
     const child = `${relative}/${entry.name}`;
     if (entry.isDirectory()) yield* sourceFiles(root, child);
-    else if (/\.tsx?$/.test(entry.name)) yield child;
+    else if (/\.tsx?$/.test(entry.name) && !TEST_FILE.test(entry.name)) yield child;
   }
 }
 
@@ -98,15 +123,28 @@ export function runContentBlocksGuard(root = process.cwd()) {
   }
 
   let scanned = 0;
+  const separateSeen = new Set();
   for (const rootDir of SCANNED_ROOTS) {
     for (const relative of sourceFiles(root, rootDir)) {
-      if (relative.endsWith(VOCABULARY.slice(VOCABULARY.lastIndexOf('/') + 1))) continue;
+      if (relative === VOCABULARY) continue;
       scanned += 1;
-      for (const restatement of arrayLiteralsRestatingTheVocabulary(read(root, relative), kinds)) {
+      const restatements = arrayLiteralsRestatingTheVocabulary(read(root, relative), kinds);
+      if (restatements.length > 0 && SEPARATE_VOCABULARIES[relative] !== undefined) {
+        separateSeen.add(relative);
+        continue;
+      }
+      for (const restatement of restatements) {
         findings.push(
           `${relative}: restates the block vocabulary (${restatement}) instead of reading MESSAGE_KINDS`,
         );
       }
+    }
+  }
+  for (const relative of Object.keys(SEPARATE_VOCABULARIES)) {
+    if (!separateSeen.has(relative)) {
+      findings.push(
+        `${relative}: no longer shares block kinds with MESSAGE_KINDS. Delete its entry from SEPARATE_VOCABULARIES; the list only shrinks.`,
+      );
     }
   }
 

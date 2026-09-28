@@ -13,6 +13,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 
@@ -42,6 +43,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
   const link = await createBankAccountsLinkToken(userId);
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'connector_authorization_started',
+    request,
+    detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
+  });
   return NextResponse.json(link, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 

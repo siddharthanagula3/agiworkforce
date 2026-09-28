@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  BROWSER_SIGN_IN_START,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
@@ -646,4 +647,8 @@ export function setDispatchTaskRunnerReady(ready: boolean): Promise<{ ready: boo
 
 export function reportDispatchTask(report: DispatchTaskReport): Promise<{ accepted: boolean }> {
   return invoke<{ accepted: boolean }>(DISPATCH_TASK_REPORT, { ...report });
+}
+
+export function startBrowserSignIn(): Promise<{ started: true }> {
+  return invoke<{ started: true }>(BROWSER_SIGN_IN_START);
 }

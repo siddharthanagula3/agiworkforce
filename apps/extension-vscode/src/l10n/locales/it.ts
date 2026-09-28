@@ -570,6 +570,48 @@ const it = {
   'cloudSteer.waitingSection': 'I tuoi messaggi',
   'cloudSteer.failed': 'non è stato possibile inviare il tuo messaggio',
   'cloudSteer.tooLong': 'Un messaggio può contenere al massimo {count} caratteri.',
+  'savedApprovals.title': 'Approvazioni salvate',
+  'savedApprovals.placeholder': 'Regole che la CLI di AGI applica in ogni sessione',
+  'savedApprovals.empty':
+    "Nessuna approvazione salvata finora. Scegli Consenti sempre su un'approvazione per salvarne una.",
+  'savedApprovals.allowed': 'Sempre consentito',
+  'savedApprovals.denied': 'Sempre negato',
+  'savedApprovals.kindCommand': 'Comando shell',
+  'savedApprovals.kindFile': 'Modifica di file',
+  'savedApprovals.kindPolicy': 'Regola di criterio dei comandi',
+  'savedApprovals.removeTitle': 'Rimuovere questa approvazione salvata?',
+  'savedApprovals.removeAllowed':
+    'AGI chiederà di nuovo la prossima volta che vorrà fare questo: {label}',
+  'savedApprovals.removeDenied':
+    'AGI potrà chiedere di nuovo di fare questo invece di essere rifiutato: {label}',
+  'savedApprovals.noun': 'approvazioni salvate',
+  'webview.alwaysAllow': 'Consenti sempre',
+  'webview.alwaysAllowHint':
+    'Salva una regola così AGI smette di chiederlo in ogni sessione. Gestiscila in Approvazioni salvate.',
+  'webview.alwaysAllowedOutcome': 'Sempre consentito. AGI non lo chiederà più.',
+  'mcpDetails.action': 'Dettagli del server',
+  'mcpDetails.checking': 'AGI Workforce: verifica di {name}',
+  'mcpDetails.documentTitle': 'Server MCP {name}',
+  'mcpDetails.health': 'Stato',
+  'mcpDetails.responding': 'Risponde',
+  'mcpDetails.notResponding': 'Connesso, ma non ha risposto a un ping',
+  'mcpDetails.notConnected': 'Connessione non riuscita',
+  'mcpDetails.connection': 'Connessione',
+  'mcpDetails.live': 'Attiva, in una sessione in corso',
+  'mcpDetails.probe': 'Avviato per questa verifica, poi arrestato',
+  'mcpDetails.protocol': 'Protocollo',
+  'mcpDetails.server': 'Server',
+  'mcpDetails.notReported': 'Non indicato',
+  'mcpDetails.capabilities': 'Funzionalità',
+  'mcpDetails.noCapabilities': 'Nessuna dichiarata',
+  'mcpDetails.error': 'Errore',
+  'mcpDetails.checkedAt': 'Verificato: {time}',
+  'mcpDetails.instructions': 'Istruzioni',
+  'mcpDetails.output': 'Output recente',
+  'mcpDetails.noOutput': 'Questo server non ha ancora prodotto output.',
+  'mcpDetails.expired':
+    'Questi dettagli non sono più disponibili. Esegui AGI Workforce: Show MCP Servers e scegli Dettagli del server per verificare di nuovo {name}.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default it;

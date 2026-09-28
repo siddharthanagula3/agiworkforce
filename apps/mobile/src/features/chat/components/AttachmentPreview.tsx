@@ -1,6 +1,16 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { Lock, X, FileText, ClipboardList, AlertCircle, RotateCcw } from 'lucide-react-native';
+import {
+  Lock,
+  X,
+  File as FileIcon,
+  FileCode,
+  FileSpreadsheet,
+  FileText,
+  ClipboardList,
+  AlertCircle,
+  RotateCcw,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
@@ -43,6 +53,59 @@ function isImage(mimeType: string): boolean {
   return mimeType.startsWith('image/');
 }
 
+const SPREADSHEET_EXTENSIONS = new Set(['csv', 'tsv', 'xls', 'xlsx', 'ods', 'numbers']);
+const CODE_EXTENSIONS = new Set([
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'py',
+  'rb',
+  'go',
+  'rs',
+  'java',
+  'kt',
+  'swift',
+  'c',
+  'cpp',
+  'h',
+  'cs',
+  'php',
+  'sh',
+  'sql',
+  'html',
+  'css',
+  'json',
+  'xml',
+  'yaml',
+  'yml',
+  'toml',
+]);
+
+function documentIcon(attachment: Attachment): typeof FileIcon {
+  const mimeType = attachment.mimeType.toLowerCase();
+  const extension = attachment.fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (mimeType === 'application/pdf' || extension === 'pdf') return FileText;
+  if (
+    mimeType.includes('spreadsheet') ||
+    mimeType.includes('excel') ||
+    mimeType === 'text/csv' ||
+    SPREADSHEET_EXTENSIONS.has(extension)
+  ) {
+    return FileSpreadsheet;
+  }
+  if (
+    mimeType.includes('javascript') ||
+    mimeType.includes('typescript') ||
+    mimeType.includes('json') ||
+    mimeType.includes('xml') ||
+    CODE_EXTENSIONS.has(extension)
+  ) {
+    return FileCode;
+  }
+  return FileIcon;
+}
+
 function AttachmentThumbnail({
   attachment,
   onRemove,
@@ -79,6 +142,7 @@ function AttachmentThumbnail({
   const imageAttachment = isImage(attachment.mimeType);
   const isPastedText = Boolean(attachment.pastedText);
   const sendFailed = attachment.sendFailed === true;
+  const DocumentIcon = documentIcon(attachment);
 
   return (
     <Animated.View
@@ -98,6 +162,13 @@ function AttachmentThumbnail({
             height: 72,
             backgroundColor: colors.surfaceElevated,
           }}
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={
+            attachment.fileSize
+              ? `${attachment.fileName}, ${formatFileSize(attachment.fileSize)}`
+              : attachment.fileName
+          }
         >
           <Image
             source={{ uri: attachment.uri }}
@@ -144,7 +215,7 @@ function AttachmentThumbnail({
             borderColor: colors.border,
           }}
         >
-          <FileText size={24} color={colors.textMuted} />
+          <DocumentIcon size={24} color={colors.textMuted} />
           <Text
             className="text-[9px] mt-1 text-center"
             style={{ color: colors.textMuted }}

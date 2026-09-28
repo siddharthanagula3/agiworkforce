@@ -521,86 +521,39 @@ impl Marketplace {
 
         for (name, entry) in &registry.plugins {
             let install_path = PathBuf::from(&entry.install_path);
-
-            // Check if this was a git clone by looking for .git directory
-            let is_git = install_path.join(".git").exists()
-                || plugins_dir.join(CACHE_DIR).join(name).join(".git").exists();
-
-            if !is_git {
+            if !is_git_checkout(&install_path)
+                && !plugins_dir.join(CACHE_DIR).join(name).join(".git").exists()
+            {
                 skipped += 1;
                 continue;
             }
-
-            // Try git pull in the install directory
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&install_path)
-                .arg("pull")
-                .arg("--ff-only")
-                .output();
-
-            match output {
-                Ok(o) if o.status.success() => {
-                    let stdout = String::from_utf8_lossy(&o.stdout);
-                    if stdout.contains("Already up to date") {
-                        eprintln!(
-                            "  {}, already up to date",
-                            crate::terminal_text::sanitize_terminal_text(name)
-                        );
-                        continue;
-                    }
-                    let signature_state =
-                        match crate::plugins::evaluate_plugin_signature(&install_path, signature) {
-                            Ok(state) => state,
-                            Err(error) => {
-                                let rollback = std::process::Command::new("git")
-                                    .arg("-C")
-                                    .arg(&install_path)
-                                    .args(["reset", "--hard", "ORIG_HEAD"])
-                                    .output();
-                                let rolled_back =
-                                    matches!(rollback, Ok(ref out) if out.status.success());
-                                eprintln!(
-                                    "  {}, update refused ({}){}",
-                                    crate::terminal_text::sanitize_terminal_text(name),
-                                    crate::terminal_text::sanitize_terminal_text(&error),
-                                    if rolled_back {
-                                        ", kept the previous version"
-                                    } else {
-                                        ", rollback failed: remove the plugin"
-                                    }
-                                );
-                                continue;
-                            }
-                        };
-                    let fresh = read_manifest_version(&install_path);
+            match update_plugin_checkout(&install_path, signature) {
+                Ok(PluginCheckoutUpdate::UpToDate) => eprintln!(
+                    "  {}, already up to date",
+                    crate::terminal_text::sanitize_terminal_text(name)
+                ),
+                Ok(PluginCheckoutUpdate::Updated {
+                    version,
+                    changed_files,
+                    signature,
+                }) => {
                     eprintln!(
                         "  {}",
                         crate::terminal_text::sanitize_terminal_text(&describe_plugin_update(
                             name,
                             &entry.version,
-                            &fresh,
-                            &changed_files_since_orig_head(&install_path),
+                            &version,
+                            &changed_files,
                         ))
                     );
-                    version_refresh.push((name.clone(), fresh, signature_state.label()));
+                    version_refresh.push((name.clone(), version, signature));
                     updated += 1;
                 }
-                Ok(o) => {
-                    let stderr = String::from_utf8_lossy(&o.stderr);
-                    eprintln!(
-                        "  {}, update failed: {}",
-                        crate::terminal_text::sanitize_terminal_text(name),
-                        crate::terminal_text::sanitize_terminal_text(stderr.trim())
-                    );
-                }
-                Err(e) => {
-                    eprintln!(
-                        "  {}, git error: {}",
-                        crate::terminal_text::sanitize_terminal_text(name),
-                        crate::terminal_text::sanitize_terminal_text(&e.to_string())
-                    );
-                }
+                Err(error) => eprintln!(
+                    "  {}, {}",
+                    crate::terminal_text::sanitize_terminal_text(name),
+                    crate::terminal_text::sanitize_terminal_text(&error)
+                ),
             }
         }
 
@@ -620,6 +573,76 @@ impl Marketplace {
         );
         Ok(())
     }
+}
+
+pub enum PluginCheckoutUpdate {
+    UpToDate,
+    Updated {
+        version: String,
+        changed_files: Vec<String>,
+        signature: String,
+    },
+}
+
+pub fn is_git_checkout(install_path: &Path) -> bool {
+    install_path.join(".git").exists()
+}
+
+pub fn update_plugin_checkout(
+    install_path: &Path,
+    signature: &crate::plugins::PluginSignaturePolicy,
+) -> std::result::Result<PluginCheckoutUpdate, String> {
+    let before = git_head(install_path);
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(install_path)
+        .args(["pull", "--ff-only"])
+        .output()
+        .map_err(|error| format!("git error: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "update failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    if before.is_some() && before == git_head(install_path) {
+        return Ok(PluginCheckoutUpdate::UpToDate);
+    }
+    match crate::plugins::evaluate_plugin_signature(install_path, signature) {
+        Ok(state) => Ok(PluginCheckoutUpdate::Updated {
+            version: read_manifest_version(install_path),
+            changed_files: changed_files_since_orig_head(install_path),
+            signature: state.label(),
+        }),
+        Err(error) => {
+            let rollback = std::process::Command::new("git")
+                .arg("-C")
+                .arg(install_path)
+                .args(["reset", "--hard", "ORIG_HEAD"])
+                .output();
+            Err(format!(
+                "update refused ({error}){}",
+                if matches!(rollback, Ok(ref out) if out.status.success()) {
+                    ", kept the previous version"
+                } else {
+                    ", rollback failed: remove the plugin"
+                }
+            ))
+        }
+    }
+}
+
+fn git_head(install_path: &Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(install_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 // ---------------------------------------------------------------------------
