@@ -675,7 +675,8 @@ export interface ModelMetadata {
       endpoint: 'responses';
     };
   };
-  imageInput?: { detailValues: string[] };
+  imageInput?: { detailValues?: string[]; maxImagesPerRequest?: number };
+  documentInput?: { maxPagesPerRequest?: number };
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];
