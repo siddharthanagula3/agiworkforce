@@ -149,7 +149,7 @@ describe('createPostgresSearchProvider', () => {
     expect(response.semantic).toBe('unavailable');
     const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
     expect(sql).not.toContain('semantic as (');
-    expect(params).toHaveLength(6);
+    expect(params).toHaveLength(7);
   });
 
   it('never pays for a query embedding when nothing in scope is embedded', async () => {

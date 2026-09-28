@@ -221,7 +221,7 @@ export function StyleSelector() {
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-start">
                   <div className="font-medium">
                     {t(`composer.styles.${s.id}`, { defaultValue: s.label })}
                   </div>
@@ -289,7 +289,7 @@ export function StyleSelector() {
                     <button
                       type="button"
                       onClick={() => handleSelectCustom(custom)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      className="flex min-w-0 flex-1 items-center gap-3 text-start"
                     >
                       <Palette className="h-4 w-4 shrink-0 opacity-60" />
                       <span className="min-w-0 flex-1">

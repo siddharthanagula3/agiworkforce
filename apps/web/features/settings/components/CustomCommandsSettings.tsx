@@ -176,7 +176,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
               aria-invalid={!!errors.description}
               maxLength={110}
             />
-            <p className="text-xs text-muted-foreground text-right">{description.length}/100</p>
+            <p className="text-xs text-muted-foreground text-end">{description.length}/100</p>
             {errors.description && (
               <p id="cmd-description-error" className="text-xs text-danger">
                 {errors.description}

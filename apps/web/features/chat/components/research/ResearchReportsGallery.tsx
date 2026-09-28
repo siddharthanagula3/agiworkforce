@@ -62,7 +62,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
         type="button"
         onClick={onOpen}
         className={cn(
-          'flex w-full items-start gap-2.5 rounded-lg border border-border/20 bg-muted/20 p-2.5 text-left',
+          'flex w-full items-start gap-2.5 rounded-lg border border-border/20 bg-muted/20 p-2.5 text-start',
           'transition-colors hover:border-border/50 hover:bg-muted/40',
         )}
       >

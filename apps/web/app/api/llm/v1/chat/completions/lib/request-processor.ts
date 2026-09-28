@@ -329,6 +329,7 @@ import {
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
+import { conversationHealthSpaceId } from '@/lib/services/health-space-service';
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
@@ -1199,6 +1200,7 @@ export type ProcessedRequest = {
   callerToolFields?: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'>;
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
+  healthSpaceProjectId?: string | null;
   /**
    * The project passages this turn was given, with the page or heading each
    * came from. Built once by the context load and carried so the response
@@ -2798,15 +2800,27 @@ export async function processRequest(
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
-  const trainingOptOutPromise = scopedDbPromise
-    .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
-    .catch((error: unknown) => {
-      logger.warn(
-        { error, userId },
-        'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
-      );
-      return true;
-    });
+  const conversationIdForHealthSpace = chatRequest.conversation_id;
+  const healthSpacePromise: Promise<string | null> = conversationIdForHealthSpace
+    ? scopedDbPromise.then((scoped) =>
+        conversationHealthSpaceId(scoped.db, userId, conversationIdForHealthSpace),
+      )
+    : Promise.resolve(null);
+  healthSpacePromise.catch(() => {});
+
+  const trainingOptOutPromise = Promise.all([
+    scopedDbPromise
+      .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
+      .catch((error: unknown) => {
+        logger.warn(
+          { error, userId },
+          'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
+        );
+        return true;
+      }),
+    healthSpacePromise,
+  ]).then(([optedOut, healthSpaceProjectId]) => optedOut || healthSpaceProjectId !== null);
+  trainingOptOutPromise.catch(() => {});
 
   const routingProfileAlias =
     chatRequest.model === getDefaultAutoRoutingProfile().id
@@ -4298,7 +4312,9 @@ export async function processRequest(
         {
           error: {
             message:
-              "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
+              (await healthSpacePromise) !== null
+                ? "This model's provider may train on what you send, and Health only uses models that keep your chats out of training. Choose another model."
+                : "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
             type: 'invalid_request_error',
             code: 'model_may_train',
           },
@@ -5503,6 +5519,7 @@ export async function processRequest(
     callerToolFields,
     conversationId: chatRequest.conversation_id,
     conversationIsTemporary,
+    healthSpaceProjectId: await healthSpacePromise,
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),

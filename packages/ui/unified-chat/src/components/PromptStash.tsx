@@ -181,7 +181,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
           ref={panelRef}
           role="listbox"
           aria-label="Saved prompts"
-          className="absolute bottom-full right-0 mb-2 z-[var(--z-dropdown)] w-80 rounded-xl border border-border bg-popover shadow-e4 overflow-hidden"
+          className="absolute bottom-full end-0 mb-2 z-[var(--z-dropdown)] w-80 rounded-xl border border-border bg-popover shadow-e4 overflow-hidden"
         >
           {/* Save current prompt */}
           <div className="px-2 pt-2 pb-1.5 border-b border-border">

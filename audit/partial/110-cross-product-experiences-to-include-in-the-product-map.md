@@ -218,14 +218,13 @@ Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/s
 
 - Done when: From the main chat, the user brings an existing notebook (project) into the conversation so its instructions and sources ground the answers.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A selected project adds only its instructions locally; the stream request carries no conversation or project id, so the server never loads the project's sources. | handler |
 | cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
 | vscode | partial | 'Use in this chat' adds the project's instructions to each turn but not its files, the same shape as S37.37 vscode partial (the ledger's n/a for this flow contradicts it). |  |
-| chrome | partial | The first turn of a chat just bound to a project goes without the conversation id, so it is not grounded on the project's sources. | handler |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
 

@@ -57,6 +57,7 @@ export interface FileSearchToolContext {
   userId: string;
   organizationId: string | null;
   temporaryChat: boolean;
+  healthSpaceProjectId?: string | null;
 }
 
 const QueryArgs = z.object({ query: z.string().trim().min(1).max(MAX_QUERY_CHARS) });
@@ -94,6 +95,7 @@ export async function executeFileSearchTool(
     organizationId: context.organizationId,
     semantic: true,
     residency,
+    healthSpaceProjectId: context.healthSpaceProjectId ?? null,
   }).search({
     text: parsed.data.query,
     kinds: FILE_SOURCE_KINDS,

@@ -69,6 +69,7 @@ import {
   isSensitiveDataToolOffered,
   sensitiveDataConnector,
 } from '@/lib/connectors/sensitive-data-connectors';
+import { isHealthSpaceConnector } from '@/lib/services/health-space-service';
 import {
   bankAccountsToolDefs,
   executeBankAccountsTool,
@@ -1877,6 +1878,7 @@ export interface LoadUserConnectorToolOptions {
   organizationId?: string | null;
   planTier?: string | null;
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
+  healthSpace?: boolean;
 }
 
 /**
@@ -2398,8 +2400,10 @@ export async function loadUserConnectorToolCatalog(
 
     const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];
 
+    const offersHealthSpaceConnectors = options.healthSpace === true;
     for (const entry of map.values()) {
       if (!activeIds.has(entry.connectorId)) continue;
+      if (isHealthSpaceConnector(entry.connectorId) && !offersHealthSpaceConnectors) continue;
       dials.push({
         member: false,
         load: async () => {
@@ -2411,6 +2415,7 @@ export async function loadUserConnectorToolCatalog(
 
     for (const connectorId of usableOAuthIds) {
       if (!grantedOAuthIds.has(connectorId)) continue;
+      if (isHealthSpaceConnector(connectorId) && !offersHealthSpaceConnectors) continue;
       if (isGraphAdapterConnector(connectorId)) {
         defs.push(
           ...graphToolDefs(
@@ -2515,9 +2520,12 @@ export async function loadUserConnectorToolCatalog(
     }
 
     const isToolDenied = options.isToolDenied;
+    const inSpace = offersHealthSpaceConnectors
+      ? inspected.allowed
+      : inspected.allowed.filter((def) => !isHealthSpaceConnector(def.serverId));
     const allowed = isToolDenied
-      ? inspected.allowed.filter((def) => !isToolDenied(def.serverId, def.toolName))
-      : inspected.allowed;
+      ? inSpace.filter((def) => !isToolDenied(def.serverId, def.toolName))
+      : inSpace;
     if (isToolDenied && allowed.length !== inspected.allowed.length) {
       logger.info(
         { userId, blocked: defs.length - allowed.length },

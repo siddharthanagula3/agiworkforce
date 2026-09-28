@@ -139,7 +139,7 @@ export function SidecarPanel({
     return (
       <div
         className={cn(
-          'flex flex-col items-center py-4 px-1 bg-card border-l border-border h-full',
+          'flex flex-col items-center py-4 px-1 bg-card border-s border-border h-full',
           className,
         )}
         data-testid="sidecar-panel-minimized"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
@@ -5791,6 +5792,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
   // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
@@ -5800,9 +5802,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
         disabledFeatures,
+        healthSpaceAvailable,
         translate: (key, fallback) => t(`common:${key}`, { defaultValue: fallback }),
       }),
-    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, healthSpaceAvailable, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   const handleLogout = useCallback(async () => {
@@ -5850,7 +5853,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             aria-label={`Account menu for ${displayName}`}
             aria-busy={isAccountLoading}
             disabled={isAccountLoading}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
+            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -6086,7 +6089,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ml-1 h-8 w-8 shrink-0 p-0"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -6125,7 +6128,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:header.temporaryChatPersonalized')}
                     title={t('chat:header.temporaryChatPersonalizationHint')}
                     onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
-                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="ms-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {temporaryChatPersonalized
                       ? t('chat:header.temporaryChatPersonalized')

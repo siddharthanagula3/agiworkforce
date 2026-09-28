@@ -404,7 +404,7 @@ export function InlineToolCall({
         </div>
 
         {trailingAction ? (
-          <div className="inline-tool-call__action flex shrink-0 items-center pl-1">
+          <div className="inline-tool-call__action flex shrink-0 items-center ps-1">
             {trailingAction}
           </div>
         ) : null}
@@ -412,7 +412,7 @@ export function InlineToolCall({
         {/* "Result" sub-label below the bar in badge mode (Claude parity) */}
         {showResultLabel ? (
           <span
-            className="inline-tool-call__result-label col-span-2 ml-8 text-caption font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
+            className="inline-tool-call__result-label col-span-2 ms-8 text-caption font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
             data-result-label=""
           >
             {resultLabel}
@@ -541,8 +541,8 @@ export function InlineToolCallStack({ children, className }: InlineToolCallStack
   return (
     <div
       className={cn(
-        'inline-tool-call-stack flex flex-col gap-2 ml-2 pl-3',
-        'border-l border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
+        'inline-tool-call-stack flex flex-col gap-2 ms-2 ps-3',
+        'border-s border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
         className,
       )}
       data-tool-stack=""

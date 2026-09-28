@@ -362,7 +362,7 @@ export function ConnectorCapabilitiesPanel({
           <button
             type="button"
             onClick={retry}
-            className="ml-1 inline-flex min-h-6 items-center font-medium underline"
+            className="ms-1 inline-flex min-h-6 items-center font-medium underline"
           >
             Retry discovery
           </button>

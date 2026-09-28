@@ -35,9 +35,12 @@ import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
+  MAX_CUSTOM_INSTRUCTIONS_CHARS,
   normalizeModelId,
   getProviderDisplayLabel,
+  PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
+  RESPONSE_STYLES,
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
@@ -47,6 +50,8 @@ import {
   type InteractiveCardResponsePayload,
   type ManagedUsageWarning,
   type ModelSpeed,
+  type PreferredLength,
+  type ResponseStyle,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -170,6 +175,7 @@ import {
   DEFAULT_AGI_BRIDGE_URL,
   validateBridgeUrl,
   sanitizePageText,
+  SELECTED_EFFORT_STORAGE_KEY,
   SELECTED_MODEL_STORAGE_KEY,
 } from './background/policy';
 import {
@@ -241,6 +247,7 @@ import {
   pendingAgiWorkPlanSteps,
   type AgiWorkPlanReviewBinding,
 } from './features/side-panel/agiWorkPlanReview';
+import { buildHelpArticleLink, HELP_LINK_CSS } from './features/side-panel/helpLinks';
 import {
   beginPairing,
   loadPairingState,
@@ -272,12 +279,18 @@ import {
   type MemoryCommandRequest,
   type MemoryCommandResult,
 } from './features/cloud-bridge/memoryClient';
+import {
+  fetchAccountPersonalization,
+  saveAccountInstructions,
+  saveAccountResponseStyle,
+  type AccountPersonalization,
+} from './features/cloud-bridge/personalizationClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   capabilityAllowed,
-  fetchCapabilityDocument,
+  fetchAccountSummary,
   saveAccountDisplayName,
   type CapabilityDocument,
 } from './features/cloud-bridge/capabilityDocument';
@@ -367,6 +380,7 @@ const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
 let refreshOnboardingAccount: () => void = () => undefined;
 let capabilityDocument: CapabilityDocument | null = null;
+let accountDisplayName: string | null = null;
 let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
@@ -898,18 +912,29 @@ function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
   return changed;
 }
 
+function previousAnswerModel(streamId: string): string | undefined {
+  const index = _ctx.messages.findIndex((message) => message.id === streamId);
+  const earlier = index < 0 ? _ctx.messages : _ctx.messages.slice(0, index);
+  return [...earlier].reverse().find((message) => message.role === 'assistant' && message.model)
+    ?.model;
+}
+
 function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
   const metadata = getModelMetadataById(routing.modelKey);
   if (!metadata) return false;
-  resolvedRouteByStreamId.set(streamId, {
+  const chosenByAuto = routing.reason !== 'explicit';
+  const movedFrom = chosenByAuto ? previousAnswerModel(streamId) : undefined;
+  const route: ResolvedRoute = {
     model: metadata.id,
     provider: metadata.provider,
-  });
+    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
+    ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
+  };
+  resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
-  assistant.model = metadata.id;
-  assistant.provider = metadata.provider;
+  stampResolvedRoute(streamId, assistant);
   return true;
 }
 
@@ -918,6 +943,10 @@ function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   if (!route) return;
   assistant.model = route.model;
   assistant.provider = route.provider;
+  if (route.autoRouteReason) assistant.autoRouteReason = route.autoRouteReason;
+  else delete assistant.autoRouteReason;
+  if (route.movedFromModel) assistant.movedFromModel = route.movedFromModel;
+  else delete assistant.movedFromModel;
 }
 
 function managedOutboundEffortPayload(usePersistedSelection = false): { effort?: Effort } {
@@ -1053,7 +1082,14 @@ interface ComposerDocument {
 const pendingDocuments: ComposerDocument[] = [];
 let composerAttachmentIntakeCount = 0;
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
+interface ResolvedRoute {
+  model: string;
+  provider: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
+}
+
+const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 const assistantCloudIdByStreamId = new Map<string, string>();
@@ -1117,6 +1153,12 @@ function serializeMessagesForHistory() {
       : {}),
     ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
     ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
+    ...(message.role === 'assistant' && message.autoRouteReason
+      ? { autoRouteReason: message.autoRouteReason }
+      : {}),
+    ...(message.role === 'assistant' && message.movedFromModel
+      ? { movedFromModel: message.movedFromModel }
+      : {}),
     ...(message.role === 'assistant' && message.generatedFiles
       ? { generatedFiles: message.generatedFiles }
       : {}),
@@ -1311,6 +1353,15 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
 }
 
 let newChatModelSelection = 'auto';
+let newChatEffortSelection: Effort | undefined;
+
+function effortForNewChat(): Effort | undefined {
+  const model = _ctx.selectedModel;
+  if (!newChatEffortSelection || _ctx.quickMode || model === 'auto' || model.startsWith('auto-')) {
+    return undefined;
+  }
+  return resolveModelEffort(model, newChatEffortSelection);
+}
 
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
@@ -1324,7 +1375,7 @@ function clearStoredMessages(): void {
   _ctx.workMode = 'chat';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
-  _ctx.reasoningEffort = undefined;
+  _ctx.reasoningEffort = effortForNewChat();
   refreshModelPickerUI();
   refreshEffortUI();
   const owner = _ctx.managedCloudOwner;
@@ -1398,6 +1449,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.selectedModel = 'auto';
     newChatModelSelection = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
+    newChatEffortSelection = undefined;
+    chrome.storage.local.remove(SELECTED_EFFORT_STORAGE_KEY).catch(() => {});
   }
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
@@ -1906,6 +1959,14 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
+    }
+    .sp-answer-route {
+      margin: 2px 0 0;
+      padding: 0 3px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
     }
     .sp-regenerate { position: relative; display: inline-flex; }
     .sp-regenerate__menu {
@@ -4858,6 +4919,21 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
+    .sp-cloud-name-edit {
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--agi-ext-accent-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .sp-cloud-name-edit[hidden],
+    .sp-cloud-name-editor[hidden] { display: none; }
+    .sp-cloud-name-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .sp-cloud-name-actions { display: flex; gap: 6px; }
     .sp-cloud-signout-btn {
       background: transparent;
       border: 1px solid var(--agi-ext-border-strong);
@@ -5289,6 +5365,8 @@ function injectStyles(): void {
     .sp-ob-body:empty { display: none; }
     .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
     .sp-drawer-memory-preferences[hidden] { display: none; }
+    .sp-drawer-personalization { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+    .sp-drawer-personalization[hidden] { display: none; }
     .sp-drawer-memory-preference {
       display: flex;
       align-items: center;
@@ -6082,7 +6160,9 @@ function injectStyles(): void {
         '\n' +
         COMMAND_PALETTE_CSS +
         '\n' +
-        AGIWORK_PLAN_REVIEW_CSS,
+        AGIWORK_PLAN_REVIEW_CSS +
+        '\n' +
+        HELP_LINK_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -7254,10 +7334,41 @@ async function ensureTemporaryConversation(owner: ManagedCloudOwner): Promise<st
   return conversation.id;
 }
 
+function projectChatAwaitsAccountCopy(): boolean {
+  const projectId = activePersistenceEntry?.projectId ?? _ctx.pendingProjectBinding;
+  return Boolean(projectId) && activePersistenceEntry?.cloudSync?.createAcknowledged !== true;
+}
+
+async function ensureProjectChatInAccount(owner: ManagedCloudOwner): Promise<boolean> {
+  const conversationId = _ctx.conversationId;
+  await persistMessages();
+  const response = (await chrome.runtime.sendMessage({
+    type: 'ENSURE_CLOUD_CONVERSATION',
+    owner,
+    conversationId,
+  })) as { success?: boolean } | undefined;
+  const entry = await getConversation(owner, conversationId);
+  if (entry && conversationId === _ctx.conversationId) activePersistenceEntry = entry;
+  return response?.success === true;
+}
+
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
   const streamId = beginManagedStream(quickMode);
   renderMemoryNotice(null);
+  if (!_ctx.temporaryChat && projectChatAwaitsAccountCopy()) {
+    void ensureProjectChatInAccount(owner)
+      .catch(() => false)
+      .then((saved) => {
+        if (_ctx.currentStreamId !== streamId) return;
+        if (!saved) {
+          composerContextNotice = t('spProjectChatNotSaved');
+          updateAttachmentPreview();
+        }
+        continueTurnWithMemory(userMsg, payload, streamId, owner, quickMode);
+      });
+    return;
+  }
   if (_ctx.temporaryChat) {
     void ensureTemporaryConversation(owner)
       .catch(() => null)
@@ -7271,6 +7382,16 @@ function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boo
       });
     return;
   }
+  continueTurnWithMemory(userMsg, payload, streamId, owner, quickMode);
+}
+
+function continueTurnWithMemory(
+  userMsg: ChatMessage,
+  payload: TurnPayload,
+  streamId: string,
+  owner: ManagedCloudOwner,
+  quickMode: boolean,
+): void {
   if (!MEMORY_COMMAND_HINT.test(payload.prompt)) {
     continueTurn(userMsg, payload, streamId, owner, quickMode);
     return;
@@ -8614,10 +8735,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     void getClerkAccountProfile()
       .then((profile) => {
         if (setupState.ownerKey !== ownerKey) return;
-        setupState.loadedName = profile?.displayName ?? '';
+        setupState.loadedName = accountDisplayName ?? profile?.displayName ?? '';
         if (!setupName.value) setupName.value = setupState.loadedName;
         setupAccountStatus.textContent = t('spSetupAccountSignedIn', [
-          profile?.displayName ?? profile?.email ?? t('spCloudAccountFallbackName'),
+          setupState.loadedName || profile?.email || t('spCloudAccountFallbackName'),
         ]);
       })
       .catch(() => undefined);
@@ -9157,6 +9278,8 @@ function buildUI(): void {
       row.appendChild(check);
       row.addEventListener('click', () => {
         _ctx.reasoningEffort = option;
+        newChatEffortSelection = option;
+        chrome.storage.local.set({ [SELECTED_EFFORT_STORAGE_KEY]: option }).catch(() => {});
         renderModelDropdown();
         refreshEffortUI();
         saveMessages();
@@ -9446,6 +9569,21 @@ function buildUI(): void {
     }
     renderModelDropdown();
     renderModelTrigger();
+  });
+  chrome.storage.local.get(SELECTED_EFFORT_STORAGE_KEY, (result) => {
+    if (chrome.runtime.lastError) return;
+    const storedEffort = result[SELECTED_EFFORT_STORAGE_KEY];
+    if (
+      typeof storedEffort !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(EFFORT_LABEL, storedEffort)
+    ) {
+      return;
+    }
+    newChatEffortSelection = storedEffort as Effort;
+    if (_ctx.messages.length === 0 && _ctx.reasoningEffort === undefined) {
+      _ctx.reasoningEffort = effortForNewChat();
+      refreshEffortUI();
+    }
   });
   modelSelectorWrap.appendChild(modelSelectorBtn);
   modelSelectorWrap.appendChild(modelDropdownEl);
@@ -10082,6 +10220,7 @@ function buildUI(): void {
         });
     });
     confirmRow.appendChild(question);
+    confirmRow.appendChild(buildHelpArticleLink('sharing-conversations', t('spHelpLinkSharing')));
     const actions = el('div', { class: 'sp-drawer-history-edit' });
     actions.appendChild(createBtn);
     actions.appendChild(cancelBtn);
@@ -11115,6 +11254,169 @@ function buildUI(): void {
   personalizationSection.appendChild(
     el('p', { class: 'sp-drawer-memory-help' }, t('spPersonalizationHelp')),
   );
+  const personalizationBody = el('div', { class: 'sp-drawer-personalization', hidden: '' });
+  personalizationBody.appendChild(
+    el(
+      'label',
+      { class: 'sp-drawer-toggle-label', for: 'sp-drawer-instructions' },
+      t('spInstructionsLabel'),
+    ),
+  );
+  const instructionsInput = el('textarea', {
+    id: 'sp-drawer-instructions',
+    class: 'sp-drawer-memory-textarea',
+    maxlength: String(MAX_CUSTOM_INSTRUCTIONS_CHARS),
+    placeholder: t('spInstructionsPlaceholder'),
+  }) as HTMLTextAreaElement;
+  personalizationBody.appendChild(instructionsInput);
+  const instructionsToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-instructions-enabled',
+  }) as HTMLInputElement;
+  personalizationBody.appendChild(
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      instructionsToggle,
+      el('label', { for: 'sp-drawer-instructions-enabled' }, t('spInstructionsEnabled')),
+    ),
+  );
+  const instructionsSaveBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spInstructionsSave'),
+  ) as HTMLButtonElement;
+  personalizationBody.appendChild(instructionsSaveBtn);
+  const responseStyleLabels: Record<ResponseStyle, string> = {
+    default: t('spResponseStyleDefault'),
+    concise: t('spResponseStyleConcise'),
+    explanatory: t('spResponseStyleExplanatory'),
+    formal: t('spResponseStyleFormal'),
+  };
+  const responseLengthLabels: Record<PreferredLength, string> = {
+    default: t('spResponseLengthDefault'),
+    shorter: t('spResponseLengthShorter'),
+    longer: t('spResponseLengthLonger'),
+  };
+  const responseStyleSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-drawer-response-style',
+    style: 'width: auto; max-width: 60%;',
+  }) as HTMLSelectElement;
+  for (const style of RESPONSE_STYLES) {
+    responseStyleSelect.appendChild(el('option', { value: style }, responseStyleLabels[style]));
+  }
+  const responseLengthSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-drawer-response-length',
+    style: 'width: auto; max-width: 60%;',
+  }) as HTMLSelectElement;
+  for (const length of PREFERRED_LENGTHS) {
+    responseLengthSelect.appendChild(el('option', { value: length }, responseLengthLabels[length]));
+  }
+  for (const [id, label, select] of [
+    ['sp-drawer-response-style', t('spResponseStyleLabel'), responseStyleSelect],
+    ['sp-drawer-response-length', t('spResponseLengthLabel'), responseLengthSelect],
+  ] as const) {
+    const row = el('div', { class: 'sp-drawer-toggle-row' });
+    row.appendChild(el('label', { class: 'sp-drawer-toggle-label', for: id }, label));
+    row.appendChild(select);
+    personalizationBody.appendChild(row);
+  }
+  const personalizationStatus = el('div', {
+    class: 'sp-drawer-toggle-status',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  personalizationBody.appendChild(personalizationStatus);
+  personalizationSection.appendChild(personalizationBody);
+  let personalizationSnapshot: AccountPersonalization | null = null;
+
+  function renderDrawerPersonalization(personalization: AccountPersonalization): void {
+    personalizationSnapshot = personalization;
+    instructionsInput.value = personalization.instructions;
+    instructionsToggle.checked = personalization.instructionsEnabled;
+    responseStyleSelect.value = personalization.style;
+    responseLengthSelect.value = personalization.preferredLength;
+    for (const control of [
+      instructionsInput,
+      instructionsToggle,
+      instructionsSaveBtn,
+      responseStyleSelect,
+      responseLengthSelect,
+    ]) {
+      control.disabled = false;
+    }
+    personalizationBody.hidden = false;
+  }
+
+  function savePersonalizationChange(
+    save: (token: string) => Promise<void>,
+    next: Partial<AccountPersonalization>,
+  ): void {
+    const previous = personalizationSnapshot;
+    if (!previous) return;
+    instructionsSaveBtn.disabled = true;
+    responseStyleSelect.disabled = true;
+    responseLengthSelect.disabled = true;
+    instructionsToggle.disabled = true;
+    personalizationStatus.textContent = t('spPersonalizationSaving');
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await save(auth.token);
+      renderDrawerPersonalization({ ...previous, ...next });
+      personalizationStatus.textContent = t('spPersonalizationSaved');
+    })().catch((error: unknown) => {
+      renderDrawerPersonalization(previous);
+      personalizationStatus.textContent =
+        error instanceof Error ? error.message : t('spPersonalizationSaveFailed');
+    });
+  }
+
+  function saveDrawerInstructions(): void {
+    const instructions = {
+      instructions: instructionsInput.value.trim(),
+      instructionsEnabled: instructionsToggle.checked,
+    };
+    savePersonalizationChange(
+      (token) => saveAccountInstructions(token, instructions),
+      instructions,
+    );
+  }
+
+  function saveDrawerResponseStyle(): void {
+    const style = {
+      style: responseStyleSelect.value as ResponseStyle,
+      preferredLength: responseLengthSelect.value as PreferredLength,
+    };
+    savePersonalizationChange((token) => saveAccountResponseStyle(token, style), style);
+  }
+
+  instructionsSaveBtn.addEventListener('click', saveDrawerInstructions);
+  instructionsToggle.addEventListener('change', saveDrawerInstructions);
+  responseStyleSelect.addEventListener('change', saveDrawerResponseStyle);
+  responseLengthSelect.addEventListener('change', saveDrawerResponseStyle);
+
+  async function refreshDrawerPersonalization(token: string): Promise<void> {
+    try {
+      renderDrawerPersonalization(await fetchAccountPersonalization(token));
+      personalizationStatus.textContent = '';
+    } catch (error) {
+      personalizationBody.hidden = false;
+      for (const control of [
+        instructionsInput,
+        instructionsToggle,
+        instructionsSaveBtn,
+        responseStyleSelect,
+        responseLengthSelect,
+      ]) {
+        control.disabled = true;
+      }
+      personalizationStatus.textContent =
+        error instanceof Error ? error.message : t('spPersonalizationUnavailable');
+    }
+  }
   const personalizationBtn = el(
     'button',
     { type: 'button', class: 'sp-drawer-memory-add-btn' },
@@ -11137,6 +11439,7 @@ function buildUI(): void {
       'Saved facts and preferences reused across sessions, shared with the AGI web and mobile apps on your account.',
     ),
   );
+  memorySection.appendChild(buildHelpArticleLink('memory', t('spHelpLinkMemory')));
   const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
   memorySection.appendChild(memoryScope);
 
@@ -11517,6 +11820,7 @@ function buildUI(): void {
   }
 
   function setDrawerMemoryExtrasHidden(hidden: boolean): void {
+    if (hidden) personalizationBody.hidden = true;
     memoryScope.hidden = hidden;
     if (hidden) memoryPreferencesBlock.hidden = true;
     exclusionsBlock.hidden = hidden;
@@ -11738,6 +12042,7 @@ function buildUI(): void {
     }
     setDrawerMemoryExtrasHidden(false);
     await Promise.all([
+      refreshDrawerPersonalization(auth.token),
       fetchMemoryPreferences(auth.token)
         .then(renderMemoryPreferences)
         .catch(() => {
@@ -11931,6 +12236,85 @@ function buildUI(): void {
   userTierEl.textContent = t('spCloudFreeTier');
   userInfoEl.appendChild(userLabelEl);
   userInfoEl.appendChild(userTierEl);
+  const nameEditBtn = el(
+    'button',
+    { type: 'button', class: 'sp-cloud-name-edit' },
+    t('spAccountNameEdit'),
+  ) as HTMLButtonElement;
+  const nameEditor = el('form', { class: 'sp-cloud-name-editor', hidden: '' });
+  const nameInput = el('input', {
+    type: 'text',
+    class: 'sp-wf-form-input',
+    id: 'sp-cloud-name-input',
+    autocomplete: 'name',
+    'aria-label': t('spAccountNameLabel'),
+  }) as HTMLInputElement;
+  const nameSaveBtn = el(
+    'button',
+    { type: 'submit', class: 'sp-drawer-memory-add-btn' },
+    t('spAccountNameSave'),
+  ) as HTMLButtonElement;
+  const nameCancelBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spAccountNameCancel'),
+  ) as HTMLButtonElement;
+  const nameStatus = el('div', { class: 'sp-drawer-toggle-status', role: 'status' });
+  nameEditor.append(
+    nameInput,
+    el('div', { class: 'sp-cloud-name-actions' }, nameSaveBtn, nameCancelBtn),
+  );
+  userInfoEl.appendChild(nameEditBtn);
+  userInfoEl.appendChild(nameEditor);
+  userInfoEl.appendChild(nameStatus);
+
+  function closeNameEditor(): void {
+    nameEditor.hidden = true;
+    nameEditBtn.hidden = false;
+    nameEditBtn.focus();
+  }
+
+  nameEditBtn.addEventListener('click', () => {
+    nameInput.value = accountDisplayName ?? '';
+    nameStatus.textContent = '';
+    nameEditBtn.hidden = true;
+    nameEditor.hidden = false;
+    nameInput.focus();
+    nameInput.select();
+  });
+  nameCancelBtn.addEventListener('click', closeNameEditor);
+  nameEditor.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeNameEditor();
+  });
+  nameEditor.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameStatus.textContent = t('spAccountNameRequired');
+      return;
+    }
+    nameSaveBtn.disabled = true;
+    nameStatus.textContent = t('spPersonalizationSaving');
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await saveAccountDisplayName(auth.token, name);
+      accountDisplayName = name;
+      userLabelEl.textContent = name;
+      nameStatus.textContent = t('spAccountNameSaved');
+      closeNameEditor();
+    })()
+      .catch((error: unknown) => {
+        nameStatus.textContent =
+          error instanceof Error ? error.message : t('spAccountNameSaveFailed');
+      })
+      .finally(() => {
+        nameSaveBtn.disabled = false;
+      });
+  });
   const signoutBtn = el(
     'button',
     { class: 'sp-cloud-signout-btn', id: 'sp-cloud-signout-btn' },
@@ -11954,6 +12338,7 @@ function buildUI(): void {
   quotaWrap.appendChild(quotaLabelEl);
   const quotaWindowsEl = el('div', { class: 'sp-quota-windows', id: 'sp-quota-windows' });
   quotaWrap.appendChild(quotaWindowsEl);
+  quotaWrap.appendChild(buildHelpArticleLink('usage-and-credits', t('spHelpLinkUsage')));
   const quotaNoticeEl = el('div', {
     class: 'sp-quota-notice',
     id: 'sp-quota-notice',
@@ -12129,6 +12514,9 @@ function buildUI(): void {
     void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
   helpShortcutsSection.appendChild(helpShortcutsChangeBtn);
+  helpShortcutsSection.appendChild(
+    buildHelpArticleLink('keyboard-shortcuts', t('spHelpLinkShortcuts')),
+  );
   helpGroupBody.appendChild(helpShortcutsSection);
 
   async function renderHelpShortcuts(): Promise<void> {
@@ -12400,7 +12788,7 @@ function buildUI(): void {
       return;
     }
 
-    const capabilityDocumentPromise = fetchCapabilityDocument(token).catch(() => null);
+    const accountSummaryPromise = fetchAccountSummary(token).catch(() => null);
     const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const currentAccountProfile =
@@ -12451,9 +12839,10 @@ function buildUI(): void {
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
 
-    const document = await capabilityDocumentPromise;
+    const accountSummary = await accountSummaryPromise;
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-    capabilityDocument = document;
+    capabilityDocument = accountSummary?.capabilityDocument ?? null;
+    accountDisplayName = accountSummary?.displayName ?? currentAccountProfile?.displayName ?? null;
     applyCapabilityGates();
     managedModelAccess = access;
     refreshOnboardingAccount();
@@ -12476,9 +12865,7 @@ function buildUI(): void {
     cloudLinkHint.style.display = '';
     cloudLinkRow.style.display = 'flex';
     userLabelEl.textContent =
-      currentAccountProfile?.displayName ??
-      currentAccountProfile?.email ??
-      t('spCloudAccountFallbackName');
+      accountDisplayName ?? currentAccountProfile?.email ?? t('spCloudAccountFallbackName');
     userLabelEl.title = currentAccountProfile?.email ?? '';
     avatarEl.textContent = currentAccountProfile?.initials ?? t('spCloudAvatarFallback');
     userTierEl.textContent = formatManagedTierLabel(
@@ -15091,7 +15478,11 @@ function buildUI(): void {
     temporaryEndPending = false;
     renderTemporaryChatState();
   });
-  temporaryNotice.append(temporaryEnd, temporaryKeep);
+  temporaryNotice.append(
+    temporaryEnd,
+    temporaryKeep,
+    buildHelpArticleLink('temporary-chats', t('spHelpLinkTemporary')),
+  );
 
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);

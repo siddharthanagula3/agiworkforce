@@ -446,7 +446,7 @@ export function ResearchActivity({
 
         {interrupted && <span className="text-muted-foreground">(stopped by you)</span>}
 
-        <span className="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
+        <span className="ms-auto flex shrink-0 items-center gap-2 tabular-nums">
           {counts.length > 0 && <span>{counts.join(' · ')}</span>}
           {liveElapsed > 0 && <span>{formatElapsed(liveElapsed)}</span>}
           {steerable && (

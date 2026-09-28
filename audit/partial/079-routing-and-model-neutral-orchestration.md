@@ -134,15 +134,14 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 
 - Done when: The user can see why Auto chose (or moved to) a model.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | 'Auto chose <model>' on assistant turns is in post-codex/chat-gates-s79.26-mobile-routing-receipt.patch (MessageBubble.tsx is Codex-held). | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Routing metadata (model and reason) is validated and stored, but the panel shows only the model name, not why it was chosen. | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension/src/side_panel.ts:587-590`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`
 
 ## S79.27: Actual-model attribution.
 

@@ -49,9 +49,9 @@ const VIDEO_MIME_PREFIX = 'video/';
 const PANEL_CLASS = 'w-[min(22rem,calc(100vw-1rem))] rounded-xl p-1.5';
 const SEARCH_WRAP_CLASS = 'relative px-1 pb-1.5 pt-1';
 const SEARCH_INPUT_CLASS =
-  'h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'h-9 w-full rounded-lg border border-border bg-background ps-8 pe-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 const ROW_CLASS =
-  'flex min-h-10 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'flex min-h-10 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-start text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 const GLYPH_CLASS = 'h-4 w-4 shrink-0 text-muted-foreground';
 const DIVIDER_CLASS = 'my-1 border-t border-border';
 const NOTE_CLASS = 'px-2 py-3 text-center text-xs text-muted-foreground';
@@ -218,7 +218,7 @@ export function ComposerFilesMenu({
         <div className={SEARCH_WRAP_CLASS}>
           <Search
             aria-hidden
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
           />
           <input
             type="search"

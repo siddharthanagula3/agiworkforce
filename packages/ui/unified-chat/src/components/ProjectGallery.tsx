@@ -217,7 +217,7 @@ export function ProjectGallery({
           <Search
             size={14}
             strokeWidth={1.75}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--chat-text-muted)]"
+            className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-[var(--chat-text-muted)]"
             aria-hidden="true"
           />
           <input
@@ -226,7 +226,7 @@ export function ProjectGallery({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search projects"
-            className="w-full rounded-md border bg-[var(--chat-surface-base)] py-1.5 pl-8 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
+            className="w-full rounded-md border bg-[var(--chat-surface-base)] py-1.5 ps-8 pe-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
             style={{ borderColor: 'var(--chat-border)' }}
           />
         </div>
@@ -424,7 +424,7 @@ export function ProjectGallery({
                 active={project.id === activeProjectId}
                 {...(projectHref ? { href: projectHref(project) } : {})}
                 onSelect={handleSelect}
-                onShare={onShareProject}
+                onShare={project.space === 'health' ? undefined : onShareProject}
                 onEdit={onEditProject}
                 onArchive={onArchiveProject ? handleArchive : undefined}
                 onDelete={onDeleteProject ? handleDelete : undefined}
