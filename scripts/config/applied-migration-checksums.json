@@ -334,5 +334,6 @@
   "0333_slack_run_cancel_and_delete.sql": "90262568cefca06dfd029c9ebd023fd5e943fba1516ff2bfee6843843fe74432",
   "0334_desktop_sign_in_grants.sql": "c6a6ddc8b1305762e68b76b1f2bbcb880627f9c960591a469854d28302a3730b",
   "0335_cloud_code_plan_turns.sql": "7b85058cfb0d1349be9bfb0784009145d80aad7bf39ff39918da92ab30520db5",
-  "0336_workspace_web_domain_policy.sql": "3732b781fac985ac42d26eac84444b865777a3dae7be9353d9045f52a87c94e0"
+  "0336_workspace_web_domain_policy.sql": "3732b781fac985ac42d26eac84444b865777a3dae7be9353d9045f52a87c94e0",
+  "0337_health_space.sql": "2ff40daf00119803fbce10a4060b6bf98a42c613c22a6dae1867768a3e962ba1"
 }
