@@ -113,6 +113,7 @@ async function exchange(provider: ConnectorOAuthProvider = PROVIDER): Promise<un
     codeVerifier: null,
     redirectUri: 'https://app.example/callback',
     requestedScopes: ['read'],
+    resource: 'https://mcp.example.com/mcp',
   }).catch((error: unknown) => error);
 }
 
@@ -206,6 +207,7 @@ describe('a token exchange never follows a redirect', () => {
       codeVerifier: null,
       redirectUri: 'https://app.example/callback',
       requestedScopes: ['read'],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(result.accessToken).toBe('at-1');
@@ -223,6 +225,7 @@ describe('a token exchange never follows a redirect', () => {
       refreshToken: REFRESH_TOKEN,
       tokenEndpoint: PROVIDER.tokenUrl,
       grantedScopes: ['read'],
+      resource: 'https://mcp.example.com/mcp',
     }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConnectorOAuthTokenError);
