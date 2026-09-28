@@ -103,7 +103,7 @@ export function resolveMobileVideoGenerationRequest(
   if (input.executionMode !== 'cloud') return blocked('requires_cloud');
   if (!input.isClerkSignedIn || !input.ownerId) return blocked('auth_required');
   if (
-    !input.grantedCapabilities.includes('canUseImages') ||
+    !input.grantedCapabilities.includes('canUseVideoGeneration') ||
     !canUseBillingPlanCapability(input.subscriptionTier, 'video_generation')
   ) {
     return blocked('plan_required');

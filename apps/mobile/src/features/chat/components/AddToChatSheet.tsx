@@ -183,7 +183,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const showVideoOption =
     appMode === 'cloud' &&
     videoModelId !== null &&
-    grantedCapabilities.includes('canUseImages') &&
+    grantedCapabilities.includes('canUseVideoGeneration') &&
     canUseBillingPlanCapability(tier, 'video_generation');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
   const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
