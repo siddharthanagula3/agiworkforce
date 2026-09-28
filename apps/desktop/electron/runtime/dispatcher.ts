@@ -1,6 +1,7 @@
 import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
+  BROWSER_SIGN_IN_START,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
@@ -91,6 +92,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { startBrowserSignIn } from '../browserSignIn';
 import { showDevicePrompt } from './devicePrompts';
 import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
@@ -1103,6 +1105,8 @@ async function execute(
       return setDispatchTaskRunner(window, requireBoolean(args, 'ready'));
     case DISPATCH_TASK_REPORT:
       return reportDispatchTask(window, args);
+    case BROWSER_SIGN_IN_START:
+      return startBrowserSignIn();
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
