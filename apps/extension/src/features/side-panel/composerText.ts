@@ -23,3 +23,14 @@ export function appendComposerText(input: HTMLTextAreaElement, text: string): vo
   const addition = input.value && !/\s$/.test(input.value) ? ` ${text}` : text;
   insertAtSelection(input, addition, `${input.value}${addition}`);
 }
+
+export function replaceComposerRange(
+  input: HTMLTextAreaElement,
+  start: number,
+  end: number,
+  text: string,
+): void {
+  input.focus();
+  input.setSelectionRange(start, end);
+  insertAtSelection(input, text, `${input.value.slice(0, start)}${text}${input.value.slice(end)}`);
+}

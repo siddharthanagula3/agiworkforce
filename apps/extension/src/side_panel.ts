@@ -75,6 +75,7 @@ import {
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import {
+  normalizeApprovedSiteOrigin,
   removeApprovedSiteHostPermission,
   requestApprovedSiteHostPermission,
 } from './features/options/site-allowlist';
@@ -111,7 +112,7 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
-import { replaceComposerText } from './features/side-panel/composerText';
+import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
 import {
   expandPromptShortcut,
   expandSlashCommand,
@@ -2905,7 +2906,7 @@ function injectStyles(): void {
     #sp-input::placeholder { color: var(--agi-ext-text-placeholder); }
     /* Slash-command autocomplete. Anchored above the composer because the panel
        is short and a downward menu would fall outside the viewport. */
-    #sp-slash-menu {
+    #sp-slash-menu, #sp-mention-menu {
       display: none;
       flex-direction: column;
       gap: 1px;
@@ -2918,7 +2919,55 @@ function injectStyles(): void {
       max-height: 214px;
       overflow-y: auto;
     }
-    #sp-slash-menu.visible { display: flex; }
+    #sp-slash-menu.visible, #sp-mention-menu.visible { display: flex; }
+    .sp-mention-heading {
+      padding: 6px 9px 2px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 600;
+    }
+    .sp-slash-item .sp-slash-name, .sp-slash-item .sp-slash-hint {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #sp-link-form { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+    #sp-link-form[hidden] { display: none; }
+    .sp-link-row { display: flex; gap: 6px; align-items: center; }
+    #sp-link-input {
+      flex: 1;
+      min-width: 0;
+      min-height: 32px;
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    #sp-link-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-link-submit, .sp-link-cancel {
+      min-height: 32px;
+      padding: 5px 10px;
+      border-radius: var(--corner-control);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+    }
+    .sp-link-submit { border: 0; background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); }
+    .sp-link-submit:disabled { cursor: wait; opacity: 0.6; }
+    .sp-link-cancel { border: 1px solid var(--agi-ext-border); background: transparent; color: var(--agi-ext-text-muted); }
+    .sp-link-cancel:hover { color: var(--agi-ext-text); }
+    .sp-link-submit:focus-visible, .sp-link-cancel:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-link-error { min-height: 0; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-link-error:empty { display: none; }
+    @media (pointer: coarse) {
+      #sp-link-input, .sp-link-submit, .sp-link-cancel { min-height: 44px; }
+    }
     #sp-queued-list { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; }
     #sp-queued-list[hidden] { display: none; }
     .sp-queued-item {
@@ -4881,6 +4930,7 @@ function injectStyles(): void {
     }#sp-model-dropdown,
 #sp-attach-menu,
 #sp-slash-menu,
+#sp-mention-menu,
 #sp-shortcuts-dropdown {
       padding: 6px;
       border-color: var(--agi-ext-border-strong);
@@ -5691,41 +5741,87 @@ async function capturePageContext(): Promise<PageContextCapture> {
         resolve({ ok: false, reason: 'No page is open in the active tab.' });
         return;
       }
-      chrome.scripting.executeScript(
-        {
-          target: { tabId: tab.id },
-          func: () => {
-            const main = document.querySelector('main, article, [role="main"]');
-            const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
-            const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
-            return text.slice(0, 5000);
-          },
-        },
-        (results) => {
-          const scriptFailure = chrome.runtime.lastError?.message;
-          if (scriptFailure) {
-            resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
-            return;
-          }
-          const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
-          const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
-          resolve(
-            text.trim()
-              ? {
-                  ok: true,
-                  text,
-                  source: {
-                    tabId: tab.id!,
-                    url: tab.url ?? '',
-                    ...(tab.title ? { title: tab.title } : {}),
-                  },
-                }
-              : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
-          );
-        },
-      );
+      void readTabText(tab).then(resolve);
     });
   });
+}
+
+function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
+  return new Promise((resolve) => {
+    if (!tab.id) {
+      resolve({ ok: false, reason: 'That tab has no page to read.' });
+      return;
+    }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tab.id },
+        func: () => {
+          const main = document.querySelector('main, article, [role="main"]');
+          const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
+          const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
+          return text.slice(0, 5000);
+        },
+      },
+      (results) => {
+        const scriptFailure = chrome.runtime.lastError?.message;
+        if (scriptFailure) {
+          resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
+          return;
+        }
+        const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
+        const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
+        resolve(
+          text.trim()
+            ? {
+                ok: true,
+                text,
+                source: {
+                  tabId: tab.id!,
+                  url: tab.url ?? '',
+                  ...(tab.title ? { title: tab.title } : {}),
+                  ...(chosen ? { chosen: true } : {}),
+                },
+              }
+            : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
+        );
+      },
+    );
+  });
+}
+
+async function readLinkedPage(url: string): Promise<PageContextCapture> {
+  let response: Response;
+  try {
+    response = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+  } catch {
+    return { ok: false, reason: t('spLinkUnreachable', [pageChipLabel(url)]) };
+  }
+  if (!response.ok) {
+    return { ok: false, reason: t('spLinkStatus', [pageChipLabel(url), String(response.status)]) };
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!/^text\/(html|plain)|application\/xhtml\+xml/i.test(contentType)) {
+    return { ok: false, reason: t('spLinkNotText', [pageChipLabel(url)]) };
+  }
+  const body = await response.text();
+  const page = /^text\/plain/i.test(contentType)
+    ? null
+    : new DOMParser().parseFromString(body, 'text/html');
+  page?.querySelectorAll('script, style, noscript, template, svg').forEach((node) => node.remove());
+  const main = page?.querySelector('main, article, [role="main"]');
+  const mainText = main?.textContent?.trim() ?? '';
+  const raw = page ? (mainText.length >= 200 ? mainText : (page.body?.textContent ?? '')) : body;
+  const text = sanitizePageText(raw.replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ')).slice(
+    0,
+    PAGE_CONTEXT_MAX_CHARS,
+  );
+  if (!text.trim()) return { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
+  const title = page?.title.trim();
+  return {
+    ok: true,
+    text,
+    source: { url: response.url || url, ...(title ? { title } : {}), chosen: true },
+  };
 }
 
 function requestStreamCancellation(streamId: string): Promise<void> {
@@ -11589,6 +11685,211 @@ function buildUI(): void {
     }
   });
 
+  function approveSiteForReading(url: string): Promise<boolean> {
+    const origin = normalizeApprovedSiteOrigin(url);
+    if (!origin) return Promise.resolve(false);
+    return requestApprovedSiteHostPermission(origin).then(async (granted) => {
+      if (!granted) return false;
+      const list = await drawerReadAllowlist();
+      if (!list.includes(origin)) await drawerWriteAllowlist([...list, origin]);
+      return true;
+    });
+  }
+
+  function attachPageCapture(capture: PageContextCapture): void {
+    if (capture.ok) {
+      _ctx.pendingPageContext = capture.text;
+      _ctx.pendingPageContextSource = capture.source;
+      composerContextNotice = null;
+    } else {
+      composerContextNotice = capture.reason;
+    }
+    updateAttachmentPreview();
+    updateContextButton();
+  }
+
+  async function attachChosenTab(tab: chrome.tabs.Tab, approval: Promise<boolean>): Promise<void> {
+    if (!(await approval)) {
+      attachPageCapture({
+        ok: false,
+        reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
+      });
+      return;
+    }
+    attachPageCapture(await readTabText(tab, true));
+  }
+
+  const mentionMenu = el('div', {
+    id: 'sp-mention-menu',
+    role: 'listbox',
+    'aria-label': t('spMentionMenuLabel'),
+  });
+  type MentionOption =
+    | { kind: 'tab'; tab: chrome.tabs.Tab; label: string; detail: string }
+    | { kind: 'project'; project: ActiveProjectSelection; label: string; detail: string };
+  let mentionOptions: MentionOption[] = [];
+  let mentionActive = 0;
+  let mentionStart = -1;
+  let mentionGeneration = 0;
+  let mentionTabs: chrome.tabs.Tab[] = [];
+  let mentionProjects: ActiveProjectSelection[] = [];
+
+  const mentionOpen = (): boolean => mentionOptions.length > 0;
+
+  function mentionAtCaret(): { start: number; end: number; query: string } | null {
+    const end = inputEl.selectionStart ?? inputEl.value.length;
+    if (end !== (inputEl.selectionEnd ?? end)) return null;
+    const match = /(?:^|\s)@([^\s@]*)$/.exec(inputEl.value.slice(0, end));
+    if (!match) return null;
+    const query = match[1] ?? '';
+    return { start: end - query.length - 1, end, query: query.toLowerCase() };
+  }
+
+  function renderMentionMenu(): void {
+    mentionMenu.textContent = '';
+    if (!mentionOpen()) {
+      mentionMenu.classList.remove('visible');
+      if (!slashOpen()) inputEl.removeAttribute('aria-activedescendant');
+      return;
+    }
+    let group: MentionOption['kind'] | null = null;
+    mentionOptions.forEach((option, index) => {
+      if (option.kind !== group) {
+        group = option.kind;
+        mentionMenu.appendChild(
+          el(
+            'div',
+            { class: 'sp-mention-heading', role: 'presentation' },
+            option.kind === 'tab' ? t('spMentionTabs') : t('spMentionProjects'),
+          ),
+        );
+      }
+      const item = el('button', {
+        class: `sp-slash-item${index === mentionActive ? ' active' : ''}`,
+        type: 'button',
+        role: 'option',
+        id: `sp-mention-opt-${index}`,
+        'aria-selected': String(index === mentionActive),
+        tabindex: '-1',
+      });
+      item.appendChild(el('span', { class: 'sp-slash-name' }, option.label));
+      item.appendChild(el('span', { class: 'sp-slash-hint' }, option.detail));
+      item.addEventListener('mousedown', (event: Event) => {
+        event.preventDefault();
+        acceptMention(index);
+      });
+      mentionMenu.appendChild(item);
+    });
+    mentionMenu.classList.add('visible');
+    inputEl.setAttribute('aria-activedescendant', `sp-mention-opt-${mentionActive}`);
+    mentionMenu.querySelector<HTMLElement>('.sp-slash-item.active')?.scrollIntoView({
+      block: 'nearest',
+    });
+  }
+
+  function closeMentionMenu(): void {
+    mentionGeneration += 1;
+    mentionOptions = [];
+    mentionActive = 0;
+    mentionStart = -1;
+    renderMentionMenu();
+  }
+
+  function recomputeMentionOptions(): void {
+    const mention = mentionAtCaret();
+    if (!mention || mentionStart === -1) return;
+    const matchesQuery = (...texts: string[]): boolean =>
+      texts.some((text) => text.toLowerCase().includes(mention.query));
+    const tabOptions = mentionTabs.flatMap((tab): MentionOption[] => {
+      const url = tab.url ?? '';
+      const label = tab.title || pageChipLabel(url);
+      const detail = pageChipLabel(url);
+      return matchesQuery(label, url) ? [{ kind: 'tab', tab, label, detail }] : [];
+    });
+    const projectOptions = mentionProjects.flatMap((project): MentionOption[] =>
+      matchesQuery(project.name)
+        ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
+        : [],
+    );
+    mentionOptions = [...tabOptions, ...projectOptions];
+    if (mentionActive >= mentionOptions.length) mentionActive = 0;
+    renderMentionMenu();
+  }
+
+  function refreshMentionMenu(): void {
+    const mention =
+      managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null
+        ? mentionAtCaret()
+        : null;
+    if (!mention) {
+      if (mentionStart !== -1) closeMentionMenu();
+      return;
+    }
+    const opening = mentionStart === -1;
+    mentionStart = mention.start;
+    if (!opening) {
+      recomputeMentionOptions();
+      return;
+    }
+    const generation = ++mentionGeneration;
+    chrome.tabs.query({ currentWindow: true }, (tabs) => {
+      if (generation !== mentionGeneration) return;
+      mentionTabs = chrome.runtime.lastError
+        ? []
+        : tabs.filter((tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url));
+      recomputeMentionOptions();
+    });
+    void listChromeProjects().then((result) => {
+      if (generation !== mentionGeneration) return;
+      mentionProjects =
+        result.status === 'success'
+          ? result.projects.map((project) => ({ id: project.id, name: project.name }))
+          : [];
+      recomputeMentionOptions();
+    });
+  }
+
+  function acceptMention(index: number): void {
+    const option = mentionOptions[index];
+    const mention = mentionAtCaret();
+    if (!option || !mention) return;
+    const approval =
+      option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
+        ? approveSiteForReading(option.tab.url ?? '')
+        : Promise.resolve(true);
+    closeMentionMenu();
+    replaceComposerRange(inputEl, mention.start, mention.end, '');
+    autoResizeInput(inputEl);
+    updateSendButton();
+    if (option.kind === 'project') {
+      chooseChatProject(option.project);
+      return;
+    }
+    void attachChosenTab(option.tab, approval);
+  }
+
+  inputEl.addEventListener('input', refreshMentionMenu);
+  inputEl.addEventListener('blur', () => closeMentionMenu());
+  inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!mentionOpen()) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionActive = (mentionActive + 1) % mentionOptions.length;
+      renderMentionMenu();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionActive = (mentionActive - 1 + mentionOptions.length) % mentionOptions.length;
+      renderMentionMenu();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      acceptMention(mentionActive);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMentionMenu();
+    }
+  });
+
   inputEl.addEventListener('input', () => {
     autoResizeInput(inputEl);
     updateSendButton();
@@ -11764,7 +12065,90 @@ function buildUI(): void {
     void chrome.tabs.create({ url: CONNECTORS_URL });
   });
 
-  const attachMenuItems = [fileItem, screenshotItem, contextBtn, connectorsItem];
+  const linkItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
+  linkItem.appendChild(renderIcon(Globe, 16));
+  linkItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spLinkItem')));
+  linkItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    linkError.textContent = '';
+    linkForm.hidden = false;
+    linkInput.focus();
+  });
+
+  const linkForm = el('form', {
+    id: 'sp-link-form',
+    'aria-label': t('spLinkFormLabel'),
+    hidden: '',
+  }) as HTMLFormElement;
+  linkForm.noValidate = true;
+  const linkInput = el('input', {
+    id: 'sp-link-input',
+    type: 'url',
+    inputmode: 'url',
+    autocomplete: 'off',
+    placeholder: 'https://',
+    'aria-label': t('spLinkInputLabel'),
+    'aria-describedby': 'sp-link-error',
+  }) as HTMLInputElement;
+  const linkSubmit = el(
+    'button',
+    { type: 'submit', class: 'sp-link-submit' },
+    t('spLinkAdd'),
+  ) as HTMLButtonElement;
+  const linkCancel = el('button', { type: 'button', class: 'sp-link-cancel' }, t('spLinkCancel'));
+  const linkError = el('div', { id: 'sp-link-error', class: 'sp-link-error', role: 'status' });
+  const linkRow = el('div', { class: 'sp-link-row' });
+  linkRow.append(linkInput, linkSubmit, linkCancel);
+  linkForm.append(linkRow, linkError);
+  const closeLinkForm = (): void => {
+    linkForm.hidden = true;
+    linkInput.value = '';
+    linkError.textContent = '';
+    inputEl.focus();
+  };
+  linkCancel.addEventListener('click', closeLinkForm);
+  linkForm.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeLinkForm();
+    }
+  });
+  linkForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const url = linkInput.value.trim();
+    if (!normalizeApprovedSiteOrigin(url)) {
+      linkError.textContent = t('spLinkInvalid');
+      linkInput.focus();
+      return;
+    }
+    const approval = approveSiteForReading(url);
+    linkSubmit.disabled = true;
+    linkError.textContent = t('spLinkReading');
+    void approval
+      .then(async (granted) => {
+        if (!granted) {
+          linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
+          return;
+        }
+        const capture = await readLinkedPage(url);
+        if (!capture.ok) {
+          linkError.textContent = capture.reason;
+          return;
+        }
+        attachPageCapture(capture);
+        closeLinkForm();
+      })
+      .finally(() => {
+        linkSubmit.disabled = false;
+      });
+  });
+
+  const attachMenuItems = [fileItem, screenshotItem, contextBtn, linkItem, connectorsItem];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
@@ -11872,6 +12256,8 @@ function buildUI(): void {
 
   composerShell.appendChild(queuedList);
   composerShell.appendChild(slashMenu);
+  composerShell.appendChild(mentionMenu);
+  composerShell.appendChild(linkForm);
   composerShell.appendChild(inputRow);
 
   const composerBar = el('div', { id: 'sp-composer-bar' });
