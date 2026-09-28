@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
@@ -123,6 +124,7 @@ function useCommands(
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_HIDDEN_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
 
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
   const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
@@ -179,6 +181,7 @@ function useCommands(
     isAdmin: isWorkspaceAdmin,
     hiddenIds: hiddenNavIds,
     disabledFeatures,
+    healthSpaceAvailable,
     translate: (key, fallback) => t(key, { defaultValue: fallback }),
   }).map((item) => ({
     id: `nav-${item.id}`,
