@@ -56,8 +56,7 @@ limit the request is refused and the message says which.
 The conversation title menu renames a chat. Archiving moves it out of the
 sidebar without deleting anything, and Settings holds an **Archived chats** list
 that restores a chat or moves it to **Recently deleted**. A deleted chat stays
-there until you restore it; the product does not currently offer permanent chat
-deletion separately from deleting your account.
+there for 30 days, so you can restore it, and is then deleted for good.
 
 ## When a chat will not load
 

@@ -39,7 +39,7 @@ const NAMESPACE = 'privacy';
 // Fixing that means gating the save path itself, not this settings screen.
 // do not re-add the switch until that read is wired, or it goes back to
 // actively lying to privacy-conscious users.
-type ToggleKey = 'shareTelemetry';
+type ToggleKey = 'shareTelemetry' | 'keepOutOfProviderTraining';
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -55,6 +55,13 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     label: 'Share crash and usage telemetry',
     description:
       'Allow browser error reports and consent-gated usage counts so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
+    defaultValue: false,
+  },
+  {
+    id: 'keepOutOfProviderTraining',
+    label: 'Only use models that do not train on your chats',
+    description:
+      'Your requests go only to models whose providers do not train on what you send. On the Free plan this replaces the free models, whose providers’ terms may allow training.',
     defaultValue: false,
   },
 ];
@@ -363,7 +370,7 @@ export function PrivacySection() {
         : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted. Memories learned from these chats stay until you delete them in Settings > Memory.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Memory.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -493,13 +500,14 @@ export function PrivacySection() {
               /subprocessors
             </SettingsPageLink>
             . On the Free plan, requests are served by providers&rsquo; free models, and those
-            providers&rsquo; terms may allow them to train on what you send.
+            providers&rsquo; terms may allow them to train on what you send, unless you turn on Only
+            use models that do not train on your chats above.
           </p>
           <p style={{ margin: 'var(--space-2) 0 0' }}>
             How long we keep it: a chat stays in your history until you delete it, and a deleted
-            chat stays in Recently deleted until you restore it. A temporary chat and its
-            attachments are removed after 30 days. When you delete your account, erasure starts 24
-            hours after you confirm, and you can cancel until then.
+            chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat
+            and its attachments are removed after 30 days. When you delete your account, erasure
+            starts 24 hours after you confirm, and you can cancel until then.
           </p>
         </ExpandableSection>
 
@@ -677,7 +685,7 @@ export function PrivacySection() {
               Recently deleted
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Put back a chat you deleted by mistake.
+              Put back a chat you deleted in the last 30 days.
             </div>
           </div>
           <SettingsSectionLink
@@ -748,7 +756,7 @@ export function PrivacySection() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Remove every active and archived conversation in this workspace from history. Restore
-              them from Recently deleted.
+              them from Recently deleted within 30 days.
             </div>
           </div>
           <button
