@@ -118,6 +118,7 @@
     "renameProject": "Rename project",
     "restore": "Restore",
     "running": "Running",
+    "unread": "Unread",
     "searchConversations": "Search conversations",
     "searchConversationsDescription": "Search your conversation history and open a matching conversation.",
     "share": "Share",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out.",
     "toggleArtifacts": "Toggle artifacts panel",
     "toggleArtifactsCount": "Toggle artifacts panel ({{count}})",
-    "toggleStats": "Stats"
+    "toggleStats": "Stats",
+    "untitledConversation": "Conversation"
   },
   "interface": {
     "closeRewindCheckpoints": "Close rewind checkpoints",
@@ -335,5 +337,14 @@
     "runningTools_other": "Running {{count}} tools",
     "runningToolsOf_one": "Running {{running}}/{{count}} tool: {{name}}",
     "runningToolsOf_other": "Running {{running}}/{{count}} tools: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Table",
+    "expand": "Expand table",
+    "copy": "Copy table",
+    "copied": "Table copied",
+    "copyFailed": "Copy failed, clipboard unavailable",
+    "download": "Download as CSV",
+    "close": "Close expanded table"
   }
 }

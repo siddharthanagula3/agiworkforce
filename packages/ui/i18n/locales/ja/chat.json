@@ -117,6 +117,7 @@
     "renameProject": "プロジェクト名を変更",
     "restore": "復元",
     "running": "実行中",
+    "unread": "未読",
     "searchConversations": "会話を検索",
     "searchConversationsDescription": "会話履歴を検索して、該当する会話を開きます。",
     "share": "共有",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "パーソナライズはプロフィール、指示、応答スタイルを使います。パーソナライズなしではそれらを使いません。",
     "toggleArtifacts": "アーティファクトパネルの表示切り替え",
     "toggleArtifactsCount": "アーティファクトパネルの表示切り替え（{{count}}）",
-    "toggleStats": "統計"
+    "toggleStats": "統計",
+    "untitledConversation": "会話"
   },
   "interface": {
     "closeRewindCheckpoints": "巻き戻しチェックポイントを閉じる",
@@ -335,5 +337,14 @@
     "runningTools_other": "{{count}} 個のツールを実行中",
     "runningToolsOf_one": "ツールを実行中 {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "表",
+    "expand": "表を拡大",
+    "copy": "表をコピー",
+    "copied": "表をコピーしました",
+    "copyFailed": "コピーできませんでした。クリップボードを利用できません",
+    "download": "CSV としてダウンロード",
+    "close": "拡大した表を閉じる"
   }
 }

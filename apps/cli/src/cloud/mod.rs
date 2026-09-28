@@ -229,6 +229,7 @@ pub async fn create_project(
         id: request.projects[0].id.clone(),
         name: request.projects[0].name.clone(),
         description: request.projects[0].description.clone(),
+        instructions: None,
         is_archived: false,
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
@@ -280,6 +281,42 @@ pub async fn delete_project(privacy: PrivacyMode, project_id: &str) -> Result<()
     if let Err(error) = save_project_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the project list: {error}"));
     }
+    Ok(())
+}
+
+pub async fn project_detail(
+    privacy: PrivacyMode,
+    project_id: &str,
+) -> Result<(serde_json::Value, Vec<serde_json::Value>), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let project: serde_json::Value = session.client.get(&project_path(project_id), &[]).await?;
+    let files: serde_json::Value = session
+        .client
+        .get(
+            &format!("{}/knowledge-files", project_path(project_id)),
+            &[],
+        )
+        .await?;
+    Ok((
+        project.get("project").cloned().unwrap_or(project),
+        files
+            .get("files")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
+    ))
+}
+
+pub async fn update_project(
+    privacy: PrivacyMode,
+    project_id: &str,
+    patch: &serde_json::Value,
+) -> Result<(), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let _: serde_json::Value = session
+        .client
+        .call(&Route::put(project_path(project_id)), &[], Some(patch))
+        .await?;
     Ok(())
 }
 
@@ -374,6 +411,131 @@ pub async fn add_memory(
     Ok(refusals)
 }
 
+pub async fn revise_memory(
+    privacy: PrivacyMode,
+    id_or_content: &str,
+    content: Option<&str>,
+    pinned: Option<bool>,
+) -> Result<Option<Vec<String>>, CloudError> {
+    let mut session = CloudSession::open(privacy)?;
+    let mut cache = load_memory_cache(&session.config_dir);
+    let Some(entry) = cache
+        .entries
+        .iter()
+        .find(|entry| entry.id == id_or_content)
+        .or_else(|| {
+            cache
+                .entries
+                .iter()
+                .find(|entry| entry.content.trim() == id_or_content.trim())
+        })
+        .cloned()
+    else {
+        return Ok(None);
+    };
+    let request = memory::MemoryPushRequest {
+        protocol_version: memory::SYNC_PROTOCOL_VERSION,
+        memories: vec![memory::revise_memory(
+            &entry,
+            &session.state,
+            MEMORY_SOURCE,
+            content,
+            pinned,
+        )],
+    };
+    let sync = memory::MemorySync::new(&session.client);
+    let response = sync.push(&request).await?;
+    memory::apply_push_response(&response, &mut session.state);
+    session.persist();
+    let refusals = memory::refusals(&request, &response);
+    if refusals.is_empty() {
+        if let Some(cached) = cache
+            .entries
+            .iter_mut()
+            .find(|cached| cached.id == entry.id)
+        {
+            cached.content = request.memories[0].content.clone();
+            if let Some(pinned) = pinned {
+                cached.pinned = pinned;
+            }
+            cached.updated_at = chrono::Utc::now().to_rfc3339();
+        }
+        if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
+            crate::output::print_warn(&format!("could not cache the account memory: {error}"));
+        }
+    }
+    Ok(Some(refusals))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ImportPreview {
+    #[serde(default)]
+    items: Vec<ImportPreviewItem>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ImportPreviewItem {
+    content: String,
+    #[serde(default)]
+    duplicate: bool,
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    #[serde(default)]
+    pub inserted_count: u64,
+    #[serde(default)]
+    pub skipped_duplicate_count: u64,
+    #[serde(default)]
+    pub blocked_count: u64,
+    #[serde(default)]
+    pub excluded_count: u64,
+}
+
+pub const MEMORY_IMPORT_PATH: &str = "/api/memory/import";
+
+pub async fn import_memories(
+    privacy: PrivacyMode,
+    text: &str,
+    source_name: &str,
+) -> Result<Option<ImportResult>, CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let preview: ImportPreview = session
+        .client
+        .post(
+            MEMORY_IMPORT_PATH,
+            &serde_json::json!({ "mode": "dry-run", "text": text, "sourceName": source_name }),
+        )
+        .await?;
+    let items: Vec<String> = preview
+        .items
+        .into_iter()
+        .filter(|item| !item.duplicate)
+        .map(|item| item.content)
+        .collect();
+    if items.is_empty() {
+        return Ok(None);
+    }
+    let mut total = ImportResult::default();
+    for chunk in items.chunks(MEMORY_IMPORT_BATCH) {
+        let result: ImportResult = session
+            .client
+            .post(
+                MEMORY_IMPORT_PATH,
+                &serde_json::json!({ "mode": "commit", "items": chunk, "sourceName": source_name }),
+            )
+            .await?;
+        total.inserted_count += result.inserted_count;
+        total.skipped_duplicate_count += result.skipped_duplicate_count;
+        total.blocked_count += result.blocked_count;
+        total.excluded_count += result.excluded_count;
+    }
+    Ok(Some(total))
+}
+
+const MEMORY_IMPORT_BATCH: usize = 500;
+
 /// Remove a memory from the account.
 pub async fn forget_memory(privacy: PrivacyMode, id_or_content: &str) -> Result<bool, CloudError> {
     let mut session = CloudSession::open(privacy)?;
@@ -422,6 +584,35 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
         return String::new();
     }
     load_memory_cache(config_dir).context_prompt()
+}
+
+pub fn project_instructions_context(
+    privacy: PrivacyMode,
+    config_dir: &Path,
+    project_id: Option<&str>,
+) -> String {
+    if privacy != PrivacyMode::Managed {
+        return String::new();
+    }
+    let Some(project_id) = project_id else {
+        return String::new();
+    };
+    let cache = load_project_cache(config_dir);
+    let Some(project) = cache
+        .projects
+        .iter()
+        .find(|project| project.id == project_id)
+    else {
+        return String::new();
+    };
+    match project.instructions.as_deref().map(str::trim) {
+        Some(instructions) if !instructions.is_empty() => format!(
+            "\n<project_instructions project=\"{}\">\nInstructions the user set for this account project:\n{}\n</project_instructions>\n",
+            project.name.replace(['"', '<', '>'], ""),
+            instructions
+        ),
+        _ => String::new(),
+    }
 }
 
 #[cfg(test)]
@@ -477,6 +668,7 @@ mod tests {
             id: "p1".to_string(),
             name: "Launch".to_string(),
             description: None,
+            instructions: None,
             is_archived: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
         });

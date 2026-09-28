@@ -10,17 +10,15 @@ nothing is left.
 
 - Done when: A dashboard lists the user's generated/published sites with their state and actions.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
-| desktop | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts list` lists account artifacts, not published pages; render_published exists but no command calls it. | ui |
 | vscode | partial | The Artifacts view marks published rows and opens their page, but cannot unpublish or change audience. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/PublishedArtifactsSection.tsx:118-134`, `apps/web/features/settings/components/WebSettingsModal.tsx:202-202`, `apps/web/app/api/artifacts/publish/route.ts:405-433`, `apps/cli/src/lib.rs:1023-1032`
+Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.02: Application name and description.
 
@@ -108,15 +106,12 @@ Code: `apps/extension-vscode/package.json:597-599`, `apps/extension-vscode/src/c
 
 - Done when: The owner can restrict a site to members of their workspace.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI prints a page's audience after publishing but cannot set it. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1986-1994`, `apps/cli/src/cloud/artifacts.rs:88-95`
 
 ## S33.13: Password or authentication options where offered.
 
@@ -187,18 +182,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 | chrome | partial | The side panel can copy the source to the clipboard but not save a file. | surface-only |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`
-
-## S33.29: Content moderation.
-
-- Done when: Published sites are subject to content moderation (review/takedown).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Moderation is reactive: an operator looks up a public token and takes it down (audited), and publish scans for secrets; published content is not screened for harmful material and reports are not queued for review. | handler |
-| desktop | partial | Moderation is reactive: an operator looks up a public token and takes it down (audited), and publish scans for secrets; published content is not screened for harmful material and reports are not queued for review. | handler |
-
-Code: `apps/web/features/admin/pages/OperatorDashboardPage.tsx:448-448`, `apps/web/app/api/admin/takedown/route.ts:56-60`, `apps/web/app/api/artifacts/publish/route.ts:206-216`
 
 ## S33.30: Deletion of app and associated data.
 

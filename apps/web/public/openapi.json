@@ -458,6 +458,36 @@
           },
           "max_output": {
             "type": "integer"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "What the model accepts and produces, from the model registry. `null` means the registry has no verified answer.",
+            "properties": {
+              "image_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "audio_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "video_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "structured_output": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "function_calling": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "reasoning": {
+                "type": "boolean",
+                "nullable": true
+              }
+            }
           }
         }
       },
@@ -487,6 +517,25 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "routing_profiles": {
+                "type": "array",
+                "description": "The values `routing_profile` accepts on chat completions, with the label and description a picker can show.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": ["auto", "speed", "quality", "cost"]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -654,7 +703,7 @@
           },
           "web_search": {
             "type": "boolean",
-            "description": "Lets the model search the web while it answers. Each search is billed in credits and shows in your usage as Agentic search."
+            "description": "Runs a hosted web search for this turn and cites what it found. When omitted, search turns on if the prompt asks to search or the task is research; `false` keeps it off. Each search is charged as Agentic search."
           },
           "research": {
             "type": "boolean",
@@ -692,10 +741,6 @@
             "type": "boolean",
             "description": "`false` answers without your account's personalization: no custom instructions, profile or response style, and no memory is read or saved for this request. Omitted or `true` keeps the default."
           },
-          "web_search": {
-            "type": "boolean",
-            "description": "Runs a hosted web search for this turn and cites what it found. When omitted, search turns on if the prompt asks to search or the task is research; `false` keeps it off. Each search is charged as Agentic search."
-          },
           "web_fetch": {
             "type": "boolean",
             "description": "Lets the model open a web page or document named in the conversation and read it. Web pages, plain text, Markdown, JSON, PDFs and Word, Excel or PowerPoint files are read as text; images, audio and video are refused. When omitted on a streamed request, it turns on if the prompt asks to open a link."
@@ -721,6 +766,11 @@
               "maxLength": 200
             },
             "description": "Connector ids whose tools are not offered for this turn."
+          },
+          "routing_profile": {
+            "type": "string",
+            "enum": ["auto", "speed", "quality", "cost"],
+            "description": "How Auto chooses a model when `model` is `auto`. `speed` routes to the quickest models your plan includes, `quality` to the most capable one your plan allows (a plan's ceiling still applies, so Pro is served its best balanced model), and `cost` to the lowest-cost model that can handle the task. `auto`, or leaving it out, lets Auto decide per message. Ignored when `model` names a specific model. Workspace model policy, data residency and the training opt-out still limit every choice."
           }
         }
       },

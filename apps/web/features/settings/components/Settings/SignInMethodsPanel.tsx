@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { AuthProvider, AuthProviderId } from '@agiworkforce/client-runtime';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
@@ -11,7 +10,7 @@ import { useConnectedAccounts, useCurrentUser, usePasskeys } from '@/lib/identit
 import { toUserMessage } from '@/lib/user-error-message';
 
 const IDENTITIES_PATH = '/api/settings/identities';
-const IDENTITIES_QUERY_KEY = ['settings', 'identities'] as const;
+const IDENTITIES_UNREADABLE = 'Your sign-in methods could not be loaded.';
 
 interface LinkedIdentity {
   id: string;
@@ -27,6 +26,11 @@ interface IdentitiesResponse {
   providers: AuthProvider[];
   consequence: string;
 }
+
+type IdentitiesState =
+  | { kind: 'loading' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'ready'; data: IdentitiesResponse };
 
 const CREATION_SOURCE_LABEL: Readonly<Record<string, string>> = {
   sso: 'Single sign-on',
@@ -68,7 +72,7 @@ function formatDate(value: string | null): string | null {
 
 async function readIdentities(): Promise<IdentitiesResponse> {
   const response = await sendAuthorizedJson(IDENTITIES_PATH, { method: 'GET' });
-  if (!response.ok) throw new Error('Your sign-in methods could not be loaded.');
+  if (!response.ok) throw new Error(IDENTITIES_UNREADABLE);
   return (await response.json()) as IdentitiesResponse;
 }
 
@@ -93,7 +97,6 @@ function MethodRow({
 }
 
 export function SignInMethodsPanel() {
-  const queryClient = useQueryClient();
   const { user } = useCurrentUser();
   const { passkeys } = usePasskeys();
   const { isLoaded, accounts, connect, disconnect } = useConnectedAccounts();
@@ -102,14 +105,29 @@ export function SignInMethodsPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const identities = useQuery({
-    queryKey: IDENTITIES_QUERY_KEY,
-    queryFn: readIdentities,
-    staleTime: 60 * 1000,
-  });
+  const [identities, setIdentities] = useState<IdentitiesState>({ kind: 'loading' });
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const providers = identities.data?.providers ?? [];
-  const linked = identities.data?.identities ?? [];
+  useEffect(() => {
+    let cancelled = false;
+    readIdentities()
+      .then((data) => {
+        if (!cancelled) setIdentities({ kind: 'ready', data });
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setIdentities({ kind: 'failed', message: toUserMessage(cause, IDENTITIES_UNREADABLE) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const loaded = identities.kind === 'ready' ? identities.data : null;
+  const providers = loaded?.providers ?? [];
+  const linked = loaded?.identities ?? [];
+  const loadError = identities.kind === 'failed' ? identities.message : null;
 
   async function run(key: string, action: () => Promise<void>, fallback: string) {
     setError(null);
@@ -158,7 +176,7 @@ export function SignInMethodsPanel() {
           } | null;
           throw new Error(body?.error?.message ?? 'That sign-in method could not be removed.');
         }
-        await queryClient.invalidateQueries({ queryKey: IDENTITIES_QUERY_KEY });
+        setReloadKey((key) => key + 1);
       },
       'That sign-in method could not be removed.',
     );
@@ -191,7 +209,7 @@ export function SignInMethodsPanel() {
         Every way you can sign in to this account. Keep at least one you can still reach.
       </p>
 
-      {!isLoaded || identities.isLoading ? (
+      {!isLoaded || identities.kind === 'loading' ? (
         <div style={{ paddingTop: 'var(--space-3)' }}>
           <Spinner size="sm" aria-label="Loading sign-in methods" />
         </div>
@@ -276,7 +294,7 @@ export function SignInMethodsPanel() {
                           confirm({
                             title: `Remove this ${label.toLowerCase()}?`,
                             description:
-                              identities.data?.consequence ??
+                              loaded?.consequence ??
                               'You will no longer be able to sign in with it.',
                             confirmLabel: 'Remove',
                             destructive: true,
@@ -299,7 +317,7 @@ export function SignInMethodsPanel() {
         </ul>
       )}
 
-      {identities.error || error ? (
+      {loadError || error ? (
         <p
           role="alert"
           style={{
@@ -308,7 +326,7 @@ export function SignInMethodsPanel() {
             color: 'var(--settings-destructive-text)',
           }}
         >
-          {error ?? identities.error?.message}
+          {error ?? loadError}
         </p>
       ) : null}
     </section>

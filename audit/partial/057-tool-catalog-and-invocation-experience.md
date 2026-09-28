@@ -267,30 +267,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-30
 
 - Done when: The assistant can call a calendar tool to read or create events in the user's calendar.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | desktop | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
-| vscode | partial | No calendar tool ships in the CLI runtime; only a user-registered MCP server could add one. | handler |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
-
-Code: `apps/cli/src/lib.rs:1338-1341`
-
-## S57.23: Messaging tool.
-
-- Done when: The assistant can call a messaging tool to read or send messages on a connected service (e.g. Slack) after approval.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The CLI runtime's send_message reaches only agent teammates; no external messaging tool. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:337-340`
 
 ## S57.24: Scheduling tool.
 
@@ -346,10 +331,9 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-16
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-| vscode | partial | The runtime's tools carry schemas for the model; the sidebar never shows a tool's description or parameters. | ui |
 | chrome | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
 
 ## S57.36: Large-result references.
 
@@ -370,12 +354,11 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 
 - Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-| vscode | partial | Tool cards persist only in the current sidebar session; no receipt or call log view. | ui |
 | chrome | partial | Tool steps show in the transcript only; Chrome has no call log or receipt view. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5908-5913`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`
+Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`

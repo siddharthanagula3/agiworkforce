@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
+import { ACCOUNT_RECOVERY_PATH } from './authRoutes';
 import { useAuthCopy } from './authCopy';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
@@ -127,11 +127,11 @@ export function AuthSecondFactorStep({
             ))
           : null}
 
-        {hasBackupCode ? null : (
-          <Link href={contactMailto(CONTACT_SUBJECTS.appeal)} className={AUTH_LINK_CLASS}>
-            {copy.text('flow.secondFactor.lostDevice', 'Lost the device with your codes?')}
-          </Link>
-        )}
+        <Link href={`${ACCOUNT_RECOVERY_PATH}?lost=factor`} className={AUTH_LINK_CLASS}>
+          {hasBackupCode
+            ? copy.text('flow.secondFactor.lostEverything', 'Lost your device and backup codes?')
+            : copy.text('flow.secondFactor.lostDevice', 'Lost the device with your codes?')}
+        </Link>
 
         <button
           type="button"

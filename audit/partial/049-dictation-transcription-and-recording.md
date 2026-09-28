@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/voice` records and transcribes, then sends the text as a turn (no composer field). Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:216-216`
+Code: `apps/cli/src/tui/tui_app.rs:5010-5011`, `apps/cli/src/voice.rs:299-299`
 
 ## S49.02: Editable transcription before send.
 
@@ -27,10 +27,10 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The transcript is shown for ENTER/re-record/discard, but cannot be edited before sending. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:216-216`
+Code: `apps/cli/src/voice.rs:229-229`
 
 ## S49.03: Dictation language selection.
 
@@ -45,22 +45,6 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:183-183`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1134-1134`, `apps/mobile/src/features/voice/services/voice.ts:45-45`, `apps/cli/Cargo.toml:118-118`
-
-## S49.04: Interim transcript.
-
-- Done when: While dictating, interim (partial) text appears before the recording ends.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Composer dictation shows only a waveform and transcribes after stop; streaming partial text exists only as voice-mode captions. | ui, handler |
-| desktop | partial | Composer dictation shows only a waveform and transcribes after stop; streaming partial text exists only as voice-mode captions. | ui, handler |
-| mobile | partial | The recognizer produces partials (interimResults) but composer dictation and the companion show text only after capture ends; only the live voice bar streams text. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/DictationStrip.tsx:101-101`, `apps/web/features/chat/stores/voice-input-store.ts:257-257`, `apps/mobile/src/features/voice/services/voiceInput.ts:291-291`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:169-169`
 
 ## S49.05: Final transcript.
 
@@ -173,11 +157,11 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:58-58`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | A RecordingOverlay with a duration readout exists but is not mounted anywhere; the composer shows only a waveform while recording. | mount |
-| cli | partial | Shows the recorded length after stopping ("N.Ns recorded") plus a live indicator, not a running clock. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`, `apps/cli/src/voice.rs:718-718`
 
 ## S49.25: Transcript export.
 
@@ -186,14 +170,14 @@ Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice-conversation transcripts are chat messages and leave with the chat export (Markdown, JSON, HTML, PDF, DOCX); there are no standalone recording transcripts to export. | surface-only |
+| web | partial | surface-only: voice transcripts leave with the chat export; no standalone recordings exist | surface-only |
 | desktop | partial | Same as web, via the hosted chat export. | surface-only |
 | mobile | partial | Voice turns leave with the conversation export (PDF or text); no standalone recording transcripts. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5851-5851`, `apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx:128-128`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1599`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:96-96`
+Code: `apps/web/features/chat/lib/live-voice-session.ts:1-1`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5851`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1599`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:96-96`
 
 ## S49.27: Retention and deletion controls.
 
@@ -202,11 +186,11 @@ Code: `apps/web/features/chat/pages/WebChatPage.tsx:5851-5851`, `apps/web/featur
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Dictation and live-voice audio is never kept; voice transcripts are saved as chat messages and can be removed only by deleting the conversation or message, and there is no voice-specific retention setting. | ui |
+| web | partial | surface-only: no voice audio is kept; transcripts are chat messages under the chat's own deletion | surface-only |
 | desktop | partial | Dictation and live-voice audio is never kept; voice transcripts are saved as chat messages and can be removed only by deleting the conversation or message, and there is no voice-specific retention setting. | ui |
 | mobile | partial | Recognition runs on device and keeps no audio; spoken turns become chat messages that can be removed only by deleting the chat, and there is no voice-specific retention setting. | ui |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:4999-5012`, `apps/web/app/api/chat/conversations/[id]/route.ts:517-517`, `apps/mobile/app/(app)/chat/[id].tsx:1155-1164`
+Code: `apps/web/features/chat/stores/voice-input-store.ts:1-1`, `apps/web/features/chat/pages/WebChatPage.tsx:4999-5012`, `apps/web/app/api/chat/conversations/[id]/route.ts:517-517`, `apps/mobile/app/(app)/chat/[id].tsx:1155-1164`
 
 ## S49.30: Undo inserted text.
 

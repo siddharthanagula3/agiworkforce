@@ -440,6 +440,39 @@ pub async fn published_for(
         .find(|artifact| artifact.artifact_id == artifact_id))
 }
 
+pub fn audience_label(visibility: &str) -> &str {
+    match visibility {
+        "organization" => "workspace",
+        "public" => "anyone with the link",
+        other => other,
+    }
+}
+
+pub fn audience_visibility(audience: &str) -> Option<&'static str> {
+    match audience {
+        "public" | "anyone" => Some("public"),
+        "workspace" | "organization" | "org" => Some("organization"),
+        _ => None,
+    }
+}
+
+pub async fn set_audience(
+    client: &CloudClient,
+    token: &str,
+    visibility: &str,
+) -> Result<serde_json::Value, CloudError> {
+    client
+        .call(
+            &Route::patch(format!(
+                "{ARTIFACT_PUBLISH_PATH}/{}",
+                urlencoding::encode(token)
+            )),
+            &[],
+            Some(&serde_json::json!({ "visibility": visibility })),
+        )
+        .await
+}
+
 pub async fn unpublish(client: &CloudClient, token: &str) -> Result<(), CloudError> {
     let _: serde_json::Value = client.call(&unpublish_route(token), &[], None).await?;
     Ok(())
@@ -516,13 +549,25 @@ pub async fn slash(
 }
 
 pub fn render_index(entries: &[ArtifactIndexEntry]) -> String {
+    render_index_marked(entries, &[])
+}
+
+pub fn render_index_marked(
+    entries: &[ArtifactIndexEntry],
+    published: &[PublishedArtifact],
+) -> String {
     if entries.is_empty() {
         return "No artifacts in your AGI Workforce account yet.".to_string();
     }
     let mut lines = Vec::with_capacity(entries.len() * 2);
     for entry in entries {
+        let state = published
+            .iter()
+            .find(|artifact| artifact.artifact_id == entry.id)
+            .map(|artifact| format!("  published: {}", audience_label(&artifact.visibility)))
+            .unwrap_or_default();
         lines.push(format!(
-            "{}  {}  [{}]",
+            "{}  {}  [{}]{state}",
             entry.id,
             entry.display_title(),
             entry.artifact_type

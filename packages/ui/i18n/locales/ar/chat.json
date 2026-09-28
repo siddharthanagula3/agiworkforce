@@ -117,6 +117,7 @@
     "renameProject": "إعادة تسمية المشروع",
     "restore": "استعادة",
     "running": "قيد التشغيل",
+    "unread": "غير مقروءة",
     "searchConversations": "البحث في المحادثات",
     "searchConversationsDescription": "ابحث في سجل محادثاتك وافتح المحادثة المطابقة.",
     "share": "مشاركة",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "المخصّصة تستخدم ملفك الشخصي وتعليماتك وأسلوب الردود. غير المخصّصة تتركها جانبًا.",
     "toggleArtifacts": "تبديل لوحة العناصر",
     "toggleArtifactsCount": "تبديل لوحة العناصر ({{count}})",
-    "toggleStats": "الإحصائيات"
+    "toggleStats": "الإحصائيات",
+    "untitledConversation": "محادثة"
   },
   "interface": {
     "closeRewindCheckpoints": "إغلاق نقاط الرجوع",
@@ -387,5 +389,14 @@
     "runningToolsOf_few": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "جارٍ التشغيل {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "جدول",
+    "expand": "توسيع الجدول",
+    "copy": "نسخ الجدول",
+    "copied": "تم نسخ الجدول",
+    "copyFailed": "تعذّر النسخ، الحافظة غير متاحة",
+    "download": "تنزيل بتنسيق CSV",
+    "close": "إغلاق الجدول الموسّع"
   }
 }

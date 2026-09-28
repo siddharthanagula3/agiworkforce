@@ -127,14 +127,11 @@ Code: `apps/extension-vscode/src/webview/render.ts:18-18`, `apps/extension-vscod
 
 - Done when: Execution stdout is shown in a dedicated output panel under the code.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a one-line output preview is shown under each command; the full output is not viewable in the TUI. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
 ## S21.16: Standard-error panel.
 
