@@ -522,6 +522,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         return tool.invoke(&call.args, opts.quiet).await;
     }
 
+    if let Some(reason) = domain_rule_refusal(canonical_name, &call.args) {
+        return Ok(ToolResult {
+            tool_name: canonical_name.to_string(),
+            success: false,
+            output: reason,
+        });
+    }
+
     let boundary_gated = match canonical_name {
         "web_fetch" => opts.require_confirmation,
         _ => require_confirm,
@@ -673,6 +681,15 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     result
 }
 
+fn domain_rule_refusal(tool_name: &str, args: &HashMap<String, String>) -> Option<String> {
+    match tool_name {
+        "web_fetch" | "browser_navigate" => {
+            crate::permissions::url_blocked_by_domain_rule(args.get("url")?)
+        }
+        _ => None,
+    }
+}
+
 fn trust_boundary_approval(
     tool_name: &str,
     args: &HashMap<String, String>,
@@ -722,6 +739,11 @@ fn trust_boundary_approval(
                 .ok()
                 .and_then(|parsed| parsed.host_str().map(str::to_string))
                 .unwrap_or(url);
+            if crate::permissions::PermissionStore::load()
+                .is_ok_and(|store| store.names_domain(&destination))
+            {
+                return None;
+            }
             Some(ApprovalRequest::new(
                 ApprovalRequestKind::Network {
                     tool_name: tool_name.to_string(),

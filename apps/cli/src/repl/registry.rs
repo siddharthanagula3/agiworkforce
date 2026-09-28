@@ -639,7 +639,7 @@ pub fn permissions_for_display(arg: &str) -> CommandOutcome {
     match subcommand {
         "" => permissions_tab("allow"),
         "help" | "-h" | "--help" => CommandOutcome::Block(format!(
-            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
+            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset\n\nWebsites: a rule of the form domain:<host> decides which sites the agent may fetch with web_fetch or open in the browser. /permissions deny domain:example.com blocks that site, domain:*.example.com covers its subdomains, and domain:* covers every site. An allow rule that names a host on this computer or your network skips the prompt for it.",
             ts::accent_header("Permissions:")
         )),
         "reset" => match crate::permissions::PermissionStore::load() {
