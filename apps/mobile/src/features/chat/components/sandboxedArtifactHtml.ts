@@ -7,14 +7,26 @@ import { lightColors } from '@/src/ui/theme/tokens';
 
 export type PreviewableKind = 'html' | 'svg' | 'mermaid';
 
+export interface MermaidAppearance {
+  background: string;
+  dark: boolean;
+}
+
+export type MermaidPreviewMessage =
+  { type: 'rendered'; height: number } | { type: 'failed'; reason: string };
+
+const MAX_FAILURE_REASON_LENGTH = 200;
+
 const PREVIEW_SURFACE = lightColors.background;
 const PREVIEW_TEXT = lightColors.textPrimary;
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net';
 const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11/dist/mermaid.min.js`;
 
-export function buildMermaidPreviewHtml(source: string): string {
+export function buildMermaidPreviewHtml(source: string, appearance?: MermaidAppearance): string {
   const encoded = JSON.stringify(source).replace(/</g, '\\u003c');
+  const background = appearance?.background ?? PREVIEW_SURFACE;
+  const theme = appearance?.dark ? 'dark' : 'default';
   const csp = `default-src 'none'; script-src ${MERMAID_CDN} 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;`;
   return [
     '<!DOCTYPE html>',
@@ -22,20 +34,41 @@ export function buildMermaidPreviewHtml(source: string): string {
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
-    `<style>html,body{margin:0;padding:12px;background:${PREVIEW_SURFACE};}#c{display:flex;justify-content:center;}</style>`,
+    `<style>html,body{margin:0;padding:12px;background:${background};}#c{display:flex;justify-content:center;}</style>`,
     '</head><body>',
     '<div id="c"></div>',
     `<script src="${MERMAID_SRC_URL}"></script>`,
     '<script>',
     `var src = ${encoded};`,
+    'function post(m){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); }',
+    "function fail(e){ document.getElementById('c').textContent = 'Could not render this diagram.'; post({ type: 'failed', reason: String((e && e.message) || e || '') }); }",
     'try {',
-    "  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });",
-    "  mermaid.render('d', src).then(function(r){ document.getElementById('c').innerHTML = r.svg; })",
-    "    .catch(function(){ document.getElementById('c').textContent = 'Could not render this diagram.'; });",
-    "} catch (e) { document.getElementById('c').textContent = 'Could not render this diagram.'; }",
+    `  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: '${theme}' });`,
+    "  mermaid.render('d', src).then(function(r){ document.getElementById('c').innerHTML = r.svg; post({ type: 'rendered', height: Math.ceil(document.documentElement.scrollHeight) }); })",
+    '    .catch(fail);',
+    '} catch (e) { fail(e); }',
     '</script>',
     '</body></html>',
   ].join('');
+}
+
+export function parseMermaidPreviewMessage(data: string): MermaidPreviewMessage | null {
+  let message: unknown;
+  try {
+    message = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (!message || typeof message !== 'object') return null;
+  const { type, height, reason } = message as Record<string, unknown>;
+  if (type === 'rendered' && typeof height === 'number' && Number.isFinite(height) && height > 0) {
+    return { type, height };
+  }
+  if (type === 'failed') {
+    const firstLine = typeof reason === 'string' ? (reason.split('\n')[0] ?? '').trim() : '';
+    return { type, reason: firstLine.slice(0, MAX_FAILURE_REASON_LENGTH) };
+  }
+  return null;
 }
 
 const CONTENT_SECURITY_POLICY =
