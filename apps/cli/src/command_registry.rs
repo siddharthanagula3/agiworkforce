@@ -236,6 +236,7 @@ fn append_tui_shortcuts(help: &mut String) {
         "Up/Down"
     );
     let _ = writeln!(help, "  {:<14} Scroll chat history", "PageUp/Down");
+    let _ = writeln!(help, "  {:<14} Jump to the latest output", "Ctrl-End");
     let _ = writeln!(help, "  {:<14} Insert a newline", "Ctrl-J");
     let _ = writeln!(help, "  {:<14} Delete to line start", "Ctrl-U");
     let _ = writeln!(
