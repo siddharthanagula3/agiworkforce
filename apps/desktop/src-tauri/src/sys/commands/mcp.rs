@@ -67,6 +67,50 @@ async fn build_runtime_server_config(
     })
 }
 
+async fn pin_oauth_token_endpoint(
+    state: &McpState,
+    server_name: &str,
+) -> Result<McpServersConfig, String> {
+    use crate::core::mcp::transport::TransportConfig;
+    let snapshot = state.config.lock().clone();
+    let url = match snapshot
+        .mcp_servers
+        .get(server_name)
+        .and_then(|server| server.transport.as_ref())
+    {
+        Some(TransportConfig::Http(http))
+            if http.oauth_client_secret.is_some() && http.oauth_token_url.is_none() =>
+        {
+            http.url.clone()
+        }
+        _ => return Ok(snapshot),
+    };
+    let token_url = agiworkforce_mcp::oauth::discover_token_endpoint(&url)
+        .await
+        .map_err(|e| {
+            format!(
+                "Could not find the sign-in server for '{}' to bind its client secret to: {:#}",
+                server_name, e
+            )
+        })?;
+    let updated = {
+        let mut config = state.config.lock();
+        if let Some(TransportConfig::Http(http)) = config
+            .mcp_servers
+            .get_mut(server_name)
+            .and_then(|server| server.transport.as_mut())
+        {
+            http.oauth_token_url = Some(token_url);
+        }
+        config.clone()
+    };
+    state
+        .persist_config_snapshot(&updated)
+        .await
+        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+    Ok(updated)
+}
+
 fn resolve_config_location() -> Result<McpConfigLocation, String> {
     let project_folder = McpServersConfig::active_project_folder_from_env();
     let config_path = McpServersConfig::default_config_path()
@@ -738,6 +782,7 @@ pub async fn mcp_connect_server(
         return Err("MCP server connection cancelled".to_string());
     }
 
+    let raw_config = pin_oauth_token_endpoint(&state, &name).await?;
     let server_config = build_runtime_server_config(&raw_config, &name).await?;
 
     state
