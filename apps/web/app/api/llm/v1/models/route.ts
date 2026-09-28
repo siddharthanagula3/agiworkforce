@@ -7,6 +7,7 @@ import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
+import { ROUTING_PROFILE_CHOICE_OPTIONS } from '@agiworkforce/types';
 import {
   ANONYMOUS_PLAN_TIER,
   buildCatalogueEntries,
@@ -133,6 +134,11 @@ async function listModelsForRequest(request: NextRequest, userTier: string, user
         user_tier: normalizeSubscriptionAccessTier(userTier),
         total_available: available.length,
         allowed_auto_modes: getAllowedAutoModesForTier(userTier),
+        routing_profiles: ROUTING_PROFILE_CHOICE_OPTIONS.map(({ choice, label, description }) => ({
+          id: choice,
+          label,
+          description,
+        })),
         temporarily_unavailable: temporarilyUnavailable,
       },
     },
