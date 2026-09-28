@@ -9,10 +9,26 @@ import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
+import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { VOICE_PRESETS, type VoicePreset } from '../voicePresets';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
+import { VOICE_PRESETS } from '../voicePresets';
 
 const ORB_SIZE = 176;
+
+interface VoiceChoice {
+  id: string;
+  name: string;
+  description: string;
+}
+
+const LIVE_CHOICES: readonly VoiceChoice[] = LIVE_VOICES.map((voice) => ({
+  id: voice.voiceURI,
+  name: voice.name,
+  description: voice.lang,
+}));
 
 function Orb({ size = ORB_SIZE }: { size?: number }) {
   const r = size / 2;
@@ -56,13 +72,24 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
+  const liveVoice = useSettingsStore((s) => s.liveVoice);
+  const setLiveVoice = useSettingsStore((s) => s.setLiveVoice);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const live =
+    liveVoiceModeUnavailableReason({
+      executionMode: appMode === 'cloud' ? 'cloud' : 'local',
+      signedIn: isClerkSignedIn,
+    }) === null;
+  const choices: readonly VoiceChoice[] = live ? LIVE_CHOICES : VOICE_PRESETS;
+  const selectedId = live ? liveVoice : selectedPresetId;
 
   const initialIndex = Math.max(
     0,
-    VOICE_PRESETS.findIndex((p) => p.id === selectedPresetId),
+    choices.findIndex((choice) => choice.id === selectedId),
   );
   const [index, setIndex] = useState(initialIndex);
-  const listRef = useRef<FlatList<VoicePreset>>(null);
+  const listRef = useRef<FlatList<VoiceChoice>>(null);
 
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -78,15 +105,18 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   );
 
   const handleStart = useCallback(() => {
-    const preset = VOICE_PRESETS[index];
-    if (preset) setSelectedPresetId(preset.id);
+    const choice = choices[index];
+    if (choice) {
+      if (live) setLiveVoice(choice.id);
+      else setSelectedPresetId(choice.id);
+    }
     if (hapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     onStart();
-  }, [index, setSelectedPresetId, hapticsEnabled, onStart]);
+  }, [choices, index, live, setLiveVoice, setSelectedPresetId, hapticsEnabled, onStart]);
 
-  const active = VOICE_PRESETS[index];
+  const active = choices[index];
 
   return (
     <Modal
@@ -151,8 +181,8 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
           <View style={{ flex: 1, minHeight: 200, justifyContent: 'center' }}>
             <FlatList
               ref={listRef}
-              data={VOICE_PRESETS}
-              keyExtractor={(p) => p.id}
+              data={choices}
+              keyExtractor={(choice) => choice.id}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
@@ -187,9 +217,9 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            {VOICE_PRESETS.map((p, i) => (
+            {choices.map((choice, i) => (
               <View
-                key={p.id}
+                key={choice.id}
                 style={{
                   width: 7,
                   height: 7,
