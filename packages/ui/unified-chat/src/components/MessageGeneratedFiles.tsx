@@ -455,7 +455,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
         <DialogContent className="w-[min(96vw,64rem)] max-w-none overflow-hidden p-0">
           <div className="grid max-h-[calc(100vh-2rem)] min-h-[24rem] grid-rows-[auto,1fr,auto]">
             <DialogHeader className="border-b border-[var(--chat-border)] px-6 py-4">
-              <DialogTitle className="truncate pr-8">
+              <DialogTitle className="truncate pe-8">
                 {previewEntry?.fileName ?? 'Generated file preview'}
               </DialogTitle>
               <DialogDescription>

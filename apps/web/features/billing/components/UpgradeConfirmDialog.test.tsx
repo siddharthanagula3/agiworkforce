@@ -8,9 +8,11 @@ const paymentMocks = vi.hoisted(() => ({
   upgradePlanMidCycle: vi.fn(),
 }));
 
-vi.mock('@agiworkforce/ui', () => {
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
+  const { translateUiPlural } = await importOriginal<typeof import('@agiworkforce/ui')>();
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
+    translateUiPlural,
     Dialog: Passthrough,
     DialogContent: Passthrough,
     DialogDescription: Passthrough,

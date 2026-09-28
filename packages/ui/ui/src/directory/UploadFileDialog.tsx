@@ -118,7 +118,7 @@ export function UploadFileDialog({
               }}
               className={cn(
                 'block w-full rounded-lg border border-border bg-background p-2 text-sm text-foreground',
-                'file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:text-foreground',
+                'file:me-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:text-foreground',
                 DIRECTORY_FOCUS_RING,
               )}
             />
@@ -130,7 +130,7 @@ export function UploadFileDialog({
                 <AlertTitle>{UPLOAD_CAUTION_TITLE}</AlertTitle>
                 <AlertDescription className="flex flex-col gap-2 text-foreground">
                   <p>{UPLOAD_CAUTION_BODY}</p>
-                  <ul className="flex list-disc flex-col gap-1 pl-4 text-xs">
+                  <ul className="flex list-disc flex-col gap-1 ps-4 text-xs">
                     {caution.findings.map((finding) => (
                       <li key={finding} className="break-words">
                         {finding}

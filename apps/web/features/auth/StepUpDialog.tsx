@@ -423,7 +423,7 @@ export function StepUpDialog({
           </Button>
           {primary ? (
             <Button type="button" disabled={primary.disabled} onClick={primary.onClick}>
-              {busy ? <Spinner size="sm" className="mr-2" aria-label="Checking" /> : null}
+              {busy ? <Spinner size="sm" className="me-2" aria-label="Checking" /> : null}
               {primary.label}
             </Button>
           ) : null}

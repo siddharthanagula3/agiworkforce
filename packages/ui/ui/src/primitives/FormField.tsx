@@ -102,7 +102,7 @@ function FormField({
         >
           {label}
           {required && (
-            <span className="ml-1 text-danger" aria-hidden="true">
+            <span className="ms-1 text-danger" aria-hidden="true">
               *
             </span>
           )}
@@ -126,7 +126,7 @@ function FormField({
             className,
             displayError && 'border-destructive focus-visible:ring-destructive',
             isValid && 'border-success-fill focus-visible:ring-success-fill',
-            showValidationIcon && (displayError || isValid) && 'pr-10',
+            showValidationIcon && (displayError || isValid) && 'pe-10',
           )}
           onChange={handleChange}
           onBlur={handleBlur}
@@ -134,13 +134,13 @@ function FormField({
         />
 
         {showValidationIcon && displayError && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+          <div className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3">
             <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />
           </div>
         )}
 
         {showValidationIcon && isValid && !displayError && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+          <div className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3">
             <CheckCircle2 className="h-4 w-4 text-success-text" aria-hidden="true" />
           </div>
         )}

@@ -628,7 +628,7 @@ export function ArtifactRenderer({
               className="h-8 flex items-center justify-center gap-0.5 px-2 rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
               <Download className="h-3.5 w-3.5" />
-              <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+              <ChevronDown className="h-2.5 w-2.5 ms-0.5" />
             </button>
             {exportMenuOpen && (
               <>
@@ -637,7 +637,7 @@ export function ArtifactRenderer({
                   onClick={() => setExportMenuOpen(false)}
                   aria-hidden
                 />
-                <div className="absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-e3 py-1">
+                <div className="absolute end-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-e3 py-1">
                   <button
                     type="button"
                     onClick={() => {

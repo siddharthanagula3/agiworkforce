@@ -444,6 +444,8 @@
     "discardedReplies_other": "The {{count}} messages below it are deleted and cannot be recovered.",
     "citationSources_one": "Source {{indices}}: {{sites}}",
     "citationSources_other": "Sources {{indices}}: {{sites}}",
+    "folderFilesLeftOut_one": "{{count}} file in {{folder}} was not attached. Attach it from a local folder.",
+    "folderFilesLeftOut_other": "{{count}} files in {{folder}} were not attached. Attach them from a local folder.",
     "savedMemoriesUsed_one": "Used {{count}} saved memory",
     "savedMemoriesUsed_other": "Used {{count}} saved memories",
     "moreSavedMemories_one": "And {{count}} more",
@@ -469,7 +471,9 @@
     "expand": "Expand code",
     "close": "Close expanded code",
     "codeTitle": "{{language}} code",
-    "codeBlockLabel": "{{language}} code block"
+    "codeBlockLabel": "{{language}} code block",
+    "edit": "Edit",
+    "editLabel": "Edit this code beside the chat"
   },
   "streaming": {
     "reconnecting": "Reconnecting…",

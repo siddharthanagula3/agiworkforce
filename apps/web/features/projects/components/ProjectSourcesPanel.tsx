@@ -39,7 +39,7 @@ export function ProjectSourcesPanel({
           className="flex w-full flex-col gap-0 p-0 sm:max-w-none"
           data-testid="project-sources-panel"
         >
-          <div className="flex min-w-0 items-center gap-2 border-b border-border/30 py-3 pl-4 pr-12">
+          <div className="flex min-w-0 items-center gap-2 border-b border-border/30 py-3 ps-4 pe-12">
             <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SheetTitle className="truncate text-sm font-semibold">
               {projectName} sources
@@ -65,8 +65,8 @@ export function ProjectSourcesPanel({
       />
       <div
         className={cn(
-          'flex flex-col border-l border-border/30 bg-card/95 backdrop-blur-xl',
-          'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
+          'flex flex-col border-s border-border/30 bg-card/95 backdrop-blur-xl',
+          'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
           'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
           'animate-in slide-in-from-right duration-moved',
         )}

@@ -493,7 +493,7 @@ export function OperatorDashboardPage() {
         users ? (
           <div className="overflow-x-auto rounded-2xl border border-border">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium">Account</th>
                   <th className="p-3 font-medium">Plan</th>
@@ -535,7 +535,7 @@ export function OperatorDashboardPage() {
                       <button
                         onClick={() => void grantCredits(user)}
                         disabled={busyUserId === user.id}
-                        className="ml-2 rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50"
+                        className="ms-2 rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50"
                       >
                         Grant credit
                       </button>

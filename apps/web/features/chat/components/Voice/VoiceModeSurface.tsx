@@ -237,7 +237,7 @@ export function VoiceModeSurface({
   const sendingChip = pendingUtterance ? (
     <div
       data-testid="voice-sending-chip"
-      className="flex max-w-full items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] py-1 pl-3 pr-1 text-sm"
+      className="flex max-w-full items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] py-1 ps-3 pe-1 text-sm"
     >
       <span className="shrink-0 font-medium text-[var(--chat-text-secondary)]">
         {LABEL.sending}

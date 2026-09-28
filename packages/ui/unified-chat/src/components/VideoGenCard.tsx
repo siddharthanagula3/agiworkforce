@@ -101,7 +101,7 @@ export function VideoGenCard({
             {(onDownload || onShare) && (
               <div
                 className={cn(
-                  'absolute right-2 top-2 flex items-center gap-1',
+                  'absolute end-2 top-2 flex items-center gap-1',
                   'opacity-0 transition-opacity duration-quick',
                   'group-hover:opacity-100 group-focus-within:opacity-100',
                   'motion-reduce:opacity-100',

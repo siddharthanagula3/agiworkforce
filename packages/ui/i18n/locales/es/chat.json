@@ -444,6 +444,8 @@
     "videoModeAttachments_other": "La generación de video solo usa tu instrucción. Los archivos adjuntos no se envían al modelo de video. Sal del modo video primero si quieres enviar estos archivos al modelo de chat.",
     "viewSources_one": "Ver {{count}} fuente",
     "viewSources_other": "Ver {{count}} fuentes",
+    "folderFilesLeftOut_one": "{{count}} archivo de {{folder}} no se adjuntó. Adjúntalo desde una carpeta local.",
+    "folderFilesLeftOut_other": "{{count}} archivos de {{folder}} no se adjuntaron. Adjúntalos desde una carpeta local.",
     "savedMemoriesUsed_one": "Usó {{count}} memoria guardada",
     "savedMemoriesUsed_other": "Usó {{count}} memorias guardadas",
     "moreSavedMemories_one": "Y {{count}} más",
@@ -469,7 +471,9 @@
     "expand": "Ampliar código",
     "close": "Cerrar código ampliado",
     "codeTitle": "Código {{language}}",
-    "codeBlockLabel": "Bloque de código {{language}}"
+    "codeBlockLabel": "Bloque de código {{language}}",
+    "edit": "Editar",
+    "editLabel": "Editar este código junto al chat"
   },
   "streaming": {
     "reconnecting": "Reconectando…",

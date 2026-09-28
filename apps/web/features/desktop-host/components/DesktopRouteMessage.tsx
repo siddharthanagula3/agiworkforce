@@ -28,7 +28,7 @@ export function DesktopRouteMessage({
     >
       <span
         data-window-brand=""
-        className="absolute left-6 top-6 inline-flex items-center gap-2 text-base font-semibold tracking-[-0.01em]"
+        className="absolute start-6 top-6 inline-flex items-center gap-2 text-base font-semibold tracking-[-0.01em]"
       >
         <AgiMark size={BRAND_MARK_SIZE} />
         {BRAND_NAME}

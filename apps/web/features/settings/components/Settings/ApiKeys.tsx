@@ -126,9 +126,9 @@ function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProp
       className="bg-success-fill text-success-on-fill hover:brightness-95"
     >
       {isCreatePending ? (
-        <Spinner size="sm" className="mr-2" aria-hidden="true" />
+        <Spinner size="sm" className="me-2" aria-hidden="true" />
       ) : (
-        <Key className="mr-2 h-4 w-4" />
+        <Key className="me-2 h-4 w-4" />
       )}
       Generate Key
     </Button>
@@ -168,7 +168,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             size="sm"
             disabled={Boolean(loadError)}
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="me-2 h-4 w-4" />
             New Key
           </Button>
         </div>
@@ -187,7 +187,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
               </p>
               {onRetry ? (
                 <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <RefreshCw className="me-2 h-4 w-4" />
                   Retry
                 </Button>
               ) : null}
@@ -261,14 +261,14 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
               {generatedAPIKey ? (
                 <div className="space-y-4">
                   <p className="text-warning-text">
-                    <AlertTriangle className="mr-2 inline h-4 w-4" />
+                    <AlertTriangle className="me-2 inline h-4 w-4" />
                     Save this key now. You will not be able to see it again!
                   </p>
                   <div className="break-all rounded-compact border border-border bg-background/50 p-3 font-mono text-sm text-success-text">
                     {generatedAPIKey}
                   </div>
                   <Button onClick={() => onCopyAPIKey(generatedAPIKey)} className="w-full">
-                    <Copy className="mr-2 h-4 w-4" />
+                    <Copy className="me-2 h-4 w-4" />
                     Copy to Clipboard
                   </Button>
                 </div>
