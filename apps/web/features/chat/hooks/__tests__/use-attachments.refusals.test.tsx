@@ -15,14 +15,17 @@ describe('a file the composer refuses', () => {
     const { result } = renderHook(() => useAttachments({ onError }));
 
     act(() => {
-      result.current.addFiles([file('empty.txt', 'text/plain', 0), file('notes.txt', 'text/plain')]);
+      result.current.addFiles([
+        file('empty.txt', 'text/plain', 0),
+        file('notes.txt', 'text/plain'),
+      ]);
     });
 
     expect(result.current.attachments.map((item) => item.name)).toEqual(['notes.txt']);
     expect(result.current.refused).toEqual([{ filename: 'empty.txt', reason: 'empty' }]);
     expect(result.current.previews.map((item) => item.file.name)).toEqual(['notes.txt']);
     expect(onError).toHaveBeenCalledWith(
-      '"empty.txt" is empty. Add content to the file and attach it again.',
+      'Attached 1 of 2 files. Not attached: "empty.txt" (empty).',
     );
     expect(chatDraftRefusalNotes(result.current.refused)).toEqual([
       '[attachment unavailable: empty.txt is empty. Add content to the file and attach it again.]',
