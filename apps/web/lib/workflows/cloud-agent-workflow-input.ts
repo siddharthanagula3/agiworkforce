@@ -25,6 +25,7 @@ import type {
   ConnectorToolPermissionEntry,
   ConnectorToolPermissions,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import type { RequestedParameters } from '@/app/api/llm/v1/chat/completions/lib/request-parameters';
 import type { SameKeys } from '@/lib/schema-key-guard';
 
 const ThinkingConfigSchema = z
@@ -86,6 +87,23 @@ const ResponseFormatSchema = z.discriminatedUnion('type', [
     .strict(),
 ]);
 
+const RequestParametersSchema = z
+  .object({
+    top_p: z.number().finite().optional(),
+    stop: z.array(z.string()).optional(),
+    seed: z.number().int().optional(),
+    frequency_penalty: z.number().finite().optional(),
+    presence_penalty: z.number().finite().optional(),
+    logit_bias: z.record(z.string(), z.number().finite()).optional(),
+    user: z.string().optional(),
+  })
+  .strict();
+const requestParametersSchemaCoversParameters: SameKeys<
+  z.infer<typeof RequestParametersSchema>,
+  RequestedParameters
+> = true;
+void requestParametersSchemaCoversParameters;
+
 const LlmRequestSchema = z
   .object({
     model: z.string().min(1),
@@ -100,6 +118,7 @@ const LlmRequestSchema = z
     effort: z.string().optional(),
     usePromptCache: z.boolean().optional(),
     responseFormat: ResponseFormatSchema.optional(),
+    requestParameters: RequestParametersSchema.optional(),
     promptCacheScope: PromptCacheScopeSchema.optional(),
   })
   .strict();
