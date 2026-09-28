@@ -202,13 +202,15 @@ const ALLOWLIST = [
   },
   {
     match: /lib\/slack\/slack-installations\.ts$/,
-    tables: ['slack_installations'],
+    tables: ['slack_installations', 'slack_assistant_runs'],
     reason:
       'a Slack installation belongs to a Slack workspace, not to an account: a signed Slack ' +
       'event names only the Slack team, so the installation and its sealed bot token are found ' +
       'by team id or by the id a link or run already carries, on the service role, and only ' +
       'the account that installed it may remove it, which the uninstall statement constrains by ' +
-      'installed_by_user_id. Members read the rows they may see through the app_rls policy.',
+      'installed_by_user_id. Members read the rows they may see through the app_rls policy. ' +
+      'Removing an installation reads the runs parked for approval under it, for every member, ' +
+      'only to stop the AGI Work tasks they held, whose approval can no longer be given.',
   },
   {
     match: /lib\/services\/semantic-decisions\/trace-service\.ts$/,
