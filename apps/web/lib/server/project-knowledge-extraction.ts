@@ -19,6 +19,7 @@ import {
 } from './project-knowledge-object-storage';
 import {
   SCANNED_DOCUMENT_OCR_NOTE,
+  SCANNED_PAGES_OCR_NOTE,
   transcribeScannedPages,
   type TranscribeScannedPagesInput,
 } from './scanned-document-text';
@@ -138,6 +139,27 @@ async function extractPdfText(
       'document_too_complex',
       'This PDF has more pages than project knowledge extraction reads. Split it and upload the parts.',
     );
+  }
+  if (content.text && ocr && content.pageImages.length > 0) {
+    if (content.scannedPagesOmitted.length > 0) {
+      throw new ProjectKnowledgeExtractionError(
+        'document_too_complex',
+        'This PDF has more scanned pages than project knowledge extraction reads. Split it and upload the parts.',
+      );
+    }
+    const recognised = await transcribeScannedPages({ ...ocr, pageImages: content.pageImages });
+    if (!recognised) return boundWithPageAnchors(content.pages);
+    const parts = recognised.split(/\n{2,}/);
+    const merged = [...content.pages];
+    if (parts.length === content.pageImages.length) {
+      content.pageImages.forEach((image, index) => {
+        merged[image.page - 1] = parts[index] ?? '';
+      });
+    } else {
+      const first = content.pageImages[0]!.page - 1;
+      merged[first] = recognised;
+    }
+    return boundWithPageAnchors(merged, `${SCANNED_PAGES_OCR_NOTE}\n\n`);
   }
   if (content.text) return boundWithPageAnchors(content.pages);
   if (!ocr || content.pageImages.length === 0) return { text: null, anchors: [] };
