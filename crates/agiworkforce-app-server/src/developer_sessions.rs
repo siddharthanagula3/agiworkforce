@@ -10,19 +10,20 @@ use agiworkforce_protocol::developer_session::{
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
+    WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -323,6 +324,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PluginRemoveParams,
     ) -> Result<PluginListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PLUGINS_REMOVE))
+    }
+
+    async fn update_plugin(
+        &self,
+        _params: PluginRemoveParams,
+    ) -> Result<PluginUpdateResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PLUGINS_UPDATE))
     }
 
     async fn add_mcp_server(
@@ -985,6 +993,16 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_plugin(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLUGINS_UPDATE => {
+                let params = match parse_params::<PluginRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .update_plugin(params)
                     .await
                     .map(serde_json::to_value)
             }

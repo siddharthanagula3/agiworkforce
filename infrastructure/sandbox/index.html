@@ -309,8 +309,12 @@
           });
           Object.defineProperty(scope, 'agi', {
             value: Object.freeze({
-              complete: function (prompt) {
-                return bridge({ op: 'complete', prompt: String(prompt) });
+              complete: function (prompt, options) {
+                const connectors =
+                  options && Array.isArray(options.connectors)
+                    ? options.connectors.map(String)
+                    : [];
+                return bridge({ op: 'complete', prompt: String(prompt), connectors: connectors });
               },
               storage: storage,
             }),

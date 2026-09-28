@@ -19,8 +19,9 @@ export interface SignatureStatus {
 
 interface Session {
   socket: Socket;
-  reply: Promise<string>;
+  reply: Promise<{ text: string; early: boolean }>;
   answered: () => boolean;
+  end: (bytes: Uint8Array) => Promise<void>;
 }
 
 const REPLY_TERMINATOR = 0;
@@ -34,7 +35,8 @@ const VERSION_REPLY = /^ClamAV ([^/\s]+)\/(\d+)\/(.+)$/;
 async function openSession(address: ClamdAddress, signal: AbortSignal): Promise<Session> {
   const socket = connect(address);
   let settled = false;
-  const reply = new Promise<string>((resolve, reject) => {
+  let ended = false;
+  const reply = new Promise<{ text: string; early: boolean }>((resolve, reject) => {
     const received: Buffer[] = [];
     socket.on('data', (data: Buffer) => {
       const end = data.indexOf(REPLY_TERMINATOR);
@@ -43,7 +45,7 @@ async function openSession(address: ClamdAddress, signal: AbortSignal): Promise<
         return;
       }
       received.push(data.subarray(0, end));
-      resolve(Buffer.concat(received).toString('utf8').trim());
+      resolve({ text: Buffer.concat(received).toString('utf8').trim(), early: !ended });
     });
     socket.on('error', reject);
     socket.once('close', () => reject(new Error('clamd closed the connection without a reply')));
@@ -63,7 +65,16 @@ async function openSession(address: ClamdAddress, signal: AbortSignal): Promise<
     socket.destroy();
     throw error;
   }
-  return { socket, reply, answered: () => settled };
+  const session: Session = {
+    socket,
+    reply,
+    answered: () => settled,
+    end: (bytes) => {
+      ended = true;
+      return send(session, bytes);
+    },
+  };
+  return session;
 }
 
 async function send(session: Session, bytes: Uint8Array): Promise<void> {
@@ -95,7 +106,7 @@ export function parseVersionReply(reply: string): SignatureStatus {
 
 export async function scanStream(
   address: ClamdAddress,
-  input: AsyncIterable<Uint8Array>,
+  input: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
   signal: AbortSignal,
 ): Promise<ScanVerdict> {
   const session = await openSession(address, signal);
@@ -106,8 +117,10 @@ export async function scanStream(
       await send(session, chunkLength(chunk.byteLength));
       await send(session, chunk);
     }
-    await send(session, END_OF_STREAM);
-    return parseScanReply(await session.reply);
+    await session.end(END_OF_STREAM);
+    const { text, early } = await session.reply;
+    if (early) return { kind: 'failed', reason: `clamd answered before the stream ended: ${text}` };
+    return parseScanReply(text);
   } finally {
     session.socket.destroy();
   }
@@ -119,8 +132,8 @@ export async function readSignatureStatus(
 ): Promise<SignatureStatus> {
   const session = await openSession(address, signal);
   try {
-    await send(session, VERSION_COMMAND);
-    return parseVersionReply(await session.reply);
+    await session.end(VERSION_COMMAND);
+    return parseVersionReply((await session.reply).text);
   } finally {
     session.socket.destroy();
   }

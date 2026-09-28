@@ -14,6 +14,7 @@ import {
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
+  routingProfileForModel,
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
@@ -22,9 +23,11 @@ import {
   canUseBillingPlanCapability,
   formatUsageRemaining,
   formatUsageResetIn,
+  isAutoModeModelId,
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
+  type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
@@ -454,7 +457,7 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'planUpdate'; payload: PlanVisualization }
-  | { type: 'sourceList'; payload: { sources: Array<{ url: string; title: string }> } }
+  | { type: 'sourceList'; payload: { sources: AgentEventSource[] } }
   | {
       type: 'toolCallStart';
       payload: {
@@ -509,11 +512,15 @@ export type ExtToWebviewMessage =
         riskLevel?: AgentEventApprovalRiskLevel;
         reversible?: boolean;
         reviewable?: true;
+        alwaysAllow?: true;
       };
     }
   | {
       type: 'approvalResolved';
-      payload: { requestId: string; outcome: 'once' | 'session' | 'deny' | 'abort' | 'expired' };
+      payload: {
+        requestId: string;
+        outcome: 'once' | 'session' | 'always' | 'deny' | 'abort' | 'expired';
+      };
     }
   | { type: 'attachmentsConsumed'; payload: { ids: string[] } }
   | { type: 'attachmentsReleased'; payload: { ids: string[] } }
@@ -1402,14 +1409,17 @@ export class ChatStateManager {
                   ? 'Auto routes within your Managed Cloud plan'
                   : 'Sign in or add a provider key to use Auto',
             boundary: autoBoundary,
-            models: [
-              {
-                id: autoItem.modelId,
-                label: autoItem.label.replace(/^\$\([^)]+\)\s*/, ''),
-                description: autoItem.description ?? '',
-                ...(autoItem.disabled === undefined ? {} : { disabled: autoItem.disabled }),
-              },
-            ],
+            models: allItems
+              .filter(
+                (item): item is typeof item & { modelId: string } =>
+                  item.modelId !== undefined && isAutoModeModelId(item.modelId),
+              )
+              .map((item) => ({
+                id: item.modelId,
+                label: item.label.replace(/^\$\([^)]+\)\s*/, ''),
+                description: item.description ?? '',
+                ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+              })),
           });
         }
         groups.push({
@@ -1454,7 +1464,7 @@ export class ChatStateManager {
           | undefined;
 
         for (const item of allItems) {
-          if (item.modelId === 'auto') continue;
+          if (item.modelId !== undefined && isAutoModeModelId(item.modelId)) continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
               const reachableOnBoundary =
@@ -2202,7 +2212,7 @@ export class ChatStateManager {
     const pending = this._pendingApprovals.get(requestId);
     if (pending === undefined) return;
     this._pendingApprovals.delete(requestId);
-    const allowing = decision === 'once' || decision === 'session';
+    const allowing = decision === 'once' || decision === 'session' || decision === 'always';
     const editedContent =
       pending.proposed === undefined
         ? undefined
@@ -2231,7 +2241,9 @@ export class ChatStateManager {
             ? 'denied'
             : decision === 'session'
               ? 'approved_for_session'
-              : 'approved',
+              : decision === 'always'
+                ? 'always_allow'
+                : 'approved',
         ...(note === undefined ? {} : { note }),
         ...(editedContent === undefined ? {} : { editedContent }),
       });
@@ -3204,6 +3216,7 @@ export class ChatStateManager {
           text,
           text_elements: [],
         }));
+        const routingProfile = routingProfileForModel(requestedModel);
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -3225,6 +3238,7 @@ export class ChatStateManager {
                   ...mentionInputs,
                   ...attachmentInputs,
                 ]),
+                ...(routingProfile === undefined ? {} : { routingProfile }),
               }
             : { model: requestedModel }),
         });
@@ -3700,6 +3714,8 @@ export class ChatStateManager {
         (await runtime.offers('approvalEdits'))
           ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
           : undefined;
+      const alwaysAllow =
+        event.alwaysAllowSaved === true && (await runtime.offers('savedPermissions'));
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
@@ -3723,6 +3739,7 @@ export class ChatStateManager {
           ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
           ...(proposed === undefined ? {} : { reviewable: true as const }),
+          ...(alwaysAllow ? { alwaysAllow: true as const } : {}),
         },
       });
       return;

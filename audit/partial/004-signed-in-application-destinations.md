@@ -359,10 +359,10 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Install (Git URL or folder, signature or sha256 pin) and remove now work in VS Code (e2e0bf339, 21d44e9df). Update needs a plugins/update app-server method (p-desktop-cli). | update |
+| vscode | partial | plugins/update now exists in the app-server (4caea04838); VS Code has to call it from its plugin manager (p-sessions) | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:293-293`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:316-316`
+Code: `crates/agiworkforce-protocol/src/developer_session.rs:95-95`, `crates/agiworkforce-app-server/src/developer_sessions.rs:999-999`, `apps/cli/src/app_server/developer_host.rs:3312-3312`, `apps/cli/src/installs.rs:329-329`
 
 ## S4.37: Connected accounts.
 

@@ -1434,23 +1434,33 @@ export interface ApprovalHistoryEntry {
   createdAt: string;
 }
 
+export interface ApprovalHistoryPage {
+  approvals: ApprovalHistoryEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export function useApprovalHistory(
   limit: number,
-  offset: number,
-): UseQueryResult<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error> {
-  return useQuery<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error>({
-    queryKey: ['settings', 'approvals', limit, offset],
+  cursor: string | null,
+): UseQueryResult<ApprovalHistoryPage, Error> {
+  return useQuery<ApprovalHistoryPage, Error>({
+    queryKey: ['settings', 'approvals', limit, cursor],
     queryFn: async () => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
-      const params = new URLSearchParams({ limit: String(limit + 1), offset: String(offset) });
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (cursor) params.set('cursor', cursor);
       const res = await fetch(`${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(statusMessage(res.status));
-      const json = (await res.json()) as { approvals?: ApprovalHistoryEntry[] };
-      const approvals = json.approvals ?? [];
-      return { approvals: approvals.slice(0, limit), hasMore: approvals.length > limit };
+      const json = (await res.json()) as Partial<ApprovalHistoryPage>;
+      return {
+        approvals: json.approvals ?? [],
+        hasMore: json.hasMore === true,
+        nextCursor: json.nextCursor ?? null,
+      };
     },
     staleTime: 60 * 1000,
     meta: {

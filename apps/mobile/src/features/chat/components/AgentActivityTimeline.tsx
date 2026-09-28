@@ -11,6 +11,7 @@ import {
   FileText,
   Globe,
   Loader2,
+  Monitor,
   PauseCircle,
   ShieldAlert,
 } from 'lucide-react-native';
@@ -19,8 +20,10 @@ import type {
   AgentActivityState,
   AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
+import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { lucideRNToolIcon } from './toolIconRN';
 import {
@@ -71,6 +74,14 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
+function awaitingDeviceSummary(activity: AgentActivityState): string | undefined {
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (entry?.kind === 'tool' && entry.status === 'awaiting-device') return entry.summary;
+  }
+  return undefined;
+}
+
 function completedSummary(activity: AgentActivityState): string {
   const tools = activity.entries.filter((entry) => entry.kind === 'tool').length;
   const files = activity.entries.filter((entry) => entry.kind === 'artifact').length;
@@ -88,11 +99,16 @@ export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: n
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
+  if (activity.status === 'awaiting-device') {
+    const deviceStep = awaitingDeviceSummary(activity);
+    return deviceStep ? `Waiting for your desktop · ${deviceStep}` : 'Waiting for your desktop';
+  }
   const elapsed = formatDuration(
     Math.max(0, (activity.completedAtMs ?? activity.updatedAtMs ?? nowMs) - activity.startedAtMs),
   );
   if (activity.status === 'paused') return `Paused after ${elapsed}`;
   if (activity.status === 'failed') return `Failed after ${elapsed}`;
+  if (activity.status === 'partial') return `Finished with errors after ${elapsed}`;
   if (activity.status === 'cancelled') return `Cancelled after ${elapsed}`;
   if (activity.status === 'completed') {
     const completed = completedSummary(activity);
@@ -131,14 +147,12 @@ function ToolRow({
   const input = asDisplayText(entry.input);
   const output = asDisplayText(entry.output);
   const hasDetails = Boolean(input || output || entry.error || entry.sources?.length);
-  const statusColor =
-    entry.status === 'failed' || entry.status === 'cancelled'
-      ? colors.agentError
-      : entry.status === 'completed'
-        ? colors.agentSuccess
-        : entry.status === 'awaiting-approval'
-          ? colors.agentWarning
-          : colors.agentActive;
+  const awaitingDevice = entry.status === 'awaiting-device';
+  const toolStatus = normalizeToolStatus(entry.status);
+  const statusColor = awaitingDevice ? colors.agentWarning : toolStatusColor(toolStatus, colors);
+  const statusLabel = awaitingDevice
+    ? `Waiting for ${entry.deviceStep?.deviceName ?? 'your desktop'}`
+    : TOOL_STATUS_PRESENTATION[toolStatus].label;
 
   return (
     <View style={{ paddingVertical: 6 }}>
@@ -167,11 +181,7 @@ function ToolRow({
                 {entry.summary}
               </Text>
               <Text style={{ color: colors.textMuted, fontSize: 10.5 }}>
-                {entry.status === 'awaiting-approval'
-                  ? 'Approval required'
-                  : entry.status === 'running'
-                    ? 'Running'
-                    : entry.status}
+                {statusLabel}
                 {entry.elapsedMs !== undefined ? ` · ${formatDuration(entry.elapsedMs)}` : ''}
               </Text>
             </View>
@@ -265,14 +275,14 @@ function ToolRow({
 
 function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'progress' }> }) {
   const colors = useThemeColors();
+  const progressStatus = normalizeToolStatus(entry.status);
   const statusColor =
-    entry.status === 'failed' || entry.status === 'cancelled'
-      ? colors.agentError
-      : entry.status === 'completed'
-        ? colors.textMuted
-        : colors.agentActive;
-  const Icon =
-    entry.status === 'running' ? Loader2 : entry.status === 'completed' ? Clock : AlertCircle;
+    progressStatus === 'succeeded' ? colors.textMuted : toolStatusColor(progressStatus, colors);
+  const Icon = TOOL_STATUS_PRESENTATION[progressStatus].terminal
+    ? progressStatus === 'succeeded'
+      ? Clock
+      : AlertCircle
+    : Loader2;
 
   return (
     <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}>
@@ -370,6 +380,8 @@ function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
   if (status === 'paused') return <PauseCircle size={16} color={colors.textMuted} />;
   if (status === 'completed') return <CheckCircle2 size={16} color={colors.agentSuccess} />;
   if (status === 'awaiting-approval') return <ShieldAlert size={16} color={colors.agentWarning} />;
+  if (status === 'awaiting-device') return <Monitor size={16} color={colors.agentWarning} />;
+  if (status === 'partial') return <AlertCircle size={16} color={colors.agentWarning} />;
   return <AlertCircle size={16} color={colors.agentError} />;
 }
 
@@ -383,7 +395,10 @@ export function AgentActivityTimeline({
   onResendApproval,
 }: AgentActivityTimelineProps) {
   const colors = useThemeColors();
-  const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
+  const isActive =
+    activity.status === 'running' ||
+    activity.status === 'awaiting-approval' ||
+    activity.status === 'awaiting-device';
   const [expanded, setExpanded] = useRecyclingState(defaultExpanded || isActive, [
     messageId,
     activity.turnId,

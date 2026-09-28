@@ -204,6 +204,7 @@ pub enum CliError {
         recovery_href: Option<String>,
         retry_after: Option<u64>,
         resets_in: Option<String>,
+        resets_at: Option<String>,
         alternative_model: Option<String>,
     },
     /// The provider answered and the turn still has nothing to deliver: no
@@ -577,11 +578,16 @@ impl CliError {
                      `agi plans` to see what each plan includes. {PAID_UPGRADES_ARE_STAGED}"
                 ),
             },
-            CliError::ModelUnavailable { .. } => {
-                "Choose another model, or try again shortly; `agi models list` shows what is \
-                 available now."
-                    .to_string()
-            }
+            CliError::ModelUnavailable { model } => match plan_alternative(model) {
+                Some(alternative) => format!(
+                    "Switch to {} with `/model {alternative}` (or `--model {alternative}`), or try \
+                     again shortly; `agi models list` shows what is available now.",
+                    crate::model_catalog::display_name(&alternative)
+                ),
+                None => "Choose another model, or try again shortly; `agi models list` shows \
+                         what is available now."
+                    .to_string(),
+            },
             CliError::Paywall { .. } => format!(
                 "Run `agi usage` to see when the limit resets, or switch to your own provider \
                  key with `--provider <name>`. Run `agi plans` to see what each plan includes. \
@@ -599,6 +605,18 @@ impl CliError {
             ),
         }
     }
+}
+
+fn plan_alternative(unavailable: &str) -> Option<String> {
+    crate::models::gateway_models::cached_picker_models()
+        .into_iter()
+        .map(|model| model.id)
+        .find(|id| id != unavailable)
+        .or_else(|| {
+            crate::tier_cache::read_tier_cache()
+                .and_then(|cached| crate::model_catalog::standard_model_for_tier(&cached.tier))
+                .filter(|id| id != unavailable)
+        })
 }
 
 fn usage_limit_hint(
@@ -766,6 +784,7 @@ impl CliError {
             recovery_href,
             retry_after,
             resets_in: None,
+            resets_at: None,
             alternative_model: None,
         }
     }
@@ -888,6 +907,21 @@ impl CliError {
             CliError::StreamError { detail, .. } => failure
                 .with_retry_after_seconds(detail.retry_after)
                 .with_request_id(detail.request_id.clone()),
+            _ => failure,
+        };
+        let failure = match self {
+            CliError::UsageLimit {
+                recovery_href,
+                resets_at,
+                alternative_model,
+                ..
+            } => failure.with_limit_recovery(
+                alternative_model.clone(),
+                resets_at.clone(),
+                recovery_href
+                    .as_deref()
+                    .map(crate::usage_summary::recovery_link),
+            ),
             _ => failure,
         };
         match (provider, self) {
@@ -1389,6 +1423,7 @@ mod tests {
             recovery_href: Some("/settings/usage".to_string()),
             retry_after: None,
             resets_in: Some("1d 12h".to_string()),
+            resets_at: None,
             alternative_model: Some(model.clone()),
         });
         assert_eq!(
