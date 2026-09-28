@@ -1306,6 +1306,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 source: CommandSourceKind::Builtin,
                 aliases: Vec::new(),
                 runnable: true,
+                prompt: false,
             }],
         })
     }

@@ -882,9 +882,11 @@ impl CliDeveloperSessionHost {
         let mut image_count = 0usize;
         let mut image_bytes = 0usize;
 
+        let mut typed_parts = Vec::new();
         for item in input {
             match item {
                 UserInput::Text { text, .. } => {
+                    typed_parts.push(text_parts.len());
                     push_bounded_text_part(&mut text_parts, text, &mut text_chars, &mut text_bytes)?
                 }
                 UserInput::Image { image_url } => {
@@ -929,13 +931,20 @@ impl CliDeveloperSessionHost {
             }
         }
 
+        if let Some(index) = typed_parts
+            .into_iter()
+            .find(|index| text_parts[*index].trim_start().starts_with('/'))
+        {
+            if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
+                text_parts[index] = expanded;
+            }
+        }
         let text = text_parts.join("\n\n");
         if text.trim().is_empty() && images.is_empty() {
             return Err(DeveloperSessionHostError::invalid_request(
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
-        let text = surfaces::expand_prompt_command(&text)?.unwrap_or(text);
         Ok(PreparedInput { text, images })
     }
 

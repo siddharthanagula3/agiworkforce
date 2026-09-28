@@ -482,18 +482,31 @@ pub fn list_commands(workspace_root: &Path) -> SlashCommandListResponse {
         .map(|entry| entry.skill)
         .collect();
     let registry = registry_from_builtins_skills_and_prompts(&catalog, &[]);
+    let custom: std::collections::HashSet<String> =
+        crate::custom_commands::discover_custom_slash_commands()
+            .into_iter()
+            .map(|command| command.name.to_ascii_lowercase())
+            .collect();
 
     let mut commands: Vec<SlashCommandSummary> = registry
         .commands()
         .iter()
         .filter(|command| command.user_invocable)
-        .map(|command| SlashCommandSummary {
-            name: command.name.clone(),
-            description: command.description.clone(),
-            args_hint: command.argument_hint.clone(),
-            source: command_source(command),
-            aliases: command.aliases.clone(),
-            runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
+        .map(|command| {
+            let source = command_source(command);
+            SlashCommandSummary {
+                name: command.name.clone(),
+                description: command.description.clone(),
+                args_hint: command.argument_hint.clone(),
+                source,
+                aliases: command.aliases.clone(),
+                runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
+                prompt: source == CommandSourceKind::Skill
+                    || custom.contains(&command.name.to_ascii_lowercase())
+                    || BUILTIN_PROMPTS
+                        .iter()
+                        .any(|(name, _)| *name == command.name.as_str()),
+            }
         })
         .collect();
     commands.sort_by(|left, right| left.name.cmp(&right.name));
@@ -1090,11 +1103,34 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     let (command, args) = invocation
         .split_once(char::is_whitespace)
         .unwrap_or((invocation, ""));
+    if let Some(prompt) = builtin_prompt_command(command.trim_start_matches('/'), args) {
+        return Ok(Some(prompt));
+    }
     match skills::skill_command_prompt(command.trim_start_matches('/'), args) {
         Some(Ok(prompt)) => Ok(Some(prompt)),
         Some(Err(reason)) => Err(invalid(reason)),
         None => Ok(None),
     }
+}
+
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
+    ("review", crate::claude_parity::review_prompt),
+    (
+        "security-review",
+        crate::claude_parity::security_review_prompt,
+    ),
+    ("pr-comments", crate::claude_parity::pr_comments_prompt),
+    ("ultrareview", crate::claude_parity::ultrareview_prompt),
+    ("think-back", crate::claude_parity::think_back_prompt),
+    ("recap", crate::claude_parity::recap_prompt),
+    ("powerup", crate::claude_parity::powerup_prompt),
+];
+
+fn builtin_prompt_command(command: &str, args: &str) -> Option<String> {
+    BUILTIN_PROMPTS
+        .iter()
+        .find(|(name, _)| *name == command)
+        .map(|(_, prompt)| prompt(args))
 }
 
 // ---------------------------------------------------------------------------
