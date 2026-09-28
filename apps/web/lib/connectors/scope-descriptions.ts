@@ -292,6 +292,15 @@ export function describeConnectorScope(scope: string): ScopeDescription | null {
   return SCOPE_DESCRIPTIONS[canonicalConnectorScope(scope)] ?? null;
 }
 
+export function describeGrantedConnectorScopes(
+  scopes: readonly string[],
+): { scope: string; sentence: string; access: 'read' | 'write' }[] {
+  return scopes.map((scope) => ({
+    scope,
+    ...(describeConnectorScope(scope) ?? undescribedScope(scope)),
+  }));
+}
+
 /**
  * An undescribed scope names itself and is counted as write. A reader cannot
  * weigh "this permission has not been described yet"; the raw scope is at least
