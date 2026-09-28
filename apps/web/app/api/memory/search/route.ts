@@ -9,6 +9,10 @@ import {
   activeMemoryPredicate,
   workspaceMemoryPredicate,
 } from '@/lib/services/managed-memory-context-service';
+import {
+  MANAGED_MEMORY_SEARCH_MAX_QUERY_CHARS,
+  type ManagedMemorySearchResponse,
+} from '@agiworkforce/types';
 
 async function handleSearchMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -23,8 +27,10 @@ async function handleSearchMemories(request: NextRequest) {
     throw createError.validation('Search query is required');
   }
 
-  if (query.length > 500) {
-    throw createError.validation('Search query must be 500 characters or less');
+  if (query.length > MANAGED_MEMORY_SEARCH_MAX_QUERY_CHARS) {
+    throw createError.validation(
+      `Search query must be ${MANAGED_MEMORY_SEARCH_MAX_QUERY_CHARS} characters or less`,
+    );
   }
 
   const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
@@ -55,7 +61,7 @@ async function handleSearchMemories(request: NextRequest) {
       updatedAt: m.updated_at,
     })),
     query,
-  });
+  } satisfies ManagedMemorySearchResponse);
 }
 
 export const GET = withErrorHandler(handleSearchMemories);
