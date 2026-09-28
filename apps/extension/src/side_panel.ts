@@ -4185,6 +4185,25 @@ function injectStyles(): void {
     .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--corner-control); background: var(--agi-ext-hover); }
     .sp-drawer-launcher-label { flex: 1; }
     .sp-drawer-launcher-desc { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
+    .sp-help-shortcuts {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 6px 12px;
+      margin: 0 0 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-help-shortcuts dt { color: var(--agi-ext-text); }
+    .sp-help-shortcuts dd { margin: 0; color: var(--agi-ext-text-muted); }
+    .sp-help-shortcuts kbd {
+      padding: 1px 6px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-surface);
+      font-family: var(--type-code-family);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .sp-drawer-launcher-chevron { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
     /* Tools row */
     .sp-drawer-tools-row {
@@ -11219,6 +11238,91 @@ function buildUI(): void {
   });
   inviteCodeSection.appendChild(drawerCloudBtn);
   settingsGroupBody.appendChild(inviteCodeSection);
+
+  const helpGroupBody = drawerGroupBody(t('spMenuHelp'), () => void renderHelpShortcuts());
+  const helpLinksSection = el('div', { class: 'sp-drawer-section' });
+  const helpLinks: ReadonlyArray<{ label: string; detail: string; path: string; icon: string }> = [
+    { label: t('spHelpCenter'), detail: t('spHelpCenterDetail'), path: '/help', icon: CircleHelp },
+    { label: t('spHelpDocs'), detail: t('spHelpDocsDetail'), path: '/docs', icon: FileText },
+    {
+      label: t('spHelpContact'),
+      detail: t('spHelpContactDetail'),
+      path: '/support',
+      icon: MessageSquare,
+    },
+    {
+      label: t('spHelpReportBug'),
+      detail: t('spHelpReportBugDetail'),
+      path: '/support#bugs',
+      icon: Shield,
+    },
+    { label: t('spHelpStatus'), detail: t('spHelpStatusDetail'), path: '/status', icon: Globe },
+    {
+      label: t('spHelpReleaseNotes'),
+      detail: t('spHelpReleaseNotesDetail'),
+      path: '/changelog',
+      icon: Zap,
+    },
+  ];
+  for (const link of helpLinks) {
+    const button = el('button', { class: 'sp-drawer-launcher-btn', type: 'button' });
+    const icon = el('div', { class: 'sp-drawer-launcher-icon' });
+    icon.appendChild(renderIcon(link.icon, 14));
+    const text = el('div', { class: 'sp-drawer-launcher-label' });
+    text.appendChild(el('div', {}, link.label));
+    text.appendChild(el('div', { class: 'sp-drawer-launcher-desc' }, link.detail));
+    button.appendChild(icon);
+    button.appendChild(text);
+    button.addEventListener('click', () => {
+      const url = new URL(link.path, FREE_TRIAL_GATEWAY);
+      url.searchParams.set('from', 'chrome-extension');
+      void chrome.tabs.create({ url: url.toString() });
+    });
+    helpLinksSection.appendChild(button);
+  }
+  helpGroupBody.appendChild(helpLinksSection);
+
+  const helpShortcutsSection = el('div', { class: 'sp-drawer-section' });
+  helpShortcutsSection.appendChild(
+    el('h3', { class: 'sp-drawer-section-title' }, t('spHelpShortcutsTitle')),
+  );
+  const helpShortcutList = el('dl', { class: 'sp-help-shortcuts' });
+  helpShortcutsSection.appendChild(helpShortcutList);
+  const helpShortcutsChangeBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spHelpShortcutsChange'),
+  );
+  helpShortcutsChangeBtn.addEventListener('click', () => {
+    void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
+  helpShortcutsSection.appendChild(helpShortcutsChangeBtn);
+  helpGroupBody.appendChild(helpShortcutsSection);
+
+  async function renderHelpShortcuts(): Promise<void> {
+    const mac = /mac/i.test(navigator.platform);
+    const modifier = mac ? '⌘' : t('spHelpKeyCtrl');
+    const commands = await chrome.commands.getAll().catch(() => []);
+    const commandKey = (name: string): string | null =>
+      commands.find((command) => command.name === name)?.shortcut || null;
+    const rows: Array<[string, string]> = [
+      [`${modifier} K`, t('spHelpShortcutPalette')],
+      [t('spHelpKeyEnter'), t('spHelpShortcutSend')],
+      [`${t('spHelpKeyShift')} ${t('spHelpKeyEnter')}`, t('spHelpShortcutNewLine')],
+      ['/', t('spHelpShortcutSlash')],
+      ['@', t('spHelpShortcutMention')],
+      [t('spHelpKeyEscape'), t('spHelpShortcutEscape')],
+    ];
+    const openPanel = commandKey('_execute_action');
+    if (openPanel) rows.push([openPanel, t('spHelpShortcutOpenPanel')]);
+    const capture = commandKey('capture_page');
+    if (capture) rows.push([capture, t('spHelpShortcutCapture')]);
+    helpShortcutList.replaceChildren();
+    for (const [keys, action] of rows) {
+      helpShortcutList.appendChild(el('dt', {}, el('kbd', {}, keys)));
+      helpShortcutList.appendChild(el('dd', {}, action));
+    }
+  }
 
   for (const group of drawerGroups) {
     const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
