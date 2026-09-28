@@ -54,6 +54,7 @@ const CUSTOMER_CONTENT = [
   'organization_shared_projects',
   'organization_shared_sessions',
   'project_knowledge_files',
+  'published_artifact_storage',
   'published_artifact_versions',
   'published_artifacts',
   'research_reports',
