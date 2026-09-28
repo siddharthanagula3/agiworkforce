@@ -3080,5 +3080,55 @@
         "example": "Daily briefing"
       }
     }
+  },
+  "spProjectsOpenChat": {
+    "message": "Open $TITLE$ on the web",
+    "description": "Tooltip of a project chat that opens on the web",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spProjectsDescriptionPlaceholder": {
+    "message": "Description (optional)",
+    "description": "Placeholder of the project description field"
+  },
+  "spProjectsSave": {
+    "message": "Save",
+    "description": "Button that saves project edits"
+  },
+  "spProjectsSaved": {
+    "message": "Project saved.",
+    "description": "A project was edited"
+  },
+  "spProjectsEdit": {
+    "message": "Edit",
+    "description": "Button that edits the project name, description and instructions"
+  },
+  "spProjectsInstructions": {
+    "message": "Instructions",
+    "description": "Heading of the project instructions"
+  },
+  "spProjectsFileCount_one": {
+    "message": "$COUNT$ file",
+    "description": "Number of knowledge files in a project, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spProjectsFileCount_other": {
+    "message": "$COUNT$ files",
+    "description": "Number of knowledge files in a project, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   }
 }
