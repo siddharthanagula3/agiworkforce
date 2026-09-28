@@ -29,6 +29,7 @@ import {
 } from '../lib/imageGenerationOptions';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { useChatStore, type ImageVersion } from '@shared/stores/web-chat-store';
+import { RegionSelector } from './RegionSelector';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { toast } from 'sonner';
@@ -433,6 +434,10 @@ function EditPanel({
   );
   const [editText, setEditText] = useState('');
   const [maskFile, setMaskFile] = useState<File | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectionMask, setSelectionMask] = useState<File | null>(null);
+  const [selectionKey, setSelectionKey] = useState(0);
+  const activeMask = selecting ? selectionMask : maskFile;
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
@@ -476,8 +481,8 @@ function EditPanel({
     async (operation: ImageEditRequest['operation']): Promise<ImageEditRequest> => {
       const [sourceImageBase64, maskImageBase64] = await Promise.all([
         readImageUrlAsBase64(currentUrl),
-        operation === 'inpaint' && maskFile
-          ? readImageFileAsBase64(maskFile)
+        operation === 'inpaint' && activeMask
+          ? readImageFileAsBase64(activeMask)
           : Promise.resolve(undefined),
       ]);
       return {
@@ -486,8 +491,13 @@ function EditPanel({
         ...(maskImageBase64 ? { maskImageBase64 } : {}),
       };
     },
-    [currentUrl, maskFile],
+    [currentUrl, activeMask],
   );
+
+  const clearSelection = useCallback(() => {
+    setSelectionMask(null);
+    setSelectionKey((key) => key + 1);
+  }, []);
 
   const handleAspectChange = useCallback(
     async (newAspect: ImageAspectRatio) => {
@@ -511,7 +521,7 @@ function EditPanel({
     setGenError(null);
     let edit: ImageEditRequest;
     try {
-      edit = await buildEdit(maskFile ? 'inpaint' : 'edit');
+      edit = await buildEdit(activeMask ? 'inpaint' : 'edit');
     } catch (err) {
       setGenError(toUserMessage(err, 'Could not prepare this image for editing. Try again.'));
       setGenerating(false);
@@ -520,6 +530,8 @@ function EditPanel({
     setGenerating(false);
     setEditText('');
     setMaskFile(null);
+    setSelecting(false);
+    clearSelection();
     await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId, edit });
   }, [
     editText,
@@ -529,8 +541,9 @@ function EditPanel({
     currentPrompt,
     currentAspect,
     modelId,
-    maskFile,
+    activeMask,
     buildEdit,
+    clearSelection,
     runRevision,
   ]);
 
@@ -699,6 +712,12 @@ function EditPanel({
           </p>
           {generating ? (
             <GeneratingCard aspectRatio={currentAspect} modelId={modelId} />
+          ) : selecting ? (
+            <RegionSelector
+              key={selectionKey}
+              imageUrl={currentUrl}
+              onMaskChange={setSelectionMask}
+            />
           ) : (
             <img
               src={currentUrl}
@@ -716,7 +735,9 @@ function EditPanel({
         <div className="border-t border-border/30 p-3 space-y-2">
           <p className="px-1 text-caption leading-snug text-muted-foreground">
             {supportsEdit
-              ? 'Describing a change edits the image above. Attach a mask to redraw only part of it.'
+              ? selecting
+                ? 'Paint over the part to change, then describe the change. Only that part is redrawn.'
+                : 'Describing a change edits the image above. Select an area to redraw only part of it.'
               : 'Describing a change generates a new image from the updated description. The image above is not modified.'}
           </p>
 
@@ -742,6 +763,35 @@ function EditPanel({
 
             {supportsEdit ? (
               <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selecting) clearSelection();
+                    setSelecting((value) => !value);
+                  }}
+                  disabled={generating || retryBlocked}
+                  aria-pressed={selecting}
+                  className={cn(
+                    'flex h-7 items-center rounded-lg border px-2.5 text-xs transition-colors',
+                    selecting
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-border/40 text-muted-foreground',
+                    generating || retryBlocked
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'hover:bg-muted/60 hover:text-foreground',
+                  )}
+                >
+                  {selecting ? 'Cancel selection' : 'Select area'}
+                </button>
+                {selecting && selectionMask ? (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="flex h-7 items-center rounded-lg border border-border/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  >
+                    Clear selection
+                  </button>
+                ) : null}
                 <input
                   ref={maskInputRef}
                   type="file"
@@ -757,7 +807,7 @@ function EditPanel({
                   type="button"
                   onClick={() => maskInputRef.current?.click()}
                   disabled={generating || retryBlocked}
-                  title="Attach an image, black where the model should redraw"
+                  title="Attach a PNG the same size as this image, transparent where the model should redraw"
                   className={cn(
                     'flex h-7 items-center rounded-lg border border-border/40 px-2.5 text-xs text-muted-foreground transition-colors',
                     generating || retryBlocked

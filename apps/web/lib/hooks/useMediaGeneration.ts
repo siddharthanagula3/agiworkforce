@@ -98,6 +98,7 @@ export interface GenerateImageOptions {
   operation?: ManagedMediaImageOperation;
   sourceImageBase64?: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
   cancelScope?: string;
 }
@@ -310,6 +311,11 @@ export function useMediaGeneration() {
               : {}),
             ...(options.maskImageBase64
               ? { mask_image: { b64_json: options.maskImageBase64 } }
+              : {}),
+            ...(options.referenceImagesBase64?.length
+              ? {
+                  reference_images: options.referenceImagesBase64.map((b64_json) => ({ b64_json })),
+                }
               : {}),
             ...(options.transparentBackground ? { transparent_background: true } : {}),
           }),
