@@ -10,7 +10,14 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
+import { logger } from '@/lib/logger';
+import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
+import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
+import {
+  listLibraryAssets,
+  sumLibraryStorageBytes,
+  type LibraryAssetRow,
+} from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -41,9 +48,18 @@ function fileNameForRow(row: LibraryAssetRow): string {
 }
 
 function previewableForRow(row: LibraryAssetRow): boolean {
-  const persisted = row.metadata['previewable'];
-  if (typeof persisted === 'boolean') return persisted;
-  return row.mimeType.toLowerCase().startsWith('image/');
+  const mime = row.mimeType.toLowerCase();
+  if (mime.startsWith('image/') || mime.startsWith('video/') || mime === 'application/pdf') {
+    return true;
+  }
+  if (fileTextPreviewKind(fileNameForRow(row), row.mimeType)) return true;
+  return row.metadata['previewable'] === true;
+}
+
+function eraseAfter(deletedAt: string): string {
+  return new Date(
+    Date.parse(deletedAt) + RESOURCE_RECOVERY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
 }
 
 function toLibraryItem(row: LibraryAssetRow): LibraryItem {
@@ -64,6 +80,9 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     model: row.model,
     prompt: row.prompt,
     created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    conversation_id: row.conversationId,
+    ...(row.deletedAt ? { erase_after: eraseAfter(row.deletedAt) } : {}),
   };
 }
 
@@ -111,7 +130,18 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     has_more: hasMore,
     next_offset: hasMore ? offset + limit : null,
   };
-  return NextResponse.json(body, { headers: headers(request) });
+  const storageUsedBytes =
+    offset === 0 && !deleted
+      ? await sumLibraryStorageBytes(userId, db).catch((error: unknown) => {
+          logger.warn({ error, userId }, 'Library storage total unavailable');
+          return null;
+        })
+      : null;
+  const response: LibraryListResponse = {
+    ...body,
+    ...(storageUsedBytes !== null ? { storage_used_bytes: storageUsedBytes } : {}),
+  };
+  return NextResponse.json(response, { headers: headers(request) });
 }
 
 const MAX_SAVED_ARTIFACT_CHARS = 1_000_000;

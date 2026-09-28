@@ -183,6 +183,47 @@ export function agentTaskStateLabel(state: AgentTaskState): string {
   return AGENT_TASK_STATE_LABELS[state];
 }
 
+export type AgentTaskBoardStage =
+  'queued' | 'running' | 'needs_approval' | 'paused' | 'done' | 'failed' | 'cancelled' | 'archived';
+
+export const AGENT_TASK_BOARD_STAGES: ReadonlyArray<{
+  id: AgentTaskBoardStage;
+  label: string;
+  alwaysShown: boolean;
+}> = Object.freeze([
+  { id: 'queued', label: 'Queued', alwaysShown: true },
+  { id: 'running', label: 'Running', alwaysShown: true },
+  { id: 'needs_approval', label: 'Needs approval', alwaysShown: true },
+  { id: 'paused', label: 'Paused', alwaysShown: false },
+  { id: 'done', label: 'Done', alwaysShown: true },
+  { id: 'failed', label: 'Failed', alwaysShown: false },
+  { id: 'cancelled', label: 'Cancelled', alwaysShown: false },
+  { id: 'archived', label: 'Archived', alwaysShown: false },
+]);
+
+export const AGENT_TASK_BOARD_STAGE_BY_STATE: Readonly<
+  Record<AgentTaskState, AgentTaskBoardStage>
+> = Object.freeze({
+  queued: 'queued',
+  planning: 'running',
+  running: 'running',
+  resuming: 'running',
+  awaiting_input: 'needs_approval',
+  awaiting_approval: 'needs_approval',
+  paused: 'paused',
+  ready_for_review: 'done',
+  completed: 'done',
+  partial: 'done',
+  failed: 'failed',
+  timed_out: 'failed',
+  cancelled: 'cancelled',
+  archived: 'archived',
+});
+
+export function agentTaskBoardStage(state: AgentTaskState): AgentTaskBoardStage {
+  return AGENT_TASK_BOARD_STAGE_BY_STATE[state];
+}
+
 /**
  * Mirrors `AgentTaskState::legacy_equivalent` in the Rust protocol: the state a
  * client built before the last five variants was shown for the same situation,

@@ -154,13 +154,13 @@ Code: `apps/cli/src/lib.rs:3957-3975`, `apps/extension-vscode/src/core/commandSe
 
 - Done when: The user can choose which local folders AGI may read or write, see the list, and remove access.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Folders can be approved from the composer's folder dialog and are listed there, but approved folders cannot be removed: the Local access list with Remove renders only in the internal Tauri shell (hostHasLocalMode is true only for shell "tauri"). | ui |
-| cli | partial | Trust is asked for each new directory at first run and --add-dir adds roots per run, but listing and revoking trusted folders (/trust, /untrust) exists only in the --no-tui REPL. | ui |
 
-Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`, `apps/cli/src/onboarding.rs:156-170`
+Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`
 
 ## S86.18: Computer applications.
 

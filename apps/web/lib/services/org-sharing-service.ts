@@ -12,7 +12,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
-export type SharedProjectAccess = 'read' | 'write';
+export type SharedProjectAccess = 'read' | 'write' | 'none';
 export type MemberProjectAccess = 'read' | 'write' | 'none';
 
 const ADMIN_ROLES: readonly OrgRole[] = ['owner', 'admin'];
@@ -152,14 +152,14 @@ export async function listReadableSharedProjectIds(
     `select s.project_id
        from public.organization_shared_projects s
       where s.organization_id = $1
-        and not exists (
-          select 1
-            from public.organization_project_access a
-           where a.organization_id = s.organization_id
-             and a.project_id = s.project_id
-             and a.user_id = $2
-             and a.access = 'none'
-        )`,
+        and coalesce(
+          (select a.access
+             from public.organization_project_access a
+            where a.organization_id = s.organization_id
+              and a.project_id = s.project_id
+              and a.user_id = $2),
+          s.default_access
+        ) <> 'none'`,
     [organizationId, userId],
   );
   return rows.map((row) => row.project_id);

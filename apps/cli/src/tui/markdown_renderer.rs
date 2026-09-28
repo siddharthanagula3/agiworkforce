@@ -17,7 +17,7 @@ use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::terminal_palette::{
     best_color, palette_version, syntax_palette, ui_accent, ui_muted, ui_success, SyntaxPalette,
 };
-use crate::tui::{display_width, pad_to_cols, truncate_cols};
+use crate::tui::{display_width, pad_to_cols};
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static THEME: Mutex<Option<(u64, Arc<Theme>)>> = Mutex::new(None);
@@ -99,10 +99,11 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut heading_level = 0u8;
     let mut in_bold = false;
     let mut in_italic = false;
-    let mut _in_inline_code = false;
+    let mut in_strike = false;
     let mut in_link = false;
-    let mut in_list = false;
-    let mut list_numbers: Vec<Option<u64>> = Vec::new();
+    let mut link_url = String::new();
+    let mut link_text = String::new();
+    let mut lists: Vec<ListLevel> = Vec::new();
     let mut item_fresh = false;
     let mut block_gap = false;
     let mut in_blockquote = false;
@@ -179,45 +180,82 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             Event::End(TagEnd::Emphasis) => {
                 in_italic = false;
             }
-            Event::Code(code) => {
-                current_spans.push(Span::styled(
-                    code.to_string(),
-                    Style::default().fg(ui_accent()),
-                ));
+            Event::Start(Tag::Strikethrough) => {
+                in_strike = true;
             }
-            Event::Start(Tag::Link { .. }) => {
+            Event::End(TagEnd::Strikethrough) => {
+                in_strike = false;
+            }
+            Event::Code(code) => {
+                if in_link {
+                    link_text.push_str(&code);
+                }
+                if in_table_cell {
+                    current_cell.push_str(&code);
+                } else {
+                    push_prefix(&mut current_spans, in_blockquote, in_heading, &lists);
+                    current_spans.push(Span::styled(
+                        code.to_string(),
+                        Style::default().fg(ui_accent()),
+                    ));
+                }
+            }
+            Event::Start(Tag::Link { dest_url, .. }) => {
                 in_link = true;
+                link_url = dest_url.to_string();
+                link_text.clear();
             }
             Event::End(TagEnd::Link) => {
                 in_link = false;
+                let text = link_text.trim();
+                let shown = !link_url.is_empty()
+                    && text != link_url
+                    && text != link_url.trim_start_matches("mailto:");
+                if shown {
+                    let suffix = format!(" ({link_url})");
+                    if in_table_cell {
+                        current_cell.push_str(&suffix);
+                    } else {
+                        current_spans.push(Span::styled(suffix, Style::default().fg(ui_muted())));
+                    }
+                }
             }
             Event::Start(Tag::List(start)) => {
-                if list_numbers.is_empty() {
+                if lists.is_empty() {
                     open_block(&mut lines, &mut current_spans, &mut block_gap);
                 } else {
                     flush_line(&mut lines, &mut current_spans);
                 }
                 item_fresh = false;
-                in_list = true;
-                list_numbers.push(start);
+                lists.push(ListLevel {
+                    next: start,
+                    content: 0,
+                });
             }
             Event::End(TagEnd::List(_)) => {
                 flush_line(&mut lines, &mut current_spans);
-                list_numbers.pop();
-                if list_numbers.is_empty() {
-                    in_list = false;
+                lists.pop();
+                if lists.is_empty() {
                     block_gap = true;
                 }
             }
             Event::Start(Tag::Item) => {
                 open_block(&mut lines, &mut current_spans, &mut block_gap);
-                let bullet = match list_numbers.last_mut() {
-                    Some(Some(n)) => {
-                        let s = format!("    {n}. ");
-                        *n += 1;
-                        s
+                let indent = " ".repeat(4 + 2 * lists.len().saturating_sub(1));
+                let bullet = match lists.last_mut() {
+                    Some(level) => {
+                        let bullet = match level.next.as_mut() {
+                            Some(n) => {
+                                let s = format!("{indent}{n}. ");
+                                *n += 1;
+                                s
+                            }
+                            None => format!("{indent}• "),
+                        };
+                        level.content = display_width(&bullet);
+                        bullet
                     }
-                    _ => "    • ".to_string(),
+                    None => format!("{indent}• "),
                 };
                 current_spans.push(Span::styled(bullet, Style::default().fg(ui_accent())));
                 item_fresh = true;
@@ -248,43 +286,31 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             }
             Event::Text(text) => {
                 item_fresh = false;
+                if in_link {
+                    link_text.push_str(&text);
+                }
                 if in_table_cell {
                     current_cell.push_str(&text);
                 } else if in_code_block {
                     code_content.push_str(&text);
                 } else {
-                    let style = if in_bold && in_italic {
-                        Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC)
-                    } else if in_bold {
-                        Style::default().add_modifier(Modifier::BOLD)
-                    } else if in_italic {
-                        Style::default().add_modifier(Modifier::ITALIC)
-                    } else if in_link {
-                        Style::default()
-                            .fg(ui_accent())
-                            .add_modifier(Modifier::UNDERLINED)
-                    } else if in_blockquote {
-                        Style::default()
-                            .fg(ui_success())
-                            .add_modifier(Modifier::ITALIC)
-                    } else {
-                        Style::default()
-                    };
-
-                    let prefix = if in_blockquote && current_spans.is_empty() {
-                        "    │ "
-                    } else if current_spans.is_empty() && !in_list && !in_heading {
-                        "    "
-                    } else {
-                        ""
-                    };
-
-                    if !prefix.is_empty() {
-                        current_spans.push(Span::styled(
-                            prefix.to_string(),
-                            Style::default().fg(ui_muted()),
-                        ));
+                    let mut style = Style::default();
+                    if in_blockquote {
+                        style = style.fg(ui_success()).add_modifier(Modifier::ITALIC);
                     }
+                    if in_link {
+                        style = style.fg(ui_accent()).add_modifier(Modifier::UNDERLINED);
+                    }
+                    if in_bold {
+                        style = style.add_modifier(Modifier::BOLD);
+                    }
+                    if in_italic {
+                        style = style.add_modifier(Modifier::ITALIC);
+                    }
+                    if in_strike {
+                        style = style.add_modifier(Modifier::CROSSED_OUT);
+                    }
+                    push_prefix(&mut current_spans, in_blockquote, in_heading, &lists);
                     current_spans.push(Span::styled(text.to_string(), style));
                 }
             }
@@ -345,7 +371,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
 
 /// Render a parsed GFM table as bordered, column-aligned terminal lines with a
 /// styled header row and a divider. Column widths are capped so a wide table
-/// can't blow past the pane.
+/// fits the pane, and longer cells wrap onto extra lines within their column.
 fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> {
     if rows.is_empty() {
         return Vec::new();
@@ -355,10 +381,13 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
         return Vec::new();
     }
     const MAX_COL: usize = 40;
+    const MIN_COL: usize = 8;
+    const TABLE_BUDGET: usize = 96;
+    let cap = (TABLE_BUDGET / ncols).clamp(MIN_COL, MAX_COL);
     let mut widths = vec![0usize; ncols];
     for row in rows {
         for (i, cell) in row.iter().enumerate() {
-            let w = display_width(cell).min(MAX_COL);
+            let w = display_width(cell).min(cap);
             if w > widths[i] {
                 widths[i] = w;
             }
@@ -366,25 +395,35 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
     }
 
     let border = Style::default().fg(ui_muted());
-    let cell_line = |row: &[String], bold: bool| -> Line<'static> {
-        let mut spans: Vec<Span<'static>> = vec![Span::styled("    │ ".to_string(), border)];
-        for (i, w) in widths.iter().enumerate() {
-            let cell = row.get(i).map(String::as_str).unwrap_or("");
-            let padded = pad_to_cols(&truncate_cols(cell, *w), *w);
-            let style = if bold {
-                Style::default().add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-            spans.push(Span::styled(padded, style));
-            let separator = if i + 1 == widths.len() {
-                " │"
-            } else {
-                " │ "
-            };
-            spans.push(Span::styled(separator.to_string(), border));
-        }
-        Line::from(spans)
+    let cell_lines = |row: &[String], bold: bool| -> Vec<Line<'static>> {
+        let wrapped: Vec<Vec<String>> = widths
+            .iter()
+            .enumerate()
+            .map(|(i, w)| wrap_cols(row.get(i).map(String::as_str).unwrap_or(""), *w))
+            .collect();
+        let height = wrapped.iter().map(Vec::len).max().unwrap_or(1);
+        let style = if bold {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        (0..height)
+            .map(|line_idx| {
+                let mut spans: Vec<Span<'static>> =
+                    vec![Span::styled("    │ ".to_string(), border)];
+                for (i, w) in widths.iter().enumerate() {
+                    let part = wrapped[i].get(line_idx).map(String::as_str).unwrap_or("");
+                    spans.push(Span::styled(pad_to_cols(part, *w), style));
+                    let separator = if i + 1 == widths.len() {
+                        " │"
+                    } else {
+                        " │ "
+                    };
+                    spans.push(Span::styled(separator.to_string(), border));
+                }
+                Line::from(spans)
+            })
+            .collect()
     };
     let rule = |left: &str, mid: &str, right: &str| -> Line<'static> {
         let mut s = format!("    {left}");
@@ -397,13 +436,74 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
 
     let mut out: Vec<Line<'static>> = vec![rule("┌", "┬", "┐")];
     for (idx, row) in rows.iter().enumerate() {
-        out.push(cell_line(row, idx < header_rows));
+        out.extend(cell_lines(row, idx < header_rows));
         if idx + 1 == header_rows {
             out.push(rule("├", "┼", "┤"));
         }
     }
     out.push(rule("└", "┴", "┘"));
     out
+}
+
+fn wrap_cols(s: &str, max: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut line = String::new();
+    let mut width = 0usize;
+    for word in s.split_whitespace() {
+        let word_width = display_width(word);
+        if width > 0 && width + 1 + word_width <= max {
+            line.push(' ');
+            line.push_str(word);
+            width += 1 + word_width;
+            continue;
+        }
+        if width > 0 {
+            out.push(std::mem::take(&mut line));
+            width = 0;
+        }
+        if word_width <= max {
+            line.push_str(word);
+            width = word_width;
+            continue;
+        }
+        for ch in word.chars() {
+            let ch_width = display_width(&ch.to_string());
+            if width > 0 && width + ch_width > max {
+                out.push(std::mem::take(&mut line));
+                width = 0;
+            }
+            line.push(ch);
+            width += ch_width;
+        }
+    }
+    if !line.is_empty() || out.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
+struct ListLevel {
+    next: Option<u64>,
+    content: usize,
+}
+
+fn push_prefix(
+    spans: &mut Vec<Span<'static>>,
+    in_blockquote: bool,
+    in_heading: bool,
+    lists: &[ListLevel],
+) {
+    if !spans.is_empty() || in_heading {
+        return;
+    }
+    let prefix = if in_blockquote {
+        "    │ ".to_string()
+    } else if let Some(level) = lists.last() {
+        " ".repeat(level.content)
+    } else {
+        "    ".to_string()
+    };
+    spans.push(Span::styled(prefix, Style::default().fg(ui_muted())));
 }
 
 fn flush_line(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>) {

@@ -128,21 +128,6 @@ Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/cod
 
 Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/cli/src/tui/tui_app.rs:4865-4870`
 
-## S68.10: Read-only session attachment.
-
-- Done when: A client can attach to a running session read-only, watching without being able to act.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:57-60`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
-
 ## S68.11: Active-control attachment.
 
 - Done when: A client attaches to a running session with full control: send turns, stop, approve.
@@ -334,46 +319,14 @@ Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:
 
 - Done when: The user exports a coding session (transcript and context) to a file from any client.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /export shows the transcript as markdown or json on screen; it never writes a file, and no other client exports a coding session at all. | surface-only |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
-
-## S68.28: Summary-only transfer as a separate option.
-
-- Done when: When moving a session, the user may choose to carry only a summary instead of the full transcript.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:405-407`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:214-214`
-
-## S68.29: Transcript branch as a separate option.
-
-- Done when: When moving a session, the user may instead branch the transcript into a new session.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-
-Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `apps/extension-vscode/src/core/commandSetup.ts:1210-1215`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:910-912`
 
 ## S68.30: Cross-client activity notifications.
 

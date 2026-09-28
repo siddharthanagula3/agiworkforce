@@ -22,7 +22,8 @@ import {
 } from '../routing-decision-trace-service';
 
 const TRACE = {
-  schemaVersion: 2,
+  schemaVersion: 3,
+  policyVersion: 17,
   requestId: 'request-1',
   selection: 'auto',
   taskType: 'simple_chat',

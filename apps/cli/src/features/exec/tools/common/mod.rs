@@ -202,7 +202,7 @@ pub(super) fn save_full_output(tool_name: &str, output: &str) -> Option<String> 
     Some(path.display().to_string())
 }
 
-pub(super) fn format_size(bytes: u64) -> String {
+pub(crate) fn format_size(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{}B", bytes)
     } else if bytes < 1024 * 1024 {

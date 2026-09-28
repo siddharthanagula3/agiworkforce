@@ -647,6 +647,37 @@ export function ChatInterface({
     [runtime, activeConversationId, activeArtifact, artifactViewMode, openArtifact],
   );
 
+  const handleRestoreArtifactVersion = useCallback(
+    async (version: Artifact) => {
+      if (!runtime?.restoreArtifactVersion || version.version === undefined) {
+        throw new Error('This version cannot be restored here.');
+      }
+      const realId = version.id.split('::v')[0] ?? version.id;
+      const result = await runtime.restoreArtifactVersion(realId, version.version);
+
+      if (activeConversationId) {
+        const store = useChatStore.getState();
+        const msgs = store.messagesByConversation[activeConversationId] ?? [];
+        const owner = msgs.find((m) => m.artifacts?.some((a) => a.id === realId));
+        if (owner) {
+          const updatedArtifacts = (owner.artifacts ?? []).map((a) =>
+            a.id === realId ? { ...a, content: result.content } : a,
+          );
+          store.updateMessage(activeConversationId, owner.id, { artifacts: updatedArtifacts });
+        }
+      }
+
+      const restored: Artifact = { ...version, id: realId, content: result.content };
+      const versions = runtime.getArtifactVersions
+        ? await runtime.getArtifactVersions(restored).catch(() => [])
+        : [];
+      const latest = versions[versions.length - 1] ?? restored;
+      setActiveArtifactVersions(versions.length > 0 ? versions : [restored]);
+      openArtifact(latest, artifactViewMode);
+    },
+    [runtime, activeConversationId, artifactViewMode, openArtifact],
+  );
+
   const handleViewNavigation = useCallback(
     (view: string) => {
       if (onNavigateView) {
@@ -908,6 +939,9 @@ export function ChatInterface({
                 onClose={closeArtifact}
                 versions={activeArtifactVersions}
                 onSelectVersion={handleSelectArtifactVersion}
+                onRestoreVersion={
+                  runtime?.restoreArtifactVersion ? handleRestoreArtifactVersion : undefined
+                }
                 onSaveEdit={handleSaveArtifactEdit}
               />
             </div>

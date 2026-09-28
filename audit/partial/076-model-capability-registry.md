@@ -77,15 +77,15 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:88-91`, `ap
 ## S76.08: Audio transcription.
 
 - Done when: The registry names the transcription model(s) and dictation/transcription requests use that registry choice.
-- Wave: 3
+- Wave: 2
 - Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | CLI /voice takes the registry transcription model only on the OPENAI_API_KEY path (env var) or runs local whisper; the managed transcription endpoint helper is never called. | handler |
+| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/voice.rs:831-837`, `apps/cli/src/voice.rs:4-5`
+Code: `apps/cli/src/voice.rs:354-354`
 
 ## S76.09: Realtime audio input.
 

@@ -77,27 +77,22 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The library shares only artifacts, as a published link; uploaded files and images cannot be shared and there are no folders to share. | ui |
-| desktop | partial | The library shares only artifacts, as a published link; uploaded files and images cannot be shared and there are no folders to share. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:45-45`, `apps/web/features/library/components/LibraryView.tsx:219-219`
 
 ## S10.10: Share artifact.
 
 - Done when: An artifact share dialog publishes it to a link, lets the user copy it and choose who can open it, and can take it down.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-| cli | partial | Publish and unpublish work, but the CLI cannot choose who can open the link (no audience option). | ui |
 | vscode | partial | VS Code can only open an already-published artifact's link; it cannot publish, copy the link, change the audience or unpublish. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1976-2027`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/extension-vscode/package.json:597-600`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
 
 ## S10.11: Publish generated application.
 
@@ -305,28 +300,15 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
-| cli | partial | The footer always shows a ctx bar and percentage, but nothing warns as it nears 100%; add a warning that suggests /compact. | states |
 | vscode | partial | Near the limit the token counter only changes colour (75% / 90%); add a text warning that is also announced. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/cli/src/tui/tui_app.rs:2029-2029`, `apps/cli/src/tui/tui_app.rs:3422-3422`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`
-
-## S10.28: Usage-limit notice.
-
-- Done when: When a usage limit is reached, the user sees which limit, when it resets, and what they can do.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The paywall message is never shown: the server sends *_limit_reached, not kind "paywall", so the CLI prints a generic error without which limit or when it resets. | handler |
-
-Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3312-3312`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -487,14 +469,13 @@ Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/c
 
 - Done when: Before diagnostics or crash reports leave the device, the user is told what is included and chooses (or sets a preference that is honoured).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Diagnostics leave only when the user taps Export Diagnostics and shares the file, but nothing says what the bundle contains before sharing. | ui |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
 
-Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`, `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`
+Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`
 
 ## S10.47: Data-export request.
 

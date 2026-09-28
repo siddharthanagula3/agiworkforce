@@ -106,14 +106,14 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2932-2932`, 
 ## S16.09: Resend action.
 
 - Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
-- Wave: 2
+- Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Add a Resend/Send-again action on a sent user message; re-running it is only possible via Regenerate on the reply or Retry after a failure. | ui |
 | desktop | partial | Add a Resend/Send-again action on a sent user message; re-running it is only possible via Regenerate on the reply or Retry after a failure. | ui |
 | mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
-| cli | partial | Only the --no-tui REPL recalls earlier prompts (Up arrow) for re-sending; the default TUI has no prompt history or resend command. | mount |
 | vscode | partial | Only a failed turn can be re-sent (error-block Retry); a sent message has no Resend action. | ui |
 | chrome | partial | Retry appears only on errored or interrupted replies; a sent user message has no Resend action. | ui |
 

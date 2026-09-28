@@ -39,8 +39,12 @@ function startFailureMessage(error: unknown): string {
 
 export type LiveVoiceStatus = 'idle' | 'connecting' | 'live' | 'error';
 
+const RECONNECT_MAX_ATTEMPTS = 3;
+const RECONNECT_BASE_MS = 1_000;
+
 export interface LiveVoiceController {
   status: LiveVoiceStatus;
+  reconnecting: boolean;
   muted: boolean;
   assistantSpeaking: boolean;
   backendBusy: boolean;
@@ -50,6 +54,7 @@ export interface LiveVoiceController {
   approvals: readonly LiveVoicePendingApproval[];
   decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   toggleMute: () => void;
+  cancelBackendWork: () => void;
   retry: () => void;
 }
 
@@ -78,6 +83,9 @@ export function useLiveVoiceSession({
   const [error, setError] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<readonly LiveVoicePendingApproval[]>([]);
   const [attempt, setAttempt] = useState(0);
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionRef = useRef<LiveVoiceSession | null>(null);
   const conversationRef = useRef<string | null>(conversationId);
@@ -116,7 +124,7 @@ export function useLiveVoiceSession({
     let cancelled = false;
     setStatus('connecting');
     setError(null);
-    setTurns([]);
+    if (reconnectsRef.current === 0) setTurns([]);
     setMuted(false);
     setInterrupted(false);
     setApprovals([]);
@@ -143,7 +151,10 @@ export function useLiveVoiceSession({
         language: activeSpeechLanguage().split('-')[0]?.trim().toLowerCase() || null,
         callbacks: {
           onStarted: () => {
-            if (!cancelled) setStatus('live');
+            if (cancelled) return;
+            reconnectsRef.current = 0;
+            setReconnecting(false);
+            setStatus('live');
           },
           onAssistantSpeaking: (speaking) => {
             if (cancelled) return;
@@ -177,9 +188,33 @@ export function useLiveVoiceSession({
             sessionRef.current = null;
             if (cancelled) return;
             setStatus('error');
+            setReconnecting(false);
             setBackendBusy(false);
             setApprovals([]);
             setError(message);
+          },
+          onConnectionLost: (message) => {
+            const session = sessionRef.current;
+            sessionRef.current = null;
+            if (session) {
+              finish(session, { reason: 'connection_lost', seconds: session.lastUsageSeconds });
+            }
+            if (cancelled) return;
+            setBackendBusy(false);
+            setApprovals([]);
+            if (reconnectsRef.current >= RECONNECT_MAX_ATTEMPTS) {
+              setReconnecting(false);
+              setStatus('error');
+              setError(message);
+              return;
+            }
+            reconnectsRef.current += 1;
+            setReconnecting(true);
+            setStatus('connecting');
+            reconnectTimerRef.current = setTimeout(
+              () => setAttempt((value) => value + 1),
+              RECONNECT_BASE_MS * 2 ** (reconnectsRef.current - 1),
+            );
           },
         },
       });
@@ -215,6 +250,8 @@ export function useLiveVoiceSession({
 
     return () => {
       cancelled = true;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
       appState.remove();
       const session = sessionRef.current;
       sessionRef.current = null;
@@ -236,12 +273,17 @@ export function useLiveVoiceSession({
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
+  const cancelBackendWork = useCallback(() => {
+    sessionRef.current?.cancelBackendWork();
+  }, []);
+
   const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
     void sessionRef.current?.decideToolApproval(callId, decision);
   }, []);
 
   return {
     status,
+    reconnecting,
     muted,
     assistantSpeaking,
     backendBusy,
@@ -251,6 +293,7 @@ export function useLiveVoiceSession({
     approvals,
     decideToolApproval,
     toggleMute,
+    cancelBackendWork,
     retry,
   };
 }

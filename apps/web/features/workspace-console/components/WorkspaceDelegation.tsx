@@ -5,6 +5,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import {
+  MemberIdentity,
+  MemberPicker,
+  memberDisplayName,
+} from '@shared/components/people/MemberPicker';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -34,6 +39,7 @@ interface TeamMember {
   userId: string;
   name: string;
   email: string;
+  avatarUrl: string | null;
   role: string;
   isCurrentUser: boolean;
 }
@@ -110,12 +116,14 @@ function useDelegations() {
   });
 }
 
-function useTeamMembers(enabled: boolean) {
+function useTeamMembers(organizationId: string | undefined) {
   return useQuery<TeamMember[], Error>({
-    queryKey: ['workspace', 'delegation', 'members'],
-    enabled,
+    queryKey: ['workspace', 'delegation', 'members', organizationId ?? ''],
+    enabled: Boolean(organizationId),
     queryFn: async () => {
-      const res = await authorizedFetch('/api/settings/team');
+      const res = await authorizedFetch(
+        `/api/settings/team?organizationId=${encodeURIComponent(organizationId ?? '')}`,
+      );
       if (!res.ok) throw new Error(await readApiError(res));
       const body = (await res.json()) as { members?: TeamMember[] };
       return body.members ?? [];
@@ -141,7 +149,7 @@ function useDelegationMutation(method: 'POST' | 'DELETE') {
 
 export function WorkspaceDelegation() {
   const { data, isPending, isError, error, refetch } = useDelegations();
-  const members = useTeamMembers(data?.canManage === true);
+  const members = useTeamMembers(data?.organizationId);
   const grant = useDelegationMutation('POST');
   const revoke = useDelegationMutation('DELETE');
   const { confirm, dialog } = useConfirmAction();
@@ -184,6 +192,12 @@ export function WorkspaceDelegation() {
 
   const maxDays = Math.floor(data.maxDurationMs / DAY_MS);
   const candidates = (members.data ?? []).filter((member) => !member.isCurrentUser);
+  const memberById = new Map((members.data ?? []).map((member) => [member.userId, member]));
+  const nameOf = (userId: string) => {
+    const member = memberById.get(userId);
+    if (member) return memberDisplayName(member);
+    return members.data ? 'A former member' : 'A workspace member';
+  };
 
   const toggleScope = (scope: string) => {
     setScopes((current) =>
@@ -218,7 +232,7 @@ export function WorkspaceDelegation() {
   const askToRevoke = (entry: WorkspaceDelegationEntry) =>
     confirm({
       title: 'Revoke this delegation?',
-      description: `${entry.delegateUserId} loses ${entry.scopes.join(', ')} immediately, and anything they started under it stops. Revoking cannot be undone: you would have to grant a new delegation.`,
+      description: `${nameOf(entry.delegateUserId)} loses ${entry.scopes.join(', ')} immediately, and anything they started under it stops. Revoking cannot be undone: you would have to grant a new delegation.`,
       confirmLabel: 'Revoke delegation',
       destructive: true,
       onConfirm: () =>
@@ -254,26 +268,33 @@ export function WorkspaceDelegation() {
           onSubmit={submitGrant}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="min-w-0 flex-1 text-xs" style={{ color: 'var(--text-3)' }}>
-              Member
-              <select
-                className={`${fieldClass} mt-1`}
-                style={{
-                  borderColor: 'var(--settings-border)',
-                  background: 'var(--bg-elev)',
-                  color: 'var(--text-1)',
-                }}
-                value={delegateUserId}
-                onChange={(event) => setDelegateUserId(event.target.value)}
-              >
-                <option value="">Choose a member</option>
-                {candidates.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.name} ({member.role})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="min-w-0 flex-1">
+              {members.isError ? (
+                <p
+                  role="alert"
+                  className="text-xs"
+                  style={{ color: 'var(--settings-destructive-text)' }}
+                >
+                  {toUserMessage(members.error, 'Workspace members could not be loaded.')}{' '}
+                  <button
+                    type="button"
+                    onClick={() => void members.refetch()}
+                    className="underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Try again
+                  </button>
+                </p>
+              ) : (
+                <MemberPicker
+                  label="Member"
+                  multiple={false}
+                  members={candidates}
+                  selectedIds={delegateUserId ? [delegateUserId] : []}
+                  onChange={(userIds) => setDelegateUserId(userIds[0] ?? '')}
+                  disabled={members.isPending}
+                />
+              )}
+            </div>
             <label className="text-xs sm:w-40" style={{ color: 'var(--text-3)' }}>
               Expires in
               <select
@@ -357,11 +378,15 @@ export function WorkspaceDelegation() {
                 style={{ borderColor: 'var(--settings-border)' }}
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
-                    {entry.delegateUserId}
-                  </p>
+                  {memberById.get(entry.delegateUserId) ? (
+                    <MemberIdentity member={memberById.get(entry.delegateUserId)!} />
+                  ) : (
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
+                      {nameOf(entry.delegateUserId)}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-                    {entry.scopes.join(', ')} · Granted by {entry.grantedByUserId} ·{' '}
+                    {entry.scopes.join(', ')} · Granted by {nameOf(entry.grantedByUserId)} ·{' '}
                     {state === 'revoked'
                       ? `Revoked ${when(entry.revokedAt)}`
                       : state === 'expired'

@@ -153,6 +153,11 @@ export interface ChatRuntime {
   updateArtifact?(artifactId: string, content: string): Promise<{ id: string; content: string }>;
 
   getArtifactVersions?(current: Artifact): Promise<Artifact[]>;
+
+  restoreArtifactVersion?(
+    artifactId: string,
+    version: number,
+  ): Promise<{ id: string; content: string }>;
 }
 
 export interface ChatAttachmentPolicy {
