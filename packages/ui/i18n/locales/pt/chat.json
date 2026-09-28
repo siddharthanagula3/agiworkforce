@@ -117,6 +117,7 @@
     "renameProject": "Renomear projeto",
     "restore": "Restaurar",
     "running": "Em execução",
+    "unread": "Não lido",
     "searchConversations": "Buscar conversas",
     "searchConversationsDescription": "Pesquise seu histórico de conversas e abra a conversa correspondente.",
     "share": "Compartilhar",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "Personalizado usa seu perfil, suas instruções e seu estilo de resposta. Sem personalização os deixa de fora.",
     "toggleArtifacts": "Alternar painel de artefatos",
     "toggleArtifactsCount": "Alternar painel de artefatos ({{count}})",
-    "toggleStats": "Estatísticas"
+    "toggleStats": "Estatísticas",
+    "untitledConversation": "Conversa"
   },
   "interface": {
     "closeRewindCheckpoints": "Fechar pontos de retrocesso",
