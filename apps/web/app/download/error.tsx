@@ -25,7 +25,7 @@ export default function DownloadError({
         <AlertTriangle aria-hidden="true" className="h-10 w-10 text-danger" />
       </div>
 
-      <h1 className="mb-3 text-2xl font-bold">Unable to load downloads</h1>
+      <h1 className="mb-3 text-h1">Unable to load downloads</h1>
       <p className="mx-auto mb-2 max-w-sm text-muted-foreground">
         The download page could not be loaded. Retry the page, use AGI Web, or check the CLI page.
       </p>

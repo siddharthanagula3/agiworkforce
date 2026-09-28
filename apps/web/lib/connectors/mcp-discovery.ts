@@ -3,6 +3,7 @@ import 'server-only';
 import {
   auth,
   AuthorizationServerMismatchError,
+  discoverOAuthProtectedResourceMetadata,
   discoverOAuthServerInfo,
   IssuerMismatchError,
   OAuthError,
@@ -13,10 +14,12 @@ import { logger } from '@/lib/logger';
 import { createDeadline } from '@/lib/url-fetch/guarded-fetch';
 import { TOKEN_REQUEST_TIMEOUT_MS } from '@/lib/connectors/oauth-client';
 import { generateOAuthState } from '@/lib/connectors/pkce';
+import { getCustomConnectorOAuthClient } from '@/lib/connectors/mcp-custom-connections';
 import {
   McpOAuthClientProvider,
   McpPkceUnsupportedError,
   type McpOAuthProviderSeed,
+  type McpSuppliedOAuthClient,
 } from '@/lib/connectors/mcp-oauth-provider';
 import { McpOAuthEgressRefusedError, mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import { deleteMcpOAuthClient } from '@/lib/connectors/mcp-oauth-clients';
@@ -95,6 +98,15 @@ function describeFailure(error: unknown): {
   };
 }
 
+export async function mcpServerPublishesProtectedResource(mcpUrl: string): Promise<boolean> {
+  try {
+    await discoverOAuthProtectedResourceMetadata(mcpUrl, undefined, mcpOAuthFetch);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function mcpServerRequiresAuthorization(mcpUrl: string): Promise<boolean> {
   try {
     const info = await discoverOAuthServerInfo(mcpUrl, { fetchFn: mcpOAuthFetch });
@@ -164,7 +176,12 @@ export async function beginMcpAuthorization(
     if (ceiling) scope = ceiling.scope;
   }
   const state = generateOAuthState();
-  const provider = new McpOAuthClientProvider({ mcpUrl, state, refuseWithoutPkce: true });
+  const provider = new McpOAuthClientProvider({
+    mcpUrl,
+    state,
+    refuseWithoutPkce: true,
+    client: await getCustomConnectorOAuthClient(userId, connectorId),
+  });
 
   if (!provider.redirectUrl) {
     return {
@@ -274,12 +291,18 @@ export async function completeMcpAuthorization(input: {
     };
   }
 
+  const client = await getCustomConnectorOAuthClient(pending.userId, pending.connectorId);
   const seed: McpOAuthProviderSeed = {
     codeVerifier: pending.codeVerifier,
     issuer: pending.issuer ?? null,
     discoveryState,
   };
-  const provider = new McpOAuthClientProvider({ mcpUrl, state: input.state, seed });
+  const provider = new McpOAuthClientProvider({
+    mcpUrl,
+    state: input.state,
+    seed,
+    client,
+  });
 
   try {
     await auth(provider, {
@@ -290,7 +313,7 @@ export async function completeMcpAuthorization(input: {
     });
   } catch (error) {
     const described = describeFailure(error);
-    if (described.reason === 'registration-rejected' && pending.issuer) {
+    if (described.reason === 'registration-rejected' && pending.issuer && !client) {
       await deleteMcpOAuthClient(pending.issuer).catch(() => undefined);
     }
     logger.warn(
@@ -366,6 +389,7 @@ export async function refreshDiscoveredGrant(input: {
   refreshToken: string;
   tokenType: string;
   grantedScopes: string[];
+  client?: McpSuppliedOAuthClient | null;
 }): Promise<McpRefreshOutcome> {
   if (!input.issuer) {
     return {
@@ -377,6 +401,7 @@ export async function refreshDiscoveredGrant(input: {
   const provider = new McpOAuthClientProvider({
     mcpUrl: input.mcpUrl,
     state: generateOAuthState(),
+    client: input.client ?? null,
     seed: {
       issuer: input.issuer,
       tokens: {

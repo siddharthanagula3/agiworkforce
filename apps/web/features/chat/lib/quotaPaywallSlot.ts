@@ -61,7 +61,9 @@ export function resolveQuotaPaywallSlot(input: {
   const canBuyCredits =
     block.clearedByCredits &&
     isSelfServePaidPlanTier(input.planTier) &&
-    input.subscriptionSource === 'stripe';
+    (input.subscriptionSource === 'stripe' ||
+      input.subscriptionSource === 'apple' ||
+      input.subscriptionSource === 'google');
   const recoveryAction =
     serverRecoveryAction(input.recovery) ?? (canBuyCredits ? 'top_up' : 'upgrade');
 

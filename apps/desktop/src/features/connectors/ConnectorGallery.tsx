@@ -872,7 +872,7 @@ export function ConnectorGallery() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 border-b border-border/80 pb-4">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Connectors</h3>
+          <h3 className="text-h3 text-foreground">Connectors</h3>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Allow AGI to interact with apps, data, and tools on your computer with your approval.
           </p>

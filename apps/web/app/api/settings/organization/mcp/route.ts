@@ -19,6 +19,7 @@ import {
   withWorkspaceRevisionHeaders,
 } from '@/lib/server/workspace-revision';
 import {
+  edgeBlockedMessage,
   McpProbeError,
   probeMcpServer,
   transportForUrl,
@@ -170,7 +171,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           .validation(
             error.authChallenge
               ? `${url.host} needs authorization before it can be published. Connect it once as a custom connector so this workspace holds a credential for it.`
-              : `${url.host} could not be reached: ${error.message}`,
+              : error.edgeBlocked
+                ? edgeBlockedMessage(url.host)
+                : `${url.host} could not be reached: ${error.message}`,
           )
           .asUserSafe();
       }

@@ -31,6 +31,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
+import { noteSessionSighting } from '@/lib/server/session-sightings';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -345,6 +346,7 @@ export async function getClerkAuthUser(
         options.mfaEnrollment,
       );
       await assertIpAllowList(auth.userId, request);
+      noteSessionSighting(auth.userId, sessionId, request);
       return auth;
     }
 
@@ -364,6 +366,7 @@ export async function getClerkAuthUser(
       options.mfaEnrollment,
     );
     await assertIpAllowList(userId, request);
+    noteSessionSighting(userId, sessionId, request);
     return authResultFor(account);
   }
 
@@ -399,4 +402,16 @@ export async function getOptionalAuthUser(
     }
     throw error;
   }
+}
+
+export async function getSuspendedAccountUser(request: NextRequest): Promise<{ userId: string }> {
+  const { subject, sessionId } = await getRequestIdentity();
+  const account = subject === null ? null : await accountForSubject(subject, request);
+  if (!account) throw createError.unauthorized();
+  await assertSessionWithinAbsoluteLifetime(sessionId, account.accountId);
+  const decision = accountAccessDecision(await readAccountStatus(account.accountId));
+  if (decision.allowed || decision.reason !== 'suspended') {
+    throw createError.forbidden('Only a suspended account can appeal its suspension.');
+  }
+  return { userId: account.accountId };
 }

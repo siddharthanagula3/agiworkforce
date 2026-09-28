@@ -1,9 +1,15 @@
 import { type AgiThemeMode } from '@agiworkforce/design-tokens';
 import { BarChart3 } from 'lucide-react';
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useId, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
-import { CHART_ROW_CAP, chartChrome, chartSeriesPalette, parseChartArtifact } from './chart-spec';
+import {
+  CHART_ROW_CAP,
+  chartChrome,
+  chartSeriesPalette,
+  parseChartArtifact,
+  summarizeChart,
+} from './chart-spec';
 
 /** recharts is heavier than every other artifact renderer in this package and a
  *  chart is rare, so the drawing surface is a separate chunk. */
@@ -142,6 +148,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
   const parsed = useMemo(() => parseChartArtifact(artifact.content), [artifact.content]);
   const palette = useMemo(() => chartSeriesPalette(mode), [mode]);
   const chrome = useMemo(() => chartChrome(mode), [mode]);
+  const summaryId = useId();
 
   if (!parsed.ok) {
     return (
@@ -150,13 +157,20 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
   }
 
   const { kind, rows, series, totalRows } = parsed.spec;
+  const chartName = parsed.spec.title || artifact.title?.trim() || `${kind} chart`;
 
   return (
     <div
       className={cn('flex flex-col bg-background border rounded-lg overflow-hidden', className)}
       data-testid="chart-artifact"
       data-chart-kind={kind}
+      role="figure"
+      aria-label={chartName}
+      aria-describedby={summaryId}
     >
+      <p id={summaryId} className="sr-only" data-testid="chart-artifact-summary">
+        {summarizeChart(parsed.spec, artifact.title)}
+      </p>
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-compact bg-primary/10 text-primary text-xs font-medium">

@@ -19,11 +19,15 @@ import type {
   AgentActivityState,
   AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { lucideRNToolIcon } from './toolIconRN';
+import {
+  CloudToolApprovalControls,
+  parseToolArguments,
+  type ResolveCloudToolApproval,
+} from './CloudToolApprovalControls';
 
 const ACTIVITY_PAGE_SIZE = 20;
 
@@ -32,7 +36,7 @@ export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
   defaultExpanded?: boolean;
   nowMs?: number;
-  onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
+  onResolveApproval?: ResolveCloudToolApproval;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }
@@ -211,49 +215,14 @@ function ToolRow({
               ) : null}
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Pressable
-                onPress={() => onResolveApproval?.(entry.toolCallId, 'approved')}
-                disabled={!onResolveApproval}
-                accessibilityRole="button"
-                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow} ${entry.summary}`}
-              >
-                <View
-                  style={{
-                    paddingHorizontal: 13,
-                    paddingVertical: 7,
-                    borderRadius: 8,
-                    backgroundColor: colors.agentSuccess,
-                    opacity: onResolveApproval ? 1 : 0.5,
-                  }}
-                >
-                  <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: '600' }}>
-                    {TOOL_APPROVAL_ACTION_LABELS.allow}
-                  </Text>
-                </View>
-              </Pressable>
-              <Pressable
-                onPress={() => onResolveApproval?.(entry.toolCallId, 'rejected')}
-                disabled={!onResolveApproval}
-                accessibilityRole="button"
-                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${entry.summary}`}
-              >
-                <View
-                  style={{
-                    paddingHorizontal: 13,
-                    paddingVertical: 7,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    opacity: onResolveApproval ? 1 : 0.5,
-                  }}
-                >
-                  <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
-                    {TOOL_APPROVAL_ACTION_LABELS.deny}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
+            <CloudToolApprovalControls
+              toolCallId={entry.toolCallId}
+              toolName={entry.name}
+              summary={entry.summary}
+              args={parseToolArguments(entry.input)}
+              riskLevel={entry.approval?.riskLevel}
+              onResolve={onResolveApproval}
+            />
           )}
         </View>
       ) : null}

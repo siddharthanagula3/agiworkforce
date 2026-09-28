@@ -77,7 +77,7 @@ export function AgiWorkScheduled() {
       <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
+          <h1 className="font-serif text-h2 text-[var(--chat-text-primary)]">
             {t('agiWork.scheduled.title')}
           </h1>
           <button

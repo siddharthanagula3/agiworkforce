@@ -166,8 +166,7 @@ export const ALLOWED_ATTACHMENT_ACCEPT = [
 ].join(',');
 
 export type AttachmentValidation =
-  | { ok: true }
-  | { ok: false; reason: 'too-large' | 'unsupported-type' | 'empty'; message: string };
+  { ok: true } | { ok: false; reason: 'too-large' | 'unsupported-type' | 'empty'; message: string };
 
 function fileExtension(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -181,6 +180,20 @@ export function isTextAttachmentMeta(name: string, mimeType: string): boolean {
   }
   if (mime.startsWith('image/') || mime === 'application/pdf') return false;
   return TEXT_ATTACHMENT_EXTENSIONS.includes(fileExtension(name));
+}
+
+export function isAcceptedAttachmentType(name: string, mimeType: string): boolean {
+  const mime = (mimeType ?? '').split(';', 1)[0]!.trim().toLowerCase();
+  const ext = fileExtension(name);
+  if (DENIED_ATTACHMENT_MIME_TYPES.includes(mime) || DENIED_ATTACHMENT_EXTENSIONS.includes(ext)) {
+    return false;
+  }
+  const mimeAllowed =
+    mime.length > 0 &&
+    (IMAGE_ATTACHMENT_MIME_TYPES.includes(mime) ||
+      OFFICE_ATTACHMENT_MIME_TYPES.includes(mime) ||
+      ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)));
+  return mimeAllowed || ALLOWED_ATTACHMENT_EXTENSIONS.includes(ext);
 }
 
 export function validateAttachmentMeta(
@@ -203,24 +216,13 @@ export function validateAttachmentMeta(
       message: `${name} is larger than the ${limitMb} MiB attachment limit.`,
     };
   }
-  const mime = (mimeType ?? '').split(';', 1)[0]!.trim().toLowerCase();
-  const ext = fileExtension(name);
-  const unsupported: AttachmentValidation = {
-    ok: false,
-    reason: 'unsupported-type',
-    message: `${name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
-  };
-  if (DENIED_ATTACHMENT_MIME_TYPES.includes(mime) || DENIED_ATTACHMENT_EXTENSIONS.includes(ext)) {
-    return unsupported;
-  }
-  const mimeAllowed =
-    mime.length > 0 &&
-    (IMAGE_ATTACHMENT_MIME_TYPES.includes(mime) ||
-      OFFICE_ATTACHMENT_MIME_TYPES.includes(mime) ||
-      ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)));
-  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(ext);
-  if (!mimeAllowed && !extAllowed) {
-    return unsupported;
+  if (!isAcceptedAttachmentType(name, mimeType)) {
+    const mime = (mimeType ?? '').split(';', 1)[0]!.trim().toLowerCase();
+    return {
+      ok: false,
+      reason: 'unsupported-type',
+      message: `${name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
+    };
   }
   return { ok: true };
 }

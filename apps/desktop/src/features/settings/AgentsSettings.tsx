@@ -29,7 +29,7 @@ export function AgentsSettings() {
     <div className="space-y-6">
       {/* Execution */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Execution</h3>
+        <h3 className="text-h3 mb-4">Execution</h3>
 
         <div className="rounded-lg border border-border bg-card p-6 space-y-6">
           {/* Max timeout */}
@@ -82,7 +82,7 @@ export function AgentsSettings() {
 
       {/* Auto-approve is the only approval override with a live runtime policy. */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Quick Toggle</h3>
+        <h3 className="text-h3 mb-4">Quick Toggle</h3>
         <div className="rounded-lg border border-border bg-card p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">

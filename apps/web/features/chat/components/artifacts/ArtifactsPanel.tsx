@@ -4,12 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
-import {
-  MAX_SIDE_PANEL_WIDTH,
-  MIN_SIDE_PANEL_WIDTH,
-  useChatProjectStore,
-  useChatUIStore,
-} from '@agiworkforce/unified-chat';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import type { PrivacyMode, SharedArtifact } from '@agiworkforce/types';
 import {
   publishArtifact as publishArtifactService,
@@ -46,6 +41,7 @@ import { ArtifactPrivacyNotice } from '@/features/onboarding/components/Artifact
 import { useUIStore } from '@shared/stores/layout-store';
 import { TASK_DOCK_ARTIFACTS_LABEL, TASK_DOCK_LABEL } from '../../lib/agi-work';
 import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
+import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 
 const ARTIFACT_CONFLICT_NOTICE =
   'Someone else changed this artifact first, so their version is shown. Your edit is kept as the latest version.';
@@ -200,10 +196,6 @@ export function resolveArtifactOriginPrivacyMode(
   ]);
 }
 
-const MIN_PANEL_WIDTH = MIN_SIDE_PANEL_WIDTH;
-const MAX_PANEL_WIDTH = MAX_SIDE_PANEL_WIDTH;
-const PANEL_WIDTH_KEY_STEP = 24;
-
 function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {
   const [layout, setLayout] = useState<'unknown' | 'mobile' | 'desktop'>('unknown');
 
@@ -249,8 +241,7 @@ export function ArtifactsPanel() {
   const taskDockOpen = useUIStore((s) => s.taskDockOpen);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
   // re-exported through `useArtifact`) with no caller for the setter and a
-  const panelWidth = useChatUIStore((s) => s.artifactPanelWidth);
-  const setPanelWidth = useChatUIStore((s) => s.setArtifactPanelWidth);
+  const panelWidth = useSidePanelWidth();
   const layout = useOverlayLayout();
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -404,36 +395,6 @@ export function ArtifactsPanel() {
   const closeModalOverlay = useCallback(() => setPanelOpen(false), [setPanelOpen]);
   useOverlayDialog(panelRef, isModalOverlay, closeModalOverlay);
 
-  const onResizePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (layout !== 'desktop') return;
-      event.preventDefault();
-      const onPointerMove = (move: PointerEvent) => {
-        setPanelWidth(window.innerWidth - move.clientX);
-      };
-      const onPointerUp = () => {
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-        document.body.style.removeProperty('user-select');
-      };
-      document.body.style.setProperty('user-select', 'none');
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-    },
-    [layout, setPanelWidth],
-  );
-
-  const onResizeKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      event.preventDefault();
-      setPanelWidth(
-        panelWidth + (event.key === 'ArrowLeft' ? PANEL_WIDTH_KEY_STEP : -PANEL_WIDTH_KEY_STEP),
-      );
-    },
-    [panelWidth, setPanelWidth],
-  );
-
   if (!panelOpen) return null;
 
   return (
@@ -462,22 +423,7 @@ export function ArtifactsPanel() {
           'animate-in slide-in-from-right duration-moved',
         )}
       >
-        {/* AUDIT-FIX ART-23: drag handle (desktop only). Also keyboard
-            operable, a mouse-only resize is not a resize for everyone. */}
-        {layout === 'desktop' && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize artifacts panel"
-            aria-valuenow={panelWidth}
-            aria-valuemin={MIN_PANEL_WIDTH}
-            aria-valuemax={MAX_PANEL_WIDTH}
-            tabIndex={0}
-            onPointerDown={onResizePointerDown}
-            onKeyDown={onResizeKeyDown}
-            className="absolute inset-y-0 -left-1 z-[var(--z-control)] w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
-          />
-        )}
+        {layout === 'desktop' && <SidePanelResizeHandle label="Resize artifacts panel" />}
         {/* Header, slim strip: panel title + count badge + Download all.
             Close X only shown here when no artifact is selected (no toolbar
             Close visible). When an artifact IS selected, the ArtifactPreview
@@ -486,12 +432,12 @@ export function ArtifactsPanel() {
             artifact selections. */}
         {/* @container, same reason as the ArtifactPreview toolbar: this strip
             lives INSIDE the split pane, which the user can drag down to
-            MIN_PANEL_WIDTH while the window stays wide. Viewport breakpoints
+            MIN_SIDE_PANEL_WIDTH while the window stays wide. Viewport breakpoints
             here reveal labels at a width this bar never has. */}
         <div className="@container flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <h2 className="shrink-0 text-sm font-semibold text-foreground">Artifacts</h2>
+            <h2 className="shrink-0 text-h5 text-foreground">Artifacts</h2>
             {artifacts.length > 0 && (
               <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
                 {artifacts.length}
@@ -674,7 +620,7 @@ export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = 
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={panelOpen ? 'Close artifacts panel' : 'Open artifacts panel'}
       title="Artifacts"

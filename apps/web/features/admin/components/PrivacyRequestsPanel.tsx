@@ -132,7 +132,7 @@ export default function PrivacyRequestsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="privacy-requests-title">
       <div>
-        <h2 id="privacy-requests-title" className="text-sm font-medium">
+        <h2 id="privacy-requests-title" className="text-h5">
           Data rights requests
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -216,7 +216,7 @@ export default function PrivacyRequestsPanel() {
       )}
 
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-medium">Erase a subject with no account</h3>
+        <h3 className="text-h5">Erase a subject with no account</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           Clears the waitlist, consent ledger and data rights rows held against one address. Rows
           that belong to a signed-up account are reported rather than deleted, because those belong

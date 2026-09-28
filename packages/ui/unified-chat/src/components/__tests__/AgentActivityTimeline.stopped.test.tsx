@@ -100,7 +100,7 @@ describe('a run the user stopped', () => {
       />,
     );
 
-    expect(container.querySelector('.text-danger')).toBeNull();
+    expect(container.querySelector('.text-danger-text')).toBeNull();
     expect(container.querySelector('.text-muted-foreground')).not.toBeNull();
   });
 });

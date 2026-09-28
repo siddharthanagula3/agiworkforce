@@ -182,7 +182,7 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
               <Telescope className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-foreground">Deep Research</h1>
+              <h1 className="text-h2 text-foreground">Deep Research</h1>
               <p className="text-sm text-muted-foreground">
                 Multi-source AI research with cited findings
               </p>

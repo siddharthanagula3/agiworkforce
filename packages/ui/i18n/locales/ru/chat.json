@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "Голосовой ввод не поддерживается в этом браузере. Попробуйте Chrome или Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI ответил:",
     "assistantThinking": "Ассистент думает",
     "cancelEdit": "Отмена",
     "copied": "Скопировано",
@@ -210,7 +211,8 @@
     "messageAttachments": "Вложения сообщения",
     "retryResponse": "Повторить этот ответ",
     "saveEdit": "Сохранить",
-    "toolResult": "Результат"
+    "toolResult": "Результат",
+    "userSaid": "Вы сказали:"
   },
   "goalHandoff": {
     "action": "Запустить как задачу",
@@ -226,6 +228,9 @@
     "shareConversation": "Поделиться беседой",
     "temporaryChat": "Временный чат",
     "temporaryChatRetentionNote": "Не будет сохранён в истории и не использует память для этого сообщения.",
+    "temporaryChatPersonalized": "С персонализацией",
+    "temporaryChatUnpersonalized": "Без персонализации",
+    "temporaryChatPersonalizationHint": "С персонализацией используются ваш профиль, инструкции и стиль ответов. Без персонализации они не учитываются.",
     "toggleArtifacts": "Переключить панель артефактов",
     "toggleArtifactsCount": "Переключить панель артефактов ({{count}})",
     "toggleStats": "Статистика"

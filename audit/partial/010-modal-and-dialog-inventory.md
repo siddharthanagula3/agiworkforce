@@ -45,16 +45,14 @@ nothing is left.
 
 - Done when: Archiving asks to confirm, or confirms afterwards with a way to undo, and says where archived items can be found.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Archive happens on one click with no confirmation, undo toast or pointer to the Archived view (only failures toast); project archive also silently unfiles its chats (S23.30). | states |
-| desktop | partial | Archive happens on one click with no confirmation, undo toast or pointer to the Archived view (only failures toast); project archive also silently unfiles its chats (S23.30). | states |
 | mobile | partial | Archive runs immediately from the menu with no confirmation or undo; only a failure alert. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/components/layout/WebAppShell.tsx:326-326`, `apps/web/shared/components/layout/sidebar-session-actions.ts:49-49`, `packages/ui/ui/src/sidebar/SessionItem.tsx:365-365`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`
+Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:100-100`
 
 ## S10.08: Share conversation.
 
@@ -181,7 +179,7 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | Let the Chrome picker attach documents (PDF, text); today "Add an image" accepts PNG, JPEG, WebP and GIF only. | handler |
+| chrome | partial | needs the R2 upload host in manifest connect-src and host_permissions (permission prompt on update, owner call) or a server upload proxy accepting the extension token | document upload |
 
 Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
 
@@ -193,10 +191,10 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | Same as S55.20: detail offers Connect on an expired connection; browser verification against a real expired grant is still owed. | states |
 | desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:15-25`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
 ## S10.20: Select among connected accounts.
 
@@ -322,14 +320,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/cli/src/tui
 
 - Done when: When a usage limit is reached, the user sees which limit, when it resets, and what they can do.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The paywall message is never shown: the server sends *_limit_reached, not kind "paywall", so the CLI prints a generic error without which limit or when it resets. | handler |
-| chrome | partial | Chrome matches none of the server's *_limit_reached codes and reports a usage block as service rate limiting; map those codes to the usage-limit notice. | handler |
 
-Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`, `apps/extension/src/side_panel.ts:8370-8384`
+Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -379,18 +376,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 | mobile | partial | Mobile shows no card; management is behind FEATURES.billing and otherwise opens web billing. | flag-off, surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S10.34: Microphone permission explanation.
-
-- Done when: Before or when the microphone is first needed, the product explains why it wants it and what to do if access is refused.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Dictation explains only after Chrome blocks the microphone; say why the side panel wants it before Chrome asks. | states |
-
-Code: `apps/extension/src/features/side-panel/voice.ts:23-23`
 
 ## S10.35: Screen-sharing source selection.
 

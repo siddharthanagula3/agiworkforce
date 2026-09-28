@@ -170,7 +170,7 @@ export function RecipeCard({ content }: RecipeCardProps) {
               <ChefHat className="h-5 w-5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold leading-tight">{recipe.title}</h3>
+              <h3 className="text-h3">{recipe.title}</h3>
               {recipe.description && (
                 <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
                   {recipe.description}

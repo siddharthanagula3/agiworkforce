@@ -29,7 +29,7 @@ import {
 import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 
 import { ConsentCentre } from './ConsentCentre';
-import { RightsRequestForm } from './RightsRequestForm';
+import { RightsRequestsPortal } from './RightsRequestsPortal';
 
 export const metadata = buildMetadata({
   title: 'Data rights and consent',
@@ -130,7 +130,7 @@ export default async function DataRightsPage() {
                 rights do not depend on having one.
               </Prose>
             </div>
-            <RightsRequestForm />
+            <RightsRequestsPortal />
           </Stack>
         </Section>
 

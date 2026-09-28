@@ -146,6 +146,13 @@ import {
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import {
+  STORED_RESULT_NOTICE_MARKER,
+  TOOL_RESULT_READER_TOOL_NAME,
+  readStoredToolResult,
+  referenceOversizedToolResult,
+  toolResultReaderToolDef,
+} from './tool-result-store';
+import {
   EXECUTE_CODE_TOOL,
   isExecutionTool,
   routeExecutionTool,
@@ -321,6 +328,7 @@ import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
 import { findInstalledDirectorySkill } from '@/features/plugins/server/directory/installed-skills';
 import { functionToolName } from './tool-loop-routing';
+import { invalidToolArgumentsMessage, toolArgumentProblem } from './tool-argument-validation';
 import {
   generateManagedOfficeFile,
   isManagedOfficeFileTool,
@@ -2163,7 +2171,14 @@ async function runMcpTool(
       );
       if (connectorResult.handled) {
         return {
-          content: capOutput(connectorResult.content),
+          content: connectorResult.isError
+            ? capOutput(connectorResult.content)
+            : ((await referenceOversizedToolResult({
+                userId: executionContext?.userId,
+                toolCallId: toolCall.id,
+                toolName: toolCall.qualifiedName,
+                content: connectorResult.content,
+              })) ?? capOutput(connectorResult.content)),
           isError: connectorResult.isError,
           ...(connectorResult.interactiveCard
             ? { interactiveCard: connectorResult.interactiveCard }
@@ -2243,10 +2258,18 @@ async function runMcpTool(
         };
       }
     }
+    const output =
+      text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)');
     return {
-      content: capOutput(
-        text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)'),
-      ),
+      content:
+        (result.isError === true
+          ? null
+          : await referenceOversizedToolResult({
+              userId: executionContext?.userId,
+              toolCallId: toolCall.id,
+              toolName: toolCall.qualifiedName,
+              content: output,
+            })) ?? capOutput(output),
       isError: result.isError === true,
       ...(interactiveCard ? { interactiveCard } : {}),
     };
@@ -2836,6 +2859,19 @@ export async function executeOfferedToolCall(
     };
   }
 
+  const argumentProblem = toolArgumentProblem(
+    call,
+    input.mcpTools?.find((tool) => tool.qualifiedName === toolName)?.inputSchema,
+  );
+  if (argumentProblem) {
+    await audit('failed');
+    return {
+      content: invalidToolArgumentsMessage(toolName, argumentProblem),
+      isError: true,
+      untrustedContent: false,
+    };
+  }
+
   const sessionScope = conversationId
     ? managedCloudE2BSessionScope(userId, conversationId)
     : undefined;
@@ -3039,7 +3075,17 @@ export async function* runToolLoop(
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
     const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
-    return directory ? [...loaded, directory] : loaded;
+    const storedResults = messages.some(
+      (message) =>
+        message.role === 'tool' &&
+        typeof message.content === 'string' &&
+        message.content.includes(STORED_RESULT_NOTICE_MARKER),
+    );
+    return [
+      ...loaded,
+      ...(directory ? [directory] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
+    ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
@@ -3067,6 +3113,9 @@ export async function* runToolLoop(
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
   ]);
+  const externalToolSchemas = new Map<string, unknown>(
+    mcpTools.map((tool) => [tool.qualifiedName, tool.inputSchema]),
+  );
   // The CLI runs its own loop, so every tool it declares is its own even when
   // a platform tool shares the name: its write_file is not the sandbox's. Any
   // other caller keeps the hosted tools it names and owns only the rest.
@@ -4179,6 +4228,16 @@ export async function* runToolLoop(
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
+      }
+      if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
+        return readStoredToolResult(options.userId, tc.args);
+      }
+      const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
+      if (argumentProblem) {
+        return Promise.resolve({
+          content: invalidToolArgumentsMessage(tc.qualifiedName, argumentProblem),
+          isError: true,
+        });
       }
       if (isWebSearchTool(tc.qualifiedName)) {
         searchObserved = true;

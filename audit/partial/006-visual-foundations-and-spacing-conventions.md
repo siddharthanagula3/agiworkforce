@@ -6,31 +6,17 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S6.02: Surface and elevated-surface colors.
-
-- Done when: Raised surfaces (cards, menus, popovers, dialogs) use a named elevated-surface token distinct from the page ground in each theme.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only the status bar has its own surface colour; TUI popups and overlays draw on the terminal background with no elevated fill. | ui |
-
-Code: `apps/cli/src/tui/terminal_palette.rs:253-255`
-
 ## S6.08: Heading scale.
 
 - Done when: Headings use one defined heading scale (named levels pairing size, weight and line-height) applied across the surface.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | foundation.css declares display/h1/h2/h3 roles but no component reads them; page headings mix Tailwind text-lg to text-3xl, text-[28px] and inline fontSize 24-54. | ui |
-| desktop | partial | foundation.css declares display/h1/h2/h3 roles but no component reads them; page headings mix Tailwind text-lg to text-3xl, text-[28px] and inline fontSize 24-54. | ui |
 | mobile | partial | The Text component has heading/subheading variants, but screens set roughly 20 literal fontSize values directly (10-34pt), so there is no enforced scale. | ui |
 
-Code: `packages/ui/design-tokens/src/foundation.css:275-288`, `apps/web/app/globals.css:1148-1148`, `apps/mobile/components/ui/text.tsx:9-10`
+Code: `apps/mobile/components/ui/text.tsx:9-10`
 
 ## S6.09: Body-text scale.
 
@@ -48,91 +34,26 @@ Code: `apps/mobile/components/ui/text.tsx:8-8`
 
 - Done when: Captions and metadata use a named small-text role no smaller than 12px that keeps AA contrast.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The caption variant no longer dilutes text, but metadata text is still set ad hoc at 10-11px in about 175 places, below the 12px floor web enforces. | ui |
-| vscode | partial | Metadata is hard-coded at 9-11px (e.g. 10px badges, 10.5px labels) with no caption role and below a 12px floor. | ui |
-| chrome | partial | Metadata sizes are per-rule literals at 10-11px (e.g. the 10px model badge) with no caption role. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | 10-11px metadata |
 
-Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/settings/auto-approve.tsx:163-163`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:455-455`, `apps/extension/src/side_panel.ts:1232-1233`
-
-## S6.11: Monospace typography.
-
-- Done when: Code and technical text use a declared monospace family and size distinct from body text.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Chat code blocks hard-code a JetBrains Mono/Fira stack at 12px instead of the editor font the rest of the panel follows. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1073-1073`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:585-585`
+Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/settings/auto-approve.tsx:163-163`, `apps/extension/src/side_panel.ts:1257-1257`
 
 ## S6.12: Line-height rules.
 
 - Done when: Line height is defined per text role (paired with size) rather than set ad hoc per element.
 - Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Line heights are per-rule literals (1.25 to 1.5) with no role pairing size and leading. | ui |
-| chrome | partial | Line heights are per-rule literals (1.4, 1.45, 1.55) with no role pairing size and leading. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:486-486`, `apps/extension/src/side_panel.ts:1335-1335`
-
-## S6.13: Paragraph spacing.
-
-- Done when: Rendered paragraphs in responses are separated by a defined vertical gap set in one rule.
-- Wave: 3
 - Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The TUI markdown renderer ends a paragraph without emitting a blank line, so consecutive paragraphs run together. | ui |
-| chrome | partial | Paragraphs render as <p> but the global reset zeroes their margins and no paragraph rule restores a gap. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal line heights |
 
-Code: `apps/cli/src/tui/markdown_renderer.rs:179-181`, `apps/extension/src/features/side-panel/markdown.ts:138-138`, `apps/extension/src/side_panel.ts:1054-1054`
-
-## S6.16: Table-cell padding.
-
-- Done when: Table cells (in rendered content and data tables) have defined, consistent padding.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | markdown-it emits GFM tables into the chat, but the webview has no table/td/th rule and its global reset zeroes padding, so cells render with no padding. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/webview/render.ts:5-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:126-126`
-
-## S6.18: Message-to-toolbar spacing.
-
-- Done when: The per-message action toolbar sits a defined distance below the message it belongs to.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Assistant messages have no per-message action row; only code blocks carry hover actions. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1086-1086`
-
-## S6.20: Page-edge gutters.
-
-- Done when: Pages use defined page-edge gutters that step with viewport width.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Gutter tokens (compact/regular/wide) exist but only the workspace console uses them; chat and settings pages hard-code px-4/px-6. | ui |
-| desktop | partial | Gutter tokens (compact/regular/wide) exist but only the workspace console uses them; chat and settings pages hard-code px-4/px-6. | ui |
-
-Code: `packages/ui/design-tokens/src/foundation.css:203-205`, `apps/web/features/workspace-console/components/WorkspaceConsoleShell.tsx:97-97`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1745-1745`
+Code: `apps/extension/src/side_panel.ts:1252-1252`
 
 ## S6.23: Dialog padding.
 
@@ -146,124 +67,65 @@ Code: `packages/ui/design-tokens/src/foundation.css:203-205`, `apps/web/features
 
 Code: `apps/mobile/src/features/chat/components/MessageEditModal.tsx:144-144`, `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:80-80`
 
-## S6.24: Form-field spacing.
-
-- Done when: Form fields share a defined label-to-input and field-to-field spacing.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Settings fields are spaced per rule with literals; there is no shared field spacing. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:256-256`, `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:345-345`
-
 ## S6.26: Button sizes and density variants.
 
 - Done when: Buttons come in a defined set of sizes/densities from one component.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Buttons are sized per class with literal heights; there is no shared size/density set. | ui |
-| chrome | partial | Button heights are per-rule literals (30px icon buttons, 34px dialog actions); no shared size set. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:832-840`, `apps/extension/src/side_panel.ts:1142-1142`
-
-## S6.27: Border-radius scale.
-
-- Done when: Corner radii come from one named radius ladder.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only --radius-md/--radius-lg are named; many rules still hard-code 3px, 6px, 7px and 14px. | ui |
-| chrome | partial | Radii are literals per rule (3, 4, 5, 6, 7, 12px); the agiRadii ladder the package exports is not used. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:121-122`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:724-724`, `apps/extension/src/side_panel.ts:1081-1081`
-
-## S6.28: Shadow and elevation scale.
-
-- Done when: Shadows come from a small named elevation scale per theme.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The four elevation rungs exist (and are tested), but about 50 files use Tailwind shadow-sm..2xl and Dialog/AlertDialog use a literal shadow. | ui |
-| desktop | partial | The four elevation rungs exist (and are tested), but about 50 files use Tailwind shadow-sm..2xl and Dialog/AlertDialog use a literal shadow. | ui |
-| mobile | partial | A few components set literal shadow/elevation values; there is no shared elevation scale. | ui |
-| vscode | partial | Shadows use the host widget-shadow colour but two literal geometries; no elevation scale. | ui |
-| chrome | partial | Shadow colours are tokens but offsets and blurs are literals per rule; the agiElevation scale is not used. | ui |
-
-Code: `packages/ui/design-tokens/src/foundation.css:260-263`, `packages/ui/ui/src/primitives/Dialog.tsx:110-110`, `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:64-67`, `apps/mobile/app/(app)/settings/memory.tsx:449-449`
-
-## S6.29: Layering and z-index rules.
-
-- Done when: Stacking order uses one named z-index ladder; components never invent numeric layers.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A handful of overlays set literal zIndex values; there is no shared layering ladder. | ui |
-| vscode | partial | Layering uses literal z-index values per rule; no ladder. | ui |
-| chrome | partial | Layering uses literal z-index values (up to 9000 and 10000) per rule; no ladder. | ui |
-
-Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps/mobile/app/(app)/voice.tsx:360-360`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1086-1086`, `apps/extension/src/side_panel.ts:1077-1077`
-
-## S6.30: Motion durations and easing.
-
-- Done when: Animations and transitions use named durations and easing curves.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Durations and easing are literals per component (about 20 files); no shared motion constants. | ui |
-| cli | partial | Timings are hard-coded per animation (50ms tick, 2s shimmer sweep); no shared motion constants. | ui |
-| vscode | partial | One easing token (--transition) exists; durations are literals per rule. | ui |
-| chrome | partial | Durations and easing are literals per rule (0.15s etc.); no motion tokens. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:46-46`, `apps/mobile/src/features/chat/components/ImageGenProgress.tsx:40-40`, `apps/cli/src/tui/tui_app.rs:36-36`, `apps/cli/src/tui/shimmer.rs:29-29`
-
-## S6.31: Reduced-motion alternatives.
-
-- Done when: When the user asks for reduced motion (OS setting or in-app), looping and travelling animation stops or is replaced with a gentle equivalent.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | --plain / AGI_PLAIN (the no-animation mode) is honoured only by REPL output; the default TUI keeps its 50ms spinner and shimmer sweep. | mount |
-
-Code: `apps/cli/src/output.rs:30-35`, `apps/cli/src/tui/shimmer.rs:21-21`, `apps/cli/src/lib.rs:4610-4610`
-
-## S6.32: Light, dark, and system themes.
-
-- Done when: The user can use light, dark, or follow-the-system appearance, and the whole surface (including code) follows it.
 - Wave: 3
 - Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Light and dark themes are picked by /theme and persisted, but there is no follow-the-terminal option (terminal_is_light has no caller) and code blocks always use the dark base16-ocean syntax theme. | ui |
-| chrome | partial | The panel follows the OS light/dark setting only; there is no in-extension choice. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal control heights |
 
-Code: `apps/cli/src/tui/tui_app.rs:316-322`, `apps/cli/src/tui/markdown_renderer.rs:28-28`, `apps/extension/src/tokens.ts:11-15`
+Code: `apps/extension/src/side_panel.ts:1234-1234`
 
-## S6.34: Selected, focused, hovered, pressed, and disabled states.
+## S6.27: Border-radius scale.
 
-- Done when: Interactive controls show distinct selected, focused, hovered, pressed and disabled states.
+- Done when: Corner radii come from one named radius ladder.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Hover, focus-visible, disabled and selected states exist, but the Button primitive and most controls have no pressed (:active) state. | states |
-| desktop | partial | Hover, focus-visible, disabled and selected states exist, but the Button primitive and most controls have no pressed (:active) state. | states |
-| vscode | partial | Hover, focus, disabled and selected states exist; no pressed (:active) state anywhere in the webview CSS. | states |
-| chrome | partial | Hover, focus-visible and disabled states exist; no pressed (:active) state in the side panel CSS. | states |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal radii |
 
-Code: `packages/ui/ui/src/primitives/Button.tsx:9-9`, `apps/web/app/globals.css:1387-1387`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:946-952`, `apps/extension/src/side_panel.ts:1056-1060`
+Code: `apps/extension/src/side_panel.ts:1311-1311`
+
+## S6.28: Shadow and elevation scale.
+
+- Done when: Shadows come from a small named elevation scale per theme.
+- Wave: 3
+- Already works on: web, desktop, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | partial | A few components set literal shadow/elevation values; there is no shared elevation scale. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal shadows |
+
+Code: `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:64-67`, `apps/mobile/app/(app)/settings/memory.tsx:449-449`, `apps/extension/src/side_panel.ts:1314-1314`
+
+## S6.29: Layering and z-index rules.
+
+- Done when: Stacking order uses one named z-index ladder; components never invent numeric layers.
+- Wave: 3
+- Already works on: web, desktop, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | partial | A handful of overlays set literal zIndex values; there is no shared layering ladder. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | z-index 100 on autonomy popover |
+
+Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps/mobile/app/(app)/voice.tsx:360-360`, `apps/extension/src/side_panel.ts:1226-1226`
+
+## S6.30: Motion durations and easing.
+
+- Done when: Animations and transitions use named durations and easing curves.
+- Wave: 3
+- Already works on: web, desktop, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | partial | Durations and easing are literals per component (about 20 files); no shared motion constants. | ui |
+| chrome | partial | 840168f8c: roles in place and used by the panel's own rules. Rules for approval, schedules and record, quota and plan compare, pairing and bridge drawer, autonomy popover and mic in side_panel.ts still use literals; left for their lanes. | literal durations |
+
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:46-46`, `apps/mobile/src/features/chat/components/ImageGenProgress.tsx:40-40`, `apps/extension/src/side_panel.ts:1497-1497`

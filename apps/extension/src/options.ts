@@ -9,6 +9,7 @@ import {
 } from './features/options/site-allowlist';
 import { createSitePermissionPolicySection } from './features/options/site-permission-policy';
 import { createDataHandlingSection } from './features/options/data-handling-section';
+import { createAppearanceSection } from './features/options/appearance-section';
 import { exportExtensionDiagnostics } from './features/diagnostics';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 import { loadSitePolicyInput } from './features/site-policy/store';
@@ -931,6 +932,7 @@ function buildPage(): void {
 
   const nav = el('nav', { class: 'opt-nav' });
   const navItems: Array<{ label: string; target: string }> = [
+    { label: 'Appearance', target: 'opt-appearance' },
     { label: 'Permissions', target: 'opt-permissions' },
     { label: 'Privacy', target: 'opt-privacy' },
     { label: 'Account', target: 'opt-account' },
@@ -1003,6 +1005,13 @@ function buildPage(): void {
   });
   header.appendChild(headerAccountButton);
   page.appendChild(header);
+
+  page.appendChild(
+    createAppearanceSection({
+      get: (key) => chrome.storage.local.get(key),
+      set: (items) => chrome.storage.local.set(items),
+    }).element,
+  );
 
   const permSection = el('section', { class: 'opt-section', id: 'opt-permissions' });
   const permHeader = el('div', { class: 'opt-section-header' });

@@ -71,7 +71,7 @@ function KeyboardShortcutsDialogImpl({
         <div className="space-y-6">
           {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
             <div key={category}>
-              <h3 className="mb-3 text-sm font-semibold text-foreground">
+              <h3 className="mb-3 text-h5 text-foreground">
                 {categoryLabels[category] || category}
               </h3>
 
@@ -124,7 +124,7 @@ function KeyboardShortcutsDialogImpl({
           {hostShortcuts.length > 0 ? (
             <div>
               <Separator className="my-4" />
-              <h3 className="mb-3 text-sm font-semibold text-foreground">Desktop app</h3>
+              <h3 className="mb-3 text-h5 text-foreground">Desktop app</h3>
               {/*
                 No switch on these rows: the shell's menu owns the chord and the
                 page cannot stop it firing, so a control here would be a promise

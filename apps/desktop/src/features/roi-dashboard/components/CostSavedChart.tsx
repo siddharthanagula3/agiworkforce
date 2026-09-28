@@ -26,7 +26,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   const data = payload[0]?.payload;
 
   return (
-    <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-lg border border-border">
+    <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-e3 border border-border">
       <p className="text-sm font-medium mb-2">{label}</p>
       <div className="space-y-1 text-xs">
         <p className="text-success-text font-semibold">

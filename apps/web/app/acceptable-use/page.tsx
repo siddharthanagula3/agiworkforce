@@ -313,14 +313,18 @@ export default function AcceptableUsePage() {
                   <Ledger caption="Enforcement ladder" rows={ENFORCEMENT} />
                   <Prose size="sm">
                     <strong>Appeals.</strong> If your account is suspended or banned and you believe
-                    it was wrong, email{' '}
+                    it was wrong, sign in and appeal from the notice you see, or use the{' '}
+                    <Link href="/appeal" className="agi-ds-link">
+                      appeal form
+                    </Link>{' '}
+                    with the email address on the account if you cannot sign in. You can also email{' '}
                     <a href={contactMailto(CONTACT_SUBJECTS.appeal)} className="agi-ds-link">
                       {CONTACT_EMAIL}
                     </a>{' '}
-                    with the subject &ldquo;{CONTACT_SUBJECTS.appeal}&rdquo; and the email address
-                    on the account. A suspension can be reversed by reinstatement; we will tell you
-                    what triggered it unless doing so would compromise an investigation or another
-                    person&rsquo;s safety.
+                    with the subject &ldquo;{CONTACT_SUBJECTS.appeal}&rdquo;. Each appeal gets a
+                    reference and a person replies. A suspension can be reversed by reinstatement;
+                    we will tell you what triggered it unless doing so would compromise an
+                    investigation or another person&rsquo;s safety.
                   </Prose>
                 </Stack>
               </Section>

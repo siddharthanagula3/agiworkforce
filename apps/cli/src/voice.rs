@@ -1,8 +1,9 @@
 //! Voice input module, push-to-talk with Whisper STT.
 //!
-//! Supports two transcription backends:
-//! 1. **OpenAI Whisper API**: used when `OPENAI_API_KEY` is set.
-//! 2. **Local `whisper` binary**: used as fallback when the binary is on `$PATH`.
+//! Supports three transcription backends:
+//! 1. **AGI Workforce**: a Managed session transcribes on the signed-in account.
+//! 2. **OpenAI Whisper API**: used when `OPENAI_API_KEY` is set.
+//! 3. **Local `whisper` binary**: used as fallback when the binary is on `$PATH`.
 //!
 //! Audio is captured from the default input device using `cpal`, recorded as
 //! 16 kHz mono PCM, then encoded to WAV via `hound` before transcription.
@@ -14,7 +15,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -103,10 +104,16 @@ pub async fn run_voice_mode(
     // cloud egress, we must not use the OpenAI Whisper API even if an API key
     // is present.  We downgrade to the local binary in that case; if no local
     // binary exists either, we abort with guidance rather than silently egress.
-    let raw_backend = detect_backend();
+    let raw_backend = detect_backend(&privacy_mode);
     let backend = gate_backend(raw_backend, &privacy_mode, voice_cloud_opt_in);
 
     match &backend {
+        TranscriptionBackend::Managed(_) => {
+            eprintln!(
+                "  {} Transcribing with AGI Workforce on your account",
+                ts::accent_header("voice:")
+            );
+        }
         TranscriptionBackend::OpenAiApi => {
             eprintln!(
                 "  {} Using OpenAI Whisper API (OPENAI_API_KEY detected)",
@@ -130,7 +137,8 @@ pub async fn run_voice_mode(
             } else {
                 output::print_error(
                     "No transcription backend available.\n\
-                     Set OPENAI_API_KEY for the Whisper API, or install the `whisper` CLI tool.",
+                     Sign in with `agi login` to transcribe on your AGI Workforce account, set\n\
+                     OPENAI_API_KEY for the Whisper API, or install the `whisper` CLI tool.",
                 );
             }
             return Ok(());
@@ -213,11 +221,18 @@ pub async fn run_voice_mode(
         eprintln!("  {} {}", ts::success_header("You said:"), text.trim());
         eprintln!(
             "  {}",
-            "[ENTER to send, 'r' to re-record, ESC to discard]".dimmed()
+            "[ENTER to send, 'e' to edit, 'r' to re-record, ESC to discard]".dimmed()
         );
 
-        match wait_for_confirmation()? {
-            Confirmation::Send => {}
+        let text = match wait_for_confirmation()? {
+            Confirmation::Send => text,
+            Confirmation::Edit => match edit_transcript(&text) {
+                Some(edited) => edited,
+                None => {
+                    eprintln!("  {}", "(discarded)".dimmed());
+                    continue;
+                }
+            },
             Confirmation::ReRecord => {
                 eprintln!("  {}", "(re-recording...)".dimmed());
                 continue;
@@ -226,7 +241,7 @@ pub async fn run_voice_mode(
                 eprintln!("  {}", "(discarded)".dimmed());
                 continue;
             }
-        }
+        };
 
         // Send transcribed text to agent (same as typing it)
         let trimmed = text.trim().to_string();
@@ -281,12 +296,47 @@ pub async fn run_voice_mode(
     Ok(())
 }
 
+pub async fn dictate(session: &AgentSession, voice_lang: &str) -> Result<Option<String>> {
+    if !crate::voice_languages::is_valid_language(voice_lang) {
+        bail!("Unsupported voice language '{voice_lang}'.");
+    }
+    let privacy_mode = session.privacy_mode;
+    let opt_in =
+        std::env::var("AGIWORKFORCE_VOICE_ALLOW_CLOUD").is_ok_and(|value| value.trim() == "1");
+    let backend = gate_backend(detect_backend(&privacy_mode), &privacy_mode, opt_in);
+    if matches!(backend, TranscriptionBackend::None) {
+        bail!(
+            "No transcription backend available. Sign in with `agi login`, set OPENAI_API_KEY, \
+             or install the `whisper` CLI tool."
+        );
+    }
+    check_audio_device()?;
+    eprintln!(
+        "  {} Press {} to dictate into the composer, {} to cancel.",
+        ts::accent_header("dictate:"),
+        "SPACE".bold(),
+        "ESC".bold(),
+    );
+    if matches!(wait_for_key()?, VoiceAction::Exit) {
+        return Ok(None);
+    }
+    eprintln!();
+    let Some(recording) = record_audio()? else {
+        return Ok(None);
+    };
+    let spinner = output::create_spinner("Transcribing...");
+    let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, opt_in).await;
+    spinner.finish_and_clear();
+    Ok(Some(transcript?.trim().to_string()).filter(|text| !text.is_empty()))
+}
+
 // ---------------------------------------------------------------------------
 // Transcription backend detection
 // ---------------------------------------------------------------------------
 
 /// Which transcription backend to use.
 enum TranscriptionBackend {
+    Managed(String),
     /// OpenAI Whisper API (requires OPENAI_API_KEY).
     OpenAiApi,
     /// Local `whisper` CLI binary at the given path.
@@ -298,7 +348,12 @@ enum TranscriptionBackend {
 /// Detect the best available transcription backend.
 ///
 /// Priority: OpenAI API (if key set) > local binary > none.
-fn detect_backend() -> TranscriptionBackend {
+fn detect_backend(privacy_mode: &PrivacyMode) -> TranscriptionBackend {
+    if *privacy_mode == PrivacyMode::Managed {
+        if let Some(token) = crate::tier_cache::load_jwt() {
+            return TranscriptionBackend::Managed(token);
+        }
+    }
     // Check for OpenAI API key
     if std::env::var("OPENAI_API_KEY").is_ok_and(|k| !k.is_empty()) {
         return TranscriptionBackend::OpenAiApi;
@@ -353,7 +408,7 @@ fn gate_cloud_egress(
     opt_in: bool,
 ) -> Result<()> {
     match backend {
-        TranscriptionBackend::OpenAiApi => {
+        TranscriptionBackend::Managed(_) | TranscriptionBackend::OpenAiApi => {
             if *privacy_mode == PrivacyMode::Local && !opt_in {
                 bail!(
                     "Privacy boundary blocked: this session is Local, but voice transcription \
@@ -388,7 +443,9 @@ fn gate_backend(
     opt_in: bool,
 ) -> TranscriptionBackend {
     match raw {
-        TranscriptionBackend::OpenAiApi if *privacy_mode == PrivacyMode::Local && !opt_in => {
+        TranscriptionBackend::Managed(_) | TranscriptionBackend::OpenAiApi
+            if *privacy_mode == PrivacyMode::Local && !opt_in =>
+        {
             // Suppress cloud backend: look for a local fallback instead.
             find_local_binary_backend()
         }
@@ -445,6 +502,7 @@ enum VoiceAction {
 /// Confirmation action after showing transcribed text.
 enum Confirmation {
     Send,
+    Edit,
     ReRecord,
     Discard,
 }
@@ -484,6 +542,7 @@ fn wait_for_confirmation() -> Result<Confirmation> {
                 }
                 match key_event.code {
                     KeyCode::Enter => break Ok(Confirmation::Send),
+                    KeyCode::Char('e') | KeyCode::Char('E') => break Ok(Confirmation::Edit),
                     KeyCode::Char('r') | KeyCode::Char('R') => break Ok(Confirmation::ReRecord),
                     KeyCode::Esc => break Ok(Confirmation::Discard),
                     _ => {}
@@ -568,11 +627,17 @@ fn record_audio() -> Result<Option<AudioRecording>> {
 
     let err_flag = Arc::new(AtomicBool::new(false));
     let err_flag_cb = Arc::clone(&err_flag);
+    let level = Arc::new(AtomicU32::new(0));
+    let level_writer = Arc::clone(&level);
 
     let stream = device
         .build_input_stream(
             &stream_config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                let peak = data
+                    .iter()
+                    .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+                level_writer.store(peak.to_bits(), Ordering::Relaxed);
                 if let Ok(mut buf) = samples_writer.lock() {
                     // Bound the in-memory buffer by sample count in addition to
                     // the wall-clock cap, so a high-rate/multi-channel device
@@ -648,8 +713,9 @@ fn record_audio() -> Result<Option<AudioRecording>> {
         // Animated recording indicator
         let elapsed_secs = start.elapsed().as_secs();
         eprint!(
-            "\r  {} {} {}s ",
+            "\r  {} {} {} {}s ",
             ts::danger_header("REC"),
+            level_meter(f32::from_bits(level.load(Ordering::Relaxed))),
             "(release SPACE to stop)".dimmed(),
             elapsed_secs,
         );
@@ -729,6 +795,12 @@ fn record_audio() -> Result<Option<AudioRecording>> {
     }))
 }
 
+fn level_meter(peak: f32) -> String {
+    const WIDTH: usize = 10;
+    let filled = ((peak.clamp(0.0, 1.0).sqrt() * WIDTH as f32).round() as usize).min(WIDTH);
+    format!("[{}{}]", "=".repeat(filled), " ".repeat(WIDTH - filled))
+}
+
 /// Simple linear resampling from one sample rate to another.
 fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
     if from_rate == to_rate || samples.is_empty() {
@@ -805,6 +877,9 @@ async fn transcribe(
     let wav_path = encode_wav(recording)?;
 
     let result = match backend {
+        TranscriptionBackend::Managed(token) => {
+            transcribe_managed(&wav_path, language, token).await
+        }
         TranscriptionBackend::OpenAiApi => transcribe_openai_api(&wav_path, language).await,
         TranscriptionBackend::LocalBinary(binary_path) => {
             transcribe_local(&wav_path, binary_path, language).await
@@ -836,6 +911,69 @@ fn openai_transcription_request(language: &str) -> Result<TranscriptionRequest> 
         TranscriptionRequest::new(model.provider_model_id, TranscriptionResponseFormat::Text)
             .with_language(Some(language.to_string())),
     )
+}
+
+async fn transcribe_managed(
+    wav_path: &std::path::Path,
+    language: &str,
+    token: &str,
+) -> Result<String> {
+    let url = crate::models::streaming::managed_cloud_url("llm/v1/audio/transcriptions")?;
+    let file_part = reqwest::multipart::Part::bytes(
+        std::fs::read(wav_path).context("Failed to read WAV file for upload")?,
+    )
+    .file_name("voice.wav")
+    .mime_str("audio/wav")
+    .context("Failed to create multipart file part")?;
+    let form = reqwest::multipart::Form::new()
+        .part(speech::TRANSCRIPTION_FILE_FIELD, file_part)
+        .text("language", language.to_string());
+    let mut request = reqwest::Client::new().post(&url).bearer_auth(token).header(
+        "Idempotency-Key",
+        format!("agi.cli.transcription.{}", uuid::Uuid::new_v4()),
+    );
+    for (name, value) in crate::models::streaming::managed_cloud_client_headers() {
+        request = request.header(name, value);
+    }
+    let response = request
+        .multipart(form)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .context("Failed to reach AGI Workforce transcription")?;
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .context("Failed to read the transcription response")?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&body).ok();
+    if !status.is_success() {
+        let message = parsed
+            .as_ref()
+            .and_then(|json| {
+                json.pointer("/error/message")
+                    .or_else(|| json.get("error"))
+                    .and_then(serde_json::Value::as_str)
+            })
+            .unwrap_or("Transcription failed.");
+        bail!("{message} ({status})");
+    }
+    Ok(parsed
+        .as_ref()
+        .and_then(|json| json.get("text").and_then(serde_json::Value::as_str))
+        .unwrap_or(&body)
+        .trim()
+        .to_string())
+}
+
+fn edit_transcript(text: &str) -> Option<String> {
+    dialoguer::Input::<String>::new()
+        .with_prompt("Edit")
+        .with_initial_text(text.trim())
+        .allow_empty(true)
+        .interact_text()
+        .ok()
+        .filter(|edited| !edited.trim().is_empty())
 }
 
 /// Transcribe using the OpenAI Whisper API.

@@ -475,9 +475,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                 <div className="flex h-full min-h-72 flex-col items-center justify-center gap-3 text-center">
                   <FileQuestion className="h-10 w-10 text-[var(--chat-text-muted)]" aria-hidden />
                   <div>
-                    <h3 className="text-base font-medium text-[var(--chat-text-primary)]">
-                      Preview unavailable
-                    </h3>
+                    <h3 className="text-h4 text-[var(--chat-text-primary)]">Preview unavailable</h3>
                     <p className="mt-1 max-w-md text-sm text-[var(--chat-text-muted)]">
                       This file type cannot be previewed safely here. Download it to open it in a
                       compatible application.
@@ -490,7 +488,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                 <div className="flex h-full min-h-72 flex-col items-center justify-center gap-3 text-center">
                   <AlertTriangle className="h-10 w-10 text-danger-text" aria-hidden />
                   <div>
-                    <h3 className="text-base font-medium text-[var(--chat-text-primary)]">
+                    <h3 className="text-h4 text-[var(--chat-text-primary)]">
                       Preview couldn’t load
                     </h3>
                     <p

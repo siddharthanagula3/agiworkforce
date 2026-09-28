@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "Voice input is not supported in this browser. Try Chrome or Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI said:",
     "assistantThinking": "Assistant is thinking",
     "cancelEdit": "Cancel",
     "copied": "Copied",
@@ -210,7 +211,8 @@
     "messageAttachments": "Message attachments",
     "retryResponse": "Retry this response",
     "saveEdit": "Save",
-    "toolResult": "Result"
+    "toolResult": "Result",
+    "userSaid": "You said:"
   },
   "goalHandoff": {
     "action": "Run as task",
@@ -226,6 +228,9 @@
     "shareConversation": "Share conversation",
     "temporaryChat": "Temporary chat",
     "temporaryChatRetentionNote": "Won't be saved to your history and skips memory for this turn.",
+    "temporaryChatPersonalized": "Personalized",
+    "temporaryChatUnpersonalized": "Unpersonalized",
+    "temporaryChatPersonalizationHint": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out.",
     "toggleArtifacts": "Toggle artifacts panel",
     "toggleArtifactsCount": "Toggle artifacts panel ({{count}})",
     "toggleStats": "Stats"

@@ -64,9 +64,11 @@ import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
+  CONNECTOR_BLOCKED_CODE,
   CONNECTOR_UNREACHABLE_CODE,
   customConnectorId,
   deleteCustomConnectorRows,
+  edgeBlockedMessage,
   insertCustomConnector,
   isUndefinedTableError,
   McpProbeError,
@@ -122,8 +124,15 @@ interface ConnectorSetupEntry {
   message: string;
 }
 
-function unreachableResponse(serverName: string, detail: string): NextResponse {
-  const message = `${serverName} could not be reached: ${detail}`;
+function unreachableResponse(serverName: string, error: McpProbeError): NextResponse {
+  if (error.edgeBlocked) {
+    const message = edgeBlockedMessage(serverName);
+    return NextResponse.json(
+      { error: { code: CONNECTOR_BLOCKED_CODE, message }, message },
+      { status: 502 },
+    );
+  }
+  const message = `${serverName} could not be reached: ${error.message}`;
   return NextResponse.json(
     { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
     { status: 502 },
@@ -257,6 +266,9 @@ async function handleGetConnectors(request: NextRequest) {
   for (const c of customConnectors) {
     const linked = await findDirectoryTargetByRemoteUrl(c.url);
     const toolConnectorId = customConnectorId(c.shortId);
+    const signInGrant = oauthGrants.find((grant) => grant.connectorId === toolConnectorId);
+    const signInPending =
+      c.signInRequired && (!signInGrant || signInGrant.needsReauthorization === true);
     connectors.push({
       id: c.id,
       connectorId: linked ? linked.connectorId : toolConnectorId,
@@ -267,7 +279,7 @@ async function handleGetConnectors(request: NextRequest) {
       updatedAt: c.updatedAt,
       source: 'custom',
       name: c.name,
-      ...(c.credentialUnreadable ? { needsReauthorization: true } : {}),
+      ...(c.credentialUnreadable || signInPending ? { needsReauthorization: true } : {}),
     });
   }
 
@@ -410,7 +422,7 @@ async function connectDirectoryTarget(
       authorizationContext: mcpAuthorizationContext.userCustomUrl(userId, url),
     });
   } catch (error) {
-    if (error instanceof McpProbeError) return unreachableResponse(target.name, error.message);
+    if (error instanceof McpProbeError) return unreachableResponse(target.name, error);
     throw error;
   }
 

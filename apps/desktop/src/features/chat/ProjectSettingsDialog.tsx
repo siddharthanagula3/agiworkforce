@@ -558,7 +558,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           disableAnimation={disableDialogAnimation}
-          className="max-w-[560px] overflow-hidden border-border bg-card p-0 shadow-2xl"
+          className="max-w-[560px] overflow-hidden border-border bg-card p-0 shadow-e4"
         >
           <div className="px-7 pb-6 pt-7">
             <DialogHeader className="space-y-2 text-left">
