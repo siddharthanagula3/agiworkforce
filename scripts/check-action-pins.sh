@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-action-pins.sh
 #
-# Verify every third-party GitHub Action is pinned to a full commit SHA.
-# Fails (exit 1) if any non-allowlisted `uses:` line points at a tag or,
+# Verify every GitHub Action, GitHub's own included, is pinned to a full commit
+# SHA. Fails (exit 1) if any non-allowlisted `uses:` line points at a tag or,
 # when VERIFY_ACTION_PIN_OBJECTS=1, an annotated tag object SHA.
 #
 # Source: docs/plans/redteam-services.md (red team report 2026-05-04, C3).
 #
-# Trusted first-party prefixes may use version tags. Everything else MUST be
-# SHA-pinned. Owners can grant exceptions by adding the `uses:` value to
-# ALLOWED_UNPINNED below with a justification.
+# A tag can be moved by whoever controls the action's repository, and that
+# holds for actions/* as much as for anyone else. Owners can grant exceptions
+# by adding the `uses:` value to ALLOWED_UNPINNED below with a justification.
 
 set -euo pipefail
 
@@ -21,20 +21,15 @@ if [ ! -d "$WORKFLOWS_DIR" ]; then
   exit 2
 fi
 
-# Trusted first-party allowlist.
-TRUSTED_PREFIXES=(
-  "actions/"
-  "github/"
-  "microsoft/"
-)
-
-# Specific "third-party but reviewed" exceptions. Add here ONLY with a
-# justification comment in the workflow itself.
+# Specific reviewed exceptions. Add here ONLY with a justification comment in
+# the workflow itself.
 ALLOWED_UNPINNED=()
 
 violations=0
 checked=0
 object_checks=0
+verified_pins=""
+failed_pins=""
 
 if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
   TMP_ROOT="${TMPDIR:-/tmp}/agi-action-pin-check.$$"
@@ -86,43 +81,52 @@ while IFS= read -r line; do
 
   checked=$((checked + 1))
 
-  # Allow trusted prefixes.
-  trusted=0
-  for prefix in "${TRUSTED_PREFIXES[@]}"; do
-    case "$owner_repo/" in
-      "$prefix"*) trusted=1; break ;;
-    esac
-  done
-  if [ "$trusted" -eq 1 ]; then continue; fi
-
   # Allow explicit exceptions.
+  allowed=0
   for allow in "${ALLOWED_UNPINNED[@]:-}"; do
-    if [ "$ref" = "$allow" ]; then trusted=1; break; fi
+    if [ "$ref" = "$allow" ]; then allowed=1; break; fi
   done
-  if [ "$trusted" -eq 1 ]; then continue; fi
+  if [ "$allowed" -eq 1 ]; then continue; fi
 
   # Require a 40-char hex SHA. Short SHAs and tags fail.
   if printf '%s' "$version" | grep -Eq '^[0-9a-f]{40}$'; then
     if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
-      if ! verify_commit_object "$action_repo" "$version" "$ref"; then
+      pin="${action_repo}@${version}"
+      case "$verified_pins" in
+        *"|${pin}|"*) continue ;;
+      esac
+      case "$failed_pins" in
+        *"|${pin}|"*)
+          violations=$((violations + 1))
+          continue
+          ;;
+      esac
+      if verify_commit_object "$action_repo" "$version" "$ref"; then
+        verified_pins="${verified_pins}|${pin}|"
+      else
+        failed_pins="${failed_pins}|${pin}|"
         violations=$((violations + 1))
       fi
     fi
     continue
   fi
 
-  echo "::error::Unpinned third-party action: $ref" >&2
+  echo "::error::Unpinned action: $ref" >&2
   echo "  Pin to a full 40-char commit SHA (with a # vN.N.N comment)." >&2
   violations=$((violations + 1))
-done < <(grep -E "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*" "$WORKFLOWS_DIR"/*.yml 2>/dev/null | cut -d: -f2-)
+done < <(grep -hE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*" "$WORKFLOWS_DIR"/*.yml "$WORKFLOWS_DIR"/*.yaml 2>/dev/null)
 
 echo ""
 echo "Scanned $checked action references."
 if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
   echo "Verified $object_checks pinned action object(s)."
 fi
-if [ "$violations" -gt 0 ]; then
-  echo "FAIL: $violations unpinned external action(s)." >&2
+if [ "$checked" -eq 0 ]; then
+  echo "FAIL: no action reference was read from $WORKFLOWS_DIR, so nothing was measured." >&2
   exit 1
 fi
-echo "PASS: all third-party actions are SHA-pinned."
+if [ "$violations" -gt 0 ]; then
+  echo "FAIL: $violations unpinned action(s)." >&2
+  exit 1
+fi
+echo "PASS: every action is SHA-pinned."
