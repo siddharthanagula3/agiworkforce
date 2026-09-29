@@ -1,15 +1,14 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { ToolCallCard as PackageToolCallCard, detectCodeBlock } from '@agiworkforce/unified-chat';
 
 export { detectCodeBlock };
 
 export type ToolCallStatus =
-  | 'pending'
-  | 'running'
+  | Extract<LifecycleStatus, 'pending' | 'running' | 'cancelled'>
   | 'complete'
   | 'error'
   | 'awaiting_approval'
-  | 'awaiting_device'
-  | 'cancelled';
+  | 'awaiting_device';
 
 export interface ToolCall {
   id: string;

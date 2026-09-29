@@ -367,3 +367,12 @@ S67.21, S67.23, S74.20, S76.28, S76.29, S78.06, S78.11, S78.15, S78.16, S78.20,
 S79.05, S79.06, S79.08, S79.21, S79.28, S81.19, S84.01, S84.18, S85.23, S86.06,
 S106.01, S106.02, S106.03, S106.04, S106.05, S106.06, S106.07, S106.08,
 S106.12, S106.15, S109.03, S109.08, S110.27 (chrome).
+
+## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
+
+When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
+reconnect prompt and the person sends the request again once the app is
+connected; neither resumes the interrupted turn on its own. The web and
+desktop apps do the same: the chat card offers Reconnect and Retry, and
+Settings offers Connect on an expired connection, with no automatic resume
+(S110.27 web and desktop).
