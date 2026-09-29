@@ -1,4 +1,5 @@
-import { View, TextInput, Modal, Pressable, KeyboardAvoidingView } from 'react-native';
+import { View, TextInput, Modal, KeyboardAvoidingView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -75,7 +76,7 @@ export function ComposerFullScreenEditor({
         >
           {/* One exit control only: collapsing IS dismissing and the message
               survives either way, so a second X would be duplicate chrome. */}
-          <Pressable
+          <PressableBox
             {...chrome.back}
             style={{
               ...chrome.back.style,
@@ -86,7 +87,7 @@ export function ComposerFullScreenEditor({
             }}
           >
             <Minimize2 size={18} color={colors.textPrimary} />
-          </Pressable>
+          </PressableBox>
 
           <Text
             style={{

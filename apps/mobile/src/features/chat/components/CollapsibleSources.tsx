@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -77,7 +78,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
       }}
     >
       {/* Toggle header */}
-      <Pressable
+      <PressableBox
         onPress={toggleExpanded}
         style={{
           flexDirection: 'row',
@@ -116,13 +117,13 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
         ) : (
           <ChevronRight size={16} color={themeColors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {/* Expandable source list */}
       <Animated.View style={listStyle}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 2 }}>
           {sources.map((source, index) => (
-            <Pressable
+            <PressableBox
               key={`source-${index}`}
               onPress={() => handleSourcePress(source.url)}
               accessibilityLabel={`Source ${index + 1}: ${source.title || getDomain(source.url)}`}
@@ -207,7 +208,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                   <ExternalLink size={12} color={themeColors.textMuted} style={{ marginTop: 3 }} />
                 </View>
               )}
-            </Pressable>
+            </PressableBox>
           ))}
         </View>
       </Animated.View>

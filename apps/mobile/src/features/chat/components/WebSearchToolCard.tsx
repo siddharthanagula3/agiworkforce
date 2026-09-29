@@ -1,4 +1,5 @@
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Globe, Loader2, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -47,7 +48,7 @@ function SourceChip({ result }: { result: ToolSearchResult }) {
   };
 
   return (
-    <Pressable
+    <PressableBox
       onPress={open}
       accessibilityRole="link"
       accessibilityLabel={`Open source ${hostname}, ${result.title}`}
@@ -72,7 +73,7 @@ function SourceChip({ result }: { result: ToolSearchResult }) {
       >
         {hostname}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 

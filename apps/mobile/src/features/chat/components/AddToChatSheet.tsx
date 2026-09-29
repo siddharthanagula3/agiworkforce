@@ -1,5 +1,6 @@
 import { useCallback, forwardRef, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -476,7 +477,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           >
             Add to Chat
           </Text>
-          <Pressable
+          <PressableBox
             onPress={closeSheet}
             testID="add-to-chat-close"
             accessible
@@ -486,7 +487,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             hitSlop={8}
           >
             <X size={20} color={themeColors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         {/* Section 1: Attachment Row */}
@@ -589,7 +590,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 >
                   Your Library could not load.
                 </Text>
-                <Pressable
+                <PressableBox
                   onPress={loadCloudLibrary}
                   accessibilityRole="button"
                   accessibilityLabel="Try loading your Library again"
@@ -604,7 +605,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   >
                     Try again
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
             ) : (
               <ScrollView
@@ -614,7 +615,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
               >
                 {libraryPicks.map((pick) => (
-                  <Pressable
+                  <PressableBox
                     key={pick.id}
                     onPress={() => handleAttachFromLibrary(pick)}
                     accessibilityRole="button"
@@ -670,7 +671,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                         {pick.subtitle}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableBox>
                 ))}
               </ScrollView>
             )}
@@ -988,7 +989,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               ) : null}
 
               {mediaMode !== 'text' ? (
-                <Pressable
+                <PressableBox
                   onPress={handleBackToText}
                   accessibilityRole="button"
                   accessibilityLabel="Back to text chat"
@@ -997,7 +998,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   <Text style={{ fontSize: typeScale.footnote, color: themeColors.teal }}>
                     Back to text chat
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
 
@@ -1123,7 +1124,7 @@ function AttachmentCard({
   textColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       style={{
@@ -1142,7 +1143,7 @@ function AttachmentCard({
       <Text style={{ fontSize: typeScale.caption, fontWeight: '500', color: textColor }}>
         {label}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1166,7 +1167,7 @@ function MediaModeRow({
   activeColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1197,7 +1198,7 @@ function MediaModeRow({
         </View>
       </View>
       {active ? <Check size={18} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1242,7 +1243,7 @@ function MediaModelRow({
     : '';
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1269,7 +1270,7 @@ function MediaModelRow({
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1351,7 +1352,7 @@ function CapabilityRow(props: CapabilityRowProps) {
     );
 
     return (
-      <Pressable
+      <PressableBox
         onPress={props.onStatusPress}
         disabled={!props.onStatusPress}
         accessible
@@ -1361,7 +1362,7 @@ function CapabilityRow(props: CapabilityRowProps) {
         accessibilityHint={props.onStatusPress ? 'Opens availability details' : undefined}
       >
         {rowContent}
-      </Pressable>
+      </PressableBox>
     );
   }
 
@@ -1432,7 +1433,7 @@ function ConfigLink({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       style={{
@@ -1469,7 +1470,7 @@ function ConfigLink({
           </>
         )}
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1491,7 +1492,7 @@ function MediaOptionRow({
   activeColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1518,6 +1519,6 @@ function MediaOptionRow({
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }

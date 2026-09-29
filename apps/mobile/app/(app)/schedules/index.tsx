@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, FlatList, RefreshControl, Alert, ScrollView } from 'react-native';
+import { View, FlatList, RefreshControl, Alert, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -214,7 +215,7 @@ export default function SchedulesScreen() {
       />
 
       {!canCreateSchedule ? (
-        <Pressable
+        <PressableBox
           onPress={handleCreate}
           className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
           accessibilityRole="button"
@@ -225,16 +226,16 @@ export default function SchedulesScreen() {
             Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or
             delete them.
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
 
       {/* Error banner */}
       {error && (
         <View className="mx-4 mb-3 bg-red-500/10 rounded-lg p-3 flex-row items-center justify-between">
           <Text className="text-sm text-red-400 flex-1">{error}</Text>
-          <Pressable onPress={clearError} className="ml-2 p-1">
+          <PressableBox onPress={clearError} className="ml-2 p-1">
             <Text className="text-xs text-red-400/70">Dismiss</Text>
-          </Pressable>
+          </PressableBox>
         </View>
       )}
 
@@ -252,7 +253,7 @@ export default function SchedulesScreen() {
                 : schedules.filter((schedule) => schedule.isActive === (item.key === 'active'))
                     .length;
             return (
-              <Pressable
+              <PressableBox
                 key={item.key}
                 onPress={() => setFilter(item.key)}
                 accessibilityRole="button"
@@ -278,7 +279,7 @@ export default function SchedulesScreen() {
                 >
                   {`${item.label} (${count})`}
                 </Text>
-              </Pressable>
+              </PressableBox>
             );
           })}
         </ScrollView>
@@ -298,7 +299,7 @@ export default function SchedulesScreen() {
                 ['recently-created', 'Recently created'],
               ] as const
             ).map(([key, label]) => (
-              <Pressable
+              <PressableBox
                 key={key}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort schedules by ${label}`}
@@ -321,7 +322,7 @@ export default function SchedulesScreen() {
                 <Text style={{ color: sort === key ? colors.white : colors.textSecondary }}>
                   {label}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ))}
           </View>
         </View>
@@ -392,19 +393,19 @@ function Header({
   const colors = useThemeColors();
   return (
     <View className="flex-row items-center px-3 h-12">
-      <Pressable
+      <PressableBox
         onPress={onBackPress}
         className="p-2 rounded-lg active:bg-white/5"
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <Text variant="subheading" className="ml-2 flex-1">
         Schedules
       </Text>
       {onSortPress ? (
-        <Pressable
+        <PressableBox
           onPress={onSortPress}
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           accessibilityLabel="Sort schedules"
@@ -412,16 +413,16 @@ function Header({
           accessibilityState={{ expanded: sortOpen }}
         >
           <ListFilter size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
       {onCreatePress ? (
-        <Pressable
+        <PressableBox
           onPress={onCreatePress}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Create schedule"
         >
           <Plus size={20} color={colors.teal} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -503,7 +504,7 @@ function TemplateCard({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onPress(template.id)}
       className="min-h-[76px] flex-row items-center rounded-2xl border border-white/20 bg-white/[0.03] px-4 py-3 active:bg-white/[0.06]"
       style={{ borderStyle: 'dashed' }}
@@ -522,6 +523,6 @@ function TemplateCard({
       >
         <Plus size={17} color={colors.teal} />
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }

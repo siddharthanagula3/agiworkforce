@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Linking,
   TextInput,
@@ -9,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -214,25 +214,29 @@ export default function CameraScreen() {
             Allow camera access to capture images for visual questions.
           </Text>
           <View style={styles.permissionButtons}>
-            <Pressable
+            <PressableBox
               onPress={requestPermission}
               style={styles.primaryButton}
               accessibilityRole="button"
               accessibilityLabel="Allow camera access"
             >
               <Text style={styles.primaryButtonText}>Allow Access</Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={() => Linking.openSettings()}
               style={styles.outlineButton}
               accessibilityRole="button"
               accessibilityLabel="Open device settings"
             >
               <Text style={styles.outlineButtonText}>Open Settings</Text>
-            </Pressable>
-            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
+            </PressableBox>
+            <PressableBox
+              {...chrome.close}
+              className="items-center py-3"
+              style={chrome.close.style}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -253,13 +257,13 @@ export default function CameraScreen() {
           {/* Top controls */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+              <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
               {chrome.cancel ? (
-                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                <PressableBox {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
                   <RotateCcw size={20} color={c.cameraOverlayText} />
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           </SafeAreaView>
@@ -277,7 +281,7 @@ export default function CameraScreen() {
                 style={styles.promptInput}
                 accessibilityLabel="Image prompt"
               />
-              <Pressable
+              <PressableBox
                 onPress={handleSend}
                 disabled={isSending}
                 style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
@@ -289,7 +293,7 @@ export default function CameraScreen() {
                 ) : (
                   <Send size={20} color={c.accentText} />
                 )}
-              </Pressable>
+              </PressableBox>
             </View>
           </SafeAreaView>
         </View>
@@ -312,12 +316,12 @@ export default function CameraScreen() {
       {/* Top bar: close + flash */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+          <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
-          </Pressable>
+          </PressableBox>
 
           <View style={styles.topBarActions}>
-            <Pressable
+            <PressableBox
               testID="camera-facing-toggle"
               onPress={toggleFacing}
               style={styles.iconButton}
@@ -327,10 +331,10 @@ export default function CameraScreen() {
               }
             >
               <SwitchCamera size={20} color={c.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
 
             {facing === 'back' && (
-              <Pressable
+              <PressableBox
                 testID="camera-torch-toggle"
                 onPress={toggleTorch}
                 style={styles.iconButton}
@@ -343,10 +347,10 @@ export default function CameraScreen() {
                 ) : (
                   <FlashlightOff size={20} color={c.cameraOverlayText} />
                 )}
-              </Pressable>
+              </PressableBox>
             )}
 
-            <Pressable
+            <PressableBox
               onPress={toggleFlash}
               style={styles.iconButton}
               accessibilityRole="button"
@@ -357,7 +361,7 @@ export default function CameraScreen() {
               ) : (
                 <ZapOff size={20} color={c.cameraOverlayText} />
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -371,7 +375,7 @@ export default function CameraScreen() {
       {/* Bottom: capture button */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
-          <Pressable
+          <PressableBox
             onPress={handleCapture}
             disabled={isCapturing || !cameraReady}
             style={[
@@ -388,7 +392,7 @@ export default function CameraScreen() {
             ) : (
               <View style={styles.captureInner} />
             )}
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     </View>

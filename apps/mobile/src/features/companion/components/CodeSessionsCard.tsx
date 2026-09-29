@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { Check, ChevronRight, Code2, Play, RefreshCw } from 'lucide-react-native';
 import { REMOTE_CODE_LIMITS, type RemoteCodeSessionStatus } from '@agiworkforce/types';
@@ -71,7 +72,7 @@ function NewCodeSession() {
           {available.map((root) => {
             const selected = root.rootId === chosen?.rootId;
             return (
-              <Pressable
+              <PressableBox
                 key={root.rootId}
                 onPress={() => setRootId(root.rootId)}
                 accessibilityRole="radio"
@@ -91,7 +92,7 @@ function NewCodeSession() {
                   ) : null}
                 </View>
                 {selected ? <Check size={14} color={colors.textPrimary} /> : null}
-              </Pressable>
+              </PressableBox>
             );
           })}
         </View>
@@ -110,7 +111,7 @@ function NewCodeSession() {
           accessibilityLabel="Task for a new AGI Code session"
         />
       </View>
-      <Pressable
+      <PressableBox
         onPress={() => void handleStart()}
         disabled={!canStart}
         accessibilityRole="button"
@@ -133,7 +134,7 @@ function NewCodeSession() {
         >
           {pending ? 'Starting…' : 'Start session'}
         </Text>
-      </Pressable>
+      </PressableBox>
       {error ? (
         <Text className="text-xs" style={{ color: colors.agentError }} accessibilityRole="alert">
           {error}
@@ -192,14 +193,14 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         <View className="flex-row items-center gap-2 mb-2">
           <Code2 size={15} color={colors.teal} />
           <Text className="flex-1 text-sm font-medium text-white">AGI Code sessions</Text>
-          <Pressable
+          <PressableBox
             onPress={() => void listCodeSessions()}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityRole="button"
             accessibilityLabel="Refresh AGI Code sessions"
           >
             <RefreshCw size={14} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         {syncedAt === null ? (
@@ -213,7 +214,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         ) : (
           <View className="gap-2">
             {sessions.map((session) => (
-              <Pressable
+              <PressableBox
                 key={`${session.rootId}:${session.threadId}`}
                 onPress={() =>
                   router.push(
@@ -245,7 +246,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
                   color={STATUS_COLORS[session.status]}
                 />
                 <ChevronRight size={14} color={colors.textMuted} />
-              </Pressable>
+              </PressableBox>
             ))}
           </View>
         )}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
@@ -217,7 +218,7 @@ function HeaderIconButton({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityLabel={label}
       accessibilityRole="button"
@@ -234,7 +235,7 @@ function HeaderIconButton({
       }}
     >
       <Icon size={18} color={colors.textPrimary} strokeWidth={1.8} />
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -253,7 +254,7 @@ function NavRow({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityLabel={tag ? `${label}. ${tag}` : label}
       accessibilityRole="button"
@@ -285,7 +286,7 @@ function NavRow({
         {label}
       </Text>
       {tag ? <Tag label={tag} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -436,7 +437,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const renderConversationRow = (conversation: ConversationSummary, inset = 0) => {
     const active = pathname.includes(conversation.id);
     return (
-      <Pressable
+      <PressableBox
         key={conversation.id}
         onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
         onLongPress={() =>
@@ -489,7 +490,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             }}
           />
         ) : null}
-      </Pressable>
+      </PressableBox>
     );
   };
 
@@ -614,7 +615,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                   return (
                     <View key={project.id}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Pressable
+                        <PressableBox
                           onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
                           accessibilityRole="button"
                           accessibilityLabel={`Open project: ${project.name}`}
@@ -632,9 +633,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                           >
                             {project.name}
                           </Text>
-                        </Pressable>
+                        </PressableBox>
                         {chats.length > 0 ? (
-                          <Pressable
+                          <PressableBox
                             onPress={() => toggleProject(project.id)}
                             accessibilityRole="button"
                             accessibilityLabel={`${expanded ? 'Hide' : 'Show'} chats in ${project.name}`}
@@ -651,7 +652,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                             ) : (
                               <ChevronRight size={16} color={colors.textMuted} />
                             )}
-                          </Pressable>
+                          </PressableBox>
                         ) : null}
                       </View>
                       {expanded ? (
@@ -660,7 +661,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                             .slice(0, DRAWER_PROJECT_CHAT_LIMIT)
                             .map((conversation) => renderConversationRow(conversation, 14))}
                           {chats.length > DRAWER_PROJECT_CHAT_LIMIT ? (
-                            <Pressable
+                            <PressableBox
                               onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
                               accessibilityRole="button"
                               accessibilityLabel={`See all chats in ${project.name}`}
@@ -676,7 +677,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                               >
                                 See all
                               </Text>
-                            </Pressable>
+                            </PressableBox>
                           ) : null}
                         </View>
                       ) : null}
@@ -715,7 +716,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 No recent chats
               </Text>
             )}
-            <Pressable
+            <PressableBox
               onPress={() => navigate('/(app)/chats')}
               accessibilityRole="button"
               accessibilityLabel="See all chats"
@@ -732,7 +733,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 See all chats
               </Text>
               <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
+            </PressableBox>
           </View>
         </ScrollView>
       </View>

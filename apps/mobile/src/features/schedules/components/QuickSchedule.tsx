@@ -2,13 +2,13 @@ import { useState, useCallback } from 'react';
 import {
   View,
   TextInput,
-  Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Modal,
   Keyboard,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -261,14 +261,14 @@ export function QuickSchedule({
           borderColor: colors.border,
         }}
       >
-        <Pressable
+        <PressableBox
           onPress={onDetailedCreate ?? handleOpen}
           className="h-11 w-11 items-center justify-center"
           accessibilityLabel="Open detailed schedule form"
           accessibilityRole="button"
         >
           <Plus size={22} color={colors.textPrimary} />
-        </Pressable>
+        </PressableBox>
         <TextInput
           value={prompt}
           onChangeText={(text) => {
@@ -285,7 +285,7 @@ export function QuickSchedule({
         <View className="h-11 w-11 items-center justify-center">
           <VoiceInputButton onTranscription={handleTranscription} onError={handleVoiceError} />
         </View>
-        <Pressable
+        <PressableBox
           onPress={handleOpen}
           disabled={!prompt.trim()}
           className="h-11 w-11 items-center justify-center rounded-full"
@@ -295,7 +295,7 @@ export function QuickSchedule({
           accessibilityState={{ disabled: !prompt.trim() }}
         >
           <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       </View>
       {error && !visible ? (
         <Text className="mx-4 mb-2 text-xs" style={{ color: colors.agentError }}>
@@ -308,12 +308,12 @@ export function QuickSchedule({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
         >
-          <Pressable
+          <PressableBox
             className="flex-1"
             style={{ backgroundColor: colors.scrim }}
             onPress={handleClose}
           >
-            <Pressable
+            <PressableBox
               onPress={(e) => e.stopPropagation()}
               className="absolute bottom-0 left-0 right-0 rounded-t-3xl"
               style={{ backgroundColor: colors.surfaceOverlay }}
@@ -324,12 +324,12 @@ export function QuickSchedule({
                   <Zap size={18} color={colors.teal} />
                   <Text className="text-[16px] font-semibold text-white">Quick Schedule</Text>
                 </View>
-                <Pressable
+                <PressableBox
                   onPress={handleClose}
                   className="w-7 h-7 rounded-full items-center justify-center active:bg-white/10"
                 >
                   <X size={16} color={colors.textMuted} />
-                </Pressable>
+                </PressableBox>
               </View>
 
               <View className="px-4 pb-8">
@@ -352,9 +352,9 @@ export function QuickSchedule({
                     returnKeyType="next"
                   />
                   {input.length > 0 && (
-                    <Pressable onPress={() => setInput('')} hitSlop={8}>
+                    <PressableBox onPress={() => setInput('')} hitSlop={8}>
                       <X size={14} color={colors.textMuted} />
-                    </Pressable>
+                    </PressableBox>
                   )}
                 </View>
 
@@ -374,7 +374,7 @@ export function QuickSchedule({
                 {/* Suggestion chips */}
                 <View className="flex-row flex-wrap gap-2 mb-4">
                   {SUGGESTIONS.map((s) => (
-                    <Pressable
+                    <PressableBox
                       key={s}
                       onPress={() => handleSuggestion(s)}
                       className="px-3 py-1.5 rounded-full active:opacity-70"
@@ -390,7 +390,7 @@ export function QuickSchedule({
                       >
                         {s}
                       </Text>
-                    </Pressable>
+                    </PressableBox>
                   ))}
                 </View>
 
@@ -424,7 +424,7 @@ export function QuickSchedule({
                 {error ? <Text className="text-[12px] text-red-400 mb-3">{error}</Text> : null}
 
                 {/* Create button */}
-                <Pressable
+                <PressableBox
                   onPress={handleCreate}
                   disabled={loading || !parsed || !prompt.trim()}
                   className="rounded-xl py-3.5 items-center justify-center active:opacity-80"
@@ -445,10 +445,10 @@ export function QuickSchedule({
                       Create Schedule
                     </Text>
                   )}
-                </Pressable>
+                </PressableBox>
               </View>
-            </Pressable>
-          </Pressable>
+            </PressableBox>
+          </PressableBox>
         </KeyboardAvoidingView>
       </Modal>
     </>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Pressable, Platform, StyleSheet, ScrollView } from 'react-native';
+import { View, Platform, StyleSheet, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -505,7 +506,7 @@ function HeroScreen({
       </Text>
 
       {/* Primary CTA, full-width pill */}
-      <Pressable
+      <PressableBox
         testID="hero-start-chatting-btn"
         onPress={onStartChatting}
         accessibilityRole="button"
@@ -513,7 +514,7 @@ function HeroScreen({
         style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
       >
         <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Start chatting</Text>
-      </Pressable>
+      </PressableBox>
 
       <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
         Made by AGI Automation LLC, USA
@@ -599,7 +600,7 @@ function AboutYouScreen({
         maxLength={120}
         returnKeyType="done"
       />
-      <Pressable
+      <PressableBox
         testID="about-you-continue-btn"
         onPress={() => onDone(preferredName.trim(), workDescription.trim())}
         accessibilityRole="button"
@@ -615,8 +616,8 @@ function AboutYouScreen({
         ]}
       >
         <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
-      </Pressable>
-      <Pressable
+      </PressableBox>
+      <PressableBox
         testID="about-you-skip-btn"
         accessibilityRole="button"
         accessibilityLabel="Skip for now"
@@ -624,7 +625,7 @@ function AboutYouScreen({
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Skip for now</Text>
-      </Pressable>
+      </PressableBox>
     </ScrollView>
   );
 }
@@ -703,7 +704,7 @@ function DeviceTierScreen({
 
       {/* Cellular toggle is off by default so large model downloads prefer Wi-Fi. */}
       {model.needsDownload && (
-        <Pressable
+        <PressableBox
           testID="device-tier-cellular-toggle"
           onPress={() => setCellularEnabled((v) => !v)}
           accessibilityRole="switch"
@@ -715,11 +716,11 @@ function DeviceTierScreen({
             Download over cellular too
           </Text>
           <Switch value={cellularEnabled} onValueChange={setCellularEnabled} />
-        </Pressable>
+        </PressableBox>
       )}
 
       {/* Primary CTA */}
-      <Pressable
+      <PressableBox
         testID="device-tier-download-btn"
         onPress={() => onDownload(cellularEnabled)}
         accessibilityRole="button"
@@ -729,10 +730,10 @@ function DeviceTierScreen({
         <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
           {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
         </Text>
-      </Pressable>
+      </PressableBox>
 
       {/* Secondary: model picker */}
-      <Pressable
+      <PressableBox
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"
         accessibilityLabel="Pick a different model"
@@ -742,11 +743,11 @@ function DeviceTierScreen({
         <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
           Pick a different model
         </Text>
-      </Pressable>
+      </PressableBox>
 
       {/* Cloud path, reach catalog-selected hosted models + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}
-      <Pressable
+      <PressableBox
         testID="device-tier-cloud-btn"
         accessibilityRole="button"
         accessibilityLabel="Sign in to use Cloud"
@@ -754,7 +755,7 @@ function DeviceTierScreen({
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.teal }]}>Sign in to use Cloud</Text>
-      </Pressable>
+      </PressableBox>
     </ScrollView>
   );
 }
@@ -840,7 +841,7 @@ function DownloadScreen({
         </Text>
       )}
 
-      <Pressable
+      <PressableBox
         testID="download-skip-btn"
         onPress={onSkip}
         disabled={skipDisabled}
@@ -853,7 +854,7 @@ function DownloadScreen({
         ]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

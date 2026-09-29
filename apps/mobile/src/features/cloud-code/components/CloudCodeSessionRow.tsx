@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
@@ -28,7 +29,7 @@ export function CloudCodeSessionRow({
     .join(' · ');
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onOpen(session.id)}
       accessibilityRole="button"
       accessibilityLabel={`${session.title}. ${stateLabel}. ${detail}`}
@@ -58,6 +59,6 @@ export function CloudCodeSessionRow({
         label={stateLabel}
         color={archived ? 'gray' : CLOUD_CODE_STATE_BADGE_COLORS[session.state]}
       />
-    </Pressable>
+    </PressableBox>
   );
 }
