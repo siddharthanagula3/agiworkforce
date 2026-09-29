@@ -32,6 +32,7 @@ import {
 } from '@/lib/services/org-shared-session-service';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
+const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
 
 function sharingUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -150,6 +151,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     userId,
     eventType: 'share_link_revoked',
     request,
+    endpoint: SHARE_AUDIT_ENDPOINT,
     outcome: 'success',
     severity: 'info',
     detail: { resourceType: 'share_link', resourceId: revoked.id },
@@ -236,6 +238,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
             ? 'organization_share_granted'
             : 'organization_share_revoked',
         request,
+        endpoint: SHARE_AUDIT_ENDPOINT,
         detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
       });
     }

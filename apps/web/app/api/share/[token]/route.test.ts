@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'owner-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
-  recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
+  recordAuditEvent: vi.fn(async (..._args: unknown[]): Promise<void> => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -50,6 +50,20 @@ function get(token = TOKEN) {
   return GET(new NextRequest(`https://agiworkforce.com/api/share/${token}`), context(token));
 }
 
+async function writeAuditRowsForReal(): Promise<void> {
+  const audit =
+    await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit');
+  mocks.recordAuditEvent.mockImplementationOnce((...args: unknown[]) =>
+    audit.recordAuditEvent(args[0] as Parameters<typeof audit.recordAuditEvent>[0]),
+  );
+}
+
+function storedAuditRows(): unknown[][] {
+  return mocks.execute.mock.calls
+    .filter(([sql]) => /insert into security_audit_logs/i.test(String(sql)))
+    .map(([, params]) => params as unknown[]);
+}
+
 describe('DELETE /api/share/[token], revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,6 +96,19 @@ describe('DELETE /api/share/[token], revocation', () => {
       detail: { resourceType: 'share_link', resourceId: 'share-1' },
     });
     expect(JSON.stringify(event['detail'])).not.toContain(TOKEN);
+  });
+
+  it('stores the route pattern as the audit endpoint, so the row never holds the live link', async () => {
+    await writeAuditRowsForReal();
+    mocks.query.mockResolvedValue([{ id: 'share-1' }]);
+    mocks.execute.mockResolvedValue(1);
+
+    await del();
+
+    const rows = storedAuditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]![5]).toBe('/api/share/[token]');
+    expect(JSON.stringify(rows[0])).not.toContain(TOKEN);
   });
 
   it('does not confirm a revocation to someone who only holds the link', async () => {

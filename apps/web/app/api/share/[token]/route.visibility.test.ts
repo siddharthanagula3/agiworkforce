@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const { auditSpy } = vi.hoisted(() => ({
-  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+  auditSpy: vi.fn(async (_event: Record<string, unknown>): Promise<void> => undefined),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/security-audit')>()),
@@ -12,6 +12,7 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 const mocks = vi.hoisted(() => ({
   scopedQuery: vi.fn(),
   privilegedQuery: vi.fn(),
+  privilegedExecute: vi.fn(),
   role: 'member' as string,
   permissions: ['content.read', 'content.share'] as string[],
 }));
@@ -28,7 +29,10 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.privilegedQuery(...args) })),
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mocks.privilegedQuery(...args),
+    execute: (...args: unknown[]) => mocks.privilegedExecute(...args),
+  })),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -117,6 +121,26 @@ describe('PATCH /api/share/[token], workspace audience', () => {
     });
     expect(event['detail']).toEqual({ resourceType: 'conversation', resourceId: SESSION });
     expect(JSON.stringify(event['detail'])).not.toContain(TOKEN);
+  });
+
+  it('stores the route pattern as the audit endpoint, so the rows never hold the live link', async () => {
+    const audit =
+      await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit');
+    auditSpy.mockImplementationOnce((event) => audit.recordAuditEvent(event as never));
+    mocks.privilegedExecute.mockResolvedValue(1);
+
+    await call('organization');
+
+    const securityRows = mocks.privilegedExecute.mock.calls.filter(([sql]) =>
+      /insert into security_audit_logs/i.test(String(sql)),
+    );
+    const workspaceRows = mocks.privilegedQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('record_enterprise_audit_event'),
+    );
+    expect(securityRows).toHaveLength(1);
+    expect(workspaceRows).toHaveLength(1);
+    expect(securityRows[0]![1][5]).toBe('/api/share/[token]');
+    expect(JSON.stringify([securityRows, workspaceRows])).not.toContain(TOKEN);
   });
 
   it('records the revoke when moving a workspace share back to its public link', async () => {
