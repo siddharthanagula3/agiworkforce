@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { normalizeWebDomain } from '@agiworkforce/cloud-contracts';
+import { normalizeWebDomain, webDomainAllowed } from '@agiworkforce/cloud-contracts';
 import type { SearchHit, SearchSourceKind } from '@agiworkforce/data-layer/search';
 
 /**
@@ -45,19 +45,6 @@ export function createResearchDomainPolicy(input: {
   return { allow, deny };
 }
 
-function hostnameOf(url: string): string | null {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
-  } catch {
-    return null;
-  }
-}
-
-function matchesRule(hostname: string, rule: string): boolean {
-  return hostname === rule || hostname.endsWith(`.${rule}`);
-}
-
 /**
  * Whether the run may read this URL. A URL that will not parse is refused when
  * an allowlist is in force, because "we could not tell" must not read as "it
@@ -68,12 +55,11 @@ export function researchDomainAllowed(
   policy: ResearchDomainPolicy | null | undefined,
   url: string,
 ): boolean {
-  if (!policy) return true;
-  const hostname = hostnameOf(url);
-  if (!hostname) return policy.allow.length === 0;
-  if (policy.deny.some((rule) => matchesRule(hostname, rule))) return false;
-  if (policy.allow.length === 0) return true;
-  return policy.allow.some((rule) => matchesRule(hostname, rule));
+  return webDomainAllowed(policy, url);
+}
+
+function matchesRule(hostname: string, rule: string): boolean {
+  return hostname === rule || hostname.endsWith(`.${rule}`);
 }
 
 export type NarrowedResearchDomainPolicy =

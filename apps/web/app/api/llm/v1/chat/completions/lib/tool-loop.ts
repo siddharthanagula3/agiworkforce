@@ -2893,6 +2893,10 @@ function recordProviderStepFailure(input: {
  * Named rather than inlined so the gate has a seam a test can reach; it had
  * none.
  */
+function isBrowserDeviceStep(tool: string): boolean {
+  return tool.startsWith('device_browser_');
+}
+
 /** The address a device browser step would open or download, if it has one. */
 function deviceStepAddress(input: Record<string, unknown>): string | null {
   const tool = input['tool'];
@@ -6366,6 +6370,11 @@ export async function* runToolLoop(
               summary,
               input: {
                 ...step,
+                // The device holds the page a step ends on, after any redirect or
+                // click-through, to the same rules, so it needs them.
+                ...(isBrowserDeviceStep(step.tool) && processed.deviceWebDomainPolicy
+                  ? { siteRules: processed.deviceWebDomainPolicy }
+                  : {}),
                 ...(isPhoneWriteStep(step.tool) ||
                 (untrustedContentInContext &&
                   sensitiveSourceAvailable &&

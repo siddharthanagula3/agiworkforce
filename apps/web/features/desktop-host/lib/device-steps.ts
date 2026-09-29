@@ -222,6 +222,7 @@ async function runBrowserStep(
     command: deviceStepBrowserCommand(tool),
     args: browserStepArgs(tool, input),
     ...reviewOf(input),
+    ...(input['siteRules'] ? { siteRules: input['siteRules'] } : {}),
   });
   switch (tool) {
     case 'device_browser_read_page':
