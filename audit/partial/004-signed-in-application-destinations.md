@@ -26,10 +26,10 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
+| vscode | partial | partials/chat-gates af8d8f52c1: the sidebar session list now leaves archived chats out, as the tree already did. Still nothing lists or restores archived sessions in VS Code (VS Code phase). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1959-1959`
 
 ## S4.05: Pinned conversations.
 
