@@ -87,7 +87,14 @@ const TOOL_CORPUS: readonly string[] = [
   UNDECLARED_CONNECTOR_TOOL,
 ];
 
-const READ_ONLY_BROWSER_COMMANDS: readonly string[] = ['browser_find', 'browser_list_tabs'];
+const READ_ONLY_BROWSER_COMMANDS: readonly string[] = [
+  'browser_find',
+  'browser_list_tabs',
+  'browser_read_page',
+  'browser_screenshot',
+  'browser_console',
+  'browser_network',
+];
 const EGRESS_BROWSER_COMMANDS: readonly string[] = BROWSER_COMMANDS.filter(
   (command) => !READ_ONLY_BROWSER_COMMANDS.includes(command),
 );
@@ -526,10 +533,11 @@ describe('a browser or computer-use action goes through the same gate', () => {
     }
   });
 
-  it('declares only the two read-only browser commands as reads without egress', () => {
+  it('declares only the browser reads as reads without egress, each carrying untrusted content', () => {
     for (const command of READ_ONLY_BROWSER_COMMANDS) {
       expect(resolveToolMetadata(command).actionClass, command).toBe('read');
       expect(resolveToolMetadata(command).createsEgressPath, command).toBe(false);
+      expect(resolveToolMetadata(command).acceptsUntrustedContent, command).toBe(true);
     }
   });
 });
