@@ -14,6 +14,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import type { Artifact } from '@/types/chat';
+import { ArtifactAudienceChip } from './ArtifactAudienceChip';
 
 interface InlineArtifactCardProps {
   artifact: Artifact;
@@ -190,6 +191,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           {artifact.title}
         </Text>
         <Badge label={artifact.language ?? config.label} color={config.badgeColor} />
+        <ArtifactAudienceChip artifactId={artifact.id} />
         {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel ? (
           <View
             style={{
