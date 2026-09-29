@@ -137,6 +137,14 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `device_browser_click`         | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_browser_type`          | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_browser_download`      | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_read_page`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_screenshot`           | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_console`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_network`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_navigate`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_click`                | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_type`                 | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_download`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_find`                 | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_fill_form`            | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_history`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
