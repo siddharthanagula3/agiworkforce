@@ -5,6 +5,7 @@ import {
   evaluateFreePoolEntry,
   loadFreePools,
   parseFreePoolsDocument,
+  reviewedQuotaOfferingKeys,
   toFreeEligibility,
   type FreePoolEntry,
 } from './free-pools';
@@ -140,5 +141,47 @@ describe('the shipped configuration', () => {
       expect(candidate.verifiedAtMs).toBeNull();
       expect(candidate.reviewedBy).toBeNull();
     }
+  });
+
+  it('does not clear promotional offerings merely because they appear in a quota inventory', () => {
+    const inventory = loadFreePools().inventory!;
+    expect(inventory.termsReview).toBeNull();
+    expect(reviewedQuotaOfferingKeys(inventory, NOW_MS).size).toBe(0);
+  });
+
+  it('clears only named offerings during a favorable, current review window', () => {
+    const inventory = loadFreePools().inventory!;
+    const key = inventory.entries[0]!.offeringKey;
+    const review = {
+      terms: {
+        commercialUseAllowed: true,
+        thirdPartyServingAllowed: true,
+        proxyingAllowed: true,
+        promptsExcludedFromTraining: true,
+      },
+      evidenceUrl: EVIDENCE_URL,
+      reviewedBy: REVIEWER,
+      verifiedAtMs: NOW_MS - HOUR_MS,
+      expiresAtMs: NOW_MS + HOUR_MS,
+      approvedOfferingKeys: [key],
+    };
+    const reviewed = { ...inventory, termsReview: review };
+    expect(reviewedQuotaOfferingKeys(reviewed, NOW_MS)).toEqual(new Set([key]));
+    expect(reviewedQuotaOfferingKeys(reviewed, NOW_MS + HOUR_MS).size).toBe(0);
+    expect(
+      reviewedQuotaOfferingKeys(
+        {
+          ...reviewed,
+          termsReview: { ...review, terms: { ...review.terms, proxyingAllowed: false } },
+        },
+        NOW_MS,
+      ).size,
+    ).toBe(0);
+    expect(() =>
+      parseFreePoolsDocument({
+        ...loadFreePools(),
+        inventory: { ...reviewed, termsReview: { ...review, approvedOfferingKeys: [key, key] } },
+      }),
+    ).toThrow();
   });
 });

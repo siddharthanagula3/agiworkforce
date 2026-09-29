@@ -15,6 +15,7 @@ import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
+import { imageLimitRefusal } from '@/src/features/chat/utils/attachmentValidation';
 import {
   freeCapacityErrorStateFromApiError,
   FREE_CAPACITY_BUSY_MESSAGE,
@@ -33,11 +34,13 @@ import {
 import {
   cancelMobileCloudAgentRun,
   streamChat,
+  streamDeviceStepResume,
   streamToolApprovalResume,
+  type StreamCallbacks,
   type StreamDelta,
   type ChatWireMessage,
 } from '@/services/streaming';
-import type { InteractiveCard } from '@agiworkforce/types';
+import type { InteractiveCard, InteractiveCardResponsePayload } from '@agiworkforce/types';
 import {
   parseInteractiveCardDelta,
   parseGeneratedFilesDelta,
@@ -47,6 +50,8 @@ import {
   ManagedCloudAgentRunReferenceSchema,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
+  type FreeQuotaMessageContent,
+  normalizePromotionalChatHistory,
 } from '@agiworkforce/cloud-contracts';
 import {
   createToolCallAccumulator,
@@ -55,6 +60,14 @@ import {
   toolCallList,
 } from '@/src/features/chat/utils/toolCallAccumulator';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
+import {
+  PHONE_STEP_DECLINED,
+  readPhoneDeviceStep,
+  runPhoneDeviceStep,
+  type PhoneDeviceStep,
+  type PhoneStepOutcome,
+} from '@/src/features/integrations/services/phoneDeviceSteps';
+import { isPhoneStepTool, phoneStepNeedsConfirmation } from '@agiworkforce/types';
 import {
   checkContentFilter,
   MINOR_SAFE_REFUSAL,
@@ -72,7 +85,10 @@ import {
   isCloudManagedModelId,
   isSelectableModelId,
 } from '@/src/features/model-picker/service';
-import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
+import {
+  cloudDispatchUnavailableMessage,
+  resolveMobileCloudDispatch,
+} from '@/src/features/chat/utils/cloudDispatchRouting';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
@@ -86,7 +102,13 @@ import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore';
+import {
+  styleForConversation,
+  useChatViewStore,
+  type ChatMode,
+  type ChatStyle,
+} from './chatViewStore';
+import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
 import { retrievePastChatContext } from '@/src/features/memory/services/pastChatContext';
@@ -94,6 +116,7 @@ import {
   consolidateFactsFromTurn,
   shouldConsolidateMemoryOnClient,
 } from '@/src/features/memory/services/consolidation';
+import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import {
   answerMemoryCommand,
   hasMemoryCommand,
@@ -123,11 +146,12 @@ import type {
 } from '@/types/chat';
 import {
   RESPONSE_STYLE_GUIDANCE,
-  canUseBillingPlanCapability,
+  autoAliasForRoutingProfile,
   getModelMetadataById,
   isAutoModeModelId,
   isTerminalToolStatus,
   type ResearchStep,
+  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import {
   isResearchRunResumable,
@@ -138,16 +162,38 @@ import {
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
 import type { CloudWorkMode } from '@agiworkforce/types';
-import type { AgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
+import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
+import {
+  clarifyCardNeedsResume,
+  INTERACTIVE_CARD_RESPONSE_PATH,
+  MOBILE_INTERACTIVE_CARD_CAPABILITY,
+  settledClarifyTurn,
+} from '@/src/features/chat/utils/clarifyCard';
+import {
+  agiWorkPlanRetryMessage,
+  parseAgiWorkPlanDelta,
+  readAgiWorkPlanReview,
+  readAgiWorkPlanSteps,
+  type AgiWorkPlanDecision,
+  type AgiWorkPlanReviewState,
+  type AgiWorkPlanStep,
+} from '@/src/features/chat/utils/agiWorkPlan';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
 import {
   unsentAttachmentMessage,
   uploadWithRetry,
 } from '@/src/features/chat/upload/uploadAttachment';
+import { speedFirstSlots } from '@agiworkforce/routing';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { managedCloudChat } from '@/services/managedCloudChat';
+import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
+import { getProviderOffering } from '@agiworkforce/types';
+import {
+  ensureReadyFreeQuotaChatOffering,
+  useFreeQuotaCatalogueStore,
+} from '@/src/features/model-picker/freeQuotaCatalogue';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
@@ -178,6 +224,7 @@ export interface SendMessageOptions {
   style?: ChatStyle;
   taskInstruction?: string;
   skillName?: string;
+  searchRequested?: boolean;
   onAccepted?: () => void;
   /**
    * Regenerate: answer this existing question again. No second question is
@@ -196,6 +243,8 @@ export interface SendMessageOptions {
    */
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
+  agiWorkPlan?: string[];
+  interactiveCardResume?: boolean;
   onRunStarted?: (runId: string) => void;
   /**
    * Resume a Deep Research run instead of starting a new plan: the sources and
@@ -207,6 +256,7 @@ export interface SendMessageOptions {
     steps: ResearchStep[];
     approvedSteps: ResearchStep[];
   };
+  research?: boolean;
 }
 
 interface DeferredSend {
@@ -219,6 +269,8 @@ interface DeferredSend {
 interface ExecutionState {
   isStreaming: boolean;
   streamingConversationIds: string[];
+  reconnectingMessageIds: string[];
+  stoppingMessageIds: string[];
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
@@ -237,11 +289,12 @@ interface ExecutionState {
     options?: SendMessageOptions,
   ) => Promise<boolean>;
   stopStreaming: () => void;
-  retryMessage: (conversationId: string, messageId: string) => void;
+  retryMessage: (conversationId: string, messageId: string, modelOverride?: string) => void;
   resumeResearch: (
     conversationId: string,
     assistantMessageId: string,
     decision: 'start' | 'cancel' | 'retry',
+    steps?: ResearchStep[],
   ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
@@ -254,6 +307,19 @@ interface ExecutionState {
     assistantMessageId: string,
     toolCallId: string,
     decision: 'approved' | 'rejected',
+    guidance?: string,
+  ) => Promise<void>;
+  continuePausedCloudTurn: (conversationId: string, assistantMessageId: string) => Promise<void>;
+  respondToInteractiveCard: (
+    conversationId: string,
+    assistantMessageId: string,
+    cardId: string,
+    payload: InteractiveCardResponsePayload,
+  ) => Promise<boolean>;
+  resolveAgiWorkPlan: (
+    conversationId: string,
+    assistantMessageId: string,
+    decision: AgiWorkPlanDecision,
   ) => Promise<void>;
 }
 
@@ -270,10 +336,12 @@ const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
 let cloudExecutionGeneration = 0;
 const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
+const stoppingRunIds = new Set<string>();
 
 interface PendingApprovalCall {
   toolCallId: string;
   name: string;
+  deviceStep?: PhoneDeviceStep;
 }
 
 interface PendingApprovalTurn {
@@ -281,10 +349,144 @@ interface PendingApprovalTurn {
   conversationId: string;
   calls: PendingApprovalCall[];
   decisions: Map<string, 'approved' | 'rejected'>;
+  guidance: Map<string, string>;
   resolving: boolean;
+  deviceResults?: Map<string, PhoneStepOutcome>;
+  deviceStarted?: Set<string>;
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
+const interactiveCardResponsesInFlight = new Set<string>();
+const agiWorkPlanDecisionsInFlight = new Set<string>();
+
+function pausedTurn(
+  runId: string,
+  conversationId: string,
+  calls: PendingApprovalCall[],
+): PendingApprovalTurn {
+  return {
+    runId,
+    conversationId,
+    calls,
+    decisions: new Map(),
+    guidance: new Map(),
+    resolving: false,
+    ...(calls.some((call) => call.deviceStep)
+      ? { deviceResults: new Map(), deviceStarted: new Set() }
+      : {}),
+  };
+}
+
+function trackPhoneDeviceStep(calls: PendingApprovalCall[], delta: StreamDelta): void {
+  const step = readPhoneDeviceStep(delta.x_agent_event);
+  if (!step || calls.some((call) => call.toolCallId === step.toolCallId)) return;
+  calls.push({ toolCallId: step.toolCallId, name: step.name, deviceStep: step });
+}
+
+function patchPausedToolCall(
+  conversationId: string,
+  assistantMessageId: string,
+  toolCallId: string,
+  patch: Partial<ToolCall>,
+): void {
+  const msgStore = getConversationMessageStore(conversationId);
+  msgStore.setState((s) => ({
+    messages: {
+      ...s.messages,
+      [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+        m.id === assistantMessageId
+          ? {
+              ...m,
+              toolCalls: (m.toolCalls ?? []).map((t) =>
+                t.toolCallId === toolCallId ? { ...t, ...patch } : t,
+              ),
+            }
+          : m,
+      ),
+    },
+  }));
+  pushCloudAssistantUpdate(
+    conversationId,
+    msgStore.getState().messages[conversationId] ?? [],
+    assistantMessageId,
+  );
+}
+
+function resumePausedTurn(
+  turn: PendingApprovalTurn,
+  callbacks: StreamCallbacks,
+  signal: AbortSignal,
+): Promise<void> {
+  const operationId = uuidv7();
+  const deviceResults = turn.deviceResults;
+  if (deviceResults) {
+    return streamDeviceStepResume(
+      {
+        run_id: turn.runId,
+        operationId,
+        device_id: turn.calls.find((call) => call.deviceStep)?.deviceStep?.deviceId ?? '',
+        device_results: turn.calls.map((call) => {
+          const outcome = deviceResults.get(call.toolCallId) ?? PHONE_STEP_DECLINED;
+          return {
+            tool_call_id: call.toolCallId,
+            content: outcome.content,
+            is_error: outcome.isError,
+          };
+        }),
+      },
+      callbacks,
+      signal,
+    );
+  }
+  const guidance = turn.calls
+    .map((call) => turn.guidance.get(call.toolCallId))
+    .filter(Boolean)
+    .join('\n\n');
+  return streamToolApprovalResume(
+    {
+      run_id: turn.runId,
+      operationId,
+      tool_approvals: turn.calls.map((call) => ({
+        tool_call_id: call.toolCallId,
+        decision: turn.decisions.get(call.toolCallId) ?? 'rejected',
+      })),
+      ...(guidance ? { guidance } : {}),
+    },
+    callbacks,
+    signal,
+  );
+}
+
+async function settlePhoneDeviceSteps(
+  conversationId: string,
+  assistantMessageId: string,
+): Promise<void> {
+  const turn = pendingApprovalTurns.get(assistantMessageId);
+  if (!turn?.deviceResults || !turn.deviceStarted || turn.resolving) return;
+  for (const call of turn.calls) {
+    if (!call.deviceStep || turn.deviceStarted.has(call.toolCallId)) continue;
+    const decision = turn.decisions.get(call.toolCallId);
+    if (phoneStepNeedsConfirmation(call.name, call.deviceStep.input) && !decision) continue;
+    turn.deviceStarted.add(call.toolCallId);
+    patchPausedToolCall(conversationId, assistantMessageId, call.toolCallId, {
+      status: 'running',
+      requiresApproval: false,
+    });
+    const outcome =
+      decision === 'rejected' ? PHONE_STEP_DECLINED : await runPhoneDeviceStep(call.deviceStep);
+    if (pendingApprovalTurns.get(assistantMessageId) !== turn) return;
+    turn.deviceResults.set(call.toolCallId, outcome);
+    patchPausedToolCall(conversationId, assistantMessageId, call.toolCallId, {
+      status: outcome.isError ? 'failed' : 'succeeded',
+      output: outcome.content,
+    });
+  }
+  if (turn.resolving || turn.deviceResults.size < turn.calls.length) return;
+  turn.resolving = true;
+  await useChatExecutionStore
+    .getState()
+    .continuePausedCloudTurn(conversationId, assistantMessageId);
+}
 
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
   if (pendingApprovalTurns.has(assistantMessageId)) return true;
@@ -304,11 +506,16 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
       )
       .map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
     if (!runReference.success || calls.length === 0) return false;
+    if (calls.some((call) => isPhoneStepTool(call.name))) return false;
 
     const decisions = new Map<string, 'approved' | 'rejected'>();
+    const guidance = new Map<string, string>();
     for (const call of message.toolCalls ?? []) {
       if (call.toolCallId && call.approvalDecision) {
         decisions.set(call.toolCallId, call.approvalDecision);
+      }
+      if (call.toolCallId && call.approvalGuidance) {
+        guidance.set(call.toolCallId, call.approvalGuidance);
       }
     }
     pendingApprovalTurns.set(assistantMessageId, {
@@ -316,6 +523,7 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
       conversationId,
       calls,
       decisions,
+      guidance,
       resolving: false,
     });
     return true;
@@ -348,9 +556,26 @@ export function clearCloudExecutionState(): void {
   pendingApprovalTurns.clear();
   useChatExecutionStore.setState({
     ...streamingFlags(),
+    isEditing: false,
     ...(streamingConversations.size === 0
       ? { streamingContent: '', streamingReasoning: '', paywallError: null, error: null }
       : {}),
+  });
+}
+
+function markReconnecting(
+  set: (update: (state: ExecutionState) => Partial<ExecutionState>) => void,
+  messageId: string,
+  reconnecting: boolean,
+): void {
+  set((state) => {
+    const listed = state.reconnectingMessageIds.includes(messageId);
+    if (listed === reconnecting) return {};
+    return {
+      reconnectingMessageIds: reconnecting
+        ? [...state.reconnectingMessageIds, messageId]
+        : state.reconnectingMessageIds.filter((id) => id !== messageId),
+    };
   });
 }
 
@@ -669,6 +894,15 @@ function settleToolCalls(
   return changed ? settled : toolCalls;
 }
 
+function stoppedByUser(message: ChatMessage): ChatMessage {
+  if (message.role !== 'assistant') return { ...message, isStreaming: false };
+  return {
+    ...message,
+    isStreaming: false,
+    metadata: { ...message.metadata, finishReason: 'stopped' },
+  };
+}
+
 function settleMessageTurnState(
   message: ChatMessage,
   status: 'failed' | 'cancelled',
@@ -921,6 +1155,8 @@ function flushDeferredSend(conversationId: string): void {
 export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isStreaming: false,
   streamingConversationIds: [],
+  reconnectingMessageIds: [],
+  stoppingMessageIds: [],
   streamingContent: '',
   streamingReasoning: '',
   error: null,
@@ -987,9 +1223,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
+    const temporaryConversation = conversation?.temporary === true;
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
+    const promotionalOffering = getProviderOffering(requestedModel);
+    const isFreeQuotaChat =
+      promotionalOffering?.category === 'chat' && promotionalOffering.quotaProbeProtocol === 'chat';
     const isCloudModel = isCloudManagedModelId(requestedModel);
     const isAutoSelection = isAutoModeModelId(requestedModel);
     const executionMode = conversation
@@ -1055,6 +1295,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     let executionModel = requestedModel;
     let routingReason: string | undefined;
+    let appliedRoutingProfile: RoutingProfileChoice | undefined;
     if (FEATURES.auth && executionMode === 'cloud') {
       const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
       if (isClerkLoaded && !isClerkSignedIn) {
@@ -1086,42 +1327,88 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       await ensureCloudEntitlementsReadyForRequest();
       if (!isTurnAccountCurrent()) return false;
 
-      const route = resolveMobileCloudDispatch({
-        selection: requestedModel,
-        message: content,
-        subscriptionTier: useTierStore.getState().tier,
-        history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        attachments: attachments?.map((attachment) => ({
-          mime: attachment.mimeType,
-          type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
-        })),
-        currentModelKey:
-          conversation?.model && !isAutoModeModelId(conversation.model)
-            ? conversation.model
-            : undefined,
-      });
+      if (isFreeQuotaChat) {
+        const freeOffering = await ensureReadyFreeQuotaChatOffering(requestedModel);
+        if (!isTurnAccountCurrent()) return false;
+        if (!freeOffering) {
+          set({
+            error:
+              useFreeQuotaCatalogueStore.getState().error ??
+              'This provider-funded Free model is unavailable right now. Choose another available Free model.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        if (
+          attachments?.some((attachment) => !attachment.mimeType.startsWith('image/')) ||
+          (attachments?.length && promotionalOffering?.quotaChatImageInput !== true)
+        ) {
+          set({
+            error:
+              'This Free model cannot read the attached file. Choose an image-capable Free model or remove the attachment.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        executionModel = requestedModel;
+      } else {
+        const routingProfile = useModelStore.getState().routingProfile;
+        const routingProfileAlias =
+          requestedModel === DEFAULT_AUTO_MODE_ID
+            ? autoAliasForRoutingProfile(routingProfile)
+            : null;
+        const route = resolveMobileCloudDispatch({
+          selection: routingProfileAlias ?? requestedModel,
+          message: content,
+          subscriptionTier: useTierStore.getState().tier,
+          history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+          attachments: attachments?.map((attachment) => ({
+            mime: attachment.mimeType,
+            type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
+          })),
+          currentModelKey:
+            !routingProfileAlias && conversation?.model && !isAutoModeModelId(conversation.model)
+              ? conversation.model
+              : undefined,
+          ...(routingProfileAlias && routingProfile === 'speed'
+            ? { preferSlots: speedFirstSlots() }
+            : {}),
+        });
 
-      if (route.status === 'unavailable') {
+        if (route.status === 'unavailable') {
+          set({
+            error: cloudDispatchUnavailableMessage(route),
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        if (route.dispatch !== 'chat') {
+          set({
+            error: 'This request requires the AGI Cloud media workflow.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        executionModel = route.modelKey;
+        routingReason = route.reason;
+        if (routingProfileAlias) appliedRoutingProfile = routingProfile;
+      }
+      const imageRefusal = imageLimitRefusal(executionModel, attachments);
+      if (imageRefusal) {
         set({
-          error: `No AGI Cloud route is available for this request: ${route.reasons.join('; ')}`,
+          error: imageRefusal,
           paywallError: null,
           ...streamingFlags(),
         });
         return false;
       }
-      if (route.dispatch !== 'chat') {
-        set({
-          error: 'This request requires the AGI Cloud media workflow.',
-          paywallError: null,
-          ...streamingFlags(),
-        });
-        return false;
-      }
-      executionModel = route.modelKey;
-      routingReason = route.reason;
     }
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
@@ -1209,6 +1496,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ];
           }
         } catch (err) {
+          if (!isTurnAccountCurrent()) return false;
           const error = err instanceof Error ? err : new Error(String(err));
           if (error.message.includes('session expired') || error.message.includes('401')) {
             set({
@@ -1228,6 +1516,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
+    if (isFreeQuotaChat && uploadedAttachments?.some((attachment) => !attachment.assetId)) {
+      set({
+        error: 'The attached image could not be uploaded. Try again.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return false;
+    }
+
     const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
 
     const isThreaded = executionMode === 'cloud' && isThreadingCapableConversation(conversation);
@@ -1239,6 +1536,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         )
       : undefined;
     if (regenerateAnchorId && !regenerateAnchor) return false;
+    const resumesCardTurn = options?.interactiveCardResume === true;
     const userMessageParentId = regenerateAnchor
       ? undefined
       : branchParentId !== undefined
@@ -1247,32 +1545,38 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ? (conversation?.activeLeafMessageId ?? undefined)
           : undefined;
 
-    const userMessage: ChatMessage | undefined = regenerateAnchor
-      ? undefined
-      : {
-          id: newMessageId(),
-          conversationId,
-          role: 'user',
-          content,
-          createdAt: new Date().toISOString(),
-          model: requestedModel,
-          attachments: uploadedAttachments,
-          ...(userMessageParentId !== undefined ? { parentId: userMessageParentId } : {}),
-          ...(executionMode === 'cloud'
-            ? {
-                metadata: {
-                  requestedModel,
-                  resolvedModel: executionModel,
-                  ...(routingReason ? { routingReason } : {}),
-                },
-              }
-            : {}),
-        };
+    const userMessage: ChatMessage | undefined =
+      regenerateAnchor || resumesCardTurn
+        ? undefined
+        : {
+            id: newMessageId(),
+            conversationId,
+            role: 'user',
+            content,
+            createdAt: new Date().toISOString(),
+            model: requestedModel,
+            attachments: uploadedAttachments,
+            ...(userMessageParentId !== undefined ? { parentId: userMessageParentId } : {}),
+            ...(executionMode === 'cloud'
+              ? {
+                  metadata: {
+                    requestedModel,
+                    resolvedModel: executionModel,
+                    ...(routingReason ? { routingReason } : {}),
+                    ...(options?.skillName
+                      ? { sendReplay: { hasSkillInstruction: true, skillName: options.skillName } }
+                      : {}),
+                  },
+                }
+              : {}),
+          };
     const assistantParentId = regenerateAnchor
       ? regenerateAnchor.id
-      : userMessage && userMessageParentId !== undefined
-        ? userMessage.id
-        : undefined;
+      : resumesCardTurn
+        ? userMessageParentId
+        : userMessage && userMessageParentId !== undefined
+          ? userMessage.id
+          : undefined;
 
     const assistantMessageId = newMessageId();
     const assistantMessage: ChatMessage = {
@@ -1317,24 +1621,44 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }> = [
       ...existingMessages
         .filter((m) => !m.isStreaming)
-        .map((m) => {
+        .flatMap((m) => {
+          const settled =
+            m.role === 'assistant'
+              ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
+              : null;
+          const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
           const imageAttachments = m.attachments?.filter((a) => a.mimeType.startsWith('image/'));
           if (imageAttachments && imageAttachments.length > 0) {
-            return {
-              role: m.role,
-              content: [
-                ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
-                ...imageAttachments.map((a) =>
-                  a.assetId
-                    ? { type: 'file' as const, file: { asset_id: a.assetId } }
-                    : { type: 'image_url' as const, image_url: { url: a.url } },
-                ),
-              ],
-            };
+            return [
+              {
+                role: m.role,
+                content: [
+                  ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+                  ...imageAttachments.map((a) =>
+                    a.assetId
+                      ? { type: 'file' as const, file: { asset_id: a.assetId } }
+                      : { type: 'image_url' as const, image_url: { url: a.url } },
+                  ),
+                ],
+              },
+              ...settledTurn,
+            ];
           }
-          return { role: m.role, content: m.content };
+          return [{ role: m.role, content: m.content }, ...settledTurn];
         }),
     ];
+
+    if (
+      isFreeQuotaChat &&
+      historyMessages.some((message) => !['system', 'user', 'assistant'].includes(message.role))
+    ) {
+      set({
+        error: 'This Free model cannot continue this conversation. Start a new Free chat.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return false;
+    }
 
     const imageUploads = uploadedAttachments?.filter((a) => a.mimeType.startsWith('image/'));
     const fileUploads = uploadedAttachments?.filter((a) => !a.mimeType.startsWith('image/'));
@@ -1359,7 +1683,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     // A regenerate's question already closes the resolved path above; appending
     // it would put the same turn in the prompt twice.
-    if (!regenerateAnchor) {
+    if (!regenerateAnchor && !resumesCardTurn) {
       if (remoteUploads.length > 0 || localImageUploads.length > 0) {
         historyMessages.push({
           role: 'user',
@@ -1393,7 +1717,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const chatViewState = useChatViewStore.getState();
     const viewSystemPrompt = buildChatViewSystemPrompt(
       options?.mode ?? chatViewState.chatMode,
-      options?.style ?? chatViewState.chatStyle,
+      options?.style ?? styleForConversation(chatViewState, conversationId),
       options?.taskInstruction,
     );
     if (viewSystemPrompt) {
@@ -1407,7 +1731,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
     const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
-    const memoryReadsEnabled = memorySettings.memoryEnabled && !isTemporaryChat;
+    const accountMemoryAllowed =
+      executionMode !== 'cloud' ||
+      useMemorySyncStateStore.getState().accountMemoryEnabled !== false;
+    const memoryReadsEnabled =
+      accountMemoryAllowed && memorySettings.memoryEnabled && !isTemporaryChat;
 
     try {
       const [memFacts, pastChatContext] = await Promise.all([
@@ -1416,7 +1744,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           executionMode,
           query: content,
           currentConversationId: conversationId,
-          enabled: memorySettings.referencePastChats && !isTemporaryChat,
+          enabled: accountMemoryAllowed && memorySettings.referencePastChats && !isTemporaryChat,
         }),
       ]);
       if (!isTurnAccountCurrent()) return false;
@@ -1438,7 +1766,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
       executionMode,
       isTemporaryChat,
-      memoryEnabled: memorySettings.memoryEnabled,
+      memoryEnabled: accountMemoryAllowed && memorySettings.memoryEnabled,
       generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
     });
     let completedLocalMemoryCaptured = false;
@@ -1464,12 +1792,49 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           regenerateAnchor ? (regenerateAnchor.parentId ?? null) : (branchParentId ?? null),
         );
       } catch {
+        if (!isTurnAccountCurrent()) return false;
         set({
           error: 'Could not start a new version of this message. Check your connection and retry.',
           paywallError: null,
           ...streamingFlags(),
         });
         return false;
+      }
+      if (!isTurnAccountCurrent()) return false;
+    }
+
+    if (isFreeQuotaChat) {
+      try {
+        await managedCloudChat.getConversation(conversationId);
+      } catch (error) {
+        if (!isTurnAccountCurrent()) return false;
+        if (!(error instanceof ManagedCloudChatHttpError) || error.status !== 404) {
+          set({
+            error: 'Could not verify this Free conversation. Check your connection and retry.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        try {
+          await managedCloudChat.createConversation({
+            id: conversationId,
+            title: conversation?.title ?? 'New conversation',
+            model: requestedModel,
+            isTemporary: conversation?.temporary ?? false,
+          });
+        } catch (error) {
+          if (!isTurnAccountCurrent()) return false;
+          set({
+            error:
+              error instanceof ManagedCloudChatHttpError && error.status === 409
+                ? 'This Free conversation is no longer available in AGI Cloud. Start a new chat and send again.'
+                : 'Could not start this Free conversation. Check your connection and retry.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
       }
       if (!isTurnAccountCurrent()) return false;
     }
@@ -1507,9 +1872,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // A branch point is already on the server, written with the parent the
       // sync push cannot express. Queueing it would make a second writer for a
       // row that is done.
-      if (userMessage && !branchPoint) {
+      if (userMessage && !branchPoint && !isFreeQuotaChat) {
         queueCloudTurnForSync(conversationId, [userMessage]);
-      } else {
+      } else if (!isFreeQuotaChat) {
         markConversationForSync(conversationId);
       }
     }
@@ -1743,7 +2108,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         });
       const researchEnabled =
         FEATURES.research &&
-        useChatViewStore.getState().features.research &&
+        (options?.research === true || useChatViewStore.getState().features.research) &&
         executionModelMetadata?.capabilities?.research === true &&
         executionModelMetadata?.capabilities?.search === true &&
         isCapabilityRequestable('canUseDeepResearch');
@@ -1754,16 +2119,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         entitlementState.codeExecutionAvailable &&
         isCapabilityRequestable('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
+      const officeFormat = useOutputFormatStore.getState().format;
       const officeCreationEnabled =
         FEATURES.codeExecution &&
         executionModelMetadata?.capabilities?.tools === true &&
         entitlementState.codeExecutionAvailable &&
         isCapabilityRequestable('canUseCloudExecution') &&
-        useChatViewStore.getState().features.codeExecution;
+        (useChatViewStore.getState().features.codeExecution || officeFormat !== null);
+      if (officeFormat !== null) useOutputFormatStore.getState().setFormat(null);
       const requestedWorkMode = options?.workMode ?? useChatViewStore.getState().workMode;
-      const workMode = canUseBillingPlanCapability(entitlementState.tier, 'agi_work')
-        ? requestedWorkMode
-        : 'chat';
+      const workMode = isCapabilityRequestable('canUseAgiWork') ? requestedWorkMode : 'chat';
+      const composerAgiWorkGoal =
+        workMode === 'agiwork' && !options?.agiWorkGoal && !resumesCardTurn
+          ? buildAgiWorkGoalInput(content)
+          : null;
+      const agiWorkGoal = options?.agiWorkGoal ?? composerAgiWorkGoal;
+      const suppliedAgiWorkPlan = workMode === 'agiwork' ? options?.agiWorkPlan : undefined;
 
       let cloudContentRaw = '';
       let lastParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
@@ -1775,6 +2146,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
       let unacknowledgedPublicText = '';
       let turnResearch: ResearchRunState | undefined;
+      let turnAgiWorkPlan: AgiWorkPlanStep[] | undefined;
+      let turnAgiWorkPlanReview: AgiWorkPlanReviewState | undefined;
 
       const thinkingEnabled =
         useModelStore.getState().thinkingEnabledPerModel[executionModel] ?? false;
@@ -1787,36 +2160,81 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
 
       await streamChat(
+        isFreeQuotaChat
+          ? {
+              model: executionModel,
+              conversation_id: conversationId,
+              assistant_message_id: assistantMessageId,
+              operationId: assistantMessageId,
+              ...(userMessage
+                ? {
+                    user_message: {
+                      id: userMessage.id,
+                      metadata: userMessage.metadata ?? {},
+                      ...(userMessage.parentId ? { parent_id: userMessage.parentId } : {}),
+                    },
+                  }
+                : {}),
+              messages: normalizePromotionalChatHistory(historyMessages).map((message) => ({
+                role: message.role as 'system' | 'user' | 'assistant',
+                content: message.content as FreeQuotaMessageContent,
+              })),
+            }
+          : {
+              model: executionModel,
+              messages: historyMessages,
+              stream: true,
+              operationId: assistantMessageId,
+              ...(isTemporaryChat || temporaryConversation
+                ? { conversation_id: conversationId }
+                : {}),
+              thinking: thinkingEnabled,
+              ...(turnEffort ? { effort: turnEffort } : {}),
+              ...(webSearchEnabled ? { web_search: true } : {}),
+              ...(webSearchEnabled && options?.searchRequested ? { search_requested: true } : {}),
+              ...(researchEnabled ? { research: true } : {}),
+              ...(researchEnabled && options?.researchResume
+                ? {
+                    research_resume: {
+                      sources: options.researchResume.sources,
+                      steps: options.researchResume.steps,
+                      ...(options.researchResume.approvedSteps.length > 0
+                        ? { approved_steps: options.researchResume.approvedSteps }
+                        : {}),
+                    },
+                  }
+                : {}),
+              ...(codeExecutionEnabled ? { code_execution: true } : {}),
+              ...(officeCreationEnabled ? { office_creation: true } : {}),
+              ...(officeCreationEnabled && officeFormat ? { office_format: officeFormat } : {}),
+              x_interactive_cards: MOBILE_INTERACTIVE_CARD_CAPABILITY,
+              ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
+              ...(workMode === 'agiwork' && agiWorkGoal ? { agi_work_goal: agiWorkGoal } : {}),
+              ...(suppliedAgiWorkPlan?.length
+                ? { agi_work_plan: { steps: suppliedAgiWorkPlan } }
+                : {}),
+              ...(composerAgiWorkGoal ? { agi_work_plan_approval: true } : {}),
+              ...(options?.skillName ? { skill_name: options.skillName } : {}),
+              ...(isTemporaryChat && !useSettingsStore.getState().temporaryChatPersonalized
+                ? { personalization: false as const }
+                : {}),
+            },
         {
-          model: executionModel,
-          messages: historyMessages,
-          stream: true,
-          operationId: assistantMessageId,
-          thinking: thinkingEnabled,
-          ...(turnEffort ? { effort: turnEffort } : {}),
-          ...(webSearchEnabled ? { web_search: true } : {}),
-          ...(researchEnabled ? { research: true } : {}),
-          ...(researchEnabled && options?.researchResume
-            ? {
-                research_resume: {
-                  sources: options.researchResume.sources,
-                  steps: options.researchResume.steps,
-                  ...(options.researchResume.approvedSteps.length > 0
-                    ? { approved_steps: options.researchResume.approvedSteps }
-                    : {}),
-                },
-              }
-            : {}),
-          ...(codeExecutionEnabled ? { code_execution: true } : {}),
-          ...(officeCreationEnabled ? { office_creation: true } : {}),
-          x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
-          ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
-          ...(workMode === 'agiwork' && options?.agiWorkGoal
-            ? { agi_work_goal: options.agiWorkGoal }
-            : {}),
-          ...(options?.skillName ? { skill_name: options.skillName } : {}),
-        },
-        {
+          onReconnecting: () => markReconnecting(set, assistantMessageId, true),
+          onAttachmentsTruncated: (fileNames) => {
+            const sentMessageId = userMessage?.id;
+            if (!sentMessageId || !isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === sentMessageId
+                    ? { ...m, metadata: { ...m.metadata, truncatedAttachments: fileNames } }
+                    : m,
+                ),
+              },
+            }));
+          },
           onRunReference: (reference) => {
             if (!isTurnAccountCurrent() || controller.signal.aborted) return;
             cloudAgentRun = {
@@ -1847,6 +2265,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
           onDelta: (delta: StreamDelta) => {
             if (controller.signal.aborted || !isTurnAccountCurrent()) return;
+            markReconnecting(set, assistantMessageId, false);
 
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
@@ -1922,6 +2341,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 name: approvalReq.name,
               });
             }
+            trackPhoneDeviceStep(turnPendingApprovals, delta);
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
@@ -1934,6 +2354,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 if (existing >= 0) turnInteractiveCards[existing] = card;
                 else turnInteractiveCards.push(card);
               }
+            }
+
+            if (delta.x_agiwork_plan) {
+              const plan = parseAgiWorkPlanDelta(delta.x_agiwork_plan);
+              if (plan.steps) turnAgiWorkPlan = plan.steps;
+              if (plan.review) turnAgiWorkPlanReview = plan.review;
             }
 
             if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
@@ -1961,7 +2387,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ...(thinkingStartedAt !== undefined ||
                 agentActivity ||
                 cloudAgentRun ||
-                turnResearch
+                turnResearch ||
+                turnAgiWorkPlan
                   ? {
                       metadata: {
                         ...target.metadata,
@@ -1969,6 +2396,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                         ...(agentActivity ? { agentActivity } : {}),
                         ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
                         ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                        ...(turnAgiWorkPlan ? { agiWorkPlan: turnAgiWorkPlan } : {}),
+                        ...(turnAgiWorkPlanReview
+                          ? { agiWorkPlanReview: turnAgiWorkPlanReview }
+                          : {}),
                       },
                     }
                   : {}),
@@ -1978,6 +2409,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onDone: () => {
+            markReconnecting(set, assistantMessageId, false);
             if (controller.signal.aborted || !isTurnAccountCurrent()) return;
             const startedAt = thinkingStartTimes.get(conversationId);
             const endedAt = thinkingEndTimes.get(conversationId) ?? Date.now();
@@ -2003,6 +2435,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               })
             ) {
               turnStreamError = EMPTY_RESPONSE_FAILURE;
+            }
+            if (isFreeQuotaChat && turnStreamError !== undefined) {
+              useFreeQuotaCatalogueStore.getState().clear();
             }
             const completedAt = new Date().toISOString();
             const convTitle =
@@ -2085,13 +2520,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
 
               if (turnPendingApprovals.length > 0 && cloudAgentRun?.runId) {
-                pendingApprovalTurns.set(assistantMessageId, {
-                  runId: cloudAgentRun.runId,
-                  conversationId,
-                  calls: turnPendingApprovals,
-                  decisions: new Map(),
-                  resolving: false,
-                });
+                pendingApprovalTurns.set(
+                  assistantMessageId,
+                  pausedTurn(cloudAgentRun.runId, conversationId, turnPendingApprovals),
+                );
               } else {
                 pendingApprovalTurns.delete(assistantMessageId);
               }
@@ -2109,7 +2541,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onError: (error: Error) => {
+            markReconnecting(set, assistantMessageId, false);
             if (!isTurnAccountCurrent()) return;
+            if (isFreeQuotaChat) useFreeQuotaCatalogueStore.getState().clear();
             thinkingStartTimes.delete(conversationId);
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
@@ -2297,6 +2731,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         set({ ...streamingFlags() });
         return true;
       }
+      if (isFreeQuotaChat) useFreeQuotaCatalogueStore.getState().clear();
 
       const currentMsgStore = getConversationMessageStore(conversationId);
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -2435,13 +2870,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
       }
       set({ ...streamingFlags() });
+      void settlePhoneDeviceSteps(conversationId, assistantMessageId);
       flushDeferredSend(conversationId);
     }
   },
 
-  resolveToolApproval: async (conversationId, assistantMessageId, toolCallId, decision) => {
-    const approvalAccountEpoch = captureCloudAccountEpoch();
-    if (approvalAccountEpoch === null) {
+  resolveToolApproval: async (
+    conversationId,
+    assistantMessageId,
+    toolCallId,
+    decision,
+    guidance,
+  ) => {
+    if (captureCloudAccountEpoch() === null) {
       set({
         error: 'Sign in to resume this AGI Cloud task.',
         paywallError: null,
@@ -2449,14 +2890,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return;
     }
-    const approvalArtifactProvenance: MobileArtifactProvenance = {
-      scope: 'cloud',
-      ownerId: approvalAccountEpoch.ownerId,
-    };
-    const approvalExecutionGeneration = cloudExecutionGeneration;
-    const isApprovalAccountCurrent = () =>
-      approvalExecutionGeneration === cloudExecutionGeneration &&
-      isCloudAccountEpochCurrent(approvalAccountEpoch);
     if (!isApprovalTurnLive(assistantMessageId)) return;
     const turn = pendingApprovalTurns.get(assistantMessageId);
     if (!turn || turn.resolving) return;
@@ -2464,6 +2897,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
 
     turn.decisions.set(toolCallId, decision);
+    const trimmedGuidance = guidance?.trim();
+    if (trimmedGuidance) turn.guidance.set(toolCallId, trimmedGuidance);
+    else turn.guidance.delete(toolCallId);
 
     const msgStore = getConversationMessageStore(conversationId);
     const patchToolCall = (patch: Partial<ToolCall>) => {
@@ -2486,7 +2922,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       pushCloudAssistantUpdate(conversationId, projectedMessages, assistantMessageId);
     };
 
-    patchToolCall({ approvalDecision: decision, requiresApproval: true });
+    patchToolCall({
+      approvalDecision: decision,
+      approvalGuidance: trimmedGuidance || undefined,
+      requiresApproval: true,
+    });
+
+    if (turn.deviceResults) {
+      await settlePhoneDeviceSteps(conversationId, assistantMessageId);
+      return;
+    }
 
     if (turn.decisions.size < turn.calls.length) return;
     turn.resolving = true;
@@ -2520,6 +2965,32 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       assistantMessageId,
     );
 
+    await get().continuePausedCloudTurn(conversationId, assistantMessageId);
+  },
+
+  continuePausedCloudTurn: async (conversationId, assistantMessageId) => {
+    const turn = pendingApprovalTurns.get(assistantMessageId);
+    if (!turn || turn.conversationId !== conversationId) return;
+    const approvalAccountEpoch = captureCloudAccountEpoch();
+    if (approvalAccountEpoch === null) {
+      turn.resolving = false;
+      set({
+        error: 'Sign in to resume this AGI Cloud task.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return;
+    }
+    const approvalArtifactProvenance: MobileArtifactProvenance = {
+      scope: 'cloud',
+      ownerId: approvalAccountEpoch.ownerId,
+    };
+    const approvalExecutionGeneration = cloudExecutionGeneration;
+    const isApprovalAccountCurrent = () =>
+      approvalExecutionGeneration === cloudExecutionGeneration &&
+      isCloudAccountEpochCurrent(approvalAccountEpoch);
+    const msgStore = getConversationMessageStore(conversationId);
+
     const existingController = abortControllers.get(conversationId);
     if (existingController) existingController.abort();
     const controller = new AbortController();
@@ -2541,11 +3012,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const seedToolCalls = currentMessage?.toolCalls
       ? currentMessage.toolCalls.map((t) => ({ ...t }))
       : [];
-
-    const toolApprovals = turn.calls.map((c) => ({
-      tool_call_id: c.toolCallId,
-      decision: turn.decisions.get(c.toolCallId) ?? ('rejected' as const),
-    }));
 
     msgStore.setState((s) => ({
       messages: {
@@ -2572,15 +3038,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
 
     try {
-      await streamToolApprovalResume(
+      await resumePausedTurn(
+        turn,
         {
-          run_id: turn.runId,
-          operationId: uuidv7(),
-          tool_approvals: toolApprovals,
-        },
-        {
+          onReconnecting: () => markReconnecting(set, assistantMessageId, true),
           onDelta: (delta: StreamDelta) => {
             if (controller.signal.aborted || !isApprovalAccountCurrent()) return;
+            markReconnecting(set, assistantMessageId, false);
             lastDeltaTimes.set(conversationId, Date.now());
 
             if (delta.x_agent_event) {
@@ -2607,6 +3071,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 name: approvalReq.name,
               });
             }
+            trackPhoneDeviceStep(turnPendingApprovals, delta);
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
@@ -2734,13 +3199,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }));
 
             if (turnPendingApprovals.length > 0) {
-              pendingApprovalTurns.set(assistantMessageId, {
-                runId: turn.runId,
-                conversationId,
-                calls: turnPendingApprovals,
-                decisions: new Map(),
-                resolving: false,
-              });
+              pendingApprovalTurns.set(
+                assistantMessageId,
+                pausedTurn(turn.runId, conversationId, turnPendingApprovals),
+              );
             } else {
               pendingApprovalTurns.delete(assistantMessageId);
             }
@@ -2751,6 +3213,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onError: (error: Error) => {
+            markReconnecting(set, assistantMessageId, false);
             if (!isApprovalAccountCurrent()) return;
             turn.resolving = false;
             abortControllers.delete(conversationId);
@@ -2765,7 +3228,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent || cloudContentRaw;
-            const checkpointIds = new Set(turn.calls.map((c) => c.toolCallId));
+            if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
+            const checkpointIds = new Set(
+              turn.deviceResults ? [] : turn.calls.map((c) => c.toolCallId),
+            );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
@@ -2795,7 +3261,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
-              error: 'Something went wrong. Please try again.',
+              error:
+                error instanceof ApiHttpError
+                  ? withFailureReference(error.message, error.requestId)
+                  : 'Something went wrong. Please try again.',
             });
           },
         },
@@ -2808,6 +3277,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isApprovalAccountCurrent()) return;
       turn.resolving = false;
       turn.decisions.clear();
+      if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
       if (!controller.signal.aborted) {
         const innerMsgStore = getConversationMessageStore(conversationId);
         const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -2818,7 +3288,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 content: cloudContentRaw || m.content,
                 isStreaming: false,
                 toolCalls: (m.toolCalls ?? []).map((tool) =>
-                  tool.toolCallId && turn.calls.some((call) => call.toolCallId === tool.toolCallId)
+                  tool.toolCallId &&
+                  !turn.deviceResults &&
+                  turn.calls.some((call) => call.toolCallId === tool.toolCallId)
                     ? {
                         ...tool,
                         status: 'awaiting-approval' as const,
@@ -2869,122 +3341,142 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
       }
       set({ ...streamingFlags() });
+      void settlePhoneDeviceSteps(conversationId, assistantMessageId);
       flushDeferredSend(conversationId);
     }
   },
 
   stopStreaming: () => {
-    const currentId = getMsgStore().getState().currentConversationId;
+    const finishStop = (currentId: string | null) => {
+      const targetId = currentId && streamingConversations.has(currentId) ? currentId : null;
 
-    const targetId = currentId && streamingConversations.has(currentId) ? currentId : null;
-
-    if (!targetId) {
-      const cid = currentId;
-      if (cid) {
-        const activeRun = activeCloudRuns.get(cid);
-        activeCloudRuns.delete(cid);
-        if (activeRun) {
-          void cancelMobileCloudAgentRun(activeRun.runId).catch(() => {
-            set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
-          });
-        }
-        cancelledBeforeStream.add(cid);
-        const ownerStore = getConversationMessageStore(cid);
-        const msgs = ownerStore.getState().messages[cid] ?? [];
-        const hasStreaming = msgs.some((m) => m.isStreaming);
-        if (hasStreaming) {
-          const stoppedAssistantIds = new Set(
-            msgs
-              .filter((message) => message.isStreaming && message.role === 'assistant')
-              .map((message) => message.id),
-          );
-          const completedAtMs = Date.now();
-          const stoppedMessages = msgs.map((m) =>
-            m.isStreaming
-              ? settleMessageTurnState({ ...m, isStreaming: false }, 'cancelled', completedAtMs)
-              : m,
-          );
-          ownerStore.setState((s) => ({
-            messages: {
-              ...s.messages,
-              [cid]: stoppedMessages,
-            },
-          }));
-          const conversation = ownerStore
-            .getState()
-            .conversations.find((candidate) => candidate.id === cid);
-          if (conversation && executionModeForConversation(conversation) === 'cloud') {
-            queueCloudTurnForSync(
-              cid,
-              stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
+      if (!targetId) {
+        const cid = currentId;
+        if (cid) {
+          activeCloudRuns.delete(cid);
+          cancelledBeforeStream.add(cid);
+          const ownerStore = getConversationMessageStore(cid);
+          const msgs = ownerStore.getState().messages[cid] ?? [];
+          const hasStreaming = msgs.some((m) => m.isStreaming);
+          if (hasStreaming) {
+            const stoppedAssistantIds = new Set(
+              msgs
+                .filter((message) => message.isStreaming && message.role === 'assistant')
+                .map((message) => message.id),
             );
-            void syncNow();
+            const completedAtMs = Date.now();
+            const stoppedMessages = msgs.map((m) =>
+              m.isStreaming
+                ? settleMessageTurnState(stoppedByUser(m), 'cancelled', completedAtMs)
+                : m,
+            );
+            ownerStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [cid]: stoppedMessages,
+              },
+            }));
+            const conversation = ownerStore
+              .getState()
+              .conversations.find((candidate) => candidate.id === cid);
+            if (conversation && executionModeForConversation(conversation) === 'cloud') {
+              queueCloudTurnForSync(
+                cid,
+                stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
+              );
+              void syncNow();
+            }
           }
         }
+        set({
+          ...streamingFlags(),
+          streamingContent: '',
+          streamingReasoning: '',
+        });
+        return;
       }
+
+      thinkingStartTimes.delete(targetId);
+      thinkingEndTimes.delete(targetId);
+      lastDeltaTimes.delete(targetId);
+      const ctrl = abortControllers.get(targetId);
+      activeCloudRuns.delete(targetId);
+      if (ctrl) {
+        ctrl.abort();
+        abortControllers.delete(targetId);
+      }
+      streamingConversations.delete(targetId);
+
+      const ownerStore = getConversationMessageStore(targetId);
+      const msgs = ownerStore.getState().messages[targetId] ?? [];
+      const stoppedAssistantIds = new Set(
+        msgs
+          .filter((message) => message.isStreaming && message.role === 'assistant')
+          .map((message) => message.id),
+      );
+      const completedAtMs = Date.now();
+      const stoppedMessages = msgs.map((m) =>
+        m.isStreaming ? settleMessageTurnState(stoppedByUser(m), 'cancelled', completedAtMs) : m,
+      );
+      ownerStore.setState((s) => ({
+        messages: {
+          ...s.messages,
+          [targetId]: stoppedMessages,
+        },
+      }));
+      const conversation = ownerStore
+        .getState()
+        .conversations.find((candidate) => candidate.id === targetId);
+      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+        queueCloudTurnForSync(
+          targetId,
+          stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
+        );
+        void syncNow();
+      }
+
       set({
         ...streamingFlags(),
         streamingContent: '',
         streamingReasoning: '',
       });
+    };
+
+    const runConversationId = getMsgStore().getState().currentConversationId;
+    const activeRun = runConversationId ? activeCloudRuns.get(runConversationId) : undefined;
+    if (!runConversationId || !activeRun) {
+      finishStop(runConversationId);
       return;
     }
-
-    thinkingStartTimes.delete(targetId);
-    thinkingEndTimes.delete(targetId);
-    lastDeltaTimes.delete(targetId);
-    const ctrl = abortControllers.get(targetId);
-    const activeRun = activeCloudRuns.get(targetId);
-    activeCloudRuns.delete(targetId);
-    if (ctrl) {
-      ctrl.abort();
-      abortControllers.delete(targetId);
-    }
-    streamingConversations.delete(targetId);
-    if (activeRun) {
-      void cancelMobileCloudAgentRun(activeRun.runId).catch(() => {
+    if (stoppingRunIds.has(activeRun.runId)) return;
+    stoppingRunIds.add(activeRun.runId);
+    const stoppingIds = (
+      getConversationMessageStore(runConversationId).getState().messages[runConversationId] ?? []
+    )
+      .filter((message) => message.isStreaming && message.role === 'assistant')
+      .map((message) => message.id);
+    set((state) => ({ stoppingMessageIds: [...state.stoppingMessageIds, ...stoppingIds] }));
+    void cancelMobileCloudAgentRun(activeRun.runId)
+      .then(() => {
+        if (
+          streamingConversations.has(runConversationId) ||
+          activeCloudRuns.has(runConversationId)
+        ) {
+          finishStop(runConversationId);
+        }
+      })
+      .catch(() => {
         set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
+      })
+      .finally(() => {
+        stoppingRunIds.delete(activeRun.runId);
+        set((state) => ({
+          stoppingMessageIds: state.stoppingMessageIds.filter((id) => !stoppingIds.includes(id)),
+        }));
       });
-    }
-
-    const ownerStore = getConversationMessageStore(targetId);
-    const msgs = ownerStore.getState().messages[targetId] ?? [];
-    const stoppedAssistantIds = new Set(
-      msgs
-        .filter((message) => message.isStreaming && message.role === 'assistant')
-        .map((message) => message.id),
-    );
-    const completedAtMs = Date.now();
-    const stoppedMessages = msgs.map((m) =>
-      m.isStreaming
-        ? settleMessageTurnState({ ...m, isStreaming: false }, 'cancelled', completedAtMs)
-        : m,
-    );
-    ownerStore.setState((s) => ({
-      messages: {
-        ...s.messages,
-        [targetId]: stoppedMessages,
-      },
-    }));
-    const conversation = ownerStore
-      .getState()
-      .conversations.find((candidate) => candidate.id === targetId);
-    if (conversation && executionModeForConversation(conversation) === 'cloud') {
-      queueCloudTurnForSync(
-        targetId,
-        stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
-      );
-      void syncNow();
-    }
-
-    set({
-      ...streamingFlags(),
-      streamingContent: '',
-      streamingReasoning: '',
-    });
   },
 
-  retryMessage: (conversationId, messageId) => {
+  retryMessage: (conversationId, messageId, modelOverride) => {
     const state = get();
     if (streamingConversations.has(conversationId)) return;
 
@@ -3043,7 +3535,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // different question and the answer stops making sense. Already-uploaded
     // assets are reused rather than sent again.
     const userAttachments = restoreComposerAttachments(userMsg.attachments);
-    const userModel = userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
+    const userModel = modelOverride ?? userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
+    const isCloudRetry =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const retryAccountEpoch = isCloudRetry ? captureCloudAccountEpoch() : null;
+    const isRetryCurrent = () => !isCloudRetry || isCloudAccountEpochCurrent(retryAccountEpoch);
+    if (!isRetryCurrent()) return;
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
@@ -3052,6 +3549,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const countedRemoved = target.role === 'assistant' ? removedCount : 0;
     const trimmedMsgs = rows.slice(0, userIndex);
     const replaceAndRetry = async () => {
+      if (!isRetryCurrent()) return;
       if (branches) {
         await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
           regenerateParentMessageId: anchorMessageId,
@@ -3059,17 +3557,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+      if (isCloudRetry) {
         try {
           await deleteCloudMessagesRemote(
             conversationId,
             rows.slice(userIndex).map((message) => message.id),
+            retryAccountEpoch,
           );
         } catch {
-          set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+          if (isRetryCurrent()) {
+            set({
+              error: 'Could not replace the Cloud response. Check your connection and retry.',
+            });
+          }
           return;
         }
       }
+
+      if (!isRetryCurrent()) return;
 
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
@@ -3094,7 +3599,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
   },
 
-  resumeResearch: async (conversationId, assistantMessageId, decision) => {
+  resumeResearch: async (conversationId, assistantMessageId, decision, steps) => {
     if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getConversationMessageStore(conversationId);
@@ -3138,7 +3643,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return;
     }
 
-    const resume = researchResumePayload(research);
+    if (decision === 'retry' && research.phase === 'complete') {
+      const question = assistantIndex > 0 ? msgs[assistantIndex - 1] : undefined;
+      if (question?.role !== 'user') return;
+      await get().sendMessage(
+        conversationId,
+        question.content,
+        question.model ?? assistantMsg.model ?? DEFAULT_AUTO_MODE_ID,
+        undefined,
+        { research: true },
+      );
+      return;
+    }
+
+    const resume = researchResumePayload(steps ? { ...research, steps } : research);
     if (decision === 'start') {
       if (research.phase !== 'awaiting_approval' || resume.approvedSteps.length === 0) return;
     } else if (!isResearchRunResumable(research)) {
@@ -3151,6 +3669,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (userIndex < 0) return;
 
     const userModel = userMsg.model ?? assistantMsg.model ?? DEFAULT_AUTO_MODE_ID;
+    const isCloudResume =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const resumeAccountEpoch = isCloudResume ? captureCloudAccountEpoch() : null;
+    const isResumeCurrent = () => !isCloudResume || isCloudAccountEpochCurrent(resumeAccountEpoch);
+    if (!isResumeCurrent()) return;
 
     if (branches) {
       await get().sendMessage(conversationId, userMsg.content, userModel, undefined, {
@@ -3160,17 +3683,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return;
     }
 
-    if (conversation && executionModeForConversation(conversation) === 'cloud') {
+    if (isCloudResume) {
       try {
         await deleteCloudMessagesRemote(
           conversationId,
           rows.slice(userIndex).map((message) => message.id),
+          resumeAccountEpoch,
         );
       } catch {
-        set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+        if (isResumeCurrent()) {
+          set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+        }
         return;
       }
     }
+
+    if (!isResumeCurrent()) return;
 
     const trimmedMsgs = rows.slice(0, userIndex);
     const removedCount = rows.length - userIndex;
@@ -3189,6 +3717,207 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     await get().sendMessage(conversationId, userMsg.content, userModel, undefined, {
       researchResume: resume,
     });
+  },
+
+  respondToInteractiveCard: async (conversationId, assistantMessageId, cardId, payload) => {
+    if (streamingConversations.has(conversationId)) return false;
+    const inFlightKey = `${assistantMessageId}:${cardId}`;
+    if (interactiveCardResponsesInFlight.has(inFlightKey)) return false;
+    interactiveCardResponsesInFlight.add(inFlightKey);
+    const accountEpoch = captureCloudAccountEpoch();
+    try {
+      let settled: InteractiveCard | null;
+      try {
+        settled = parseInteractiveCardDelta(
+          await api.post<unknown>(INTERACTIVE_CARD_RESPONSE_PATH, {
+            conversation_id: conversationId,
+            message_id: assistantMessageId,
+            card_id: cardId,
+            response: payload,
+          }),
+        );
+      } catch {
+        return false;
+      }
+      if (!settled?.recognized || !isCloudAccountEpochCurrent(accountEpoch)) return false;
+      const settledCard = settled;
+
+      const msgStore = getConversationMessageStore(conversationId);
+      const rows = msgStore.getState().messages[conversationId] ?? [];
+      const message = rows.find((m) => m.id === assistantMessageId);
+      if (!message) return false;
+      const cards = (
+        message.interactiveCards ?? readPersistedInteractiveCards(message.metadata)
+      ).map((card) => (card.cardId === settledCard.cardId ? settledCard : card));
+      const resumes =
+        clarifyCardNeedsResume(settledCard) && message.metadata?.interactiveCardsResumed !== true;
+      const nextRows = rows.map((m) =>
+        m.id === assistantMessageId
+          ? {
+              ...m,
+              interactiveCards: cards,
+              metadata: {
+                ...m.metadata,
+                interactiveCards: cards,
+                ...(resumes ? { interactiveCardsResumed: true } : {}),
+              },
+            }
+          : m,
+      );
+      msgStore.setState((s) => ({ messages: { ...s.messages, [conversationId]: nextRows } }));
+      pushCloudAssistantUpdate(conversationId, nextRows, assistantMessageId);
+
+      const turn = resumes ? settledClarifyTurn(cards) : null;
+      if (turn) {
+        const thread = historyMessagesForConversation(conversationId, 'cloud');
+        const answeredIndex = thread.findIndex((m) => m.id === assistantMessageId);
+        const question = thread
+          .slice(0, Math.max(0, answeredIndex))
+          .reverse()
+          .find((m) => m.role === 'user');
+        void get().sendMessage(
+          conversationId,
+          turn,
+          question?.model ?? message.model ?? DEFAULT_AUTO_MODE_ID,
+          undefined,
+          { interactiveCardResume: true },
+        );
+      }
+      return true;
+    } finally {
+      interactiveCardResponsesInFlight.delete(inFlightKey);
+    }
+  },
+
+  resolveAgiWorkPlan: async (conversationId, assistantMessageId, decision) => {
+    if (streamingConversations.has(conversationId)) return;
+    if (agiWorkPlanDecisionsInFlight.has(assistantMessageId)) return;
+
+    const msgStore = getConversationMessageStore(conversationId);
+    const conversation = msgStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    const isCloud =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const branches = isCloud && isThreadingCapableConversation(conversation);
+    const rows = branches
+      ? ensureLocalThreadParents(conversationId)
+      : msgStore.getState().messages[conversationId];
+    if (!rows) return;
+    const msgs = branches ? visibleThreadFor(rows, conversation) : rows;
+
+    const assistantIndex = msgs.findIndex((m) => m.id === assistantMessageId);
+    const assistantMsg = assistantIndex >= 0 ? msgs[assistantIndex] : undefined;
+    if (!assistantMsg || assistantMsg.role !== 'assistant') return;
+    const steps = readAgiWorkPlanSteps(assistantMsg.metadata?.agiWorkPlan);
+    const review = readAgiWorkPlanReview(assistantMsg.metadata?.agiWorkPlanReview);
+    if (!steps || !review) return;
+
+    if (decision.kind === 'cancel') {
+      const cancelledRows = rows.map((m) =>
+        m.id === assistantMessageId
+          ? {
+              ...m,
+              metadata: {
+                ...m.metadata,
+                agiWorkPlan: steps.map((step) => ({ ...step, status: 'cancelled' as const })),
+                agiWorkPlanReview: { ...review, awaitingApproval: false },
+              },
+            }
+          : m,
+      );
+      msgStore.setState((s) => ({
+        messages: { ...s.messages, [conversationId]: cancelledRows },
+      }));
+      if (isCloud) pushCloudAssistantUpdate(conversationId, cancelledRows, assistantMessageId);
+      return;
+    }
+
+    const userMsg = assistantIndex > 0 ? msgs[assistantIndex - 1] : undefined;
+    if (!userMsg || userMsg.role !== 'user') return;
+    const userModel = userMsg.model ?? assistantMsg.model ?? DEFAULT_AUTO_MODE_ID;
+
+    agiWorkPlanDecisionsInFlight.add(assistantMessageId);
+    try {
+      if (decision.kind === 'retry') {
+        const step = steps[decision.fromIndex];
+        if (!step) return;
+        await get().sendMessage(
+          conversationId,
+          agiWorkPlanRetryMessage(decision.fromIndex, step),
+          userModel,
+          undefined,
+          {
+            workMode: 'agiwork',
+            agiWorkGoal: review.goal,
+            agiWorkPlan: steps.slice(decision.fromIndex).map((entry) => entry.description),
+          },
+        );
+        return;
+      }
+
+      const planOptions: SendMessageOptions = {
+        workMode: 'agiwork',
+        agiWorkGoal: review.goal,
+        agiWorkPlan: decision.steps,
+      };
+      const userAttachments = restoreComposerAttachments(userMsg.attachments);
+      const accountEpoch = isCloud ? captureCloudAccountEpoch() : null;
+      const isDecisionCurrent = () => !isCloud || isCloudAccountEpochCurrent(accountEpoch);
+
+      if (branches) {
+        await get().sendMessage(conversationId, userMsg.content, userModel, userAttachments, {
+          ...planOptions,
+          regenerateParentMessageId: userMsg.id,
+        });
+        return;
+      }
+
+      const userIndex = rows.findIndex((m) => m.id === userMsg.id);
+      if (userIndex < 0) return;
+
+      if (isCloud) {
+        try {
+          await deleteCloudMessagesRemote(
+            conversationId,
+            rows.slice(userIndex).map((message) => message.id),
+            accountEpoch,
+          );
+        } catch {
+          if (isDecisionCurrent()) {
+            set({
+              error: 'Could not replace the Cloud response. Check your connection and retry.',
+            });
+          }
+          return;
+        }
+      }
+
+      if (!isDecisionCurrent()) return;
+
+      const removedCount = rows.length - userIndex;
+      msgStore.setState((s) => ({
+        messages: { ...s.messages, [conversationId]: rows.slice(0, userIndex) },
+        conversations: s.conversations.map((candidate) =>
+          candidate.id === conversationId
+            ? {
+                ...candidate,
+                messageCount: Math.max(0, (candidate.messageCount ?? 0) - removedCount),
+              }
+            : candidate,
+        ),
+      }));
+
+      await get().sendMessage(
+        conversationId,
+        userMsg.content,
+        userModel,
+        userAttachments,
+        planOptions,
+      );
+    } finally {
+      agiWorkPlanDecisionsInFlight.delete(assistantMessageId);
+    }
   },
 
   editMessage: (conversationId, messageId, newContent) => {
@@ -3230,6 +3959,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
     const editedParentId = targetMsg.parentId ?? null;
     const editedAttachments = restoreComposerAttachments(targetMsg.attachments);
+    const isCloudEdit =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const accountEpoch = isCloudEdit ? captureCloudAccountEpoch() : null;
+    const isEditCurrent = () => !isCloudEdit || isCloudAccountEpochCurrent(accountEpoch);
+
+    if (!isEditCurrent()) return;
 
     set({ isEditing: true });
 
@@ -3242,29 +3977,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+      if (isCloudEdit) {
         await deleteCloudMessagesRemote(
           conversationId,
           msgs.slice(msgIndex).map((message) => message.id),
+          accountEpoch,
         );
       }
+      if (!isEditCurrent()) return;
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
       }));
       await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
     })()
       .catch((err) => {
+        if (!isEditCurrent()) return;
         set({
-          error:
-            conversation && executionModeForConversation(conversation) === 'cloud'
-              ? 'Could not replace the Cloud message. Check your connection and retry.'
-              : err instanceof Error
-                ? err.message
-                : 'Failed to re-send edited message',
+          error: isCloudEdit
+            ? 'Could not replace the Cloud message. Check your connection and retry.'
+            : 'Could not replace the Local message. Please try again.',
         });
       })
       .finally(() => {
-        set({ isEditing: false });
+        if (isEditCurrent()) set({ isEditing: false });
       });
   },
 }));

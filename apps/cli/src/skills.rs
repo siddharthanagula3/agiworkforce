@@ -904,7 +904,7 @@ pub fn format_skill_catalog_for_prompt(skills: &[Skill]) -> String {
     out
 }
 
-fn missing_tool_dependencies(skill: &Skill, available_tools: &[String]) -> Vec<String> {
+pub(crate) fn missing_tool_dependencies(skill: &Skill, available_tools: &[String]) -> Vec<String> {
     skill
         .required_tools
         .iter()

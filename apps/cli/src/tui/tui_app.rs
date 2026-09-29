@@ -481,7 +481,12 @@ impl TuiApp {
         // follow-up prompt) had the full prior history. Hydrate the
         // transcript widget state from the same `session.messages` here so
         // the first render already shows the resumed conversation.
-        let chat_messages: Vec<ChatMessage> = session
+        let imported_from = session.managed_session.as_ref().and_then(|managed| {
+            crate::sessions::open_db()
+                .ok()
+                .and_then(|conn| crate::sessions::imported_from(&conn, &managed.session_id))
+        });
+        let mut chat_messages: Vec<ChatMessage> = session
             .messages
             .iter()
             .filter_map(|m| {
@@ -500,6 +505,15 @@ impl TuiApp {
                 Some(ChatMessage { role, text })
             })
             .collect();
+        if let Some(origin) = imported_from.filter(|_| !chat_messages.is_empty()) {
+            chat_messages.insert(
+                0,
+                ChatMessage {
+                    role: ChatRole::System,
+                    text: format!("The messages below came from {origin}."),
+                },
+            );
+        }
         let git_branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
@@ -3258,6 +3272,8 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
     app.scroll_offset = 0;
 }
 
+const VOICE_TRANSCRIPT_LABEL: &str = "(spoken)";
+
 fn append_session_messages_since(app: &mut TuiApp, first: usize) {
     if app.session.messages.len() < first {
         rebuild_transcript_from_session(app);
@@ -4061,24 +4077,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::cli_options::PermissionMode::Plan
             ) {
                 "/plan accept: not in plan mode. Use /plan to enter it first.".to_string()
-            } else if app.session.current_plan.is_none() {
+            } else if app.session.approve_plan().is_err() {
                 "/plan accept: no plan to approve yet. Ask the model to call update_plan first."
                     .to_string()
             } else {
-                app.session.plan_approved = true;
                 "Plan approved. Mutating tools enabled for this session.".to_string()
             },
         ),
 
         "/plan" if arg.starts_with("reject") => {
             let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
-            SlashResult::SystemMessage(if feedback.is_empty() {
+            SlashResult::SystemMessage(if app.session.reject_plan(&feedback).is_err() {
                 "/plan reject: needs a reason. Usage: /plan reject <feedback>".to_string()
             } else {
-                app.session.plan_rejection_feedback = Some(feedback);
-                app.session.current_plan = None;
-                app.session.current_plan_path = None;
-                app.session.plan_approved = false;
                 "Plan rejected. Feedback queued for the model on the next turn.".to_string()
             })
         }
@@ -5663,6 +5674,7 @@ async fn run_event_loop(
                                 let result =
                                     crate::auth::interactive_login_for_provider(None).await;
                                 *terminal = setup_terminal()?;
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 match result {
                                     Ok(()) => {
                                         app.chat_messages.push(ChatMessage {
@@ -5724,7 +5736,14 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                let first_voice_row = app.chat_messages.len();
                                 append_session_messages_since(app, first_voice_message);
+                                for message in app.chat_messages.iter_mut().skip(first_voice_row) {
+                                    if message.role == ChatRole::User {
+                                        message.text =
+                                            format!("{VOICE_TRANSCRIPT_LABEL} {}", message.text);
+                                    }
+                                }
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {
@@ -5886,6 +5905,7 @@ async fn run_event_loop(
                                 let mut store = crate::auth::load_auth().unwrap_or_default();
                                 store.entries.clear();
                                 let _ = crate::auth::save_auth(&store);
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: if revoked {
@@ -5897,6 +5917,14 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 let prompt = resolve_composer_mentions(app, &text);
+                                let (prompt, notices) =
+                                    app.session.expand_mcp_resource_mentions(&prompt).await;
+                                for notice in notices {
+                                    app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: notice,
+                                    });
+                                }
                                 send_message_with_prompt(terminal, app, &text, &prompt).await?;
                             }
                             SlashResult::SendPrompt(prompt) => {

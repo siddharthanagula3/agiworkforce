@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -68,6 +69,16 @@ test('a tag that is not a digest is reported separately from a moving tag', () =
   const failures = checkSupplyChain(root).failures;
   assert.equal(failures.length, 1);
   assert.match(failures[0], /by tag, not by digest/);
+});
+
+test('ignored worktrees are excluded from container image checks', () => {
+  const root = fixture({ files: { Dockerfile: 'FROM node:24-alpine@sha256:' + 'a'.repeat(64) } });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, '.gitignore'), '.worktrees/\n');
+  fs.mkdirSync(path.join(root, '.worktrees', 'other'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.worktrees', 'other', 'Dockerfile'), 'FROM node:latest\n');
+  assert.deepEqual(containerFiles(root), ['Dockerfile']);
+  assert.deepEqual(checkSupplyChain(root).failures, []);
 });
 
 test('a build argument is not read as an image name', () => {

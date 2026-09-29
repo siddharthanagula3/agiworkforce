@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -12,6 +12,7 @@ import {
   type ChineseHqConsentMap,
   type ChineseHqProviderId,
 } from '@/services/providerConsent';
+import { NamedProviderConsentModal } from './NamedProviderConsentModal';
 
 export const PROVIDER_CONSENT_TEST_ID_PREFIX = 'settings-provider-consent-';
 
@@ -22,10 +23,30 @@ const SECTION_BODY =
 export function ChineseHqProviderConsentGroup() {
   const colors = useThemeColors();
   const [consent, setConsent] = useState<ChineseHqConsentMap>(readChineseHqConsent);
+  const [reviewingProvider, setReviewingProvider] = useState<ChineseHqProviderId | null>(null);
 
   const toggle = useCallback((providerId: ChineseHqProviderId, accepted: boolean) => {
+    if (accepted) {
+      setReviewingProvider(providerId);
+      return;
+    }
     setChineseHqProviderConsent(providerId, accepted);
     setConsent(readChineseHqConsent());
+  }, []);
+
+  const confirm = useCallback((providerId: ChineseHqProviderId) => {
+    try {
+      setChineseHqProviderConsent(providerId, true);
+    } catch {
+      setReviewingProvider(null);
+      Alert.alert(
+        'Privacy disclosure required',
+        'Complete the privacy disclosure before enabling this provider.',
+      );
+      return;
+    }
+    setConsent(readChineseHqConsent());
+    setReviewingProvider(null);
   }, []);
 
   return (
@@ -52,6 +73,11 @@ export function ChineseHqProviderConsentGroup() {
           />
         ))}
       </SettingsGroup>
+      <NamedProviderConsentModal
+        providerId={reviewingProvider}
+        onConfirm={confirm}
+        onCancel={() => setReviewingProvider(null)}
+      />
     </View>
   );
 }

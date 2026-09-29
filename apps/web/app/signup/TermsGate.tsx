@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
+import { AccountDataDisclosure } from '@/features/auth/AccountDataDisclosure';
 
 /**
  * localStorage, not sessionStorage.
@@ -109,6 +110,8 @@ export function TermsGate({
           Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
         </p>
       </div>
+
+      <AccountDataDisclosure />
 
       {confirmationLabel && !confirmed ? (
         <button

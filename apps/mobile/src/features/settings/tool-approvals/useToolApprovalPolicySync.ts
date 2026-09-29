@@ -60,9 +60,7 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
       } catch (caught) {
         if (cancelled) return;
         setStatus('error');
-        setError(
-          caught instanceof Error ? caught.message : 'Your approval default could not be loaded.',
-        );
+        setError('Your approval default could not be loaded. Check your connection and try again.');
       }
     })();
 
@@ -87,7 +85,7 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
           setToolApprovalPolicy(previous);
           setStatus('error');
           setError(
-            caught instanceof Error ? caught.message : 'Your approval default could not be saved.',
+            'Your approval default could not be saved. Check your connection and try again.',
           );
         });
     },

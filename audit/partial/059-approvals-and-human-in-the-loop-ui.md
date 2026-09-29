@@ -22,14 +22,13 @@ Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:11
 
 - Done when: The user can set allow/ask/deny per connected app (and per tool within it), and the runtime enforces it.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | MCP tools ask per server/tool and Always Allow can be saved per command prefix, but there is no per-app allow/ask/deny setting screen. | ui |
 | vscode | partial | Session approvals are scoped per MCP server tool, but VS Code has no standing per-app permission setting. | ui |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:1010-1016`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`
+Code: `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`
 
 ## S59.05: Per-folder permission.
 

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -99,6 +99,12 @@ jest.mock('expo-router', () => ({
 }));
 
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
+import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
 import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
@@ -117,8 +123,11 @@ import {
   getModelListForCloudAccess,
 } from '../src/features/model-picker/service';
 import {
+  EFFORT_DESCRIPTION,
+  EFFORT_LABEL,
   getMinimumRequiredTier,
   getModelReasoning,
+  getProviderOfferings,
   type ModelReasoning,
   getAutoRoutingProfileTiers,
 } from '@agiworkforce/types';
@@ -190,8 +199,7 @@ function sortedEfforts(reasoning: ModelReasoning): readonly string[] {
 }
 
 function effortLabel(effort: string): string {
-  if (effort === 'xhigh') return 'Extra high';
-  return `${effort.charAt(0).toUpperCase()}${effort.slice(1)}`;
+  return EFFORT_LABEL[effort as keyof typeof EFFORT_LABEL];
 }
 
 function resetModelStore() {
@@ -244,9 +252,79 @@ function renderPicker(overrides?: {
 describe('ModelPickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    useFreeQuotaCatalogueStore.getState().clear();
     resetModelStore();
     useTierStore.setState({ tier: 'free' });
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
+  });
+
+  it('explains an empty provider-funded catalogue and a retryable check failure', () => {
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: null,
+      loading: false,
+      error: null,
+    });
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    expect(
+      screen.getByText('No provider-funded Free chat models are available right now.'),
+    ).toBeTruthy();
+    act(() => {
+      useFreeQuotaCatalogueStore.setState({
+        error: 'Sign in again to check provider-funded Free models.',
+      });
+    });
+
+    expect(screen.getByText('Sign in again to check provider-funded Free models.')).toBeTruthy();
+    expect(screen.getByLabelText('Retry loading provider-funded Free models')).toBeTruthy();
+    expect(
+      screen.queryByText('No provider-funded Free chat models are available right now.'),
+    ).toBeNull();
+  });
+
+  it('explains a checked catalogue whose chat offers are all unavailable', () => {
+    const chatOffering = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',
+    );
+    if (!chatOffering) throw new Error('The registry has no promotional chat offering');
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: {
+        issuer: 'AGI Cloud',
+        observedOn: new Date().toISOString(),
+        evidenceUrl: 'https://example.test/free-capacity',
+        reportedEligible: 0,
+        reportedUnavailable: 1,
+        models: [
+          {
+            key: chatOffering[0],
+            displayName: chatOffering[1].displayName,
+            providerModelId: null,
+            category: 'chat',
+            limit: null,
+            unit: null,
+            consumedApproximate: null,
+            expiresOn: null,
+            status: 'exhausted',
+          },
+        ],
+      },
+      loading: false,
+      error: null,
+    });
+
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    expect(
+      screen.getByText('No provider-funded Free chat models are available right now.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(chatOffering[1].displayName)).toBeNull();
   });
 
   it('renders all registry-owned auto mode cards in Local mode', () => {
@@ -361,21 +439,33 @@ describe('ModelPickerSheet', () => {
   });
 
   it('does not select an unprepared downloaded model until preparation finishes', async () => {
+    let completePreparation: (() => void) | undefined;
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completePreparation = resolve;
+        }),
+    );
     useModelInstallStore.setState({
       installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
       readySystemModelIds: [],
       jobs: {},
+      prepareModel,
     });
     const { getByLabelText, queryByTestId } = renderPicker();
-    // Pressing before the installed read settles selects a model the sheet
-    // believes is absent, so wait for the sheet's own loading row to go.
-    await waitFor(() => expect(queryByTestId('model-picker-loading')).toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(queryByTestId('model-picker-loading')).toBeNull();
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 
-    await waitFor(() => {
-      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(prepareModel).toHaveBeenCalledTimes(1);
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    await act(async () => {
+      completePreparation?.();
     });
+    expect(useModelStore.getState().selectedModel).toBe(LITE_MODEL_ID);
   });
 
   it('calls onSelect callback instead of store when provided', () => {
@@ -415,7 +505,12 @@ describe('ModelPickerSheet', () => {
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(auth)/login'));
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(auth)/login',
+        params: { postAuthIntent: 'cloud-chat' },
+      }),
+    );
   });
 
   it('delegates locked cloud rows to the parent invite surface when provided', async () => {
@@ -551,7 +646,7 @@ describe('ModelPickerSheet', () => {
 
   it('does not render the reasoning effort selector for the local scope', () => {
     const { queryByLabelText } = renderPicker();
-    expect(queryByLabelText('Reasoning effort High')).toBeNull();
+    expect(queryByLabelText(`Reasoning effort ${effortLabel('high')}`)).toBeNull();
   });
 
   it('sets a per-conversation effort override by tapping a labelled tier', () => {
@@ -568,6 +663,7 @@ describe('ModelPickerSheet', () => {
     ).toBe(true);
     const nextTier = getByLabelText(`Reasoning effort ${effortLabel(nextEffort)}`);
     expect(nextTier.props.accessibilityState.selected).toBe(false);
+    expect(nextTier.props.accessibilityHint).toBe(EFFORT_DESCRIPTION[nextEffort]);
 
     fireEvent.press(nextTier);
 
@@ -633,8 +729,8 @@ describe('ModelPickerSheet', () => {
       const tradeoff = tier.props.accessibilityHint;
       expect(typeof tradeoff).toBe('string');
       expect(tradeoff.length).toBeGreaterThan(0);
-      expect(getByText(label)).toBeTruthy();
-      expect(getByText(tradeoff)).toBeTruthy();
+      expect(within(tier).getByText(label)).toBeTruthy();
+      expect(within(tier).getByText(tradeoff)).toBeTruthy();
     }
   });
 

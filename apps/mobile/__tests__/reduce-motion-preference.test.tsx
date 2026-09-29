@@ -3,6 +3,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Animated } from 'react-native';
 
 jest.mock('../src/ui/theme', () => ({
+  ...jest.requireActual('../src/ui/theme/tokens'),
   useThemeColors: () => ({
     teal: '#0f9b8e',
     accentText: '#ffffff',

@@ -3,6 +3,11 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockModelPicker = jest.fn().mockReturnValue(null);
 
+jest.mock('../src/shared/hooks/useUnsavedChangesGuard', () => ({
+  useUnsavedChangesGuard: jest.fn(),
+  confirmDiscardChanges: jest.fn((discard: () => void) => discard()),
+}));
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light' },
@@ -10,6 +15,9 @@ jest.mock('expo-haptics', () => ({
 
 jest.mock('lucide-react-native', () => ({
   ChevronDown: jest.fn().mockReturnValue(null),
+  Check: jest.fn().mockReturnValue(null),
+  Globe: jest.fn().mockReturnValue(null),
+  X: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('../stores/settingsStore', () => ({

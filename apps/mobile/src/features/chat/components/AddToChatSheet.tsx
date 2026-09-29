@@ -137,8 +137,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const videoResolution = useChatViewStore((s) => s.videoResolution);
   const setVideoAspectRatio = useChatViewStore((s) => s.setVideoAspectRatio);
   const setVideoResolution = useChatViewStore((s) => s.setVideoResolution);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
+  const setVideoDurationSecs = useChatViewStore((s) => s.setVideoDurationSecs);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
   const setImageAspectRatio = useChatViewStore((s) => s.setImageAspectRatio);
+  const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
+  const setImageTransparentBackground = useChatViewStore((s) => s.setImageTransparentBackground);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
@@ -162,9 +166,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [videoModelId],
   );
   const videoOutputSelection = useMemo(
-    () => resolveVideoOutputSelection(videoModelId, videoAspectRatio, videoResolution),
-    [videoModelId, videoAspectRatio, videoResolution],
+    () =>
+      resolveVideoOutputSelection(
+        videoModelId,
+        videoAspectRatio,
+        videoResolution,
+        videoDurationSecs,
+      ),
+    [videoModelId, videoAspectRatio, videoResolution, videoDurationSecs],
   );
+  const videoDurationOptions = videoOutputSelection.durationOptions;
   const effectiveVideoAspectRatio = videoOutputSelection.aspectRatio;
   const effectiveVideoResolution = videoOutputSelection.resolution;
   const imageAspectOptions = useMemo(
@@ -183,11 +194,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     const model = videoModelId ? getModelMetadataById(videoModelId) : undefined;
     if (!videoModelId || !model) return null;
     const durationSecs =
+      videoOutputSelection.durationSecs ??
       supportedVideoDurationSecs(
         videoModelId,
         effectiveVideoAspectRatio,
         effectiveVideoResolution,
-      ) ?? ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
+      ) ??
+      ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
     const microusd = videoGenerationCostMicrousd({
       model,
       resolution: effectiveVideoResolution,
@@ -196,7 +209,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       generateAudio: model.videoGeneration?.supportsAudio ?? false,
     });
     return microusd === null ? null : { credits: chargeCreditsForMicrousd(microusd), durationSecs };
-  }, [videoModelId, effectiveVideoAspectRatio, effectiveVideoResolution]);
+  }, [
+    videoModelId,
+    effectiveVideoAspectRatio,
+    effectiveVideoResolution,
+    videoOutputSelection.durationSecs,
+  ]);
   useEffect(() => {
     clearInvalidMediaModelSelections();
   }, [selectedMediaModel]);
@@ -767,7 +785,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       }}
                     >
                       {imageModelSupportsReference
-                        ? 'Attach one photo above to edit it with your prompt instead of generating from text.'
+                        ? 'Attach up to 4 photos above: the first is edited with your prompt and the others guide it.'
                         : 'This model generates from text only. Attach a photo and pick an editing model to edit it.'}
                     </Text>
                   ) : null}
@@ -806,6 +824,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                         />
                       ))}
                     </>
+                  ) : null}
+
+                  {mediaMode === 'image' && imageModelSupportsReference ? (
+                    <MediaOptionRow
+                      label="Transparent background"
+                      hint="Return the image without a background"
+                      selected={imageTransparentBackground}
+                      onPress={() => {
+                        haptic();
+                        setImageTransparentBackground(!imageTransparentBackground);
+                      }}
+                      textColor={themeColors.textPrimary}
+                      mutedColor={themeColors.textMuted}
+                      activeColor={themeColors.teal}
+                    />
                   ) : null}
 
                   {/* Video output shape. Options come from the shared model
@@ -873,6 +906,38 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                           onPress={() => {
                             haptic();
                             setVideoResolution(option.id);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+
+                  {mediaMode === 'video' && videoDurationOptions.length > 1 ? (
+                    <>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: themeColors.textMuted,
+                          textTransform: 'uppercase',
+                          paddingHorizontal: 4,
+                          marginTop: 10,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Length
+                      </Text>
+                      {videoDurationOptions.map((secs) => (
+                        <MediaOptionRow
+                          key={secs}
+                          label={`${secs} seconds`}
+                          selected={secs === videoOutputSelection.durationSecs}
+                          onPress={() => {
+                            haptic();
+                            setVideoDurationSecs(secs);
                           }}
                           textColor={themeColors.textPrimary}
                           mutedColor={themeColors.textMuted}

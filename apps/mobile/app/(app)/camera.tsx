@@ -83,12 +83,8 @@ export default function CameraScreen() {
       if (photo?.uri) {
         setCapturedUri(photo.uri);
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'The camera could not capture the image. Please try again.';
-      Alert.alert('Capture failed', message);
+    } catch {
+      Alert.alert('Capture failed', 'The camera could not capture the image. Please try again.');
     } finally {
       setIsCapturing(false);
     }
@@ -133,16 +129,25 @@ export default function CameraScreen() {
       };
 
       const messageContent = promptText.trim() || 'What do you see in this image?';
-      await sendMessage(conversationId, messageContent, selectedModel, [attachment]);
+      const accepted = await sendMessage(conversationId, messageContent, selectedModel, [
+        attachment,
+      ]);
+      if (!accepted) {
+        Alert.alert('Send failed', 'The image could not be sent. Check your model and try again.');
+        setIsSending(false);
+        return;
+      }
 
       if (conversationId === openConversationId && router.canGoBack()) {
         router.back();
         return;
       }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The image could not be sent.';
-      Alert.alert('Send failed', message);
+    } catch {
+      Alert.alert(
+        'Send failed',
+        'The image could not be sent. Check your connection and try again.',
+      );
       setIsSending(false);
     }
   }, [

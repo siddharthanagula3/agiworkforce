@@ -29,7 +29,7 @@ pub(crate) use checkpoints::CheckpointLog;
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub(crate) use executor::value_to_legacy_args;
 pub use executor::ToolCall;
-pub(crate) use history::close_orphaned_tool_calls;
+pub(crate) use history::{close_orphaned_tool_calls, mark_interrupted_tool_calls};
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -201,6 +201,7 @@ pub struct AgentSession {
     pub(crate) runtime_session_id: String,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
+    pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
     /// A reviewed Local→cloud continuation that has been drafted but not sent.
     /// The source durable session remains authoritative until the reviewed
@@ -444,7 +445,6 @@ pub(crate) fn rule_paths_from_tool_call(
         "resolve_conflict",
         "lsp_definition",
         "lsp_hover",
-        "lsp_diagnostics",
         "lsp_completion",
         "lsp_document_symbols",
         "lsp_format",
@@ -519,10 +519,25 @@ impl AgentSession {
                 }
             }
         }
-        let (memory, policy) = tokio::join!(
+        let (memory, policy, connector_policy) = tokio::join!(
             crate::cloud::refresh_memory(PrivacyMode::Managed),
             crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
+            crate::claude_parity::connectors::fetch_workspace_policy(PrivacyMode::Managed),
         );
+        if let Err(error) = connector_policy {
+            let not_readable_here = matches!(
+                error,
+                crate::cloud::CloudError::Api {
+                    status: 401 | 403 | 404,
+                    ..
+                }
+            );
+            if !error.is_boundary() && !not_readable_here {
+                crate::output::print_warn(&format!(
+                    "could not read the workspace connector policy: {error}"
+                ));
+            }
+        }
         match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
@@ -726,6 +741,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            allowed_mcp_servers: None,
             cloud_project: None,
             pending_image_blocks: Vec::new(),
             search_next_turn: false,
@@ -774,6 +790,32 @@ impl AgentSession {
         ));
     }
 
+    pub fn approve_plan(&mut self) -> Result<(), &'static str> {
+        if !matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) {
+            return Err("Not in plan mode.");
+        }
+        if self.current_plan.is_none() {
+            return Err("There is no plan to approve yet.");
+        }
+        self.plan_approved = true;
+        Ok(())
+    }
+
+    pub fn reject_plan(&mut self, feedback: &str) -> Result<(), &'static str> {
+        let feedback = feedback.trim();
+        if feedback.is_empty() {
+            return Err("Say what to change in the plan.");
+        }
+        self.plan_rejection_feedback = Some(feedback.to_string());
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_approved = false;
+        Ok(())
+    }
+
     pub(crate) fn apply_tool_filters(
         &mut self,
         allowed_tools: &[String],
@@ -799,14 +841,82 @@ impl AgentSession {
         }
         self.mcp_manager
             .as_ref()
-            .map(|manager| std::sync::Arc::new(manager.tool_definitions(self.privacy_mode)))
+            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
+    }
+
+    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+        const MAX_RESOURCE_CHARS: usize = 50_000;
+        let privacy_mode = self.privacy_mode;
+        let Some(manager) = self.mcp_manager.as_mut() else {
+            return (prompt.to_string(), Vec::new());
+        };
+        let mut attached = String::new();
+        let mut notices = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for token in prompt.split_whitespace() {
+            let Some((server, uri)) = token
+                .strip_prefix('@')
+                .and_then(|mention| mention.split_once(':'))
+            else {
+                continue;
+            };
+            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+                continue;
+            }
+            match manager.read_resource(server, uri, privacy_mode).await {
+                Ok(contents) => {
+                    for content in contents {
+                        match content.text {
+                            Some(text) => {
+                                let shown: String = text.chars().take(MAX_RESOURCE_CHARS).collect();
+                                attached.push_str(&format!(
+                                    "\n\n<mcp_resource server=\"{server}\" uri=\"{}\">\n{shown}\n</mcp_resource>",
+                                    content.uri
+                                ));
+                                if shown.len() < text.len() {
+                                    notices.push(format!(
+                                        "{server}:{} was cut to {MAX_RESOURCE_CHARS} characters.",
+                                        content.uri
+                                    ));
+                                }
+                            }
+                            None => notices.push(format!(
+                                "{server}:{} is not text, so it was not added.",
+                                content.uri
+                            )),
+                        }
+                    }
+                }
+                Err(error) => notices.push(format!("Could not read {server}:{uri}: {error:#}")),
+            }
+        }
+        (format!("{prompt}{attached}"), notices)
+    }
+
+    fn permitted_mcp_definitions(&self, manager: &crate::mcp::McpManager) -> Vec<ToolDefinition> {
+        manager
+            .tool_definitions(self.privacy_mode)
+            .into_iter()
+            .filter(|definition| self.mcp_server_permitted(&definition.name))
+            .collect()
+    }
+
+    pub(crate) fn mcp_server_permitted(&self, tool_name: &str) -> bool {
+        let Some(servers) = self.allowed_mcp_servers.as_ref() else {
+            return true;
+        };
+        servers.iter().any(|server| {
+            let prefix = crate::mcp::mcp_tool_name(server, "");
+            tool_name.starts_with(&prefix)
+        })
     }
 
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions =
             crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
@@ -851,7 +961,7 @@ impl AgentSession {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut callable = offered.to_vec();
         callable.extend(
@@ -1892,6 +2002,7 @@ impl AgentSession {
                         task_type: crate::routing::classify::developer_task_type(task_type),
                         trust_mode: TrustMode::ManagedCloud,
                         speed_first,
+                        policy_version: crate::runtime::session::current_routing_policy_version(),
                     },
                 ));
                 format!(
@@ -2475,7 +2586,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 65);
+        assert_eq!(defs.len(), 64);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
@@ -2947,6 +3058,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
                 trust_mode: agiworkforce_model_registry::TrustMode::Local,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         let source_before = std::fs::read(&source_path).expect("read Local source");

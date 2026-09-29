@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.02: Branch picker.
 
@@ -27,26 +27,24 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.03: Worktree picker.
 
 - Done when: The user picks or creates a git worktree for a coding session so parallel work stays isolated.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | TUI /worktree now lists, creates and removes worktrees, but the session does not move into a new worktree. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3877-3877`
 
 ## S66.04: Local/cloud execution selector.
 
@@ -55,13 +53,13 @@ Code: `apps/cli/src/tui/tui_app.rs:3877-3877`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Local branch on desktop already works. | switch-on |
-| desktop | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Local branch on desktop already works. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.05: Coding-session list.
 
@@ -71,9 +69,9 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.06: Coding-session title.
 
@@ -83,9 +81,9 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.07: Session status.
 
@@ -95,9 +93,9 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.08: File tree.
 
@@ -197,10 +195,10 @@ Code: `apps/cli/src/agent/mod.rs:430-430`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.16: Terminal tabs.
 
@@ -222,10 +220,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | partial | Only in-flight tool lines while a turn runs; finished commands and their output are not kept in view. | ui |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`
 
 ## S66.18: Diff viewer.
 
@@ -235,9 +233,9 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.19: File-change summary.
 
@@ -247,10 +245,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | vscode | partial | Only the host Source Control view lists changed files; the extension shows no per-session summary of what the agent changed. | ui |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/extension-vscode/src/core/commandSetup.ts:1383-1396`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/core/commandSetup.ts:1383-1396`
 
 ## S66.21: Hunk acceptance/rejection.
 
@@ -310,10 +308,10 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.26: Permission-mode control.
 
@@ -323,10 +321,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.27: Context-usage indicator.
 
@@ -336,10 +334,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.28: Usage/cost indicator.
 
@@ -386,12 +384,12 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.38: Test-results panel.
 

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: a7b8b5cc5115fc8082f58cb44a645097652614d53c0ceecbbfb4fce1e96aaa65 -->
+<!-- ui-gaps-csv-sha256: 398737cbc7e38e06d3f4347250ea4ab8ec2f0a9a65087e280025f7da87e8c52a -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 122 P2, 40 P3.
+- Unresolved: 0 P0, 53 P1, 108 P2, 35 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  215 |
-| In Progress |    0 |
+| Open        |  185 |
+| In Progress |   11 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |  100 |
+| Done        |  119 |
 | Not Planned |   26 |
 
 ## P0
@@ -3203,24 +3203,24 @@ Completed. Add future surface-bound capabilities to the shared descriptor and re
 
 ## P2
 
-### GAP-139, Account header avatar and display name are not editable
+### GAP-139, Account profile editing needs signed-device verification
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Account header
 
 **Gap**
 
-The reference puts a pencil badge on the avatar in the account header so a user can change their picture, with the display name directly beneath. agiworkforce renders the same header (avatar + name + email) but purely as decoration, there is no edit affordance for the avatar or the name on mobile.
+The reference puts a pencil badge on the avatar in the account header so a user can change their picture, with the display name directly beneath. agiworkforce renders the same header (avatar + name + email) with an editable avatar and a pencil badge. The display name is now editable through the server-owned Cloud profile.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-account/index.tsx:180-214 (Image accessibilityLabel='Profile picture', no Pressable); grep 'setProfileImage|change photo|edit avatar' across apps/mobile/src, no match
+apps/mobile/src/features/settings/cloud-account/index.tsx uses useCloudProfilePhoto for an accessible avatar button; the shared hook updates Clerk and PATCH /api/me, with account-epoch checks. Account and Settings read the same account-scoped Cloud profile; focused tests cover edits, failures and account switching. Signed-device verification remains.
 
 **Suggested fix**
 
-Wrap the avatar in a Pressable with a pencil badge that opens the existing photo picker and uploads via Clerk's setProfileImage, and make the name row editable with an inline text prompt.
+Verify name and avatar edits on a signed-in device and confirm Web-to-Mobile updates and error recovery.
 
 **Reference screenshot(s)**
 
@@ -3249,47 +3249,47 @@ Not recommended unless agiworkforce is entering the health-assistant vertical; i
 
 - `references-2/chatgpt-ios-health-09-add-condition-list-a.png`
 
-### GAP-141, Empty chat offers no capability quick actions above the composer
+### GAP-141, Empty chat quick actions need draft prefill and capability-aware labels
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Chat empty state
 
 **Gap**
 
-The reference keeps three compact, verb-led capability rows (Create an image / Write or edit / Look something up) pinned directly above the composer, so they remain visible and tappable with the keyboard open and teach what the product can do. agiworkforce's empty chat is brand mark + greeting only; ConversationStarters.tsx (a 2-column card grid of long prompts) exists but is rendered by nothing, and the chat screen comments record a founder decision to ship 'NO suggestion cards'.
+The empty chat pins Create an image, Write or edit, and Search the web actions above the composer. They select the existing media or task mode, fill an editable starting draft only when the composer is empty, and focus it without sending. Search the web appears only for a Cloud model with a supported route when the user preference and server capability allow it.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/chat.tsx:617-621 (comment 'Still NO suggestion cards'); apps/mobile/src/features/chat/components/ConversationStarters.tsx is imported nowhere (only referenced in a comment at chat/[id].tsx:111)
+TaskChips.tsx owns the starter copy and checks model search support, server capability, and the persisted web-search preference; the new-chat screen and existing-thread Composer pass their selected model and prefill through ChatInput. chat-input.test.tsx verifies that the draft is editable, is never auto-sent, and preserves existing text. task-chips-web-search.test.tsx covers available, disabled, Local, and server-off states. A repository search found no ConversationStarters component.
 
 **Suggested fix**
 
-Ship the lightweight variant rather than cards: three icon+verb rows (image, write/edit, look up) directly above the composer that prefill the composer instead of sending, hidden as soon as the thread has messages, and delete or wire up ConversationStarters so no dead component remains.
+Verify keyboard and compact-screen layout on a device.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/075-chatgpt-ios-chat-empty-state-quick-actions-keyboard-open.png`
 
-### GAP-142, Reasoning effort is a slider, not a tappable tier list with the current value checked
+### GAP-142, Reasoning effort uses a tappable tier list with the current value checked
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-interaction
 - **Reference:** ChatGPT · iOS · Chat model + intelligence popover
 
 **Gap**
 
-The reference selects intelligence from a discrete list (Pro / Extra High / High / Medium / Instant) where the active tier carries a checkmark and each option is a full-width tap target. agiworkforce renders effort as a continuous Slider over the model's supported stops, which on a phone is a precision drag, has no per-option tap target, and does not show the ladder at a glance.
+Mobile now renders the selected model’s supported reasoning efforts as full-width tap targets. Each tier has a label and tradeoff description, and the selected tier has a checkmark and accessibility selected state. The options come from the shared model reasoning metadata rather than a Mobile-only capability list.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:597-626 (Slider with testID 'model-picker-effort-selector')
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/**tests**/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
 
 **Suggested fix**
 
-Replace the slider with a radio list of the model's supportedEfforts (label + one-line description + checkmark on the active one), keeping the same capability-driven option source; retain slider semantics only for accessibility adjustable actions.
+Keep the tier list tied to supportedEfforts and preserve full-width accessible selection when model reasoning metadata changes.
 
 **Reference screenshot(s)**
 
@@ -3387,24 +3387,24 @@ Add an optional 'View full activity' affordance on long/complex agent runs that 
 
 - `references-2/chatgpt-ios-work-01-expanded-agent-activity.png`
 
-### GAP-147, No post-sign-in prompt offering to enable App Lock / Face ID
+### GAP-147, Post-sign-in App Lock offer needs signed-device verification
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Face ID enrollment prompt
 
 **Gap**
 
-The reference offers biometric login immediately after authentication with a Face ID glyph, a one-line benefit, Continue and Skip, so opt-in happens at the moment of highest intent. agiworkforce implements the same capability but only exposes it as an 'App Lock' switch buried in Settings > Safety & Security, so most users will never enable it.
+AGI Mobile now offers App Lock after a signed-in Cloud account completes continuity onboarding, only when device authentication is enrolled and App Lock is off. Continue authenticates before enabling; Skip is remembered in device-only secure storage. The existing Safety & Security switch remains available.
 
 **Evidence**
 
-apps/mobile/src/features/settings/safety-security/index.tsx lines 17-78 (App Lock toggle); apps/mobile/src/features/auth/hooks/useBiometricGate.ts; no enrollment prompt exists in apps/mobile/app/(auth)/login.tsx
+apps/mobile/src/features/auth/components/AppLockOffer.tsx mounts in app/(app)/_layout.tsx and guards the offer against account changes; lib/biometricFlagStore.ts persists the offer decision. app-lock-offer.test.tsx and biometric-flag-store.test.ts cover eligibility, Skip, successful authentication, and an account switch during authentication. Focused biometric and Safety & Security suites pass locally.
 
 **Suggested fix**
 
-After a successful Clerk sign-in, if hasHardwareAsync && isEnrolledAsync && !biometricFlag.enabled, present a one-time sheet with Continue (calls setBiometricEnabled(true) behind an authenticateAsync confirm) and Skip, persisting a 'prompted' flag so it never repeats.
+Verify the offer and device unlock on a signed-in physical iPhone and Android device, including the first Cloud onboarding transition and app restart. Keep the offer optional and never enable App Lock without successful device authentication.
 
 **Reference screenshot(s)**
 
@@ -3458,8 +3458,8 @@ Build a reusable FeatureAnnouncementScreen (or bottom-sheet) component, badge, h
 
 ### GAP-150, No dedicated search overlay and no pre-typing guidance state
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-state
 - **Reference:** ChatGPT · iOS · Global search overlay
 
@@ -3469,7 +3469,7 @@ The reference dedicates a full screen to search with the field bottom-anchored a
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx:195-232 (SearchBox at the top of the drawer) and 553-556 ('No matches' / 'No recent chats')
+apps/mobile/app/(app)/search.tsx and ChatsListScreen.tsx (dedicated scope guide, bottom search input, mode-scoped results); DrawerContent.tsx (search route); chats-list-screen.test.tsx and drawer-content.test.tsx (navigation and search states). Recent queries are not retained to protect search privacy.
 
 **Suggested fix**
 
@@ -3481,8 +3481,8 @@ Add a full-screen search route opened from the drawer's search affordance with a
 
 ### GAP-151, Library header has no overflow menu (select, sort, delete)
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Library
 
@@ -3492,7 +3492,7 @@ Reference Library header carries a trailing '…' button for bulk/manage actions
 
 **Evidence**
 
-apps/mobile/src/features/library/index.tsx header block (only `library-open-drawer` Pressable + Text)
+apps/mobile/src/features/library/index.tsx now opens server-backed saved-file sorting from the header; libraryClient.ts passes the canonical sort contract; useLibraryAssets.ts uses the server cursor and account-scoped result visibility. Focused Library tests cover sorting, pagination, and account changes. Select mode now acts on loaded account-owned saved files, confirms a move to deleted items, preserves failed rows for retry, and permits sharing one selected file. Oldest/type sorting now uses the shared Library sort contract and server ordering; multi-file share and clear-generated-images remain open.
 
 **Suggested fix**
 
@@ -3527,22 +3527,22 @@ Add a `FeaturePromoSheet` component (icon row, title, body, primary CTA, dismiss
 
 ### GAP-153, Voice mode hides the chat transcript instead of overlaying it
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Live voice conversation overlaying full chat transcript
 
 **Gap**
 
-In ChatGPT, voice mode is a translucent dark overlay on top of the existing chat screen, the full streamed response text, previous messages, and message action icons (copy/thumbs/share) remain visible/scrollable behind the mic controls. agiworkforce's VoiceConversationScreen is an opaque full-screen gradient takeover (colors.voiceConversationBgEnd background) that shows only a phase label and a 3-line max transcriptPreview, discarding the surrounding conversation context.
+The current Voice route now displays complete user and assistant text from its own voice-session conversation in a bounded scrollable panel while the microphone and composer remain available. It no longer truncates replies to three lines. Voice is still a separate opaque screen rather than an overlay on the originating chat; prior chat messages and message actions are not visible there.
 
 **Evidence**
 
-apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx lines 260-355 (opaque background, transcriptPreview numberOfLines=3).
+apps/mobile/app/(app)/voice.tsx subscribes to the created conversation messages and renders full text turns in voice-session-transcript. voice-conversation-ptt.test.tsx verifies both roles and an untruncated long reply. The retired VoiceConversationScreen.tsx cited by the original row no longer exists.
 
 **Suggested fix**
 
-Consider rendering VoiceConversationScreen as a semi-transparent overlay above the live MessageList (with reduced opacity/dim), showing the full streaming response text rather than a truncated 3-line preview, so users can read along while speaking.
+Finish by presenting Voice over the active conversation with current MessageList context and its existing actions, preserving scroll position and foreground-only capture. Verify layout, keyboard, and microphone transitions on signed devices.
 
 **Reference screenshot(s)**
 
@@ -3571,24 +3571,24 @@ Surface a model/effort chip in DispatchTaskComposer.tsx (apps/mobile/src/feature
 
 - `references-2/IMG_0628.PNG`
 
-### GAP-155, Drawer has no nav entry for Code or Dispatch, though both screens exist
+### GAP-155, Code and Dispatch are discoverable inside Remote when a Desktop is paired
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Claude · iOS · Nav drawer primary destinations
 
 **Gap**
 
-NEEDS RE-SITING (verified 2026-08-21): the files this row cites (apps/mobile/app/(app)/code/index.tsx, apps/mobile/app/(app)/dispatch/index.tsx) were deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). Code/Dispatch functionality now lives inside the unified Companion screen (apps/mobile/app/(app)/companion/index.tsx, apps/mobile/src/features/companion/). Do not treat this row as verified-open or closed until it is re-audited against Companion's current IA. Original complaint, preserved verbatim: Reference drawer lists Chats, Projects, Artifacts, Code, Dispatch, and Cowork as primary top-level destinations. agiworkforce's DrawerContent.PRIMARY_ITEMS only included Projects, Artifacts, Library, Tasks, and Schedules -- Code and Dispatch were fully built screens with no drawer entry point, making them undiscoverable without a deep link, before both screens were removed.
+The previous gap cited Code and Dispatch routes that were removed before this inventory was written. The drawer has a Remote destination. Once paired, that screen exposes the connected Desktop card with Code Sessions when the peer advertises support and a Dispatch task composer. Separate drawer routes would lead to screens the current app does not have.
 
 **Evidence**
 
-STALE -- cited paths do not exist: apps/mobile/app/(app)/code/index.tsx and apps/mobile/app/(app)/dispatch/index.tsx were deleted in c21de5707 (2026-07-30). Current DrawerContent.tsx PRIMARY_ITEMS type union (lines 56-107) is 'chats'|'projects'|'library'|'skills'|'schedules'|'remote' -- there is no separate Code/Dispatch destination because there is no separate screen; both are folded into 'remote' -> apps/mobile/app/(app)/companion/index.tsx. Whether a within-Companion discoverability gap remains (e.g. for DispatchTaskComposer) needs a fresh audit pass, not reuse of this evidence.
+DrawerContent.tsx routes Remote to /(app)/companion. companion/index.tsx mounts DesktopInfoCard only for a connected, stale, or reconnecting peer. DesktopInfoCard.tsx renders CodeSessionsCard when the peer advertises code-sessions, and DispatchTaskComposer. The disconnected path presents pairing and setup, which are prerequisites for either control.
 
 **Suggested fix**
 
-Add 'Code' and 'Dispatch' rows to PRIMARY_ITEMS in DrawerContent.tsx, routed to their existing screens, so both surfaces are reachable from primary navigation.
+Closed as stale. Keep Code and Dispatch under the paired Remote session; reassess only if the product creates independent session owners and routable screens.
 
 **Reference screenshot(s)**
 
@@ -3619,22 +3619,22 @@ Add an optional `emoji` field to the project model, a leading emoji button in th
 
 ### GAP-157, No starter category pills to seed a project's instructions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · New project modal
 
 **Gap**
 
-Reference offers a horizontally scrolling pill row (Homework, Writing, Health, Travel…) that pre-fills a project template, so the empty Custom Instructions field is never a blank page. agiworkforce presents three empty text fields with only placeholder hints.
+Mobile New Project offers the same starter templates as Web in a horizontal pill row. Selecting one seeds editable name, description, and instructions, while preserving a name the user typed. Editing an existing project does not apply a new starter.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx create modal; grep -i 'template|category' in apps/mobile/src/features/projects and apps/web/features/projects/components, only an unrelated CSS gridTemplateColumns hit
+packages/contracts/types/src/project-templates.ts owns the shared template definitions; apps/web/features/projects/data/project-templates.ts re-exports them. apps/mobile/app/(app)/(tabs)/projects.tsx renders accessible 44-point starter pills and persists the selected seed through the project store. projects-list-ergonomics.test.tsx verifies selection, editable fields, saved values, and custom-name preservation; Web CreateProjectDialog.templates.test.tsx confirms compatibility.
 
 **Suggested fix**
 
-Ship a small PROJECT_TEMPLATES constant (label, icon, seed instructions) rendered as a pill row under the Name field; tapping one fills description + instructions, which the user can then edit.
+Completed with the shared Web template catalogue; keep the template seed editable and maintain one canonical owner across surfaces.
 
 **Reference screenshot(s)**
 
@@ -3709,24 +3709,24 @@ If model-training consent is or becomes a real backend capability, surface it as
 
 - `claude_reference/125-claude-ios-settings-privacy-data-privacy-train-models-toggle.png`
 
-### GAP-161, Projects tab has no search field
+### GAP-161, Projects can be searched by name and description
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Projects list
 
 **Gap**
 
-Reference shows a persistent 'Search projects' pill at the bottom of the Projects list. agiworkforce renders every project in an unfiltered FlatList with only a count badge, so project lookup degrades linearly.
+The Projects screen has a bottom-anchored Search projects control. It filters current projects by name and description and shows an explicit no-match state.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx (FlatList over `projects`, no query state)
+apps/mobile/app/(app)/(tabs)/projects.tsx filters visibleProjects from query. projects-list-ergonomics.test.tsx verifies name, description, and no-match behavior.
 
 **Suggested fix**
 
-Add a bottom-anchored search pill filtering name + description client-side, matching the Library search treatment so both list surfaces share one pattern.
+Complete in repository. Verify search with a populated Cloud account on a signed device before submission.
 
 **Reference screenshot(s)**
 
@@ -3824,47 +3824,47 @@ Add a secondary button on the pairing intro that posts to an email-download-link
 
 - `chatgpt_reference/027-codex-ios-remote-setup-intro-signin-instructions.png`
 
-### GAP-166, Pairing setup is a single static screen, not a back-navigable stepped wizard
+### GAP-166, Returning users can revisit Remote desktop setup steps
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Codex · iOS · Remote setup step 2, Get pairing code
 
 **Gap**
 
-The reference splits setup into intro -> get pairing code -> scan/enter, each with a back chevron and one instruction per screen, so a user who loses their place can step back. UPDATED 2026-08-21: this is now only partially true. Since commit 00309f240 (2026-08-01), first-time pairing is a real multi-screen flow -- DesktopSetupChecklistView (one-time intro + checklist) -> DisconnectedView (pair CTA) -> QRScanner (camera, with its own manual-entry sub-step and a 'Close scanner' exit back to DisconnectedView) -- not the single dense screen this row originally described. The residual gap is narrower: there is no back-chevron from DisconnectedView to the one-time setup checklist once hasSeenDispatchSetup flips true (it's a persisted one-way gate, not a revisitable wizard step), and the screen header's back button exits Companion entirely rather than stepping back one screen.
+The disconnected Remote screen now provides a setup-steps action. The first-run checklist can be revisited and dismissed back to pairing without clearing the persisted first-run state.
 
 **Evidence**
 
-Re-sited 2026-08-21: apps/mobile/app/(app)/companion/index.tsx (state machine: DesktopSetupChecklistView | DisconnectedView | QRScanner, gated by useDispatchSetupStore's persisted hasSeenDispatchSetup); apps/mobile/src/features/companion/components/DesktopSetupChecklistView.tsx (one-time step); ConnectionStateViews.tsx DisconnectedView; QRScanner.tsx (close returns to DisconnectedView; manual-entry sub-step has its own 'Back to QR Scanner'). No revisit path from DisconnectedView back to DesktopSetupChecklistView once seen.
+apps/mobile/app/(app)/companion/index.tsx controls the revisit state; src/features/companion/components/ConnectionStateViews.tsx exposes the action. dispatch-setup-checklist.test.tsx and companion-screen-render-loop.test.tsx cover the flow.
 
 **Suggested fix**
 
-Narrow scope: add a way to re-open the one-time setup checklist from DisconnectedView (e.g. a 'Show setup steps again' link) instead of building a full 3-step back-navigable wizard from scratch -- most of that structure already exists.
+Verify revisit, back, and pairing on a physical iOS and Android device.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/028-codex-ios-remote-setup-get-pairing-code-step.png`
 
-### GAP-167, No filter/sort control on the scheduled tasks list
+### GAP-167, Scheduled tasks can filter and sort the list
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Scheduled tasks
 
 **Gap**
 
-Reference places a filter/sort control in the top-right of the Scheduled header. agiworkforce's header offers only Back and Create, so a user with many tasks cannot separate active from paused, or sort by next run.
+Mobile keeps the existing All, Active, and Paused filters and now offers a header sort control with Next run and Recently created. Tasks without a next run sort last; changing sort does not clear the filter.
 
 **Evidence**
 
-apps/mobile/app/(app)/schedules/index.tsx Header(onBackPress, onCreatePress) only
+apps/mobile/app/(app)/schedules/index.tsx owns the filter and sort controls; src/features/schedules/sort.ts orders a copy of the account-scoped schedules. schedule-screen.test.tsx covers the visible order and filter interaction.
 
 **Suggested fix**
 
-Add a header filter button opening a sheet with Active/Paused/All and sort by Next run / Recently created; the store already exposes isActive per schedule.
+Verify sort and filter with a signed-in task list on iOS and Android after Cloud sign-in works.
 
 **Reference screenshot(s)**
 
@@ -3895,22 +3895,22 @@ Add a connectors/tools multi-select to ScheduleForm sourced from the connector d
 
 ### GAP-169, Schedule creation has no persistent composer with voice dictation
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-interaction
 - **Reference:** ChatGPT · iOS · Scheduled tasks composer
 
 **Gap**
 
-Reference keeps a chat-style composer pinned to the bottom of the Scheduled screen ('+ | Schedule a task | mic | send'), so a task can be dictated or typed without leaving the list. agiworkforce hides natural-language creation behind a QuickSchedule chip that opens a Modal, and offers no mic/dictation entry point for scheduling.
+The Scheduled screen now keeps a bottom composer with a full-form button, task draft, existing on-device voice dictation, and continue button. Continuing opens scheduling details with the draft preserved; successful creation clears it.
 
 **Evidence**
 
-apps/mobile/src/features/schedules/components/QuickSchedule.tsx (Modal-based flow, TextInput only); apps/mobile/app/(app)/schedules/index.tsx renders it as an inline chip above the list
+apps/mobile/src/features/schedules/components/QuickSchedule.tsx owns the pinned composer and scheduling modal; apps/mobile/app/(app)/schedules/index.tsx places it after the task list; schedule-screen.test.tsx covers dictation, draft preservation, and full-form navigation.
 
 **Suggested fix**
 
-Promote QuickSchedule to a pinned bottom composer reusing the chat ChatInput shell (attach button, text field, mic wired to the existing voice feature, send), keeping the modal only for the detailed form.
+Verify dictated and typed scheduling on signed-in iOS and Android devices after Cloud sign-in works.
 
 **Reference screenshot(s)**
 
@@ -4077,47 +4077,47 @@ Add a second, independently persisted toggle 'Include audio recordings' nested u
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-177, No chat-history controls: archive, archive all, or delete all chats
+### GAP-177, Cloud chat-history controls need signed-device verification and Local archive decision
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Data controls
 
 **Gap**
 
-Reference groups 'Chat history' with Archived chats >, Archive all chats, and Delete all chats. agiworkforce mobile has no archive concept at all, a conversation menu item for it was removed because nothing was wired, and the only bulk destructive action is the Storage screen's full device wipe, which also deletes memory, settings and models.
+AGI Mobile provides Cloud Archived chats, Archive all chats, and Delete all chats with explicit Cloud scope and two-step confirmation. Local chats remain separate and are cleared with the device storage control; there is no Local archive feature.
 
 **Evidence**
 
-apps/mobile/src/features/sidebar/components/ConversationItem.tsx lines 96-98 ('No "Archive" entry here: it rendered unconditionally with no wired action … conversations have no archived field'); grep -i 'delete all chats|deleteAllConversations' across apps/mobile/src, no match
+apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
 
 **Suggested fix**
 
-Add an `archivedAt` field to local and cloud conversations, an Archived chats screen, and a Chat history group in Data Controls with Archive all / Delete all chats (both confirmed, and scoped to the active Local vs Cloud mode so the trust boundary is explicit in the confirmation copy).
+Verify Cloud archive/delete on a signed-in device once production routes are deployed. Decide whether Local archive is a supported product requirement; if so, add it to local storage and chat navigation without crossing the Cloud boundary.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-178, No user control over automatic web search ('Automatically use' group)
+### GAP-178, Mobile lets users turn automatic web search off
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > General
 
 **Gap**
 
-The reference has an 'Automatically use' group whose 'Web search' switch, with the explainer 'Search the web for real-time info.', lets a user stop the model reaching the network on its own. In agiworkforce web search is always on for capable signed-in cloud sessions and the Capabilities screen only reports status.
+Capabilities exposes a persisted Web search switch for signed-in Cloud use. The send boundary reads that preference and omits web_search when it is off, while still checking model and deployment capability when it is on. The screen explains that disabling search may produce outdated answers.
 
 **Evidence**
 
-apps/mobile/src/features/chat/components/ChatInput.tsx:174 ('Web search has no user toggle -- it is on for every capable signed-in…'); apps/mobile/src/features/settings/capabilities/index.tsx:118-126 (read-only 'Web search' row)
+apps/mobile/src/features/settings/capabilities/index.tsx renders the switch through useChatStore.setFeature; chatViewStore.ts persists features.webSearch; chatExecutionStore.ts reads it before adding web_search to the Cloud request. capabilities-settings.test.tsx verifies the toggle and chatStore.test.ts verifies both request states.
 
 **Suggested fix**
 
-Add an 'Automatically use → Web search' switch in General (or make the Capabilities row interactive) that is genuinely honoured by the request builder, with copy stating that turning it off may produce stale answers.
+Completed for supported Cloud search. Keep the UI preference and Cloud request builder bound to the same persisted feature flag; retain model and deployment capability checks.
 
 **Reference screenshot(s)**
 
@@ -4148,8 +4148,8 @@ Add an 'Intelligence' row in General bound to the existing agentControlStore '**
 
 ### GAP-180, Approval policy is not surfaced where plugins/connectors are managed
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings > Plugins
 
@@ -4159,11 +4159,11 @@ Reference puts 'Permissions, Allow low-risk >' as the first row of the Plugins s
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/auto-approve.tsx OPTIONS (ask/smart/full); apps/mobile/src/features/settings/cloud-connectors/index.tsx has no approval-policy row
+apps/mobile/app/(app)/settings/auto-approve.tsx OPTIONS (ask/smart/full); apps/mobile/src/features/settings/cloud-connectors/index.tsx shows the canonical toolApprovalPolicyOption summary and routes to Action approvals; cloud-connectors-page-enabled.test.tsx checks the row and navigation
 
 **Suggested fix**
 
-Add a first-row summary at the top of the connectors screen showing the current approval mode as a `value` on SettingsRow that deep-links to /(app)/settings/auto-approve, with the one-line explainer beneath the group.
+Implemented the policy summary and direct settings link. Verify the signed-in connector screen and policy change on a release device before closing.
 
 **Reference screenshot(s)**
 
@@ -4171,22 +4171,22 @@ Add a first-row summary at the top of the connectors screen showing the current 
 
 ### GAP-181, Remote control/companion is not in the Settings information architecture
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Codex · iOS · Settings > Remote control
 
 **Gap**
 
-Reference places Remote control inside Settings, grouping Profile, Connections, Composer, Behavior and Safety on one page. agiworkforce reaches the companion only through a DesktopCompanionWidget in the navigation drawer; the Settings index has no companion, remote or desktop entry, so a user looking to manage or revoke a desktop pairing in Settings finds nothing.
+Settings Device section now includes the existing Remote destination with live companion connection state; the drawer shortcut remains. Pairing recovery and first-run setup also describe the actual short-lived-code authorization instead of requiring a matching phone account.
 
 **Evidence**
 
-grep -n 'companion|Companion|Desktop' in apps/mobile/src/features/settings/index.tsx, no match; apps/mobile/src/features/drawer/components/DrawerContent.tsx line 451 renders DesktopCompanionWidget
+apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/**tests**/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
 
 **Suggested fix**
 
-Add a 'Desktop & remote control' row to the Settings index that opens /(app)/companion, keeping the drawer widget as a shortcut, and show connection status as the row's `value`.
+Completed locally; verify navigation and status on a signed device before submission.
 
 **Reference screenshot(s)**
 
@@ -4215,47 +4215,47 @@ Add a persisted 'Start AGI with Voice' switch in Voice settings; when on, the (a
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-183, Voice settings lacks a Language row; speech language is only editable mid-session
+### GAP-183, Speech language is selectable in Voice settings
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings > Voice
 
 **Gap**
 
-The reference puts 'Language: Auto' directly in Voice settings. In agiworkforce the Voice settings screen reads speechLanguage but never lets the user change it, the only setter lives in the in-session VoiceSelector component, so a user in Settings cannot change recognition/speech language.
+Voice settings shows the current speech language and opens a picker populated by available device voices. Choosing a language updates the current Local or Cloud speech-language preference.
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice-language/index.tsx:177-179 (reads speechLanguage, no setter); apps/mobile/src/features/voice/components/VoiceSelector.tsx:49-84 (only setSpeechLanguage call site)
+apps/mobile/src/features/settings/voice/index.tsx renders Speech language and SpeechLanguageModal, loads TTS languages, and writes through the active settings store. voice-settings-speech-language.test.tsx covers selection and the empty-language state.
 
 **Suggested fix**
 
-Add a 'Language' SettingsRow (value = current language or 'Auto') to Settings > Voice that pushes the existing language list from VoiceSelector, writing through local/cloud settings stores as VoiceSelector does.
+Complete in repository. Verify available-language results on the target iOS device before submission.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-184, No voice model / voice intelligence tier selection in Voice settings
+### GAP-184, Voice settings identifies the model used for replies
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Voice
 
 **Gap**
 
-The reference exposes 'Model: Live' and 'Intelligence: Instant' so users pick the realtime voice pipeline and its reasoning tier before starting. agiworkforce's Voice settings only chooses a TTS provider (System, with Cloud disabled) and never surfaces which model answers in a voice session or at what effort.
+Voice uses the same current chat model as text, with on-device speech playback. Mobile has no separate realtime voice model or intelligence tier. Voice settings now shows the resolved answer model for the active Local or Cloud boundary and opens the existing model picker; the full-screen Voice Companion resolves the same model before sending.
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx (ProviderOption system/cloud only); grep 'realtime|voice model' across apps/mobile/src, only cloud sync realtime, no voice model picker
+apps/mobile/src/features/chat/utils/newConversationModel.ts owns the model fallback shared by the new-chat screen and full-screen Voice Companion. apps/mobile/src/features/settings/voice/index.tsx shows Answer model, links to the existing model picker, and explains the Cloud transcript destination. new-conversation-model.test.ts, voice-conversation-ptt.test.tsx, and voice-settings.test.tsx cover boundary selection and the visible row.
 
 **Suggested fix**
 
-Add Model and Intelligence rows to Voice settings that read the voice-capable entries from models.json and the model's supportedEfforts (same source ModelPickerSheet uses), or, until a realtime voice route exists, show a single read-only row naming the model that answers voice turns.
+Verify answer-model label, selection, and voice send on a signed device before closing. A separate realtime voice tier needs its own provider/runtime contract.
 
 **Reference screenshot(s)**
 
@@ -4330,7 +4330,7 @@ Add a 'Shared links' row to the Account section of the settings list (apps/mobil
 
 - `claude_reference/126-claude-ios-settings-shared-links-empty-state-no-shared-links.png`
 
-### GAP-188, No phone-number identity row and no avatar edit affordance on mobile
+### GAP-188, No phone-number identity row on mobile
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4339,38 +4339,38 @@ Add a 'Shared links' row to the Account section of the settings list (apps/mobil
 
 **Gap**
 
-The reference Account group shows Email (tappable), Phone number, Subscription and Restore purchases, and the profile header carries a pencil badge for changing the avatar. agiworkforce shows email and subscription but has no phone row, and the Clerk avatar is rendered read-only on the cloud-account screen with no picker, even though expo-image-picker is already a dependency used for chat attachments.
+The reference Account group shows Email (tappable), Phone number, Subscription and Restore purchases, and the profile header carries a pencil badge for changing the avatar. agiworkforce shows email and subscription but has no phone row, while the avatar now has an editable picker on the cloud-account screen.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 306-347 (Account rows); apps/mobile/src/features/settings/cloud-account/index.tsx:38,184-186 (avatarUrl rendered as Image, no edit); apps/mobile/src/features/media/photo-picker.ts (picker exists but is chat-only)
+apps/mobile/src/features/settings/cloud-account/index.tsx has editable avatar and display name; Account rows still lack a phone identity flow.
 
 **Suggested fix**
 
-Add a Phone number row bound to Clerk's phone identity (with add/verify) and wire an edit-avatar affordance on ProfileHeader that reuses pickImageAssets and Clerk's setProfileImage.
+Add a Phone number row bound to Clerk phone identity with supported add and verification steps.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/041-chatgpt-ios-settings-account-profile-identity-email-phone-theme.png`
 
-### GAP-189, App settings missing Remote control, Trusted contact, Cloud browser; Storage buried
+### GAP-189, Settings exposes Storage and Remote while safety controls remain combined
 
-- **Status:** Open
+- **Status:** In Progress
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings, App settings list
 
 **Gap**
 
-The reference App settings group is General, Notifications, Voice, Parental controls, Trusted contact, Safety, Security and login, Remote control, Cloud browser, Storage, Data controls. agiworkforce's Device group covers General, Notifications, Voice, Parental Controls and a merged Safety & Security. Remote control has no settings entry at all (the paired-desktop screen is only reachable from the drawer widget), Trusted contact and Cloud browser do not exist in any surface, and the real Storage screen is only reachable two levels deep.
+Settings now links directly to the existing Storage screen from Device, including a return path, and already shows Remote with live pairing status. Safety and security remain combined. Trusted contact and Cloud browser have no implemented service or screen and should not appear as dead controls.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 348-397; apps/mobile/app/(app)/settings/storage.tsx linked only from settings/data-controls/index.tsx:117 and settings/general/index.tsx:67; grep -i 'trusted contact|crisis|cloud browser' across apps/mobile, apps/web/app and apps/desktop/src, no matches
+SettingsTabScreen has Device rows for Remote and Storage; settings-page.test.tsx verifies both navigation paths. StorageManagerScreen accepts a Settings-root return path. Safety & Security remains a combined row.
 
 **Suggested fix**
 
-Promote Storage to the Device group, add a 'Remote control' row routing to /(app)/companion, and split Safety & Security into Safety and Security-and-login to match the mental model; track Trusted contact and Cloud browser as separate feature gaps.
+Reassess the Safety & Security information hierarchy against its current controls. Add Trusted contact and Cloud browser only with implemented and tested backing services.
 
 **Reference screenshot(s)**
 
@@ -4399,93 +4399,93 @@ Skills nav gap is resolved; do not rebuild it. Remaining work is a mobile plugin
 
 - `chatgpt_reference/040-chatgpt-ios-sidebar-nav-menu-recents-projects-peek.png`
 
-### GAP-191, Recents are capped at 8 with no path to full chat history
+### GAP-191, Recents lead to the full chat history
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Sidebar recents
 
 **Gap**
 
-The reference's sidebar scrolls the entire chat history under 'Recents'. agiworkforce caps the drawer list at DRAWER_RECENT_LIMIT = 8 and offers no 'See all' link or history screen, so older conversations are only reachable if the user remembers a search term.
+The drawer keeps eight recent conversations visible and now offers See all chats below them. Chats opens the full grouped, searchable, paginated history for the current Local or Cloud mode.
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx:92 (DRAWER_RECENT_LIMIT = 8) and the recents block at 500-557 (no overflow affordance)
+DrawerContent.tsx renders See all chats beneath Recents and routes to /(app)/chats. ChatsListScreen.tsx owns grouped history, search, and load-more. drawer-content.test.tsx verifies the capped preview and handoff.
 
 **Suggested fix**
 
-Either paginate the drawer list on scroll or add a 'See all chats' row beneath Recents that opens a full history screen with date grouping, reusing the existing conversation list item and long-press menu.
+Complete in repository. Confirm scrolling and accessibility on a signed device before submission.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/077-chatgpt-ios-sidebar-nav-recents-chat-history-fab.png`
 
-### GAP-192, Voice conversation screen has no text-input fallback to type instead of speaking
+### GAP-192, Voice conversation supports typed turns without leaving Voice mode
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Voice mode reasoning status + text-input fallback
 
 **Gap**
 
-ChatGPT's voice overlay keeps a real composer (text field + mic + X) pinned at the bottom, letting the user type a message mid-conversation without leaving voice mode. agiworkforce's VoiceConversationScreen forces Keyboard.dismiss() on entry and renders no TextInput at all, the only way to communicate is the orb (tap-to-talk or push-to-talk).
+The full-screen Voice route now keeps an accessible text composer available alongside the microphone. Typed turns share the selected model and conversation with spoken turns, work when Voice Input is disabled, and preserve the draft after send failure.
 
 **Evidence**
 
-apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx lines 202-204 (Keyboard.dismiss() on visible) and the full render tree (lines 260-404) contains no TextInput/composer.
+apps/mobile/app/(app)/voice.tsx renders the keyboard-aware composer and lazily creates a session on the first send. useVoiceConversation.ts shares response handling for speech and text and suppresses background playback. voice-conversation-ptt.test.tsx covers typed send, retry, and background behavior.
 
 **Suggested fix**
 
-Add a slim always-visible text composer at the bottom of VoiceConversationScreen (matching the reference's pill-shaped input with mic and X) so users can switch to typing without exiting voice mode.
+Complete in repository. Verify keyboard, touch targets, and spoken feedback on a signed release device before App Store submission.
 
 **Reference screenshot(s)**
 
 - `references-2/chatgpt-ios-voice-05-reasoning-status.png`
 
-### GAP-193, No persistent Hands-free vs Push-to-talk voice mode preference
+### GAP-193, Voice mode preference persists between conversations
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude · iOS · Voice settings
 
 **Gap**
 
-Claude iOS has a 'Mode' section with a persisted radio choice between Hands free ('Best for quiet environments') and Push to talk ('Hold to speak, release to send'). agiworkforce has push-to-talk vs hands-free behavior only as a live toggle inside an active voice conversation (VoiceConversationScreen.tsx), not as a saved Settings preference alongside Speed/Pitch/Voice.
+Voice Settings presents Hands free and Push to talk choices backed by the persisted voicePushToTalk setting. The Voice conversation route reads and updates that same preference.
 
 **Evidence**
 
-apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx:395 (in-call toggle only); apps/mobile/src/features/settings/voice/index.tsx has Auto-listen toggle but no explicit hands-free/push-to-talk radio
+apps/mobile/src/features/settings/voice/index.tsx renders the Mode choice; apps/mobile/app/(app)/voice.tsx reads voicePushToTalk and updates it from the in-call toggle. voice-settings.test.tsx verifies the Settings control and voice-conversation-ptt.test.tsx covers its behavior.
 
 **Suggested fix**
 
-Add a persisted 'Mode' setting (Hands free / Push to talk) to the Voice settings screen that seeds the default state of the in-call toggle.
+Complete in repository. Verify preference retention after app restart on a signed device before submission.
 
 **Reference screenshot(s)**
 
 - `claude_reference/131-claude-ios-voice-settings-buttery-hands-free-mode.png`
 
-### GAP-194, Work mode is hidden inside the '+' sheet instead of a header surface switcher
+### GAP-194, Chat and Work mode are visible in the mobile chat header
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Work mode header switcher
 
 **Gap**
 
-The reference switches surfaces from the title bar ('Chat ⌄' / 'Work ⌄'), making the current mode always visible and one tap away. In agiworkforce the equivalent workMode ('chat' vs 'agiwork') is a switch buried in the AddToChatSheet, and the chat header carries only the Local|Cloud execution toggle, so users cannot see which mode they are in.
+The new-chat header now exposes Chat and Work above the separate Local/Cloud execution toggle. The Work selection follows the existing agi_work entitlement and Cloud boundary. The screen still needs a signed-device layout and interaction check.
 
 **Evidence**
 
-apps/mobile/src/features/chat/components/AddToChatSheet.tsx:196-201, 344-345 (setWorkMode toggle); apps/mobile/app/(app)/(tabs)/chat.tsx:588-601 (header holds only Menu + ModeToggle Local|Cloud)
+apps/mobile/app/(app)/(tabs)/chat.tsx exposes a Chat/Work header switch while retaining Local/Cloud execution mode below it. Work checks the canonical agi_work billing capability and asks before moving a Local session into Cloud; ChatInput.tsx labels eligible Cloud Work with 'Work with AGI'. chat-tab-mode-toggle.test.tsx and chat-input.test.tsx cover navigation, entitlement, consent prompt, and composer copy.
 
 **Suggested fix**
 
-Promote workMode to a header dropdown showing the active surface name (Chat / Work) with the Local|Cloud toggle kept as a secondary chip, and mirror the selection in the composer placeholder ('Work with AGI').
+Verify Chat/Work header and Cloud consent on a signed release device before closing.
 
 **Reference screenshot(s)**
 
@@ -6908,24 +6908,24 @@ Add a second lens pass that matches TODO/FIXME/HACK/XXX comment markers and emit
 
 ## P3
 
-### GAP-300, Effort levels use engineering labels with no explanation of the trade-off
+### GAP-300, Reasoning effort uses shared product labels and trade-off descriptions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-copy
 - **Reference:** ChatGPT · iOS · Chat model + intelligence popover
 
 **Gap**
 
-The reference names tiers in product language ('Instant', 'Pro') so the speed/quality trade-off is legible. agiworkforce shows 'None / Minimal / Low / Medium / High / xHigh / Max' with no description of what changes (latency, cost, quality) at each stop.
+Reasoning effort keeps the provider wire values while every displayed level uses a shared product label and a cautious explanation of the reasoning-depth and response-time trade-off.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:54-62 (REASONING_EFFORT_LABEL)
+packages/contracts/types/src/design-system/effort.ts owns seven distinct product labels and descriptions. Mobile ModelPickerSheet.tsx renders those values in the accessible effort selector; Web and shared Desktop controls consume the same EFFORT_LABEL map. The mobile picker test verifies the selected level and its accessibility hint.
 
 **Suggested fix**
 
-Keep the wire values but map them to product labels with a one-line subtitle each (e.g. 'Instant, fastest replies, light reasoning'), defined once in the shared design-system effort module so web/desktop/mobile stay consistent.
+Completed. Keep labels and descriptions in the shared effort contract, and do not promise a fixed latency, quality, or cost across models and providers.
 
 **Reference screenshot(s)**
 
@@ -7025,45 +7025,45 @@ Once the reusable FeatureAnnouncementScreen exists (see 103 fix), add a Cowork-s
 
 ### GAP-305, No top-level 'Remote' entry point in mobile primary navigation
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Home sidebar with 'Remote' nav entry
 
 **Gap**
 
-ChatGPT iOS surfaces device/CLI pairing ('Remote') as a first-class item in the main hamburger sidebar next to Library, Projects, Scheduled, and Plugins. agiworkforce's companion/pairing feature exists in code but its entry point in the primary mobile navigation was not confirmed; it may be nested deeper than a top-level sidebar item.
+The mobile primary drawer already exposes Remote as a first-class destination next to other app sections; this audit row was stale. The row opens the mounted /(app)/companion screen and is feature-gated with the companion implementation.
 
 **Evidence**
 
-grep -in 'remote|pairing' the audit source inventory snapshot only surfaced 'features/native-bridge/pairing.ts' and the companion component folder, with no route inventory entry showing a top-level '(app)/remote' or sidebar item named 'Remote'.
+apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
 
 **Suggested fix**
 
-Add a 'Remote' item to the mobile app's primary sidebar/tab navigation that deep-links directly to the companion pairing/device list screen, matching its prominence in the reference.
+Completed locally; verify navigation and status on a signed device before submission.
 
 **Reference screenshot(s)**
 
 - `references-2/IMG_0618.PNG`
 
-### GAP-306, New Project modal never explains what a project is for
+### GAP-306, New Project explains shared context and keeps creation within thumb reach
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-copy
 - **Reference:** ChatGPT · iOS · New project modal
 
 **Gap**
 
-Reference leads with 'Projects give ChatGPT shared context across chats and files, all in one place.' directly under the title. agiworkforce's modal jumps straight to a Name field; the only explanatory copy sits far below, attached to Custom Instructions.
+The New Project editor now explains the shared context before its fields and places the Create or Save action in a full-width bottom bar. Cloud copy mentions project files; Local copy limits the promise to chats and instructions.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx (modal header then Name field; explainer only under 'Custom Instructions')
+apps/mobile/app/(app)/(tabs)/projects.tsx renders a scope-aware explanation, keeps the form in a scrollable region, and places the action outside that region with safe-area spacing and a 48-point touch target. projects-list-ergonomics.test.tsx checks Local and Cloud copy, bottom-action placement, and that template selection still creates the expected project.
 
 **Suggested fix**
 
-Add a one-line subtitle under the modal title describing shared context across chats and files, and move the primary action to a full-width bottom CTA for thumb reach.
+Completed. Keep the explanation aligned with the actual Local and Cloud project capabilities, and keep the submission action reachable above the device safe area and keyboard.
 
 **Reference screenshot(s)**
 
@@ -7071,45 +7071,45 @@ Add a one-line subtitle under the modal title describing shared context across c
 
 ### GAP-307, Manual pairing submit has no disabled state and no paste affordance
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-state
 - **Reference:** Codex · iOS · Pair manually dialog
 
 **Gap**
 
-The reference disables 'Pair' until the field is non-empty, so the error path is unreachable for the empty case. agiworkforce's Connect button is always enabled and produces a validation error ('Please enter a pairing code.') on an empty submit, and there is no paste button despite the field expecting a long copied payload.
+Manual pairing now disables Connect until the trimmed field has content, reads a full copied code or link through the existing Expo clipboard dependency, and explains empty or unreadable clipboard results. Manual entry remains usable when camera permission is denied, with a way to return to camera options or close.
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx lines 66-71 (empty-string error) and 173-179 (Button with no disabled prop)
+apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/**tests**/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
 
 **Suggested fix**
 
-Disable the Connect button while the trimmed input is empty and add a 'Paste' action that reads Clipboard.getStringAsync into the field.
+Completed locally; verify the camera-denied and clipboard permission paths on a signed device before App Store submission.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/030-codex-ios-remote-setup-manual-pairing-code-modal-keyboard.png`
 
-### GAP-308, Remaining usage is not surfaced in any nav or menu, only on a dedicated screen
+### GAP-308, Cloud usage remaining is visible in the drawer
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Codex · iOS · Remote overflow menu, Usage remaining
 
 **Gap**
 
-The reference prints 'Usage remaining, Week 100%' at the bottom of the overflow menu so quota is visible without leaving the current task. agiworkforce only exposes usage via Settings > Cloud > Usage, and the drawer contains no usage indicator.
+The Cloud drawer footer shows a live remaining percentage for the active weekly or billing-period window and opens the full Usage screen. It hides the summary in Local mode and while signed out. Both surfaces share an account-scoped snapshot that clears at Cloud account teardown; failed refreshes show an unavailable state instead of an old percentage.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx line 473-480 (cloud-usage row); apps/mobile/src/features/drawer/components/DrawerContent.tsx has no usage/percent references
+apps/mobile/src/features/drawer/components/DrawerContent.tsx renders the account-bound footer; apps/mobile/src/features/settings/cloud-usage/store.ts owns the snapshot and ignores stale account responses; apps/mobile/src/features/settings/cloud-usage/index.tsx reads the same store. Focused drawer, usage-screen, account-switch and teardown tests pass on 2026-09-27.
 
 **Suggested fix**
 
-Render a compact 'Usage remaining' line in the drawer footer (or an overflow menu) sourced from the same store as settings/cloud-usage, hidden in Local mode.
+Keep usage data account-scoped and refresh it when the Cloud drawer opens.
 
 **Reference screenshot(s)**
 
@@ -7163,8 +7163,8 @@ Surface a Location row in Data Controls showing the live OS permission status wi
 
 ### GAP-311, Export and account deletion live on two unrelated settings screens
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings > Data controls (export/delete)
 
@@ -7174,11 +7174,11 @@ Reference co-locates Export data and Delete account at the bottom of Data contro
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx vs apps/mobile/src/features/settings/cloud-account/index.tsx line 277 (Delete Account row)
+apps/mobile/src/features/settings/data-controls/index.tsx now shows Export Cloud data and Delete account rows that open the existing account-scoped Cloud Account flow; data-controls-bulk-chats.test.tsx verifies both links without firing a deletion
 
 **Suggested fix**
 
-Mirror a 'Delete account' row into Data Controls (navigating to the existing cloud-account flow) so both export paths and the deletion path are reachable from one screen.
+Implemented navigation from Data Controls to the existing Cloud export and deletion flow. Verify the paths on a signed release device before closing.
 
 **Reference screenshot(s)**
 

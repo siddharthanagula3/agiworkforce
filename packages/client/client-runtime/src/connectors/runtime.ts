@@ -142,12 +142,18 @@ function statusOf(error: unknown): number | null {
   return null;
 }
 
-const InstallStartSchema = ConnectConflictResponseSchema.pick({ installStartPath: true });
+const ConflictPathsSchema = ConnectConflictResponseSchema.pick({
+  oauthStartPath: true,
+  installStartPath: true,
+  credentialsPath: true,
+});
 
-function installUrlOf(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null;
-  const parsed = InstallStartSchema.safeParse((error as { body?: unknown }).body);
-  return parsed.success && parsed.data.installStartPath ? parsed.data.installStartPath : null;
+type ConflictPaths = ReturnType<typeof ConflictPathsSchema.parse>;
+
+function conflictPathsOf(error: unknown): ConflictPaths {
+  if (!error || typeof error !== 'object') return {};
+  const parsed = ConflictPathsSchema.safeParse((error as { body?: unknown }).body);
+  return parsed.success ? parsed.data : {};
 }
 
 export function createConnectorRuntime(options: ConnectorRuntimeOptions): ConnectorRuntime {
@@ -282,9 +288,16 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
         return { kind: 'connected' };
       } catch (error) {
         if (statusOf(error) !== 409) throw error;
-        const installStartPath = installUrlOf(error);
-        if (installStartPath) {
-          return { kind: 'install-required', connectorId, installUrl: installStartPath };
+        const conflict = conflictPathsOf(error);
+        if (conflict.credentialsPath) {
+          return {
+            kind: 'credentials-required',
+            connectorId,
+            credentialsPath: conflict.credentialsPath,
+          };
+        }
+        if (conflict.installStartPath && !conflict.oauthStartPath) {
+          return { kind: 'install-required', connectorId, installUrl: conflict.installStartPath };
         }
         const start = await startOAuth(connectorId);
         return {

@@ -2,10 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { Input } from '@/components/ui/input';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import type { RecurrenceType } from '../store';
+import { ScheduleDateTimeField } from './ScheduleDateTimeField';
 import {
   MOBILE_SCHEDULE_CADENCE_NOTE,
   MOBILE_SUPPORTED_SCHEDULE_RECURRENCES,
@@ -38,10 +38,6 @@ const RECURRENCE_LABELS: Readonly<Record<MobileSupportedScheduleRecurrence, stri
 };
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-
-const MINUTES = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
 
 const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -77,10 +73,6 @@ export function RecurrencePicker({
     setLocalDate(scheduledDate ?? '');
     setDateError(undefined);
   }, [scheduledDate]);
-
-  const timeParts = (timeOfDay || '09:00').split(':');
-  const hours = timeParts[0] ?? '09';
-  const minutes = timeParts[1] ?? '00';
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -118,20 +110,12 @@ export function RecurrencePicker({
     [haptic, onChange],
   );
 
-  const handleHourChange = useCallback(
-    (h: string) => {
+  const handleTimeChange = useCallback(
+    (time: string) => {
       haptic();
-      onChange(value, { timeOfDay: `${h}:${minutes}` });
+      onChange(value, { timeOfDay: time });
     },
-    [haptic, value, minutes, onChange],
-  );
-
-  const handleMinuteChange = useCallback(
-    (m: string) => {
-      haptic();
-      onChange(value, { timeOfDay: `${hours}:${m}` });
-    },
-    [haptic, value, hours, onChange],
+    [haptic, value, onChange],
   );
 
   const handleDateChange = useCallback(
@@ -260,93 +244,23 @@ export function RecurrencePicker({
 
       {/* Once: Date input */}
       {value === 'once' && (
-        <Input
-          label="Date (YYYY-MM-DD)"
-          placeholder="2026-03-01"
+        <ScheduleDateTimeField
+          mode="date"
+          label="Date"
           value={localDate}
-          onChangeText={handleDateChange}
+          onChange={handleDateChange}
           error={dateError}
-          autoCapitalize="none"
-          keyboardType="numbers-and-punctuation"
         />
       )}
 
       {/* Time picker (HH:MM) */}
       {isMobileScheduleRecurrenceSupported(value) && (
-        <View>
-          <Text className="text-sm text-white/70 mb-2">Preferred time</Text>
-          <View className="flex-row items-center gap-3">
-            {/* Hours */}
-            <View className="flex-1">
-              <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
-                Hour
-              </Text>
-              <ScrollView
-                className="h-32 rounded-lg bg-surface-elevated"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              >
-                {HOURS.map((h) => {
-                  const selected = h === hours;
-                  return (
-                    <Pressable
-                      key={h}
-                      onPress={() => handleHourChange(h)}
-                      className="h-9 items-center justify-center rounded-md mx-1"
-                      style={selected ? { backgroundColor: colors.accentSurface } : undefined}
-                      accessibilityLabel={`${h} hours`}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${selected ? '' : 'text-white/50'}`}
-                        style={selected ? { color: colors.teal } : undefined}
-                      >
-                        {h}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            <Text className="text-xl text-white/30 font-bold mt-4">:</Text>
-
-            {/* Minutes */}
-            <View className="flex-1">
-              <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
-                Minute
-              </Text>
-              <ScrollView
-                className="h-32 rounded-lg bg-surface-elevated"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              >
-                {MINUTES.map((m) => {
-                  const selected = m === minutes;
-                  return (
-                    <Pressable
-                      key={m}
-                      onPress={() => handleMinuteChange(m)}
-                      className="h-9 items-center justify-center rounded-md mx-1"
-                      style={selected ? { backgroundColor: colors.accentSurface } : undefined}
-                      accessibilityLabel={`${m} minutes`}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${selected ? '' : 'text-white/50'}`}
-                        style={selected ? { color: colors.teal } : undefined}
-                      >
-                        {m}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
+        <ScheduleDateTimeField
+          mode="time"
+          label="Preferred time"
+          value={timeOfDay || '09:00'}
+          onChange={handleTimeChange}
+        />
       )}
     </View>
   );

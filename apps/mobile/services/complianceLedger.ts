@@ -75,6 +75,15 @@ export const mmkvConsentLedger: ConsentLedger = {
   },
 };
 
+export const mmkvRoutingConsentLedger: ConsentLedger = {
+  getNamedProviderConsent(providerId: string): NamedProviderConsent | null {
+    const consent = mmkvConsentLedger.getNamedProviderConsent(providerId);
+    if (!consent?.accepted) return consent;
+    const disclosureVersion = mmkvDisclosureLedger.read()?.disclosureCopyHash;
+    return disclosureVersion && consent.disclosureVersion === disclosureVersion ? consent : null;
+  },
+};
+
 export function recordNamedProviderConsent(consent: NamedProviderConsent): void {
   storage.set(consentKey(consent.providerId), JSON.stringify(consent));
 }

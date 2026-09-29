@@ -13,12 +13,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
-| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/components/FinanceDashboard.tsx:140-140`, `apps/web/app/api/finance/overview/route.ts:34-34`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.02: Connected accounts.
 
@@ -27,12 +27,12 @@ Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/com
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
-| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/features/finance/components/FinanceDashboard.tsx:101-101`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.03: Spending analysis.
 
@@ -41,12 +41,12 @@ Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
-| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/features/finance/components/FinanceDashboard.tsx:177-177`, `apps/web/features/finance/components/FinanceDashboard.tsx:213-213`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.09: Financial research workspace.
 
@@ -75,12 +75,12 @@ Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: HealthEx setup (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check), owner said Health stays off; records browser waits on founder research entry 1 (Claude's HealthEx connector is conversational only). | ui, flag-off |
-| desktop | partial | owner: HealthEx setup (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check), owner said Health stays off; records browser waits on founder research entry 1 (Claude's HealthEx connector is conversational only). | ui, flag-off |
+| web | partial | owner: HealthEx agreement and FTC Health Breach Notification Rule legal sign-off, register a client at api.healthex.io/oauth/register and add the healthex entry with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID; owner has said Health stays off | ui, flag-off |
+| desktop | partial | owner: HealthEx agreement and FTC Health Breach Notification Rule legal sign-off, register a client at api.healthex.io/oauth/register and add the healthex entry with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID; owner has said Health stays off | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/db/neon/0337_health_space.sql:11-11`, `apps/web/db/neon/0337_health_space.sql:88-88`, `apps/web/db/neon/0337_health_space.sql:113-113`, `apps/web/db/neon/0337_health_space.sql:140-140`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:234-234`
 
 ## S108.17: Legal research workspace.
 

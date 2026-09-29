@@ -51,6 +51,34 @@ function optionalNumber(args: Record<string, unknown>, key: string): number | un
   return value;
 }
 
+const MAX_FILL_FIELDS = 50;
+const MAX_FILL_VALUE_CHARS = 10_000;
+
+function requireFillFields(
+  args: Record<string, unknown>,
+): Array<{ selector: string; value: string }> {
+  const fields = args['fields'];
+  if (!Array.isArray(fields) || fields.length === 0 || fields.length > MAX_FILL_FIELDS) {
+    throw new InvalidBrowserArguments(
+      `"fields" must list between 1 and ${MAX_FILL_FIELDS} fields to fill.`,
+    );
+  }
+  return fields.map((field) => {
+    const record = field && typeof field === 'object' ? (field as Record<string, unknown>) : {};
+    const selector = record['selector'];
+    const value = record['value'];
+    if (typeof selector !== 'string' || selector.trim() === '') {
+      throw new InvalidBrowserArguments('Each field needs a "selector".');
+    }
+    if (typeof value !== 'string' || value.length > MAX_FILL_VALUE_CHARS) {
+      throw new InvalidBrowserArguments(
+        `Each field needs a "value" of at most ${MAX_FILL_VALUE_CHARS} characters.`,
+      );
+    }
+    return { selector, value };
+  });
+}
+
 function withDefined(entries: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(entries).filter(([, value]) => value !== undefined));
 }
@@ -148,6 +176,40 @@ export function planBrowserCommand(
         "Read the paired browser's network activity?",
         'Requests the active tab made, including their addresses and status, are copied into this conversation.',
       );
+    case 'browser_find': {
+      const query = optionalString(rawArgs, 'query');
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ query, tabId }),
+        'List the controls on the page in the paired browser?',
+        query === undefined
+          ? 'The buttons, links and fields of the page, with their labels, are copied into this conversation. Field values are not.'
+          : `The buttons, links and fields whose label matches "${query}" are copied into this conversation. Field values are not.`,
+      );
+    }
+    case 'browser_fill_form': {
+      const fields = requireFillFields(rawArgs);
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ fields, tabId }),
+        'Fill in fields in the paired browser?',
+        `${fields.map((field) => `${field.selector}: ${field.value}`).join('\n')}\n\nare entered on the page. Nothing is submitted. Password and payment fields are left for you.`,
+      );
+    }
+    case 'browser_history': {
+      const direction = requireString(rawArgs, 'direction');
+      if (direction !== 'back' && direction !== 'forward') {
+        throw new InvalidBrowserArguments('"direction" must be back or forward.');
+      }
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ direction, tabId }),
+        direction === 'back'
+          ? 'Go back in the paired browser?'
+          : 'Go forward in the paired browser?',
+        `The tab returns to the page it showed ${direction === 'back' ? 'before' : 'after'} this one.`,
+      );
+    }
     case 'browser_download': {
       const url = requireHttpUrl(rawArgs, 'url');
       return plan(

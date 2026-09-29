@@ -9,7 +9,10 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useTheme, type ColorScheme } from '@/src/ui/theme';
+import { Input } from '@/components/ui/input';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
 import {
   assertDownloadAllowed,
   downloadModel,
@@ -126,7 +129,7 @@ function formatBytes(bytes: number): string {
   return `${Math.round(mb)} MB`;
 }
 
-type ScreenId = 'hero' | 'device-tier' | 'download';
+type ScreenId = 'hero' | 'about-you' | 'device-tier' | 'download';
 
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
@@ -255,7 +258,7 @@ export default function OnboardingScreen() {
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
     if (alreadySatisfied) {
-      setScreen('device-tier');
+      setScreen('about-you');
       return;
     }
     const copy = composeFirstRunDisclosure({
@@ -279,10 +282,22 @@ export default function OnboardingScreen() {
         chineseHqProvidersAccepted: acceptedProviderIds,
       });
       applyChineseHqProviderConsent(acceptedProviderIds);
-      setScreen('device-tier');
+      setScreen('about-you');
     },
     [disclosureCopy],
   );
+
+  const handleAboutYouDone = useCallback((preferredName: string, workDescription: string) => {
+    const partial = {
+      ...(preferredName ? { nickname: preferredName } : {}),
+      ...(workDescription ? { occupation: workDescription } : {}),
+    };
+    if (Object.keys(partial).length > 0) {
+      useLocalSettingsStore.getState().setPersonalization(partial);
+      useCloudSettingsStore.getState().setPersonalization(partial);
+    }
+    setScreen('device-tier');
+  }, []);
 
   const handleDisclosureDecline = useCallback(() => {
     setDisclosureVisible(false);
@@ -333,10 +348,9 @@ export default function OnboardingScreen() {
             setTier2Loading(false);
             finishOnboarding(recommendedModel.id);
           })
-          .catch((err: unknown) => {
+          .catch(() => {
             setTier2Loading(false);
-            const msg = err instanceof Error ? err.message : 'Download failed. Please try again.';
-            setDownloadError(msg);
+            setDownloadError('Download failed. You can try again or continue without the model.');
           });
         return;
       }
@@ -393,8 +407,8 @@ export default function OnboardingScreen() {
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
       <Reanimated.View
         key={screen}
-        entering={FadeIn.duration(280)}
-        exiting={FadeOut.duration(160)}
+        entering={FadeIn.duration(motion.moved)}
+        exiting={FadeOut.duration(motion.quick)}
         style={{ flex: 1 }}
       >
         {screen === 'hero' && (
@@ -402,6 +416,13 @@ export default function OnboardingScreen() {
             colors={colors}
             primaryButtonTextColor={primaryButtonTextColor}
             onStartChatting={handleHeroCTA}
+          />
+        )}
+        {screen === 'about-you' && (
+          <AboutYouScreen
+            colors={colors}
+            primaryButtonTextColor={primaryButtonTextColor}
+            onDone={handleAboutYouDone}
           />
         )}
         {screen === 'device-tier' && (
@@ -526,6 +547,84 @@ function AgiNativeMark({
         />
       ))}
     </Svg>
+  );
+}
+
+function AboutYouScreen({
+  colors,
+  primaryButtonTextColor,
+  onDone,
+}: {
+  colors: ColorScheme;
+  primaryButtonTextColor: string;
+  onDone: (preferredName: string, workDescription: string) => void;
+}) {
+  const [preferredName, setPreferredName] = useState(
+    () => useLocalSettingsStore.getState().personalization.nickname ?? '',
+  );
+  const [workDescription, setWorkDescription] = useState(
+    () => useLocalSettingsStore.getState().personalization.occupation ?? '',
+  );
+
+  return (
+    <ScrollView
+      testID="onboarding-about-you-screen"
+      style={{ flex: 1 }}
+      contentContainerStyle={[styles.deviceTierRoot, { paddingBottom: 48, gap: 16 }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>
+        What should AGI call you?
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 21 }}>
+        Answers use your name and fit your work. You can change both later in Settings,
+        Personalization.
+      </Text>
+      <Input
+        label="Your name"
+        value={preferredName}
+        onChangeText={setPreferredName}
+        autoComplete="given-name"
+        textContentType="givenName"
+        maxLength={60}
+        returnKeyType="next"
+      />
+      <Input
+        label="What best describes your work?"
+        value={workDescription}
+        onChangeText={setWorkDescription}
+        placeholder="For example, product design"
+        maxLength={120}
+        returnKeyType="done"
+      />
+      <Pressable
+        testID="about-you-continue-btn"
+        onPress={() => onDone(preferredName.trim(), workDescription.trim())}
+        accessibilityRole="button"
+        accessibilityLabel="Continue"
+        disabled={!preferredName.trim()}
+        style={[
+          styles.ctaBtn,
+          {
+            backgroundColor: colors.teal,
+            marginTop: 8,
+            opacity: preferredName.trim() ? 1 : 0.5,
+          },
+        ]}
+      >
+        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
+      </Pressable>
+      <Pressable
+        testID="about-you-skip-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Skip for now"
+        onPress={() => onDone('', '')}
+        style={styles.secondaryBtn}
+      >
+        <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Skip for now</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 

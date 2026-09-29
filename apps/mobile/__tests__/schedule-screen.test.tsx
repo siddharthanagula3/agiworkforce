@@ -26,16 +26,34 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+jest.mock('../src/features/voice/components/VoiceInputButton', () => ({
+  VoiceInputButton: ({ onTranscription }: { onTranscription: (text: string) => void }) => {
+    const { Pressable, Text } = jest.requireActual('react-native');
+    return (
+      <Pressable
+        accessibilityLabel="Dictate scheduled task"
+        onPress={() => onTranscription('Summarize my inbox')}
+      >
+        <Text>Mic</Text>
+      </Pressable>
+    );
+  },
+}));
+
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return {
     ArrowLeft: icon,
+    ArrowUp: icon,
     Calendar: icon,
     ChevronDown: icon,
     ChevronRight: icon,
     ChevronUp: icon,
     Clock: icon,
     Cloud: icon,
+    Pause: icon,
+    Play: icon,
+    ListFilter: icon,
     Plus: icon,
     Trash2: icon,
     X: icon,
@@ -132,7 +150,10 @@ describe('Schedules screen Cloud boundary', () => {
 
     fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-schedules' },
+    });
     expect(useChatAppModeStore.getState().appMode).toBe('local');
     expect(mockFetchSchedules).not.toHaveBeenCalled();
   });
@@ -144,7 +165,27 @@ describe('Schedules screen Cloud boundary', () => {
     expect(getByText('No Schedules')).toBeTruthy();
     expect(getByText('Try a template')).toBeTruthy();
     expect(getByLabelText('Use Daily focus template')).toBeTruthy();
+    expect(getByLabelText('Schedule a task')).toBeTruthy();
     await waitFor(() => expect(mockFetchSchedules).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps a dictated task in the pinned composer and opens scheduling details', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText, getAllByDisplayValue, getAllByLabelText } = render(<SchedulesScreen />);
+
+    fireEvent.press(getByLabelText('Dictate scheduled task'));
+    expect(getAllByDisplayValue('Summarize my inbox').length).toBe(1);
+    fireEvent.press(getByLabelText('Continue scheduling task'));
+    expect(getAllByLabelText('Create schedule').length).toBeGreaterThan(1);
+    expect(getAllByDisplayValue('Summarize my inbox').length).toBe(2);
+  });
+
+  it('opens the full schedule form from the composer', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText } = render(<SchedulesScreen />);
+
+    fireEvent.press(getByLabelText('Open detailed schedule form'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/schedules/create' });
   });
 
   it('opens the create form with only an allowlisted template ID', () => {
@@ -208,13 +249,84 @@ describe('Schedules screen Cloud boundary', () => {
     expect(queryByText('Weekly rollup')).toBeNull();
   });
 
+  it('sorts scheduled tasks by next run or recently created without losing the filter', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const base = {
+      prompt: 'Summarize inbox',
+      model: 'test-model-fixture',
+      recurrence: 'daily' as const,
+      cronExpression: undefined,
+      scheduledAt: null,
+      timeOfDay: '09:00',
+      timezone: 'UTC',
+      lastRunAt: null,
+      lastRunStatus: null,
+      updatedAt: '2026-07-17T09:00:00.000Z',
+    };
+    useScheduleStore.setState({
+      schedules: [
+        {
+          ...base,
+          id: 'recent-paused',
+          name: 'Recent paused',
+          isActive: false,
+          nextRunAt: null,
+          createdAt: '2026-07-19T09:00:00.000Z',
+        },
+        {
+          ...base,
+          id: 'later-active',
+          name: 'Later active',
+          isActive: true,
+          nextRunAt: '2026-08-02T09:00:00.000Z',
+          createdAt: '2026-07-18T09:00:00.000Z',
+        },
+        {
+          ...base,
+          id: 'sooner-active',
+          name: 'Sooner active',
+          isActive: true,
+          nextRunAt: '2026-08-01T09:00:00.000Z',
+          createdAt: '2026-07-17T09:00:00.000Z',
+        },
+      ],
+    });
+
+    const { getAllByLabelText, getByLabelText } = render(<SchedulesScreen />);
+    const names = () =>
+      getAllByLabelText(/^Schedule:/u).map((node) => node.props.accessibilityLabel);
+
+    expect(names()).toEqual([
+      expect.stringContaining('Sooner active'),
+      expect.stringContaining('Later active'),
+      expect.stringContaining('Recent paused'),
+    ]);
+
+    fireEvent.press(getByLabelText('Sort schedules'));
+    expect(getByLabelText('Sort schedules by Next run').props.accessibilityState.selected).toBe(
+      true,
+    );
+    fireEvent.press(getByLabelText('Sort schedules by Recently created'));
+    expect(names()).toEqual([
+      expect.stringContaining('Recent paused'),
+      expect.stringContaining('Later active'),
+      expect.stringContaining('Sooner active'),
+    ]);
+
+    fireEvent.press(getByLabelText('Filter schedules: Active'));
+    expect(names()).toEqual([
+      expect.stringContaining('Later active'),
+      expect.stringContaining('Sooner active'),
+    ]);
+  });
+
   it('sends Free users to plan options instead of advertising an unavailable task', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'free' });
 
     const { getByLabelText, queryByLabelText } = render(<SchedulesScreen />);
 
-    expect(queryByLabelText('Quick schedule')).toBeNull();
+    expect(queryByLabelText('Schedule a task')).toBeNull();
     expect(queryByLabelText('Use Daily focus template')).toBeNull();
     fireEvent.press(getByLabelText('View plans for scheduled tasks'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');

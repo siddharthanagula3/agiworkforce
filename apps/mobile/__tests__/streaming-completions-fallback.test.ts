@@ -1,6 +1,6 @@
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, getProviderOfferings } from '@agiworkforce/types';
 
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
@@ -8,6 +8,9 @@ const MODEL_ID = requireMobileCloudModel(
   (model) => model.provider === 'openai',
   'OpenAI Mobile Cloud model',
 ).id;
+const FREE_CHAT_MODEL_ID = Object.entries(getProviderOfferings()).find(
+  ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',
+)?.[0];
 
 const SSE = [
   'data: {"choices":[{"delta":{"content":"2 plus 2 "}}]}',
@@ -111,6 +114,130 @@ describe('completions stream fallback (RN null response.body)', () => {
       model: MODEL_ID,
       web_search: true,
     });
+  });
+
+  it('reports a response-handler failure instead of treating it as malformed SSE', async () => {
+    if (!FREE_CHAT_MODEL_ID) throw new Error('Expected a provider-funded Free chat offering.');
+    const { streamFreeQuotaChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => SSE,
+    } as unknown as Response);
+    const callbacks = {
+      onDelta: jest.fn(() => {
+        throw new Error('Could not apply response');
+      }),
+      onDone: jest.fn(),
+      onError: jest.fn(),
+    };
+
+    await streamFreeQuotaChat(
+      {
+        model: FREE_CHAT_MODEL_ID,
+        conversation_id: '0190a000-0000-7000-8000-000000000051',
+        assistant_message_id: '0190a000-0000-7000-8000-000000000052',
+        operationId: '0190a000-0000-7000-8000-000000000052',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      callbacks,
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledWith(new Error('Could not apply response'));
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
+  it('applies the final streamed event even when the provider omits a terminal newline', async () => {
+    const { streamChat } = await loadStreamingService();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ReadableStream } = require('node:stream/web');
+    const body = new ReadableStream({
+      start(controller: { enqueue: (value: Uint8Array) => void; close: () => void }) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"final"}}]}\n\ndata: [DONE]',
+          ),
+        );
+        controller.close();
+      },
+    });
+    guardedFetchMock.mockResolvedValue({ ok: true, status: 200, body } as unknown as Response);
+    const { deltas, callbacks } = makeCallbacks();
+
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000053',
+      },
+      callbacks,
+    );
+
+    expect(deltas).toEqual(['final']);
+    expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('reports a truncated streamed response instead of completing the turn', async () => {
+    const { streamChat } = await loadStreamingService();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ReadableStream } = require('node:stream/web');
+    const body = new ReadableStream({
+      start(controller: { enqueue: (value: Uint8Array) => void; close: () => void }) {
+        controller.enqueue(
+          new TextEncoder().encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n'),
+        );
+        controller.close();
+      },
+    });
+    guardedFetchMock.mockResolvedValue({ ok: true, status: 200, body } as unknown as Response);
+    const { deltas, callbacks } = makeCallbacks();
+
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000054',
+      },
+      callbacks,
+    );
+
+    expect(deltas).toEqual(['partial']);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      new Error('The response ended before completion. Please retry.'),
+    );
+  });
+
+  it('reports a truncated buffered provider-funded response without a stream reader', async () => {
+    const { streamFreeQuotaChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: {"choices":[{"delta":{"content":"partial"}}]}\n',
+    } as unknown as Response);
+    const { deltas, callbacks } = makeCallbacks();
+
+    await streamFreeQuotaChat(
+      {
+        model: FREE_CHAT_MODEL_ID,
+        conversation_id: '0190a000-0000-7000-8000-000000000055',
+        assistant_message_id: '0190a000-0000-7000-8000-000000000056',
+        operationId: '0190a000-0000-7000-8000-000000000056',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      callbacks,
+    );
+
+    expect(deltas).toEqual(['partial']);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      new Error('The response ended before completion. Please retry.'),
+    );
   });
 
   it('maps boolean thinking → thinking_mode (never sends a bare boolean `thinking`)', async () => {

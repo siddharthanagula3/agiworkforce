@@ -116,13 +116,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
-| desktop | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
+| web | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
+| desktop | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:74-74`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:45-45`, `apps/web/app/api/chat/conversations/[id]/messages/lib/generate-follow-ups.ts:170-170`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 ## S13.21: Prompt-template insertion.
 
@@ -209,16 +209,13 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/
 
 - Done when: The user can reference a connected app (connector/MCP server) or one of its resources inline in the composer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
 
 ## S13.32: Selected-source chips.
 
@@ -228,7 +225,7 @@ Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show chosen sources as chips; the composer only shows tool status chips (Research, Code), not which sources a message will use. | ui |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; source chips need a connector or resource picker on mobile. | codex |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`

@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's projects rework lands; CloudProject has no defaultModelId on mobile yet. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -24,14 +24,13 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 - Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-| vscode | partial | turn/start routingProfile speed now resolves with the fastest slots first and keeps that preference (ccf4744297); VS Code adds its Fastest row to ROUTING_PROFILE_BY_AUTO_PROFILE (p-sessions) | handler |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:2354-2354`, `apps/cli/src/app_server/developer_host.rs:1200-1200`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.06: Quality-first profile.
 
@@ -137,15 +136,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S79.28: Routing-policy versioning.
-
-- Done when: Routing policies are versioned and each decision can be traced to the policy version that made it.
-- Wave: 3
-- Already works on: web, desktop, mobile, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The generated Rust registry now carries policies.release.policyVersion and routing_policy_version() reads it (ccf4744297); recording it on the CLI routing decision is p-mcp-rust's | handler |
-
-Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`

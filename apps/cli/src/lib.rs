@@ -1772,7 +1772,12 @@ enum PluginSubcommand {
         /// settings forbid the override. A signature that fails to verify is never accepted.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
+        /// Install this tag or branch of a git plugin. A tag stays pinned: `agi plugin update` leaves it in place.
+        #[arg(long = "ref", value_name = "TAG_OR_BRANCH")]
+        git_ref: Option<String>,
     },
+    /// Show one installed plugin's publisher, signature, version, links and source.
+    Info { name: String },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -1843,6 +1848,34 @@ enum McpSubcommand {
     Get {
         /// Registry name of the server to show.
         name: String,
+    },
+    /// Let a server's tools, or one tool, run without asking.
+    Allow {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Ask before a server's tools, or one tool, run.
+    Ask {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Never run a server's tools, or one tool.
+    Block {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Drop your allow, ask or block setting for a server or one tool.
+    Unset {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for the server-wide setting.
+        tool: Option<String>,
     },
     /// Authorize a remote MCP server over OAuth and store the token.
     Login {
@@ -1946,6 +1979,22 @@ enum SyncSubcommand {
 
 #[derive(Subcommand, Debug)]
 enum MarketplaceSubcommand {
+    /// Add a publisher's marketplace (a public GitHub repository with a marketplace manifest)
+    /// to your account, so its plugins show up on every surface.
+    Add {
+        /// GitHub repository URL of the marketplace.
+        repository_url: String,
+        /// Branch or tag to read the manifest from.
+        #[arg(long = "ref")]
+        git_ref: Option<String>,
+        /// Name to show for it.
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// List the marketplaces added to your account.
+    Sources,
+    /// Remove a marketplace from your account by the id `agi marketplace sources` prints.
+    Remove { id: String },
     /// Search the remote plugin marketplace.
     Search {
         /// Search query.
@@ -2184,6 +2233,7 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         &title,
         None,
         code_teleport::history(&detail),
+        "the cloud Code session",
     )?;
     eprintln!(
         "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
@@ -2276,6 +2326,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
         &conversation.title,
         conversation.model.as_deref(),
         messages,
+        "your AGI Workforce account",
     )?;
     eprintln!(
         "Resuming '{}' from your account ({} messages).",
@@ -2645,6 +2696,12 @@ async fn handle_image_command(
                     ""
                 }
             );
+            if !model.aspect_ratios.is_empty() {
+                println!("    aspect ratios: {}", model.aspect_ratios.join(", "));
+            }
+            if let Some(max) = model.max_images {
+                println!("    up to {max} per request");
+            }
         }
         return Ok(());
     }
@@ -3276,11 +3333,17 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
     let privacy = account_privacy_mode();
     match action {
         MemorySubcommand::List => {
-            let cache = cloud::refresh_memory(privacy)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let (cache, workspace) = tokio::join!(
+                cloud::refresh_memory(privacy),
+                cloud::active_workspace_label(privacy)
+            );
+            let cache = cache.map_err(|error| anyhow::anyhow!("{error}"))?;
+            let workspace = workspace.unwrap_or_else(|_| "your active workspace".to_string());
+            if cache.account_memory_off {
+                println!("Memory is off for your account. Turn it on with `agi memory on`.");
+            }
             if cache.entries.is_empty() {
-                println!("Your AGI Workforce account holds no memories.");
+                println!("Your AGI Workforce account holds no memories in {workspace}.");
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
@@ -3292,7 +3355,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             topics.sort_unstable();
             topics.dedup();
             println!(
-                "{} memories in your account (* pinned, used first):",
+                "{} memories in {workspace} (* pinned, used first):",
                 cache.entries.len()
             );
             for topic in topics {
@@ -4245,6 +4308,133 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 terminal_text::sanitize_terminal_text(&row.target)
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
+            let prefix = crate::platform::policy::mcp_rule_target(name, None);
+            for (target, decision) in crate::platform::policy::user_mcp_rules()
+                .into_iter()
+                .filter(|(target, _)| {
+                    target == &prefix || target.starts_with(&format!("{prefix}__"))
+                })
+            {
+                let scope = target
+                    .strip_prefix(&format!("{prefix}__"))
+                    .map_or_else(|| "all tools".to_string(), str::to_string);
+                println!(
+                    "{:<10} {} {}",
+                    "rule",
+                    terminal_text::sanitize_terminal_text(&scope),
+                    match decision {
+                        crate::platform::policy::PolicyDecision::Allow => "runs without asking",
+                        crate::platform::policy::PolicyDecision::Ask => "asks first",
+                        crate::platform::policy::PolicyDecision::Deny => "blocked",
+                    }
+                );
+            }
+            if !row.enabled {
+                println!("\nTurn it on with `agi mcp enable {name}` to see what it offers.");
+                return Ok(());
+            }
+            let config: crate::mcp::McpServerConfig = registry_file
+                .entry(name)
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .with_context(|| format!("registry entry for '{name}' is not a server config"))?
+                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let connected = tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                crate::mcp::McpConnection::connect(name, &config),
+            )
+            .await;
+            let mut connection = match connected {
+                Ok(Ok(connection)) => connection,
+                Ok(Err(error)) => {
+                    println!("{:<10} could not connect: {error:#}", "connection");
+                    return Ok(());
+                }
+                Err(_) => {
+                    println!("{:<10} did not answer within 20 seconds", "connection");
+                    return Ok(());
+                }
+            };
+            let negotiated = connection.negotiated().clone();
+            if let Some(info) = negotiated.server_info.as_ref() {
+                println!(
+                    "{:<10} {} {}",
+                    "server",
+                    terminal_text::sanitize_terminal_text(&info.name),
+                    terminal_text::sanitize_terminal_text(&info.version)
+                );
+            }
+            if let Some(instructions) = negotiated
+                .instructions
+                .as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+            {
+                println!(
+                    "{:<10} {}",
+                    "about",
+                    terminal_text::sanitize_terminal_text(
+                        instructions.lines().next().unwrap_or(instructions)
+                    )
+                );
+            }
+            match connection.list_tools().await {
+                Ok(tools) if tools.is_empty() => println!("\nIt offers no tools."),
+                Ok(tools) => {
+                    println!("\nTools ({}):", tools.len());
+                    for tool in tools {
+                        println!(
+                            "  {}  {}",
+                            terminal_text::sanitize_terminal_text(&tool.original_name),
+                            terminal_text::sanitize_terminal_text(
+                                tool.description.lines().next().unwrap_or_default()
+                            )
+                        );
+                    }
+                }
+                Err(error) => println!("\nIts tools could not be listed: {error:#}"),
+            }
+            let _ = connection.shutdown().await;
+            Ok(())
+        }
+        McpSubcommand::Allow { server, tool }
+        | McpSubcommand::Ask { server, tool }
+        | McpSubcommand::Block { server, tool }
+        | McpSubcommand::Unset { server, tool } => {
+            use crate::platform::policy::PolicyDecision;
+            let decision = match action {
+                McpSubcommand::Allow { .. } => Some(PolicyDecision::Allow),
+                McpSubcommand::Ask { .. } => Some(PolicyDecision::Ask),
+                McpSubcommand::Block { .. } => Some(PolicyDecision::Deny),
+                _ => None,
+            };
+            let path =
+                crate::platform::policy::set_user_mcp_rule(server, tool.as_deref(), decision)?;
+            let subject = match tool {
+                Some(tool) => format!(
+                    "'{}' from '{}'",
+                    terminal_text::sanitize_terminal_text(tool),
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+                None => format!(
+                    "every tool from '{}'",
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+            };
+            println!(
+                "{} ({})",
+                match decision {
+                    Some(PolicyDecision::Allow) => format!("{subject} now runs without asking"),
+                    Some(PolicyDecision::Ask) => format!("{subject} now asks before it runs"),
+                    Some(PolicyDecision::Deny) => format!("{subject} is now blocked"),
+                    None => format!("Your setting for {subject} is removed"),
+                },
+                path.display()
+            );
+            println!(
+                "A workspace administrator's managed rules still come first, and a project's policy.toml applies once you trust the project."
+            );
             Ok(())
         }
         McpSubcommand::Login { name } => {
@@ -4308,6 +4498,9 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
+            if let Some(message) = permissions::open_ended_allow_error(rule) {
+                anyhow::bail!(message);
+            }
             store.allow_always(rule);
             store.save()?;
             println!("Always allow: {}", rule.trim());
@@ -5239,11 +5432,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }),
                     (None, _) => None,
                 };
-                let (session_label, (messages, managed_session)) = match resolved_id.as_ref() {
+                let (session_label, (mut messages, managed_session)) = match resolved_id.as_ref() {
                     Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
                     None => resolve_latest_resume_payload()?
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
                 };
+                let interrupted = agent::mark_interrupted_tool_calls(&mut messages);
+                if interrupted > 0 {
+                    eprintln!(
+                        "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
+                        if interrupted == 1 { "call was" } else { "calls were" },
+                        if interrupted == 1 { "its" } else { "their" },
+                        if interrupted == 1 { "it" } else { "them" }
+                    );
+                }
                 if messages.is_empty() {
                     eprintln!("Warning: session '{}' has no messages.", session_label);
                 } else {
@@ -5526,12 +5728,36 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         }
                         Ok(())
                     }
+                    PluginSubcommand::Info { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let signature_policy = plugins::PluginSignaturePolicy {
+                            publishers:
+                                features::plugins::signature::TrustedPublishers::configured()
+                                    .unwrap_or_default(),
+                            ..plugins::PluginSignaturePolicy::default()
+                        };
+                        println!("{}", plugins::describe_plugin(plugin, &signature_policy));
+                        Ok(())
+                    }
                     PluginSubcommand::Install {
                         source,
                         name,
                         integrity,
                         unsafe_no_integrity,
                         unsafe_allow_unsigned,
+                        git_ref,
                     } => {
                         // AUDIT-FIX: H-16, supply-chain integrity is required.
                         let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
@@ -5555,6 +5781,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             name.as_deref(),
                             pintegrity,
                             psignature,
+                            git_ref.as_deref(),
                         )
                         .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
                         match outcome {
@@ -5826,10 +6053,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             }
                         }
                         if !report.conflicts.is_empty() {
-                            println!("Conflicts (local kept):");
+                            println!("Conflicts (local kept, imported version saved beside it):");
                             for f in &report.conflicts {
-                                println!("  {}", f);
+                                println!("  {f}  ->  {f}.imported");
                             }
+                            println!(
+                                "Compare the two, keep the one you want under the original name, and delete the .imported copy."
+                            );
                         }
                         Ok(())
                     }
@@ -6058,6 +6288,46 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let home = config::CliConfig::config_dir()?;
                 let mp = marketplace::Marketplace::new_production();
                 match action {
+                    MarketplaceSubcommand::Add {
+                        repository_url,
+                        git_ref,
+                        name,
+                    } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = cloud::marketplaces::add(
+                            &client,
+                            repository_url,
+                            git_ref.as_deref(),
+                            name.as_deref(),
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Added {} to your account ({} plugins).",
+                            terminal_text::sanitize_terminal_text(&source.name),
+                            source.entry_count
+                        );
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Sources => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::marketplaces::render(&sources));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Remove { id } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        cloud::marketplaces::remove(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;
                         println!(
@@ -6673,6 +6943,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
                     speed_first: false,
+                    policy_version: crate::runtime::session::current_routing_policy_version(),
                 },
                 tier: tier.clone(),
             });

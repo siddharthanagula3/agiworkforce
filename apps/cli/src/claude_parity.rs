@@ -420,6 +420,9 @@ pub fn render_privacy_settings(session: &AgentSession) -> String {
         "  Attached files: never included in BYOK handoff drafts automatically".to_string(),
         "  Telemetry: CLI-local unless managed cloud features are enabled".to_string(),
         "  Sync: opt-in with agi sync".to_string(),
+        "  History: a Managed Cloud chat stays in your account history until you delete it; Local and BYOK sessions stay on this computer".to_string(),
+        "  Model training: AGI Workforce does not train its own models on your prompts, responses or files, so there is no training opt-in; on the Free plan the providers' free models may train on what you send unless you turn on Only use models that do not train on your chats in Settings > Privacy".to_string(),
+        "  Retention: a deleted chat stays in Recently deleted for 30 days, then is deleted for good; a temporary chat and its attachments are removed after 30 days".to_string(),
     ]
     .join("\n")
 }
@@ -1820,6 +1823,10 @@ pub mod connectors {
         #[serde(default)]
         pub allowed_mcp_hosts: Vec<String>,
         #[serde(default)]
+        pub allowed_web_domains: Vec<String>,
+        #[serde(default)]
+        pub blocked_web_domains: Vec<String>,
+        #[serde(default)]
         pub tool_rules: Vec<WorkspaceToolRule>,
     }
 
@@ -1837,6 +1844,8 @@ pub mod connectors {
                 allowed_plugins: Vec::new(),
                 blocked_plugins: Vec::new(),
                 allowed_mcp_hosts: Vec::new(),
+                allowed_web_domains: Vec::new(),
+                blocked_web_domains: Vec::new(),
                 tool_rules: Vec::new(),
             }
         }
@@ -2052,6 +2061,159 @@ pub mod connectors {
         };
         set_cached_policy(policy.clone());
         Ok(policy)
+    }
+
+    /// What a tool that runs on this machine in any privacy mode, such as
+    /// web_search and web_fetch, must apply. Their site rules bind Local and
+    /// BYOK turns too.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum LocalToolPolicy {
+        /// Signed out, a personal account, or a workspace that set nothing.
+        Unrestricted,
+        Rules(ConnectorAccessPolicy),
+        /// A workspace member whose rules could not be read. Refused, as the
+        /// web connector gate refuses, rather than read as permission.
+        Unreadable(String),
+    }
+
+    const UNREADABLE_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
+
+    /// One read per signed-in account: the stored sign-in's subject keys it,
+    /// so a /login as someone else or a /logout never reuses another
+    /// account's rules.
+    struct LocalToolRead {
+        owner: Option<String>,
+        policy: LocalToolPolicy,
+        read_at: std::time::Instant,
+    }
+
+    impl LocalToolRead {
+        /// The cached answer, when it was read for this same account and is
+        /// not an unreadable result due for another try.
+        fn reusable_for(&self, owner: &Option<String>) -> Option<LocalToolPolicy> {
+            let fresh = !matches!(self.policy, LocalToolPolicy::Unreadable(_))
+                || self.read_at.elapsed() < UNREADABLE_RETRY;
+            (&self.owner == owner && fresh).then(|| self.policy.clone())
+        }
+    }
+
+    #[cfg(test)]
+    pub fn cached_read_reusable(
+        owner: Option<&str>,
+        policy: LocalToolPolicy,
+        age: std::time::Duration,
+        asking: Option<&str>,
+    ) -> bool {
+        LocalToolRead {
+            owner: owner.map(str::to_string),
+            policy,
+            read_at: std::time::Instant::now() - age,
+        }
+        .reusable_for(&asking.map(str::to_string))
+        .is_some()
+    }
+
+    fn local_tool_cache() -> &'static Mutex<Option<LocalToolRead>> {
+        static CACHE: OnceLock<Mutex<Option<LocalToolRead>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(None))
+    }
+
+    fn signed_in_owner() -> Option<String> {
+        crate::tier_cache::load_jwt()
+            .filter(|jwt| !jwt.trim().is_empty())
+            .map(|jwt| crate::auth::jwt_subject(&jwt).unwrap_or_else(|| "unknown".to_string()))
+    }
+
+    /// Called on /login and /logout so the next tool call reads afresh.
+    pub fn forget_local_tool_policy() {
+        if let Ok(mut slot) = local_tool_cache().lock() {
+            *slot = None;
+        }
+    }
+
+    /// Decides the policy from one read. A 403 or 404 means no workspace
+    /// governs this account; any other failure refuses only when this account
+    /// is known to belong to a workspace.
+    pub fn local_tool_policy_from(
+        read: Result<Option<ConnectorAccessPolicy>, CloudError>,
+        workspace_member: bool,
+    ) -> LocalToolPolicy {
+        match read {
+            Ok(Some(policy)) => LocalToolPolicy::Rules(policy),
+            Ok(None) | Err(CloudError::SignedOut) => LocalToolPolicy::Unrestricted,
+            Err(CloudError::Api {
+                status: 403 | 404, ..
+            }) => LocalToolPolicy::Unrestricted,
+            Err(_) if !workspace_member => LocalToolPolicy::Unrestricted,
+            Err(CloudError::SessionExpired) => LocalToolPolicy::Unreadable(
+                "Your AGI Workforce session expired, so your workspace's website rules could \
+                 not be checked and the assistant will not read websites. Sign in again with \
+                 `agi login`."
+                    .to_string(),
+            ),
+            Err(_) => LocalToolPolicy::Unreadable(
+                "Your workspace's website rules could not be read, so the assistant will not \
+                 read websites until they can be. Check your connection and try again."
+                    .to_string(),
+            ),
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct WorkspaceGovernance {
+        #[serde(default)]
+        governed: bool,
+    }
+
+    /// Whether the server places this account in a workspace, asked when the
+    /// rules themselves could not be read. The cached copy on disk is user
+    /// writable, so it is not trusted for this; when the server cannot answer
+    /// either, a signed-in account is treated as a member and refused.
+    async fn workspace_membership(client: &CloudClient) -> bool {
+        client
+            .get::<WorkspaceGovernance>("/api/settings/organization/policy/effective", &[])
+            .await
+            .map(|governance| governance.governed)
+            .unwrap_or(true)
+    }
+
+    /// Read once per process with the stored sign-in; the read sends nothing
+    /// of the session. An unreadable result is retried after a minute.
+    pub async fn policy_for_local_tools() -> LocalToolPolicy {
+        let owner = signed_in_owner();
+        if let Some(policy) = local_tool_cache()
+            .lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().and_then(|read| read.reusable_for(&owner)))
+        {
+            return policy;
+        }
+        let (read, workspace_member) = match CloudClient::connect_managed() {
+            Ok(client) => {
+                let read = client
+                    .get::<PolicyResponse>(CONNECTOR_POLICY_PATH, &[])
+                    .await
+                    .map(|response| response.configured.then_some(response.policy).flatten());
+                let member = match &read {
+                    Ok(_)
+                    | Err(CloudError::Api {
+                        status: 403 | 404, ..
+                    }) => false,
+                    Err(_) => workspace_membership(&client).await,
+                };
+                (read, member)
+            }
+            Err(error) => (Err(error), false),
+        };
+        let policy = local_tool_policy_from(read, workspace_member);
+        if let Ok(mut slot) = local_tool_cache().lock() {
+            *slot = Some(LocalToolRead {
+                owner,
+                policy: policy.clone(),
+                read_at: std::time::Instant::now(),
+            });
+        }
+        policy
     }
 
     pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
@@ -2900,6 +3062,8 @@ mod connector_contract_tests {
                 "mcp.example.com".to_string(),
                 "*.internal.example".to_string(),
             ],
+            allowed_web_domains: vec![],
+            blocked_web_domains: vec![],
             tool_rules: vec![],
         }
     }

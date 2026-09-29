@@ -93,9 +93,8 @@ export default function ScanScreen() {
       setPromptText(prefill);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'OCR failed';
-      setOcrError(msg);
+    } catch {
+      setOcrError('Text could not be read from this image. Retake the scan or type your question.');
       setPromptText('');
     }
 
@@ -118,12 +117,8 @@ export default function ScanScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
       if (!photo?.uri) return;
       await scanImage(photo.uri);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'The camera could not capture the image. Please try again.';
-      Alert.alert('Capture failed', message);
+    } catch {
+      Alert.alert('Capture failed', 'The camera could not capture the image. Please try again.');
     } finally {
       setIsCapturing(false);
     }
@@ -191,11 +186,18 @@ export default function ScanScreen() {
         fileName: `scan_${now}.jpg`,
       };
 
-      await sendMessage(conversationId, content, selectedModel, [attachment]);
+      const accepted = await sendMessage(conversationId, content, selectedModel, [attachment]);
+      if (!accepted) {
+        Alert.alert('Send failed', 'The scan could not be sent. Check your model and try again.');
+        setIsSending(false);
+        return;
+      }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The scan could not be sent.';
-      Alert.alert('Send failed', message);
+    } catch {
+      Alert.alert(
+        'Send failed',
+        'The scan could not be sent. Check your connection and try again.',
+      );
       setIsSending(false);
     }
   }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);

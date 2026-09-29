@@ -560,7 +560,9 @@ pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[Stri
         PluginTab::Marketplaces => vec![
             "  Marketplaces".to_string(),
             String::new(),
-            "  ❯ + Add Marketplace".to_string(),
+            "  Add a publisher's marketplace to your account:".to_string(),
+            "    agi marketplace add <github url>".to_string(),
+            "  See the ones you added: agi marketplace sources".to_string(),
         ],
         PluginTab::Errors => {
             if errors.is_empty() {
@@ -1143,7 +1145,7 @@ mod tests {
     #[test]
     fn plugin_marketplaces_offers_add_action() {
         let s = render_plugin(PluginTab::Marketplaces, &[], &[]);
-        assert!(s.contains("❯ + Add Marketplace"));
+        assert!(s.contains("agi marketplace add <github url>"));
     }
 
     #[test]

@@ -39,6 +39,14 @@ export function requireMobileCloudModel(
   return model;
 }
 
+export function requireFreeMobileCloudModel(): PickerModelView {
+  const model = getModelsForTierAndSurface('free', 'mobile/cloud-chat', {
+    modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'],
+  })[0];
+  if (!model) throw new Error('Canonical catalog has no Free Mobile Cloud model');
+  return model;
+}
+
 export function requireLocalModel(
   predicate: (model: OnDeviceModel) => boolean = () => true,
   description = 'shippable local model matching the test predicate',

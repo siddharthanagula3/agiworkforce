@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockSetActiveWorkspace = jest.fn();
@@ -91,6 +92,8 @@ describe('mobile workspace switcher (UI-86)', () => {
     mockLoadConversations.mockResolvedValue(undefined);
   });
 
+  afterEach(() => jest.restoreAllMocks());
+
   it('offers Personal and every workspace membership, marking the active one', async () => {
     const screen = render(<WorkspaceScreen />);
 
@@ -108,6 +111,23 @@ describe('mobile workspace switcher (UI-86)', () => {
 
     await waitFor(() => expect(mockSetActiveWorkspace).toHaveBeenCalledWith('ws-acme'));
     await waitFor(() => expect(mockLoadConversations).toHaveBeenCalled());
+  });
+
+  it('does not report a failed switch after the workspace changed but chats failed to refresh', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockSetActiveWorkspace.mockImplementation(async () => {
+      overview.activeWorkspaceId = 'ws-acme';
+    });
+    mockLoadConversations.mockRejectedValue(new Error('private chat history route'));
+    const screen = render(<WorkspaceScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Switch to Acme Research'));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Workspace changed', expect.any(String)),
+    );
+    expect(alertSpy.mock.calls[0]?.[1]).toBe('Refresh your chats to see this workspace’s history.');
+    expect(alertSpy).not.toHaveBeenCalledWith('Could not switch workspace', expect.any(String));
   });
 
   it('does not re-send the workspace that is already active', async () => {

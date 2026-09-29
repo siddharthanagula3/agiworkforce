@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 
 export type AppMode = 'chat' | 'agent' | 'voice' | 'cloud' | 'local';
 
@@ -77,7 +77,7 @@ export function ModeSwitchModal({
             borderWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.surfaceBase,
-            padding: 18,
+            padding: dialogPadding,
           }}
         >
           <Text style={{ color: colors.textPrimary, fontSize: 19, fontWeight: '700' }}>
@@ -94,6 +94,7 @@ export function ModeSwitchModal({
           >
             <Pressable
               onPress={handleCancel}
+              accessibilityRole="button"
               style={{
                 minHeight: 44,
                 justifyContent: 'center',
@@ -109,6 +110,7 @@ export function ModeSwitchModal({
             </Pressable>
             <Pressable
               onPress={handleConfirm}
+              accessibilityRole="button"
               style={{
                 minHeight: 44,
                 justifyContent: 'center',

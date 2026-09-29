@@ -103,8 +103,8 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-assistant.ts:276-276`
 
@@ -115,8 +115,8 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/lib/slack/slack-config.ts:14-14`
 
@@ -137,8 +137,8 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack-assistant.ts:379-379`, `apps/web/lib/slack/slack-assistant.ts:380-380`, `apps/web/lib/slack/slack-assistant.ts:146-146`
 
@@ -149,8 +149,8 @@ Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/lib/slack/slack-api.ts:108-108`, `apps/web/lib/slack/slack-api.ts:109-109`, `apps/web/lib/slack/slack-installations.ts:87-87`, `apps/web/lib/slack/slack-assistant.ts:134-134`
 

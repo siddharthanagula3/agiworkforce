@@ -42,20 +42,22 @@ impl std::fmt::Display for SubagentStatus {
 
 /// Render the `/task list` management view over the spawned-subagent task
 /// state `(id, description, status)`. Read-only.
-pub fn format_task_list(tasks: &[(String, String, SubagentStatus)]) -> String {
+const GENERAL_PURPOSE_ROLE: &str = "general-purpose";
+
+pub fn format_task_list(tasks: &[(String, String, String, SubagentStatus)]) -> String {
     if tasks.is_empty() {
         return "No subagent tasks in this session yet.\n  \
                 Tasks appear here after the model calls the `task` tool to spawn a subagent."
             .to_string();
     }
     let mut lines = vec![format!("Subagent tasks ({})", tasks.len())];
-    for (id, description, status) in tasks {
+    for (id, role, description, status) in tasks {
         let desc = if description.trim().is_empty() {
             "(no description)"
         } else {
             description.trim()
         };
-        lines.push(format!("  {:<20} [{}] {}", id, status, desc));
+        lines.push(format!("  {:<20} {:<16} [{}] {}", id, role, status, desc));
     }
     lines.join("\n")
 }
@@ -149,6 +151,7 @@ pub struct SubagentResult {
 /// Internal handle tracking a spawned subagent thread.
 struct SubagentEntry {
     id: String,
+    role: String,
     description: String,
     status: Arc<RwLock<SubagentStatus>>,
     result: Arc<RwLock<Option<SubagentResult>>>,
@@ -388,6 +391,9 @@ impl SubagentManager {
         let agent_name = named_agent
             .as_ref()
             .map(|definition| definition.name.clone());
+        let agent_role = agent_name
+            .clone()
+            .unwrap_or_else(|| GENERAL_PURPOSE_ROLE.to_string());
         let task_prompt = prompt.to_string();
         let task_run_config = SubagentRunConfig {
             config: self.config.clone(),
@@ -513,6 +519,7 @@ impl SubagentManager {
 
         let entry = SubagentEntry {
             id: id.clone(),
+            role: agent_role,
             description: description.to_string(),
             status,
             result,
@@ -546,6 +553,22 @@ impl SubagentManager {
     }
 
     /// List all subagents with their current status.
+    pub async fn list_with_roles(&self) -> Vec<(String, String, String, SubagentStatus)> {
+        let entries = self.entries.read().await;
+        let mut items = Vec::new();
+        for entry in entries.values() {
+            let status = entry.status.read().await.clone();
+            items.push((
+                entry.id.clone(),
+                entry.role.clone(),
+                entry.description.clone(),
+                status,
+            ));
+        }
+        items.sort_by(|a, b| a.0.cmp(&b.0));
+        items
+    }
+
     pub async fn list(&self) -> Vec<(String, String, SubagentStatus)> {
         let entries = self.entries.read().await;
         let mut items = Vec::new();
@@ -974,11 +997,13 @@ mod tests {
         let tasks = vec![
             (
                 "task-1".to_string(),
+                "reviewer".to_string(),
                 "refactor module".to_string(),
                 SubagentStatus::Running,
             ),
             (
                 "task-2".to_string(),
+                GENERAL_PURPOSE_ROLE.to_string(),
                 String::new(),
                 SubagentStatus::Failed("boom".to_string()),
             ),
@@ -986,6 +1011,7 @@ mod tests {
         let out = format_task_list(&tasks);
         assert!(out.contains("Subagent tasks (2)"), "{out}");
         assert!(out.contains("task-1"), "{out}");
+        assert!(out.contains("reviewer"), "{out}");
         assert!(out.contains("[running] refactor module"), "{out}");
         assert!(out.contains("[failed: boom]"), "{out}");
         assert!(out.contains("(no description)"), "{out}");
@@ -1103,6 +1129,7 @@ mod tests {
             id.to_string(),
             SubagentEntry {
                 id: id.to_string(),
+                role: GENERAL_PURPOSE_ROLE.to_string(),
                 description: "seeded".to_string(),
                 status: Arc::new(RwLock::new(status)),
                 result: Arc::new(RwLock::new(None)),
@@ -1220,6 +1247,7 @@ mod tests {
             "subagent-test".to_string(),
             SubagentEntry {
                 id: "subagent-test".to_string(),
+                role: GENERAL_PURPOSE_ROLE.to_string(),
                 description: "shutdown sentinel".to_string(),
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
@@ -1263,6 +1291,7 @@ mod tests {
             "subagent-test".to_string(),
             SubagentEntry {
                 id: "subagent-test".to_string(),
+                role: GENERAL_PURPOSE_ROLE.to_string(),
                 description: "abort sentinel".to_string(),
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),

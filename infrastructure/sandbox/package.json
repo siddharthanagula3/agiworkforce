@@ -1,6 +1,6 @@
 {
   "name": "@agiworkforce/sandbox",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML, no build step.",
   "scripts": {

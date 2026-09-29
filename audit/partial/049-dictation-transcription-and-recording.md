@@ -52,16 +52,15 @@ Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 ## S49.06: Retry failed transcription.
 
 - Done when: After a failed transcription the user can retry without starting over.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
-| cli | partial | A failed transcription prints an error and returns to the SPACE prompt to record again; the audio is not retried. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:207-207`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S49.07: Discard recording.
 
@@ -114,17 +113,16 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, 
 ## S49.17: Recording notice and consent interface.
 
 - Done when: Before audio is captured, the user sees a notice of what is recorded and where it goes, and must agree.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
-| cli | partial | Only a startup line naming the transcription backend (OpenAI API or local whisper); no consent step. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:112-112`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S49.19: Recording-duration display.
 

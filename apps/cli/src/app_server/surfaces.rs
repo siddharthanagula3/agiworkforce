@@ -14,11 +14,14 @@ use agiworkforce_protocol::developer_session::{
     McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
     McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
-    PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginScope, PluginSummary, PluginUpdateResponse, SavedPermission, SavedPermissionDecision,
-    SavedPermissionKind, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    PermissionRule, PermissionRuleDecision, PermissionRuleKind, PermissionRulesResponse,
+    PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
+    ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
     SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    TrustListResponse, TrustedFolder,
 };
 use std::path::{Path, PathBuf};
 
@@ -101,9 +104,17 @@ fn skill_scope(origin: SkillOrigin) -> SkillCatalogScope {
 }
 
 pub fn list_skills(workspace_root: &Path) -> SkillListResponse {
+    let available_tools: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .map(|definition| definition.name)
+        .collect();
     let skills = skills::skill_catalog(workspace_root)
         .into_iter()
         .map(|entry| SkillSummary {
+            missing_tools: skills::missing_tool_dependencies(&entry.skill, &available_tools),
+            missing_env_vars: entry.skill.check_env_deps().err().unwrap_or_default(),
+            required_tools: entry.skill.required_tools.clone(),
+            required_env_vars: entry.skill.required_env_vars.clone(),
             name: entry.skill.name,
             description: entry.skill.description,
             scope: skill_scope(entry.origin),
@@ -861,6 +872,7 @@ pub fn install_plugin(
         params.name.as_deref(),
         integrity,
         signature,
+        None,
     )
     .map_err(invalid)?
     {
@@ -1092,6 +1104,13 @@ pub fn remove_saved_permission(
                 .find(|rule| saved_permission_id(scope, rule) == id)
                 .map(|rule| (deny, rule.clone()))
         });
+    let mcp_rule = crate::platform::policy::user_mcp_rules()
+        .into_iter()
+        .find(|(target, _)| saved_permission_id(MCP_RULE_SCOPE, target) == id);
+    if let Some((target, _)) = mcp_rule {
+        crate::platform::policy::remove_user_mcp_rule(&target).map_err(internal)?;
+        return list_saved_permissions();
+    }
     let removed = if let Some((deny, rule)) = stored {
         if deny {
             store.always_deny.remove(&rule);
@@ -1117,6 +1136,202 @@ pub fn remove_saved_permission(
         ));
     }
     list_saved_permissions()
+}
+
+const MCP_RULE_SCOPE: &str = "mcp";
+const MCP_TARGET_SEPARATOR: char = '/';
+
+pub fn list_permission_rules() -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+    let mut rules: Vec<PermissionRule> = list_saved_permissions()?
+        .permissions
+        .into_iter()
+        .map(|saved| {
+            let decision = match saved.decision {
+                SavedPermissionDecision::Allow => PermissionRuleDecision::Allow,
+                SavedPermissionDecision::Deny => PermissionRuleDecision::Deny,
+            };
+            let (kind, target) = match saved.kind {
+                SavedPermissionKind::File => (PermissionRuleKind::File, saved.label.clone()),
+                SavedPermissionKind::ExecPolicy => {
+                    (PermissionRuleKind::ExecPolicy, saved.label.clone())
+                }
+                SavedPermissionKind::Command => {
+                    match saved
+                        .label
+                        .strip_prefix(crate::permissions::DOMAIN_RULE_PREFIX)
+                    {
+                        Some(host) => (PermissionRuleKind::Domain, host.to_string()),
+                        None => (PermissionRuleKind::Command, saved.label.clone()),
+                    }
+                }
+            };
+            PermissionRule {
+                id: saved.id,
+                kind,
+                target,
+                label: saved.label,
+                decision,
+            }
+        })
+        .collect();
+    let server_prefix = crate::platform::policy::mcp_rule_target("", None);
+    for (target, decision) in crate::platform::policy::user_mcp_rules() {
+        let shown = target
+            .strip_prefix(&server_prefix)
+            .unwrap_or(&target)
+            .trim_end_matches("__*");
+        let (server, tool) = match shown.split_once("__") {
+            Some((server, tool)) => (server.to_string(), Some(tool.to_string())),
+            None => (shown.to_string(), None),
+        };
+        rules.push(PermissionRule {
+            id: saved_permission_id(MCP_RULE_SCOPE, &target),
+            kind: PermissionRuleKind::Mcp,
+            target: match &tool {
+                Some(tool) => format!("{server}{MCP_TARGET_SEPARATOR}{tool}"),
+                None => server.clone(),
+            },
+            label: match &tool {
+                Some(tool) => format!("{tool} from {server}"),
+                None => format!("every tool from {server}"),
+            },
+            decision: match decision {
+                crate::platform::policy::PolicyDecision::Allow => PermissionRuleDecision::Allow,
+                crate::platform::policy::PolicyDecision::Ask => PermissionRuleDecision::Ask,
+                crate::platform::policy::PolicyDecision::Deny => PermissionRuleDecision::Deny,
+            },
+        });
+    }
+    Ok(PermissionRulesResponse { rules })
+}
+
+pub fn add_permission(
+    params: PermissionsAddParams,
+) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+    let target = params.target.trim();
+    if target.is_empty() || target.len() > 512 || target.chars().any(char::is_control) {
+        return Err(invalid("Name what the rule applies to"));
+    }
+    match params.kind {
+        PermissionRuleKind::Mcp => {
+            let (server, tool) = match target.split_once(MCP_TARGET_SEPARATOR) {
+                Some((server, tool)) => (server.trim(), Some(tool.trim())),
+                None => (target, None),
+            };
+            let valid = |name: &str| {
+                !name.is_empty()
+                    && !name.contains("__")
+                    && name.chars().all(|character| {
+                        character.is_ascii_alphanumeric() || "-_.".contains(character)
+                    })
+            };
+            if !valid(server) || tool.is_some_and(|tool| !valid(tool)) {
+                return Err(invalid(
+                    "An MCP rule names a server, or server/tool, using letters, digits, dots, dashes and underscores",
+                ));
+            }
+            let decision = match params.decision {
+                PermissionRuleDecision::Allow => crate::platform::policy::PolicyDecision::Allow,
+                PermissionRuleDecision::Ask => crate::platform::policy::PolicyDecision::Ask,
+                PermissionRuleDecision::Deny => crate::platform::policy::PolicyDecision::Deny,
+            };
+            crate::platform::policy::set_user_mcp_rule(server, tool, Some(decision))
+                .map_err(internal)?;
+        }
+        PermissionRuleKind::Command | PermissionRuleKind::Domain => {
+            let rule = if params.kind == PermissionRuleKind::Domain {
+                if target.contains(['/', ':', ' ']) {
+                    return Err(invalid(
+                        "A site rule names a host such as example.com or *.example.com",
+                    ));
+                }
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::website_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
+                format!(
+                    "{}{}",
+                    crate::permissions::DOMAIN_RULE_PREFIX,
+                    target.to_ascii_lowercase()
+                )
+            } else {
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::open_ended_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
+                target.to_string()
+            };
+            let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
+            match params.decision {
+                PermissionRuleDecision::Allow => {
+                    store.remove_always_deny(&rule);
+                    store.allow_always(&rule);
+                }
+                PermissionRuleDecision::Deny => {
+                    store.remove_always_allow(&rule);
+                    store.deny_always(&rule);
+                }
+                PermissionRuleDecision::Ask => {
+                    store.remove_always_allow(&rule);
+                    store.remove_always_deny(&rule);
+                }
+            }
+            store.save().map_err(internal)?;
+        }
+        PermissionRuleKind::File | PermissionRuleKind::ExecPolicy => {
+            return Err(invalid(
+                "File and exec-policy rules are saved from an approval prompt, not added here",
+            ));
+        }
+    }
+    list_permission_rules()
+}
+
+pub fn list_provider_keys() -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+    let providers = crate::auth::api_key_providers()
+        .map_err(internal)?
+        .into_iter()
+        .map(|provider| ProviderKeySummary {
+            provider: provider.id.to_string(),
+            label: provider.label.to_string(),
+            env_var: provider.env_var.to_string(),
+            configured: provider.configured,
+        })
+        .collect();
+    Ok(ProvidersListResponse {
+        providers,
+        storage: crate::auth::credential_storage_label().to_string(),
+    })
+}
+
+pub fn list_trusted_folders() -> Result<TrustListResponse, DeveloperSessionHostError> {
+    let config_dir = CliConfig::config_dir().map_err(internal)?;
+    let registry = crate::project_registry::ProjectRegistry::load(&config_dir).map_err(internal)?;
+    let mut folders: Vec<TrustedFolder> = registry
+        .projects
+        .iter()
+        .filter(|(_, entry)| entry.trust_level == "trusted" && entry.revoked_at.is_none())
+        .map(|(path, entry)| TrustedFolder {
+            path: path.clone(),
+            trusted_at: entry.trusted_at.clone(),
+            trusted_by: entry.trusted_by.clone(),
+        })
+        .collect();
+    folders.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(TrustListResponse { folders })
+}
+
+pub fn revoke_trusted_folder(path: &str) -> Result<TrustListResponse, DeveloperSessionHostError> {
+    let listed = list_trusted_folders()?;
+    if !listed.folders.iter().any(|folder| folder.path == path) {
+        return Err(DeveloperSessionHostError::not_found(
+            "That folder is not trusted; list them again",
+        ));
+    }
+    crate::trust::revoke(std::path::Path::new(path)).map_err(internal)?;
+    list_trusted_folders()
 }
 
 fn saved_permission_id(scope: &str, rule: &str) -> String {
@@ -1362,5 +1577,38 @@ mod tests {
             );
         }
         assert!(crate::cli_options::persisted_permission_mode("bypassPermissions").is_none());
+    }
+
+    #[test]
+    fn an_allow_for_a_bare_interpreter_is_refused_before_anything_is_saved() {
+        for target in ["bash", "python3", "npm exec", "/usr/bin/env"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Command,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("without asking"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_site_allow_for_a_metadata_address_is_refused() {
+        for target in ["169.254.169.254", "localhost", "*"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Domain,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("cannot be allowed")
+                    || error.to_string().contains("names a host"),
+                "{target}: {error}"
+            );
+        }
     }
 }

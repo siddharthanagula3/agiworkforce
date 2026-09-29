@@ -47,6 +47,7 @@ export default function CompanionScreen() {
   const router = useRouter();
   const { pairingCode: deepLinkCode } = useLocalSearchParams<{ pairingCode?: string }>();
   const [showScanner, setShowScanner] = useState(false);
+  const [showSetupAgain, setShowSetupAgain] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
   const hasSeenDispatchSetup = useDispatchSetupStore((s) => s.hasSeenDispatchSetup);
@@ -151,9 +152,13 @@ export default function CompanionScreen() {
   }, [clearError, pairingCode, connect]);
 
   const handleBack = useCallback(() => {
+    if (showSetupAgain) {
+      setShowSetupAgain(false);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+  }, [router, showSetupAgain]);
 
   const handleApprove = useCallback(
     async (id: string) => {
@@ -244,10 +249,13 @@ export default function CompanionScreen() {
       )}
 
       {status === 'disconnected' &&
-        (hasSeenDispatchSetup ? (
-          <DisconnectedView onScanPress={() => setShowScanner(true)} />
+        (hasSeenDispatchSetup && !showSetupAgain ? (
+          <DisconnectedView
+            onScanPress={() => setShowScanner(true)}
+            onShowSetupSteps={() => setShowSetupAgain(true)}
+          />
         ) : (
-          <DesktopSetupChecklistView />
+          <DesktopSetupChecklistView onContinue={() => setShowSetupAgain(false)} />
         ))}
       {status === 'connecting' && <ConnectingView onCancel={disconnect} />}
       {status === 'error' && <ErrorView error={error} onRetry={handleRetry} />}

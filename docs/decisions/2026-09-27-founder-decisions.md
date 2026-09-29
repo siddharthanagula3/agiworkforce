@@ -450,3 +450,24 @@ interval recurrence, and reading a host app's live selection or handing a sessio
 Cells (mobile): declined S48.11, S48.18, S48.19, S48.20, S48.29, S49.08, S49.19, S53.36,
 S55.26, S55.29, S55.30, S56.37, S56.44, S57.30, S57.37, S58.07, S59.09, S60.05, S60.08,
 S60.09, S61.01, S61.11, S61.19, S61.22, S62.08, S63.04, S63.14, S106.08, S106.25.
+
+## D-2026-09-28-29 The terminal agent stays at Claude Code's and Codex CLI's scope
+
+Claude Code (code.claude.com/docs) and the Codex CLI (learn.chatgpt.com/docs),
+read 2026-09-28, offer none of the following in the terminal, so the CLI does
+not add them: task shortcut tiles, a connector recommendation registry, answer
+cards and widgets, artifact cards, building states, previews, source toggles,
+editors, export menus and project attachment, user file create, delete and
+search commands, a Python analysis panel, design and site publishing and
+export, a briefing template, a routine history view beyond listing runs, an
+agent preview chat, agent export, a skill instruction editor, recorded skills,
+plugin customize, an MCP traffic inspector, a subagent handoff-mode choice,
+routine webhook token creation, a page summary command, a browser pause-and-keep
+control, a pull request tool beyond the shell's gh, a pre-task cost estimate,
+an output style derived from a sample, a design-to-code handoff, a user symbol
+search and a diagnostics panel. The sources for each are in the w-desktop
+parity table (partials/scratch/w-desktop/cli-parity.tsv). Cells (cli): S10.25,
+S12.05, S12.09, S17.09, S17.13, S19.12, S26.14, S26.27, S26.29, S28.01, S28.03,
+S28.08, S28.10, S28.11, S29.27, S32.33, S33.04, S42.01, S42.25, S52.05, S52.39,
+S53.09, S53.27, S54.27, S58.26, S62.15, S63.17, S64.05, S64.25, S67.31, S82.22,
+S85.04, S110.12, S66.10, S66.14.

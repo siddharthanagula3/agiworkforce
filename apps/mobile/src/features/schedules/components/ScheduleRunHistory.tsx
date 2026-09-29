@@ -193,6 +193,11 @@ function RunRow({ run }: RunRowProps) {
           </Text>
           {duration ? <Text className="text-[11px] text-white/30">{duration}</Text> : null}
         </View>
+        {run.timingNote ? (
+          <Text className="text-[12px] mt-1 leading-[18px]" style={{ color: colors.textMuted }}>
+            {run.timingNote}
+          </Text>
+        ) : null}
         {isAwaitingApproval ? <PendingApproval run={run} /> : null}
         {run.result ? (
           <Text

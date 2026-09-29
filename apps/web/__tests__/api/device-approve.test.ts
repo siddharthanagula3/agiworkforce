@@ -57,6 +57,7 @@ vi.mock('@/lib/server/device-signin-policy', () => ({
 
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mockHasAcceptedCurrentTerms(userId),
+  mustAcceptTerms: async (userId: string) => !(await mockHasAcceptedCurrentTerms(userId)),
 }));
 
 const mockRecordAuditEvent = vi.fn();

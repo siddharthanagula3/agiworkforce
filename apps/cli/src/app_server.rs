@@ -12,6 +12,7 @@
 
 pub(crate) mod account;
 mod developer_host;
+mod pull_request;
 pub(crate) mod surfaces;
 mod threads;
 
@@ -65,7 +66,6 @@ const MCP_SERVER_CORE_TOOLS: &[&str] = &[
     "list_worktrees",
     "lsp_definition",
     "lsp_hover",
-    "lsp_diagnostics",
     "lsp_completion",
     "lsp_document_symbols",
     "lsp_format",

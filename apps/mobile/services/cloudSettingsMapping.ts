@@ -16,6 +16,7 @@ import {
   type PreferredLength,
   type TechnicalLevel,
 } from '@agiworkforce/types';
+import { speechLanguageFromLegacy } from '@/src/features/voice/speechLanguage';
 
 function isPreferredLength(value: unknown): value is PreferredLength {
   return (PREFERRED_LENGTHS as readonly unknown[]).includes(value);
@@ -60,6 +61,7 @@ export interface CloudNotifications {
 export interface CloudLanguage {
   locale?: string;
   speechLocale?: string;
+  speechLanguage?: string;
 }
 
 export interface CloudChat {
@@ -154,7 +156,7 @@ export function toCloudSettings(
       enabled: notificationsEnabled,
     },
     language: {
-      speechLocale: speechLanguage,
+      speechLanguage,
     },
     ...(memoryPolicyInitialized
       ? {
@@ -233,8 +235,10 @@ export function applyCloudSettings(partial: CloudSettings): void {
     store.setNotificationsEnabled(partial.notifications.enabled);
   }
 
-  if (partial.language?.speechLocale !== undefined) {
-    store.setSpeechLanguage(partial.language.speechLocale);
+  if (partial.language?.speechLanguage !== undefined) {
+    store.setSpeechLanguage(partial.language.speechLanguage);
+  } else if (partial.language?.speechLocale !== undefined) {
+    store.setSpeechLanguage(speechLanguageFromLegacy(partial.language.speechLocale));
   }
 
   if (partial.capabilities?.memory !== undefined) {

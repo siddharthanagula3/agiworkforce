@@ -132,15 +132,16 @@ describe('runAuthGate terms acceptance', () => {
     expect(mocks.readTermsStanding).not.toHaveBeenCalled();
   });
 
-  it('lets the mobile app through with a notice until it can record an acceptance', async () => {
+  it('refuses the mobile app too, now that it can record an acceptance', async () => {
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1', boundSurface: 'mobile' });
     mocks.readTermsStanding.mockResolvedValue({ kind: 'required', reason: 'never_accepted' });
 
     const result = await runAuthGate(request('mobile'));
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.termsNotice).toEqual({ 'X-AGI-Terms-Notice': CURRENT_TERMS_VERSION });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+      expect((await result.response.json()).error.code).toBe('terms_acceptance_required');
     }
   });
 

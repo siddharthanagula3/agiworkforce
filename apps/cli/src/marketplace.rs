@@ -592,6 +592,26 @@ pub fn update_plugin_checkout(
     install_path: &Path,
     signature: &crate::plugins::PluginSignaturePolicy,
 ) -> std::result::Result<PluginCheckoutUpdate, String> {
+    let on_branch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(install_path)
+        .args(["symbolic-ref", "-q", "HEAD"])
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !on_branch {
+        let pinned = std::process::Command::new("git")
+            .arg("-C")
+            .arg(install_path)
+            .args(["describe", "--tags", "--always"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .unwrap_or_else(|| "a fixed version".to_string());
+        return Err(format!(
+            "pinned to {pinned}; install it again with --ref <tag> to move it"
+        ));
+    }
     let before = git_head(install_path);
     let output = std::process::Command::new("git")
         .arg("-C")

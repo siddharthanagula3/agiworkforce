@@ -1,3 +1,4 @@
+import { ACCOUNT_HOLDER_MINIMUM_AGE } from '@agiworkforce/types';
 import { storage } from '@/lib/mmkv';
 
 export type AgeGateRecord = {
@@ -90,7 +91,7 @@ export function detectRegionRule(): RegionAgeRule {
 }
 
 export function getAgeThreshold(): number {
-  return detectRegionRule().threshold;
+  return Math.max(detectRegionRule().threshold, ACCOUNT_HOLDER_MINIMUM_AGE);
 }
 
 function readRecord(): AgeGateRecord | null {
@@ -108,7 +109,8 @@ function writeRecord(record: AgeGateRecord): void {
 }
 
 export function isAgeGateConfirmed(): boolean {
-  return readRecord()?.confirmed === true;
+  const rec = readRecord();
+  return rec?.confirmed === true && rec.isMinor !== true;
 }
 
 export function isMinorMode(): boolean {
@@ -119,9 +121,9 @@ export function isMinorMode(): boolean {
 /**
  * Record the user's age confirmation.
  *
- * A device already in minor-safe mode keeps its record: nothing in this app
- * verifies the typed age, so accepting a higher one would let the protected
- * user switch the protection off. Only clearAgeGate lifts it.
+ * A device that recorded an age under the account minimum keeps its record:
+ * nothing in this app verifies the typed age, so accepting a higher one would
+ * let someone refused an account open one. Only clearAgeGate lifts it.
  *
  * @param ageEntered The age the user entered (integer years).
  */
@@ -130,13 +132,13 @@ export function confirmAgeGate(ageEntered: number): AgeGateRecord {
   if (existing?.confirmed === true && existing.isMinor === true) return existing;
 
   const rule = detectRegionRule();
-  const isMinor = ageEntered < rule.threshold;
+  const threshold = Math.max(rule.threshold, ACCOUNT_HOLDER_MINIMUM_AGE);
   const record: AgeGateRecord = {
     confirmed: true,
-    isMinor,
+    isMinor: ageEntered < threshold,
     confirmedAt: new Date().toISOString(),
     regionCode: rule.code,
-    threshold: rule.threshold,
+    threshold,
   };
   writeRecord(record);
   return record;

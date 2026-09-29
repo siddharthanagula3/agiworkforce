@@ -21,9 +21,22 @@ import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
+const WIDE_TABLE_GUTTER = 24;
+
+export function wideTableOverflow(input: {
+  tableWidth: number;
+  containerWidth: number;
+  paneWidth: number;
+}): number {
+  const { tableWidth, containerWidth, paneWidth } = input;
+  if (containerWidth <= 0 || tableWidth <= containerWidth) return 0;
+  const widest = Math.max(containerWidth, paneWidth - WIDE_TABLE_GUTTER * 2);
+  return Math.max(0, Math.min(tableWidth, widest) - containerWidth);
+}
 const TABLE_COLUMN_CHARACTER_WIDTH = 8;
 const TABLE_COLUMN_PADDING = 16;
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -272,6 +285,10 @@ function MarkdownTable({
     return sort.direction === 'ascending' ? ordered : ordered.reverse();
   }, [body, sort]);
   const sortable = body.length > 1;
+  const { contentWidth: paneWidth } = useResponsiveLayout();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const tableWidth = columnWidths.reduce((total, width) => total + width, 0) + 2;
+  const overflow = wideTableOverflow({ tableWidth, containerWidth, paneWidth });
 
   const cellStyle = (colIdx: number) => ({
     width: columnWidths[colIdx],
@@ -283,86 +300,92 @@ function MarkdownTable({
   });
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator
-      style={{ marginVertical: 8 }}
-      contentContainerStyle={{
-        borderWidth: 1,
-        borderColor: renderColors.border,
-        borderRadius: 4,
-        overflow: 'hidden',
-        flexDirection: 'column',
-      }}
+    <View
+      onLayout={(event: LayoutChangeEvent) => setContainerWidth(event.nativeEvent.layout.width)}
+      testID="markdown-table-frame"
     >
-      <View
-        style={{
-          flexDirection: 'row',
-          borderBottomWidth: 1,
-          borderBottomColor: renderColors.border,
-          backgroundColor: renderColors.surfaceHover,
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        style={{ marginVertical: 8, marginHorizontal: -overflow / 2 }}
+        testID="markdown-table"
+        contentContainerStyle={{
+          borderWidth: 1,
+          borderColor: renderColors.border,
+          borderRadius: 4,
+          overflow: 'hidden',
+          flexDirection: 'column',
         }}
       >
-        {Array.from({ length: numCols }).map((_, colIdx) => {
-          const label = header[colIdx] ?? '';
-          const active = sort?.column === colIdx ? sort.direction : null;
-          const next = active === 'ascending' ? 'descending' : 'ascending';
-          const content = (
-            <Text
-              style={{
-                fontSize: 13,
-                color: renderColors.textPrimary,
-                fontWeight: '500',
-                lineHeight: 19,
-              }}
-            >
-              {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
-              {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
-            </Text>
-          );
-          return sortable ? (
-            <Pressable
-              key={`${keyBase}-th-${colIdx}`}
-              style={cellStyle(colIdx)}
-              onPress={() => setSort({ column: colIdx, direction: next })}
-              accessibilityRole="button"
-              accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
-              accessibilityHint={`Sorts the table by this column, ${next}`}
-            >
-              {content}
-            </Pressable>
-          ) : (
-            <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
-              {content}
-            </View>
-          );
-        })}
-      </View>
-      {sortedBody.map((row, rowIdx) => (
-        <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
-          {Array.from({ length: numCols }).map((_, colIdx) => (
-            <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+        <View
+          style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: renderColors.border,
+            backgroundColor: renderColors.surfaceHover,
+          }}
+        >
+          {Array.from({ length: numCols }).map((_, colIdx) => {
+            const label = header[colIdx] ?? '';
+            const active = sort?.column === colIdx ? sort.direction : null;
+            const next = active === 'ascending' ? 'descending' : 'ascending';
+            const content = (
               <Text
                 style={{
                   fontSize: 13,
-                  color: renderColors.textSecondary,
-                  fontWeight: '400',
+                  color: renderColors.textPrimary,
+                  fontWeight: '500',
                   lineHeight: 19,
                 }}
-                selectable
               >
-                {renderInlineMarkdown(
-                  row[colIdx] || '',
-                  `${keyBase}-tdil-${rowIdx}-${colIdx}`,
-                  renderColors,
-                  citations,
-                )}
+                {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
+                {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
               </Text>
-            </View>
-          ))}
+            );
+            return sortable ? (
+              <Pressable
+                key={`${keyBase}-th-${colIdx}`}
+                style={cellStyle(colIdx)}
+                onPress={() => setSort({ column: colIdx, direction: next })}
+                accessibilityRole="button"
+                accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
+                accessibilityHint={`Sorts the table by this column, ${next}`}
+              >
+                {content}
+              </Pressable>
+            ) : (
+              <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
+                {content}
+              </View>
+            );
+          })}
         </View>
-      ))}
-    </ScrollView>
+        {sortedBody.map((row, rowIdx) => (
+          <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
+            {Array.from({ length: numCols }).map((_, colIdx) => (
+              <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: renderColors.textSecondary,
+                    fontWeight: '400',
+                    lineHeight: 19,
+                  }}
+                  selectable
+                >
+                  {renderInlineMarkdown(
+                    row[colIdx] || '',
+                    `${keyBase}-tdil-${rowIdx}-${colIdx}`,
+                    renderColors,
+                    citations,
+                  )}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 

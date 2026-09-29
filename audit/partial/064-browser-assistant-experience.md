@@ -93,48 +93,36 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 - Done when: The assistant runs a search on a website and reads the results back.
 - Wave: 3
-- Already works on: chrome
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No site-search action: the agent must type into the site's search box by guessed CSS selector, because browser_read_page returns text without element selectors. | handler |
-| vscode | partial | Same as the CLI runtime it drives: search only by typing into a guessed CSS selector. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.15: Form filling.
 
 - Done when: The assistant fills in a web form on the user's behalf.
 - Wave: 3
-- Already works on: desktop, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | browser_type fills one field per call by CSS selector, but the agent never receives the form's fields or selectors, so it must guess them. | handler |
-| vscode | partial | Same limit as the CLI runtime: one guessed CSS selector per field. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.16: Multi-step website task.
 
 - Done when: The user gives a goal and the assistant carries it out over several steps on websites.
 - Wave: 3
-- Already works on: chrome
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can chain read, click, type, navigate and screenshot, but has no element selectors, back/forward or tab control, so many sites cannot be completed. | handler |
-| vscode | partial | Same limits as the CLI runtime it drives. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.17: Structured site-tool invocation.
 
