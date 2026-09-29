@@ -94,7 +94,6 @@
     "notifications",
     "pair/initiate",
     "portal",
-    "projects/[id]/duplicate",
     "projects/[id]/export",
     "releases/[target]/[version]",
     "releases/cli/latest",
