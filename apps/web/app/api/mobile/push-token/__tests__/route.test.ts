@@ -80,6 +80,32 @@ describe('POST /api/mobile/push-token', () => {
     expect(body['success']).toBe(true);
   });
 
+  it('stores the delivery preferences the phone sends with its token', async () => {
+    mockNeonQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const preferences = {
+      version: 1,
+      timezone: 'UTC',
+      categories: { approvals: true },
+      eventTypes: { task_completed: false },
+      quietHours: {
+        enabled: false,
+        days: [],
+        startTime: '22:00',
+        endTime: '07:00',
+        timezone: 'UTC',
+      },
+    };
+
+    const res = await POST(
+      makePostRequest({ deviceId: DEVICE_ID, pushToken: 'ExponentPushToken[abc]', preferences }),
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockNeonQuery.mock.calls[1]!;
+    expect(String(sql)).toContain('push_preferences');
+    expect(JSON.parse(String((params as unknown[])[5]))).toEqual(preferences);
+  });
+
   it('rejects a device already owned by a different user', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ user_id: 'someone-else' }]);
 
