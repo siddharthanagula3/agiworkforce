@@ -5189,11 +5189,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }),
                     (None, _) => None,
                 };
-                let (session_label, (messages, managed_session)) = match resolved_id.as_ref() {
+                let (session_label, (mut messages, managed_session)) = match resolved_id.as_ref() {
                     Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
                     None => resolve_latest_resume_payload()?
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
                 };
+                let interrupted = agent::mark_interrupted_tool_calls(&mut messages);
+                if interrupted > 0 {
+                    eprintln!(
+                        "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
+                        if interrupted == 1 { "call was" } else { "calls were" },
+                        if interrupted == 1 { "its" } else { "their" },
+                        if interrupted == 1 { "it" } else { "them" }
+                    );
+                }
                 if messages.is_empty() {
                     eprintln!("Warning: session '{}' has no messages.", session_label);
                 } else {
