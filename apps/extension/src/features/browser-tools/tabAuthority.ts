@@ -76,7 +76,19 @@ export async function authorizeBrowserToolTab(
   }
   const url = typeof tab.url === 'string' ? tab.url : '';
   if (!url) throw new Error('Tab has no URL.');
+  const { origin, profileId } = await authorizeBrowserToolUrl(url, storage);
+  return { tabId, origin, url, profileId };
+}
 
+/**
+ * The same bar for an address a command is about to open: navigating is how a
+ * page's injected text would carry data off to a site nobody approved, so the
+ * destination must be admitted exactly as the tab it leaves.
+ */
+export async function authorizeBrowserToolUrl(
+  url: string,
+  storage: SitePermissionPolicyStorage = localStorageArea(),
+): Promise<{ origin: string; profileId: string | null }> {
   const origin = normalizeApprovedSiteOrigin(new URL(url).origin);
   if (!origin) throw new Error('Only http and https tabs are supported.');
 
@@ -90,7 +102,5 @@ export async function authorizeBrowserToolTab(
   }
   if (!granted) throw new Error(browserControlConsentRequiredMessage(origin));
 
-  const profileId = await profileForTab(url, storage);
-
-  return { tabId, origin, url, profileId };
+  return { origin, profileId: await profileForTab(url, storage) };
 }
