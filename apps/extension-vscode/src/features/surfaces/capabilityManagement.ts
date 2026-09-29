@@ -761,6 +761,60 @@ const SAVED_PERMISSION_KINDS = {
   exec_policy: 'savedApprovals.kindPolicy',
 } as const;
 
+async function addPermissionRule(
+  adapter: CliCapabilityAdapter,
+): Promise<CliCapabilityResult<unknown> | undefined> {
+  const target = await vscode.window.showQuickPick(
+    [
+      {
+        label: t('savedApprovals.targetCommand'),
+        detail: t('savedApprovals.targetCommandDetail'),
+        target: 'command' as const,
+      },
+      {
+        label: t('savedApprovals.targetDomain'),
+        detail: t('savedApprovals.targetDomainDetail'),
+        target: 'domain' as const,
+      },
+    ],
+    { title: t('savedApprovals.add') },
+  );
+  if (target === undefined) return undefined;
+  const decision = await vscode.window.showQuickPick(
+    [
+      { label: t('savedApprovals.decisionAllow'), decision: 'allow' as const },
+      { label: t('savedApprovals.decisionDeny'), decision: 'deny' as const },
+    ],
+    { title: target.label },
+  );
+  if (decision === undefined) return undefined;
+  const pattern = await vscode.window.showInputBox({
+    title: `${decision.label}: ${target.label}`,
+    prompt:
+      target.target === 'command'
+        ? t('savedApprovals.patternCommand')
+        : t('savedApprovals.patternDomain'),
+    validateInput: (value) => (value.trim() === '' ? target.detail : undefined),
+  });
+  if (pattern === undefined || pattern.trim() === '') return undefined;
+  if (
+    target.target === 'command' &&
+    decision.decision === 'allow' &&
+    !(await confirmInstall(
+      t('savedApprovals.allowCommandTitle', { pattern: pattern.trim() }),
+      t('savedApprovals.allowCommandDetail'),
+      t('savedApprovals.allowConfirm'),
+    ))
+  ) {
+    return undefined;
+  }
+  return adapter.call('savedPermissionsAdd', {
+    target: target.target,
+    decision: decision.decision,
+    pattern: pattern.trim(),
+  });
+}
+
 export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promise<void> {
   return showManagedSurface(
     {
@@ -770,6 +824,15 @@ export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promi
       load: async () => {
         const result = await adapter.call<SavedPermissionList>('savedPermissions');
         if (result.status !== 'ok') return result;
+        const addItems: ManagedItem[] = (await adapter.offers('permissionRules'))
+          ? [
+              {
+                label: `$(add) ${t('savedApprovals.add')}`,
+                detail: t('savedApprovals.addDetail'),
+                followUp: { run: () => addPermissionRule(adapter), reopen: true },
+              },
+            ]
+          : [];
         const items: ManagedItem[] = result.value.permissions.map((permission) => {
           const allowed = permission.decision === 'allow';
           return {
@@ -790,7 +853,7 @@ export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promi
             ],
           };
         });
-        return { status: 'ok', value: items };
+        return { status: 'ok', value: [...addItems, ...items] };
       },
     },
     t('savedApprovals.noun'),

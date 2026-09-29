@@ -9,12 +9,12 @@ use agiworkforce_protocol::developer_session::{
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
+    PluginUpdateResponse, ProtocolVersionUnsupportedData, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
     ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
     ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
     ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
@@ -431,6 +431,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PlanDecideParams,
     ) -> Result<(), DeveloperSessionHostError> {
         Err(unsupported(method::PLAN_DECIDE))
+    }
+
+    async fn add_permission(
+        &self,
+        _params: PermissionsAddParams,
+    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_ADD))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1137,6 +1144,16 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_ADD => {
+                let params = match parse_params::<PermissionsAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .add_permission(params)
                     .await
                     .map(serde_json::to_value)
             }

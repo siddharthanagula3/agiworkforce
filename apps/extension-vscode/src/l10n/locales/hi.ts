@@ -491,6 +491,22 @@ const hi = {
   'savedApprovals.removeAllowed': 'अगली बार यह करना चाहने पर AGI फिर से पूछेगा: {label}',
   'savedApprovals.removeDenied':
     'अस्वीकार होने के बजाय AGI इसे करने के लिए फिर से पूछ सकता है: {label}',
+  'savedApprovals.add': 'नियम जोड़ें',
+  'savedApprovals.addDetail':
+    'हर सत्र में किसी कमांड या वेबसाइट को हमेशा अनुमति दें या हमेशा मना करें',
+  'savedApprovals.targetCommand': 'एक शेल कमांड',
+  'savedApprovals.targetCommandDetail': 'कमांड की शुरुआत से मिलाया जाता है, जैसे npm test',
+  'savedApprovals.targetDomain': 'एक वेबसाइट',
+  'savedApprovals.targetDomainDetail':
+    'वे पेज जिन्हें एजेंट लाता या खोलता है: example.com, *.example.com या *',
+  'savedApprovals.decisionAllow': 'हमेशा अनुमति दें',
+  'savedApprovals.decisionDeny': 'हमेशा मना करें',
+  'savedApprovals.patternCommand': 'कमांड, या उसकी शुरुआत',
+  'savedApprovals.patternDomain': 'वेबसाइट, जैसे example.com',
+  'savedApprovals.allowCommandTitle': '{pattern} को हमेशा अनुमति दें?',
+  'savedApprovals.allowCommandDetail':
+    'AGI इससे शुरू होने वाली कोई भी कमांड हर सत्र में बिना पूछे चलाएगा।',
+  'savedApprovals.allowConfirm': 'हमेशा अनुमति दें',
   'savedApprovals.noun': 'सहेजी गई स्वीकृतियाँ',
   'webview.alwaysAllow': 'हमेशा अनुमति दें',
   'webview.alwaysAllowHint':

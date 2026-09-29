@@ -115,6 +115,7 @@ pub mod method {
     pub const PERMISSIONS_LIST: &str = "permissions/list";
     pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
     pub const PLAN_DECIDE: &str = "plan/decide";
+    pub const PERMISSIONS_ADD: &str = "permissions/add";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -385,9 +386,10 @@ pub struct AppServerCapabilities {
     pub mcp_inspect: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub plugin_updates: bool,
-    /// `plan/decide` approves or rejects the plan a plan-mode turn proposed.
     #[serde(default, skip_serializing_if = "is_false")]
     pub plan_decisions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub permission_rules: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2481,6 +2483,23 @@ pub struct PermissionsListResponse {
     pub permissions: Vec<SavedPermission>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PermissionRuleTarget {
+    Command,
+    Domain,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsAddParams {
+    pub target: PermissionRuleTarget,
+    pub decision: SavedPermissionDecision,
+    pub pattern: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -2496,8 +2515,6 @@ pub enum PlanDecision {
     Reject,
 }
 
-/// Approve the thread's current plan, or reject it with the feedback the
-/// next turn carries to the model.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]

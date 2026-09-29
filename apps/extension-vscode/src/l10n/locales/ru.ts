@@ -656,6 +656,22 @@ const ru = {
   'savedApprovals.removeAllowed':
     'AGI снова спросит, когда в следующий раз захочет сделать это: {label}',
   'savedApprovals.removeDenied': 'AGI сможет снова попросить сделать это вместо отказа: {label}',
+  'savedApprovals.add': 'Добавить правило',
+  'savedApprovals.addDetail':
+    'Всегда разрешать или всегда запрещать команду или сайт в каждом сеансе',
+  'savedApprovals.targetCommand': 'Команда оболочки',
+  'savedApprovals.targetCommandDetail': 'Сравнивается с начала команды, например npm test',
+  'savedApprovals.targetDomain': 'Сайт',
+  'savedApprovals.targetDomainDetail':
+    'Страницы, которые агент загружает или открывает: example.com, *.example.com или *',
+  'savedApprovals.decisionAllow': 'Всегда разрешать',
+  'savedApprovals.decisionDeny': 'Всегда запрещать',
+  'savedApprovals.patternCommand': 'Команда или её начало',
+  'savedApprovals.patternDomain': 'Сайт, например example.com',
+  'savedApprovals.allowCommandTitle': 'Всегда разрешать {pattern}?',
+  'savedApprovals.allowCommandDetail':
+    'AGI будет выполнять любую команду, начинающуюся так, в каждом сеансе без запроса.',
+  'savedApprovals.allowConfirm': 'Всегда разрешать',
   'savedApprovals.noun': 'сохранённые подтверждения',
   'webview.alwaysAllow': 'Всегда разрешать',
   'webview.alwaysAllowHint':

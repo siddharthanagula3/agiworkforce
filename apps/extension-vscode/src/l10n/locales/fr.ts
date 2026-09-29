@@ -611,6 +611,23 @@ const fr = {
     "AGI redemandera la prochaine fois qu'il voudra faire ceci : {label}",
   'savedApprovals.removeDenied':
     "AGI pourra redemander à faire ceci au lieu d'être refusé : {label}",
+  'savedApprovals.add': 'Ajouter une règle',
+  'savedApprovals.addDetail':
+    'Toujours autoriser ou toujours refuser une commande ou un site web dans chaque session',
+  'savedApprovals.targetCommand': 'Une commande shell',
+  'savedApprovals.targetCommandDetail':
+    'Comparée depuis le début de la commande, par exemple npm test',
+  'savedApprovals.targetDomain': 'Un site web',
+  'savedApprovals.targetDomainDetail':
+    "Pages que l'agent récupère ou ouvre : example.com, *.example.com ou *",
+  'savedApprovals.decisionAllow': 'Toujours autoriser',
+  'savedApprovals.decisionDeny': 'Toujours refuser',
+  'savedApprovals.patternCommand': 'La commande, ou son début',
+  'savedApprovals.patternDomain': 'Le site web, par exemple example.com',
+  'savedApprovals.allowCommandTitle': 'Toujours autoriser {pattern} ?',
+  'savedApprovals.allowCommandDetail':
+    'AGI exécute toute commande qui commence ainsi, dans chaque session, sans demander.',
+  'savedApprovals.allowConfirm': 'Toujours autoriser',
   'savedApprovals.noun': 'approbations enregistrées',
   'webview.alwaysAllow': 'Toujours autoriser',
   'webview.alwaysAllowHint':

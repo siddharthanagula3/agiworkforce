@@ -160,6 +160,7 @@ const capabilitiesSchema = z.object({
   mcpInspect: z.boolean().optional(),
   pluginUpdates: z.boolean().optional(),
   planDecisions: z.boolean().optional(),
+  permissionRules: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -1328,6 +1329,15 @@ export class LocalRuntimeClient {
   async listSavedPermissions(): Promise<SavedPermissionList> {
     const connection = await this.readyConnection();
     return savedPermissionsResponseSchema.parse(await connection.request('permissions/list', {}));
+  }
+
+  async addSavedPermission(rule: {
+    target: 'command' | 'domain';
+    decision: 'allow' | 'deny';
+    pattern: string;
+  }): Promise<SavedPermissionList> {
+    const connection = await this.readyConnection();
+    return savedPermissionsResponseSchema.parse(await connection.request('permissions/add', rule));
   }
 
   async removeSavedPermission(id: string): Promise<SavedPermissionList> {

@@ -423,6 +423,21 @@ const ko = {
   'savedApprovals.removeTitle': '이 저장된 승인을 제거할까요?',
   'savedApprovals.removeAllowed': '다음에 이 작업을 하려고 할 때 AGI가 다시 묻습니다: {label}',
   'savedApprovals.removeDenied': '거부되는 대신 AGI가 이 작업을 다시 요청할 수 있습니다: {label}',
+  'savedApprovals.add': '규칙 추가',
+  'savedApprovals.addDetail': '모든 세션에서 명령이나 웹사이트를 항상 허용하거나 항상 거부합니다',
+  'savedApprovals.targetCommand': '셸 명령',
+  'savedApprovals.targetCommandDetail': '명령의 앞부분부터 일치시킵니다. 예: npm test',
+  'savedApprovals.targetDomain': '웹사이트',
+  'savedApprovals.targetDomainDetail':
+    '에이전트가 가져오거나 여는 페이지: example.com, *.example.com 또는 *',
+  'savedApprovals.decisionAllow': '항상 허용',
+  'savedApprovals.decisionDeny': '항상 거부',
+  'savedApprovals.patternCommand': '명령 또는 명령의 앞부분',
+  'savedApprovals.patternDomain': '웹사이트. 예: example.com',
+  'savedApprovals.allowCommandTitle': '{pattern}을(를) 항상 허용할까요?',
+  'savedApprovals.allowCommandDetail':
+    'AGI는 이것으로 시작하는 모든 명령을 모든 세션에서 묻지 않고 실행합니다.',
+  'savedApprovals.allowConfirm': '항상 허용',
   'savedApprovals.noun': '저장된 승인',
   'webview.alwaysAllow': '항상 허용',
   'webview.alwaysAllowHint':
