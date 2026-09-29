@@ -125,7 +125,7 @@ describe('GET /api/code/repositories/branches', () => {
 
   it('asks for a reconnect when the installation predates verification', async () => {
     mocks.assertRepositoryIsVerified.mockImplementation(() => {
-      throw new GitHubInstallationUnverifiedError('legacy');
+      throw new GitHubInstallationUnverifiedError(42);
     });
 
     const response = await GET(request(VALID));

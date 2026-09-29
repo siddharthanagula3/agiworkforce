@@ -263,6 +263,7 @@ export const MemoryWireDeltaSchema = z.object({
   server_version: ServerVersionSchema,
   source_conversation_id: z.string().nullable().optional(),
   source_conversation_title: z.string().nullable().optional(),
+  project_id: z.string().nullable().optional(),
 });
 export type MemoryWireDelta = z.infer<typeof MemoryWireDeltaSchema>;
 

@@ -539,8 +539,6 @@ pub fn is_auto_routing_selection(selection: &str) -> bool {
 /// Return canonical model keys for a provider in registry-defined order.
 /// Provider membership is generated from model identities, so Rust consumers
 /// do not need to maintain provider-specific model tables.
-/// The model line a model belongs to, looked up by registry key or by the
-/// provider's own model id, so pickers can keep related models together.
 pub fn model_family(model: &str) -> Result<Option<String>, RegistryError> {
     let registry = registry()?;
     Ok(registry

@@ -519,25 +519,10 @@ impl AgentSession {
                 }
             }
         }
-        let (memory, policy, connector_policy) = tokio::join!(
+        let (memory, policy) = tokio::join!(
             crate::cloud::refresh_memory(PrivacyMode::Managed),
             crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
-            crate::claude_parity::connectors::fetch_workspace_policy(PrivacyMode::Managed),
         );
-        if let Err(error) = connector_policy {
-            let not_readable_here = matches!(
-                error,
-                crate::cloud::CloudError::Api {
-                    status: 401 | 403 | 404,
-                    ..
-                }
-            );
-            if !error.is_boundary() && !not_readable_here {
-                crate::output::print_warn(&format!(
-                    "could not read the workspace connector policy: {error}"
-                ));
-            }
-        }
         match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
@@ -641,7 +626,13 @@ impl AgentSession {
         let account_memory = crate::config::CliConfig::config_dir()
             .ok()
             .filter(|_| memory_enabled)
-            .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
+            .map(|home| {
+                crate::cloud::account_memory_context_for(
+                    privacy_mode,
+                    &home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
             .unwrap_or_default();
 
         let project_instructions = crate::config::CliConfig::config_dir()
@@ -2086,6 +2077,15 @@ impl AgentSession {
     ///
     /// No-op under `--no-session-persistence`, including on a `--resume`d
     /// session: the file that was read stays exactly as it was on disk.
+    pub fn start_fresh_managed_session(&mut self) -> Result<()> {
+        self.clear();
+        self.managed_session = None;
+        self.managed_session_path = None;
+        self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
+        self.checkpoint_captures.clear();
+        self.enable_managed_session()
+    }
+
     pub fn persist_managed_session(&mut self) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
@@ -2460,7 +2460,7 @@ fn escape_attr(path: &Path) -> String {
 /// The account project this working directory has been linked to with
 /// `agi projects link`. Visiting a directory never creates an account project,
 /// so this is `None` until the user asks for the link.
-fn linked_cloud_project() -> Option<String> {
+pub(crate) fn linked_cloud_project() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let home = crate::config::CliConfig::config_dir().ok()?;
     let registry = crate::project_registry::ProjectRegistry::load(&home).ok()?;

@@ -130,18 +130,6 @@ Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S8.31: Tabs.
-
-- Done when: Tabs (a tablist switching between panels, with the selected tab exposed) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /plugin prints a static tab header ("Discover Installed Marketplaces Errors, current: Installed") as a message; the tabs cannot be switched, although the keybindings screen advertises "←/→ Switch tabs". | handler |
-
-Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/tui_app.rs:3788-3788`, `apps/cli/src/tui/widgets/screen_renderers.rs:881-881`
-
 ## S8.32: Accordions.
 
 - Done when: An accordion (a stack of sections that expand and collapse, each with a labelled header) is used in shipped UI.

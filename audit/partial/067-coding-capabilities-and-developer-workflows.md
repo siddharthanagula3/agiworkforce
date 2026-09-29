@@ -305,15 +305,14 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 - Done when: The user picks which of the agent's proposed patches to apply, and only those are applied.
 - Wave: 3
-- Already works on: desktop, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | partial | Approve/deny each pending desktop tool call from the phone; no patch-level selection. | handler |
-| cli | partial | /diff-review stages the files you approve; agi apply applies the whole latest diff; no per-patch selection. | handler |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`, `apps/cli/src/tui/tui_app.rs:748-758`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
 
 ## S67.26: Generate documentation.
 
@@ -398,16 +397,14 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 - Done when: The agent reads review comments on a pull request and changes the code to address them.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /pr-comments is a canned prompt; the agent has no GitHub tool and depends on gh through the shell to read the comments. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:228-228`, `apps/cli/src/claude_parity.rs:1188-1197`
 
 ## S67.33: Investigate CI failures.
 

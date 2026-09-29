@@ -175,6 +175,44 @@ pub async fn ensure_hosted_conversation(
     Ok(conversation_id)
 }
 
+pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> String {
+    if session.privacy_mode != PrivacyMode::Managed {
+        return format!(
+            "This conversation runs in {} mode, so it stays on this device. Switch it to your account with /continue-with-cloud, then continue it on another device.",
+            session.privacy_mode.label()
+        );
+    }
+    let Some(snapshot) = session.cloud_snapshot() else {
+        return "This conversation is not being saved, so it cannot continue on another device."
+            .to_string();
+    };
+    let cloud = match CloudSession::open(session.privacy_mode) {
+        Ok(cloud) => cloud,
+        Err(error) => return format!("Could not reach your account: {error}"),
+    };
+    let conversation_id = chat::conversation_id_for(&snapshot.session_id);
+    if !cloud
+        .state
+        .conversations
+        .versions
+        .contains_key(&conversation_id)
+    {
+        return "This conversation reaches your account after its next reply. Send a message, then run /continue-elsewhere again.".to_string();
+    }
+    let url = format!(
+        "{}/chat/{}",
+        cloud.client.base().trim_end_matches('/'),
+        conversation_id
+    );
+    let opened = arg.trim() == "open"
+        && crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
+    format!(
+        "This conversation is in your account's chat history. Continue it on the web{} at {url}, or open it from the chat list in the desktop or mobile app.{}",
+        if opened { " (opened in your browser)" } else { "" },
+        if opened { "" } else { " /continue-elsewhere open opens it in your browser." }
+    )
+}
+
 pub(crate) fn forget_hosted_conversation(conversation_id: &str) {
     if let Ok(mut session) = CloudSession::open(PrivacyMode::Managed) {
         if session
@@ -520,6 +558,7 @@ pub async fn add_memory(
                 updated_at: chrono::Utc::now().to_rfc3339(),
                 source_conversation_id: None,
                 source_conversation_title: None,
+                project_id: None,
             },
         );
         if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
@@ -713,6 +752,57 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
     cache.context_prompt()
 }
 
+pub fn account_memory_context_for(
+    privacy: PrivacyMode,
+    config_dir: &Path,
+    project: Option<&str>,
+) -> String {
+    if privacy != PrivacyMode::Managed {
+        return String::new();
+    }
+    let cache = load_memory_cache(config_dir);
+    if cache.account_memory_off {
+        return String::new();
+    }
+    cache.context_prompt_for(project)
+}
+
+pub async fn add_project_memory(
+    privacy: PrivacyMode,
+    project_id: &str,
+    content: &str,
+    category: Option<&str>,
+) -> Result<bool, CloudError> {
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreateMemory<'a> {
+        content: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        category: Option<&'a str>,
+        source: &'a str,
+        project_id: &'a str,
+    }
+    #[derive(serde::Deserialize)]
+    struct Created {
+        #[serde(default)]
+        merged: bool,
+    }
+    let session = CloudSession::open(privacy)?;
+    let created: Created = session
+        .client
+        .post(
+            "/api/memory",
+            &CreateMemory {
+                content,
+                category,
+                source: MEMORY_SOURCE,
+                project_id,
+            },
+        )
+        .await?;
+    Ok(created.merged)
+}
+
 pub fn project_instructions_context(
     privacy: PrivacyMode,
     config_dir: &Path,
@@ -771,6 +861,7 @@ mod tests {
             updated_at: "2026-09-13T00:00:00Z".to_string(),
             source_conversation_id: None,
             source_conversation_title: None,
+            project_id: None,
         });
         save_memory_cache(dir.path(), &cache).expect("save");
 

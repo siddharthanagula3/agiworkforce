@@ -151,6 +151,48 @@ pub struct Diff {
     pub files: Vec<FileDiff>,
 }
 
+pub fn file_hunk_patches(patch: &str) -> Vec<Vec<String>> {
+    let mut files: Vec<Vec<String>> = Vec::new();
+    let mut header = String::new();
+    let mut hunk: Option<String> = None;
+    let mut current: Option<Vec<String>> = None;
+    let finish_hunk =
+        |header: &str, hunk: &mut Option<String>, current: &mut Option<Vec<String>>| {
+            if let (Some(body), Some(patches)) = (hunk.take(), current.as_mut()) {
+                patches.push(format!("{header}{body}"));
+            }
+        };
+    for line in patch.split_inclusive('\n') {
+        if line.starts_with("diff --git ") {
+            finish_hunk(&header, &mut hunk, &mut current);
+            if let Some(done) = current.take() {
+                files.push(done);
+            }
+            current = Some(Vec::new());
+            header = line.to_string();
+        } else if line.starts_with("@@") {
+            finish_hunk(&header, &mut hunk, &mut current);
+            hunk = Some(line.to_string());
+        } else if let Some(body) = hunk.as_mut() {
+            body.push_str(line);
+        } else if current.is_some() {
+            header.push_str(line);
+        }
+    }
+    finish_hunk(&header, &mut hunk, &mut current);
+    if let Some(done) = current.take() {
+        files.push(done);
+    }
+    for patches in &mut files {
+        for patch in patches.iter_mut() {
+            if !patch.ends_with('\n') {
+                patch.push('\n');
+            }
+        }
+    }
+    files
+}
+
 impl Diff {
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()

@@ -69,16 +69,13 @@ nothing is left.
 
 - Done when: A user can add a git repository as a plugin marketplace and install plugins listed in it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Installs a single plugin from a git URL (agi plugin/marketplace install); a repository cannot be added as a marketplace to browse, and the name@marketplace registry resolver has no caller. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.08: Search and filters.
 
@@ -243,16 +240,13 @@ Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 - Done when: A user can authenticate the connections a plugin bundles.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Plugin MCP servers join the MCP config and agi mcp login can authorize a remote server by name, but plugins have no sign-in step of their own. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
 
 ## S54.24: Enable/disable.
 
