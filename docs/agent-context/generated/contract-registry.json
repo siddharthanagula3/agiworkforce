@@ -192,6 +192,7 @@
     "me",
     "message-metadata-projection",
     "message-thread",
+    "mobile-push",
     "plugin-marketplaces",
     "plugin-packages",
     "project-knowledge",
