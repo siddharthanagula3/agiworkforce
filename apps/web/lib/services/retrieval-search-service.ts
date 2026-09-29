@@ -333,7 +333,7 @@ export async function readIndexedSourceText(
            and coalesce(origin.is_temporary, false) = false
            and asset.deleted_at is null
            and coalesce(asset.temporary_chat, false) = false
-      )
+      ),
       positioned as (
         select ordered.*,
                coalesce(start_offset, chars_before) as position,
