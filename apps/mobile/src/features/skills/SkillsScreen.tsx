@@ -28,6 +28,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import {
   fetchInstalledSkillNames,
   fetchSkillCatalog,
+  fetchCanAuthorSkills,
   installSkill,
   isAuthoredSkill,
   isPluginOwnedSkill,
@@ -38,6 +39,7 @@ import {
   type ManagedSkillSummary,
 } from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
+import { NewSkillSheet } from './NewSkillSheet';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -607,6 +609,8 @@ export function SkillsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [canAuthor, setCanAuthor] = useState(false);
+  const [newSkillOpen, setNewSkillOpen] = useState(false);
 
   const cloudActive = appMode === 'cloud';
   const canLoad = FEATURES.skills && isClerkLoaded && isClerkSignedIn && cloudActive;
@@ -678,13 +682,15 @@ export function SkillsScreen() {
       setError(null);
 
       try {
-        const [nextSkills, nextInstalled] = await Promise.all([
+        const [nextSkills, nextInstalled, authoring] = await Promise.all([
           fetchSkillCatalog(signal),
           fetchInstalledSkillNames(signal),
+          fetchCanAuthorSkills(signal).catch(() => false),
         ]);
         if (!isCloudAccountEpochCurrent(account)) return;
         setSkills(nextSkills);
         setInstalled(nextInstalled);
+        setCanAuthor(authoring);
       } catch (loadError) {
         if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
         setError('Could not load Skills. Check your connection and try again.');
@@ -779,6 +785,9 @@ export function SkillsScreen() {
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
               <CatalogIntro count={installedSkillCount} />
+              {canAuthor ? (
+                <Button title="New skill" variant="outline" onPress={() => setNewSkillOpen(true)} />
+              ) : null}
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />
               ) : null}
@@ -796,6 +805,11 @@ export function SkillsScreen() {
           }
         />
       )}
+      <NewSkillSheet
+        visible={newSkillOpen}
+        onClose={() => setNewSkillOpen(false)}
+        onCreated={() => void load('refresh')}
+      />
     </SafeAreaView>
   );
 }
