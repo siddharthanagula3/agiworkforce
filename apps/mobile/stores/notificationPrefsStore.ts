@@ -13,7 +13,22 @@ import {
   type TimeFocusWeekday,
 } from '@agiworkforce/types';
 
-export type NotificationCategory = 'approvals' | 'task_updates' | 'errors' | 'status';
+export type NotificationCategory = 'chat_replies' | 'tasks' | 'product';
+
+export const DEFAULT_CATEGORY_ENABLED: Readonly<Record<NotificationCategory, boolean>> = {
+  chat_replies: true,
+  tasks: true,
+  product: false,
+};
+
+const LEGACY_CATEGORY_DEFAULTS = {
+  approvals: true,
+  task_updates: true,
+  errors: true,
+  status: false,
+} as const;
+
+type LegacyNotificationCategory = keyof typeof LEGACY_CATEGORY_DEFAULTS;
 
 export type QuietHours = QuietHoursPreferences;
 
@@ -44,24 +59,67 @@ export interface NotificationPrefsState {
 
 export function getCategoryForType(type: NotificationEventType): NotificationCategory {
   switch (type) {
+    case 'chat_message':
+      return 'chat_replies';
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
-      return 'approvals';
     case 'task_completed':
-    case 'agent_paused':
-    case 'schedule_triggered':
-    case 'companion_connected':
-    case 'chat_message':
-      return 'task_updates';
     case 'agent_failed':
     case 'emergency_stop_triggered':
-      return 'errors';
+    case 'agent_paused':
+    case 'schedule_run':
+    case 'schedule_triggered':
+    case 'companion_connected':
+      return 'tasks';
     case 'status_update':
     case 'heartbeat_info':
-      return 'status';
+      return 'product';
     default:
-      return 'task_updates';
+      return 'tasks';
   }
+}
+
+export function migrateLegacyCategoryEnabled(
+  legacy: unknown,
+): Record<NotificationCategory, boolean> {
+  if (legacy === null || typeof legacy !== 'object' || Array.isArray(legacy)) {
+    return { ...DEFAULT_CATEGORY_ENABLED };
+  }
+  const source = legacy as Partial<Record<LegacyNotificationCategory, unknown>>;
+  const flag = (key: LegacyNotificationCategory): boolean => {
+    const value = source[key];
+    return typeof value === 'boolean' ? value : LEGACY_CATEGORY_DEFAULTS[key];
+  };
+  return {
+    chat_replies: flag('task_updates'),
+    tasks: flag('approvals') || flag('task_updates') || flag('errors'),
+    product: flag('status'),
+  };
+}
+
+function migrateQuietHours(quiet: Partial<QuietHours>): QuietHours {
+  return {
+    enabled: quiet.enabled === true,
+    days: Array.isArray(quiet.days) && quiet.days.length > 0 ? quiet.days : ALL_WEEKDAYS,
+    startTime: quiet.startTime ?? '22:00',
+    endTime: quiet.endTime ?? '08:00',
+    timezone: quiet.timezone ?? deviceTimezone(),
+  };
+}
+
+export function migrateNotificationPrefs(persisted: unknown, version: number): unknown {
+  if (persisted === null || typeof persisted !== 'object') return persisted;
+  let state = persisted as Record<string, unknown>;
+  if (version < 1) {
+    const quiet = state['quietHours'];
+    if (quiet !== null && typeof quiet === 'object') {
+      state = { ...state, quietHours: migrateQuietHours(quiet as Partial<QuietHours>) };
+    }
+  }
+  if (version < 2) {
+    state = { ...state, categoryEnabled: migrateLegacyCategoryEnabled(state['categoryEnabled']) };
+  }
+  return state;
 }
 
 export function shouldNotifyWithPreferences(
@@ -85,12 +143,7 @@ export function shouldNotifyWithPreferences(
 export const useNotificationPrefsStore = create<NotificationPrefsState>()(
   persist(
     (set, get) => ({
-      categoryEnabled: {
-        approvals: true,
-        task_updates: true,
-        errors: true,
-        status: false,
-      },
+      categoryEnabled: { ...DEFAULT_CATEGORY_ENABLED },
       vibrationEnabled: {
         critical: true,
         high: true,
@@ -142,23 +195,9 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
-      migrate: (persisted, version) => {
-        if (version >= 1 || persisted === null || typeof persisted !== 'object') return persisted;
-        const state = persisted as { quietHours?: Partial<QuietHours> };
-        const quiet = state.quietHours;
-        if (!quiet) return persisted;
-        return {
-          ...state,
-          quietHours: {
-            enabled: quiet.enabled === true,
-            days: Array.isArray(quiet.days) && quiet.days.length > 0 ? quiet.days : ALL_WEEKDAYS,
-            startTime: quiet.startTime ?? '22:00',
-            endTime: quiet.endTime ?? '08:00',
-            timezone: quiet.timezone ?? deviceTimezone(),
-          },
-        };
-      },
+      version: 2,
+      migrate: (persisted, version) =>
+        migrateNotificationPrefs(persisted, version) as NotificationPrefsState,
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[notificationPrefsStore] Hydration failed:', error);

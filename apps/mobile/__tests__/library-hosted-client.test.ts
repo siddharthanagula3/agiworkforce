@@ -76,6 +76,7 @@ describe('library client mapping', () => {
       sourceLabel: 'sol-1',
       eraseAfter: null,
       model: 'sol-1',
+      conversationId: null,
     });
   });
 

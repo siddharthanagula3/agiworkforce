@@ -15,13 +15,29 @@ jest.mock('@/lib/egressGuard', () => ({
 }));
 
 const mockUploadAsync = jest.fn();
+const mockCancelAsync = jest.fn();
+const mockUploadProgress: {
+  current?: (data: { totalBytesSent: number; totalBytesExpectedToSend: number }) => void;
+} = {};
 jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8', Base64: 'base64' },
   FileSystemUploadType: { BINARY_CONTENT: 0 },
-  createUploadTask: jest.fn(() => ({ uploadAsync: mockUploadAsync })),
+  createUploadTask: jest.fn(
+    (
+      _url: string,
+      _uri: string,
+      _options: unknown,
+      callback?: (data: { totalBytesSent: number; totalBytesExpectedToSend: number }) => void,
+    ) => {
+      mockUploadProgress.current = callback;
+      return { uploadAsync: mockUploadAsync, cancelAsync: mockCancelAsync };
+    },
+  ),
   getInfoAsync: jest.fn(),
   readAsStringAsync: jest.fn(),
 }));
+
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 
 jest.mock('@/services/api', () => ({
   api: { get: jest.fn(), post: jest.fn(), delete: jest.fn() },
@@ -33,11 +49,17 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { managedCloudProjectKnowledgePath } from '@agiworkforce/cloud-contracts';
-import { getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
+import { Alert } from 'react-native';
+import { getDocumentAsync } from 'expo-document-picker';
+import { createUploadTask, getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import { api } from '@/services/api';
 import { guardedFetch } from '@/lib/egressGuard';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
-import { ProjectSourceError, useProjectStore } from '@/src/features/projects/store';
+import {
+  ProjectSourceCancelledError,
+  ProjectSourceError,
+  useProjectStore,
+} from '@/src/features/projects/store';
 import {
   PROJECT_SOURCE_MIME_TYPES,
   ProjectSourcesTab,
@@ -200,6 +222,141 @@ describe('adding sources to a cloud project', () => {
     expect(api.delete).toHaveBeenCalledWith(
       `${managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID)}/kf_1`,
     );
+  });
+});
+
+function hangUploadUntilCancelled() {
+  mockUploadAsync.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        mockCancelAsync.mockImplementation(async () => resolve(undefined));
+      }),
+  );
+}
+
+function knowledgeRegistrations() {
+  return (api.post as jest.Mock).mock.calls.filter(
+    ([path]) => path === managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID),
+  );
+}
+
+describe('upload progress and cancellation', () => {
+  it('reports byte progress from the upload task', async () => {
+    primeHappyPath();
+    mockUploadAsync.mockImplementation(async () => {
+      mockUploadProgress.current?.({ totalBytesSent: 1, totalBytesExpectedToSend: 4 });
+      return { status: 200 };
+    });
+    const onProgress = jest.fn();
+
+    await useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE, { onProgress });
+
+    expect(onProgress).toHaveBeenCalledWith({ bytesSent: 1, totalBytes: 4 });
+  });
+
+  it('cancels the in-flight upload, releases the presign and registers nothing', async () => {
+    primeHappyPath();
+    hangUploadUntilCancelled();
+    const controller = new AbortController();
+
+    const pending = useProjectStore
+      .getState()
+      .addSource(CLOUD_PROJECT_ID, PICKED_SOURCE, { signal: controller.signal });
+    await waitFor(() => expect(mockUploadAsync).toHaveBeenCalledTimes(1));
+    controller.abort();
+
+    await expect(pending).rejects.toBeInstanceOf(ProjectSourceCancelledError);
+    expect(mockCancelAsync).toHaveBeenCalledTimes(1);
+    expect(guardedFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/uploads/presign'),
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({
+          kind: 'knowledge-file',
+          projectId: CLOUD_PROJECT_ID,
+          storageKey: STORAGE_KEY,
+        }),
+      }),
+    );
+    expect(knowledgeRegistrations()).toHaveLength(0);
+  });
+
+  it('touches nothing when the signal is already aborted', async () => {
+    primeHappyPath();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      useProjectStore
+        .getState()
+        .addSource(CLOUD_PROJECT_ID, PICKED_SOURCE, { signal: controller.signal }),
+    ).rejects.toBeInstanceOf(ProjectSourceCancelledError);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(createUploadTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('the sources tab upload queue', () => {
+  const pickedAssets = [
+    { name: 'notes.md', mimeType: 'text/markdown', size: 1, uri: 'file:///cache/notes.md' },
+    { name: 'plan.md', mimeType: 'text/markdown', size: 1, uri: 'file:///cache/plan.md' },
+  ];
+
+  beforeEach(() => {
+    primeHappyPath();
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    (getDocumentAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: pickedAssets });
+  });
+
+  async function startAdding() {
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Add sources'));
+    await waitFor(() => expect(mockUploadAsync).toHaveBeenCalledTimes(1));
+    return screen;
+  }
+
+  it('shows which file is uploading and its byte progress', async () => {
+    hangUploadUntilCancelled();
+    const screen = await startAdding();
+
+    expect(screen.getByText('Adding notes.md')).toBeTruthy();
+    await act(async () => {
+      mockUploadProgress.current?.({ totalBytesSent: 1, totalBytesExpectedToSend: 4 });
+    });
+
+    expect(screen.getByText('Uploading notes.md, 25%')).toBeTruthy();
+    expect(screen.getByText('File 1 of 2')).toBeTruthy();
+    screen.unmount();
+  });
+
+  it('cancel stops the queue without reporting an error', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    hangUploadUntilCancelled();
+    const screen = await startAdding();
+
+    const cancel = screen.getByLabelText('Cancel adding sources');
+    expect(cancel.props.accessibilityRole).toBe('button');
+    await act(async () => {
+      fireEvent.press(cancel);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('project-source-upload-progress')).toBeNull());
+    expect(mockCancelAsync).toHaveBeenCalledTimes(1);
+    expect(createUploadTask).toHaveBeenCalledTimes(1);
+    expect(knowledgeRegistrations()).toHaveLength(0);
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('cancels the in-flight upload when the tab unmounts', async () => {
+    hangUploadUntilCancelled();
+    const screen = await startAdding();
+
+    screen.unmount();
+
+    await waitFor(() => expect(mockCancelAsync).toHaveBeenCalledTimes(1));
+    expect(createUploadTask).toHaveBeenCalledTimes(1);
   });
 });
 

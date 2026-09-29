@@ -193,15 +193,16 @@ export function TwoFactorSection({
         ) : null}
         {enabled ? (
           <SettingsRow
+            label="Backup codes"
+            icon={KeyRound}
+            value={status?.backupCodesReady ? 'Ready' : 'Not set'}
+          />
+        ) : null}
+        {enabled ? (
+          <SettingsRow
             label="Generate new backup codes"
             icon={KeyRound}
-            value={
-              !available
-                ? 'Temporarily unavailable'
-                : status?.backupCodesReady
-                  ? 'Ready'
-                  : 'Not set'
-            }
+            {...(available ? {} : { value: 'Temporarily unavailable' })}
             {...(available && !busy ? { onPress: () => void regenerate() } : {})}
           />
         ) : null}
@@ -224,6 +225,7 @@ export function TwoFactorSection({
         onRequestClose={() => (stage.name === 'enrolling' ? setStage({ name: 'idle' }) : null)}
       >
         <KeyboardAvoidingView
+          accessibilityViewIsModal
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         >

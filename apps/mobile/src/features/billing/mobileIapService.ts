@@ -8,11 +8,20 @@ import {
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 
 export class BillingUpgradeRequestError extends Error {
   constructor(readonly userMessage: string) {
     super(userMessage);
   }
+}
+
+export function billingRequestMessage(error: unknown, fallback: string): string {
+  if (error instanceof BillingUpgradeRequestError) return error.userMessage;
+  if (error instanceof ApiHttpError && error.status >= 400 && error.status < 500) {
+    return error.message;
+  }
+  return fallback;
 }
 
 function currentStorePlatform(): MobileIapPlatform | null {

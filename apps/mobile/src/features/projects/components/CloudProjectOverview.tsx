@@ -140,6 +140,7 @@ export function CloudProjectOverview({
         onRequestClose={() => setPickerOpen(false)}
       >
         <Pressable
+          accessibilityViewIsModal
           style={{ flex: 1, backgroundColor: colors.scrim }}
           onPress={() => setPickerOpen(false)}
           accessibilityRole="button"

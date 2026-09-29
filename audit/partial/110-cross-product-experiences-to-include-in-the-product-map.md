@@ -23,17 +23,16 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 - Done when: A document (chat artifact or uploaded file) is turned into a presentation the user can open and keep working on.
 - Wave: 3
-- Already works on: chrome
+- Already works on: mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
 | desktop | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
-| mobile | partial | mobile now attaches documents (incl. pptx) and the office tool builds decks as on web; same owner gate as web: provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/docParser.ts:110-110`, `apps/web/lib/security/upload-scan.ts:38-38`
+Code: `apps/web/lib/security/upload-scan.ts:264-264`
 
 ## S110.03: Spreadsheet → chart → report.
 
