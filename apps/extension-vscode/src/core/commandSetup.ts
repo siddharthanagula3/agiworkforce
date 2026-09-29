@@ -2568,6 +2568,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await showCloudRunDetail(resolution.client, runId, {
         webOrigin: getCloudWebOrigin(),
         onChanged: () => cloudTasksTreeProvider.refresh(),
+        renameConversation: async (conversationId, title) => {
+          const projects = await resolveProjectsWorkspace(context.secrets);
+          if (projects.status === 'signed-out') throw new Error('sign in to AGI Cloud first');
+          await projects.workspace.chat.updateConversation(conversationId, { title });
+        },
         listArtifacts: async () => {
           const artifacts = await resolveArtifactsWorkspace(context.secrets);
           return artifacts.status === 'signed-out' ? [] : artifacts.workspace.index.listArtifacts();
