@@ -365,6 +365,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
         rootId: input['rootId'],
         command: input['command'],
         ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+        ...reviewOf(input),
       });
       return describeCommandRun(result);
     }
@@ -374,6 +375,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
         rootId: input['rootId'],
         command: input['command'],
         ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+        ...reviewOf(input),
       });
       return describeBackgroundOutput(result);
     }

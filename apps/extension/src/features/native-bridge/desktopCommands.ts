@@ -3,9 +3,10 @@ import {
   isBrowserCommandRequest,
   type BrowserCommandRequest,
   type BrowserCommandResult,
+  type BrowserTabSummary,
 } from '@agiworkforce/types';
 import { sanitizePageText } from '../../background/policy';
-import { authorizeBrowserToolTab } from '../browser-tools/tabAuthority';
+import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
@@ -19,7 +20,8 @@ export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
  * authority over what Chrome may do.
  */
 export interface DesktopCommandContext {
-  resolveTabId: () => Promise<number | null>;
+  resolveTabId: (explicitTabId?: number) => Promise<number | null>;
+  listTabs: () => Promise<BrowserTabSummary[]>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
   capture: (tabId: number) => Promise<string>;
@@ -71,6 +73,8 @@ async function execute(
   const { args } = request;
 
   switch (request.command) {
+    case 'browser_list_tabs':
+      return context.listTabs();
     case 'browser_read_page': {
       const info = requireSuccess(await context.send(tabId, { type: 'GET_PAGE_INFO' }));
       const text = await context.send(tabId, { type: 'GET_TEXT', selector: 'body' });
@@ -101,6 +105,7 @@ async function execute(
     }
     case 'browser_navigate': {
       const url = httpUrl(args['url']);
+      await authorizeBrowserToolUrl(url);
       await context.navigate(tabId, url);
       return { url };
     }
@@ -157,7 +162,18 @@ export async function runDesktopBrowserCommand(
   }
 
   try {
-    const tabId = await context.resolveTabId();
+    if (raw.command === 'browser_list_tabs') {
+      return succeeded(raw.id, await context.listTabs());
+    }
+    const requestedTabId = raw.args['tabId'];
+    const explicitTabId =
+      typeof requestedTabId === 'number' && Number.isInteger(requestedTabId)
+        ? requestedTabId
+        : undefined;
+    const tabId = await context.resolveTabId(explicitTabId);
+    if (explicitTabId !== undefined && tabId !== explicitTabId) {
+      return failed(raw.id, 'That tab is no longer open in Chrome.');
+    }
     if (tabId === null) {
       return failed(raw.id, 'No web page is open in Chrome for that action.');
     }

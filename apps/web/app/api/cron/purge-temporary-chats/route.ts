@@ -25,6 +25,10 @@ const PURGE_BATCH = 500;
 const MAX_BATCHES = 200;
 const PURGE_BUDGET_MS = 240_000;
 const RETENTION_DAYS = 30;
+const SETTLED_IMAGE_JOB = `job.status = any (array['completed', 'failed', 'canceled'])
+  and coalesce(job.billing_settlement_status, 'succeeded') <> 'pending'`;
+const SETTLED_VIDEO_JOB = `job.status = any (array['completed', 'failed', 'outcome_unknown'])
+  and coalesce(job.billing_settlement_status, 'succeeded') <> 'pending'`;
 
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
@@ -73,14 +77,22 @@ export async function GET(request: NextRequest) {
         break;
       }
       const deleted = await db.query<{ count: number }>(
-        `with expired as (
+        `with due as (
+           select candidate.id from web_conversations candidate
+            where ${chatDue}
+              and ${chatExclusion.sql}
+            limit $2
+         ), image_jobs as (
+           delete from public.image_generation_jobs job
+            where job.conversation_id in (select id from due)
+              and ${SETTLED_IMAGE_JOB}
+         ), video_jobs as (
+           delete from public.video_generation_jobs job
+            where job.conversation_id in (select id from due)
+              and ${SETTLED_VIDEO_JOB}
+         ), expired as (
            delete from web_conversations
-            where id in (
-              select candidate.id from web_conversations candidate
-               where ${chatDue}
-                 and ${chatExclusion.sql}
-               limit $2
-            )
+            where id in (select id from due)
             returning id
          )
          select count(*)::int as count from expired`,
@@ -91,6 +103,29 @@ export async function GET(request: NextRequest) {
       if (count < PURGE_BATCH) break;
       remaining = batch === MAX_BATCHES - 1;
     }
+
+    // A job still settling when its chat went loses the conversation link, so
+    // it is found by its own mark and clock once it has settled.
+    const orphanedJobs = await db.query<{ count: number }>(
+      `with image_jobs as (
+         delete from public.image_generation_jobs job
+          where job.conversation_id is null
+            and job.temporary_chat
+            and job.created_at < now() - make_interval(days => $1)
+            and ${SETTLED_IMAGE_JOB}
+          returning 1
+       ), video_jobs as (
+         delete from public.video_generation_jobs job
+          where job.conversation_id is null
+            and job.temporary_chat
+            and job.created_at < now() - make_interval(days => $1)
+            and ${SETTLED_VIDEO_JOB}
+          returning 1
+       )
+       select ((select count(*) from image_jobs) + (select count(*) from video_jobs))::int as count`,
+      [RETENTION_DAYS],
+    );
+    const jobsPurged = orphanedJobs[0]?.count ?? 0;
 
     // A file attached to a temporary chat is retired on the same clock as the
     // chat (0218). Marking it deleted rather than deleting it hands it to
@@ -121,7 +156,7 @@ export async function GET(request: NextRequest) {
     }
     // Counted, never named: whose chats they are is not for a log.
     logger.info(
-      { purged, attachmentsRetired, remaining, heldChats, heldAttachments },
+      { purged, jobsPurged, attachmentsRetired, remaining, heldChats, heldAttachments },
       heldChats + heldAttachments > 0
         ? 'Purged expired temporary chats; some were preserved by an active legal hold and will be purged once it is released'
         : 'Purged expired temporary chat conversations',
@@ -130,6 +165,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       message: 'Temporary chat purge completed',
       purged,
+      jobsPurged,
       attachmentsRetired,
       heldChats,
       heldAttachments,

@@ -13,6 +13,3 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | The user can sign out and back in as another account; there is no workspace switcher and runs stop on account change. | ui |
-
-Code: `apps/extension/src/side_panel.ts:8420-8430`, `apps/extension/src/features/side-panel/computerUsePanel.ts:515-516`

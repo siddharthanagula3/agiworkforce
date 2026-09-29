@@ -339,6 +339,26 @@ person's own machine (code.claude.com/docs/en/claude-code-on-the-web, section
 Share sessions). The desktop app shares cloud sessions through the hosted Code
 page, and local sessions stay unshareable (S66.40 desktop). Checked 2026-09-28.
 
+## D-2026-09-28-22 A cloud session's result comes local through the CLI and VS Code
+
+Claude brings a cloud session into a local checkout with the CLI's
+`claude --teleport`, which checks out the session's branch and loads its
+history, and with Open in > Terminal on claude.ai/code, which copies that
+command; the desktop app does not pull a cloud result into a repository itself
+(code.claude.com/docs/en/claude-code-on-the-web, section From cloud to
+terminal). The desktop app therefore hands a cloud session to VS Code or the
+terminal and adds no native pull and review of its own (S110.23 desktop).
+Checked 2026-09-28.
+
+## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
+
+When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
+reconnect prompt and the person sends the request again once the app is
+connected; neither resumes the interrupted turn on its own. The web and
+desktop apps do the same: the chat card offers Reconnect and Retry, and
+Settings offers Connect on an expired connection, with no automatic resume
+(S110.27 web and desktop).
+
 ## D-2026-09-28-23 The Chrome extension stays at Claude in Chrome's scope
 
 Claude in Chrome is the reference for the extension. Its pages
@@ -367,12 +387,3 @@ S67.21, S67.23, S74.20, S76.28, S76.29, S78.06, S78.11, S78.15, S78.16, S78.20,
 S79.05, S79.06, S79.08, S79.21, S79.28, S81.19, S84.01, S84.18, S85.23, S86.06,
 S106.01, S106.02, S106.03, S106.04, S106.05, S106.06, S106.07, S106.08,
 S106.12, S106.15, S109.03, S109.08, S110.27 (chrome).
-
-## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
-
-When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
-reconnect prompt and the person sends the request again once the app is
-connected; neither resumes the interrupted turn on its own. The web and
-desktop apps do the same: the chat card offers Reconnect and Retry, and
-Settings offers Connect on an expired connection, with no automatic resume
-(S110.27 web and desktop).

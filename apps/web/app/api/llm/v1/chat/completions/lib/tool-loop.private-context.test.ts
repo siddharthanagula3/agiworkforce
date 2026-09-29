@@ -46,6 +46,17 @@ describe('the sensitive-source leg of the trifecta gate', () => {
     expect(hasPrivateContext({ autoMemoryFacts: [] }, [USER])).toBe(false);
   });
 
+  it('sees a file the turn already read on the user device, with no device host left', () => {
+    const readCall = (name: string) =>
+      ({
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id: 'call_1', type: 'function', function: { name, arguments: '{}' } }],
+      }) as Message;
+    expect(hasPrivateContext({}, [SYSTEM, USER, readCall('device_read_file')])).toBe(true);
+    expect(hasPrivateContext({}, [SYSTEM, USER, readCall('device_wait')])).toBe(false);
+  });
+
   it('sees an earlier user turn', () => {
     expect(hasPrivateContext({}, [USER, USER])).toBe(true);
   });
