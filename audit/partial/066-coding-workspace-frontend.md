@@ -37,16 +37,14 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: The user picks or creates a git worktree for a coding session so parallel work stays isolated.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | TUI /worktree now lists, creates and removes worktrees, but the session does not move into a new worktree. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3877-3877`
 
 ## S66.04: Local/cloud execution selector.
 

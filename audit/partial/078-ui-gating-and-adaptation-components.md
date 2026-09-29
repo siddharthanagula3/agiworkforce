@@ -36,14 +36,11 @@ Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 - Done when: Media generation settings (duration, size, aspect) offered depend on the selected media model.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:188-188`, `packages/contracts/cloud-contracts/src/managed-media.ts:211-211`, `packages/contracts/cloud-contracts/src/managed-media.ts:214-214`, `packages/contracts/cloud-contracts/src/managed-media.ts:215-215`
 
 ## S78.10: Role restrictions.
 

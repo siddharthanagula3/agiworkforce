@@ -222,16 +222,13 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: A project can be archived out of the active list and restored later with its contents intact.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The hosted project PUT empties the project's conversations when isArchived is true (apps/web/app/api/projects/[id]/route.ts:233), so archive/undo loses filing on every surface; a server change is needed. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/cloud/mod.rs:256-256`
 
 ## S23.33: Project-only context mode.
 

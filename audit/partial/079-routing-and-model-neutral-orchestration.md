@@ -136,15 +136,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S79.28: Routing-policy versioning.
-
-- Done when: Routing policies are versioned and each decision can be traced to the policy version that made it.
-- Wave: 3
-- Already works on: web, desktop, mobile, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The generated Rust registry now carries policies.release.policyVersion and routing_policy_version() reads it (ccf4744297); recording it on the CLI routing decision is p-mcp-rust's | handler |
-
-Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`

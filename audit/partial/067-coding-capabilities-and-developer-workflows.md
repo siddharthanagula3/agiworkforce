@@ -192,15 +192,12 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 - Done when: The agent starts a development server and keeps it running while it continues working.
 - Wave: 3
-- Already works on: desktop, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | run_command blocks until the command exits or times out; there is no background shell, so a dev server cannot keep running while the agent continues. | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
 
 ## S67.16: Inspect browser behavior.
 

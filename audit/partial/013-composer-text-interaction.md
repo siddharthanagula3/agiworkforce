@@ -209,16 +209,13 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/
 
 - Done when: The user can reference a connected app (connector/MCP server) or one of its resources inline in the composer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
 
 ## S13.32: Selected-source chips.
 

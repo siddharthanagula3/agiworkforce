@@ -109,16 +109,13 @@ Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 - Done when: A user can see details about a plugin's publisher.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi plugin list shows a signature label naming the trusted publisher when signed; no publisher detail. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 ## S54.13: Plugin detail.
 
@@ -284,16 +281,13 @@ Code: `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
 
 - Done when: A user can pin a plugin to a specific version.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | --integrity sha256:<hex> pins the content on install, but there is no way to choose a version, and marketplace update moves every git plugin forward. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.27: Customize installed plugin.
 
