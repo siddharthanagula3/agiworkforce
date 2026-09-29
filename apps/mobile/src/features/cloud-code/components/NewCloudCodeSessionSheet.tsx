@@ -22,10 +22,12 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from '../service';
-import { connectGitHubInApp, describeGitHubInstallOutcome } from '../githubInstall';
+import { useRouter } from 'expo-router';
+import { startGitHubInstallInApp } from '../githubInstall';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
+const GITHUB_CONNECT_FAILED = 'GitHub could not be connected';
 const TITLE_WORDS = 6;
 const SEARCH_DEBOUNCE_MS = 300;
 const GIGABYTE_MB = 1024;
@@ -237,6 +239,7 @@ export function NewCloudCodeSessionSheet({
   const [extraHosts, setExtraHosts] = useState('');
   const [runtimeId, setRuntimeId] = useState('');
   const [creating, setCreating] = useState(false);
+  const router = useRouter();
   const [connectingGitHub, setConnectingGitHub] = useState(false);
   const [gitHubNotice, setGitHubNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -343,15 +346,21 @@ export function NewCloudCodeSessionSheet({
     setConnectingGitHub(true);
     setGitHubNotice(null);
     try {
-      const outcome = await connectGitHubInApp();
-      setGitHubNotice(describeGitHubInstallOutcome(outcome));
-      if (outcome === 'connected') setRepositoryAttempt((attempt) => attempt + 1);
+      const started = await startGitHubInstallInApp();
+      if (started.kind === 'returned') {
+        onClose();
+        router.push({ pathname: '/(app)/github/installed', params: started.result });
+      } else if (started.kind === 'opened') {
+        onClose();
+      } else if (started.kind === 'failed') {
+        setGitHubNotice(GITHUB_CONNECT_FAILED);
+      }
     } catch (connectError: unknown) {
-      setGitHubNotice(describeCloudCodeError(connectError, 'GitHub could not be connected'));
+      setGitHubNotice(describeCloudCodeError(connectError, GITHUB_CONNECT_FAILED));
     } finally {
       setConnectingGitHub(false);
     }
-  }, []);
+  }, [onClose, router]);
 
   const handleCreate = useCallback(async () => {
     if (!canCreate || creatingRef.current) return;

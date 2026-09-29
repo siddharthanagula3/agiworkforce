@@ -421,3 +421,4 @@ export {
 export * from './chart-spec';
 export * from './connector-connect-required';
 export * from './image-jobs';
+export * from './media-jobs';
