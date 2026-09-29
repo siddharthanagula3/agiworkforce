@@ -2030,26 +2030,78 @@ pub mod connectors {
         Ok(policy)
     }
 
-    /// The policy for a tool that runs on this machine in any privacy mode, such
-    /// as web_search and web_fetch, whose site rules bind Local and BYOK turns
-    /// too. Read once per process with the stored sign-in; reading it sends
-    /// nothing of the session. Signed out, or unreadable, it is unrestricted,
-    /// as the connector gate is.
-    pub async fn policy_for_local_tools() -> Option<ConnectorAccessPolicy> {
-        if let Some(read) = cache().lock().ok().and_then(|slot| slot.clone()) {
-            return read;
+    /// What a tool that runs on this machine in any privacy mode, such as
+    /// web_search and web_fetch, must apply. Their site rules bind Local and
+    /// BYOK turns too.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum LocalToolPolicy {
+        /// Signed out, a personal account, or a workspace that set nothing.
+        Unrestricted,
+        Rules(ConnectorAccessPolicy),
+        /// A workspace member whose rules could not be read. Refused, as the
+        /// web connector gate refuses, rather than read as permission.
+        Unreadable(String),
+    }
+
+    const UNREADABLE_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
+
+    fn local_tool_cache() -> &'static Mutex<Option<(LocalToolPolicy, std::time::Instant)>> {
+        static CACHE: OnceLock<Mutex<Option<(LocalToolPolicy, std::time::Instant)>>> =
+            OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(None))
+    }
+
+    /// Decides the policy from one read. A 403 or 404 means no workspace
+    /// governs this account; any other failure refuses only when this account
+    /// is known to belong to a workspace.
+    pub fn local_tool_policy_from(
+        read: Result<Option<ConnectorAccessPolicy>, CloudError>,
+        workspace_member: bool,
+    ) -> LocalToolPolicy {
+        match read {
+            Ok(Some(policy)) => LocalToolPolicy::Rules(policy),
+            Ok(None) | Err(CloudError::SignedOut) => LocalToolPolicy::Unrestricted,
+            Err(CloudError::Api {
+                status: 403 | 404, ..
+            }) => LocalToolPolicy::Unrestricted,
+            Err(_) if !workspace_member => LocalToolPolicy::Unrestricted,
+            Err(CloudError::SessionExpired) => LocalToolPolicy::Unreadable(
+                "Your AGI Workforce session expired, so your workspace's website rules could \
+                 not be checked and the assistant will not read websites. Sign in again with \
+                 `agi login`."
+                    .to_string(),
+            ),
+            Err(_) => LocalToolPolicy::Unreadable(
+                "Your workspace's website rules could not be read, so the assistant will not \
+                 read websites until they can be. Check your connection and try again."
+                    .to_string(),
+            ),
         }
-        let policy = match CloudClient::connect_managed() {
-            Ok(client) => match client
+    }
+
+    /// Read once per process with the stored sign-in; the read sends nothing
+    /// of the session. An unreadable result is retried after a minute.
+    pub async fn policy_for_local_tools() -> LocalToolPolicy {
+        if let Some((policy, read_at)) =
+            local_tool_cache().lock().ok().and_then(|slot| slot.clone())
+        {
+            let stale = matches!(policy, LocalToolPolicy::Unreadable(_))
+                && read_at.elapsed() >= UNREADABLE_RETRY;
+            if !stale {
+                return policy;
+            }
+        }
+        let read = match CloudClient::connect_managed() {
+            Ok(client) => client
                 .get::<PolicyResponse>(CONNECTOR_POLICY_PATH, &[])
                 .await
-            {
-                Ok(response) if response.configured => response.policy,
-                _ => None,
-            },
-            Err(_) => None,
+                .map(|response| response.configured.then_some(response.policy).flatten()),
+            Err(error) => Err(error),
         };
-        set_cached_policy(policy.clone());
+        let policy = local_tool_policy_from(read, crate::cloud::workspace_policy::governed());
+        if let Ok(mut slot) = local_tool_cache().lock() {
+            *slot = Some((policy.clone(), std::time::Instant::now()));
+        }
         policy
     }
 
