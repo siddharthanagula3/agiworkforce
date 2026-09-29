@@ -16,17 +16,10 @@ export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
 export const GITHUB_INSTALL_APP_START_PATH = '/api/github/install/app-start';
 export const GITHUB_INSTALL_COMPLETE_PATH = '/api/github/install/complete';
-export const GITHUB_INSTALL_APP_RETURN_URL = 'agiworkforce://github/installed';
 export const GITHUB_INSTALL_APP_LINK_RETURN_URL = 'https://agiworkforce.com/github/installed';
 export const GITHUB_INSTALL_PENDING_PATH = '/api/github/install/pending';
 
-export const GITHUB_INSTALL_APP_PLATFORMS = ['ios', 'android'] as const;
-export type GitHubInstallAppPlatform = (typeof GITHUB_INSTALL_APP_PLATFORMS)[number];
-
-export const GitHubInstallAppStartRequestSchema = z.object({
-  platform: z.enum(GITHUB_INSTALL_APP_PLATFORMS).optional(),
-});
-export type GitHubInstallAppStartRequest = z.infer<typeof GitHubInstallAppStartRequestSchema>;
+export const GITHUB_INSTALL_CONNECT_PAGE_PATH = '/github/connect';
 
 export const GitHubInstallPendingRequestSchema = z.object({
   state: z.string().regex(/^[a-f0-9]{64}$/),

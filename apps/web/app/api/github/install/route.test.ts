@@ -12,9 +12,8 @@ const mocks = vi.hoisted(() => ({
   ),
   linkingAvailable: vi.fn(() => false),
   recordAppInstallation: vi.fn(
-    async (
-      ..._args: unknown[]
-    ): Promise<{ oauthState: string; codeChallenge: string; returnTarget: string } | null> => null,
+    async (..._args: unknown[]): Promise<{ oauthState: string; codeChallenge: string } | null> =>
+      null,
   ),
 }));
 
@@ -151,7 +150,6 @@ describe('GitHub installation callback ownership proof', () => {
     mocks.recordAppInstallation.mockResolvedValue({
       oauthState: 'd'.repeat(64),
       codeChallenge: 'row-challenge',
-      returnTarget: 'app_link',
     });
 
     const response = await GET(

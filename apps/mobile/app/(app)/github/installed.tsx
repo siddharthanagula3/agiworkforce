@@ -142,7 +142,14 @@ export default function GitHubInstallReturnRoute() {
           accessibilityLabel="Finishing the GitHub connection"
         >
           <ActivityIndicator color={colors.textPrimary} />
-          <Button title="Cancel" variant="outline" onPress={handleBack} />
+          <Button
+            title="Cancel"
+            variant="outline"
+            onPress={() => {
+              if (returned && stage.name === 'loading') void finish('cancel');
+              else handleBack();
+            }}
+          />
         </View>
       )}
     </SafeAreaView>

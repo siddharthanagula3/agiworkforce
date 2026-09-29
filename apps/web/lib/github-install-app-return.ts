@@ -1,9 +1,6 @@
 import 'server-only';
 
-import {
-  GITHUB_INSTALL_APP_LINK_RETURN_URL,
-  GITHUB_INSTALL_APP_RETURN_URL,
-} from '@agiworkforce/cloud-contracts';
+import { GITHUB_INSTALL_APP_LINK_RETURN_URL } from '@agiworkforce/cloud-contracts';
 import { generatePkcePair, hashOAuthState } from '@/lib/connectors/pkce';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { generateGitHubInstallState, type VerifiedGitHubInstallation } from '@/lib/github-app';
@@ -13,17 +10,9 @@ const APP_INSTALL_TTL_MINUTES = 10;
 
 const VERIFIER_PURPOSE = 'oauth-code-verifier';
 
-export type AppInstallReturnTarget = 'app_scheme' | 'app_link';
-
-export interface AppInstallReturn {
-  userId: string;
-  returnTarget: AppInstallReturnTarget;
-}
-
 export interface AppInstallAuthorization {
   oauthState: string;
   codeChallenge: string;
-  returnTarget: AppInstallReturnTarget;
 }
 
 export interface ConsumedAppInstall {
@@ -31,10 +20,7 @@ export interface ConsumedAppInstall {
   codeVerifier: string;
 }
 
-export async function startAppInstall(
-  userId: string,
-  returnTarget: AppInstallReturnTarget,
-): Promise<string> {
+export async function startAppInstall(userId: string): Promise<string> {
   const state = generateGitHubInstallState();
   const db = getNeonDb();
   await db.query(
@@ -44,10 +30,9 @@ export async function startAppInstall(
     [userId],
   );
   await db.query(
-    `insert into public.github_install_authorizations
-       (user_id, install_state_hash, expires_at, return_target)
-     values ($1, $2, now() + make_interval(mins => $3), $4)`,
-    [userId, hashOAuthState(state), APP_INSTALL_TTL_MINUTES, returnTarget],
+    `insert into public.github_install_authorizations (user_id, install_state_hash, expires_at)
+     values ($1, $2, now() + make_interval(mins => $3))`,
+    [userId, hashOAuthState(state), APP_INSTALL_TTL_MINUTES],
   );
   return state;
 }
@@ -58,7 +43,7 @@ export async function recordAppInstallation(
 ): Promise<AppInstallAuthorization | null> {
   const oauthState = generateGitHubInstallState();
   const pkce = generatePkcePair();
-  const rows = await getNeonDb().query<{ user_id: string; return_target: string }>(
+  const rows = await getNeonDb().query<{ user_id: string }>(
     `update public.github_install_authorizations
         set installation_id = $2,
             oauth_state_hash = $3,
@@ -67,7 +52,7 @@ export async function recordAppInstallation(
         and installation_id is null
         and consumed_at is null
         and expires_at > now()
-      returning user_id, return_target`,
+      returning user_id`,
     [
       hashOAuthState(installState),
       installationId,
@@ -75,18 +60,12 @@ export async function recordAppInstallation(
       encryptConnectorToken(pkce.verifier, VERIFIER_PURPOSE),
     ],
   );
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    oauthState,
-    codeChallenge: pkce.challenge,
-    returnTarget: row.return_target === 'app_link' ? 'app_link' : 'app_scheme',
-  };
+  return rows.length > 0 ? { oauthState, codeChallenge: pkce.challenge } : null;
 }
 
-export async function appInstallReturn(oauthState: string): Promise<AppInstallReturn | null> {
-  const rows = await getNeonDb().query<{ user_id: string; return_target: string }>(
-    `select user_id, return_target
+export async function appInstallOwner(oauthState: string): Promise<string | null> {
+  const rows = await getNeonDb().query<{ user_id: string }>(
+    `select user_id
        from public.github_install_authorizations
       where oauth_state_hash = $1
         and consumed_at is null
@@ -94,12 +73,35 @@ export async function appInstallReturn(oauthState: string): Promise<AppInstallRe
       limit 1`,
     [hashOAuthState(oauthState)],
   );
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    userId: row.user_id,
-    returnTarget: row.return_target === 'app_link' ? 'app_link' : 'app_scheme',
-  };
+  return rows[0]?.user_id ?? null;
+}
+
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 1)}***${email.slice(at)}`;
+}
+
+export async function appInstallRequester(installState: string): Promise<string | null> {
+  const db = getNeonDb();
+  const rows = await db.query<{ user_id: string }>(
+    `select user_id
+       from public.github_install_authorizations
+      where install_state_hash = $1
+        and installation_id is null
+        and consumed_at is null
+        and expires_at > now()
+      limit 1`,
+    [hashOAuthState(installState)],
+  );
+  const userId = rows[0]?.user_id;
+  if (!userId) return null;
+  const profiles = await db.query<{ email: string | null }>(
+    'select email from public.profiles where id = $1 limit 1',
+    [userId],
+  );
+  const email = profiles[0]?.email;
+  return email ? maskEmail(email) : 'an AGI Workforce account';
 }
 
 export async function pendingAppInstallation(
@@ -155,15 +157,8 @@ export async function consumeAppInstall(
   }
 }
 
-export function appInstallReturnUrl(
-  returnTarget: AppInstallReturnTarget,
-  params: Readonly<Record<string, string | null>>,
-): URL {
-  const target = new URL(
-    returnTarget === 'app_link'
-      ? GITHUB_INSTALL_APP_LINK_RETURN_URL
-      : GITHUB_INSTALL_APP_RETURN_URL,
-  );
+export function appInstallReturnUrl(params: Readonly<Record<string, string | null>>): URL {
+  const target = new URL(GITHUB_INSTALL_APP_LINK_RETURN_URL);
   for (const [key, value] of Object.entries(params)) {
     if (value) target.searchParams.set(key, value);
   }

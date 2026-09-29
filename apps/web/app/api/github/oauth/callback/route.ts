@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
-  appInstallReturn,
+  appInstallOwner,
   appInstallReturnUrl,
   linkVerifiedGitHubInstallation,
 } from '@/lib/github-install-app-return';
@@ -26,13 +26,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const appState = new URL(request.url).searchParams.get('state');
-  const appReturn =
-    appState && GITHUB_STATE_PATTERN.test(appState) ? await appInstallReturn(appState) : null;
-  if (appState && appReturn) {
+  if (appState && GITHUB_STATE_PATTERN.test(appState) && (await appInstallOwner(appState))) {
     const params = new URL(request.url).searchParams;
     const code = params.get('code');
     return NextResponse.redirect(
-      appInstallReturnUrl(appReturn.returnTarget, {
+      appInstallReturnUrl({
         state: appState,
         code: code && code.length <= 512 ? code : null,
         error: params.get('error') ? 'denied' : null,

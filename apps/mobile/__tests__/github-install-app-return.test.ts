@@ -1,13 +1,16 @@
 const mockPost = jest.fn();
 const mockOpenAuthSession = jest.fn();
 const mockOpenBrowser = jest.fn();
-const mockPlatform = { OS: 'ios' as 'ios' | 'android' };
+const mockOpenURL = jest.fn();
+const mockPlatform = { OS: 'ios' as 'ios' | 'android', Version: '17.4' as string | number };
 
 jest.mock('react-native', () => ({
   get Platform() {
     return mockPlatform;
   },
+  Linking: { openURL: (...args: unknown[]) => mockOpenURL(...args) },
 }));
+jest.mock('@/lib/constants', () => ({ API_URL: 'https://agiworkforce.com' }));
 jest.mock('@/services/api', () => ({
   api: {
     get: jest.fn(),
@@ -25,62 +28,80 @@ import {
   completeGitHubInstall,
   describeGitHubInstallOutcome,
   fetchPendingGitHubInstall,
+  iosSupportsHttpsAuthCallback,
   readGitHubInstallReturn,
   startGitHubInstallInApp,
 } from '../src/features/cloud-code/githubInstall';
 
 const STATE = 'b'.repeat(64);
-const INSTALL_URL = `https://github.com/apps/agi-workforce/installations/new?state=${'f'.repeat(64)}`;
+const CONNECT_URL = `https://agiworkforce.com/github/connect?state=${'f'.repeat(64)}`;
+const RETURN_URL = 'https://agiworkforce.com/github/installed';
 
 describe('a GitHub app install started on the phone', () => {
   beforeEach(() => {
     mockPost.mockReset();
     mockOpenAuthSession.mockReset();
     mockOpenBrowser.mockReset();
+    mockOpenURL.mockReset();
     mockPlatform.OS = 'ios';
+    mockPlatform.Version = '17.4';
   });
 
-  it('on iOS installs in an auth session and hands back what GitHub returned, unlinked', async () => {
-    mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
+  it('on iOS 17.4+ catches the https return in the auth session and hands it back, unlinked', async () => {
+    mockPost.mockResolvedValueOnce({ url: CONNECT_URL });
     mockOpenAuthSession.mockResolvedValue({
       type: 'success',
-      url: `agiworkforce://github/installed?state=${STATE}&code=one-time-code`,
+      url: `${RETURN_URL}?state=${STATE}&code=one-time-code`,
     });
 
     await expect(startGitHubInstallInApp()).resolves.toEqual({
       kind: 'returned',
       result: { state: STATE, code: 'one-time-code' },
     });
-    expect(mockPost).toHaveBeenCalledWith('/api/github/install/app-start', { platform: 'ios' });
-    expect(mockOpenAuthSession).toHaveBeenCalledWith(
-      INSTALL_URL,
-      'agiworkforce://github/installed',
-    );
+    expect(mockPost).toHaveBeenCalledWith('/api/github/install/app-start');
+    expect(mockOpenAuthSession).toHaveBeenCalledWith(CONNECT_URL, RETURN_URL, {
+      preferUniversalLinks: true,
+    });
     expect(mockPost).toHaveBeenCalledTimes(1);
   });
 
-  it('on Android opens the install and waits for the verified App Link, never a scheme listener', async () => {
-    mockPlatform.OS = 'android';
-    mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
+  it('below iOS 17.4 opens Safari and returns through the universal link', async () => {
+    mockPlatform.Version = '16.7';
+    mockPost.mockResolvedValueOnce({ url: CONNECT_URL });
 
     await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'opened' });
-    expect(mockPost).toHaveBeenCalledWith('/api/github/install/app-start', {
-      platform: 'android',
-    });
-    expect(mockOpenBrowser).toHaveBeenCalledWith(INSTALL_URL);
+    expect(mockOpenURL).toHaveBeenCalledWith(CONNECT_URL);
     expect(mockOpenAuthSession).not.toHaveBeenCalled();
   });
 
-  it('never opens an install URL that is not on github.com', async () => {
-    mockPost.mockResolvedValueOnce({ url: 'https://evil.example/installations/new' });
+  it('on Android opens a browser tab and waits for the verified App Link', async () => {
+    mockPlatform.OS = 'android';
+    mockPlatform.Version = 36;
+    mockPost.mockResolvedValueOnce({ url: CONNECT_URL });
+
+    await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'opened' });
+    expect(mockOpenBrowser).toHaveBeenCalledWith(CONNECT_URL);
+    expect(mockOpenAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('knows which iOS versions take an https auth callback', () => {
+    expect(iosSupportsHttpsAuthCallback('17.4')).toBe(true);
+    expect(iosSupportsHttpsAuthCallback('18.0')).toBe(true);
+    expect(iosSupportsHttpsAuthCallback('17.3.1')).toBe(false);
+    expect(iosSupportsHttpsAuthCallback('15.1')).toBe(false);
+  });
+
+  it('never opens a start URL that is not our own site', async () => {
+    mockPost.mockResolvedValueOnce({ url: 'https://evil.example/github/connect' });
 
     await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'failed' });
     expect(mockOpenAuthSession).not.toHaveBeenCalled();
     expect(mockOpenBrowser).not.toHaveBeenCalled();
+    expect(mockOpenURL).not.toHaveBeenCalled();
   });
 
   it('treats a closed install sheet as dismissed', async () => {
-    mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
+    mockPost.mockResolvedValueOnce({ url: CONNECT_URL });
     mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
 
     await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'dismissed' });

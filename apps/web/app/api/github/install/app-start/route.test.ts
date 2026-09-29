@@ -45,16 +45,14 @@ describe('POST /api/github/install/app-start', () => {
     mocks.installUrl.mockReturnValue('https://github.com/apps/agi-workforce/installations/new');
   });
 
-  it('opens a pending install for the signed-in account and returns the install URL', async () => {
+  it('opens a pending install and sends the phone to our requester page, not straight to GitHub', async () => {
     const response = await POST(startRequest());
 
     expect(response.status).toBe(200);
-    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_scheme');
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
     const body = (await response.json()) as { url: string };
     const url = new URL(body.url);
-    expect(url.origin + url.pathname).toBe(
-      'https://github.com/apps/agi-workforce/installations/new',
-    );
+    expect(url.origin + url.pathname).toBe('http://localhost:3000/github/connect');
     expect(url.searchParams.get('state')).toBe('f'.repeat(64));
     expect(response.headers.get('cache-control')).toContain('no-store');
   });
@@ -77,22 +75,9 @@ describe('POST /api/github/install/app-start', () => {
     expect(mocks.startAppInstall).not.toHaveBeenCalled();
   });
 
-  it('asks for the verified App Link return when Android starts the install', async () => {
-    await POST(startRequest({ platform: 'android' }));
-
-    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_link');
-  });
-
-  it('keeps the auth-session scheme for iOS', async () => {
+  it('ignores any platform the caller claims, so the starter cannot pick the return channel', async () => {
     await POST(startRequest({ platform: 'ios' }));
 
-    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_scheme');
-  });
-
-  it('rejects an unknown platform', async () => {
-    const response = await POST(startRequest({ platform: 'windows' }));
-
-    expect(response.status).toBe(400);
-    expect(mocks.startAppInstall).not.toHaveBeenCalled();
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
   });
 });
