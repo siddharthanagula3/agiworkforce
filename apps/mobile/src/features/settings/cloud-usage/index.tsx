@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import { BarChart3, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -84,7 +85,9 @@ function UsagePercentBar({
 
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+        {label}
+      </Text>
       <View
         style={{
           height: 8,
@@ -103,13 +106,15 @@ function UsagePercentBar({
         />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
           {credits
             ? formatCreditWindowUsage(credits.used, credits.allowance)
             : `${Math.round(clamped)}% used`}
         </Text>
         {resetLabel && (
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Resets {resetLabel}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            Resets {resetLabel}
+          </Text>
         )}
       </View>
     </View>
@@ -240,11 +245,13 @@ function SectionCard({
       <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 4 }}>
         <Text
           accessibilityRole="header"
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {title}
         </Text>
-        {note ? <Text style={{ color: colors.textMuted, fontSize: 12 }}>{note}</Text> : null}
+        {note ? (
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>{note}</Text>
+        ) : null}
       </View>
       <View style={{ padding: 16, gap: 14 }}>{children}</View>
     </View>
@@ -256,12 +263,21 @@ function DetailRow({ label, value, detail }: { label: string; value: string; det
   return (
     <View style={{ gap: 2 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '500', flexShrink: 1 }}>
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontSize: typeScale.subhead,
+            fontWeight: '500',
+            flexShrink: 1,
+          }}
+        >
           {label}
         </Text>
-        <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{value}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>{value}</Text>
       </View>
-      {detail ? <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{detail}</Text> : null}
+      {detail ? (
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>{detail}</Text>
+      ) : null}
     </View>
   );
 }
@@ -280,14 +296,20 @@ function ResourceStatus({
   if (!resource.error) return null;
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{resource.error}</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+        {resource.error}
+      </Text>
       <Pressable
         onPress={resource.reload}
         accessibilityRole="button"
         accessibilityLabel="Retry"
         style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+        >
+          Retry
+        </Text>
       </Pressable>
     </View>
   );
@@ -437,7 +459,7 @@ function HistoryRows({
   if (rows.length === 0) return null;
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}>
         {caption}
       </Text>
       {rows.slice(0, HISTORY_ROW_LIMIT).map((row) => (
@@ -445,10 +467,10 @@ function HistoryRows({
           key={row.key}
           style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 13, flexShrink: 1 }}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote, flexShrink: 1 }}>
             {labelFor(row)}
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
             {`${formatCount(row.requests, 'request', 'requests')} · ${formatCreditAmount(row.credits)}`}
           </Text>
         </View>
@@ -505,7 +527,7 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
               <Text
                 style={{
                   color: colors.textPrimary,
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   fontWeight: selected ? '600' : '400',
                 }}
               >
@@ -517,13 +539,13 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
       </View>
       <ResourceStatus resource={resource} loadingLabel="Loading usage history" />
       {history && history.totals.requests === 0 ? (
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
           No settled usage in this period.
         </Text>
       ) : null}
       {history && history.totals.requests > 0 ? (
         <>
-          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
             {`${formatCount(history.totals.requests, 'request', 'requests')} · ${formatCreditAmount(history.totals.credits)}`}
           </Text>
           <HistoryRows
@@ -542,7 +564,10 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
             labelFor={(row) => row.label ?? getModelMetadataById(row.key)?.name ?? row.key}
           />
           {history.unsettledRequests > 0 ? (
-            <Text accessibilityRole="text" style={{ color: colors.textSecondary, fontSize: 12 }}>
+            <Text
+              accessibilityRole="text"
+              style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
+            >
               {`${formatCount(history.unsettledRequests, 'request is', 'requests are')} still settling and not counted above.`}
             </Text>
           ) : null}
@@ -637,7 +662,9 @@ export default function CloudUsageScreen() {
                 marginBottom: 18,
               }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {error}
+              </Text>
               <Pressable
                 onPress={() => void load()}
                 disabled={loading}
@@ -652,7 +679,13 @@ export default function CloudUsageScreen() {
                 }}
               >
                 <RefreshCw size={14} color={colors.agentError} />
-                <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.agentError,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   {loading ? 'Retrying…' : 'Retry'}
                 </Text>
               </Pressable>
@@ -696,7 +729,7 @@ export default function CloudUsageScreen() {
                   <Text
                     style={{
                       color: colors.textMuted,
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       fontWeight: '600',
                       marginBottom: 8,
                     }}
@@ -765,7 +798,7 @@ export default function CloudUsageScreen() {
                   <Text
                     style={{
                       color: colors.textMuted,
-                      fontSize: 11,
+                      fontSize: typeScale.caption,
                       fontWeight: '700',
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
@@ -774,7 +807,7 @@ export default function CloudUsageScreen() {
                     {planLabel} plan
                   </Text>
                   {lastUpdated && (
-                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                       Updated {lastUpdated}
                     </Text>
                   )}
@@ -784,7 +817,7 @@ export default function CloudUsageScreen() {
                   <Text
                     style={{
                       color: colors.textSecondary,
-                      fontSize: 12,
+                      fontSize: typeScale.caption,
                       paddingHorizontal: 14,
                       paddingTop: 10,
                     }}
@@ -846,7 +879,9 @@ export default function CloudUsageScreen() {
                         }}
                       >
                         <RefreshCw size={12} color={colors.textMuted} />
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Refresh</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                          Refresh
+                        </Text>
                       </View>
                     )}
                   </Pressable>

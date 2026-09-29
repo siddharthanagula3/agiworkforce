@@ -15,6 +15,7 @@ import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {
@@ -155,12 +156,12 @@ const styles = StyleSheet.create({
   },
   recordingLabel: {
     color: colors.terraCotta,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   timer: {
     color: colors.voiceTextMuted,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontVariant: ['tabular-nums'],
     marginLeft: 4,
   },
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: colors.voiceTextSubtle,
-    fontSize: 12,
+    fontSize: typeScale.caption,
   },
   actions: {
     flexDirection: 'row',

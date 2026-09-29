@@ -6,7 +6,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { DimensionValue } from 'react-native';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 interface SkeletonProps {
   width?: DimensionValue;

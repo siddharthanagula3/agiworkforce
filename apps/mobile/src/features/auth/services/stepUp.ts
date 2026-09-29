@@ -13,7 +13,13 @@ const STEP_UP_LEVELS = ['second_factor', 'first_factor'] as const;
 export type StepUpLevel = (typeof STEP_UP_LEVELS)[number];
 
 export type StepUpAction =
-  'account.delete' | 'organization.transfer_ownership' | 'password.change' | 'session.revoke_all';
+  | 'account.delete'
+  | 'organization.transfer_ownership'
+  | 'password.change'
+  | 'session.revoke_all'
+  | 'two_factor.enable'
+  | 'two_factor.disable'
+  | 'two_factor.regenerate_backup_codes';
 
 export type StepUpGrant =
   | { kind: 'granted'; token: string }

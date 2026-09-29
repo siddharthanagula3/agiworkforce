@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function RemoteWorkspaceBoundaryNotice() {
   const colors = useThemeColors();
@@ -25,10 +26,17 @@ export function RemoteWorkspaceBoundaryNotice() {
     >
       <FolderLock size={16} color={colors.textSecondary} />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '700' }}>
           Desktop folders stay Desktop-controlled
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.caption,
+            lineHeight: 16,
+            marginTop: 3,
+          }}
+        >
           Pairing does not let this phone browse files or projects. Choose allowed folders and start
           path-scoped work on Desktop.
         </Text>

@@ -125,11 +125,11 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
                     <Text className="text-xs font-medium text-white" numberOfLines={1}>
                       {computer.name ?? 'Computer'}
                     </Text>
-                    <Text className="text-[10px] text-white/45" numberOfLines={1}>
+                    <Text className="text-xs text-white/45" numberOfLines={1}>
                       {detailLine(computer)}
                     </Text>
                     {capabilityLine(computer) ? (
-                      <Text className="text-[10px] text-white/45" numberOfLines={2}>
+                      <Text className="text-xs text-white/45" numberOfLines={2}>
                         {capabilityLine(computer)}
                       </Text>
                     ) : null}
@@ -144,7 +144,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           </View>
         )}
         {connectedName === null ? (
-          <Text className="mt-2 text-[10px] text-white/45">
+          <Text className="mt-2 text-xs text-white/45">
             To control one, open Remote on that computer and scan its code.
           </Text>
         ) : null}

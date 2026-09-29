@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FolderOpen, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectSourcesTab } from './ProjectSourcesTab';
@@ -76,7 +77,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
               <Text variant="subheading" style={{ color: colors.textPrimary }} numberOfLines={1}>
                 {`${projectName} sources`}
               </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
                 The files this project’s chats can read.
               </Text>
             </View>

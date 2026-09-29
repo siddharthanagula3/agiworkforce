@@ -20,6 +20,7 @@ import {
 import type { ResearchStep } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   formatResearchElapsed,
   isResearchRunActive,
@@ -69,10 +70,23 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         <View style={{ width: 14, alignItems: 'center', paddingTop: 2 }}>
           <MessageSquare size={13} color={colors.agentActive} />
         </View>
-        <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            color: colors.textPrimary,
+          }}
+        >
           {step.description}
         </Text>
-        <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase' }}>
+        <Text
+          style={{
+            fontSize: typeScale.caption,
+            color: colors.textMuted,
+            textTransform: 'uppercase',
+          }}
+        >
           Your guidance
         </Text>
       </View>
@@ -95,7 +109,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: step.status === 'pending' ? colors.textSecondary : colors.textPrimary,
           }}
@@ -103,10 +117,14 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
           {step.description}
         </Text>
         {step.status === 'dropped' && step.note ? (
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{step.note}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}>
+            {step.note}
+          </Text>
         ) : null}
       </View>
-      <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase' }}>
+      <Text
+        style={{ fontSize: typeScale.caption, color: colors.textMuted, textTransform: 'uppercase' }}
+      >
         {STEP_STATUS_LABELS[step.status]}
       </Text>
     </View>
@@ -154,7 +172,7 @@ function ActionButton({
       <Icon size={13} color={emphasis ? colors.background : colors.textPrimary} />
       <Text
         style={{
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '600',
           color: emphasis ? colors.background : colors.textPrimary,
         }}
@@ -192,7 +210,7 @@ function PlanEditor({
       accessibilityLabel="Research plan, editable"
       style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 6, gap: 6 }}
     >
-      <Text style={{ fontSize: 11, color: colors.textMuted }}>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
         Edit any step before it runs. What you start here is exactly what gets searched.
       </Text>
       {steps.map((step, index) => (
@@ -207,7 +225,7 @@ function PlanEditor({
             placeholderTextColor={colors.textMuted}
             style={{
               flex: 1,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 17,
               color: colors.textPrimary,
               borderWidth: 1,
@@ -334,34 +352,46 @@ export function ResearchRunCard({
           <Telescope size={14} color={tint} />
         )}
         <Text
-          style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+          style={{
+            flex: 1,
+            fontSize: typeScale.footnote,
+            fontWeight: '600',
+            color: colors.textPrimary,
+          }}
           numberOfLines={2}
         >
           {label}
         </Text>
         {elapsed > 0 ? (
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             {formatResearchElapsed(elapsed)}
           </Text>
         ) : null}
       </View>
 
       {counts.length > 0 ? (
-        <Text testID="research-run-counts" style={{ fontSize: 11, color: colors.textSecondary }}>
+        <Text
+          testID="research-run-counts"
+          style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+        >
           {counts.join(' · ')}
         </Text>
       ) : null}
 
       {interrupted ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>Stopped before it finished.</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          Stopped before it finished.
+        </Text>
       ) : null}
       {paused ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           Paused. Resume to continue from where it stopped.
         </Text>
       ) : null}
       {failed && research.error && research.error !== label ? (
-        <Text style={{ fontSize: 11, color: colors.textSecondary }}>{research.error}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+          {research.error}
+        </Text>
       ) : null}
 
       {steps.length > 0 && !canDecide ? (
@@ -393,19 +423,33 @@ export function ResearchRunCard({
             gap: 6,
           }}
         >
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
             Planned questions
           </Text>
           {gaps.map((gap) => (
             <View key={gap.id} style={{ gap: 2 }}>
-              <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textPrimary }}
+              >
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}
+                >
                   {gap.status === 'closed' ? 'Answered: ' : 'Not answered: '}
                 </Text>
                 {gap.question}
               </Text>
               {gap.status === 'open' ? (
-                <Text style={{ fontSize: 11, lineHeight: 16, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    lineHeight: 16,
+                    color: colors.textSecondary,
+                  }}
+                >
                   {gap.reason}
                 </Text>
               ) : null}

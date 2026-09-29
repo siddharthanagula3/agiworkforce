@@ -6,6 +6,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { toUserMessage } from '@/services/userMessage';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { cancelMediaJob, listMediaJobs, retryMediaJob } from './libraryClient';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -60,7 +61,9 @@ function JobAction({
       }}
     >
       <Icon size={15} color={c.textSecondary} />
-      <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: c.textSecondary, fontSize: typeScale.footnote, fontWeight: '600' }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -122,12 +125,15 @@ export function MediaJobsSection({
     <View testID="library-media-jobs" style={{ marginBottom: 16, gap: 8 }}>
       <Text
         accessibilityRole="header"
-        style={{ color: c.textPrimary, fontSize: 15, fontWeight: '600' }}
+        style={{ color: c.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
       >
         Generations
       </Text>
       {error ? (
-        <Text accessibilityRole="alert" style={{ color: c.agentError, fontSize: 13 }}>
+        <Text
+          accessibilityRole="alert"
+          style={{ color: c.agentError, fontSize: typeScale.footnote }}
+        >
           {error}
         </Text>
       ) : null}
@@ -157,16 +163,21 @@ export function MediaJobsSection({
               >
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text numberOfLines={2} style={{ color: c.textPrimary, fontSize: 14 }}>
+                    <Text
+                      numberOfLines={2}
+                      style={{ color: c.textPrimary, fontSize: typeScale.subhead }}
+                    >
                       {job.prompt}
                     </Text>
-                    <Text style={{ color: c.textMuted, fontSize: 12 }}>
+                    <Text style={{ color: c.textMuted, fontSize: typeScale.caption }}>
                       {`${KIND_LABEL[job.kind]} · ${job.model} · ${new Date(
                         job.created_at,
                       ).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
                     </Text>
                     {job.error ? (
-                      <Text style={{ color: c.agentError, fontSize: 12 }}>{job.error}</Text>
+                      <Text style={{ color: c.agentError, fontSize: typeScale.caption }}>
+                        {job.error}
+                      </Text>
                     ) : null}
                   </View>
                   <View
@@ -177,7 +188,7 @@ export function MediaJobsSection({
                     <Text
                       style={{
                         color: job.status === 'failed' ? c.agentError : c.textSecondary,
-                        fontSize: 12,
+                        fontSize: typeScale.caption,
                         fontWeight: '600',
                       }}
                     >

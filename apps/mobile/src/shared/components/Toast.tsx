@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { elevation, motion, radii, spacing, useThemeColors, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 
 const TOAST_DURATION_MS = 5_000;
@@ -91,7 +92,7 @@ export function ToastHost() {
           ...elevation.e2,
         }}
       >
-        <Text style={{ flexShrink: 1, color: colors.textPrimary, fontSize: 14 }}>
+        <Text style={{ flexShrink: 1, color: colors.textPrimary, fontSize: typeScale.subhead }}>
           {current.message}
         </Text>
         {current.action ? (
@@ -110,7 +111,9 @@ export function ToastHost() {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
+            >
               {current.action.label}
             </Text>
           </Pressable>

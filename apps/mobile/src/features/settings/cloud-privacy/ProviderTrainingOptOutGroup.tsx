@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/text';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const PRIVACY_NAMESPACE = 'privacy';
 const OPT_OUT_KEY = 'keepOutOfProviderTraining';
@@ -53,7 +54,7 @@ export function ProviderTrainingOptOutGroup() {
         accessibilityRole="header"
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           marginBottom: 8,
@@ -75,7 +76,7 @@ export function ProviderTrainingOptOutGroup() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           lineHeight: 17,
           marginTop: 8,
           paddingHorizontal: 2,
@@ -87,7 +88,12 @@ export function ProviderTrainingOptOutGroup() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          style={{ color: colors.agentError, fontSize: 12, lineHeight: 17, marginTop: 4 }}
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            marginTop: 4,
+          }}
         >
           {error}
         </Text>

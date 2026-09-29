@@ -75,12 +75,12 @@ function PendingApproval({ run }: RunRowProps) {
           <Text className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
             {call.summary}
           </Text>
-          <Text className="text-[11px]" style={{ color: colors.textMuted }} numberOfLines={1}>
+          <Text className="text-xs" style={{ color: colors.textMuted }} numberOfLines={1}>
             {call.name}
           </Text>
           {call.input ? (
             <Text
-              className="text-[11px] mt-0.5 leading-4"
+              className="text-xs mt-0.5 leading-4"
               style={{ color: colors.textSecondary }}
               numberOfLines={6}
             >
@@ -191,7 +191,7 @@ function RunRow({ run }: RunRowProps) {
           >
             {statusLabel}
           </Text>
-          {duration ? <Text className="text-[11px] text-white/30">{duration}</Text> : null}
+          {duration ? <Text className="text-xs text-white/30">{duration}</Text> : null}
         </View>
         {run.timingNote ? (
           <Text className="text-[12px] mt-1 leading-[18px]" style={{ color: colors.textMuted }}>
@@ -210,11 +210,11 @@ function RunRow({ run }: RunRowProps) {
           </Text>
         ) : null}
         {run.error ? (
-          <Text className="text-[11px] text-red-400/70 mt-0.5 leading-4" numberOfLines={2}>
+          <Text className="text-xs text-red-400/70 mt-0.5 leading-4" numberOfLines={2}>
             {run.error}
           </Text>
         ) : null}
-        <Text className="text-[10px] text-white/30 mt-0.5">{timeLabel}</Text>
+        <Text className="text-xs text-white/30 mt-0.5">{timeLabel}</Text>
       </View>
     </View>
   );
@@ -247,7 +247,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
     <Animated.View entering={FadeIn.duration(motion.quick)}>
       {/* Section header */}
       <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-[11px] text-white/40 uppercase tracking-wider">Run History</Text>
+        <Text className="text-xs text-white/40 uppercase tracking-wider">Run History</Text>
         <Pressable
           onPress={handleRefresh}
           className="p-1 rounded active:opacity-60"

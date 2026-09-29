@@ -25,7 +25,8 @@ import {
 import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -59,6 +60,12 @@ import {
 import type { LibraryAsset, LibraryScope } from './libraryClient';
 import { useLibraryAssets } from './useLibraryAssets';
 import { MediaJobsSection } from './MediaJobsSection';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import { generateImage } from '@/src/features/image/services/imagegen';
+import { showToast } from '@/src/shared/components/Toast';
+import { toUserMessage } from '@/services/userMessage';
+import { useChatStore } from '@/stores/chatStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
@@ -257,6 +264,48 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, []);
+
+  const handleEditPreviewArea = useCallback(
+    (edit: ImageAreaEdit) => {
+      const asset = previewImage;
+      if (!asset) return;
+      handleCloseImage();
+      showToast('Editing the image. The new version appears in your Library.');
+      void generateImage({
+        prompt: edit.prompt,
+        ...(asset.model ? { model: asset.model } : {}),
+        ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
+        operation: 'inpaint',
+        source_image: { b64_json: edit.sourceBase64 },
+        mask_image: { b64_json: edit.maskBase64 },
+        size: '1024x1024',
+        n: 1,
+        quality: 'standard',
+        transparent_background: false,
+      })
+        .then(() => library.refresh())
+        .catch((error: unknown) => {
+          Alert.alert('Could not edit the image', toUserMessage(error, 'Try again in a moment.'));
+        });
+    },
+    [handleCloseImage, library, previewImage],
+  );
+
+  const handleDeletePreview = useCallback(() => {
+    const asset = previewImage;
+    if (!asset) return;
+    handleCloseImage();
+    void (async () => {
+      try {
+        if (asset.conversationId) {
+          await useChatStore.getState().deleteConversation(asset.conversationId);
+        }
+        await library.removeAsset(asset.id);
+      } catch {
+        Alert.alert('Delete failed', 'The image could not be deleted. Try again.');
+      }
+    })();
+  }, [handleCloseImage, library, previewImage]);
 
   const handleShareAsset = useCallback(async (asset: LibraryAsset) => {
     try {
@@ -553,7 +602,9 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
         <DrawerButton testID="library-open-drawer" onPress={openDrawer} />
-        <Text style={{ flex: 1, color: c.textPrimary, fontSize: 17, fontWeight: '700' }}>
+        <Text
+          style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+        >
           Library
         </Text>
         <Pressable
@@ -577,7 +628,12 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       {showDeleted ? (
         <Text
           testID="library-deleted-heading"
-          style={{ color: c.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 }}
+          style={{
+            color: c.textMuted,
+            fontSize: typeScale.footnote,
+            paddingHorizontal: 16,
+            paddingBottom: 12,
+          }}
         >
           Recently deleted. Files are erased 30 days after you delete them. Long press to restore.
         </Text>
@@ -664,7 +720,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             {!showDeleted && library.storageUsedBytes !== null ? (
               <Text
                 testID="library-storage-used"
-                style={{ color: c.textMuted, fontSize: 12, marginBottom: 12 }}
+                style={{ color: c.textMuted, fontSize: typeScale.caption, marginBottom: 12 }}
               >
                 {library.storageLimitBytes !== null
                   ? `${formatBytes(library.storageUsedBytes, 1)} of ${formatBytes(library.storageLimitBytes, 0)} file storage used`
@@ -782,6 +838,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         prompt={previewImage?.prompt ?? undefined}
         visible={previewImage !== null}
         onClose={handleCloseImage}
+        onEditArea={appMode === 'cloud' && FEATURES.imageGen ? handleEditPreviewArea : undefined}
+        onDelete={appMode === 'cloud' ? handleDeletePreview : undefined}
+        deleteMessage={
+          previewImage?.conversationId
+            ? 'Deleting this image also deletes the chat it was made in, with all of its messages.'
+            : 'The image moves to deleted items in your Library.'
+        }
       />
 
       <VideoPlayerModal
@@ -990,18 +1053,31 @@ function LibraryFileCard({
         <Badge label={isVideo ? 'Video' : 'Document'} color="gray" />
         <Text
           numberOfLines={2}
-          style={{ color: c.textPrimary, fontSize: 13, lineHeight: 18, textAlign: 'center' }}
+          style={{
+            color: c.textPrimary,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            textAlign: 'center',
+          }}
         >
           {asset.fileName}
         </Text>
       </View>
       <Text
         numberOfLines={1}
-        style={{ color: c.textPrimary, fontSize: 14, fontWeight: '600', marginTop: 9 }}
+        style={{
+          color: c.textPrimary,
+          fontSize: typeScale.subhead,
+          fontWeight: '600',
+          marginTop: 9,
+        }}
       >
         {asset.fileName}
       </Text>
-      <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: 12, marginTop: 3 }}>
+      <Text
+        numberOfLines={1}
+        style={{ color: c.textMuted, fontSize: typeScale.caption, marginTop: 3 }}
+      >
         {formatAssetSize(asset.byteCount)} · {asset.sourceLabel}
       </Text>
     </Pressable>
@@ -1090,7 +1166,7 @@ function LibraryImageCard({
           <View
             style={{ width, height, alignItems: 'center', justifyContent: 'center', padding: 16 }}
           >
-            <Text style={{ color: c.textMuted, fontSize: 12, textAlign: 'center' }}>
+            <Text style={{ color: c.textMuted, fontSize: typeScale.caption, textAlign: 'center' }}>
               {status === 'signed-out'
                 ? 'Sign in to view'
                 : status === 'authorizing'
@@ -1135,7 +1211,7 @@ function LibraryArtifactCard({
         {artifact.previewLines.slice(0, 5).map((line, index) => (
           <Text
             key={`${artifact.id}-${index}`}
-            className="text-[10px] leading-[14px]"
+            className="text-xs leading-[14px]"
             numberOfLines={1}
             style={{
               color: index === 0 ? artifact.accentColor : c.textSecondary,

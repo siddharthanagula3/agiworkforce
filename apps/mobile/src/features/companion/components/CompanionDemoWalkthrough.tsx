@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -196,7 +197,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             backgroundColor: '#1a1a1a',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            paddingHorizontal: 24,
+            paddingHorizontal: dialogPadding,
             paddingBottom: 40,
             paddingTop: 24,
             borderTopWidth: 1,
@@ -231,7 +232,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
               style={{ backgroundColor: colors.accentSurface }}
             >
               <Text
-                className="text-[10px] font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold uppercase tracking-wider"
                 style={{ color: colors.teal }}
               >
                 Step {step.stepNumber} of {DEMO_STEPS.length}
@@ -247,10 +248,10 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
           {/* Hint pill */}
           <View className="flex-row items-start gap-2 px-4 py-3 rounded-xl bg-white/5 mb-6">
-            <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.teal }}>
+            <Text className="text-xs font-semibold mt-0.5" style={{ color: colors.teal }}>
               TIP
             </Text>
-            <Text className="text-[11px] text-white/50 flex-1 leading-4">{step.hint}</Text>
+            <Text className="text-xs text-white/50 flex-1 leading-4">{step.hint}</Text>
           </View>
 
           {/* Navigation */}

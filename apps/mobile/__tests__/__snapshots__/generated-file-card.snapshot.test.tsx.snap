@@ -94,7 +94,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
             style={
               {
                 "color": "#11ad87",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
                 "textTransform": "uppercase",
@@ -118,7 +118,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -128,7 +128,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -140,7 +140,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "color": "rgba(244, 244, 244, 0.56)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -182,7 +182,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -209,7 +209,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -236,7 +236,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -251,7 +251,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
     style={
       {
         "color": "rgba(244, 244, 244, 0.56)",
-        "fontSize": 11,
+        "fontSize": 12,
       }
     }
   >
@@ -354,7 +354,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
             style={
               {
                 "color": "#f87171",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
                 "textTransform": "uppercase",
@@ -378,7 +378,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -388,7 +388,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -400,7 +400,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.56)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -442,7 +442,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -469,7 +469,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -496,7 +496,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -511,7 +511,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
     style={
       {
         "color": "rgba(244, 244, 244, 0.56)",
-        "fontSize": 11,
+        "fontSize": 12,
       }
     }
   >
@@ -614,7 +614,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
             style={
               {
                 "color": "#11ad87",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
                 "textTransform": "uppercase",
@@ -638,7 +638,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -648,7 +648,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -660,7 +660,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.56)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -702,7 +702,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -729,7 +729,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -756,7 +756,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -864,7 +864,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
             style={
               {
                 "color": "#fbbf24",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
                 "textTransform": "uppercase",
@@ -888,7 +888,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -898,7 +898,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.74)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -910,7 +910,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "color": "rgba(244, 244, 244, 0.56)",
-              "fontSize": 11,
+              "fontSize": 12,
             }
           }
         >
@@ -952,7 +952,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -979,7 +979,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -1006,7 +1006,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
             style={
               {
                 "color": "rgba(244, 244, 244, 0.74)",
-                "fontSize": 10,
+                "fontSize": 12,
                 "fontWeight": "600",
               }
             }
@@ -1021,7 +1021,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
     style={
       {
         "color": "rgba(244, 244, 244, 0.56)",
-        "fontSize": 11,
+        "fontSize": 12,
       }
     }
   >

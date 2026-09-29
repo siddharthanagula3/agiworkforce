@@ -8,6 +8,7 @@ import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
@@ -22,6 +23,9 @@ import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { Download } from 'lucide-react-native';
+import { exportSourceFile, shareFile } from '@/services/fileCreation';
+import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -182,7 +186,7 @@ export function renderInlineMarkdown(
           key={`code-${keyBase}-${inlineKey++}`}
           style={{
             fontFamily: 'Menlo',
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             backgroundColor: renderColors.surfaceHover,
             color: renderColors.textPrimary,
           }}
@@ -332,7 +336,7 @@ function MarkdownTable({
             const content = (
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: renderColors.textPrimary,
                   fontWeight: '500',
                   lineHeight: 19,
@@ -366,7 +370,7 @@ function MarkdownTable({
               <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     color: renderColors.textSecondary,
                     fontWeight: '400',
                     lineHeight: 19,
@@ -385,6 +389,28 @@ function MarkdownTable({
           </View>
         ))}
       </ScrollView>
+      <Pressable
+        onPress={() => {
+          void exportSourceFile(markdownTableToCsv([header, ...sortedBody]), 'table', 'csv')
+            .then((result) => shareFile(result.uri))
+            .catch(() => {
+              Alert.alert('Download failed', 'Could not save this table as CSV. Try again.');
+            });
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Download table as CSV"
+        style={{
+          alignSelf: 'flex-end',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          minHeight: 44,
+          paddingHorizontal: 8,
+        }}
+      >
+        <Download size={14} color={renderColors.textSecondary} />
+        <Text style={{ fontSize: typeScale.caption, color: renderColors.textSecondary }}>CSV</Text>
+      </Pressable>
     </View>
   );
 }
@@ -505,7 +531,7 @@ function renderTextSegment(
         >
           <Text
             style={{
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               fontStyle: 'italic',
               color: renderColors.textSecondary,
               lineHeight: 21,
@@ -536,7 +562,7 @@ function renderTextSegment(
             >
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.teal,
                   lineHeight: 22,
                   ...(item.ordered
@@ -548,7 +574,7 @@ function renderTextSegment(
               </Text>
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.textPrimary,
                   lineHeight: 22,
                   flex: 1,
@@ -656,7 +682,7 @@ function renderTextSegment(
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          style={{ color: renderColors.textPrimary, fontSize: 15, lineHeight: 23 }}
+          style={{ color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }}
           selectable
         >
           {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
@@ -706,7 +732,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 11,
+            fontSize: typeScale.caption,
             fontWeight: '500',
             color: renderColors.textMuted,
             flexShrink: 1,
@@ -729,7 +755,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 19,
             fontFamily: 'Menlo',
             color: renderColors.textPrimary,

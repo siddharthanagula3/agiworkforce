@@ -29,6 +29,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -116,8 +117,12 @@ function ToggleRow({
     >
       <Mic size={19} color={colors.textSecondary} />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{label}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{description}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+          {label}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
+          {description}
+        </Text>
       </View>
       <Switch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
     </View>
@@ -146,8 +151,10 @@ function VoiceSlider({
   return (
     <View style={{ gap: 8, paddingHorizontal: 14, paddingVertical: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{label}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>{valueLabel}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+          {label}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>{valueLabel}</Text>
       </View>
       <Slider
         value={value}
@@ -207,7 +214,13 @@ function SpeechLanguageModal({
                 paddingBottom: 12,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.callout,
+                  fontWeight: '700',
+                }}
+              >
                 Speech language
               </Text>
               <Pressable
@@ -247,11 +260,13 @@ function SpeechLanguageModal({
                       backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
                     })}
                   >
-                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
                       {option.label}
                     </Text>
                     {option.detail ? (
-                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>{option.detail}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                        {option.detail}
+                      </Text>
                     ) : null}
                     {selected ? <Check size={17} color={colors.teal} /> : null}
                   </Pressable>
@@ -393,7 +408,7 @@ export default function VoiceSettingsScreen() {
         {/* The device speech engine is the only one that exists on mobile, so it
             is stated here as a caption instead of offered as a choice. */}
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
-          <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
             Voice replies use the current chat model. Cloud Mode sends your transcript to AGI Cloud.
             Speech plays through voices installed on this device.
           </Text>
@@ -425,7 +440,7 @@ export default function VoiceSettingsScreen() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           fontWeight: '600',
           paddingHorizontal: 2,
           paddingBottom: 8,
@@ -456,10 +471,14 @@ export default function VoiceSettingsScreen() {
             >
               <option.icon size={19} color={selected ? colors.teal : colors.textSecondary} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+                >
                   {option.label}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+                >
                   {option.description}
                 </Text>
               </View>

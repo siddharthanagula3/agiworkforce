@@ -42,6 +42,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -446,7 +447,7 @@ export default function MemoryScreen() {
         accessibilityRole="header"
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           paddingTop: 8,
@@ -533,10 +534,10 @@ export default function MemoryScreen() {
 
       {/* Count subtitle */}
       <View className="px-4 mb-2 gap-0.5">
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {describeMemoryScope(currentIsCloud, workspaceName)}
         </Text>
       </View>
@@ -552,7 +553,7 @@ export default function MemoryScreen() {
               borderColor: colors.dangerBorder,
             }}
           >
-            <Text style={{ color: colors.agentError, fontSize: 12 }}>{error}</Text>
+            <Text style={{ color: colors.agentError, fontSize: typeScale.caption }}>{error}</Text>
           </View>
         </Animated.View>
       )}
@@ -581,7 +582,7 @@ export default function MemoryScreen() {
           <Search size={16} color={colors.textMuted} />
           <TextInput
             className="flex-1 py-0"
-            style={{ color: colors.textPrimary, fontSize: 14, letterSpacing: 0 }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, letterSpacing: 0 }}
             placeholder="Search memories..."
             placeholderTextColor={colors.textMuted}
             value={searchText}
@@ -629,7 +630,7 @@ export default function MemoryScreen() {
                   <Text
                     style={{
                       color: isActive ? colors.textPrimary : colors.textSecondary,
-                      fontSize: 12,
+                      fontSize: typeScale.caption,
                       fontWeight: '500',
                     }}
                   >
@@ -777,7 +778,10 @@ function EmptyState({
       >
         {hasSearch ? 'No results found' : isPinnedFilter ? 'No pinned memories' : 'No memories yet'}
       </Text>
-      <Text className="text-center leading-5" style={{ color: colors.textMuted, fontSize: 14 }}>
+      <Text
+        className="text-center leading-5"
+        style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
+      >
         {hasSearch
           ? 'Try a different search term'
           : isPinnedFilter
