@@ -110,6 +110,8 @@ export interface ConversationCloudSyncState {
   createAcknowledged?: boolean;
   syncedTitle?: string;
   syncedProjectId?: string | null;
+  syncedPinned?: boolean;
+  syncedArchived?: boolean;
   state: 'idle' | 'pending' | 'error' | 'blocked';
   blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
   lastError?: string;
@@ -640,6 +642,10 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   } else {
     const syncedProjectId = normalizeConversationProjectId(raw['syncedProjectId']);
     if (syncedProjectId) normalized.syncedProjectId = syncedProjectId;
+  }
+  if (typeof raw['syncedPinned'] === 'boolean') normalized.syncedPinned = raw['syncedPinned'];
+  if (typeof raw['syncedArchived'] === 'boolean') {
+    normalized.syncedArchived = raw['syncedArchived'];
   }
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
@@ -1539,6 +1545,14 @@ export function conversationProjectNeedsSync(entry: ConversationEntry): boolean 
   return (entry.projectId ?? null) !== (synced === undefined ? null : synced);
 }
 
+export function conversationFlagsNeedSync(entry: ConversationEntry): boolean {
+  if (entry.cloudSync?.conversationId === undefined) return false;
+  return (
+    (entry.pinned === true) !== (entry.cloudSync.syncedPinned === true) ||
+    (entry.archived === true) !== (entry.cloudSync.syncedArchived === true)
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
@@ -1559,6 +1573,7 @@ export async function listConversationsNeedingCloudSync(
       (entry.cloudSync?.conversationId !== undefined &&
         (entry.cloudSync.syncedTitle !== entry.title ||
           conversationProjectNeedsSync(entry) ||
+          conversationFlagsNeedSync(entry) ||
           entry.cloudSync.organizationId === undefined ||
           entry.cloudSync.createAcknowledged !== true))
     );

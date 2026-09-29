@@ -85,14 +85,11 @@ Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`,
 
 - Done when: The user can choose whether their chats are kept in history (and synced to the account) or not saved.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | F1: the cited toggle is 'Save Managed Cloud chats to my account' (cloud mirroring); with it off, flushConversation skips the account sync but chats are still written to the extension's local history in chrome.storage, and the extension has no temporary/not-saved option. The criterion is 'kept in history ... or not saved'; only the sync half exists: partial. |  |
-
-Code: `apps/extension/src/features/options/data-handling-section.ts:147-158`, `apps/extension/src/features/cloud-bridge/conversationSync.ts:120-130`
 
 ## S85.16: Temporary-chat preferences.
 

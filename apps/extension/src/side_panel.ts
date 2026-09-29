@@ -72,6 +72,7 @@ import {
   pendingCloudMessages,
   deleteConversation,
   persistConversationSeed,
+  recordCloudSyncState,
   upsertConversation,
   updateConversationEntry,
   startNewConversation,
@@ -79,6 +80,7 @@ import {
   type ConversationEntry,
   type ConversationEntryChanges,
 } from './features/background/conversation-history';
+import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
 import { wirePopupMenu } from './features/side-panel/menu';
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
 import {
@@ -9991,6 +9993,12 @@ function buildUI(): void {
         );
       }
       await updateConversationEntry(owner, entry.id, changes);
+      if (cloudConversationId && Object.keys(cloudFlags).length > 0) {
+        await recordCloudSyncState(owner, entry.id, {
+          ...(changes.pinned !== undefined ? { syncedPinned: changes.pinned } : {}),
+          ...(changes.archived !== undefined ? { syncedArchived: changes.archived } : {}),
+        });
+      }
     } catch (error) {
       console.warn('[SidePanel] history change failed:', error);
       showHistoryStatus(t('spHistoryChangeFailed'));
@@ -10423,6 +10431,18 @@ function buildUI(): void {
     renderDrawerHistory(drawerHistoryEntries);
   }
 
+  async function pullDrawerHistoryFlags(): Promise<void> {
+    const owner = _ctx.managedCloudOwner;
+    if (!owner) return;
+    try {
+      if (!(await pullCloudConversationFlags(owner))) return;
+    } catch (error) {
+      console.warn('[SidePanel] reading pins and archives from the account failed:', error);
+      return;
+    }
+    if (sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) await refreshDrawerHistory();
+  }
+
   drawerHistorySearch.addEventListener('input', () => {
     renderDrawerHistory(drawerHistoryEntries);
   });
@@ -10487,6 +10507,7 @@ function buildUI(): void {
       .then(() => {
         if (!drawerHistorySearch.hidden) drawerHistorySearch.focus();
         else recentsClose.focus();
+        void pullDrawerHistoryFlags();
       })
       .catch(() => recentsClose.focus());
   }
@@ -16354,6 +16375,16 @@ loadPromptShortcuts();
 chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
+const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+let lastAccountRefreshOnReturn = Date.now();
+function refreshAccountOnReturn(): void {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS) return;
+  lastAccountRefreshOnReturn = Date.now();
+  void refreshCloudAccountUI();
+}
+document.addEventListener('visibilitychange', refreshAccountOnReturn);
+window.addEventListener('focus', refreshAccountOnReturn);
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
     refreshPageHostname();
