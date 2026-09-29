@@ -2072,6 +2072,10 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 4000
+          },
+          "detached": {
+            "type": "boolean",
+            "description": "`true` when the caller will not read the stream. The run then finishes even if the connection closes; follow it at the `X-AGI-Agent-Run-URL` response header. Omitted or `false` stops the run when the connection closes."
           }
         }
       },

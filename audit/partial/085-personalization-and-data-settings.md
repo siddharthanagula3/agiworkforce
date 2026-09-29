@@ -41,18 +41,6 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S85.05: Saved Memory.
-
-- Done when: The user can see, add, edit and delete saved memories on the surface and turn memory on or off, and saved memories are used in that surface's chats.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | In Cloud mode the "Memory" switch is only stored on the phone (never synced), so turning it off does not stop the server from reading or learning account memories; the "Search and reference chats" switch is what actually writes the account memory setting. | handler |
-
-Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`
-
 ## S85.06: Past-chat reference.
 
 - Done when: The user can let the assistant search or reference their other chats when answering, and switch it off; temporary chats are never referenced.
@@ -116,7 +104,7 @@ Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Delete all works, but the confirmation says chats are "permanently deleted. This cannot be undone" while the server only soft-deletes them (restorable on web under Recently deleted); mobile has no Recently deleted screen. | states |
+| mobile | partial | apply the patch after Codex commits data-controls/index.tsx | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

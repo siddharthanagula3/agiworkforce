@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Cited CATALOG is a fixed 21-entry hand-coded list (name, description, category); no publisher, and fetchConnectorDirectory loads /api/connectors (connected + available ids), never the registry directory, so the criterion's "publisher" and a browsable catalogue beyond 21 entries are not shown. |  |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/features/settings/index.tsx:588-589`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:153-163`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:598-602`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.02: Connector search.
 
@@ -47,10 +47,10 @@ Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/feature
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only an already-connected connector opens a detail screen; tapping an unconnected entry connects it or does nothing, so there is no page to read about a connector before connecting. | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 | cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `apps/mobile/app/(app)/connectors/[id].tsx:9-10`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
 
 ## S55.05: Supported-operation list.
 
@@ -81,9 +81,9 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a custom MCP bearer token can be typed; catalogue connectors that need an API key get a 409 credentialsPath that the shared runtime ignores and sends into the OAuth path, so they cannot be connected on mobile. | handler |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.10: Service-account authorization.
 
@@ -135,9 +135,9 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.20: Reconnect/reauthorize.
 
@@ -206,10 +206,10 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists only rows already in connector_tool_permissions (GET /api/connectors/permissions returns saved rows only; rows are created only by the upsert route, which mobile calls for existing rows). A connector whose tools were never set on web shows no tool to control, so mobile cannot set auto/approval/block on its own; the auditor rated S55.26 mobile partial for this same reason. |  |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 | cli | partial | Every MCP tool call asks (fail closed); there is no standing per-tool allow or block for MCP tools (`agi approvals` rules are shell command prefixes). | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/cli/src/agent/tools.rs:134-142`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`, `apps/cli/src/agent/tools.rs:134-142`
 
 ## S55.28: Data-retention explanation.
 

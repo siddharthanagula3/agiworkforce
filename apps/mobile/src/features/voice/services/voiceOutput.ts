@@ -1,4 +1,3 @@
-
 import * as TTS from './tts';
 export type { TTSOptions, VoiceInfo } from './tts';
 
@@ -23,6 +22,8 @@ export const isSpeaking = TTS.isSpeaking;
 export const getAvailableVoices = TTS.getAvailableVoices;
 
 export const getEnglishVoices = TTS.getEnglishVoices;
+
+export const speechOptionsFromSettings = TTS.speechOptionsFromSettings;
 
 function chunkText(text: string): string[] {
   if (text.length <= MAX_CHUNK_CHARS) return [text];
