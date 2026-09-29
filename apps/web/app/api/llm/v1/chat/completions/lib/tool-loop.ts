@@ -314,9 +314,11 @@ import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
+  toolCreatesEgressPath,
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
+  privateToolContentInContext,
   resolveToolCallGate,
   sensitiveSourceReachable,
   untrustedToolContentInContext,
@@ -2193,6 +2195,9 @@ async function runMcpTool(
       provider: 'agi-managed-office',
       origin: 'managed-office-tool',
       model: executionContext.model,
+      ...(executionContext.conversationId
+        ? { conversationId: executionContext.conversationId }
+        : {}),
       extraMetadata: { format: toolCall.args['format'] },
     });
     if (!persisted.ok) {
@@ -2423,6 +2428,7 @@ async function runMcpTool(
       toolCall.args,
       undefined,
       cause,
+      executionContext?.signal,
     );
     const referenced =
       result.ok && result.overflow
@@ -2894,7 +2900,18 @@ export function hasPrivateContext(
     processed.sensitiveContextPresent === true ||
     (processed.autoMemoryFacts?.length ?? 0) > 0 ||
     messages.filter((message) => message.role === 'user').length > 1 ||
-    messages.some((message) => hasNonTextPart(message))
+    messages.some((message) => hasNonTextPart(message)) ||
+    privateToolContentInContext(priorToolCallNames(messages))
+  );
+}
+
+function priorToolCallNames(
+  messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
+): string[] {
+  return messages.flatMap((message) =>
+    Array.isArray(message.tool_calls)
+      ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
+      : [],
   );
 }
 
@@ -2922,13 +2939,7 @@ export function hasUntrustedContext(
   return (
     processed.untrustedContextPresent === true ||
     messages.some((message) => hasNonTextPart(message)) ||
-    untrustedToolContentInContext(
-      messages.flatMap((message) =>
-        Array.isArray(message.tool_calls)
-          ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
-          : [],
-      ),
-    )
+    untrustedToolContentInContext(priorToolCallNames(messages))
   );
 }
 
@@ -4125,6 +4136,7 @@ export async function* runToolLoop(
           organizationId: processed.organizationId ?? null,
           refs: [...providerGeneratedFileRefs.values()],
           model: responseModel,
+          conversationId: processed.conversationId,
         });
         files.push(...persisted.files.map((file) => file.wire));
         failedCount += persisted.failedCount;
@@ -6337,10 +6349,18 @@ export async function* runToolLoop(
           let plan: (typeof planned)[number] | null = null;
           try {
             const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
+            const summary = describeDeviceStep(step, deviceHost.roots);
             plan = {
               tc,
-              summary: describeDeviceStep(step, deviceHost.roots),
-              input: { ...step } as Record<string, unknown>,
+              summary,
+              input: {
+                ...step,
+                ...(untrustedContentInContext &&
+                sensitiveSourceAvailable &&
+                toolCreatesEgressPath(step.tool)
+                  ? { review: summary }
+                  : {}),
+              } as Record<string, unknown>,
             };
           } catch (error) {
             refusal =

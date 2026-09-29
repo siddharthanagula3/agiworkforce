@@ -107,9 +107,6 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The cloud-run list shows a research run's state (running, done) but not its phase, search or source counts. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.10: Search activity timeline.
 

@@ -112,6 +112,7 @@ nothing is left.
 
 - Done when: The product offers prompt suggestions (e.g. follow-up questions) that the user can pick to fill or send the next message.
 - Wave: 2
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -119,7 +120,6 @@ nothing is left.
 | desktop | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Blind re-search: chatParticipant.ts registers a followupProvider that returns three clickable follow-up prompts after every reply in VS Code's Chat view (the same participant the auditor credited for S13.24). That is a real prompt-suggestion surface, so missing is wrong; the sidebar webview still has none and the list is static, hence partial. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:74-74`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:45-45`, `apps/web/app/api/chat/conversations/[id]/messages/lib/generate-follow-ups.ts:170-170`
@@ -198,14 +198,13 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 
 - Done when: The user can reference an open browser tab (choosing which one) as context for the message.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Let the user pick which tab; the desktop "Use the browser" dialog can read the paired browser's current page and attach it, but not choose or mention other tabs. | ui |
 | cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:44-60`, `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
+Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
 
 ## S13.30: Connected-app mention.
 

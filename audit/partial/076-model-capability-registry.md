@@ -144,27 +144,3 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S76.28: Context-window limit.
-
-- Done when: The registry records each model context window; the product shows it and trims or refuses over-long requests accordingly.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The criterion says the product shows the context window and trims by it. The cited chrome ui lines (side_panel.ts renderModelDropdown) only render picker options built from name, provider, capability and bestFor (managedModelPicker.ts:53-62); no context window is shown anywhere in the extension. Server trimming (context-window.ts:170) still applies, so partial with miss ui; remaining: show the model context window in the picker. |  |
-
-Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts:170-186`, `packages/ai/routing/src/auto.ts:1354-1359`
-
-## S76.29: Output-token limit.
-
-- Done when: The registry records each model output-token limit; requests are capped by it and it is shown.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Output-token limit is never shown in the extension (picker options carry no maxOutput); the server cap (request-processor.ts:4034) applies. Partial with miss ui; remaining: show the output ceiling. |  |
-
-Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4034-4036`

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   ConnectRequestSchema,
   connectorCredentialsPath,
@@ -528,7 +530,7 @@ async function connectDirectoryTarget(
 }
 
 async function handleCreateConnector(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -550,11 +552,33 @@ async function handleCreateConnector(request: NextRequest) {
   const body = parsedBody.data;
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
-  if (!isCuratedOrConfiguredId(body.connectorId)) {
-    const target = await resolveDirectoryTarget(body.connectorId);
-    if (!target) throw createError.validation('Invalid connector ID');
-    return connectDirectoryTarget(request, db, userId, target);
+  const directoryTarget = isCuratedOrConfiguredId(body.connectorId)
+    ? null
+    : await resolveDirectoryTarget(body.connectorId);
+  if (!isCuratedOrConfiguredId(body.connectorId) && !directoryTarget) {
+    throw createError.validation('Invalid connector ID');
   }
+
+  const policyDecision = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    organizationId,
+    connectorId: body.connectorId,
+    ...(directoryTarget ? { isCustom: true, url: directoryTarget.mcpUrl } : {}),
+    request,
+    surface: resolveCloudChatSurface(request),
+  });
+  if (!policyDecision.allowed) {
+    return NextResponse.json(
+      {
+        error: policyDecision.reason,
+        message: policyDecision.reason,
+        connectorId: body.connectorId,
+      } satisfies ConnectConflictResponse,
+      { status: 403 },
+    );
+  }
+  if (directoryTarget) return connectDirectoryTarget(request, db, userId, directoryTarget);
 
   const isLocal = isDeviceLocalConnector(body.connectorId);
   if (isLocal) {
