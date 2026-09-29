@@ -633,7 +633,10 @@ export const api = {
         throw new Error('Upload failed: session expired. Please sign in again.');
       }
       if (!presignResponse.ok) {
-        throw new Error(await uploadErrorMessage(presignResponse, file.name));
+        throw new ApiHttpError(
+          await uploadErrorMessage(presignResponse, file.name),
+          presignResponse.status,
+        );
       }
 
       const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
@@ -737,7 +740,10 @@ export const api = {
         }
       }
       if (!completeResponse.ok) {
-        throw new Error(await uploadErrorMessage(completeResponse, file.name));
+        throw new ApiHttpError(
+          await uploadErrorMessage(completeResponse, file.name),
+          completeResponse.status,
+        );
       }
 
       const { attachment } = ManagedCloudChatAttachmentCompleteResponseSchema.parse(

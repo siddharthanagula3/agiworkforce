@@ -1,4 +1,5 @@
 import { api, type UploadFileInput, type UploadFileResult } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -21,6 +22,16 @@ export function unsentAttachmentMessage(fileNames: string[]): string {
 export interface UploadChatContext {
   conversationId?: string;
   temporary?: boolean;
+}
+
+function isRefusal(error: Error): boolean {
+  return (
+    error instanceof ApiHttpError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  );
 }
 
 export async function uploadWithRetry(
@@ -61,6 +72,10 @@ export async function uploadWithRetry(
           .getState()
           .settle(attachmentId, 'failed', 'Your session expired. Sign in again to upload files.');
         throw lastError;
+      }
+      if (isRefusal(lastError)) {
+        useUploadLifecycleStore.getState().settle(attachmentId, 'failed', lastError.message);
+        return null;
       }
       if (attempt < MAX_UPLOAD_RETRIES) {
         await new Promise<void>((resolve) => setTimeout(resolve, backoffMs(attempt)));

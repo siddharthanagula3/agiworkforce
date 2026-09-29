@@ -1652,14 +1652,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
               : null;
           const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
-          const imageAttachments = m.attachments?.filter((a) => a.mimeType.startsWith('image/'));
-          if (imageAttachments && imageAttachments.length > 0) {
+          const replayedAttachments = m.attachments?.filter((a) =>
+            executionMode === 'cloud'
+              ? Boolean(a.assetId) ||
+                (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
+              : a.mimeType.startsWith('image/'),
+          );
+          if (replayedAttachments && replayedAttachments.length > 0) {
             return [
               {
                 role: m.role,
                 content: [
                   ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
-                  ...imageAttachments.map((a) =>
+                  ...replayedAttachments.map((a) =>
                     a.assetId
                       ? { type: 'file' as const, file: { asset_id: a.assetId } }
                       : { type: 'image_url' as const, image_url: { url: a.url } },
