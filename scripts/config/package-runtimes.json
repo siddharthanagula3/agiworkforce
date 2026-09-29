@@ -71,7 +71,8 @@
       ".": "server"
     },
     "packages/ai/routing": {
-      ".": "universal"
+      ".": "universal",
+      "./model-picker": "universal"
     },
     "packages/ai/search": {
       ".": "universal"
@@ -99,8 +100,10 @@
     },
     "packages/contracts/cloud-contracts": {
       ".": "universal",
+      "./account-security": "universal",
       "./client-request": "universal",
-      "./me": "universal"
+      "./me": "universal",
+      "./support": "universal"
     },
     "packages/contracts/compliance": {
       ".": "universal"
@@ -122,9 +125,11 @@
     "packages/contracts/types": {
       ".": "universal",
       "./capabilities": "universal",
+      "./encryption-key": "universal",
+      "./live-voices": "universal",
       "./models.json": "asset",
-      "./protocol": "universal",
-      "./product-routes": "universal"
+      "./product-routes": "universal",
+      "./protocol": "universal"
     },
     "packages/guardian/core": {
       ".": "universal",
@@ -188,6 +193,7 @@
       "./display-name": "universal",
       "./fence": "universal",
       "./format": "universal",
+      "./greeting": "universal",
       "./interaction-timings": "universal",
       "./logger": "universal",
       "./managed-chat-idempotency": "universal",
@@ -198,8 +204,8 @@
       "./reasoning": "universal",
       "./remote-control": "server",
       "./retry-policy": "universal",
-      "./source-url": "universal",
       "./signaling": "universal",
+      "./source-url": "universal",
       "./uuidv7": "universal",
       "./voice": "universal"
     },
