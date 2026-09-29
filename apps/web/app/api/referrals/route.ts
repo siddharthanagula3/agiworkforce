@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ReferralOverviewResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { getClientIpForRateLimit, withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -13,7 +14,8 @@ async function handleGetReferrals(request: NextRequest): Promise<NextResponse> {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   await recordReferrerNetwork(db, userId, referralNetworkHash(getClientIpForRateLimit(request)));
-  return NextResponse.json(await getReferralOverview(db, userId));
+  const overview: ReferralOverviewResponse = await getReferralOverview(db, userId);
+  return NextResponse.json(overview);
 }
 
 export const GET = withErrorHandler(handleGetReferrals);

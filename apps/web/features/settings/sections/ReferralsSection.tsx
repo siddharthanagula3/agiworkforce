@@ -1,9 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { z } from 'zod';
 import { Copy, Mail, Share2 } from 'lucide-react';
 import { Button, Spinner } from '@agiworkforce/ui';
+import {
+  REFERRAL_CODE_PATH,
+  REFERRALS_PATH,
+  ReferralCodeSchema,
+  ReferralOverviewSchema,
+  type ReferralOverviewResponse,
+} from '@agiworkforce/cloud-contracts';
 import { formatCredits } from '@agiworkforce/types';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -12,52 +18,7 @@ import { SITE_NAME } from '@/lib/seo/site';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 
-const REFERRALS_PATH = '/api/referrals';
-const REFERRAL_CODE_PATH = '/api/referrals/code';
-
-const ReferralStatusSchema = z.enum([
-  'signed_up',
-  'converted',
-  'rewarded',
-  'capped',
-  'blocked',
-  'clawed_back',
-]);
-
-const ReferralOverviewSchema = z.object({
-  code: z.string().nullable(),
-  link: z.string().url().nullable(),
-  program: z.object({
-    friendTrialDays: z.number(),
-    rewardCredits: z.number(),
-    holdDays: z.number(),
-    monthlyRewardCap: z.number(),
-    yearlyRewardCap: z.number(),
-    bonusExpiryDays: z.number(),
-  }),
-  stats: z.object({
-    joined: z.number(),
-    subscribed: z.number(),
-    rewarded: z.number(),
-    creditsEarned: z.number(),
-  }),
-  bonus: z.object({
-    availableCredits: z.number(),
-    nextExpiry: z.string().nullable(),
-  }),
-  friends: z.array(
-    z.object({
-      id: z.string(),
-      status: ReferralStatusSchema,
-      joinedAt: z.string(),
-      rewardAt: z.string().nullable(),
-    }),
-  ),
-});
-
-const ReferralCodeSchema = z.object({ code: z.string(), link: z.string().url() });
-
-type ReferralOverview = z.infer<typeof ReferralOverviewSchema>;
+type ReferralOverview = ReferralOverviewResponse;
 type ReferralProgram = ReferralOverview['program'];
 type ReferralFriend = ReferralOverview['friends'][number];
 

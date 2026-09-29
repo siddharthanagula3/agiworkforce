@@ -112,8 +112,6 @@
     "projects/[id]/duplicate",
     "projects/[id]/export",
     "projects/[id]/knowledge-files/[fileId]/reindex",
-    "referrals",
-    "referrals/code",
     "releases/[target]/[version]",
     "releases/cli/latest",
     "releases/desktop-cloud/latest",
