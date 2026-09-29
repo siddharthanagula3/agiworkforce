@@ -69,6 +69,7 @@ export interface SettingsState {
   ttsProvider: TTSProvider;
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
+  dictationOnboardingSeen: boolean;
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
   capabilities: Capabilities;
@@ -86,6 +87,7 @@ export interface SettingsState {
   setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
+  setDictationOnboardingSeen: (seen: boolean) => void;
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
@@ -140,6 +142,7 @@ export const useSettingsStore = create<SettingsState>()(
       ttsProvider: 'system',
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
+      dictationOnboardingSeen: false,
       audioRoute: 'auto',
       isTemporaryChat: false,
       capabilities: {
@@ -166,6 +169,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
+      setDictationOnboardingSeen: (seen) => set({ dictationOnboardingSeen: seen }),
       setAudioRoute: (route) => set({ audioRoute: route }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
