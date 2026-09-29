@@ -1636,7 +1636,7 @@ describe('chatStore, streaming state', () => {
       );
     });
 
-    it('injects Cloud project custom instructions into the remote stream (regression: was local-only)', async () => {
+    it('leaves Cloud project instructions to the server, which loads them from the conversation', async () => {
       useChatStore.setState({
         conversations: [
           {
@@ -1691,7 +1691,7 @@ describe('chatStore, streaming state', () => {
       });
 
       const systemMessages = capturedBody?.messages?.filter((message) => message.role === 'system');
-      expect(systemMessages).toEqual(
+      expect(systemMessages ?? []).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ content: 'Always answer in exactly one sentence.' }),
         ]),

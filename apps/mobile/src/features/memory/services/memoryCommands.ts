@@ -13,6 +13,7 @@ import { syncNow } from '@/services/cloudSyncEngine';
 import { deleteMemoryFact, getMemoryFact, searchMemoryByText } from '@/storage/memory';
 import type { StatusStep } from '@/types/chat';
 import { writeLocalMemoryFact } from './localMemoryWriter';
+import { prohibitedMemoryCategory, prohibitedMemoryMessage } from '@agiworkforce/context';
 
 const MEMORY_COMMANDS_PATH = '/api/memory/commands';
 const MIN_FORGET_SUBJECT_CHARS = 3;
@@ -66,10 +67,15 @@ export function hasMemoryCommand(message: string): boolean {
 
 function localMemoryPorts(memoryEnabled: boolean): ExplicitMemoryPorts {
   return {
-    checkEligibility: async () =>
-      memoryEnabled
-        ? { eligible: true }
-        : { eligible: false, reason: 'memory_disabled', message: MEMORY_OFF_MESSAGE },
+    checkEligibility: async (fact) => {
+      if (!memoryEnabled) {
+        return { eligible: false, reason: 'memory_disabled', message: MEMORY_OFF_MESSAGE };
+      }
+      const category = prohibitedMemoryCategory(fact);
+      return category
+        ? { eligible: false, reason: 'ineligible', message: prohibitedMemoryMessage(category) }
+        : { eligible: true };
+    },
     store: async ({ fact }) => {
       const result = await writeLocalMemoryFact({ fact, source: 'typed' });
       return result.outcome === 'already_known'

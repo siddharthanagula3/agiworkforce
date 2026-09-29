@@ -35,10 +35,10 @@ describe('isAcceptableAttachment', () => {
   it('rejects an unsupported type with a specific reason', () => {
     mockIsParseable.mockReturnValue(false);
     const verdict = isAcceptableAttachment(
-      att({ fileName: 'deck.docx', mimeType: 'application/vnd.openxmlformats' }),
+      att({ fileName: 'deck.key', mimeType: 'application/x-iwork-keynote-sffkey' }),
     );
     expect(verdict).not.toBe(true);
-    expect(String(verdict)).toContain('deck.docx');
+    expect(String(verdict)).toContain('deck.key');
     expect(String(verdict)).toContain('supported');
   });
 
