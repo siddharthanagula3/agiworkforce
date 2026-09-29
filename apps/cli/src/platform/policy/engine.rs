@@ -311,14 +311,14 @@ enum RuleTarget<'a> {
     Mcp { server: &'a str, tool: &'a str },
 }
 
-/// The rule in one layer that decides this call: any matching deny, else the
-/// highest-priority match.
+/// The rule in one layer that decides this call: deny over ask over allow,
+/// then the highest-priority match.
 fn best_rule<'a>(
     rules: &'a [CompiledRule],
     target: RuleTarget<'_>,
     primary_arg: &str,
 ) -> Option<&'a PolicyRule> {
-    let mut best: Option<(&PolicyRule, (bool, u16))> = None;
+    let mut best: Option<(&PolicyRule, (u8, u16))> = None;
     for compiled in rules {
         let rule = &compiled.rule;
         if !rule_names_tool(&rule.tool, target) {
@@ -331,7 +331,7 @@ fn best_rule<'a>(
                 continue;
             }
         }
-        let rank = (decision_of(rule) == PolicyDecision::Deny, rule.priority);
+        let rank = (decision_of(rule).strictness(), rule.priority);
         match best {
             Some((_, previous)) if rank <= previous => {}
             _ => best = Some((rule, rank)),
@@ -1069,6 +1069,29 @@ mod tests {
         assert_eq!(
             engine.resolve_mcp("github", "search").decision,
             PolicyDecision::Deny
+        );
+    }
+
+    #[test]
+    fn an_ask_rule_outranks_a_higher_priority_allow_in_the_same_layer() {
+        let engine = make_engine(vec![
+            rule(&mcp_rule_target("github", None), None, "ask", 10),
+            rule(
+                &mcp_rule_target("github", Some("search")),
+                None,
+                "allow",
+                20,
+            ),
+            rule("run_command", Some("git push"), "ask", 10),
+            rule("run_command", Some("git push.*"), "allow", 900),
+        ]);
+        assert_eq!(
+            engine.resolve_mcp("github", "search").decision,
+            PolicyDecision::Ask
+        );
+        assert_eq!(
+            engine.evaluate("run_command", "git push origin main"),
+            PolicyDecision::Ask
         );
     }
 }
