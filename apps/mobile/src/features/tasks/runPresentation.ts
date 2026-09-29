@@ -4,7 +4,7 @@ import {
   type CloudAgentRun,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
-import { AGENT_TASK_STATE_LABELS } from '@agiworkforce/types';
+import { AGENT_TASK_STATE_LABELS, messageKindForAgentEvent } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { TIME_GROUPS } from '@/lib/constants';
 import { formatAgeLabel } from '@/src/features/artifacts/store';
@@ -217,7 +217,9 @@ export function collectCloudRunFile(
   envelope: AgentEventEnvelope,
 ): CloudRunProducedFile[] {
   const event = envelope.event;
-  if (event.type !== 'artifact-produced') return files;
+  if (messageKindForAgentEvent(event.type) !== 'artifact' || event.type !== 'artifact-produced') {
+    return files;
+  }
   if (files.some((file) => file.artifactId === event.artifactId)) return files;
   return [
     ...files,
@@ -232,53 +234,71 @@ export function collectCloudRunFile(
 }
 
 export function cloudRunTextDelta(envelope: AgentEventEnvelope): string {
-  return envelope.event.type === 'text-delta' ? envelope.event.delta : '';
+  const event = envelope.event;
+  return messageKindForAgentEvent(event.type) === 'text' && event.type === 'text-delta'
+    ? event.delta
+    : '';
 }
 
 export function summarizeCloudRunEvent(envelope: AgentEventEnvelope): CloudRunActivityLine | null {
   const id = `${envelope.turnId}:${envelope.sequence}`;
   const event = envelope.event;
 
-  switch (event.type) {
-    case 'tool-execution-start':
-      return { id, label: event.summary, tone: 'default' };
-    case 'tool-execution-end':
-      return {
-        id,
-        label: `${event.name} ${event.isError ? 'failed' : 'finished'}`,
-        tone: event.isError ? 'error' : 'success',
-      };
-    case 'progress-update':
-      return {
-        id,
-        label: event.summary,
-        tone:
-          event.status === 'failed'
-            ? 'error'
-            : event.status === 'completed'
-              ? 'success'
-              : 'default',
-      };
-    case 'approval-requested':
-      return { id, label: `Approval requested: ${event.summary}`, tone: 'default' };
-    case 'approval-resolved':
-      return {
-        id,
-        label: APPROVAL_DECISION_LABELS[event.decision] ?? event.decision,
-        tone: event.decision === 'denied' ? 'error' : 'success',
-      };
-    case 'input-requested':
-      return { id, label: `${event.toolName} is asking for input`, tone: 'default' };
-    case 'artifact-produced':
-      return { id, label: `Produced ${event.name}`, tone: 'success' };
+  switch (messageKindForAgentEvent(event.type)) {
+    case 'tool_call':
+      return event.type === 'tool-execution-start'
+        ? { id, label: event.summary, tone: 'default' }
+        : null;
+    case 'tool_result':
+      return event.type === 'tool-execution-end'
+        ? {
+            id,
+            label: `${event.name} ${event.isError ? 'failed' : 'finished'}`,
+            tone: event.isError ? 'error' : 'success',
+          }
+        : null;
+    case 'status':
+      if (event.type === 'progress-update') {
+        return {
+          id,
+          label: event.summary,
+          tone:
+            event.status === 'failed'
+              ? 'error'
+              : event.status === 'completed'
+                ? 'success'
+                : 'default',
+        };
+      }
+      if (event.type === 'task-state-changed') {
+        return {
+          id,
+          label: event.summary ?? CLOUD_RUN_STATE_LABELS[event.state],
+          tone: event.state === 'failed' ? 'error' : 'default',
+        };
+      }
+      return null;
+    case 'approval':
+      if (event.type === 'approval-requested') {
+        return { id, label: `Approval requested: ${event.summary}`, tone: 'default' };
+      }
+      if (event.type === 'approval-resolved') {
+        return {
+          id,
+          label: APPROVAL_DECISION_LABELS[event.decision] ?? event.decision,
+          tone: event.decision === 'denied' ? 'error' : 'success',
+        };
+      }
+      if (event.type === 'input-requested') {
+        return { id, label: `${event.toolName} is asking for input`, tone: 'default' };
+      }
+      return null;
+    case 'artifact':
+      return event.type === 'artifact-produced'
+        ? { id, label: `Produced ${event.name}`, tone: 'success' }
+        : null;
     case 'error':
-      return { id, label: event.message, tone: 'error' };
-    case 'task-state-changed':
-      return {
-        id,
-        label: event.summary ?? CLOUD_RUN_STATE_LABELS[event.state],
-        tone: event.state === 'failed' ? 'error' : 'default',
-      };
+      return event.type === 'error' ? { id, label: event.message, tone: 'error' } : null;
     default:
       return null;
   }
@@ -305,9 +325,11 @@ export const CLOUD_RUN_PLAN_STATUS_LABELS: Record<CloudRunPlanStepStatus | 'stop
 };
 
 export function isCloudRunPlanOverview(envelope: AgentEventEnvelope): boolean {
+  const event = envelope.event;
   return (
-    envelope.event.type === 'progress-update' &&
-    envelope.event.progressId === PLAN_OVERVIEW_PROGRESS_ID
+    messageKindForAgentEvent(event.type) === 'status' &&
+    event.type === 'progress-update' &&
+    event.progressId === PLAN_OVERVIEW_PROGRESS_ID
   );
 }
 
@@ -316,7 +338,9 @@ export function applyCloudRunPlanEvent(
   envelope: AgentEventEnvelope,
 ): CloudRunPlanStep[] {
   const event = envelope.event;
-  if (event.type !== 'progress-update') return [...plan];
+  if (messageKindForAgentEvent(event.type) !== 'status' || event.type !== 'progress-update') {
+    return [...plan];
+  }
   if (event.progressId === PLAN_OVERVIEW_PROGRESS_ID) {
     return (event.detail ?? '').split('\n').flatMap((line): CloudRunPlanStep[] => {
       const match = PLAN_OVERVIEW_LINE.exec(line.trim());
