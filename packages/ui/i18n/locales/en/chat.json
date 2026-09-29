@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
     "runtimeAllow": "Allow",
     "runtimeDecline": "Don't allow",
+    "runtimeConnectorsLoading": "Checking your connected apps",
+    "runtimeConnectorNotConnected": "Not connected. Connect it in Settings, Connectors, to use this part of the app.",
+    "runtimeToolNeedsApproval": "Asks before each use, so this app cannot use it.",
+    "runtimeToolBlocked": "Blocked in your settings.",
+    "runtimeManageConnectors": "Connected apps",
     "saveCopy": "Save a copy to my chats",
     "saveCopyBusy": "Copying…",
     "saveCopyFailed": "This artifact could not be copied."

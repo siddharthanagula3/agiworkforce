@@ -1,10 +1,14 @@
 import {
   ArtifactRuntimeCompleteResponseSchema,
+  ArtifactRuntimeConnectorsResponseSchema,
   ArtifactRuntimeErrorResponseSchema,
   artifactRuntimeCompletePath,
+  artifactRuntimeConnectorsPath,
   artifactRuntimeStoragePath,
   parseArtifactStorageResponse,
   type ArtifactRuntimeCompleteRequest,
+  type ArtifactRuntimeConnector,
+  type ArtifactRuntimeConnectorsRequest,
   type ArtifactStorageRequest,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -35,7 +39,10 @@ function storageBody(
   }
 }
 
-async function post(path: string, body: ArtifactRuntimeCompleteRequest | ArtifactStorageRequest) {
+async function post(
+  path: string,
+  body: ArtifactRuntimeCompleteRequest | ArtifactRuntimeConnectorsRequest | ArtifactStorageRequest,
+) {
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'same-origin',
@@ -57,14 +64,27 @@ async function post(path: string, body: ArtifactRuntimeCompleteRequest | Artifac
   return payload;
 }
 
+export async function describeArtifactRuntimeConnectors(
+  token: string,
+  connectors: readonly string[],
+): Promise<ArtifactRuntimeConnector[]> {
+  const parsed = ArtifactRuntimeConnectorsResponseSchema.safeParse(
+    await post(artifactRuntimeConnectorsPath(token), { connectors: [...connectors] }),
+  );
+  if (!parsed.success) throw new Error(REQUEST_FAILED);
+  return parsed.data.connectors;
+}
+
 export async function callArtifactRuntime(
   token: string,
   request: ArtifactRuntimeRequest,
+  options: { disabledTools?: readonly string[] } = {},
 ): Promise<unknown> {
   if (request.op === 'complete') {
     const payload = await post(artifactRuntimeCompletePath(token), {
       prompt: request.prompt,
       connectors: request.connectors,
+      disabledTools: [...(options.disabledTools ?? [])],
     });
     const parsed = ArtifactRuntimeCompleteResponseSchema.safeParse(payload);
     if (!parsed.success) throw new Error(REQUEST_FAILED);

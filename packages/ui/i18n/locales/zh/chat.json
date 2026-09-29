@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "此应用想使用您的账户调用 AI，并读取或更改 {{apps}} 中的数据。它能看到这些应用返回的内容，每次请求都会计入您的套餐用量。",
     "runtimeAllow": "允许",
     "runtimeDecline": "不允许",
+    "runtimeConnectorsLoading": "正在检查你已连接的应用",
+    "runtimeConnectorNotConnected": "未连接。请在“设置”的“连接器”中连接它，才能使用此应用的这一部分。",
+    "runtimeToolNeedsApproval": "每次使用前都会询问，因此此应用无法使用它。",
+    "runtimeToolBlocked": "已在你的设置中屏蔽。",
+    "runtimeManageConnectors": "已连接的应用",
     "saveCopy": "将副本保存到我的聊天",
     "saveCopyBusy": "正在复制…",
     "saveCopyFailed": "无法复制此工件。"

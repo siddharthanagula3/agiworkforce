@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "Cette app souhaite utiliser l'IA avec votre compte et lire ou modifier des données dans {{apps}}. Elle voit ce que ces apps renvoient, et chaque requête est comptée dans l'utilisation de votre forfait.",
     "runtimeAllow": "Autoriser",
     "runtimeDecline": "Ne pas autoriser",
+    "runtimeConnectorsLoading": "Vérification de vos applications connectées",
+    "runtimeConnectorNotConnected": "Non connectée. Connectez-la dans Paramètres, Connecteurs, pour utiliser cette partie de l'application.",
+    "runtimeToolNeedsApproval": "Demande une confirmation avant chaque utilisation, donc cette application ne peut pas l'utiliser.",
+    "runtimeToolBlocked": "Bloquée dans vos paramètres.",
+    "runtimeManageConnectors": "Applications connectées",
     "saveCopy": "Enregistrer une copie dans mes discussions",
     "saveCopyBusy": "Copie en cours…",
     "saveCopyFailed": "Cet artefact n’a pas pu être copié."

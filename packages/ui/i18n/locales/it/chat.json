@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "Questa app vuole usare l'IA con il tuo account e leggere o modificare dati in {{apps}}. Vede ciò che restituiscono quelle app, e ogni richiesta conta per l'utilizzo del tuo piano.",
     "runtimeAllow": "Consenti",
     "runtimeDecline": "Non consentire",
+    "runtimeConnectorsLoading": "Verifica delle app collegate",
+    "runtimeConnectorNotConnected": "Non collegata. Collegala in Impostazioni, Connettori, per usare questa parte dell'app.",
+    "runtimeToolNeedsApproval": "Chiede conferma prima di ogni uso, quindi questa app non può usarla.",
+    "runtimeToolBlocked": "Bloccata nelle tue impostazioni.",
+    "runtimeManageConnectors": "App collegate",
     "saveCopy": "Salva una copia nelle mie chat",
     "saveCopyBusy": "Copia in corso…",
     "saveCopyFailed": "Impossibile copiare questo artefatto."
