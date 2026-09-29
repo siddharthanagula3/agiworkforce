@@ -17,15 +17,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S33.02: Application name and description.
-
-- Done when: The user can set a name and description for a published app.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | missing | Not built on this surface. |  |
-
 ## S33.04: Prompt-based creation.
 
 - Done when: The user creates a site by prompting the assistant, then hosts the result.
@@ -36,14 +27,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S33.05: Source-code workspace.
-
-- Done when: The site's source code can be browsed and edited in a workspace.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S33.07: Preview deployment.
 
 - Done when: The site can be deployed to a shareable preview URL.
@@ -53,26 +36,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S33.08: Production deployment.
-
-- Done when: The site can be deployed to a separate production URL/stage.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | missing | Not built on this surface. |  |
-
-## S33.09: Deployment history.
-
-- Done when: The user can see the history of deployments.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S33.12: Workspace-only access.
 
@@ -85,24 +48,19 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S33.13: Password or authentication options where offered.
+## S33.20: Model-call allowance for generated apps.
 
-- Done when: The owner can require a password or sign-in to view the site.
+- Done when: Generated apps get an allowance of model calls through the product.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S33.19: Usage and hosting limits.
-
-- Done when: Usage and hosting limits are enforced and shown to the owner.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
 ## S33.23: Rollback.
 

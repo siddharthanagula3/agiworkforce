@@ -76,18 +76,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S18.14: Jump to a turn.
-
-- Done when: The user can jump directly to a chosen earlier turn in the conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S18.15: Jump to latest.
 
 - Done when: After scrolling up, one control returns the view to the latest message.

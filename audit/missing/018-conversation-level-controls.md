@@ -18,6 +18,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S18.14: Jump to a turn.
+
+- Done when: The user can jump directly to a chosen earlier turn in the conversation.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
 ## S18.16: Scroll-position restoration.
 
 - Done when: Leaving and returning to a conversation restores the previous scroll position.

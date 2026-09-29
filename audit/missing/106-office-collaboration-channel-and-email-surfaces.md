@@ -6,6 +6,54 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S106.01: Assistant inside Word.
+
+- Done when: An assistant pane runs inside Word and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.02: Assistant inside Excel.
+
+- Done when: An assistant pane runs inside Excel and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.03: Assistant inside PowerPoint.
+
+- Done when: An assistant pane runs inside PowerPoint and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.04: Assistant inside Outlook.
+
+- Done when: An assistant pane runs inside Outlook and can read and change the open message through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.05: Assistant inside Google Docs.
+
+- Done when: An assistant pane runs inside Google Docs and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.06: Assistant inside Google Sheets.
+
+- Done when: An assistant pane runs inside Google Sheets and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.07: Assistant inside Google Slides.
+
+- Done when: An assistant pane runs inside Google Slides and can read and change the open document through the host.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.08: Host-document selection context.
+
+- Done when: The in-host assistant sees what the user has selected in the host document (text, cells, slide objects) as context.
+- Wave: 5
+- Build on: web, desktop
+
 ## S106.09: Native tracked edits.
 
 - Done when: Edits the assistant makes to a host document appear as native tracked changes or suggestions the user can accept or reject.
@@ -23,6 +71,18 @@ nothing is left.
 - Done when: From inside one host document the assistant can pull in or cite another document from the same host (another file, sheet or deck).
 - Wave: 5
 - Build on: web, desktop, chrome
+
+## S106.12: Shared conversation context across supported host applications.
+
+- Done when: One assistant conversation carries across the supported host apps (for example, started in Word and continued in Excel) with its context.
+- Wave: 5
+- Build on: web, desktop
+
+## S106.15: Teams assistant.
+
+- Done when: Users can talk to the assistant inside Microsoft Teams (bot or app) and get answers there.
+- Wave: 5
+- Build on: web, desktop
 
 ## S106.17: Email-to-task address.
 
@@ -59,3 +119,9 @@ nothing is left.
 - Done when: Each channel conversation or thread maps to one persistent agent session, so follow-ups in the thread continue it.
 - Wave: 5
 - Build on: web, desktop
+
+## S106.25: Native-host and standalone-app handoff.
+
+- Done when: A session started in a host add-in can be opened in the standalone app (and back) with its context.
+- Wave: 5
+- Build on: web, desktop, chrome

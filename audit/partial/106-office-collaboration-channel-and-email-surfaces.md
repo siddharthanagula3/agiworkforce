@@ -6,96 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S106.01: Assistant inside Word.
-
-- Done when: An assistant pane runs inside Word and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.02: Assistant inside Excel.
-
-- Done when: An assistant pane runs inside Excel and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.03: Assistant inside PowerPoint.
-
-- Done when: An assistant pane runs inside PowerPoint and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.04: Assistant inside Outlook.
-
-- Done when: An assistant pane runs inside Outlook and can read and change the open message through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.05: Assistant inside Google Docs.
-
-- Done when: An assistant pane runs inside Google Docs and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.06: Assistant inside Google Sheets.
-
-- Done when: An assistant pane runs inside Google Sheets and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.07: Assistant inside Google Slides.
-
-- Done when: An assistant pane runs inside Google Slides and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.08: Host-document selection context.
-
-- Done when: The in-host assistant sees what the user has selected in the host document (text, cells, slide objects) as context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
-## S106.12: Shared conversation context across supported host applications.
-
-- Done when: One assistant conversation carries across the supported host apps (for example, started in Word and continued in Excel) with its context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
 ## S106.13: Slack direct-message assistant.
 
 - Done when: A user can DM the product's Slack bot and gets the assistant's reply in that DM.
@@ -120,16 +30,6 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 
 Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/lib/slack/slack-config.ts:14-14`
 
-## S106.15: Teams assistant.
-
-- Done when: Users can talk to the assistant inside Microsoft Teams (bot or app) and get answers there.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-
 ## S106.16: Mention-to-task handoff.
 
 - Done when: Mentioning the assistant in a channel message turns that message into a task the agent runs.
@@ -153,14 +53,3 @@ Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack
 | desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/lib/slack/slack-api.ts:108-108`, `apps/web/lib/slack/slack-api.ts:109-109`, `apps/web/lib/slack/slack-installations.ts:87-87`, `apps/web/lib/slack/slack-assistant.ts:134-134`
-
-## S106.25: Native-host and standalone-app handoff.
-
-- Done when: A session started in a host add-in can be opened in the standalone app (and back) with its context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |

@@ -42,6 +42,35 @@ function readLedger() {
     });
 }
 
+function expectedRollup(item) {
+  if (item.rollup === 'declined' || !item.cells || !Object.keys(item.cells).length)
+    return item.rollup;
+  const applicable = Object.values(item.cells)
+    .map((entry) => entry.s)
+    .filter((status) => status !== 'n/a');
+  if (!applicable.length) return 'n/a';
+  for (const status of ['done', 'missing', 'unverified'])
+    if (applicable.every((value) => value === status)) return status;
+  return 'partial';
+}
+
+function normalizeRollups() {
+  const file = path.join(root, LEDGER);
+  const drift = [];
+  const lines = fs
+    .readFileSync(file, 'utf8')
+    .split('\n')
+    .map((line) => {
+      if (!line) return line;
+      const item = JSON.parse(line);
+      const expected = expectedRollup(item);
+      if (expected === item.rollup) return line;
+      drift.push(`${item.id} says ${item.rollup}, its cells say ${expected}`);
+      return line.replace(`"rollup": "${item.rollup}"`, `"rollup": "${expected}"`);
+    });
+  return { drift, text: lines.join('\n') };
+}
+
 function slug(title) {
   return title
     .toLowerCase()
@@ -283,9 +312,17 @@ function listGenerated() {
   return out;
 }
 
-const files = build();
 const check = process.argv.includes('--check');
 const problems = [];
+const rollups = normalizeRollups();
+if (rollups.drift.length) {
+  if (check)
+    problems.push(
+      `${rollups.drift.length} ledger items have a rollup that disagrees with their cells (${rollups.drift.slice(0, 3).join('; ')})`,
+    );
+  else fs.writeFileSync(path.join(root, LEDGER), rollups.text);
+}
+const files = build();
 
 for (const [file, content] of files) {
   const abs = path.join(root, file);

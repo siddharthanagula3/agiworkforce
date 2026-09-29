@@ -49,19 +49,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.07: Profile summary.
-
-- Done when: The user can read a summary of what the assistant has learned about them as a person (a profile summary).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S39.09: Ongoing-work summary.
 
 - Done when: The user can read a summary of the ongoing work or projects the assistant knows they are pursuing.

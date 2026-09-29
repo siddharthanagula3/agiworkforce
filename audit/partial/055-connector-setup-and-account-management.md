@@ -57,14 +57,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-## S55.10: Service-account authorization.
-
-- Done when: A connector can be authorized with a service account (a non-personal credential) and it is shown as such.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S55.13: Account display name.
 
 - Done when: Each connected account shows a human-readable name.

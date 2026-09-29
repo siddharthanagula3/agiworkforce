@@ -129,42 +129,6 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S17.23: Shorten answer.
-
-- Done when: One action rewrites an answer shorter.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S17.24: Expand answer.
-
-- Done when: One action rewrites an answer longer/more detailed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S17.25: Change tone.
-
-- Done when: One action rewrites an answer in a different tone.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S17.26: Revise selected text.
 
 - Done when: The user can select part of an answer and ask for that span to be revised or asked about.
@@ -243,18 +207,6 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S17.33: Save answer to Project knowledge.
-
-- Done when: From an answer, the user can save it into a Project's knowledge/sources.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

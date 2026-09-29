@@ -6,6 +6,12 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S14.09: Cloud-file picker.
+
+- Done when: The user can browse a cloud drive (Google Drive, OneDrive, Dropbox) from the composer and attach a file from it.
+- Wave: 4
+- Build on: web, desktop, vscode, chrome
+
 ## S14.13: Audio attachment.
 
 - Done when: The user can attach an audio file (e.g. MP3, M4A, WAV) and the model receives it.

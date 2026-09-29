@@ -6,24 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S32.28: Design-to-code handoff.
-
-- Done when: A developer can get the code/specs for a design (inspect, copy or export the implementation).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S32.30: Figma import/export integration.
-
-- Done when: The workspace imports designs from Figma and/or exports designs to Figma.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.

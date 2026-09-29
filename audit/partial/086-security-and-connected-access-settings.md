@@ -95,11 +95,3 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S86.25: Revoke all optional grants.
-
-- Done when: One action withdraws every optional permission granted to AGI (connectors, saved approvals, device grants, folders).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
