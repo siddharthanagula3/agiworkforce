@@ -68,6 +68,7 @@ import {
   type Effort,
   getPickerModelTier,
   evaluateModelEnvironment,
+  getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
   type ModelEnvironment,
@@ -888,6 +889,8 @@ export function ComposerFooter({
   const thinkingEffort = useThinkingStore((s) => s.effort);
   const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
+  const fastEnabled = useThinkingStore((s) => s.fast);
+  const setFastEnabled = useThinkingStore((s) => s.setFast);
   const subscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingUnauthenticated = useBillingStore((s) => s.unauthenticated === true);
@@ -1153,6 +1156,8 @@ export function ComposerFooter({
   // or misleading effort switch.
   const hasEffortControl = supportsAdaptive && effortChips.length > 0;
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
+  const fastTier = getModelMetadataById(selectedModel.id)?.fastTier;
+  const fastOn = Boolean(fastTier) && fastEnabled;
   // Store efforts this model actually supports (for clamping the persisted pref).
   const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
   const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
@@ -1638,13 +1643,14 @@ export function ComposerFooter({
                 <button
                   type="button"
                   className={EFFORT_TRIGGER_CLASS}
-                  aria-label={`Reasoning effort: ${effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}`}
+                  aria-label={`Reasoning effort: ${effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}${fastOn ? ', fast mode on' : ''}`}
                   aria-expanded={effortOpen}
                   title="Reasoning effort"
                 >
                   <Brain className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
                   <span className="font-medium">
                     {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
+                    {fastOn ? ' · Fast' : ''}
                   </span>
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
@@ -1740,6 +1746,22 @@ export function ComposerFooter({
                       ? 'Higher effort thinks longer before it answers.'
                       : 'Extended thinking is off for this model.'}
                 </p>
+                {fastTier && (
+                  <div className="mt-3 border-t border-[var(--chat-border)] pt-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-foreground">Fast mode</span>
+                      <Switch
+                        checked={fastEnabled}
+                        onCheckedChange={setFastEnabled}
+                        aria-label="Fast mode"
+                        className="h-5 w-9"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {`Faster answers from the same model, at ${fastTier.priceMultiplier}x the usage.`}
+                    </p>
+                  </div>
+                )}
                 {gatedEffortChips.length > 0 && (
                   <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     <span>

@@ -4107,6 +4107,7 @@ export function useChatStream(
                 supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
                   ? resolvedEffort
                   : undefined,
+              speed: thinkingState.fast && selectedModelMetadata?.fastTier ? 'fast' : undefined,
               client_timezone: getBrowserTimeZone(),
               use_prompt_cache: true,
             }),
