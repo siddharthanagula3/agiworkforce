@@ -30,10 +30,12 @@ describe('mobile app domain association', () => {
               expect.objectContaining({ '/': '/pair/*' }),
               expect.objectContaining({ '/': '/auth/reset-password' }),
               expect.objectContaining({ '/': '/open/*' }),
+              expect.objectContaining({ '/': '/github/installed' }),
             ],
           },
         ],
       },
+      webcredentials: { apps: ['D2PR62RLT4.com.agiworkforce.app'] },
     });
   });
 

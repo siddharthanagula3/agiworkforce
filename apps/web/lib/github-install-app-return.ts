@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { GITHUB_INSTALL_APP_RETURN_URL } from '@agiworkforce/cloud-contracts';
+import { GITHUB_INSTALL_APP_LINK_RETURN_URL } from '@agiworkforce/cloud-contracts';
 import { generatePkcePair, hashOAuthState } from '@/lib/connectors/pkce';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { generateGitHubInstallState, type VerifiedGitHubInstallation } from '@/lib/github-app';
@@ -76,6 +76,53 @@ export async function appInstallOwner(oauthState: string): Promise<string | null
   return rows[0]?.user_id ?? null;
 }
 
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 1)}***${email.slice(at)}`;
+}
+
+export async function appInstallRequester(installState: string): Promise<string | null> {
+  const db = getNeonDb();
+  const rows = await db.query<{ user_id: string }>(
+    `select user_id
+       from public.github_install_authorizations
+      where install_state_hash = $1
+        and installation_id is null
+        and consumed_at is null
+        and expires_at > now()
+      limit 1`,
+    [hashOAuthState(installState)],
+  );
+  const userId = rows[0]?.user_id;
+  if (!userId) return null;
+  const profiles = await db.query<{ email: string | null }>(
+    'select email from public.profiles where id = $1 limit 1',
+    [userId],
+  );
+  const email = profiles[0]?.email;
+  return email ? maskEmail(email) : 'an AGI Workforce account';
+}
+
+export async function pendingAppInstallation(
+  userId: string,
+  oauthState: string,
+): Promise<number | null> {
+  const rows = await getNeonDb().query<{ installation_id: string | number }>(
+    `select installation_id
+       from public.github_install_authorizations
+      where oauth_state_hash = $1
+        and user_id = $2
+        and installation_id is not null
+        and consumed_at is null
+        and expires_at > now()
+      limit 1`,
+    [hashOAuthState(oauthState), userId],
+  );
+  const installationId = Number(rows[0]?.installation_id);
+  return Number.isSafeInteger(installationId) && installationId > 0 ? installationId : null;
+}
+
 export async function consumeAppInstall(
   userId: string,
   oauthState: string,
@@ -111,7 +158,7 @@ export async function consumeAppInstall(
 }
 
 export function appInstallReturnUrl(params: Readonly<Record<string, string | null>>): URL {
-  const target = new URL(GITHUB_INSTALL_APP_RETURN_URL);
+  const target = new URL(GITHUB_INSTALL_APP_LINK_RETURN_URL);
   for (const [key, value] of Object.entries(params)) {
     if (value) target.searchParams.set(key, value);
   }
