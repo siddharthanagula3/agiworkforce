@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
+
 const {
   mockGetUserScopedDb,
   mockCsrf,
@@ -229,6 +237,49 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
     );
     expect(response.status).toBe(201);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/code/sessions, the audit trail', () => {
+  it('records the opened session by id alone', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-audit-0001',
+        title: 'quarterly-close workspace',
+        networkAccess: 'trusted',
+        runtimeId: null,
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      userId: 'user-1',
+      organizationId: null,
+      eventType: 'code_session_lifecycle_changed',
+    });
+    expect(event['detail']).toEqual({
+      resourceType: 'code_session',
+      resourceId: 'session-1',
+      status: 'opened',
+    });
+    expect(JSON.stringify(event['detail'])).not.toMatch(/quarterly-close|req-audit/);
+  });
+
+  it('records nothing when the session is refused', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-audit-0002',
+        title: 'workspace',
+        networkAccess: 'full',
+        fullNetworkAcknowledged: true,
+        runtimeId: 'droid',
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 });
 
