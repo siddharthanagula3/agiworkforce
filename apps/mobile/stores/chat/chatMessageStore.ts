@@ -28,11 +28,13 @@ import {
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
+  CONVERSATION_TITLE_MAX_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
   ManagedCloudChatHttpError,
   type ManagedCloudConversation,
   type ManagedCloudConversationHistoryStats,
 } from '@agiworkforce/cloud-contracts';
+import { api } from '@/services/api';
 import { managedCloudChat } from '@/services/managedCloudChat';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
@@ -59,6 +61,7 @@ let cloudConversationPagination: {
   accountEpoch: CloudAccountEpoch;
   requestVersion: number;
   nextOffset: number;
+  nextCursor: string | null;
   conversations: ManagedCloudConversation[];
   historyStats?: ManagedCloudConversationHistoryStats;
 } | null = null;
@@ -67,6 +70,21 @@ const cloudReactionWrites = new Map<
   string,
   { tail: Promise<void>; committedReaction: MessageReaction }
 >();
+
+function appendNewConversations(
+  into: ManagedCloudConversation[],
+  page: readonly ManagedCloudConversation[],
+): void {
+  const seen = new Set(into.map((conversation) => conversation.id));
+  for (const conversation of page) {
+    if (seen.has(conversation.id)) continue;
+    seen.add(conversation.id);
+    into.push(conversation);
+  }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const KEPT_CHAT_TITLE_MAX_LENGTH = 200;
 
 function getCloudStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
@@ -108,6 +126,7 @@ interface MessageState {
   setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
+  keepTemporaryConversation: (id: string) => Promise<void>;
   markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   setMessageReaction: (
@@ -228,12 +247,13 @@ export const useChatMessageStore = create<MessageState>()(
             if (!accountEpoch) throw new Error('Cloud account is not active');
             const conversations: ManagedCloudConversation[] = [];
             let offset = 0;
+            let cursor: string | null = null;
             let hasMore = true;
             let historyStats: ManagedCloudConversationHistoryStats | undefined;
             while (hasMore) {
               const page = await managedCloudChat.listConversations({
                 limit: CLOUD_CONVERSATION_PAGE_SIZE,
-                offset,
+                ...(cursor ? { cursor } : { offset }),
                 includeHistoryStats: offset === 0,
                 archived: 'exclude',
               });
@@ -243,13 +263,14 @@ export const useChatMessageStore = create<MessageState>()(
               ) {
                 return;
               }
-              if (page.hasMore && page.nextOffset <= offset) {
+              if (page.hasMore && page.nextOffset <= offset && !page.nextCursor) {
                 throw new Error('Cloud conversation pagination did not advance.');
               }
-              conversations.push(...page.conversations);
+              appendNewConversations(conversations, page.conversations);
               if (offset === 0) historyStats = page.historyStats;
               hasMore = page.hasMore;
               offset = page.nextOffset;
+              cursor = page.nextCursor;
               getCloudStore()
                 .getState()
                 .setCloudConversations(
@@ -261,6 +282,7 @@ export const useChatMessageStore = create<MessageState>()(
                   accountEpoch,
                   requestVersion,
                   nextOffset: offset,
+                  nextCursor: cursor,
                   conversations,
                   historyStats,
                 };
@@ -301,7 +323,9 @@ export const useChatMessageStore = create<MessageState>()(
         try {
           const page = await managedCloudChat.listConversations({
             limit: CLOUD_CONVERSATION_PAGE_SIZE,
-            offset: pagination.nextOffset,
+            ...(pagination.nextCursor
+              ? { cursor: pagination.nextCursor }
+              : { offset: pagination.nextOffset }),
             archived: 'exclude',
           });
           if (
@@ -314,11 +338,12 @@ export const useChatMessageStore = create<MessageState>()(
             }
             return;
           }
-          if (page.hasMore && page.nextOffset <= pagination.nextOffset) {
+          if (page.hasMore && page.nextOffset <= pagination.nextOffset && !page.nextCursor) {
             throw new Error('Cloud conversation pagination did not advance.');
           }
-          pagination.conversations.push(...page.conversations);
+          appendNewConversations(pagination.conversations, page.conversations);
           pagination.nextOffset = page.nextOffset;
+          pagination.nextCursor = page.nextCursor;
           getCloudStore()
             .getState()
             .setCloudConversations(
@@ -595,7 +620,8 @@ export const useChatMessageStore = create<MessageState>()(
         }
       },
 
-      renameConversation: async (id, title) => {
+      renameConversation: async (id, requestedTitle) => {
+        const title = requestedTitle.slice(0, CONVERSATION_TITLE_MAX_LENGTH);
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
@@ -692,6 +718,28 @@ export const useChatMessageStore = create<MessageState>()(
         } else {
           getCloudStore().getState().patchCloudConversation(id, { temporary: false });
         }
+      },
+
+      keepTemporaryConversation: async (id) => {
+        const cloudState = getCloudStore().getState();
+        const conversation = cloudState.conversations.find((c) => c.id === id);
+        const kept = (cloudState.messages[id] ?? []).filter(
+          (message) =>
+            (message.role === 'user' || message.role === 'assistant') &&
+            !message.isStreaming &&
+            message.content.trim().length > 0,
+        );
+        const title = conversation?.title?.trim().slice(0, KEPT_CHAT_TITLE_MAX_LENGTH);
+        await api.post(`/api/chat/conversations/${encodeURIComponent(id)}/keep`, {
+          ...(title ? { title } : {}),
+          messages: kept.map((message) => ({
+            ...(UUID_PATTERN.test(message.id) ? { id: message.id } : {}),
+            role: message.role,
+            content: message.content,
+            ...(message.model ? { model: message.model } : {}),
+          })),
+        });
+        get().makeConversationPermanent(id);
       },
 
       markConversationRead: (id) => {

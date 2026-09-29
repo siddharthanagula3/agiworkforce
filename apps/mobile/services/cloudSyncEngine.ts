@@ -24,6 +24,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  CONVERSATION_TITLE_MAX_LENGTH,
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
   MemorySyncPullResponseSchema,
@@ -89,7 +90,7 @@ const conversationPort: ConversationStorePort = {
     if (!c) return undefined;
     return {
       id: c.id,
-      title: c.title,
+      title: c.title.slice(0, CONVERSATION_TITLE_MAX_LENGTH),
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       messageCount: c.messageCount,
