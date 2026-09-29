@@ -1,8 +1,10 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type {
   AgentEventApprovalRiskLevel,
+  AgentEventEnvelope,
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
@@ -984,6 +986,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionStartSchema>, 'type'>)
   | ({
       type: 'tool_execution_end';
@@ -991,6 +994,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionEndSchema>, 'type'>)
   | ({
       type: 'progress_update';
@@ -998,16 +1002,19 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
   | ({
       type: 'source_list';
       threadId: string;
       turnId: string;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof sourceListSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
     } & z.infer<typeof mcpStatusEventSchema>)
+  | { type: 'agent_event'; threadId: string; turnId: string; envelope: AgentEventEnvelope }
   | { type: 'runtime_disconnected'; error: string };
 
 function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEvent | undefined {
@@ -1028,13 +1035,25 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     return parsed.success ? { type: 'approval_requested', ...parsed.data } : undefined;
   }
   if (notification.method === 'turn/agent_event') {
+    const shared = parseAgentEventDelta(notification.params);
+    const envelope = shared === null ? {} : { envelope: shared };
     const parsed = agentEventEnvelopeSchema.safeParse(notification.params);
-    if (!parsed.success) return undefined;
+    if (!parsed.success) {
+      return shared === null
+        ? undefined
+        : {
+            type: 'agent_event',
+            threadId: shared.sessionId,
+            turnId: shared.turnId,
+            envelope: shared,
+          };
+    }
     const { sessionId: threadId, turnId, sequence, emittedAtMs, event } = parsed.data;
     const kind = messageKindForAgentEvent(event.type);
     if (kind === 'tool_call' && event.type === 'tool-execution-start') {
       return {
         type: 'tool_execution_start',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -1049,6 +1068,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (kind === 'citation' && event.type === 'source-list') {
       return {
         type: 'source_list',
+        ...envelope,
         threadId,
         turnId,
         sources: event.sources,
@@ -1059,6 +1079,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (kind === 'tool_result' && event.type === 'tool-execution-end') {
       return {
         type: 'tool_execution_end',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -1073,6 +1094,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (event.type !== 'progress-update') return undefined;
     return {
       type: 'progress_update',
+      ...envelope,
       threadId,
       turnId,
       sequence,

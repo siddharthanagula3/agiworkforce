@@ -411,6 +411,7 @@ export function createChatHandler(
         return;
       }
       if (turnId !== undefined && event.turnId !== turnId) return;
+      if (event.type === 'agent_event') return;
       if (event.type === 'output_delta') {
         stream.markdown(event.delta);
       } else if (event.type === 'progress_update') {
