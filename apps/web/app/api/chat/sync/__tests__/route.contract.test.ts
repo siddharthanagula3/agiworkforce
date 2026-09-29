@@ -25,19 +25,23 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
-    db: {
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: async (...args: unknown[]) => {
-        await mockQuery(...args);
-        return 0;
-      },
+vi.mock('@/lib/server/rls-db', () => {
+  const db = {
+    query: (...args: unknown[]) => mockQuery(...args),
+    execute: async (...args: unknown[]) => {
+      await mockQuery(...args);
+      return 0;
     },
-    userId: 'user_contract_1',
-    organizationId: '11111111-1111-4111-8111-111111111111',
-  })),
-}));
+    transaction: async <T>(run: (tx: unknown) => Promise<T>) => run(db),
+  };
+  return {
+    getUserScopedDb: vi.fn(async () => ({
+      db,
+      userId: 'user_contract_1',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+    })),
+  };
+});
 
 const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
   mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
@@ -289,6 +293,52 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('46');
+  });
+
+  it('revokes the shared links and published artifacts of a chat deleted through sync', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('insert into web_conversations')) {
+        return [{ kind: 'applied', id: CONV_ID, server_version: '47', current: null }];
+      }
+      return [];
+    });
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          { id: CONV_ID, title: 'Quarterly plan', baseVersion: '45', isDeleted: true },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const statements = mockQuery.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes('delete from public.published_artifacts'))).toBe(
+      true,
+    );
+    expect(statements.some((sql) => sql.includes('delete from public.shared_sessions'))).toBe(true);
+  });
+
+  it('touches no links when a push deletes nothing', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('insert into web_conversations')) {
+        return [{ kind: 'applied', id: CONV_ID, server_version: '48', current: null }];
+      }
+      return [];
+    });
+
+    await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, title: 'Quarterly plan', baseVersion: '45' }],
+      }),
+    );
+
+    const statements = mockQuery.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes('delete from public.shared_sessions'))).toBe(
+      false,
+    );
   });
 
   it('counts only new conversations and messages against the Free daily caps', async () => {
