@@ -519,25 +519,10 @@ impl AgentSession {
                 }
             }
         }
-        let (memory, policy, connector_policy) = tokio::join!(
+        let (memory, policy) = tokio::join!(
             crate::cloud::refresh_memory(PrivacyMode::Managed),
             crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
-            crate::claude_parity::connectors::fetch_workspace_policy(PrivacyMode::Managed),
         );
-        if let Err(error) = connector_policy {
-            let not_readable_here = matches!(
-                error,
-                crate::cloud::CloudError::Api {
-                    status: 401 | 403 | 404,
-                    ..
-                }
-            );
-            if !error.is_boundary() && !not_readable_here {
-                crate::output::print_warn(&format!(
-                    "could not read the workspace connector policy: {error}"
-                ));
-            }
-        }
         match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
