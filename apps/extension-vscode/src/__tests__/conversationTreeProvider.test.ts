@@ -84,6 +84,40 @@ describe('ConversationTreeProvider', () => {
     expect(b.readThread).not.toHaveBeenCalled();
   });
 
+  it('asks for cloud sessions and lists them as read-only cloud rows', async () => {
+    const cloud: ThreadSummary = {
+      ...thread('cloud:5f1c', '2026-07-15T00:00:00Z', ''),
+      cwd: undefined,
+      location: 'cloud',
+    };
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({ threads: [cloud] }),
+      readThread: vi.fn().mockResolvedValue({
+        thread: cloud,
+        messages: [{ role: 'user', text: 'Fix the test' }],
+        transcriptTruncated: false,
+      }),
+    };
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+    ];
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+
+    expect((await provider.getThreads()).map((value) => value.id)).toEqual(['cloud:5f1c']);
+    expect(runtime.listThreads).toHaveBeenCalledWith(
+      expect.objectContaining({ includeCloud: true }),
+    );
+    await expect(provider.readThread('cloud:5f1c')).resolves.toEqual(
+      expect.objectContaining({ thread: cloud }),
+    );
+    const item = new ConversationTreeItem(cloud);
+    expect(item.contextValue).toBe('cloudConversation');
+    expect(String(item.description)).toContain('Cloud');
+  });
+
   it('archives through the owning runtime and refreshes the tree', async () => {
     const runtime = {
       listThreads: vi.fn().mockResolvedValue({

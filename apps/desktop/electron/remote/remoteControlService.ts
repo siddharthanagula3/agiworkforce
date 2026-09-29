@@ -49,7 +49,7 @@ export function configureRemoteControl(emit: (state: RemoteControlState) => void
   host?.stop();
   host = createRemoteControlHost({
     code: {
-      listSessions: listDeveloperSessions,
+      listSessions: () => listDeveloperSessions({ includeCloud: true }),
       readActivity: readDeveloperSessionActivity,
       startTurn: startDeveloperTurn,
       interruptTurn: interruptDeveloperTurn,

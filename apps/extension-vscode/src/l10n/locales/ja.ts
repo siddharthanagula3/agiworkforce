@@ -77,6 +77,10 @@ const ja = {
     'このモデルは、現在のプランまたはプロバイダーの設定では利用できません。',
   'chatNotice.trustBeforeResume':
     '開発者セッションを再開する前に、このワークスペースを信頼してください。',
+  'chatNotice.cloudSessionReadOnly':
+    'このクラウド Code セッションはここでは読み取り専用で開きます。Web で続けるか、`agi code teleport` を実行してこのマシンに取り込んでください。',
+  'chatNotice.openOnWeb': 'Web で開く',
+  'conversationTree.cloudLabel': 'クラウド',
   'chatNotice.stopBeforeOpening': '別の開発者セッションを開く前に、現在の応答を停止してください。',
   'chatNotice.historyUnavailable': 'このチャット画面では開発者セッションの履歴を利用できません。',
   'chatNotice.sessionNotFound': '開いているワークスペースに開発者セッションが見つかりません。',

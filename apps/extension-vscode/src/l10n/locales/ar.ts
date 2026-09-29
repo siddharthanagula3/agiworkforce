@@ -83,6 +83,10 @@ const ar = {
   'chatNotice.noDiagnostics': 'لم يتم العثور على تشخيصات في الملف النشط.',
   'chatNotice.modelNotOnPlan': 'هذا النموذج غير متاح لخطتك الحالية أو لإعداد الموفّر لديك.',
   'chatNotice.trustBeforeResume': 'يجب الوثوق بمساحة العمل هذه قبل استئناف جلسة تطوير.',
+  'chatNotice.cloudSessionReadOnly':
+    'تُفتح جلسة Code السحابية هذه هنا للقراءة فقط. تابعها على الويب، أو شغّل `agi code teleport` لنقلها إلى هذا الجهاز.',
+  'chatNotice.openOnWeb': 'فتح على الويب',
+  'conversationTree.cloudLabel': 'سحابي',
   'chatNotice.stopBeforeOpening': 'أوقف الرد الحالي قبل فتح جلسة تطوير أخرى.',
   'chatNotice.historyUnavailable': 'سجل جلسات التطوير غير متاح في واجهة الدردشة هذه.',
   'chatNotice.sessionNotFound': 'لم يتم العثور على جلسة التطوير في مساحة العمل المفتوحة.',

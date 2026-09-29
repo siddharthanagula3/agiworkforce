@@ -64,6 +64,10 @@ const zh = {
   'chatNotice.noDiagnostics': '在活动文件中未找到诊断信息。',
   'chatNotice.modelNotOnPlan': '此模型不适用于你当前的计划或提供商设置。',
   'chatNotice.trustBeforeResume': '请先信任此工作区，然后再恢复开发者会话。',
+  'chatNotice.cloudSessionReadOnly':
+    '此云端 Code 会话在这里以只读方式打开。请在网页上继续，或运行 `agi code teleport` 将其带到这台电脑。',
+  'chatNotice.openOnWeb': '在网页上打开',
+  'conversationTree.cloudLabel': '云端',
   'chatNotice.stopBeforeOpening': '请先停止当前回复，然后再打开其他开发者会话。',
   'chatNotice.historyUnavailable': '此聊天界面中无法使用开发者会话历史记录。',
   'chatNotice.sessionNotFound': '在打开的工作区中找不到开发者会话。',
