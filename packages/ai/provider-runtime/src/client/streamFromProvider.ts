@@ -94,6 +94,26 @@ interface RawPaywallBody {
   reason?: unknown;
 }
 
+function paywallChunk(text: string): Record<string, string> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { kind, feature, requiredTier, reason } = parsed as RawPaywallBody;
+  if (kind !== 'paywall' || typeof feature !== 'string' || typeof requiredTier !== 'string') {
+    return null;
+  }
+  return {
+    type: 'paywall',
+    feature,
+    requiredTier,
+    ...(typeof reason === 'string' ? { reason } : {}),
+  };
+}
+
 export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChunk>(
   options: StreamFromProviderOptions<TRequest>,
 ): AsyncIterable<TChunk> {
@@ -166,26 +186,11 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
 
-      if (detectPaywall && res.status === 429 && text) {
-        try {
-          const parsed = JSON.parse(text) as RawPaywallBody;
-          if (
-            parsed.kind === 'paywall' &&
-            typeof parsed.feature === 'string' &&
-            typeof parsed.requiredTier === 'string'
-          ) {
-            yield {
-              type: 'paywall',
-              feature: parsed.feature,
-              requiredTier: parsed.requiredTier,
-              ...(typeof parsed.reason === 'string' ? { reason: parsed.reason } : {}),
-            } as unknown as TChunk;
-            yield { type: 'stop', reason: 'error' } as unknown as TChunk;
-            return;
-          }
-        } catch {
-          return;
-        }
+      const paywall = detectPaywall && res.status === 429 ? paywallChunk(text) : null;
+      if (paywall) {
+        yield paywall as unknown as TChunk;
+        yield { type: 'stop', reason: 'error' } as unknown as TChunk;
+        return;
       }
 
       yield {
