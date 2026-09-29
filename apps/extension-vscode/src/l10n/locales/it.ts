@@ -550,6 +550,9 @@ const it = {
   'webview.resendMessage': 'Invia di nuovo',
   'webview.resendMessageLabel': 'Invia di nuovo questo messaggio',
   'webview.branchFromMessage': 'Crea ramo',
+  'webview.branchFromAnswer': 'Crea ramo da qui',
+  'webview.branchFromAnswerLabel':
+    'Avvia una nuova sessione che mantiene la conversazione fino a questa risposta',
   'webview.branchFromMessageLabel':
     'Avvia una nuova sessione da qui con questo messaggio pronto da modificare',
   'localServers.running_one': '{provider} è in esecuzione · {count} modello',
