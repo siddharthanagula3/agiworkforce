@@ -4553,13 +4553,11 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
         }
         McpSubcommand::Logout { name } => {
             let url = remote_server_url(&registry_file, name)?;
-            let entry = registry_file
+            let config: Option<crate::mcp::McpServerConfig> = registry_file
                 .entry(name)
                 .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
-            let config: crate::mcp::McpServerConfig = serde_json::from_value(entry)
-                .with_context(|| format!("registry entry for '{name}' is not a server config"))?;
-            let outcome = crate::mcp::logout_from_remote_server(&url, &config).await?;
+                .and_then(|entry| serde_json::from_value(entry).ok());
+            let outcome = crate::mcp::logout_from_remote_server(&url, config.as_ref()).await?;
             let shown = terminal_text::sanitize_terminal_text(name);
             match outcome.revocation {
                 None => println!("No OAuth token was stored for '{shown}'."),
