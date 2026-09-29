@@ -150,15 +150,12 @@ nothing is left.
 
 - Done when: A document can be exported to office document formats (e.g. Word/DOCX).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | DOCX export waits on lead approval to add the docx library to apps/mobile (asked 2026-09-29); then add a Word option to the Download as sheet | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/utils/artifactExport.ts:1-1`
 
 ## S27.36: Export to PDF.
 

@@ -21,20 +21,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | uploads stop when backgrounded; background upload sessions and resume need the leader check first; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
-
-## S71.19: Conversation restoration after process death.
-
-- Done when: After the OS kills the app, relaunching returns the user to their conversation with messages, draft and any in-flight reply.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | relaunch opens a new chat; restoring the last chat and resuming a detached reply need the leader check first; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | states |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.23: System shortcuts/App Intents.
 
@@ -43,9 +29,6 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Android launcher shortcuts / App Actions; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | surface-only |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.26: Foldable adaptation.
 
@@ -54,20 +37,6 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | foldable hinge and table-top handling (no installed package exposes posture); waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
-
-## S71.27: Landscape adaptation.
-
-- Done when: Rotating the phone to landscape re-lays out the chat usefully.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | app locked to portrait (app.config.js:67); waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
-
-Code: `apps/mobile/app.config.js:67-67`
 
 ## S71.29: Cellular-data preferences.
 
@@ -76,9 +45,6 @@ Code: `apps/mobile/app.config.js:67-67`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | cellular choice covers model downloads only; whether uploads, voice and media obey it; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.31: App-store purchase and restoration.
 
