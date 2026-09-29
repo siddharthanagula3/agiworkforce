@@ -722,6 +722,16 @@
         "icon": "$(lightbulb)"
       },
       {
+        "command": "agi-workforce.newSessionInWorktree",
+        "title": "AGI Workforce: New Session in a Worktree",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "agi-workforce.manageWorktrees",
+        "title": "AGI Workforce: Session Worktrees",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "agi-workforce.rememberForRepository",
         "title": "AGI Workforce: Remember for This Repository",
         "icon": "$(bookmark)"
