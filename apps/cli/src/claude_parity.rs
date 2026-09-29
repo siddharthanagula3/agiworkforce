@@ -102,6 +102,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "recap",
         "save-skill",
         "save-routine",
+        "schedule",
+        "routines",
         "security-review",
         "pr-comments",
         "ultrareview",
@@ -274,6 +276,15 @@ pub fn handle_shared_command(
         "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
         "/save-skill" => ParityCommandResult::Prompt(save_skill_prompt(arg)),
         "/save-routine" => ParityCommandResult::Prompt(save_routine_prompt(arg)),
+        "/schedule" | "/routines" => {
+            if session.privacy_mode == PrivacyMode::Local {
+                ParityCommandResult::SystemMessage(
+                    crate::schedules::ScheduleError::LocalPrivacy.to_string(),
+                )
+            } else {
+                ParityCommandResult::Prompt(schedule_prompt(arg))
+            }
+        }
         _ => ParityCommandResult::NotHandled,
     }
 }
@@ -801,6 +812,24 @@ pub fn save_routine_prompt(arg: &str) -> String {
     };
     format!(
         "Turn the task we just finished in this conversation into a routine that runs on its own. Write a prompt that repeats the task without relying on this conversation, then create the routine with cron_create. {schedule} Tell me the schedule and what each run will do."
+    )
+}
+
+pub fn schedule_prompt(arg: &str) -> String {
+    let request = match arg.trim() {
+        "" => "Ask me what I want to set up or change.".to_string(),
+        request => format!("Here is what I want: {request}"),
+    };
+    format!(
+        "Help me manage my routines: schedules that run an agent task in AGI cloud on a clock, when an event arrives, or both. {request} \
+Create a clock schedule with cron_create and see existing ones with cron_list. For everything else run `agi schedules` in the shell: \
+`agi schedules edit|pause|resume|run|runs|approve|deny <schedule>`, and to start a schedule when an event arrives, \
+`agi schedules triggers add <schedule> --source github|slack|gmail|google_calendar|connector [--event TYPE] [--account ACCOUNT] [--when \"FIELD OPERATOR VALUE\"] [--debounce SECONDS]`, \
+with `agi schedules triggers list|pause|resume|watch|remove` to manage them. \
+Before creating anything, ask for whatever is missing: how often or on which event, which repository, workspace or mailbox, and what each run should do. \
+Write the run's prompt so it works without this conversation. Confirm with me before deleting a schedule or trigger, then pass --yes. \
+When a trigger is added, show me the endpoint, signing secret or verification code it prints, since they are shown only once. \
+If I ask why a run did something, read `agi schedules runs <schedule>` before answering."
     )
 }
 
@@ -2710,6 +2739,44 @@ mod tests {
             }
             other => panic!("expected prompt, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn schedule_walks_through_routines_and_event_triggers() {
+        for command in ["/schedule", "/routines"] {
+            let mut session = test_session();
+            session.set_privacy_mode(PrivacyMode::Managed);
+            let ParityCommandResult::Prompt(prompt) = handle_shared_command(
+                command,
+                "review new pull requests in acme/webapp",
+                &mut session,
+            ) else {
+                panic!("{command} must hand the model a prompt");
+            };
+            assert!(
+                prompt.contains("review new pull requests in acme/webapp"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("cron_create"), "{prompt}");
+            assert!(prompt.contains("agi schedules triggers add"), "{prompt}");
+            assert!(prompt.contains("shown only once"), "{prompt}");
+        }
+    }
+
+    #[test]
+    fn schedule_without_a_request_asks_what_to_set_up() {
+        assert!(schedule_prompt("  ").contains("Ask me what I want to set up"));
+    }
+
+    #[test]
+    fn schedule_in_local_mode_explains_the_prompt_would_leave_the_device() {
+        let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Local);
+        let result = handle_shared_command("/schedule", "", &mut session);
+        let ParityCommandResult::SystemMessage(message) = result else {
+            panic!("Local mode must not hand a scheduling prompt to the model: {result:?}");
+        };
+        assert!(message.contains("Local privacy mode"), "{message}");
     }
 }
 

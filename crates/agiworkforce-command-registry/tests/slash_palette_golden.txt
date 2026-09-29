@@ -53,6 +53,7 @@
 /search
 /save-skill
 /save-routine
+/schedule [routines]
 /theme
 /login
 /logout
