@@ -9,6 +9,7 @@ import {
   cloudProjectSources,
   useProjectSourceTarget,
   useProjectStore,
+  ProjectSourceCancelledError,
   ProjectSourceError,
 } from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
@@ -33,7 +34,23 @@ export const PROJECT_SOURCE_MIME_TYPES: readonly string[] = [
   ),
 ];
 
+interface UploadProgress {
+  name: string;
+  position: number;
+  total: number;
+  percent: number | null;
+}
+
 const EMPTY_SOURCES: DisplaySource[] = [];
+
+export function uploadProgressLabel({ name, percent }: UploadProgress): string {
+  return percent === null ? `Adding ${name}` : `Uploading ${name}, ${percent}%`;
+}
+
+function percentOf(bytesSent: number, totalBytes: number): number | null {
+  if (totalBytes <= 0) return null;
+  return Math.min(100, Math.max(0, Math.round((bytesSent / totalBytes) * 100)));
+}
 
 export function projectSourceErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ProjectSourceError && error.message.trim() ? error.message : fallback;
@@ -100,6 +117,54 @@ function SourceRow({
   );
 }
 
+function UploadProgressRow({
+  progress,
+  onCancel,
+}: {
+  progress: UploadProgress;
+  onCancel: () => void;
+}) {
+  const colors = useThemeColors();
+  const label = uploadProgressLabel(progress);
+  const position = `File ${progress.position} of ${progress.total}`;
+  return (
+    <View
+      className="flex-row items-center gap-3 px-4 py-2 mx-4 mb-2 rounded-xl"
+      style={{
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+      testID="project-source-upload-progress"
+    >
+      <ActivityIndicator size="small" color={colors.teal} />
+      <View className="flex-1" accessible accessibilityLiveRegion="polite">
+        <Text
+          className="text-[13px] font-medium"
+          style={{ color: colors.textPrimary }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text className="text-[12px]" style={{ color: colors.textSecondary }}>
+          {position}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel adding sources"
+        className="min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-3"
+        style={{ backgroundColor: `${colors.textMuted}14` }}
+      >
+        <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
+          Cancel
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Notice({ title, body }: { title: string; body: string }) {
   const colors = useThemeColors();
   return (
@@ -136,14 +201,21 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const [cloudSources, setCloudSources] = useState<DisplaySource[]>(EMPTY_SOURCES);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const mounted = useRef(true);
   const requestRef = useRef(0);
+  const uploadRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      uploadRef.current?.abort();
     };
+  }, []);
+
+  const cancelUpload = useCallback(() => {
+    uploadRef.current?.abort();
   }, []);
 
   const localSources = useMemo<DisplaySource[]>(
@@ -215,21 +287,45 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     if (result.canceled) return;
 
     setBusy(true);
+    const controller = new AbortController();
+    uploadRef.current = controller;
     const failures: string[] = [];
-    for (const asset of result.assets) {
+    const total = result.assets.length;
+    for (const [index, asset] of result.assets.entries()) {
+      if (controller.signal.aborted) break;
+      setUploadProgress({ name: asset.name, position: index + 1, total, percent: null });
       try {
-        await addSource(projectId, {
-          name: asset.name,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          size: asset.size ?? 0,
-          uri: asset.uri,
-        });
+        await addSource(
+          projectId,
+          {
+            name: asset.name,
+            mimeType: asset.mimeType ?? 'application/octet-stream',
+            size: asset.size ?? 0,
+            uri: asset.uri,
+          },
+          {
+            signal: controller.signal,
+            onProgress: ({ bytesSent, totalBytes }) => {
+              if (!mounted.current || controller.signal.aborted) return;
+              const percent = percentOf(bytesSent, totalBytes);
+              setUploadProgress((current) =>
+                current && current.position === index + 1 && current.percent !== percent
+                  ? { ...current, percent }
+                  : current,
+              );
+            },
+          },
+        );
       } catch (error) {
+        if (error instanceof ProjectSourceCancelledError || controller.signal.aborted) break;
         failures.push(
           projectSourceErrorMessage(error, `"${asset.name}" could not be added. Try again.`),
         );
       }
     }
+    if (uploadRef.current === controller) uploadRef.current = null;
+    if (!mounted.current) return;
+    setUploadProgress(null);
     if (target === 'cloud') await refreshCloudSources();
     if (!mounted.current) return;
     setBusy(false);
@@ -285,6 +381,10 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           </Text>
         </Pressable>
       </View>
+
+      {uploadProgress ? (
+        <UploadProgressRow progress={uploadProgress} onCancel={cancelUpload} />
+      ) : null}
 
       {target === 'unknown' ? (
         <Notice

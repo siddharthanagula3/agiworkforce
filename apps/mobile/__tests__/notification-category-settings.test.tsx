@@ -44,8 +44,6 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
   return {
-    AlertOctagon: icon,
-    AlertTriangle: icon,
     ArrowLeft: icon,
     Bell: icon,
     BellOff: icon,
@@ -56,6 +54,7 @@ jest.mock('lucide-react-native', () => {
     CloudOff: icon,
     Info: icon,
     Mail: icon,
+    MessageSquare: icon,
     Moon: icon,
     Vibrate: icon,
     X: icon,
@@ -72,10 +71,9 @@ describe('notification category settings', () => {
     act(() => {
       useNotificationPrefsStore.setState({
         categoryEnabled: {
-          approvals: true,
-          task_updates: true,
-          errors: true,
-          status: false,
+          chat_replies: true,
+          tasks: true,
+          product: false,
         },
         vibrationEnabled: {
           critical: true,
@@ -98,28 +96,47 @@ describe('notification category settings', () => {
     // asserting on a tree it will re-render.
     await screen.findByText('Your device is delivering notifications');
 
-    expect(screen.getByLabelText('Approvals. Push')).toBeTruthy();
-    expect(screen.getByLabelText('Work Updates. Push')).toBeTruthy();
-    expect(screen.getByLabelText('Status Updates. Off')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Approvals. Push'));
+    expect(screen.getByLabelText('Chat replies. Push')).toBeTruthy();
+    expect(screen.getByLabelText('Task and approval updates. Push')).toBeTruthy();
+    expect(screen.getByLabelText('Product. Off')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Task and approval updates. Push'));
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/settings/notifications/[category]',
-      params: { category: 'approvals' },
+      params: { category: 'tasks' },
     });
   });
 
   it('changes the live Push preference without creating an inert Email preference', () => {
-    const screen = render(<NotificationCategoryDetailScreen category="approvals" />);
+    const screen = render(<NotificationCategoryDetailScreen category="tasks" />);
 
-    expect(screen.getByText('Approvals')).toBeTruthy();
+    expect(screen.getByText('Task and approval updates')).toBeTruthy();
     expect(screen.getByLabelText('Email notifications. Unavailable')).toBeTruthy();
     expect(screen.getByText('No hidden email preference')).toBeTruthy();
 
     fireEvent(screen.getByRole('switch'), 'valueChange', false);
 
-    expect(useNotificationPrefsStore.getState().categoryEnabled.approvals).toBe(false);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.tasks).toBe(false);
     expect(useNotificationPrefsStore.getState()).not.toHaveProperty('emailEnabled');
+  });
+
+  it.each([
+    ['approvals', 'tasks', 'Task and approval updates'],
+    ['task_updates', 'tasks', 'Task and approval updates'],
+    ['errors', 'tasks', 'Task and approval updates'],
+    ['status', 'product', 'Product'],
+  ] as const)('opens the %s link from the old taxonomy on %s', (legacy, current, label) => {
+    const screen = render(<NotificationCategoryDetailScreen category={legacy} />);
+
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.queryByText('Notification category not found')).toBeNull();
+
+    fireEvent(screen.getByRole('switch'), 'valueChange', current === 'product');
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled[current]).toBe(
+      current === 'product',
+    );
+    expect(useNotificationPrefsStore.getState().categoryEnabled).not.toHaveProperty(legacy);
   });
 
   it('rejects an unknown dynamic category without mutating preferences', () => {
