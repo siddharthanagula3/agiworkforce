@@ -586,6 +586,7 @@
         "permission mode",
         "agi init",
         "agiworkforce_home",
+        "update check",
         "project config",
         "mcp.json",
         "hooks.json"
@@ -597,7 +598,7 @@
         "vscode",
         "windows"
       ],
-      "updated": "2026-09-28",
+      "updated": "2026-09-29",
       "source": "content/support/configuration.md",
       "chunks": [
         {
@@ -612,14 +613,14 @@
           "ordinal": 1,
           "heading": "Viewing and changing settings",
           "headingPath": "Configure the CLI › Viewing and changing settings",
-          "text": "- `agi --config` prints the settings in effect and where each one came from.\n- In a session, `/config` shows them, `/config get <key>` reads one and\n  `/config set <key> <value>` saves one to your own `config.toml`.\n- `/config set` accepts `model`, `provider`, `max-tokens`, `temperature`,\n  `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,\n  `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,\n  `bell` and `crash-reports`. Other settings are edited in the file itself.\n- The VS Code extension runs the same CLI, so it reads the same file."
+          "text": "- `agi --config` prints the settings in effect and where each one came from.\n- In a session, `/config` shows them, `/config get <key>` reads one and\n  `/config set <key> <value>` saves one to your own `config.toml`.\n- `/config set` accepts `model`, `provider`, `max-tokens`, `temperature`,\n  `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,\n  `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,\n  `bell`, `crash-reports` and `product-analytics`. Other settings are edited in\n  the file itself.\n- The VS Code extension runs the same CLI, so it reads the same file."
         },
         {
           "id": "configuration#2",
           "ordinal": 2,
           "heading": "Useful settings",
           "headingPath": "Configure the CLI › Useful settings",
-          "text": "- `[default] model` and `provider` choose the default route; both start from\n  the model catalog.\n- `[default] permission_mode` is `default`, `plan`, `acceptEdits` or\n  `dontAsk`. Skipping every approval cannot be saved as a default; it is only\n  available for one run with a command-line flag.\n- `[default] reasoning_effort` is `low`, `medium`, `high` or `max`.\n- `max_tokens` is between 1 and 200000 (8192 by default) and `temperature`\n  between 0 and 1.\n- `[providers.<name>]` takes `api_key_env`, the name of the environment\n  variable that holds that provider's key, and an optional `base_url`."
+          "text": "- `[default] model` and `provider` choose the default route; both start from\n  the model catalog.\n- `[default] permission_mode` is `default`, `plan`, `acceptEdits` or\n  `dontAsk`. Skipping every approval cannot be saved as a default; it is only\n  available for one run with a command-line flag.\n- `[default] reasoning_effort` is `low`, `medium`, `high` or `max`.\n- `max_tokens` is between 1 and 200000 (8192 by default) and `temperature`\n  between 0 and 1.\n- `[providers.<name>]` takes `api_key_env`, the name of the environment\n  variable that holds that provider's key, and an optional `base_url`.\n- `[telemetry] product_analytics = false` stops the CLI from sending product\n  usage events, such as a stopped response, even when your account allows\n  product analytics. Setting `DISABLE_TELEMETRY` or `DO_NOT_TRACK` to any value\n  other than `0`, `false`, `off` or `no` does the same for one shell. Events are sent only in\n  Managed mode and only when your account's product analytics choice, in\n  Settings, Privacy on the web, allows them. Like `crash_reports`, this is read\n  from your own `config.toml` only.\n- `[updates] check_on_startup = false` stops the full-screen terminal from\n  asking agiworkforce.com for the newest release each time it starts. Setting\n  `AGIWORKFORCE_NO_UPDATE_CHECK` to any value other than `0`, `false`, `off` or\n  `no` does the same for one shell, and Local mode never makes the check.\n  `agi update` still checks when you run it. This is read from your own\n  `config.toml` only."
         },
         {
           "id": "configuration#3",

@@ -28,6 +28,9 @@ pub struct CliConfig {
     #[serde(default, skip_serializing_if = "TelemetryConfig::is_default")]
     pub telemetry: TelemetryConfig,
 
+    #[serde(default, skip_serializing_if = "UpdatesConfig::is_default")]
+    pub updates: UpdatesConfig,
+
     /// Tracks provenance of configuration values. Excluded from serialization.
     #[serde(skip)]
     pub source: ConfigSource,
@@ -55,6 +58,30 @@ impl Default for TelemetryConfig {
 }
 
 impl TelemetryConfig {
+    pub fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdatesConfig {
+    #[serde(default = "check_on_startup_default")]
+    pub check_on_startup: bool,
+}
+
+fn check_on_startup_default() -> bool {
+    true
+}
+
+impl Default for UpdatesConfig {
+    fn default() -> Self {
+        Self {
+            check_on_startup: check_on_startup_default(),
+        }
+    }
+}
+
+impl UpdatesConfig {
     pub fn is_default(&self) -> bool {
         self == &Self::default()
     }
@@ -330,6 +357,7 @@ impl Default for CliConfig {
             ui: UiConfig::default(),
             providers,
             telemetry: TelemetryConfig::default(),
+            updates: UpdatesConfig::default(),
             source: ConfigSource::default(),
         }
     }

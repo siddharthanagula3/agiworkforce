@@ -5546,25 +5546,6 @@ pub async fn run(
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
     crate::tools::enable_interactive_questions();
-    tokio::spawn(async {
-        let Ok(release) = crate::update_check::fetch_latest_release().await else {
-            return;
-        };
-        crate::update_check::remember_latest_release(&release);
-        if crate::update_check::compare_versions(
-            crate::update_check::running_version(),
-            &release.version,
-        ) == crate::update_check::UpdateVerdict::Available
-        {
-            crate::tui::push_tui_notice(format!(
-                "agi {} is available (you have {}). Install it with: agi update --install",
-                release.version,
-                crate::update_check::running_version()
-            ));
-        } else if let Some(lines) = crate::update_check::unseen_release_notes(&release) {
-            crate::tui::push_tui_notice(lines.join("\n"));
-        }
-    });
     let effective_provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
@@ -5580,6 +5561,7 @@ pub async fn run(
         effective_provider_override,
     )?;
     session.apply_ui_config(config);
+    crate::update_check::spawn_startup_check(config, session.privacy_mode);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;

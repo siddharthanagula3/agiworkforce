@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::config::CliConfig;
+use crate::platform::runtime::session::PrivacyMode;
 use crate::tier_cache;
 
 const RELEASE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -23,6 +25,7 @@ const INSTALL_SCRIPT: &str = include_str!("../../web/public/install.sh");
 const PUBLIC_KEY_BEGIN: &str = "-----BEGIN PUBLIC KEY-----";
 const PUBLIC_KEY_END: &str = "-----END PUBLIC KEY-----";
 const INSTALLED_BINARIES: [&str; 2] = ["agi", "agiworkforce"];
+const NO_UPDATE_CHECK_ENV: &str = "AGIWORKFORCE_NO_UPDATE_CHECK";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -102,6 +105,47 @@ pub fn unseen_release_notes(release: &CliRelease) -> Option<Vec<String>> {
 
 pub fn running_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
+}
+
+fn switched_on(value: Option<&str>) -> bool {
+    value.map(str::trim).is_some_and(|value| {
+        !value.is_empty()
+            && !matches!(
+                value.to_ascii_lowercase().as_str(),
+                "0" | "false" | "off" | "no"
+            )
+    })
+}
+
+pub fn startup_check_allowed(
+    config: &CliConfig,
+    privacy: PrivacyMode,
+    env: impl Fn(&str) -> Option<String>,
+) -> bool {
+    privacy != PrivacyMode::Local
+        && config.updates.check_on_startup
+        && !switched_on(env(NO_UPDATE_CHECK_ENV).as_deref())
+}
+
+pub fn spawn_startup_check(config: &CliConfig, privacy: PrivacyMode) {
+    if !startup_check_allowed(config, privacy, |name| std::env::var(name).ok()) {
+        return;
+    }
+    tokio::spawn(async {
+        let Ok(release) = fetch_latest_release().await else {
+            return;
+        };
+        remember_latest_release(&release);
+        if compare_versions(running_version(), &release.version) == UpdateVerdict::Available {
+            crate::tui::push_tui_notice(format!(
+                "agi {} is available (you have {}). Install it with: agi update --install",
+                release.version,
+                running_version()
+            ));
+        } else if let Some(lines) = unseen_release_notes(&release) {
+            crate::tui::push_tui_notice(lines.join("\n"));
+        }
+    });
 }
 
 pub fn parse_release(body: &str) -> Result<CliRelease, serde_json::Error> {
@@ -476,6 +520,63 @@ mod tests {
             compare_versions("nightly", "1.7.1"),
             UpdateVerdict::Unknown(_)
         ));
+    }
+
+    #[test]
+    fn the_startup_check_stays_off_the_network_when_the_user_or_local_mode_says_so() {
+        let config = CliConfig::default();
+        let no_env = |_: &str| None;
+        assert!(startup_check_allowed(&config, PrivacyMode::Managed, no_env));
+        assert!(startup_check_allowed(&config, PrivacyMode::Byok, no_env));
+        assert!(!startup_check_allowed(&config, PrivacyMode::Local, no_env));
+
+        let mut opted_out = CliConfig::default();
+        opted_out.updates.check_on_startup = false;
+        assert!(!startup_check_allowed(
+            &opted_out,
+            PrivacyMode::Managed,
+            no_env
+        ));
+
+        let env_says = |value: &'static str| {
+            move |name: &str| (name == NO_UPDATE_CHECK_ENV).then(|| value.to_string())
+        };
+        assert!(!startup_check_allowed(
+            &config,
+            PrivacyMode::Managed,
+            env_says("1")
+        ));
+        assert!(startup_check_allowed(
+            &config,
+            PrivacyMode::Managed,
+            env_says("0")
+        ));
+        assert!(startup_check_allowed(
+            &config,
+            PrivacyMode::Managed,
+            env_says("")
+        ));
+    }
+
+    #[test]
+    fn a_repository_cannot_switch_the_startup_check_for_its_users() {
+        let mut user = CliConfig::default();
+        let mut repository = CliConfig::default();
+        repository.updates.check_on_startup = false;
+        user.merge_from(&repository);
+        assert!(user.updates.check_on_startup);
+    }
+
+    #[test]
+    fn a_saved_opt_out_survives_a_round_trip_through_config_toml() {
+        let parsed: CliConfig =
+            toml::from_str("[updates]\ncheck_on_startup = false\n").expect("config parses");
+        assert!(!parsed.updates.check_on_startup);
+        let written = toml::to_string(&parsed).expect("config serializes");
+        assert!(written.contains("check_on_startup = false"));
+        assert!(!toml::to_string(&CliConfig::default())
+            .expect("config serializes")
+            .contains("[updates]"));
     }
 
     #[test]
