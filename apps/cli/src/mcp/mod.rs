@@ -635,7 +635,9 @@ async fn sign_in(
     if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
         name,
         remote_config_url(config).as_deref(),
-    ) {
+    )
+    .await
+    {
         bail!(refusal);
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
@@ -857,7 +859,9 @@ impl McpConnection {
         if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
             name,
             remote_config_url(config).as_deref(),
-        ) {
+        )
+        .await
+        {
             bail!(refusal);
         }
         let transport = sandboxed_transport_config(config)
