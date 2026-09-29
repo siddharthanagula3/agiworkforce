@@ -460,6 +460,35 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         });
     }
 
+    if let Some(kind) = crate::documents::DocumentKind::for_path(file_path) {
+        return Ok(
+            match crate::documents::extract(file_path, kind, args.get("pages").map(String::as_str))
+                .await
+            {
+                Ok(document) => {
+                    let text = match document.note {
+                        Some(note) => format!("{}\n{note}", document.text),
+                        None => document.text,
+                    };
+                    let output = truncate_output_with_save(
+                        "read_file",
+                        crate::documents::untrusted(path, &text),
+                    );
+                    ToolResult {
+                        tool_name: "read_file".to_string(),
+                        success: true,
+                        output,
+                    }
+                }
+                Err(error) => ToolResult {
+                    tool_name: "read_file".to_string(),
+                    success: false,
+                    output: format!("Could not read {path}: {error:#}"),
+                },
+            },
+        );
+    }
+
     match read_text_file_limited(file_path, MAX_TEXT_READ_BYTES).await {
         Ok((contents, byte_truncated)) => {
             if !byte_truncated {

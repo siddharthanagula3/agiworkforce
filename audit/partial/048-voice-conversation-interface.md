@@ -104,12 +104,9 @@ Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/featur
 ## S48.40: Remote coding-session voice control.
 
 - Done when: The user can steer a remote coding session (running on another device) by voice.
-- Wave: 2
+- Wave: 3
 - Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Voice drives the local session only; steering a session on another device needs the same remote-session relay S72.30 lacks. | handler, flag-off |
-
-Code: `apps/cli/src/voice.rs:75-75`

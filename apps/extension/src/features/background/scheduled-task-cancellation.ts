@@ -1,4 +1,9 @@
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import {
+  AGENT_TASK_BOARD_STAGE_BY_STATE,
+  type AgentTaskBoardStage,
+  type AgentTaskState,
+} from '@agiworkforce/types';
 import { logger, sleep } from '../../utils';
 import {
   removeScheduledTaskRunJournal,
@@ -118,22 +123,29 @@ const DEFAULT_DEPENDENCIES: ScheduledTaskCancellationDependencies = {
   warn: (message, detail) => logger.warn(message, detail),
 };
 
+const CANCELLATION_TERMINAL_STAGES: ReadonlySet<AgentTaskBoardStage> = new Set([
+  'done',
+  'failed',
+  'cancelled',
+  'archived',
+]);
+
+function runStage(state: unknown): AgentTaskBoardStage | null {
+  return typeof state === 'string' &&
+    Object.prototype.hasOwnProperty.call(AGENT_TASK_BOARD_STAGE_BY_STATE, state)
+    ? AGENT_TASK_BOARD_STAGE_BY_STATE[state as AgentTaskState]
+    : null;
+}
+
 export function isScheduledRunCancellationTerminal(state: unknown): boolean {
-  return (
-    state === 'ready_for_review' ||
-    state === 'completed' ||
-    state === 'failed' ||
-    state === 'cancelled' ||
-    state === 'archived'
-  );
+  const stage = runStage(state);
+  return stage !== null && CANCELLATION_TERMINAL_STAGES.has(stage);
 }
 
 function isScheduledRunCancellationSettled(run: ManagedCloudAgentRunReference): boolean {
   if (isScheduledRunCancellationTerminal(run.state)) return true;
-  return (
-    Boolean(run.cancellationRequestedAt) &&
-    (run.state === 'awaiting_input' || run.state === 'paused')
-  );
+  const stage = runStage(run.state);
+  return Boolean(run.cancellationRequestedAt) && (stage === 'needs_approval' || stage === 'paused');
 }
 
 export function isScheduledCancellationRetryDue(

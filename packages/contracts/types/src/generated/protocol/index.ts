@@ -347,6 +347,7 @@ export * from './ThreadId';
 export * from './ThreadIdParams';
 export * from './ThreadListParams';
 export * from './ThreadListResponse';
+export * from './ThreadLocation';
 export * from './ThreadNameUpdatedEvent';
 export * from './ThreadPlanNotification';
 export * from './ThreadReadResponse';

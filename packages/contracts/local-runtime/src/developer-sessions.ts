@@ -69,6 +69,7 @@ export interface LocalDeveloperSession {
   createdAt: string;
   updatedAt: string;
   origin: DeveloperSessionSource;
+  location?: 'cloud';
 }
 
 /**

@@ -51,6 +51,16 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Runs a search and reads the results. Classified as a read that accepts untrusted content and creates an egress path, because a search query is a place secrets can leak and a result page is attacker-influenced text.',
   },
+  search_places: {
+    label: 'Place search',
+    description:
+      'Looks up businesses and places by name or kind near a location, with ratings and opening hours, and shows them in the conversation.',
+  },
+  ask_clarifying_questions: {
+    label: 'Ask you a question',
+    description:
+      'Asks you to choose between options when a request could mean more than one thing, and continues with the answer you give.',
+  },
   search_maps: {
     label: 'Map search',
     description:
@@ -326,6 +336,46 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     label: 'Add a reminder',
     description:
       'Adds a reminder on your phone. Your phone asks for reminders access, and AGI asks before it adds anything.',
+  },
+  browser_read_page: {
+    label: 'Read your Chrome tab',
+    description:
+      'Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_screenshot: {
+    label: 'Capture your Chrome tab',
+    description:
+      'Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_console: {
+    label: 'Read the Chrome console',
+    description:
+      'Reads the console messages the active tab in your paired Chrome logged. AGI always asks first.',
+  },
+  browser_network: {
+    label: 'Read Chrome network activity',
+    description:
+      'Reads the requests the active tab in your paired Chrome made, with addresses and status. AGI always asks first.',
+  },
+  browser_navigate: {
+    label: 'Open a page in Chrome',
+    description:
+      'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
+  },
+  browser_click: {
+    label: 'Click in Chrome',
+    description:
+      'Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved.',
+  },
+  browser_type: {
+    label: 'Type in Chrome',
+    description:
+      'Types into a field on the active tab of your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_download: {
+    label: 'Download through Chrome',
+    description:
+      'Downloads a file through your paired Chrome into your downloads folder. AGI always asks first.',
   },
   browser_find: {
     label: 'Find on your Chrome tab',

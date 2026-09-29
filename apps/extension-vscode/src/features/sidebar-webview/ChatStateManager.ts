@@ -100,6 +100,7 @@ import {
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
+import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
@@ -304,7 +305,12 @@ export type WebviewToExtMessage =
     }
   | {
       type: 'respondToApproval';
-      payload: { requestId: string; decision: ApprovalDecision; guidance?: string };
+      payload: {
+        requestId: string;
+        decision: ApprovalDecision;
+        guidance?: string;
+        answer?: string;
+      };
     }
   | {
       type: 'attachFiles';
@@ -544,6 +550,7 @@ export type ExtToWebviewMessage =
         reversible?: boolean;
         reviewable?: true;
         alwaysAllow?: true;
+        question?: { text: string; options: string[] };
       };
     }
   | {
@@ -830,6 +837,8 @@ export class ChatStateManager {
   private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
   private readonly _sessionApprovals = new Set<string>();
+  private readonly _disallowedTools = new Map<string, readonly string[]>();
+  private _draftDisallowedTools: readonly string[] | undefined;
   private readonly _pendingApprovals = new Map<
     string,
     {
@@ -1128,6 +1137,7 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
+        this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
@@ -1167,6 +1177,7 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
+        this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
@@ -1302,7 +1313,11 @@ export class ChatStateManager {
       }
 
       case 'respondToApproval': {
-        const { requestId, decision, guidance } = msg.payload;
+        const { requestId, decision, guidance, answer } = msg.payload;
+        if (answer !== undefined) {
+          await this._resolveApproval(requestId, 'once', false, answer);
+          break;
+        }
         const pending = this._pendingApprovals.get(requestId);
         const noted =
           decision === 'deny' &&
@@ -1951,7 +1966,9 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
+      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
+        (thread) => !isCloudThread(thread),
+      );
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -2147,6 +2164,10 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (isCloudThread(listed)) {
+        void showCloudSession(resolved.response);
+        return false;
+      }
       const statusError = resumeStatusError(listed);
       if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
       if (listed.trustMode === 'unknown') {
@@ -2738,6 +2759,28 @@ export class ChatStateManager {
     }
   }
 
+  sessionDisallowedTools(): readonly string[] {
+    const threadId = this._thread?.id;
+    return (
+      (threadId === undefined ? undefined : this._disallowedTools.get(threadId)) ??
+      this._draftDisallowedTools ??
+      []
+    );
+  }
+
+  setSessionDisallowedTools(tools: readonly string[]): void {
+    const threadId = this._thread?.id;
+    if (threadId === undefined) {
+      this._draftDisallowedTools = tools;
+      return;
+    }
+    this._disallowedTools.set(threadId, tools);
+  }
+
+  sessionAgentMode(): AgentMode {
+    return enforceAgentModeConsent(this._mode ?? Config.agentMode());
+  }
+
   async activeThreadReceipt(): Promise<SessionReceipt | undefined> {
     const thread = this._thread;
     if (thread === undefined) return undefined;
@@ -2775,6 +2818,7 @@ export class ChatStateManager {
     this._startNewEpoch();
     this._dismissedEditorContext.clear();
     this._sessionApprovals.clear();
+    this._draftDisallowedTools = undefined;
     this._clearPendingApprovals();
     this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
@@ -3523,6 +3567,13 @@ export class ChatStateManager {
           text_elements: [],
         }));
         const routingProfile = routingProfileForModel(requestedModel);
+        if (this._draftDisallowedTools !== undefined && !this._disallowedTools.has(thread.id)) {
+          this._disallowedTools.set(thread.id, this._draftDisallowedTools);
+        }
+        this._draftDisallowedTools = undefined;
+        const disallowedTools = this._disallowedTools.get(thread.id);
+        const filtersTools =
+          disallowedTools !== undefined && (await runtime.offers('turnToolFilters'));
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -3537,6 +3588,7 @@ export class ChatStateManager {
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
           reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
+          ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
@@ -4077,8 +4129,14 @@ export class ChatStateManager {
         (await runtime.offers('approvalEdits'))
           ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
           : undefined;
+      const question =
+        event.question !== undefined && event.question !== null
+          ? { text: event.question.question, options: event.question.options }
+          : undefined;
       const alwaysAllow =
-        event.alwaysAllowSaved === true && (await runtime.offers('savedPermissions'));
+        question === undefined &&
+        event.alwaysAllowSaved === true &&
+        (await runtime.offers('savedPermissions'));
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
@@ -4087,7 +4145,7 @@ export class ChatStateManager {
         label,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      if (this._sessionApprovals.has(identity)) {
+      if (question === undefined && this._sessionApprovals.has(identity)) {
         await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
@@ -4103,6 +4161,7 @@ export class ChatStateManager {
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
           ...(proposed === undefined ? {} : { reviewable: true as const }),
           ...(alwaysAllow ? { alwaysAllow: true as const } : {}),
+          ...(question === undefined ? {} : { question }),
         },
       });
       return;

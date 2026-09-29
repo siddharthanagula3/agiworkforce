@@ -148,11 +148,8 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagents return only their final result to the parent model, but the user cannot choose or see a summary-only handoff. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-255`
 
 ## S62.16: Background fork.
 

@@ -1,0 +1,50 @@
+[
+  {
+    "case": "plain manifest",
+    "source": "---\nname: pdf-reader\ndescription: \"Reads PDFs page by page\"\nversion: 1.2.0\n---\n\nRead the file, then summarise it.\n",
+    "expected": {
+      "name": "pdf-reader",
+      "description": "Reads PDFs page by page",
+      "version": "1.2.0",
+      "body": "Read the file, then summarise it.",
+      "tools": [],
+      "env": []
+    }
+  },
+  {
+    "case": "no frontmatter",
+    "source": "# Notes\nJust a body.\n",
+    "expected": {
+      "name": null,
+      "description": null,
+      "version": null,
+      "body": "# Notes\nJust a body.",
+      "tools": [],
+      "env": []
+    }
+  },
+  {
+    "case": "nested requirements",
+    "source": "---\nname: deploy\ndescription: Ship the current branch\nrequires:\n  tools: [run_command, read_file]\n  env:\n    - DEPLOY_TOKEN\n    - DEPLOY_REGION\n---\nRun the deploy script.\n",
+    "expected": {
+      "name": "deploy",
+      "description": "Ship the current branch",
+      "version": null,
+      "body": "Run the deploy script.",
+      "tools": ["run_command", "read_file"],
+      "env": ["DEPLOY_TOKEN", "DEPLOY_REGION"]
+    }
+  },
+  {
+    "case": "single quotes and comments",
+    "source": "---\n# drafted by hand\nname: 'quoted-name'\ndescription: 'Handles quoting'\n---\nBody\n",
+    "expected": {
+      "name": "quoted-name",
+      "description": "Handles quoting",
+      "version": null,
+      "body": "Body",
+      "tools": [],
+      "env": []
+    }
+  }
+]

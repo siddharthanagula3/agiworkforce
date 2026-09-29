@@ -9,18 +9,29 @@ import {
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 import { getAllWorkspaceFolders } from '../../platform/workspaceFolders';
+import { t } from '../../l10n';
+import { isCloudThread } from './cloudSessions';
 
 export { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly thread: ThreadSummary) {
     super(thread.title, vscode.TreeItemCollapsibleState.None);
-    this.description = formatRelativeTime(Date.parse(thread.updatedAt));
+    const cloud = isCloudThread(thread);
+    const updated = formatRelativeTime(Date.parse(thread.updatedAt));
+    this.description = cloud ? `${t('conversationTree.cloudLabel')} · ${updated}` : updated;
     const branch = thread.gitBranch === undefined ? '' : ` · ${thread.gitBranch}`;
-    this.tooltip = `${thread.model ?? 'Configured model'} · ${thread.cwd ?? 'workspace'}${branch}`;
-    this.iconPath = new vscode.ThemeIcon(thread.status === 'running' ? 'loading~spin' : 'comment');
-    this.accessibilityInformation = { label: thread.title, role: 'treeitem' };
-    this.contextValue = 'conversation';
+    this.tooltip = cloud
+      ? `${t('chatNotice.cloudSessionReadOnly')}${branch}`
+      : `${thread.model ?? 'Configured model'} · ${thread.cwd ?? 'workspace'}${branch}`;
+    this.iconPath = new vscode.ThemeIcon(
+      thread.status === 'running' ? 'loading~spin' : cloud ? 'cloud' : 'comment',
+    );
+    this.accessibilityInformation = {
+      label: cloud ? `${thread.title}, ${t('conversationTree.cloudLabel')}` : thread.title,
+      role: 'treeitem',
+    };
+    this.contextValue = cloud ? 'cloudConversation' : 'conversation';
     this.command = {
       command: 'agi-workforce.openConversation',
       title: 'Open Developer Session',
@@ -118,9 +129,11 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
             cwd: folder.uri.fsPath,
             limit: 100,
             includeArchived: false,
+            includeCloud: true,
           });
           const ownedThreads = page.threads.filter((thread) => {
-            const owned = isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
+            const owned =
+              isCloudThread(thread) || isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
             if (!owned) {
               console.warn(
                 `[AGI Workforce] ignoring developer session ${thread.id} with mismatched workspace metadata`,
@@ -228,7 +241,10 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     }
     if (owner === undefined) return undefined;
     const response = await owner.runtime.readThread(threadId);
-    if (response.thread.id !== threadId || !isSameWorkspacePath(owner.cwd, response.thread.cwd)) {
+    if (
+      response.thread.id !== threadId ||
+      (!isCloudThread(response.thread) && !isSameWorkspacePath(owner.cwd, response.thread.cwd))
+    ) {
       throw new Error('Developer session ownership metadata does not match the open workspace.');
     }
     return {
