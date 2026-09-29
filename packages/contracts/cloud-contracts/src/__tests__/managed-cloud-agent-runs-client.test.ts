@@ -399,6 +399,7 @@ describe('managed Cloud agent-run client', () => {
           body: JSON.stringify({
             run_id: RUN_ID,
             tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+            detached: true,
           }),
           headers: expect.objectContaining({ 'x-csrf-token': 'csrf-1' }),
         }),
@@ -420,6 +421,7 @@ describe('managed Cloud agent-run client', () => {
             run_id: RUN_ID,
             tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
             guidance: 'Use the docs repo instead.',
+            detached: true,
           }),
         }),
       );

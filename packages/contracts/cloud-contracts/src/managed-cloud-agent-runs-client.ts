@@ -375,6 +375,7 @@ export function createManagedCloudAgentRunClient(
           decision: approval.decision,
         })),
         ...(guidance ? { guidance } : {}),
+        detached: true,
       });
       let response: Response;
       try {
