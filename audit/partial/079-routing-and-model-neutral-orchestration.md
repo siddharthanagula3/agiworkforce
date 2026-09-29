@@ -30,7 +30,6 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
 | vscode | partial | turn/start routingProfile speed now resolves with the fastest slots first and keeps that preference (ccf4744297); VS Code adds its Fastest row to ROUTING_PROFILE_BY_AUTO_PROFILE (p-sessions) | handler |
-| chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
 Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:2354-2354`, `apps/cli/src/app_server/developer_host.rs:1200-1200`
 
@@ -43,9 +42,8 @@ Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/ty
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
-| chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `packages/ai/routing/src/auto.ts:32-32`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.07: Cost-first profile.
 
@@ -58,18 +56,6 @@ Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/exte
 | mobile | partial | Same post-codex patch as S79.05. | ui |
 
 Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
-
-## S79.08: Privacy-first profile.
-
-- Done when: A privacy-first profile keeps requests on local models or zero-retention routes.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome always routes through the managed cloud; a workspace zero-retention policy applies server-side, but the panel offers no privacy-first choice. | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`, `packages/ai/routing/src/auto.ts:1070-1079`
 
 ## S79.17: Provider lock.
 
@@ -103,9 +89,8 @@ Code: `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`, `p
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A one-tap 'Use <model>' switch to the first edit-capable image model the registry lists is in post-codex/chat-gates-s79.21-mobile-image-model-switch.patch; both chat screens that raise the blocked alert are Codex-held. | ui |
-| chrome | partial | Chrome falls back to Auto silently and only suggests choosing another model after an outage; no switch action. | ui |
 
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
+Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`
 
 ## S79.23: Specialist worker selection.
 
@@ -162,6 +147,5 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The generated Rust registry now carries policies.release.policyVersion and routing_policy_version() reads it (ccf4744297); recording it on the CLI routing decision is p-mcp-rust's | handler |
-| chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
-Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`
+Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`

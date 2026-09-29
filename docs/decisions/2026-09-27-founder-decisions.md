@@ -358,3 +358,32 @@ connected; neither resumes the interrupted turn on its own. The web and
 desktop apps do the same: the chat card offers Reconnect and Retry, and
 Settings offers Connect on an expired connection, with no automatic resume
 (S110.27 web and desktop).
+
+## D-2026-09-28-23 The Chrome extension stays at Claude in Chrome's scope
+
+Claude in Chrome is the reference for the extension. Its pages
+(support.claude.com/en/articles/12012173, claude.com/chrome,
+code.claude.com/docs/en/chrome, support.claude.com/en/articles/12902428) and
+Gemini in Chrome's (support.google.com/chrome/answer/16283624), checked
+2026-09-28, document none of the following, so the side panel does not add
+them: a library or file browser, a model catalog, in-panel billing management,
+recents grouped by project, back and forward history, artifact or source split
+views, downloads of uploaded originals, partial copy from an artifact, artifact
+cards and states for inline replies, a floating selection toolbar or in-place
+rewrite, chart image export, choosing project sources, a research progress
+view, source-type icons, project notes, retry of a failed dictation, an account
+or workspace switcher, context and output limits in the picker, model-dependent
+media settings, regional-restriction and runtime notices, unavailable-model
+states, connect-account explanations, routing profiles and a switch offer,
+routing-policy versions, promotional credits, a display-language choice,
+per-category notifications, clearing local storage, an active-sessions list,
+Office, Google Workspace and Teams host integrations, a toolbar quick-action
+list, reconnect-and-resume for integrations, and pull request diff review
+(Claude in Chrome reads the page; the CLI, VS Code and cloud Code review pull
+requests). Claude in Chrome works in Google apps by using the page, without API
+setup. Cells: S4.23, S4.38, S4.40, S5.11, S5.25, S7.04, S7.05, S9.13, S25.26,
+S25.28, S26.01, S26.04, S27.15, S29.36, S34.19, S35.09, S36.07, S37.38, S49.06,
+S67.21, S67.23, S74.20, S76.28, S76.29, S78.06, S78.11, S78.15, S78.16, S78.20,
+S79.05, S79.06, S79.08, S79.21, S79.28, S81.19, S84.01, S84.18, S85.23, S86.06,
+S106.01, S106.02, S106.03, S106.04, S106.05, S106.06, S106.07, S106.08,
+S106.12, S106.15, S109.03, S109.08, S110.27 (chrome).

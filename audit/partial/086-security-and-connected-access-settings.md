@@ -65,9 +65,6 @@ Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome can only end its own session through Log out; it cannot list or end other sessions. | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
 ## S86.10: Sign out all devices.
 
