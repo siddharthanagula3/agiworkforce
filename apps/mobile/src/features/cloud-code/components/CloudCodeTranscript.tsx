@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronRight } from 'lucide-react-native';
 import type { CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import {
@@ -38,7 +39,7 @@ function Disclosure({
   const colors = useThemeColors();
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onToggle}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
@@ -59,7 +60,7 @@ function Disclosure({
       <View style={{ transform: [{ rotate: expanded ? EXPANDED_ROTATION : '0deg' }] }}>
         <ChevronRight size={CHEVRON_SIZE} color={colors.textMuted} />
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 

@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import type { LucideIcon } from 'lucide-react-native';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
@@ -39,7 +40,7 @@ export function ShellSecondarySheet({
           {title}
         </Text>
         {controls.map(({ key, label, icon: Icon, onPress }) => (
-          <Pressable
+          <PressableBox
             key={key}
             onPress={onPress}
             accessibilityRole="button"
@@ -55,7 +56,7 @@ export function ShellSecondarySheet({
           >
             <Icon size={19} color={colors.textSecondary} strokeWidth={1.8} />
             <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>{label}</Text>
-          </Pressable>
+          </PressableBox>
         ))}
       </View>
     </BottomSheet>

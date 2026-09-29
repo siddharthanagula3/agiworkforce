@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   AlertCircle,
   Check,
@@ -148,7 +149,7 @@ function ActionButton({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -179,7 +180,7 @@ function ActionButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -235,7 +236,7 @@ function PlanEditor({
               paddingVertical: 6,
             }}
           />
-          <Pressable
+          <PressableBox
             onPress={() => remove(step.id)}
             accessibilityRole="button"
             accessibilityLabel={`Remove step ${index + 1}`}
@@ -243,7 +244,7 @@ function PlanEditor({
             style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={14} color={colors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
       ))}
       {steps.length < MAX_PLAN_STEPS ? (

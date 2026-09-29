@@ -4,11 +4,11 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   TextInput,
   View,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -96,7 +96,7 @@ export function StartWorkSheet({
               gap: 8,
             }}
           >
-            <Pressable
+            <PressableBox
               onPress={handleClose}
               accessibilityRole="button"
               accessibilityLabel="Close new task"
@@ -104,7 +104,7 @@ export function StartWorkSheet({
               style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
             <Text variant="subheading" style={{ flex: 1, color: colors.textPrimary }}>
               New task
             </Text>
@@ -195,7 +195,7 @@ export function StartWorkSheet({
                   {selectableProjects.map((project) => {
                     const selected = project.id === projectId;
                     return (
-                      <Pressable
+                      <PressableBox
                         key={project.id}
                         onPress={() => setProjectId(selected ? undefined : project.id)}
                         accessibilityRole="button"
@@ -220,7 +220,7 @@ export function StartWorkSheet({
                         >
                           {project.name}
                         </Text>
-                      </Pressable>
+                      </PressableBox>
                     );
                   })}
                 </View>
@@ -240,7 +240,7 @@ export function StartWorkSheet({
           </ScrollView>
 
           <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-            <Pressable
+            <PressableBox
               onPress={handleSubmit}
               disabled={submitting || !goal.trim()}
               accessibilityRole="button"
@@ -268,7 +268,7 @@ export function StartWorkSheet({
               >
                 {submitting ? 'Starting…' : 'Start task'}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>

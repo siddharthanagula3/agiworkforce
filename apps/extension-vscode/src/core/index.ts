@@ -24,7 +24,7 @@ export {
   activate as activateTelemetry,
   logEvent,
   logError,
-  redactSecrets,
+  redactTelemetryText,
   TelemetryEvents,
   __resetTelemetryForTests,
 } from './telemetry';

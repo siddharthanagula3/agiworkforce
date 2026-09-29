@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type {
+  ManagedCloudEventTriggerCreated,
+  ManagedCloudEventTriggerListResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -55,7 +59,8 @@ async function handleListTriggers(request: NextRequest) {
     offset,
     taskId: url.searchParams.get('taskId'),
   });
-  return NextResponse.json({ triggers, pagination: { limit, offset } });
+  const payload: ManagedCloudEventTriggerListResponse = { triggers, pagination: { limit, offset } };
+  return NextResponse.json(payload);
 }
 
 async function handleCreateTrigger(request: NextRequest) {
@@ -94,15 +99,13 @@ async function handleCreateTrigger(request: NextRequest) {
       },
     });
     const trigger = await startGmailWatch(getNeonDb(), created.trigger);
-    return NextResponse.json(
-      {
-        trigger,
-        verificationCode: created.verificationCode,
-        signingSecret: created.signingSecret,
-        webhookPath: triggerWebhookPath(trigger),
-      },
-      { status: 201 },
-    );
+    const payload: ManagedCloudEventTriggerCreated = {
+      trigger,
+      verificationCode: created.verificationCode,
+      signingSecret: created.signingSecret,
+      webhookPath: triggerWebhookPath(trigger),
+    };
+    return NextResponse.json(payload, { status: 201 });
   } catch (error) {
     rethrowTriggerError(error);
   }

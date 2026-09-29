@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AlertCircle, ArrowLeft, Telescope, TriangleAlert } from 'lucide-react-native';
@@ -42,7 +43,7 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
         gap: 10,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -50,7 +51,7 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
         style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={21} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <Text
         numberOfLines={1}
         style={{
@@ -78,7 +79,7 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
     .join(' · ');
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${researchReportLabel(report)}. ${meta}`}
@@ -127,7 +128,7 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
           </Text>
         </View>
       ) : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -238,7 +239,7 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
               {`Sections · ${sections.length}`}
             </Text>
             {sections.map((section) => (
-              <Pressable
+              <PressableBox
                 key={section.id}
                 onPress={() => jumpToSection(section.id)}
                 accessibilityRole="button"
@@ -259,7 +260,7 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
                 >
                   {section.text}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ))}
           </View>
         ) : null}

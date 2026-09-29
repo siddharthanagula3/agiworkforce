@@ -1,5 +1,6 @@
 import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -217,7 +218,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </View>
 
             {/* Close button, 44pt touch target per iOS HIG */}
-            <Pressable
+            <PressableBox
               onPress={handleDismiss}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
               accessibilityLabel="Dismiss"
@@ -225,7 +226,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Body copy */}
@@ -285,7 +286,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </Text>
           )}
           {onChooseStandardModel ? (
-            <Pressable
+            <PressableBox
               onPress={handleChooseStandardModel}
               style={{
                 minHeight: 44,
@@ -305,10 +306,10 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               >
                 Choose a standard model
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
           {showPlanComparison ? (
-            <Pressable
+            <PressableBox
               onPress={handleComparePlans}
               style={{
                 minHeight: 44,
@@ -328,9 +329,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               >
                 Compare plans
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
-          <Pressable
+          <PressableBox
             onPress={handleDismiss}
             style={{
               minHeight: 44,
@@ -342,7 +343,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             accessibilityRole="button"
           >
             <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>Try later</Text>
-          </Pressable>
+          </PressableBox>
         </BottomSheetView>
       </BottomSheet>
     );

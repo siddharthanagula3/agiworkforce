@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudCodeCommandReply } from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -86,16 +87,15 @@ async function handleRun(request: NextRequest, context: RouteContext) {
   if (accessGateResponse) return accessGateResponse;
   const planTier = entitlement.plan;
   try {
-    return NextResponse.json(
-      await runCloudCodeCommand(
-        db,
-        { userId, organizationId },
-        sessionId,
-        body['command'],
-        planTier,
-        request.signal,
-      ),
+    const ran: CloudCodeCommandReply = await runCloudCodeCommand(
+      db,
+      { userId, organizationId },
+      sessionId,
+      body['command'],
+      planTier,
+      request.signal,
     );
+    return NextResponse.json(ran);
   } catch (error) {
     rethrowCloudCodeError(error);
   }

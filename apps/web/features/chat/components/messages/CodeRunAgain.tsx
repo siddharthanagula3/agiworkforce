@@ -22,7 +22,7 @@ const NO_OUTPUT = '(no output)';
 const RUN_FAILED = 'The code did not run.';
 const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;
 const BUTTON_CLASS =
-  'inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60';
 const PRE_CLASS =
   'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-compact px-3 py-2 font-mono text-xs leading-relaxed';
 

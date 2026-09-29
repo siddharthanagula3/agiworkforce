@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSession } from '@clerk/expo';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -276,7 +277,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
             ) : null}
 
             {prompt.kind === 'second_factor' && prompt.strategies.length > 1 ? (
-              <Pressable
+              <PressableBox
                 accessibilityRole="button"
                 disabled={busy}
                 onPress={() =>
@@ -291,10 +292,10 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                     ? 'Use a backup code instead'
                     : 'Use your authenticator app instead'}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
             {prompt.kind === 'password' && prompt.emailAddressId ? (
-              <Pressable
+              <PressableBox
                 accessibilityRole="button"
                 disabled={busy}
                 onPress={() => void sendEmailCode(prompt.emailAddressId!, null)}
@@ -302,7 +303,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                 <Text style={[styles.link, { color: colors.textPrimary }]}>
                   Email me a code instead
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {error ? (

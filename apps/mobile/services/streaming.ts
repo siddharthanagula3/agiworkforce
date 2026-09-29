@@ -9,6 +9,7 @@ import {
 import {
   getModelMetadataById,
   getProviderOffering,
+  messageKindForAgentEvent,
   type CloudWorkMode,
   type Effort,
   type Provider,
@@ -616,7 +617,10 @@ export async function streamChat(
         const finishReason = finishReasonFromStop(envelope);
         timedCallbacks.onDelta({
           x_agent_event: envelope,
-          ...(envelope.event.type === 'text-delta' ? { content: envelope.event.delta } : {}),
+          ...(messageKindForAgentEvent(envelope.event.type) === 'text' &&
+          envelope.event.type === 'text-delta'
+            ? { content: envelope.event.delta }
+            : {}),
           ...(finishReason ? { finish_reason: finishReason } : {}),
           durableReplay: true,
         });

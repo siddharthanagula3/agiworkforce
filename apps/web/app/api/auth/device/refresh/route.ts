@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DeviceTokenError, DeviceTokenResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
 import { accountAccessDecision } from '@/lib/auth/account-status';
@@ -84,10 +85,10 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const body = await request.json().catch(() => null);
   const parsed = RefreshSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   const db = getNeonDb();
@@ -223,7 +224,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         error_description: `Accept the Terms of Service at ${termsAcceptanceUrl(request)} to keep using AGI Workforce on this device.`,
         terms_version: CURRENT_TERMS_VERSION,
         acceptance_url: termsAcceptanceUrl(request),
-      },
+      } satisfies DeviceTokenError,
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -240,7 +241,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         ...(result.recoveryPath
           ? { recovery_url: new URL(result.recoveryPath, new URL(request.url).origin).toString() }
           : {}),
-      },
+      } satisfies DeviceTokenError,
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -278,18 +279,18 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         status: result.compromiseRecorded ? 'recorded' : 'revoked_only',
       },
     });
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   if (result.kind !== 'rotated') {
     logger.warn({ reason: result.kind }, 'Device refresh credential rejected');
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   return NextResponse.json(
@@ -299,7 +300,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       token_type: 'Bearer',
       expires_in: result.accessExpiresIn,
       refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
-    },
+    } satisfies DeviceTokenResponse,
     { headers: { 'Cache-Control': 'no-store', ...termsNoticeHeaders(result.termsStanding) } },
   );
 }

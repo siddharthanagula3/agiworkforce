@@ -32,7 +32,7 @@ import {
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
-import { redactSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
 import {
   CLOUD_CODE_COMMAND_DEADLINE_MS,
   resolveCloudCodeCommandDeadlineMs,
@@ -270,7 +270,7 @@ function gitStepFailure(
       ...context,
       step,
       kind,
-      reason: redactSecrets(output.replace(URL_USERINFO, '$1')).slice(0, 500),
+      reason: redactAuditedSecrets(output.replace(URL_USERINFO, '$1')).slice(0, 500),
     },
     '[code] git step failed',
   );

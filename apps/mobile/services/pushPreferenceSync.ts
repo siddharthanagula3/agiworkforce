@@ -11,7 +11,7 @@ import {
   deviceTimezone,
   getCategoryForType,
   useNotificationPrefsStore,
-  type NotificationCategory,
+  type PushPreferenceGroup,
 } from '@/stores/notificationPrefsStore';
 import { MOBILE_PUSH_TOKEN_PATH } from '@agiworkforce/cloud-contracts';
 import type { TimeFocusWeekday } from '@agiworkforce/types';
@@ -41,7 +41,7 @@ export interface PushDeliveryQuietHours {
 export interface PushDeliveryPreferences {
   version: number;
   timezone: string;
-  categories: Record<NotificationCategory, boolean>;
+  categories: Record<PushPreferenceGroup, boolean>;
   eventTypes: Record<NotificationEventType, boolean>;
   quietHours: PushDeliveryQuietHours;
   quietHoursExemptEventTypes: NotificationEventType[];

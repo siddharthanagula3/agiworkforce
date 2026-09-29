@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Archive,
   ArrowUpFromLine,
@@ -233,7 +234,7 @@ export default function DataControlsScreen() {
         icon={Database}
       />
       <SettingsGroup>
-        <Pressable
+        <PressableBox
           onPress={handleExport}
           disabled={exporting}
           accessibilityRole="button"
@@ -253,7 +254,7 @@ export default function DataControlsScreen() {
           <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
             {exporting ? 'Exporting…' : 'Export Local Data'}
           </Text>
-        </Pressable>
+        </PressableBox>
         <SettingsRow
           label="Storage"
           icon={Trash2}
@@ -280,7 +281,7 @@ export default function DataControlsScreen() {
             router.push('/(app)/settings/archived-chats' as Parameters<typeof router.push>[0])
           }
         />
-        <Pressable
+        <PressableBox
           onPress={handleArchiveAll}
           disabled={bulkBusy}
           accessibilityRole="button"
@@ -308,8 +309,8 @@ export default function DataControlsScreen() {
               </Text>
             ) : null}
           </View>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={handleDeleteAll}
           disabled={bulkBusy}
           accessibilityRole="button"
@@ -340,7 +341,7 @@ export default function DataControlsScreen() {
               </Text>
             ) : null}
           </View>
-        </Pressable>
+        </PressableBox>
       </SettingsGroup>
 
       {/*
@@ -354,7 +355,7 @@ export default function DataControlsScreen() {
         icon={Cloud}
       />
       <SettingsGroup>
-        <Pressable
+        <PressableBox
           onPress={handleSyncToCloud}
           disabled={syncing}
           accessibilityRole="button"
@@ -380,7 +381,7 @@ export default function DataControlsScreen() {
               </Text>
             ) : null}
           </View>
-        </Pressable>
+        </PressableBox>
       </SettingsGroup>
 
       <SettingsInfo

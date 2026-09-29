@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
-import { redactSecrets } from '../core/telemetry';
+import { redactTelemetryText } from '../core/telemetry';
 
 const execFileAsync = promisify(execFile);
 
@@ -168,7 +168,7 @@ export class ContextBuilder {
         if (truncatedDiff.length > MAX_GIT_DIFF_CHARS) {
           truncatedDiff = truncatedDiff.slice(0, MAX_GIT_DIFF_CHARS) + '\n... (truncated)';
         }
-        parts.push(`\nDiff summary:\n${redactSecrets(truncatedDiff)}`);
+        parts.push(`\nDiff summary:\n${redactTelemetryText(truncatedDiff)}`);
       }
 
       return parts.join('\n');

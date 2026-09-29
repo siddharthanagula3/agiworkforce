@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Linking, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Mail, MonitorDown } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
@@ -130,7 +131,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
         {/* Directly beneath the pair button, before any pairing action. */}
         <PairingRiskDisclosure className="mt-4" />
 
-        <Pressable
+        <PressableBox
           onPress={() => void handleEmailDesktopLink()}
           className="flex-row items-center justify-center gap-2 mt-6 py-3 rounded-xl"
           style={{ backgroundColor: colors.accentSurface }}
@@ -141,7 +142,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           <Text className="text-sm font-medium" style={{ color: colors.teal }}>
             Email me the desktop app link
           </Text>
-        </Pressable>
+        </PressableBox>
       </ScrollView>
     </Animated.View>
   );

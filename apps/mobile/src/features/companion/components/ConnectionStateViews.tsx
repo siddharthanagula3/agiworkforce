@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { View, ActivityIndicator, Pressable, ScrollView } from 'react-native';
+import { View, ActivityIndicator, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   QrCode,
   Wifi,
@@ -117,14 +118,14 @@ export function DisconnectedView({
         />
 
         {onShowSetupSteps ? (
-          <Pressable
+          <PressableBox
             accessibilityRole="button"
             accessibilityLabel="Show desktop setup steps again"
             onPress={onShowSetupSteps}
             style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ color: colors.teal }}>Show desktop setup steps again</Text>
-          </Pressable>
+          </PressableBox>
         ) : null}
 
         <PairingRiskDisclosure className="mt-4" />
@@ -223,7 +224,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
       {error && (
         <View className="w-full mt-4">
-          <Pressable
+          <PressableBox
             onPress={() => setDetailsOpen((open) => !open)}
             className="flex-row items-center justify-center gap-1 py-2"
             accessibilityRole="button"
@@ -236,7 +237,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
               <ChevronRight size={14} color={colors.textMuted} />
             )}
             <Text className="text-xs text-white/40">Details</Text>
-          </Pressable>
+          </PressableBox>
           {detailsOpen && (
             <Text className="text-xs text-white/40 text-center leading-5" selectable>
               {error}

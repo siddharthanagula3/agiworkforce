@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowLeft, Code2, Plus, RefreshCw } from 'lucide-react-native';
@@ -37,7 +38,7 @@ function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
         gap: 8,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -45,7 +46,7 @@ function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <Text
         variant="subheading"
         accessibilityRole="header"
@@ -54,7 +55,7 @@ function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
         {CLOUD_CODE_SCREEN_TITLE}
       </Text>
       {onNew ? (
-        <Pressable
+        <PressableBox
           onPress={onNew}
           accessibilityRole="button"
           accessibilityLabel="New cloud session"
@@ -63,7 +64,7 @@ function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <Plus size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -175,7 +176,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
         {CLOUD_CODE_SESSION_STATUS_FILTERS.map((key) => {
           const selected = key === filter;
           return (
-            <Pressable
+            <PressableBox
               key={key}
               onPress={() => setFilter(key)}
               accessibilityRole="button"
@@ -202,7 +203,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
               >
                 {CLOUD_CODE_SESSION_STATUS_FILTER_LABELS[key]}
               </Text>
-            </Pressable>
+            </PressableBox>
           );
         })}
       </View>
@@ -233,7 +234,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
                   {error}
                 </Text>
               ) : null}
-              <Pressable
+              <PressableBox
                 onPress={handleOpenRemote}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
@@ -257,7 +258,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
                     {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
                   </Text>
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
           }
           ListEmptyComponent={<EmptyState filtered={filter !== DEFAULT_FILTER} />}

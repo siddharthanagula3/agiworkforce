@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { WebSearchAllowance } from '@agiworkforce/cloud-contracts';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -16,7 +17,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const scoped = await getUserScopedDb(request, { resolveOrganization: false });
   await assertAccountActive(scoped.userId);
   const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
-  const allowance = await readSearchAllowance({
+  const allowance: WebSearchAllowance = await readSearchAllowance({
     userId: scoped.userId,
     planTier,
     db: scoped.db,

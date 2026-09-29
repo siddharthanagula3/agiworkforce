@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -133,7 +134,7 @@ export default function ProfileScreen() {
           paddingHorizontal: 8,
         }}
       >
-        <Pressable
+        <PressableBox
           onPress={goBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -141,7 +142,7 @@ export default function ProfileScreen() {
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <ArrowLeft size={21} color={colors.textPrimary} />
-        </Pressable>
+        </PressableBox>
         <Text
           style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
         >
@@ -385,7 +386,7 @@ function ProfileRow({
   const colors = useThemeColors();
   const tint = tone === 'danger' ? colors.agentError : colors.textSecondary;
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={[label, value].filter(Boolean).join('. ')}
@@ -421,7 +422,7 @@ function ProfileRow({
       {/* Log Out raises a confirm Alert instead of pushing a screen, so the
           danger tone carries no chevron, matching the Settings root. */}
       {tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
-    </Pressable>
+    </PressableBox>
   );
 }
 

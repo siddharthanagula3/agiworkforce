@@ -683,6 +683,11 @@ export interface ModelMetadata {
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];
+  /**
+   * The provider's fast output tier (Anthropic `speed: "fast"`): the same model
+   * served faster, every token priced at this multiple of the standard rate.
+   */
+  fastTier?: { priceMultiplier: number };
   /** @deprecated Read compatibility for catalogs generated before ordered tiers. */
   longContext?: InputTokenPricingTier;
   cachePolicy?: {

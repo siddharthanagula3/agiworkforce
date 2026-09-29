@@ -1,13 +1,15 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedCloudChatAttachmentCompleteRequestSchema,
+  type ManagedCloudChatAttachmentCompleteResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { isPrivateObjectStorageConfigured } from '@/lib/server/object-storage';
-import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveProductAnalyticsSurface } from '@/lib/server/product-analytics';
@@ -15,15 +17,6 @@ import {
   completeChatAttachmentUpload,
   resolveUploadSourceSurface,
 } from '@/lib/server/chat-attachment-completion';
-
-const CompleteChatAttachmentSchema = z.object({
-  storageKey: z.string().min(1).max(600),
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(255),
-  byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
-  conversationId: z.string().min(1).max(200).optional(),
-  temporary: z.boolean().optional(),
-});
 
 async function handleComplete(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -38,7 +31,9 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Private object storage is not configured');
   }
 
-  const parsed = CompleteChatAttachmentSchema.safeParse(await request.json().catch(() => null));
+  const parsed = ManagedCloudChatAttachmentCompleteRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
   }
@@ -51,7 +46,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     analyticsSurface: resolveProductAnalyticsSurface(request),
     ...parsed.data,
   });
-  return NextResponse.json({ attachment });
+  const completed: ManagedCloudChatAttachmentCompleteResponse = { attachment };
+  return NextResponse.json(completed);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleComplete));

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Bluetooth, Check, Headphones, Volume2, Waves } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -42,7 +43,7 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
 
   return (
     <>
-      <Pressable
+      <PressableBox
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Audio route, ${AUDIO_ROUTE_LABELS[route]}`}
@@ -66,7 +67,7 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
             {AUDIO_ROUTE_LABELS[route]}
           </Text>
         )}
-      </Pressable>
+      </PressableBox>
 
       <Modal
         visible={open}
@@ -75,13 +76,13 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
         onRequestClose={() => setOpen(false)}
         accessibilityViewIsModal
       >
-        <Pressable
+        <PressableBox
           onPress={() => setOpen(false)}
           accessibilityRole="button"
           accessibilityLabel="Close audio route picker"
           style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}
         >
-          <Pressable
+          <PressableBox
             onPress={(event) => event.stopPropagation()}
             accessibilityRole="menu"
             accessibilityLabel="Audio route"
@@ -110,7 +111,7 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
               const Icon = ROUTE_ICON[candidate];
               const selected = candidate === route;
               return (
-                <Pressable
+                <PressableBox
                   key={candidate}
                   onPress={() => choose(candidate)}
                   accessibilityRole="menuitem"
@@ -137,11 +138,11 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
                     </Text>
                   </View>
                   {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-                </Pressable>
+                </PressableBox>
               );
             })}
-          </Pressable>
-        </Pressable>
+          </PressableBox>
+        </PressableBox>
       </Modal>
     </>
   );

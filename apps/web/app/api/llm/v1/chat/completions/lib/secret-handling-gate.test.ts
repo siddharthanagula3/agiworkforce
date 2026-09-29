@@ -21,7 +21,7 @@ vi.mock('@/lib/security/secrets-audit', async (importOriginal) => {
   return {
     ...actual,
     scanForSecrets: vi.fn(actual.scanForSecrets),
-    redactSecrets: vi.fn(actual.redactSecrets),
+    redactAuditedSecrets: vi.fn(actual.redactAuditedSecrets),
   };
 });
 
@@ -158,7 +158,7 @@ describe('applySecretHandlingToRequest', () => {
     // count; redaction does, because each message is redacted on its own
     // rather than round-tripped through a delimiter that a replacement can eat.
     expect(secretsAudit.scanForSecrets).toHaveBeenCalledTimes(2);
-    expect(secretsAudit.redactSecrets).toHaveBeenCalledTimes(messages.length);
+    expect(secretsAudit.redactAuditedSecrets).toHaveBeenCalledTimes(messages.length);
   });
 });
 

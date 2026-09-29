@@ -1,7 +1,6 @@
 import {
   View,
   ScrollView,
-  Pressable,
   Modal,
   Share,
   Alert,
@@ -9,6 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import * as Haptics from 'expo-haptics';
 import {
   X,
@@ -467,7 +467,7 @@ export function ArtifactFullScreen({
                   overflow: 'hidden',
                 }}
               >
-                <Pressable
+                <PressableBox
                   onPress={() => setViewMode('preview')}
                   style={{
                     padding: 6,
@@ -480,9 +480,9 @@ export function ArtifactFullScreen({
                   accessibilityState={{ selected: viewMode === 'preview' }}
                 >
                   <Eye size={16} color={colors.textSecondary} />
-                </Pressable>
+                </PressableBox>
                 <View style={{ width: 1, backgroundColor: colors.border }} />
-                <Pressable
+                <PressableBox
                   onPress={() => setViewMode('source')}
                   style={{
                     padding: 6,
@@ -495,7 +495,7 @@ export function ArtifactFullScreen({
                   accessibilityState={{ selected: viewMode === 'source' }}
                 >
                   <Code size={16} color={colors.textSecondary} />
-                </Pressable>
+                </PressableBox>
               </View>
             ) : null}
 
@@ -520,7 +520,7 @@ export function ArtifactFullScreen({
 
             {/* Publish to a public link, only kinds the public renderer supports */}
             {canPublish(artifact, activeContent) ? (
-              <Pressable
+              <PressableBox
                 onPress={handlePublish}
                 style={{
                   padding: 8,
@@ -538,11 +538,11 @@ export function ArtifactFullScreen({
                   size={17}
                   color={publishedUrl ? colors.agentSuccess : colors.textSecondary}
                 />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {canEditSource ? (
-              <Pressable
+              <PressableBox
                 onPress={() => setEditDraft(activeContent)}
                 style={{
                   padding: 8,
@@ -554,11 +554,11 @@ export function ArtifactFullScreen({
                 accessibilityRole="button"
               >
                 <Pencil size={17} color={colors.textSecondary} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Download / export */}
-            <Pressable
+            <PressableBox
               onPress={handleDownload}
               style={{
                 padding: 8,
@@ -571,11 +571,11 @@ export function ArtifactFullScreen({
               disabled={downloading}
             >
               <Download size={17} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
 
             {/* Share generated file (only when manifest present) */}
             {hasGeneratedFileManifest ? (
-              <Pressable
+              <PressableBox
                 onPress={handleShare}
                 style={{
                   padding: 8,
@@ -586,12 +586,12 @@ export function ArtifactFullScreen({
                 accessibilityRole="button"
               >
                 <Share2 size={17} color={colors.textSecondary} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Refresh, re-generate the artifact (only when handler is wired) */}
             {onRegenerate ? (
-              <Pressable
+              <PressableBox
                 onPress={() => {
                   onRegenerate();
                   onClose();
@@ -605,7 +605,7 @@ export function ArtifactFullScreen({
                 accessibilityRole="button"
               >
                 <RefreshCw size={17} color={colors.textSecondary} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Copy only when there is actual source text. Generated-file
@@ -614,7 +614,7 @@ export function ArtifactFullScreen({
                 there used to succeed while placing an empty string on the
                 clipboard. */}
             {activeContent.trim().length > 0 ? (
-              <Pressable
+              <PressableBox
                 onPress={handleCopy}
                 style={{
                   padding: 8,
@@ -631,11 +631,11 @@ export function ArtifactFullScreen({
                 ) : (
                   <Copy size={17} color={colors.textSecondary} />
                 )}
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Close */}
-            <Pressable
+            <PressableBox
               {...chrome.close}
               style={{
                 ...chrome.close.style,
@@ -646,7 +646,7 @@ export function ArtifactFullScreen({
               }}
             >
               <X size={17} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Row 2: version navigation over the store's real edit history */}
@@ -667,7 +667,7 @@ export function ArtifactFullScreen({
               }}
               testID="artifact-version-chip"
             >
-              <Pressable
+              <PressableBox
                 onPress={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
                 disabled={shownVersionIndex <= 0}
                 style={{ padding: 6, opacity: shownVersionIndex <= 0 ? 0.3 : 1 }}
@@ -676,8 +676,8 @@ export function ArtifactFullScreen({
                 accessibilityState={{ disabled: shownVersionIndex <= 0 }}
               >
                 <ChevronLeft size={15} color={colors.textSecondary} />
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={() => setVersionHistoryOpen(true)}
                 accessibilityRole="button"
                 accessibilityLabel={`Version ${shownVersionIndex + 1} of ${versionCount}`}
@@ -698,8 +698,8 @@ export function ArtifactFullScreen({
                 >
                   {`v${shownVersionIndex + 1}/${versionCount}`}
                 </Text>
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={() =>
                   setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
                 }
@@ -713,9 +713,9 @@ export function ArtifactFullScreen({
                 accessibilityState={{ disabled: shownVersionIndex >= versionCount - 1 }}
               >
                 <ChevronRight size={15} color={colors.textSecondary} />
-              </Pressable>
+              </PressableBox>
               {canShowChanges ? (
-                <Pressable
+                <PressableBox
                   onPress={() => setChangesShownFor(showChanges ? null : changesKey)}
                   style={{
                     paddingVertical: 6,
@@ -737,10 +737,10 @@ export function ArtifactFullScreen({
                   >
                     Show changes
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
               {shownVersionIndex < versionCount - 1 ? (
-                <Pressable
+                <PressableBox
                   onPress={handleRestoreVersion}
                   style={{ paddingVertical: 6, paddingHorizontal: 8 }}
                   accessibilityLabel={`Restore version ${shownVersionIndex + 1}`}
@@ -756,7 +756,7 @@ export function ArtifactFullScreen({
                   >
                     Restore
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           ) : null}
@@ -794,7 +794,7 @@ export function ArtifactFullScreen({
               >
                 {publishedUrl}
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={handleCopyLink}
                 accessibilityLabel={copyControlLabel(linkCopyStatus, 'Copy public link')}
                 accessibilityRole="button"
@@ -807,15 +807,15 @@ export function ArtifactFullScreen({
                 ) : (
                   <Copy size={15} color={colors.textSecondary} />
                 )}
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={handleShareLink}
                 accessibilityLabel="Share public link"
                 accessibilityRole="button"
                 style={{ padding: 4 }}
               >
                 <Share2 size={15} color={colors.textSecondary} />
-              </Pressable>
+              </PressableBox>
             </View>
           ) : null}
           {currentPublication && artifact ? (
@@ -883,7 +883,7 @@ export function ArtifactFullScreen({
               HTML, SVG, and Mermaid render live in a sandbox; JSX/TSX need compilation, which the
               secure preview intentionally omits. Switch to Source view to read the content.
             </Text>
-            <Pressable
+            <PressableBox
               onPress={() => setViewMode('source')}
               style={{
                 marginTop: 8,
@@ -904,7 +904,7 @@ export function ArtifactFullScreen({
               >
                 View Source
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         ) : (
           <ScrollView
@@ -1073,7 +1073,7 @@ export function ArtifactFullScreen({
                 gap: 8,
               }}
             >
-              <Pressable
+              <PressableBox
                 onPress={() => setEditDraft(null)}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel editing"
@@ -1082,7 +1082,7 @@ export function ArtifactFullScreen({
                 <Text style={{ fontSize: typeScale.body, color: colors.textSecondary }}>
                   Cancel
                 </Text>
-              </Pressable>
+              </PressableBox>
               <Text
                 style={{
                   flex: 1,
@@ -1094,7 +1094,7 @@ export function ArtifactFullScreen({
               >
                 {artifact.title}
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={handleSaveEdit}
                 accessibilityRole="button"
                 accessibilityLabel="Save as a new version"
@@ -1103,7 +1103,7 @@ export function ArtifactFullScreen({
                 <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.teal }}>
                   Save
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
             <TextInput
               value={editDraft ?? ''}

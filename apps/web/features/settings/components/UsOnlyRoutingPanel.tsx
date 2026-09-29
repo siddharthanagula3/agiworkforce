@@ -8,15 +8,18 @@ import {
   isBillingPlanTier,
   normalizeSubscriptionAccessTier,
 } from '@agiworkforce/types';
+import {
+  ME_ROUTING_PREFERENCES_PATH,
+  RoutingPreferencesSchema,
+  type RoutingPreferences,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from './SaveStatusLine';
 
-const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+const ROUTING_PREFERENCES_PATH = ME_ROUTING_PREFERENCES_PATH;
 const LABEL = 'Only use AI providers based in the US';
-
-type RoutingPreferences = Record<string, unknown> & { us_only?: boolean };
 
 const US_ONLY_TIERS: readonly string[] =
   modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers;
@@ -39,7 +42,7 @@ export function UsOnlyRoutingPanel() {
     fetch(ROUTING_PREFERENCES_PATH, { credentials: 'same-origin' })
       .then(async (response) => {
         if (!response.ok) throw new Error('Routing preferences could not be loaded.');
-        const body = (await response.json()) as RoutingPreferences;
+        const body = RoutingPreferencesSchema.parse(await response.json());
         if (!cancelled) setPreferences(body);
       })
       .catch((caught: unknown) => {

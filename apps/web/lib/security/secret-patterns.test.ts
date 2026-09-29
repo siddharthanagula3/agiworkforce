@@ -8,7 +8,7 @@ import {
   isHighConfidenceSecretName,
 } from './secret-patterns';
 import { assertNoLeaks, LeakDetectedError, SECRET_PATTERNS } from '../leak-detector';
-import { containsSecrets, redactSecrets, scanForSecrets } from './secrets-audit';
+import { containsSecrets, redactAuditedSecrets, scanForSecrets } from './secrets-audit';
 
 const FAKE_ANTHROPIC_KEY = `sk-${'a1B2c3D4e5F6g7H8'.repeat(3)}`;
 const FAKE_STRIPE_LIVE = `sk_live_${'0'.repeat(30)}`;
@@ -119,11 +119,13 @@ describe('scanning API (non-throwing)', () => {
   });
 
   it('redacts every match and leaves ordinary text alone', () => {
-    const redacted = redactSecrets(`key ${FAKE_ANTHROPIC_KEY} and token ${FAKE_GITHUB_TOKEN}`);
+    const redacted = redactAuditedSecrets(
+      `key ${FAKE_ANTHROPIC_KEY} and token ${FAKE_GITHUB_TOKEN}`,
+    );
     expect(redacted).not.toContain(FAKE_ANTHROPIC_KEY);
     expect(redacted).not.toContain(FAKE_GITHUB_TOKEN);
     expect(redacted).toContain('[REDACTED]');
-    expect(redactSecrets('nothing sensitive here')).toBe('nothing sensitive here');
+    expect(redactAuditedSecrets('nothing sensitive here')).toBe('nothing sensitive here');
   });
 
   it('finds a match regardless of position across repeated calls', () => {
@@ -134,7 +136,7 @@ describe('scanning API (non-throwing)', () => {
 
   it('scopes redaction to an allowed pattern name set when given one', () => {
     const input = `key ${FAKE_ANTHROPIC_KEY} and jwt ${FAKE_JWT}`;
-    const redacted = redactSecrets(input, new Set(['Anthropic/OpenAI API Key']));
+    const redacted = redactAuditedSecrets(input, new Set(['Anthropic/OpenAI API Key']));
     expect(redacted).not.toContain(FAKE_ANTHROPIC_KEY);
     expect(redacted).toContain(FAKE_JWT);
   });

@@ -201,6 +201,7 @@ import {
   isAutoModeModelId,
   WORKSPACE_FEATURE_LABELS,
   type Effort,
+  type ModelMetadata,
   getSlotForModel,
   isFlagshipRoutingSlot,
   normalizeModelId,
@@ -310,6 +311,7 @@ import {
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
   resolveManagedQuotaRecovery,
+  usageCreditsEnabled,
   type ManagedQuotaRecovery,
   type ManagedUsageLimitContext,
   type ManagedUsageRequestReservation,
@@ -643,6 +645,7 @@ export const ChatCompletionRequestSchema = z
       })
       .optional(),
     effort: z.string().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
     use_prompt_cache: z.boolean().optional(),
     client_timezone: z
       .string()
@@ -1384,6 +1387,8 @@ export type ProcessedRequest = {
     thinking_mode?: boolean;
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
+    /** Only ever set for a first-party Anthropic model with a fast tier. */
+    speed?: 'fast';
     usePromptCache?: boolean;
     responseFormat?: ChatResponseFormat;
     requestParameters?: RequestedParameters;
@@ -1464,6 +1469,47 @@ const EFFORT_ORDER: readonly Effort[] = [
 function effortExceeds(effort: Effort | undefined, maximum: Effort | undefined): boolean {
   if (!effort || !maximum) return false;
   return EFFORT_ORDER.indexOf(effort) > EFFORT_ORDER.indexOf(maximum);
+}
+
+/** Fast mode is Anthropic's first-party tier; a gateway or cloud route does not offer it. */
+export function fastTierFor(
+  provider: string,
+  model: string,
+): NonNullable<ModelMetadata['fastTier']> | null {
+  if (provider !== 'anthropic') return null;
+  return getModelMetadataById(model)?.fastTier ?? null;
+}
+
+/**
+ * Fast mode follows Claude's rules: a model that offers it, a paid plan (never a
+ * free trial, the free lane or a promotion), and on a workspace only once an
+ * administrator has turned it on. It is billed to usage credits.
+ */
+export function fastModeRefusal(input: {
+  model: string;
+  modelOffersFast: boolean;
+  paidPlan: boolean;
+  workspaceAllowsFast: boolean;
+}): { message: string; status: 403 | 422 } | null {
+  if (!input.modelOffersFast) {
+    return {
+      message: `Fast mode is not available for ${input.model}. Turn it off or choose a model that offers it.`,
+      status: 422,
+    };
+  }
+  if (!input.paidPlan) {
+    return {
+      message: 'Fast mode is available on paid plans and is billed to usage credits.',
+      status: 403,
+    };
+  }
+  if (!input.workspaceAllowsFast) {
+    return {
+      message: 'Fast mode has been disabled by your organization.',
+      status: 403,
+    };
+  }
+  return null;
 }
 
 export function buildThinkingConfig({
@@ -4852,6 +4898,55 @@ export async function processRequest(
     };
   }
 
+  const fastRefusal =
+    chatRequest.speed === 'fast'
+      ? fastModeRefusal({
+          model: chatRequest.model,
+          modelOffersFast: fastTierFor(providerLower, chatRequest.model) !== null,
+          paidPlan: !isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled && !freeLanePlan,
+          workspaceAllowsFast: workspaceControls
+            ? workspaceControls.featureAccess.fast_mode === true
+            : true,
+        })
+      : null;
+  if (fastRefusal) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: fastRefusal.message,
+            type: 'invalid_request_error',
+            code: 'fast_mode_unavailable',
+            param: 'speed',
+          },
+        },
+        { status: fastRefusal.status },
+      ),
+    };
+  }
+  if (
+    chatRequest.speed === 'fast' &&
+    !(await usageCreditsEnabled((await scopedDbPromise).db, userId))
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Fast mode is billed to usage credits. Turn them on in Settings > Billing.',
+            type: 'invalid_request_error',
+            code: 'extra_usage_required',
+            param: 'speed',
+          },
+        },
+        { status: 402 },
+      ),
+    };
+  }
+  let fastTier =
+    chatRequest.speed === 'fast' ? fastTierFor(providerLower, chatRequest.model) : null;
+
   const effectiveEffort = clampReasoningEffort(
     resolveRequestEffort(
       providerLower,
@@ -4947,6 +5042,9 @@ export async function processRequest(
       estimatedPromptTokens,
       maxTokens,
     );
+  if (fastTier) {
+    estimatedCostMicrousd = Math.ceil(estimatedCostMicrousd * fastTier.priceMultiplier);
+  }
   const turnCodeExecutionInput = {
     provider: providerLower,
     stream: chatRequest.stream,
@@ -5111,6 +5209,7 @@ export async function processRequest(
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
           estimatedCostMicrousd = fallbackCostMicrousd;
+          fastTier = null;
         } else {
           return monthlyLimitRefusal();
         }
@@ -5156,6 +5255,7 @@ export async function processRequest(
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
+          ...(fastTier ? { funding: 'extra_usage' as const } : {}),
           quotaFeature,
           attribution: {
             workload: resolveChatWorkload({
@@ -5508,6 +5608,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(fastTier ? { speed: 'fast' as const } : {}),
     ...(responseFormat ? { responseFormat } : {}),
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({

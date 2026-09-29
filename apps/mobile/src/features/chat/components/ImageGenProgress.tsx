@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ImagePlus, AlertCircle, Loader2, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -206,7 +207,7 @@ export function ImageGenProgress({
         ) : null}
 
         {onStop && !isFailed ? (
-          <Pressable
+          <PressableBox
             testID="image-gen-stop"
             onPress={onStop}
             accessibilityRole="button"
@@ -234,7 +235,7 @@ export function ImageGenProgress({
             >
               Stop generating
             </Text>
-          </Pressable>
+          </PressableBox>
         ) : null}
 
         {/* Failed state: error message + retry button */}

@@ -135,7 +135,7 @@ impl fmt::Debug for RedactedAuthEntry<'_> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// On Unix, restrict file to owner-only read/write (0o600).
-#[cfg(unix)]
+#[cfg(all(unix, test))]
 fn set_file_permissions(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let perms = std::fs::Permissions::from_mode(0o600);
@@ -144,7 +144,7 @@ fn set_file_permissions(path: &Path) -> Result<()> {
 }
 
 /// On non-Unix platforms, this is a no-op (Windows ACLs handle security differently).
-#[cfg(not(unix))]
+#[cfg(all(not(unix), test))]
 fn set_file_permissions(_path: &Path) -> Result<()> {
     Ok(())
 }
@@ -192,17 +192,13 @@ struct AuthKeyringIndex {
     providers: Vec<String>,
 }
 
-fn keyring_disabled() -> bool {
-    std::env::var("AGIWORKFORCE_NO_KEYRING")
-        .map(|value| !value.is_empty() && value != "0")
-        .unwrap_or(false)
-}
-
 pub fn credential_storage_label() -> &'static str {
-    if keyring_disabled() {
+    if crate::secure_store::uses_keychain() {
+        "OS credential store"
+    } else if crate::secure_store::keyring_disabled() {
         "owner-only credential file (OS keyring explicitly disabled)"
     } else {
-        "OS credential store"
+        "owner-only credential file"
     }
 }
 
@@ -266,9 +262,7 @@ fn parse_auth_keyring_index(data: &str) -> Option<AuthKeyringIndex> {
 }
 
 fn write_owner_only_file(path: &Path, data: &str) -> Result<()> {
-    std::fs::write(path, data).with_context(|| format!("Failed to write {}", path.display()))?;
-    set_file_permissions(path)
-        .with_context(|| format!("Failed to restrict permissions on {}", path.display()))
+    crate::secure_store::write_owner_only(path, data.as_bytes())
 }
 
 /// Read the file store, which holds credential material in the clear. The mode
@@ -286,20 +280,26 @@ fn read_file_store(path: &Path, data: &str) -> Result<AuthStore> {
     serde_json::from_str(data).context("Failed to parse auth.json")
 }
 
+/// A credential the store no longer holds is an error, unless `missing_signs_out`
+/// says that provider is simply signed out. Any other store failure is always
+/// an error, so a caller never saves over credentials it could not read.
 fn load_keyring_auth(
     credentials: &dyn CredentialStore,
     index: AuthKeyringIndex,
+    missing_signs_out: bool,
 ) -> Result<AuthStore> {
     let mut entries = HashMap::with_capacity(index.providers.len());
     for provider in index.providers {
-        let secret = credentials
+        let held = credentials
             .get(&auth_keyring_account(&provider))
-            .with_context(|| format!("Could not read the saved {provider} credential"))?
-            .with_context(|| {
-                format!(
-                    "The saved {provider} credential is missing from the OS credential store; sign in again with `agi login`"
-                )
-            })?;
+            .with_context(|| format!("Could not read the saved {provider} credential"))?;
+        let secret = match held {
+            Some(secret) => secret,
+            None if missing_signs_out => continue,
+            None => bail!(
+                "The saved {provider} credential is missing from the OS credential store; sign in again with `agi login`"
+            ),
+        };
         let entry = serde_json::from_str::<AuthEntry>(&secret)
             .with_context(|| format!("Saved {provider} credential is invalid"))?;
         entries.insert(provider, entry);
@@ -361,14 +361,22 @@ impl AuthStore {
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
         if let Some(index) = parse_auth_keyring_index(&data) {
-            return load_keyring_auth(&OsKeyring, index);
+            if crate::secure_store::uses_keychain() {
+                return load_keyring_auth(&OsKeyring, index, false);
+            }
+            // A Linux install upgraded from the kernel keyring may find it
+            // emptied by a reboot; a credential it no longer holds is signed
+            // out, not a failure that blocks signing in again.
+            let store = load_keyring_auth(&OsKeyring, index, true)?;
+            store.save()?;
+            return Ok(store);
         }
 
         // One-time migration from the legacy owner-readable JSON file. We do
         // not silently fall back to plaintext when the OS keyring fails; an
         // explicit headless opt-out is required for that compatibility mode.
         let store = read_file_store(&path, &data)?;
-        if !keyring_disabled() {
+        if crate::secure_store::uses_keychain() {
             save_keyring_auth(&OsKeyring, &path, &store).context(
                 "Could not migrate auth.json into the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to retain the owner-only file store",
             )?;
@@ -376,11 +384,24 @@ impl AuthStore {
         Ok(store)
     }
 
+    /// Move a token read from the legacy plaintext auth.toml into this store.
+    /// The caller deletes the old file only once the store holds the token.
+    pub fn adopt_legacy_token(token: &str) -> Result<()> {
+        let mut store = Self::load()?;
+        store
+            .entries
+            .entry("managed_cloud".to_string())
+            .or_insert_with(|| AuthEntry::ApiKey {
+                key: token.to_string(),
+            });
+        store.save()
+    }
+
     pub fn save(&self) -> Result<()> {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
         let path = auth_path()?;
-        if keyring_disabled() {
+        if !crate::secure_store::uses_keychain() {
             let data =
                 serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
             return write_owner_only_file(&path, &data);
@@ -1666,7 +1687,7 @@ mod tests {
         }
 
         let index = parse_auth_keyring_index(&on_disk).expect("index");
-        let reloaded = load_keyring_auth(&keyring, index).expect("load");
+        let reloaded = load_keyring_auth(&keyring, index, false).expect("load");
         assert_eq!(reloaded.entries.len(), 2);
         let mut round_tripped = every_secret(&reloaded);
         let mut original = every_secret(&store);
@@ -1715,8 +1736,42 @@ mod tests {
 
         let index = parse_auth_keyring_index(&std::fs::read_to_string(&path).expect("index"))
             .expect("parse");
-        let error = load_keyring_auth(&keyring, index).expect_err("missing credential must error");
+        let error =
+            load_keyring_auth(&keyring, index, false).expect_err("missing credential must error");
         assert!(format!("{error:#}").contains("openai"), "{error:#}");
+    }
+
+    #[test]
+    fn an_emptied_kernel_keyring_signs_out_only_the_missing_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = MemoryStore::default();
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        keyring
+            .secrets
+            .lock()
+            .expect("store lock")
+            .remove(&auth_keyring_account("openai"));
+
+        let index = parse_auth_keyring_index(&std::fs::read_to_string(&path).expect("index"))
+            .expect("parse");
+        let store = load_keyring_auth(&keyring, index, true).expect("load");
+        assert_eq!(
+            store.entries.keys().collect::<Vec<_>>(),
+            vec!["agiworkforce"]
+        );
+    }
+
+    #[test]
+    fn a_keyring_failure_other_than_a_missing_entry_is_never_a_signed_out_store() {
+        let index = AuthKeyringIndex {
+            version: AUTH_INDEX_VERSION,
+            storage: AUTH_INDEX_STORAGE.to_string(),
+            providers: vec!["openai".to_string()],
+        };
+        let error = load_keyring_auth(&DenyingStore, index, true)
+            .expect_err("a denied read must not become an empty store");
+        assert!(format!("{error:#}").contains("denied"), "{error:#}");
     }
 
     #[test]

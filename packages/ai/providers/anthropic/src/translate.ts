@@ -33,6 +33,7 @@ interface AnthropicTranslatedRequest {
     format?: { type: 'json_schema'; schema: Record<string, unknown> };
   };
   metadata?: Record<string, unknown>;
+  speed?: 'fast';
 }
 
 interface AnthropicMessageParam {
@@ -320,6 +321,10 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     );
   }
 
+  if (req.speed === 'fast' && !metadata?.fastTier) {
+    throw new Error(`${req.model} has no fast output tier.`);
+  }
+
   const messages = req.messages
     .map(translateMessage)
     .filter((m): m is AnthropicMessageParam => m !== null);
@@ -375,6 +380,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
         }
       : {}),
     ...(requestMetadata ? { metadata: requestMetadata } : {}),
+    ...(req.speed === 'fast' ? { speed: 'fast' as const } : {}),
   };
 }
 

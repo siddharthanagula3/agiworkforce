@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronRight, List } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
@@ -37,7 +38,7 @@ export function ResearchReportSections({
         paddingVertical: 6,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={() => setExpanded((value) => !value)}
         accessibilityRole="button"
         accessibilityLabel={
@@ -64,7 +65,7 @@ export function ResearchReportSections({
         ) : (
           <ChevronRight size={14} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {expanded ? (
         <View style={{ paddingBottom: 4 }}>

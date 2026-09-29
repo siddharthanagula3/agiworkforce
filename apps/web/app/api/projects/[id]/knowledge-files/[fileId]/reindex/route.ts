@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudProjectKnowledgeReindexResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -65,10 +66,11 @@ async function handleReindexKnowledgeFile(request: NextRequest, context: RouteCo
   const dispatch = await dispatchRetrievalIndexWorkflows([{ documentId, userId, organizationId }]);
   const states = await readProjectKnowledgeIndexStates(db, projectId, [fileId]);
 
-  return NextResponse.json(
-    { indexing: states.get(fileId) ?? null, dispatched: dispatch.started > 0 },
-    { status: 202 },
-  );
+  const reindexed: ManagedCloudProjectKnowledgeReindexResponse = {
+    indexing: states.get(fileId) ?? null,
+    dispatched: dispatch.started > 0,
+  };
+  return NextResponse.json(reindexed, { status: 202 });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleReindexKnowledgeFile));
