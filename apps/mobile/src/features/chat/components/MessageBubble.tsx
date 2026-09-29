@@ -101,6 +101,8 @@ import {
   type VariantInfo,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCardResponsePayload } from '@agiworkforce/types';
+import type { ManagedCloudAgentRunInputAnswer } from '@agiworkforce/cloud-contracts';
+import { CloudRunInputForm } from '@/src/features/tasks/components/CloudRunInputForm';
 import {
   generatedFileArtifactsFromMetadata,
   mergeDerivedAndGeneratedFileArtifacts,
@@ -632,6 +634,14 @@ export const MessageBubble = memo(function MessageBubble({
       useChatExecutionStore
         .getState()
         .respondToInteractiveCard(message.conversationId, message.id, cardId, payload),
+    [message.conversationId, message.id],
+  );
+
+  const handleAnswerToolInput = useCallback(
+    (answers: ManagedCloudAgentRunInputAnswer[]) =>
+      void useChatExecutionStore
+        .getState()
+        .answerToolInput(message.conversationId, message.id, answers),
     [message.conversationId, message.id],
   );
 
@@ -1404,6 +1414,36 @@ export const MessageBubble = memo(function MessageBubble({
                 }
                 onRespond={handleRespondToCard}
               />
+            ) : null}
+
+            {isAssistant &&
+            appMode === 'cloud' &&
+            message.pendingToolInput &&
+            message.isStreaming !== true ? (
+              <View
+                testID="chat.tool-input-request"
+                style={{
+                  marginTop: 8,
+                  gap: 10,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: themeColors.borderLight,
+                  padding: 12,
+                }}
+              >
+                <Text
+                  accessibilityRole="header"
+                  style={{ fontSize: 14, fontWeight: '600', color: themeColors.textPrimary }}
+                >
+                  Needs your input
+                </Text>
+                <CloudRunInputForm
+                  key={message.pendingToolInput.requestedAt}
+                  pendingInput={message.pendingToolInput}
+                  busy={conversationStreaming}
+                  onSubmit={handleAnswerToolInput}
+                />
+              </View>
             ) : null}
 
             {research?.phase === 'complete' && !message.isStreaming ? (
