@@ -575,7 +575,19 @@
     "moreSavedMemories_one": "И ещё {{count}}",
     "moreSavedMemories_few": "И ещё {{count}}",
     "moreSavedMemories_many": "И ещё {{count}}",
-    "moreSavedMemories_other": "И ещё {{count}}"
+    "moreSavedMemories_other": "И ещё {{count}}",
+    "filesCreated_one": "{{count}} файл создан",
+    "filesCreated_few": "{{count}} файла создано",
+    "filesCreated_many": "{{count}} файлов создано",
+    "filesCreated_other": "{{count}} файла создано",
+    "foundSources_one": "Найден {{count}} источник",
+    "foundSources_few": "Найдено {{count}} источника",
+    "foundSources_many": "Найдено {{count}} источников",
+    "foundSources_other": "Найдено {{count}} источника",
+    "mapPreviewPlaces_one": "Предпросмотр карты с {{count}} местом",
+    "mapPreviewPlaces_few": "Предпросмотр карты с {{count}} местами",
+    "mapPreviewPlaces_many": "Предпросмотр карты с {{count}} местами",
+    "mapPreviewPlaces_other": "Предпросмотр карты с {{count}} места"
   },
   "markdownTable": {
     "label": "Таблица",

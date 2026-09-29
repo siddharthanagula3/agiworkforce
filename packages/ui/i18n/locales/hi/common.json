@@ -170,7 +170,11 @@
     "toolsAwaitingApproval_one": "एक टूल आपकी मंज़ूरी का इंतज़ार कर रहा है।",
     "toolsAwaitingApproval_other": "{{count}} टूल आपकी मंज़ूरी का इंतज़ार कर रहे हैं।",
     "unsentMessages_one": "आपका एक मैसेज नहीं भेजा गया है।",
-    "unsentMessages_other": "आपके {{count}} मैसेज नहीं भेजे गए हैं।"
+    "unsentMessages_other": "आपके {{count}} मैसेज नहीं भेजे गए हैं।",
+    "packages_one": "{{count}} पैकेज",
+    "packages_other": "{{count}} पैकेज",
+    "unreadNotifications_one": "{{count}} अपठित सूचना",
+    "unreadNotifications_other": "{{count}} अपठित सूचनाएँ"
   },
   "relative": {
     "minutesAgo_one": "{{count}} मिनट पहले",
