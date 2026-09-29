@@ -436,11 +436,35 @@ describe('carrying an unlink to the signaling relay', () => {
       expect.objectContaining({
         kind: 'webhooks.signaling-device-revoke',
         userId: 'user-1',
-        payload: { deviceId: DEVICE_ID, reason: 'unlinked' },
+        payload: expect.objectContaining({ deviceId: DEVICE_ID, reason: 'unlinked' }),
+        idempotencyKey: expect.stringMatching(/^device-revoke:.+:unlinked:\d{4}-/),
       }),
     );
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.doUnmock('@/lib/jobs/job-service');
+  });
+});
+
+describe('a queued relay revoke that outlived its device', () => {
+  it('is stale once remote work is back on, or an unlinked device reports in again', async () => {
+    const { revocationIsStale } = await import('../device-registry');
+    const at = '2026-09-29T10:00:00.000Z';
+    expect(revocationIsStale('unlinked', at, null)).toBe(false);
+    expect(revocationIsStale('unlinked', at, { remote_enabled: true, last_seen_at: null })).toBe(
+      true,
+    );
+    expect(
+      revocationIsStale('unlinked', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(true);
+    expect(
+      revocationIsStale('remote_work_stopped', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(false);
   });
 });
