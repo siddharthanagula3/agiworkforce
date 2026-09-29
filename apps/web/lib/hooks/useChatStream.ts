@@ -45,6 +45,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { useFastModeAllowanceStore } from '@shared/stores/fast-mode-allowance-store';
 import { readSelectedLocalModel } from '@features/desktop-host';
 import {
   LOCAL_ATTACHMENTS_UNSUPPORTED,
@@ -4107,7 +4108,12 @@ export function useChatStream(
                 supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
                   ? resolvedEffort
                   : undefined,
-              speed: thinkingState.fast && selectedModelMetadata?.fastTier ? 'fast' : undefined,
+              speed:
+                thinkingState.fast &&
+                useFastModeAllowanceStore.getState().allowed &&
+                selectedModelMetadata?.fastTier
+                  ? 'fast'
+                  : undefined,
               client_timezone: getBrowserTimeZone(),
               use_prompt_cache: true,
             }),

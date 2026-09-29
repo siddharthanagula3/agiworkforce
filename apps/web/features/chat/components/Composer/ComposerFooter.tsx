@@ -84,6 +84,7 @@ import {
 import { environmentAvailability, modelLock } from '@features/chat/lib/model-plan-admission';
 import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { useFastModeAvailability } from '@/features/chat/hooks/use-fast-mode-availability';
 import {
   resolveFreeLaneUiBuildEnabled,
   resolveFreeLaneUiEnabled,
@@ -735,6 +736,8 @@ interface ComposerFooterProps {
   toolsArmed?: boolean;
   /** What those armed controls are called, for the compatibility copy. */
   toolsLabel?: string;
+  /** The workspace has not turned fast mode on for this account. */
+  fastModeDisabledByWorkspace?: boolean;
 }
 
 export function ComposerFooter({
@@ -749,6 +752,7 @@ export function ComposerFooter({
   pendingAttachmentCount = 0,
   toolsArmed = false,
   toolsLabel,
+  fastModeDisabledByWorkspace = false,
 }: ComposerFooterProps) {
   const effortPanelId = useId();
   const [open, setOpen] = useState(false);
@@ -1157,7 +1161,12 @@ export function ComposerFooter({
   const hasEffortControl = supportsAdaptive && effortChips.length > 0;
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   const fastTier = getModelMetadataById(selectedModel.id)?.fastTier;
-  const fastOn = Boolean(fastTier) && fastEnabled;
+  const fastAvailability = useFastModeAvailability(
+    Boolean(fastTier),
+    knownTier === null ? null : !freePlan,
+    fastModeDisabledByWorkspace,
+  );
+  const fastOn = Boolean(fastTier) && fastEnabled && fastAvailability.allowed;
   // Store efforts this model actually supports (for clamping the persisted pref).
   const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
   const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
@@ -1751,14 +1760,16 @@ export function ComposerFooter({
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium text-foreground">Fast mode</span>
                       <Switch
-                        checked={fastEnabled}
+                        checked={fastOn}
+                        disabled={!fastAvailability.allowed}
                         onCheckedChange={setFastEnabled}
                         aria-label="Fast mode"
                         className="h-5 w-9"
                       />
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {`Faster answers from the same model, at ${fastTier.priceMultiplier}x the usage.`}
+                      {fastAvailability.reason ??
+                        `Faster answers from the same model, at ${fastTier.priceMultiplier}x the usage, billed to usage credits.`}
                     </p>
                   </div>
                 )}
