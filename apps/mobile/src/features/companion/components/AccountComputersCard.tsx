@@ -29,15 +29,25 @@ const KIND_LABELS: Record<string, string> = {
   vscode: 'VS Code',
 };
 
+const CAPABILITY_LABELS = [
+  ['remoteControl', 'Remote control'],
+  ['browser', 'Browser'],
+  ['computerUse', 'Computer use'],
+  ['localModels', 'Local models'],
+  ['localMcp', 'Local MCP'],
+] as const;
+
 function detailLine(computer: AccountComputer): string {
-  return [
-    KIND_LABELS[computer.kind] ?? computer.kind,
-    computer.platform,
-    computer.architecture,
-    computer.capabilities && !computer.capabilities.remoteControl ? 'Remote control off' : null,
-  ]
+  return [KIND_LABELS[computer.kind] ?? computer.kind, computer.platform, computer.architecture]
     .filter((part): part is string => Boolean(part))
     .join(' · ');
+}
+
+function capabilityLine(computer: AccountComputer): string | null {
+  const { capabilities } = computer;
+  if (!capabilities) return null;
+  const offered = CAPABILITY_LABELS.filter(([key]) => capabilities[key]).map(([, label]) => label);
+  return offered.length > 0 ? offered.join(' · ') : 'Remote control off';
 }
 
 export function AccountComputersCard({ connectedName }: { connectedName: string | null }) {
@@ -118,6 +128,11 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
                     <Text className="text-[10px] text-white/45" numberOfLines={1}>
                       {detailLine(computer)}
                     </Text>
+                    {capabilityLine(computer) ? (
+                      <Text className="text-[10px] text-white/45" numberOfLines={2}>
+                        {capabilityLine(computer)}
+                      </Text>
+                    ) : null}
                   </View>
                   <Badge
                     label={connected ? 'Connected' : PRESENCE_LABELS[computer.presence]}
