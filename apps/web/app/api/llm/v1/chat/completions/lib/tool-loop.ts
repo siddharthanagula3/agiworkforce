@@ -360,7 +360,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
-import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { executeFileTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
 import {
@@ -2143,7 +2143,7 @@ async function runMcpTool(
     if (!executionContext?.userId) {
       return { content: 'A signed-in account is required to search files.', isError: true };
     }
-    return executeFileSearchTool(toolCall.args, {
+    return executeFileTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,

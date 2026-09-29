@@ -268,6 +268,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  open_file: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
   create_schedule: {
     actionClass: 'write',
     reversible: true,
