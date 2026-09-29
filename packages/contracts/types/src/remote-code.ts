@@ -46,6 +46,18 @@ export interface RemoteCodeSessionSummary {
   status: RemoteCodeSessionStatus;
   model: string | null;
   updatedAt: string;
+  /** The tool that started the session, so the phone can tell VS Code from the CLI. */
+  origin?: RemoteCodeSessionOrigin;
+}
+
+export const REMOTE_CODE_SESSION_ORIGINS = ['cli', 'vscode', 'desktop'] as const;
+export type RemoteCodeSessionOrigin = (typeof REMOTE_CODE_SESSION_ORIGINS)[number];
+
+function sessionOrigin(value: unknown): RemoteCodeSessionOrigin | undefined {
+  return typeof value === 'string' &&
+    (REMOTE_CODE_SESSION_ORIGINS as readonly string[]).includes(value)
+    ? (value as RemoteCodeSessionOrigin)
+    : undefined;
 }
 
 export interface RemoteCodeFileChange {
@@ -474,7 +486,18 @@ export function parseRemoteCodeSessions(payload: unknown): RemoteCodeSessionsEve
     ) {
       return null;
     }
-    return { rootId, threadId, title, folder, branch, status, model, updatedAt };
+    const origin = sessionOrigin(entry['origin']);
+    return {
+      rootId,
+      threadId,
+      title,
+      folder,
+      branch,
+      status,
+      model,
+      updatedAt,
+      ...(origin ? { origin } : {}),
+    };
   });
   const unavailable = list(base['unavailable'], 50, (entry) => {
     if (!isRecord(entry)) return null;

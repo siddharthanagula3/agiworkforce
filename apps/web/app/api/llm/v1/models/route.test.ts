@@ -122,6 +122,18 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     });
   });
 
+  it('carries the step-up details with a passkey refusal, as the chat gateway does', async () => {
+    const { PasskeyRequiredError } = await import('@/lib/server/account-security/gate');
+    authMocks.getClerkAuthUser.mockRejectedValueOnce(new PasskeyRequiredError());
+
+    const response = await GET(request({ Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'passkey_required', details: { reason: 'passkey_required' } },
+    });
+  });
+
   it('returns the authenticated subscription catalog for a valid credential', async () => {
     authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
     subscriptionMocks.getSubscription.mockResolvedValueOnce({
