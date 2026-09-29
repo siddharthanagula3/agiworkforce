@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { RoutingPreferencesSchema, type RoutingPreferences } from '@agiworkforce/cloud-contracts';
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
@@ -11,13 +11,6 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-
-const RoutingPreferencesSchema = z.object({
-  us_only: z.boolean().optional(),
-  geo_overlay: z.enum(['auto', 'us', 'in', 'cn']).optional(),
-});
-
-type RoutingPreferences = z.infer<typeof RoutingPreferencesSchema>;
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
@@ -30,17 +23,16 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       'select routing_preferences from profiles where id = $1 limit 1',
       [userId],
     );
-    const raw = row?.routing_preferences;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      return NextResponse.json({});
-    }
-    return NextResponse.json(raw);
+    const stored = RoutingPreferencesSchema.safeParse(row?.routing_preferences);
+    const preferences: RoutingPreferences = stored.success ? stored.data : {};
+    return NextResponse.json(preferences);
   } catch (error) {
     logger.warn(
       { userId, error: error instanceof Error ? error.message : String(error) },
       '[routing-preferences] read failed · returning {}',
     );
-    return NextResponse.json({});
+    const preferences: RoutingPreferences = {};
+    return NextResponse.json(preferences);
   }
 }
 
