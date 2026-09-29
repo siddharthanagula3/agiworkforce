@@ -44,10 +44,20 @@ function onDisk(path: string, text: string, sha256: string): FileTextContent {
   return { path, text, sizeBytes: text.length, modifiedAtMs: 1, truncated: false, sha256 };
 }
 
-function renderPanel() {
+function renderPanel(sessionBusy = false) {
   const onClose = vi.fn();
-  render(<LocalChangesPanel rootId="root-1" title="Tidy" refreshKey={0} onClose={onClose} />);
-  return { onClose };
+  const onReview = vi.fn();
+  render(
+    <LocalChangesPanel
+      rootId="root-1"
+      title="Tidy"
+      refreshKey={0}
+      sessionBusy={sessionBusy}
+      onReview={onReview}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onReview };
 }
 
 async function openFile(path: string): Promise<HTMLElement> {
@@ -111,5 +121,31 @@ describe('the file open in the changes panel', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }),
     );
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('reviewing the changes', () => {
+  it('asks the session for one review turn', async () => {
+    readDeveloperSessionChanges.mockResolvedValue(CHANGES);
+    const { onReview } = renderPanel();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Review code' }));
+
+    expect(onReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while a turn runs', async () => {
+    readDeveloperSessionChanges.mockResolvedValue(CHANGES);
+    renderPanel(true);
+
+    expect(await screen.findByRole('button', { name: 'Review code' })).toBeDisabled();
+  });
+
+  it('is not offered when nothing has changed', async () => {
+    readDeveloperSessionChanges.mockResolvedValue({ ...CHANGES, files: [] });
+    renderPanel();
+
+    expect(await screen.findByText('No changes to show')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review code' })).not.toBeInTheDocument();
   });
 });

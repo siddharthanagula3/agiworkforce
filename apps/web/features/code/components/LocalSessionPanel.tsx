@@ -48,6 +48,7 @@ import {
   LOCAL_AGENT_MODE_HINTS,
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
+  LOCAL_REVIEW_COMMAND,
   localAgentMode,
   localApprovalPrompts,
   localFailureAction,
@@ -312,6 +313,16 @@ export function LocalSessionPanel({
     setDraft('');
     void state.send(
       text,
+      model === '' || model === session.model ? undefined : model,
+      activeMode,
+      boundedTurns ? turnSteps : undefined,
+    );
+  };
+
+  const review = () => {
+    if (busy) return;
+    void state.send(
+      LOCAL_REVIEW_COMMAND,
       model === '' || model === session.model ? undefined : model,
       activeMode,
       boundedTurns ? turnSteps : undefined,
@@ -604,6 +615,8 @@ export function LocalSessionPanel({
             rootId={session.rootId}
             title={session.title}
             refreshKey={state.messages.length}
+            sessionBusy={busy}
+            onReview={review}
             onClose={() => setChangesOpen(false)}
           />
         )}

@@ -17,9 +17,12 @@ import {
   providerLabels,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
+  type CloudCodeGoalCommand,
 } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
 import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
+
+export const LOCAL_REVIEW_COMMAND: CloudCodeGoalCommand = '/review';
 
 export const LOCAL_CODE_COPY = {
   heading: 'On this device',
@@ -70,6 +73,7 @@ export const LOCAL_CODE_COPY = {
   discardFailed: 'That change could not be discarded.',
   commandFailed: 'That command could not be run.',
   editFile: 'Edit',
+  reviewCode: 'Review code',
   closeFile: 'Close the file',
   openingFile: 'Opening the file',
   saveFile: 'Save',

@@ -99,10 +99,19 @@ export interface LocalChangesPanelProps {
   rootId: string;
   title: string;
   refreshKey: number;
+  sessionBusy: boolean;
+  onReview: () => void;
   onClose: () => void;
 }
 
-export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalChangesPanelProps) {
+export function LocalChangesPanel({
+  rootId,
+  title,
+  refreshKey,
+  sessionBusy,
+  onReview,
+  onClose,
+}: LocalChangesPanelProps) {
   const [changes, setChanges] = useState<WorkingTreeChanges | null>(null);
   const [repository, setRepository] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -182,6 +191,16 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
           <span>{CODE_COPY.changesHeading}</span>
         </span>
         <div className={styles['changesActions']}>
+          {changes !== null && changes.files.length > 0 && (
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              disabled={sessionBusy}
+              onClick={onReview}
+            >
+              {LOCAL_CODE_COPY.reviewCode}
+            </button>
+          )}
           <button
             type="button"
             className={styles['headerButton']}
