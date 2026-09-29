@@ -178,12 +178,13 @@ describe('evaluateConnectorPolicyForUser', () => {
     expect(loggerError).toHaveBeenCalled();
   });
 
-  it('fails open when the workspace cannot be resolved', async () => {
+  it('refuses to connect when the workspace cannot be confirmed', async () => {
     resolveActiveOrganizationId.mockRejectedValue(new Error('no workspace'));
 
     await expect(
       evaluateConnectorPolicyForUser({ db, userId: USER, connectorId: 'github' }),
-    ).resolves.toMatchObject({ allowed: true, code: 'ungoverned' });
+    ).resolves.toMatchObject({ allowed: false, code: 'connectors_unavailable' });
+    expect(readConnectorPolicySafely).not.toHaveBeenCalled();
   });
 
   it('does not resolve a workspace without a user', async () => {
