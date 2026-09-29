@@ -12,6 +12,7 @@
 
 pub(crate) mod account;
 mod developer_host;
+mod pull_request;
 pub(crate) mod surfaces;
 mod threads;
 

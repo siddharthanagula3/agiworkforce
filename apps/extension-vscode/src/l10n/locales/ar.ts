@@ -735,6 +735,18 @@ const ar = {
   'savedApprovals.removeAllowed':
     'سيسأل AGI مرة أخرى في المرة القادمة التي يريد فيها فعل هذا: {label}',
   'savedApprovals.removeDenied': 'قد يطلب AGI فعل هذا مرة أخرى بدلًا من رفضه: {label}',
+  'pullRequest.titlePrompt': 'عنوان طلب الدمج',
+  'pullRequest.basePrompt': 'الفرع المراد الدمج فيه',
+  'pullRequest.confirmPush':
+    'دفع {count} من الإيداعات من {branch} إلى {remote} وفتح طلب دمج إلى {base}؟',
+  'pullRequest.confirmOpen': 'فتح طلب دمج من {branch} إلى {base}؟',
+  'pullRequest.confirmAction': 'دفع وفتح',
+  'pullRequest.openAction': 'فتح طلب الدمج',
+  'pullRequest.created': 'AGI Workforce: تم فتح طلب الدمج.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'عرض',
+  'pullRequest.blocked': 'AGI Workforce: لا يمكن فتح طلب دمج: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'الموافقات المحفوظة',
   'webview.alwaysAllow': 'السماح دائمًا',
   'webview.alwaysAllowHint':

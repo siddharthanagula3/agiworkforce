@@ -611,6 +611,18 @@ const fr = {
     "AGI redemandera la prochaine fois qu'il voudra faire ceci : {label}",
   'savedApprovals.removeDenied':
     "AGI pourra redemander à faire ceci au lieu d'être refusé : {label}",
+  'pullRequest.titlePrompt': 'Titre de la pull request',
+  'pullRequest.basePrompt': 'Branche dans laquelle fusionner',
+  'pullRequest.confirmPush':
+    'Pousser {count} commit(s) de {branch} vers {remote} et ouvrir une pull request vers {base} ?',
+  'pullRequest.confirmOpen': 'Ouvrir une pull request de {branch} vers {base} ?',
+  'pullRequest.confirmAction': 'Pousser et ouvrir',
+  'pullRequest.openAction': 'Ouvrir la pull request',
+  'pullRequest.created': 'AGI Workforce : pull request ouverte.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce : {note}.',
+  'pullRequest.view': 'Afficher',
+  'pullRequest.blocked': 'AGI Workforce : impossible d’ouvrir une pull request : {reason}.',
+  'pullRequest.failed': 'AGI Workforce : {reason}',
   'savedApprovals.noun': 'approbations enregistrées',
   'webview.alwaysAllow': 'Toujours autoriser',
   'webview.alwaysAllowHint':

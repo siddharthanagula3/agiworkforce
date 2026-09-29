@@ -423,6 +423,18 @@ const ko = {
   'savedApprovals.removeTitle': '이 저장된 승인을 제거할까요?',
   'savedApprovals.removeAllowed': '다음에 이 작업을 하려고 할 때 AGI가 다시 묻습니다: {label}',
   'savedApprovals.removeDenied': '거부되는 대신 AGI가 이 작업을 다시 요청할 수 있습니다: {label}',
+  'pullRequest.titlePrompt': '풀 리퀘스트 제목',
+  'pullRequest.basePrompt': '병합할 대상 브랜치',
+  'pullRequest.confirmPush':
+    '{branch}의 커밋 {count}개를 {remote}에 푸시하고 {base}로 풀 리퀘스트를 열까요?',
+  'pullRequest.confirmOpen': '{branch}에서 {base}로 풀 리퀘스트를 열까요?',
+  'pullRequest.confirmAction': '푸시하고 열기',
+  'pullRequest.openAction': '풀 리퀘스트 열기',
+  'pullRequest.created': 'AGI Workforce: 풀 리퀘스트를 열었습니다.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': '보기',
+  'pullRequest.blocked': 'AGI Workforce: 풀 리퀘스트를 열 수 없습니다: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': '저장된 승인',
   'webview.alwaysAllow': '항상 허용',
   'webview.alwaysAllowHint':

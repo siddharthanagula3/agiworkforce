@@ -491,6 +491,18 @@ const hi = {
   'savedApprovals.removeAllowed': 'अगली बार यह करना चाहने पर AGI फिर से पूछेगा: {label}',
   'savedApprovals.removeDenied':
     'अस्वीकार होने के बजाय AGI इसे करने के लिए फिर से पूछ सकता है: {label}',
+  'pullRequest.titlePrompt': 'पुल रिक्वेस्ट का शीर्षक',
+  'pullRequest.basePrompt': 'जिस ब्रांच में मर्ज करना है',
+  'pullRequest.confirmPush':
+    '{branch} से {count} कमिट {remote} पर पुश करके {base} में पुल रिक्वेस्ट खोलें?',
+  'pullRequest.confirmOpen': '{branch} से {base} में पुल रिक्वेस्ट खोलें?',
+  'pullRequest.confirmAction': 'पुश करें और खोलें',
+  'pullRequest.openAction': 'पुल रिक्वेस्ट खोलें',
+  'pullRequest.created': 'AGI Workforce: पुल रिक्वेस्ट खोला गया।',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}।',
+  'pullRequest.view': 'देखें',
+  'pullRequest.blocked': 'AGI Workforce: पुल रिक्वेस्ट नहीं खोला जा सकता: {reason}।',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'सहेजी गई स्वीकृतियाँ',
   'webview.alwaysAllow': 'हमेशा अनुमति दें',
   'webview.alwaysAllowHint':
