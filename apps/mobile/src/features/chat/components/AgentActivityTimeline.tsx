@@ -21,6 +21,7 @@ import type {
   AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
+import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
@@ -32,6 +33,7 @@ import {
   type ResolveCloudToolApproval,
 } from './CloudToolApprovalControls';
 import { RunSteerInput } from './RunSteerInput';
+import { CodeRunAgain } from './CodeRunAgain';
 
 const ACTIVITY_PAGE_SIZE = 20;
 
@@ -44,6 +46,7 @@ export interface AgentActivityTimelineProps {
   approvalExpired?: boolean;
   onResendApproval?: () => void;
   steerRunId?: string;
+  codeRunConversationId?: string;
 }
 
 function formatDuration(ms: number): string {
@@ -136,12 +139,14 @@ function ToolRow({
   onResolveApproval,
   approvalExpired,
   onResendApproval,
+  codeRunConversationId,
 }: {
   entry: AgentActivityToolEntry;
   expanded: boolean;
   onToggle: () => void;
   onResolveApproval?: AgentActivityTimelineProps['onResolveApproval'];
   approvalExpired: boolean;
+  codeRunConversationId?: string;
   onResendApproval?: () => void;
 }) {
   const colors = useThemeColors();
@@ -152,6 +157,15 @@ function ToolRow({
   const awaitingDevice = entry.status === 'awaiting-device';
   const toolStatus = normalizeToolStatus(entry.status);
   const statusColor = awaitingDevice ? colors.agentWarning : toolStatusColor(toolStatus, colors);
+  const rerunArgs =
+    entry.name === CHAT_CODE_RUN_TOOL_NAME ? parseToolArguments(entry.input) : undefined;
+  const rerunCode = typeof rerunArgs?.['code'] === 'string' ? rerunArgs['code'] : '';
+  const rerunLanguage =
+    typeof rerunArgs?.['language'] === 'string' ? rerunArgs['language'] : 'python';
+  const canRunAgain =
+    codeRunConversationId !== undefined &&
+    rerunCode.trim() !== '' &&
+    TOOL_STATUS_PRESENTATION[toolStatus].terminal;
   const statusLabel = awaitingDevice
     ? `Waiting for ${entry.deviceStep?.deviceName ?? 'your desktop'}`
     : TOOL_STATUS_PRESENTATION[toolStatus].label;
@@ -239,6 +253,16 @@ function ToolRow({
               onResolve={onResolveApproval}
             />
           )}
+        </View>
+      ) : null}
+
+      {canRunAgain ? (
+        <View style={{ marginLeft: 25 }}>
+          <CodeRunAgain
+            conversationId={codeRunConversationId}
+            language={rerunLanguage}
+            code={rerunCode}
+          />
         </View>
       ) : null}
 
@@ -405,6 +429,7 @@ export function AgentActivityTimeline({
   approvalExpired = false,
   onResendApproval,
   steerRunId,
+  codeRunConversationId,
 }: AgentActivityTimelineProps) {
   const colors = useThemeColors();
   const isActive =
@@ -523,6 +548,7 @@ export function AgentActivityTimeline({
                   onResolveApproval={onResolveApproval}
                   approvalExpired={approvalExpired}
                   onResendApproval={onResendApproval}
+                  codeRunConversationId={codeRunConversationId}
                 />
               );
             }
