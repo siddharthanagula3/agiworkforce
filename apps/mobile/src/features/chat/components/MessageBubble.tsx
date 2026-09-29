@@ -4,7 +4,7 @@ import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Check,
@@ -105,6 +105,8 @@ import {
   type VariantInfo,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCardResponsePayload } from '@agiworkforce/types';
+import type { ManagedCloudAgentRunInputAnswer } from '@agiworkforce/cloud-contracts';
+import { CloudRunInputForm } from '@/src/features/tasks/components/CloudRunInputForm';
 import {
   generatedFileArtifactsFromMetadata,
   mergeDerivedAndGeneratedFileArtifacts,
@@ -298,6 +300,7 @@ function TurnNotice({
 }
 
 const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
+const NEW_MESSAGE_ENTRY_WINDOW_MS = 5_000;
 const REFUSAL_FINISH_REASONS = new Set(['refusal', 'content_filter']);
 
 function splitQuotedReply(content: string): { quote: string; body: string } | null {
@@ -526,6 +529,11 @@ export const MessageBubble = memo(function MessageBubble({
   const isAssistant = message.role === 'assistant';
   const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
   const router = useRouter();
+  const [arrivedNow] = useState(
+    () =>
+      Boolean(message.isStreaming) ||
+      Date.now() - Date.parse(message.createdAt) < NEW_MESSAGE_ENTRY_WINDOW_MS,
+  );
   const connectRequests = useMemo(() => {
     const seen = new Set<string>();
     const requests: ConnectorConnectRequest[] = [];
@@ -690,6 +698,14 @@ export const MessageBubble = memo(function MessageBubble({
       useChatExecutionStore
         .getState()
         .respondToInteractiveCard(message.conversationId, message.id, cardId, payload),
+    [message.conversationId, message.id],
+  );
+
+  const handleAnswerToolInput = useCallback(
+    (answers: ManagedCloudAgentRunInputAnswer[]) =>
+      void useChatExecutionStore
+        .getState()
+        .answerToolInput(message.conversationId, message.id, answers),
     [message.conversationId, message.id],
   );
 
@@ -1100,7 +1116,9 @@ export const MessageBubble = memo(function MessageBubble({
   const messageContent = (
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
-      entering={reducedMotion ? undefined : FadeInDown.duration(motion.quick).springify()}
+      entering={
+        reducedMotion || !arrivedNow ? undefined : FadeInDown.duration(motion.quick).springify()
+      }
       className="px-4 py-4"
     >
       <Pressable
@@ -1483,6 +1501,40 @@ export const MessageBubble = memo(function MessageBubble({
                 }
                 onRespond={handleRespondToCard}
               />
+            ) : null}
+
+            {isAssistant &&
+            appMode === 'cloud' &&
+            message.pendingToolInput &&
+            message.isStreaming !== true ? (
+              <View
+                testID="chat.tool-input-request"
+                style={{
+                  marginTop: 8,
+                  gap: 10,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: themeColors.borderLight,
+                  padding: 12,
+                }}
+              >
+                <Text
+                  accessibilityRole="header"
+                  style={{
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                    color: themeColors.textPrimary,
+                  }}
+                >
+                  Needs your input
+                </Text>
+                <CloudRunInputForm
+                  key={message.pendingToolInput.requestedAt}
+                  pendingInput={message.pendingToolInput}
+                  busy={conversationStreaming}
+                  onSubmit={handleAnswerToolInput}
+                />
+              </View>
             ) : null}
 
             {research?.phase === 'complete' && !message.isStreaming ? (

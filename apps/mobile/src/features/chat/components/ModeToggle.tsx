@@ -8,9 +8,7 @@ import type { AppMode } from './ModeSwitchModal';
 
 export interface ModeToggleProps {
   mode?: AppMode;
-  cloudJoined?: boolean;
   cloudUnlocked?: boolean;
-  waitlistRank?: number | undefined;
   compact?: boolean;
   onChange?: (mode: AppMode) => void;
   onTapLocal?: () => void;
@@ -19,9 +17,7 @@ export interface ModeToggleProps {
 
 export function ModeToggle({
   mode = 'local',
-  cloudJoined = false,
   cloudUnlocked = false,
-  waitlistRank,
   compact = false,
   onTapLocal,
   onTapCloud,
@@ -29,8 +25,6 @@ export function ModeToggle({
   const colors = useThemeColors();
   const cloudLabel = 'Cloud';
   const cloudActive = mode === 'cloud';
-  void cloudJoined;
-  void waitlistRank;
   const cloudAccessibilityLabel = cloudUnlocked ? 'AGI Cloud' : 'AGI Cloud, sign in required';
   const toggleWidth = compact ? 172 : 216;
   const selectedBackground = colors.charcoal700;

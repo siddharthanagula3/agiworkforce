@@ -40,7 +40,10 @@ const SMART_ON_FHIR_PATIENT_SCOPES: readonly string[] = [
 export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorScopeCeiling>> = {
   gmail: [...GOOGLE_IDENTITY_SCOPES, ...google('gmail.readonly', 'gmail.compose', 'gmail.send')],
   'google-calendar': [...GOOGLE_IDENTITY_SCOPES, ...google('calendar.readonly', 'calendar.events')],
-  'google-drive': [...GOOGLE_IDENTITY_SCOPES, ...google('drive.file', 'drive.metadata.readonly')],
+  'google-drive': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('drive.file', 'drive.readonly', 'drive.metadata.readonly'),
+  ],
   'google-contacts': [
     ...GOOGLE_IDENTITY_SCOPES,
     ...google('contacts.readonly', 'directory.readonly'),

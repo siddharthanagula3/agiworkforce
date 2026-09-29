@@ -204,6 +204,7 @@ export function ImageAreaEditor({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onCancel}>
       <KeyboardAvoidingView
+        accessibilityViewIsModal
         style={{ flex: 1, backgroundColor: colors.surfaceBase }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >

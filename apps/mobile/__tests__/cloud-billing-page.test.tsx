@@ -144,6 +144,7 @@ import * as mobileIapService from '../src/features/billing/mobileIapService';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
+import { ApiHttpError } from '../services/apiErrors';
 
 describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
@@ -197,6 +198,47 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
       await (props?.onPrimaryAction as () => Promise<void>)();
     });
     expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/portal');
+  });
+
+  it.each([
+    [
+      new ApiHttpError(
+        'This subscription is billed by Apple. Manage or cancel it with Apple before starting web billing.',
+        409,
+        'CONFLICT',
+      ),
+      'Billing managed elsewhere',
+      'This subscription is billed by Apple. Manage or cancel it with Apple before starting web billing.',
+    ],
+    [
+      new ApiHttpError('Paid upgrades are opening in stages.', 403, 'waitlist_access_required'),
+      'Upgrade access needed',
+      'Paid upgrades are opening in stages.',
+    ],
+    [
+      new ApiHttpError('Failed to create portal session', 500, 'INTERNAL_ERROR'),
+      'Billing portal unavailable',
+      'Please try again later.',
+    ],
+  ])('says why the billing portal did not open (%#)', async (error, title, message) => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'pro',
+      billingStatus: 'past_due',
+      billingSource: 'stripe',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchPortalSessionUrl as jest.Mock).mockRejectedValueOnce(error);
+
+    render(<CloudBillingScreen />);
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await (props?.onPrimaryAction as () => Promise<void>)();
+    });
+    expect(Alert.alert).toHaveBeenCalledWith(title, message);
+    expect(openExternalUrl).not.toHaveBeenCalled();
   });
 
   it('keeps inactive store-owned recovery at the recorded owner instead of opening Stripe', async () => {
@@ -550,6 +592,46 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     } finally {
       iapSpy.mockRestore();
       joinSpy.mockRestore();
+      redeemSpy.mockRestore();
+    }
+  });
+
+  it('shows the server reason when an access code is refused', async () => {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
+      connected: false,
+      loading: false,
+      restoring: false,
+      purchasingKey: null,
+      catalog: {
+        enabled: false,
+        platform: 'ios',
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'Paid upgrades are opening in stages.',
+        unavailableCode: 'waitlist_access_required',
+      },
+      storeProducts: new Map(),
+      priceFor: jest.fn(),
+      error: null,
+      lastResult: null,
+      purchase: jest.fn(),
+      restore: jest.fn(),
+      reload: jest.fn(),
+    });
+    const redeemSpy = jest
+      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
+      .mockRejectedValue(
+        new ApiHttpError('This access code has expired.', 400, 'VALIDATION_ERROR'),
+      );
+
+    try {
+      const screen = render(<CloudBillingScreen />);
+
+      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
+      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
+      expect(screen.getByText('This access code has expired.')).toBeTruthy();
+    } finally {
+      iapSpy.mockRestore();
       redeemSpy.mockRestore();
     }
   });

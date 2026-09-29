@@ -1,12 +1,14 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 
 import {
   ConnectorGrantDecryptionError,
+  consumePendingAuthorization,
+  createPendingAuthorization,
   getConnectorOAuthGrant,
   upsertConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
@@ -165,6 +167,77 @@ export async function createBankAccountsLinkToken(
     },
   );
   return { linkToken: created.link_token, expiration: created.expiration };
+}
+
+export const BANK_ACCOUNTS_HOSTED_LINK_COMPLETION_URI = 'agiworkforce://connectors/bank-complete';
+const HOSTED_LINK_LIFETIME_SECONDS = 1_800;
+
+export async function createBankAccountsHostedLink(
+  userId: string,
+): Promise<{ linkToken: string; hostedLinkUrl: string; expiration: string }> {
+  const created = await plaidRequest<{
+    link_token: string;
+    expiration: string;
+    hosted_link_url?: string;
+  }>('/link/token/create', {
+    client_name: PLAID_CLIENT_NAME,
+    user: { client_user_id: plaidClientUserId(userId) },
+    products: PLAID_PRODUCTS,
+    country_codes: PLAID_COUNTRY_CODES,
+    language: PLAID_LANGUAGE,
+    hosted_link: {
+      is_mobile_app: true,
+      completion_redirect_uri: BANK_ACCOUNTS_HOSTED_LINK_COMPLETION_URI,
+      url_lifetime_seconds: HOSTED_LINK_LIFETIME_SECONDS,
+    },
+  });
+  if (!created.hosted_link_url) {
+    throw new PlaidApiError('hosted_link_unavailable', 'The bank connection did not answer.');
+  }
+  await createPendingAuthorization({
+    userId,
+    connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
+    state: created.link_token,
+    codeVerifier: randomBytes(32).toString('base64url'),
+    codeChallengeMethod: 'plain',
+    redirectUri: BANK_ACCOUNTS_HOSTED_LINK_COMPLETION_URI,
+    requestedScopes: [...PLAID_PRODUCTS],
+    returnPath: '/connectors',
+    ttlSeconds: HOSTED_LINK_LIFETIME_SECONDS,
+  });
+  return {
+    linkToken: created.link_token,
+    hostedLinkUrl: created.hosted_link_url,
+    expiration: created.expiration,
+  };
+}
+
+export type HostedLinkCompletion = 'connected' | 'not_finished' | 'not_found';
+
+export async function completeBankAccountsHostedLink(
+  userId: string,
+  linkToken: string,
+): Promise<HostedLinkCompletion> {
+  const session = await plaidRequest<{
+    link_sessions?: Array<{
+      results?: {
+        item_add_results?: Array<{
+          public_token?: string;
+          institution?: { name?: string | null } | null;
+        }>;
+      } | null;
+    }>;
+  }>('/link/token/get', { link_token: linkToken });
+  const added = (session.link_sessions ?? [])
+    .flatMap((entry) => entry.results?.item_add_results ?? [])
+    .find((result) => typeof result.public_token === 'string' && result.public_token.length > 0);
+  if (!added?.public_token) return 'not_finished';
+  const pending = await consumePendingAuthorization(linkToken);
+  if (!pending || pending.userId !== userId || pending.connectorId !== BANK_ACCOUNTS_CONNECTOR_ID) {
+    return 'not_found';
+  }
+  await connectBankAccounts(userId, added.public_token, added.institution?.name ?? null);
+  return 'connected';
 }
 
 async function readBankAccountsToken(userId: string): Promise<string | null> {

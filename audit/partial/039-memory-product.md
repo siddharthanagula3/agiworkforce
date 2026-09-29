@@ -193,18 +193,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.29: Sensitive-Memory controls.
-
-- Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | waits on lead approval for apps/mobile to depend on @agiworkforce/context (lockfile at merge); then refuse prohibitedMemoryCategory facts in the Local memory writer | handler |
-
-Code: `apps/mobile/src/features/memory/services/consolidation.ts:175-176`, `packages/contracts/context/src/memory-content-policy.ts:110-110`
-
 ## S39.30: Memory reset independent from chat deletion.
 
 - Done when: The user can reset all memory without deleting chats, and deleting chats does not silently wipe (or silently keep) memory.

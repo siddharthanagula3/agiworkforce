@@ -127,13 +127,13 @@ One Google Cloud project and one OAuth client serve all four connectors.
    | all five        | `openid`, `profile`, `email`, `userinfo.email`, `userinfo.profile`     |
    | Gmail           | `gmail.readonly`, `gmail.compose`, `gmail.send`                        |
    | Google Calendar | `calendar.readonly`, `calendar.events`                                 |
-   | Google Drive    | `drive.file`, `drive.metadata.readonly`                                |
+   | Google Drive    | `drive.file`, `drive.readonly`                                         |
    | Google Contacts | `contacts.readonly`, `directory.readonly`                              |
    | BigQuery        | `bigquery.readonly`, `devstorage.read_only`                            |
 
    The console labels each scope non-sensitive, sensitive or restricted when
    you add it; trust its label over this page. Expect `gmail.readonly`,
-   `gmail.compose` and `drive.metadata.readonly` to be restricted, and the Calendar and
+   `gmail.compose` and `drive.readonly` to be restricted, and the Calendar and
    `gmail.send` scopes to be sensitive.
 
 6. **Create the OAuth client.** In Clients, create an OAuth client of type
@@ -164,8 +164,9 @@ One Google Cloud project and one OAuth client serve all four connectors.
    - `gmail.send`: send a draft after the user approves that specific send.
    - `calendar.readonly`: read events and free/busy to answer scheduling
      questions. `calendar.events`: create or change an event the user asked for.
-   - `drive.file`: open files the user picks. `drive.metadata.readonly`: list
-     and search file names so the user can pick them.
+   - `drive.readonly`: search and read the user's Drive files to answer questions
+     about them, as Claude and ChatGPT do. `drive.file`: create or update files
+     the user asks for, and open files they pick.
    - `contacts.readonly`, `directory.readonly`: look up a recipient's address.
    - Leave the BigQuery scopes out of this submission. Google's hosted
      BigQuery server accepts only the full `bigquery` scope, which our ceiling
@@ -203,10 +204,10 @@ One Google Cloud project and one OAuth client serve all four connectors.
    5. Add the three variables in Vercel Production. Until all three are set and
       migration 0307 is applied, Gmail triggers stay unverified and show why.
 
-Decision to make: Claude and ChatGPT let users search their whole Drive, which
-needs the restricted `drive.readonly` scope. Our Drive connector asks only for
-files the user picks (`drive.file`) plus file metadata. Matching them means
-adding `drive.readonly`, which is covered by the same assessment as Gmail.
+Drive searches the whole Drive, as Claude and ChatGPT do, so it asks for the
+restricted `drive.readonly` scope with `drive.file`, the two scopes Google's
+Drive MCP server documents. Google may reassess when a restricted scope is added
+after an assessment, so add it before the first submission.
 
 ## 2. Microsoft 365
 
