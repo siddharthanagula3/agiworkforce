@@ -72,6 +72,10 @@ const ko = {
   'chatNotice.noDiagnostics': '활성 파일에서 진단을 찾을 수 없습니다.',
   'chatNotice.modelNotOnPlan': '현재 플랜 또는 공급자 설정에서는 이 모델을 사용할 수 없습니다.',
   'chatNotice.trustBeforeResume': '개발자 세션을 재개하기 전에 이 작업 영역을 신뢰하세요.',
+  'chatNotice.cloudSessionReadOnly':
+    '이 클라우드 Code 세션은 여기에서 읽기 전용으로 열립니다. 웹에서 계속하거나 `agi code teleport`를 실행해 이 컴퓨터로 가져오세요.',
+  'chatNotice.openOnWeb': '웹에서 열기',
+  'conversationTree.cloudLabel': '클라우드',
   'chatNotice.stopBeforeOpening': '다른 개발자 세션을 열기 전에 현재 응답을 중지하세요.',
   'chatNotice.historyUnavailable': '이 채팅 화면에서는 개발자 세션 기록을 사용할 수 없습니다.',
   'chatNotice.sessionNotFound': '열려 있는 작업 영역에서 개발자 세션을 찾을 수 없습니다.',

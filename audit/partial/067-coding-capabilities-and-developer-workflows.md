@@ -189,15 +189,14 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: The agent opens the app in a browser and inspects how it behaves (navigate, click, read, screenshot).
 - Wave: 3
-- Already works on: desktop, mobile, chrome
+- Already works on: desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| cli | partial | The CLI's browser_* tools do not drive a browser themselves: execute_browser_command (tools/mod.rs:1236-1249) forwards every call to crate::browser_bridge::run_command, which talks to AGI Desktop's loopback bridge (desktop-bridge.json, 127.0.0.1) and 'the shell owns the pairing; the CLI never speaks to the extension' (browser_bridge.rs:1-2). Without the Electron app running with a Chrome extension paired there, every browser tool returns 'No browser is paired with AGI Desktop' (l.149). The CLI has no pairing of its own (no /browser command, 0 hits). Partial, miss ['surface-only'], remaining: 'browser_* tools only work while AGI Desktop is running with the Chrome extension paired; add a CLI-side pairing or note the dependency.' |  |
-| vscode | partial | Same runtime as the CLI: the app-server's browser_* tools reach a browser only through AGI Desktop's loopback bridge (browser_bridge.rs:1-2, tools/mod.rs:1247); the extension has no browser pairing of its own, so with VS Code and the CLI alone the tools fail 'No browser is paired with AGI Desktop'. Partial, miss ['surface-only'], remaining: 'browser inspection needs AGI Desktop running with the Chrome extension paired; VS Code cannot pair a browser itself.' |  |
+| vscode | partial | Needs a CLI-side browser pairing without AGI Desktop (c-cli lane); VS Code has nothing of its own to add. |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:686-689`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`, `apps/cli/src/features/exec/tools/mod.rs:686-689`
 
 ## S67.17: Inspect console errors.
 
@@ -352,9 +351,8 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.32: Respond to review feedback.
 

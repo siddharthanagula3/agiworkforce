@@ -100,11 +100,10 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/fe
 | web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/tui_app.rs:3687-3701`, `apps/cli/src/skills.rs:142-160`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.10: Reference-file bundle.
 
@@ -132,14 +131,11 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/t
 
 - Done when: A skill declares the tools it needs and the product shows or enforces that requirement.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Enforced by the CLI runtime when a skill loads, but VS Code never shows a skill's requirements. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:944-962`
 
 ## S53.15: Required connections.
 
@@ -214,11 +210,8 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No deliberate record step: the CLI silently writes "learned" SKILL.md files from tool sequences repeated across 3+ past sessions. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1046-1062`, `apps/cli/src/skill_learner.rs:1-11`
 
 ## S53.36: Permission and provenance summary.
 

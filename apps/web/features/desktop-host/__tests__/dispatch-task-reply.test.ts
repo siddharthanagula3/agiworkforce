@@ -13,7 +13,7 @@ vi.mock('@/lib/identity/client', () => ({
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: true }),
 }));
 
-const { answerReplies, replyFieldError } = await import('../hooks/use-dispatch-task-runner');
+const { answerReplies, replyFieldIssue } = await import('../hooks/use-dispatch-task-runner');
 
 const FORM = {
   form: {
@@ -89,7 +89,44 @@ describe('answering a dispatched task from the phone', () => {
     expect(run.runtime.resolveToolInput).not.toHaveBeenCalled();
     expect(reportDispatchTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        replyError: expect.objectContaining({ toolCallId: 'call-input' }),
+        replyError: {
+          toolCallId: 'call-input',
+          message: expect.any(String),
+          fieldId: 'room',
+          code: 'not_an_option',
+        },
+      }),
+    );
+  });
+
+  it('never relays the offending value or any free text about it', async () => {
+    const run = runWith();
+    await answerReplies(run as never, answerWith([inputTool]), [
+      {
+        toolCallId: 'call-input',
+        kind: 'input',
+        inputKey: 'form',
+        values: { email: 'ada@example.com', room: '<script>attic</script>' },
+      },
+    ]);
+    const report = JSON.stringify(reportDispatchTask.mock.calls.at(-1));
+    expect(report).not.toContain('attic');
+    expect(report).not.toContain('Room');
+  });
+
+  it('tells the phone a question is no longer waiting when its step has gone', async () => {
+    const run = runWith();
+    await answerReplies(run as never, answerWith([approvalTool]), [
+      {
+        toolCallId: 'call-input',
+        kind: 'input',
+        inputKey: 'form',
+        values: { email: 'ada@example.com', room: 'north' },
+      },
+    ]);
+    expect(reportDispatchTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyError: expect.objectContaining({ toolCallId: 'call-input', code: 'expired' }),
       }),
     );
   });
@@ -117,12 +154,19 @@ describe('answering a dispatched task from the phone', () => {
         },
       ],
     };
-    expect(replyFieldError(prompt, { room: 'north' })).toMatch(/^Email: /);
-    expect(replyFieldError(prompt, { email: 'not-an-email', room: 'north' })).toMatch(/^Email: /);
-    expect(replyFieldError(prompt, { email: 'a@verylongdomain.example', room: 'north' })).toMatch(
-      /^Email: /,
-    );
-    expect(replyFieldError(prompt, { email: 'a@b.co', room: 'north' })).toBeNull();
+    expect(replyFieldIssue(prompt, { room: 'north' })).toEqual({
+      fieldId: 'email',
+      code: 'required',
+    });
+    expect(replyFieldIssue(prompt, { email: 'nope', room: 'north' })).toEqual({
+      fieldId: 'email',
+      code: 'bad_format',
+    });
+    expect(replyFieldIssue(prompt, { email: 'a@verylongdomain.example', room: 'north' })).toEqual({
+      fieldId: 'email',
+      code: 'too_long',
+    });
+    expect(replyFieldIssue(prompt, { email: 'a@b.co', room: 'north' })).toBeNull();
   });
 
   it('refuses an invalid date and time without throwing', async () => {

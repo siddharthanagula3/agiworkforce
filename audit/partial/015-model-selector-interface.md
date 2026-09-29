@@ -155,7 +155,7 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /fast toggles between the session model and a fast model (original_model is restored on the way back); it does not enable a faster tier of the chosen model. Same reading as the Chrome cell. |  |
+| cli | partial | Waits on the c-platform fast tier (per-model fast tier and price in the registry, speed or service_tier in the gateway, provider payloads and billing); then /fast switches to that tier of the same model. |  |
 | vscode | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
@@ -215,14 +215,11 @@ Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1
 
 - Done when: The user can choose to send turns through their own provider key, supplied in the product.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Let users enter a provider key in VS Code; the "Your providers" route appears only for keys already set up in the CLI (Set API Key stores the AGI key, not a provider key). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1172-1180`, `apps/extension-vscode/src/core/commandSetup.ts:1062-1062`
 
 ## S15.31: Per-turn model override.
 

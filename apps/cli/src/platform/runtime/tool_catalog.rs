@@ -490,13 +490,14 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
             "read_file",
-            "Read a file's contents (optionally a line range). Always read a file before editing or overwriting it, and before proposing changes to code you have not seen.",
+            "Read a file's contents (optionally a line range). PDF, Word (.docx), PowerPoint (.pptx) and spreadsheet (.xlsx, .xls, .ods) files return their text; long PDFs are read a page range at a time. Always read a file before editing or overwriting it, and before proposing changes to code you have not seen.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Absolute path to the file to read"},
                     "start_line": {"type": "integer", "description": "First line to read (1-based, inclusive). Omit to start from beginning."},
-                    "end_line": {"type": "integer", "description": "Last line to read (1-based, inclusive). Omit to read to the end."}
+                    "end_line": {"type": "integer", "description": "Last line to read (1-based, inclusive). Omit to read to the end."},
+                    "pages": {"type": "string", "description": "PDF only: page range such as \"3\" or \"11-20\", at most 20 pages. Omit to read the first 10 pages."}
                 },
                 "required": ["path"]
             }),

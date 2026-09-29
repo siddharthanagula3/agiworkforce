@@ -891,6 +891,7 @@ impl CliDeveloperSessionHost {
             repository: summary.repository.clone(),
             writer: writer_lease::read(&summary.path)
                 .map(|lease| writer_summary(self.writer, lease)),
+            location: None,
         }
     }
 
@@ -1625,6 +1626,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for summary in selected {
             threads.push(self.thread_summary(summary).await);
         }
+        if params.include_cloud && params.cursor.is_none() {
+            threads.extend(super::cloud_threads::list(&self.workspace_root).await);
+        }
         Ok(ThreadListResponse {
             threads,
             next_cursor,
@@ -1636,6 +1640,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         self.load_agent(&params.thread_id).await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
@@ -1653,6 +1660,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if let Some(session_id) = super::cloud_threads::cloud_session_id(&params.thread_id) {
+            return super::cloud_threads::read(session_id).await;
+        }
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let (resolved, session) = tokio::task::spawn_blocking(move || {
@@ -2292,6 +2302,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: TurnStartParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let context_files =
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
@@ -2927,6 +2940,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: TurnSteerParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         let prepared = self.prepare_input(params.input)?;
         let running = self.running_turns.lock().await;
         let Some(turn) = running.get(&params.thread_id) else {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { MessageSquare, RotateCcw, X, type LucideIcon } from 'lucide-react-native';
 import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
+import { isInFlightMediaJobStatus, type MediaJobStatus } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { toUserMessage } from '@/services/userMessage';
@@ -12,7 +13,7 @@ import { cancelMediaJob, listMediaJobs, retryMediaJob } from './libraryClient';
 const POLL_INTERVAL_MS = 5_000;
 const ACTION_FAILED_COPY = 'That did not go through. Try again.';
 
-const STATUS_LABEL: Record<MediaJobEntry['status'], string> = {
+const STATUS_LABEL: Record<MediaJobStatus, string> = {
   queued: 'Queued',
   running: 'Generating',
   failed: 'Failed',
@@ -23,7 +24,7 @@ const STATUS_LABEL: Record<MediaJobEntry['status'], string> = {
 const KIND_LABEL: Record<MediaJobEntry['kind'], string> = { image: 'Image', video: 'Video' };
 
 function inFlight(job: MediaJobEntry): boolean {
-  return job.status === 'queued' || job.status === 'running';
+  return isInFlightMediaJobStatus(job.status);
 }
 
 function statusText(job: MediaJobEntry): string {

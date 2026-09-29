@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { bareMediaType, documentClassFor } from '@agiworkforce/types';
+import { MEDIA_JOB_STATUSES, bareMediaType, documentClassFor } from '@agiworkforce/types';
 import { GENERATED_FILE_SURFACES } from './generated-files';
 
 export const LIBRARY_ORIGINS = ['generated', 'uploaded'] as const;
@@ -133,7 +133,7 @@ export const FileTextPreviewSchema = z.object({
 });
 export type FileTextPreview = z.infer<typeof FileTextPreviewSchema>;
 
-export const MEDIA_JOB_STATUSES = ['queued', 'running', 'failed', 'done', 'cancelled'] as const;
+export { MEDIA_JOB_STATUSES };
 export const MEDIA_JOB_KINDS = ['image', 'video'] as const;
 export const MEDIA_JOB_HISTORY_MAX = 50;
 

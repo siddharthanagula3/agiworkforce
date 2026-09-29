@@ -3,7 +3,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
   SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
@@ -360,7 +360,7 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
-  it.each(['1.7.0', '1.7.1-beta.1', '0.1.0', 'not-semver'])(
+  it.each(['0.0.0', `${MINIMUM_SUPPORTED_RUNTIME_VERSION}-beta.1`, 'not-semver'])(
     'rejects an incompatible owning CLI version %s even when protocol 8 is claimed',
     async (serverVersion) => {
       const runtime = fakeRuntime(8, { serverVersion });
@@ -371,7 +371,9 @@ describe('LocalRuntimeClient', () => {
         spawn: runtime.spawn,
       });
 
-      await expect(client.initialize()).rejects.toThrow('version 1.7.1 or newer is required');
+      await expect(client.initialize()).rejects.toThrow(
+        `version ${MINIMUM_SUPPORTED_RUNTIME_VERSION} or newer is required`,
+      );
       await client.dispose();
     },
   );
@@ -1431,7 +1433,7 @@ describe('LocalRuntimeClient', () => {
 
     await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_FOUND/u);
     await expect(client.initialize()).rejects.toThrow(/agiWorkforce\.cliPath/u);
-    await expect(client.initialize()).rejects.toThrow(/1\.7\.1/u);
+    await expect(client.initialize()).rejects.toThrow(MINIMUM_SUPPORTED_RUNTIME_VERSION);
     await expect(client.initialize()).rejects.toThrow(/not on the PATH/u);
   });
 

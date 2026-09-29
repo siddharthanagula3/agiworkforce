@@ -6,32 +6,17 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S76.06: Native PDF/document input.
-
-- Done when: The registry records native PDF input per model and PDFs go natively to models that accept them.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI reads the pdf modality into supports_pdf but only a reserved, unwired detail view shows it and nothing gates on it. | ui, handler |
-
-Code: `apps/cli/src/provider.rs:19-22`, `apps/cli/src/model_catalog.rs:938-938`
-
 ## S76.07: Audio understanding.
 
 - Done when: The registry records audio input per model and the product uses it to show or gate audio understanding.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | CLI loads supports_audio_input but only a reserved, unwired detail view shows it; nothing gates on it. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/provider.rs:16-19`
 
 ## S76.08: Audio transcription.
 

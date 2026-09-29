@@ -13,6 +13,7 @@ const TOOL_LABELS: Readonly<Record<string, string>> = Object.freeze({
   LoopDetection: 'repeated actions',
   McpElicitation: 'prompts from this MCP server',
   AskUser: 'questions from the agent',
+  Question: 'questions from the agent',
   Hook: 'hooks',
   Subagent: 'subagents',
   TrustDirectory: 'directory trust',

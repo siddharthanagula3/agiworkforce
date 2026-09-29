@@ -251,7 +251,10 @@ fn close_open_tool_calls(messages: &mut Vec<Message>, note: &str) -> usize {
                     ContentBlock::ToolResult { tool_use_id, .. } => {
                         result_ids.insert(tool_use_id.clone());
                     }
-                    ContentBlock::Text { .. } | ContentBlock::Image { .. } => {}
+                    ContentBlock::Text { .. }
+                    | ContentBlock::Image { .. }
+                    | ContentBlock::Document { .. }
+                    | ContentBlock::Unknown => {}
                 }
             }
         }

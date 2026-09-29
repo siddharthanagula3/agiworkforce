@@ -83,6 +83,10 @@ const de = {
     'Dieses Modell ist mit Ihrem aktuellen Plan oder Ihrer Anbieterkonfiguration nicht verfügbar.',
   'chatNotice.trustBeforeResume':
     'Vertrauen Sie diesem Arbeitsbereich, bevor Sie eine Entwicklersitzung fortsetzen.',
+  'chatNotice.cloudSessionReadOnly':
+    'Diese Cloud-Code-Sitzung wird hier nur lesend geöffnet. Setze sie im Web fort oder hole sie mit `agi code teleport` auf diesen Rechner.',
+  'chatNotice.openOnWeb': 'Im Web öffnen',
+  'conversationTree.cloudLabel': 'Cloud',
   'chatNotice.stopBeforeOpening':
     'Beenden Sie die aktuelle Antwort, bevor Sie eine andere Entwicklersitzung öffnen.',
   'chatNotice.historyUnavailable':

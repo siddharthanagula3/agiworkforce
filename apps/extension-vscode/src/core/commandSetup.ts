@@ -109,6 +109,7 @@ import {
   showArchivedSessions,
   showSessionsHistory,
 } from '../features/trees/sessionPickers';
+import { isCloudThread } from '../features/trees/cloudSessions';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -123,6 +124,9 @@ import {
   openCapabilitySurface,
   manageHooks,
   manageSavedApprovals,
+  manageProviderKeys,
+  chooseSessionTools,
+  type SessionPermissions,
   createPullRequest,
   CREATE_PULL_REQUEST_COMMAND,
   manageMcpServers,
@@ -588,6 +592,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
+  const sessionPermissions: SessionPermissions = {
+    mode: () => sidebarProvider.sessionAgentMode(),
+    disallowedTools: () => sidebarProvider.sessionDisallowedTools(),
+    setDisallowedTools: (tools) => sidebarProvider.setSessionDisallowedTools(tools),
+  };
   const mcpServerDetails = new McpServerDetailsProvider();
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(
@@ -713,7 +722,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
    * surface it already appeared to be.
    */
   const pickDeveloperSession = async (placeHolder: string) => {
-    const threads = await conversationTreeProvider.getThreads();
+    const threads = (await conversationTreeProvider.getThreads()).filter(
+      (thread) => !isCloudThread(thread),
+    );
     if (threads.length === 0) {
       vscode.window.showInformationMessage('AGI Workforce: No developer sessions in this window.');
       return undefined;
@@ -2551,7 +2562,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       manageMcpServers(cliCapabilities, mcpServerDetails),
     ),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
-    register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
+    register('agi-workforce.showSavedApprovals', () =>
+      manageSavedApprovals(cliCapabilities, sessionPermissions),
+    ),
+    register('agi-workforce.chooseSessionTools', () =>
+      chooseSessionTools(cliCapabilities, sessionPermissions),
+    ),
+    register('agi-workforce.manageProviderKeys', () => manageProviderKeys(cliCapabilities)),
     register(CREATE_PULL_REQUEST_COMMAND, () => createPullRequest(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),

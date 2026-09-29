@@ -85,6 +85,10 @@ const fr = {
     "Ce modèle n'est pas disponible avec votre forfait actuel ou votre configuration de fournisseur.",
   'chatNotice.trustBeforeResume':
     'Approuvez cet espace de travail avant de reprendre une session de développement.',
+  'chatNotice.cloudSessionReadOnly':
+    "Cette session Code cloud s'ouvre ici en lecture seule. Poursuivez-la sur le web, ou exécutez `agi code teleport` pour la ramener sur cette machine.",
+  'chatNotice.openOnWeb': 'Ouvrir sur le web',
+  'conversationTree.cloudLabel': 'Cloud',
   'chatNotice.stopBeforeOpening':
     "Arrêtez la réponse en cours avant d'ouvrir une autre session de développement.",
   'chatNotice.historyUnavailable':

@@ -35,10 +35,7 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A file being written shows only as a running write tool row; there is no artifact-building state. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`
 
 ## S19.13: Generating media.
 

@@ -201,6 +201,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.activeThreadReceipt();
   }
 
+  public sessionDisallowedTools(): readonly string[] {
+    return this._stateManager.sessionDisallowedTools();
+  }
+
+  public setSessionDisallowedTools(tools: readonly string[]): void {
+    this._stateManager.setSessionDisallowedTools(tools);
+  }
+
+  public sessionAgentMode(): ReturnType<ChatStateManager['sessionAgentMode']> {
+    return this._stateManager.sessionAgentMode();
+  }
+
   public chatTranscript(): readonly ChatTurn[] {
     return this._stateManager.chatTranscript();
   }

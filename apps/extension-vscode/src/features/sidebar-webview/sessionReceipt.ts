@@ -38,6 +38,15 @@ const OUTCOME_LABELS: Record<DeveloperSessionApproval['outcome'], string> = {
   timeout: 'Timed out',
 };
 
+const FILE_CHANGE_LABELS: Record<
+  DeveloperSessionFileChange['kind'],
+  { icon: string; verb: string }
+> = {
+  created: { icon: 'new-file', verb: 'Created' },
+  modified: { icon: 'edit', verb: 'Modified' },
+  deleted: { icon: 'trash', verb: 'Deleted' },
+};
+
 interface ReceiptItem extends vscode.QuickPickItem {
   file?: string;
   copyLink?: string;
@@ -82,11 +91,16 @@ export function buildSessionReceiptItems(receipt: SessionReceipt): ReceiptItem[]
     items.push({ label: '$(circle-slash) No files changed in this session' });
   }
   for (const change of receipt.fileChanges) {
+    const shown = FILE_CHANGE_LABELS[change.kind];
     items.push({
-      label: `$(${change.kind === 'created' ? 'new-file' : 'edit'}) ${change.path}`,
-      description: `${change.kind === 'created' ? 'Created' : 'Modified'} by ${change.tool} · ${when(change.changedAt)}`,
+      label: `$(${shown.icon}) ${change.path}`,
+      description: `${shown.verb} by ${change.tool} · ${when(change.changedAt)}`,
       ...(change.reason === undefined ? {} : { detail: change.reason }),
-      file: path.isAbsolute(change.path) ? change.path : path.join(receipt.cwd, change.path),
+      ...(change.kind === 'deleted'
+        ? {}
+        : {
+            file: path.isAbsolute(change.path) ? change.path : path.join(receipt.cwd, change.path),
+          }),
     });
   }
   items.push({ label: 'Approvals', kind: vscode.QuickPickItemKind.Separator });

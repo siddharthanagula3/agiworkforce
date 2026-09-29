@@ -267,8 +267,8 @@ pub struct MentionExpansion {
     pub prompt: String,
     /// Paths whose contents were inlined.
     pub inlined: Vec<String>,
-    /// Image paths a mention named; the caller stages these the way `/attach`
-    /// does rather than inlining bytes into the text.
+    /// Image and document paths a mention named; the caller stages these the
+    /// way `/attach` does rather than inlining bytes into the text.
     pub images: Vec<String>,
     /// Paths that resolved but were not inlined, each with the reason.
     pub skipped: Vec<(String, String)>,
@@ -344,6 +344,10 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
                 mention,
                 "workspace is not trusted, only the path was sent".to_string(),
             ));
+            continue;
+        }
+        if crate::documents::DocumentKind::for_path(&resolved).is_some() {
+            expansion.images.push(mention);
             continue;
         }
         match std::fs::metadata(&resolved) {

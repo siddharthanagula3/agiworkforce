@@ -319,12 +319,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/extension/src/features/background/scheduled-task-cancellation.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/extension/src/features/browser-tools/networkCapture.ts",
       "symbol": "TOOL_STATUSES",
       "family": "tool support",
@@ -481,18 +475,6 @@
       "why": "restates permission areas in local literals; import them from enterprise/permissions."
     },
     {
-      "file": "apps/web/features/marketing/components/LandingSections.tsx",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/features/marketing/components/RouteFlow.tsx",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
       "file": "apps/desktop/src/utils/ipc.ts",
       "symbol": "ErrorCode",
       "why": "The bridge names TIMEOUT, PAYLOAD_TOO_LARGE and INVALID_RESPONSE as its own transport codes instead of importing ErrorCode from @agiworkforce/types, so a renderer maps a host failure onto a code the server never uses.",
@@ -503,12 +485,6 @@
       "symbol": "CONTROL_LAYERS",
       "why": "The unavailable screen restates entitlement, permission and policy to choose its copy, so a fourth control layer added to the registry renders the wrong sentence on mobile.",
       "fix": "Import CONTROL_LAYERS and key the copy off it."
-    },
-    {
-      "file": "apps/web/features/admin/components/RouteEconomicsPanel.tsx",
-      "symbol": "COMPAT_CAPABILITY_SOURCES",
-      "why": "The admin panel restates imageInput, reasoning, imageOutput and videoOutput to label route economics, so a capability added to the catalogue is missing from the panel with no failure.",
-      "fix": "Read the capability names from COMPAT_CAPABILITY_SOURCES."
     },
     {
       "file": "apps/desktop/src/stores/chat/types.ts",

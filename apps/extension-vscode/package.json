@@ -211,8 +211,18 @@
       },
       {
         "command": "agi-workforce.showSavedApprovals",
-        "title": "AGI Workforce: Saved Approvals",
+        "title": "AGI Workforce: Permissions",
         "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.chooseSessionTools",
+        "title": "AGI Workforce: Choose Tools for This Session",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "agi-workforce.manageProviderKeys",
+        "title": "AGI Workforce: Provider API Keys",
+        "icon": "$(key)"
       },
       {
         "command": "agi-workforce.createPullRequest",

@@ -228,8 +228,8 @@ describe('bulk diff commands never write or discard silently', () => {
 
     const [message, options] = vi.mocked(vscode.window.showWarningMessage).mock.calls[0] ?? [];
     expect(String(message)).toContain('3 pending changes');
-    expect(String(message)).toContain('across 3 files');
     expect(options).toMatchObject({ modal: true });
+    expect(String((options as { detail?: string }).detail).match(/^• /gmu)).toHaveLength(3);
     expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
   });
 
