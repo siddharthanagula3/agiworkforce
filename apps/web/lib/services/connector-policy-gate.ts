@@ -110,18 +110,20 @@ export async function evaluateConnectorPolicyForUser(
     surface?: string | null;
   },
 ): Promise<ConnectorPolicyGateResult> {
-  const organizationId =
-    params.organizationId !== undefined || !params.userId
-      ? (params.organizationId ?? null)
-      : await resolveActiveOrganizationId(params.db, params.userId, params.request).catch(
-          (error: unknown) => {
-            logger.error(
-              { error, userId: params.userId },
-              '[connector-policy] workspace unresolved',
-            );
-            return null;
-          },
-        );
+  let organizationId: string | null = params.organizationId ?? null;
+  if (params.organizationId === undefined && params.userId) {
+    try {
+      organizationId = await resolveActiveOrganizationId(params.db, params.userId, params.request);
+    } catch (error) {
+      logger.error({ error, userId: params.userId }, '[connector-policy] workspace unresolved');
+      return {
+        allowed: false,
+        code: 'connectors_unavailable',
+        reason: 'Your workspace could not be confirmed, so nothing was connected. Try again.',
+        organizationId: null,
+      };
+    }
+  }
   const subscription = await SubscriptionService.getSubscription(params.db, params.userId).catch(
     (error: unknown) => {
       logger.error({ error, userId: params.userId }, '[connector-policy] plan unreadable');
@@ -143,7 +145,7 @@ export async function evaluateConnectorPolicyForUser(
     };
   }
   return evaluateWorkspacePolicy(
-    params,
+    { ...params, organizationId },
     { connectorId: params.connectorId },
     '[connector-policy] workspace policy refused a connection before any credential was exchanged',
     (policy) =>
