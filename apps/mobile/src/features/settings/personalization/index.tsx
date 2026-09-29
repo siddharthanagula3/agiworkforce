@@ -24,6 +24,7 @@ import {
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
@@ -318,10 +319,7 @@ export default function PersonalizationScreen() {
 
   const handleBack = useCallback(() => {
     if (hasChanges) {
-      Alert.alert('Discard changes?', 'You have unsaved changes.', [
-        { text: 'Discard', style: 'destructive', onPress: goBack },
-        { text: 'Keep Editing', style: 'cancel' },
-      ]);
+      confirmDiscardChanges(goBack);
     } else {
       goBack();
     }

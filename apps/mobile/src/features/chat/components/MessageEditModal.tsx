@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, dialogPadding } from '@/src/ui/theme';
@@ -25,8 +27,21 @@ export function MessageEditModal({
 }: MessageEditModalProps) {
   const colors = useThemeColors();
   const keyboard = useKeyboardSafeComposer('modal');
+  const [originalText, setOriginalText] = useState(text);
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setOriginalText(text);
+  }
+  const closeEdit = () => {
+    if (text.trim() !== originalText.trim()) {
+      confirmDiscardChanges(onClose);
+    } else {
+      onClose();
+    }
+  };
   const discard = {
-    onPress: onClose,
+    onPress: closeEdit,
     label: 'Cancel edit',
     hint: 'Closes without changing the message',
   };
@@ -61,7 +76,7 @@ export function MessageEditModal({
       >
         <Pressable
           style={[styles.backdrop, { backgroundColor: colors.scrim }]}
-          onPress={onClose}
+          onPress={closeEdit}
           accessibilityLabel="Dismiss edit dialog"
           accessibilityRole="button"
           accessible={false}
