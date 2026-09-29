@@ -26,6 +26,10 @@
       "reason": "RFC 8628 device flow, the row is resolved by device_id and user_code, not the caller, until the poll succeeds and a developer token is minted"
     },
     {
+      "path": "apps/web/lib/connectors/bank-accounts.ts",
+      "reason": "bank tools and account erasure run with no request scope, so the Plaid items are read and changed on the owner connection, and every statement is constrained by the caller's user_id"
+    },
+    {
       "path": "apps/web/lib/server/mobile-intent.ts",
       "reason": "the Ask from Siri token is the subject: it is resolved by its hash before any caller is known, and every statement after that runs on a claimed-user connection bound to the token's owner"
     },

@@ -17,6 +17,7 @@ export const CONNECTOR_SECRET_PURPOSES = [
   'oauth-access-token',
   'oauth-refresh-token',
   'slack-bot-token',
+  'plaid-access-token',
 ] as const;
 
 export type ConnectorSecretPurpose = (typeof CONNECTOR_SECRET_PURPOSES)[number];
@@ -72,6 +73,12 @@ export const CONNECTOR_SECRET_COLUMNS: readonly ConnectorSecretColumn[] = [
     column: 'refresh_token_enc',
     keyColumn: 'id',
     purpose: 'oauth-refresh-token',
+  },
+  {
+    table: 'public.bank_account_items',
+    column: 'access_token_enc',
+    keyColumn: 'id',
+    purpose: 'plaid-access-token',
   },
   {
     table: 'public.slack_installations',

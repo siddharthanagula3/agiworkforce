@@ -488,6 +488,7 @@
       "capabilities": [],
       "concepts": [],
       "tables": [
+        "bank_account_items",
         "connector_oauth_authorizations",
         "connector_oauth_grants",
         "messaging_connections",

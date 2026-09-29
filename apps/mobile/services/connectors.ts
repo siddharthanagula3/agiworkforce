@@ -16,8 +16,12 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   BANK_ACCOUNTS_EXCHANGE_PATH,
   BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
+  BANK_ACCOUNTS_ITEMS_PATH,
   BANK_ACCOUNTS_LINK_PATH,
+  BankAccountsItemsResponseSchema,
   BankAccountsLinkResponseSchema,
+  bankAccountsItemPath,
+  type BankAccountsItem,
   CONNECTOR_CALLS_PATH,
   ConnectorCallLogResponseSchema,
   type ConnectorCallEntry,
@@ -294,4 +298,20 @@ export async function linkBankAccountsInApp(): Promise<BankLinkOutcome> {
   if (session.type !== 'success') return 'dismissed';
   await api.post<unknown>(BANK_ACCOUNTS_EXCHANGE_PATH, { linkToken: created.data.linkToken });
   return 'connected';
+}
+
+export async function fetchBankItems(): Promise<BankAccountsItem[]> {
+  return BankAccountsItemsResponseSchema.parse(await api.get<unknown>(BANK_ACCOUNTS_ITEMS_PATH))
+    .items;
+}
+
+export async function setBankItemExcludedAccounts(
+  itemId: string,
+  excludedAccountIds: readonly string[],
+): Promise<void> {
+  await api.patch<unknown>(bankAccountsItemPath(itemId), { excludedAccountIds });
+}
+
+export async function removeBankItem(itemId: string): Promise<void> {
+  await api.delete<unknown>(bankAccountsItemPath(itemId));
 }

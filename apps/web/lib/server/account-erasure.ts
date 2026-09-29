@@ -69,6 +69,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_custom_connectors', column: 'user_id' },
   { table: 'connector_tool_permissions', column: 'user_id' },
   { table: 'connector_oauth_grants', column: 'user_id' },
+  { table: 'bank_account_items', column: 'user_id' },
   { table: 'connector_oauth_authorizations', column: 'user_id' },
   { table: 'mcp_app_payloads', column: 'user_id' },
   { table: 'mcp_task_bindings', column: 'user_id' },
