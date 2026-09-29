@@ -5,6 +5,7 @@ use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use super::{cloud_dir, read_cache, write_cache, CloudClient, CloudError};
 use crate::config::CliConfig;
@@ -13,6 +14,8 @@ use crate::platform::runtime::session::PrivacyMode;
 const EFFECTIVE_POLICY_PATH: &str = "/api/settings/organization/policy/effective";
 const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const FIRST_FETCH_WAIT: Duration = Duration::from_secs(5);
+const CACHE_KEY_SERVICE: &str = "com.agiworkforce.cli.workspace-policy";
+const CACHE_KEY_ACCOUNT: &str = "cache-seal";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,10 +44,15 @@ struct WorkspaceControls {
     feature_access: HashMap<String, bool>,
 }
 
+/// The policy as the server sent it, sealed with a key held in the OS
+/// credential store. A cache edited by hand no longer matches its seal and is
+/// ignored. This keeps honest clients honest; it is not a security boundary,
+/// since whoever controls the machine controls the binary that enforces it.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct CachedPolicy {
     owner: String,
-    policy: EffectiveWorkspacePolicy,
+    policy: String,
+    seal: String,
 }
 
 impl EffectiveWorkspacePolicy {
@@ -74,11 +82,83 @@ fn signed_in_owner() -> Option<String> {
         .map(|jwt| crate::auth::jwt_subject(&jwt).unwrap_or_else(|| "unknown".to_string()))
 }
 
+fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    let mut block = [0u8; 64];
+    if key.len() > block.len() {
+        block[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        block[..key.len()].copy_from_slice(key);
+    }
+    let inner = Sha256::new()
+        .chain_update(block.map(|byte| byte ^ 0x36))
+        .chain_update(message)
+        .finalize();
+    Sha256::new()
+        .chain_update(block.map(|byte| byte ^ 0x5c))
+        .chain_update(inner)
+        .finalize()
+        .into()
+}
+
+fn seal_for(key: &[u8], owner: &str, policy: &str) -> String {
+    let message = [owner.as_bytes(), b"\n", policy.as_bytes()].concat();
+    crate::hex::encode(&hmac_sha256(key, &message))
+}
+
+fn seal_matches(expected: &str, actual: &str) -> bool {
+    expected.len() == actual.len()
+        && expected
+            .bytes()
+            .zip(actual.bytes())
+            .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+            == 0
+}
+
+fn open_sealed(key: &[u8], owner: &str, cached: &CachedPolicy) -> Option<EffectiveWorkspacePolicy> {
+    if cached.owner != owner || !seal_matches(&seal_for(key, owner, &cached.policy), &cached.seal) {
+        return None;
+    }
+    serde_json::from_str(&cached.policy).ok()
+}
+
+fn cache_key_entry() -> Option<keyring::Entry> {
+    keyring::Entry::new(CACHE_KEY_SERVICE, CACHE_KEY_ACCOUNT).ok()
+}
+
+fn cache_key() -> Option<Vec<u8>> {
+    let stored = cache_key_entry()?.get_password().ok()?;
+    let key: Option<Vec<u8>> = (stored.len() == 64)
+        .then(|| {
+            (0..64)
+                .step_by(2)
+                .map(|at| u8::from_str_radix(stored.get(at..at + 2)?, 16).ok())
+                .collect()
+        })
+        .flatten();
+    key
+}
+
+fn cache_key_or_create() -> Option<Vec<u8>> {
+    if let Some(key) = cache_key() {
+        return Some(key);
+    }
+    use rand::Rng;
+    let mut key = [0u8; 32];
+    rand::rng().fill_bytes(&mut key);
+    cache_key_entry()?
+        .set_password(&crate::hex::encode(&key))
+        .ok()?;
+    Some(key.to_vec())
+}
+
 fn load_cached() -> Option<EffectiveWorkspacePolicy> {
     let owner = signed_in_owner()?;
     let config_dir = CliConfig::config_dir().ok()?;
     let cached: CachedPolicy = read_cache(&cache_path(&config_dir));
-    (cached.owner == owner).then_some(cached.policy)
+    if cached.seal.is_empty() {
+        return None;
+    }
+    open_sealed(&cache_key()?, &owner, &cached)
 }
 
 fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
@@ -107,11 +187,16 @@ fn policy_known() -> bool {
         || load_cached().is_some()
 }
 
-fn on_workspace_plan() -> bool {
-    matches!(
-        crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
-        Some(crate::tier_cache::UserTier::Team | crate::tier_cache::UserTier::Enterprise)
-    )
+/// Only a fresh tier read that names a personal plan clears an account of
+/// having an administrator. The tier cache lapses after minutes, so an absent
+/// read is not evidence of a personal account and must not open the gates.
+fn known_personal_plan() -> bool {
+    crate::tier_cache::read_tier_cache().is_some_and(|cached| {
+        !matches!(
+            cached.tier,
+            crate::tier_cache::UserTier::Team | crate::tier_cache::UserTier::Enterprise
+        )
+    })
 }
 
 pub fn feature_enabled(feature: &str) -> bool {
@@ -121,11 +206,11 @@ pub fn feature_enabled(feature: &str) -> bool {
     with_current(|policy| policy.feature_enabled(feature))
 }
 
-/// Whether a failed read leaves this account's controls unknown: only an
-/// account on a workspace plan has an administrator to answer to. A personal
-/// account, or one whose policy was read before, keeps what it has.
-fn closes_on_failed_read(signed_in: bool, known: bool, workspace_plan: bool) -> bool {
-    signed_in && !known && workspace_plan
+/// Whether a failed read leaves this account's controls unknown. A signed-in
+/// account with no verified policy may belong to a workspace, so its switches
+/// count as off, unless a fresh tier read shows a personal plan.
+fn closes_on_failed_read(signed_in: bool, known: bool, personal_plan: bool) -> bool {
+    signed_in && !known && !personal_plan
 }
 
 pub fn governed() -> bool {
@@ -135,7 +220,10 @@ pub fn governed() -> bool {
 pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
     if signed_in_owner().is_some() && !policy_known() {
         let fetched = tokio::time::timeout(FIRST_FETCH_WAIT, fetch(PrivacyMode::Managed)).await;
-        if !matches!(fetched, Ok(Ok(()))) && on_workspace_plan() {
+        let signed_in = !matches!(fetched, Ok(Err(CloudError::SignedOut)));
+        if !matches!(fetched, Ok(Ok(())))
+            && closes_on_failed_read(signed_in, policy_known(), known_personal_plan())
+        {
             return Some(format!(
                 "MCP server '{name}' was not started: your workspace policy could not be read, so MCP servers stay off until it can be. Check your connection and try again"
             ));
@@ -190,11 +278,62 @@ mod failed_read_tests {
     use super::closes_on_failed_read;
 
     #[test]
-    fn only_a_signed_in_workspace_account_with_no_known_policy_closes() {
-        assert!(closes_on_failed_read(true, false, true));
-        assert!(!closes_on_failed_read(true, false, false));
-        assert!(!closes_on_failed_read(true, true, true));
-        assert!(!closes_on_failed_read(false, false, true));
+    fn a_signed_in_account_with_no_known_policy_closes_unless_shown_personal() {
+        assert!(closes_on_failed_read(true, false, false));
+        assert!(!closes_on_failed_read(true, false, true));
+        assert!(!closes_on_failed_read(true, true, false));
+        assert!(!closes_on_failed_read(false, false, false));
+    }
+}
+
+#[cfg(test)]
+mod sealed_cache_tests {
+    use super::*;
+
+    const KEY: [u8; 32] = [7u8; 32];
+
+    fn sealed(owner: &str, policy: &str) -> CachedPolicy {
+        CachedPolicy {
+            owner: owner.to_string(),
+            policy: policy.to_string(),
+            seal: seal_for(&KEY, owner, policy),
+        }
+    }
+
+    #[test]
+    fn hmac_matches_the_rfc_4231_vector() {
+        let key = [0x0bu8; 20];
+        assert_eq!(
+            crate::hex::encode(&hmac_sha256(&key, b"Hi There")),
+            "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+        );
+    }
+
+    #[test]
+    fn a_sealed_policy_opens_for_its_owner() {
+        let cached = sealed(
+            "user_1",
+            r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        let policy = open_sealed(&KEY, "user_1", &cached).expect("opens");
+        assert!(policy.governed);
+        assert_eq!(
+            policy.code.and_then(|code| code.allow_mcp_servers),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn a_hand_edited_policy_or_another_owner_is_ignored() {
+        let mut cached = sealed(
+            "user_1",
+            r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        assert!(open_sealed(&KEY, "user_2", &cached).is_none());
+        cached.policy = r#"{"governed":true,"code":{"allowMcpServers":true}}"#.to_string();
+        assert!(open_sealed(&KEY, "user_1", &cached).is_none());
+        let other_key = sealed("user_1", &cached.policy);
+        assert!(open_sealed(&[8u8; 32], "user_1", &other_key).is_none());
     }
 }
 
@@ -262,21 +401,32 @@ pub async fn refresh(privacy: PrivacyMode) -> Result<(), CloudError> {
 async fn fetch(privacy: PrivacyMode) -> Result<(), CloudError> {
     let client = CloudClient::connect(privacy)?;
     let policy: EffectiveWorkspacePolicy = client.get(EFFECTIVE_POLICY_PATH, &[]).await?;
-    let cached = CachedPolicy {
-        owner: client.owner().to_string(),
-        policy,
+    remember(client.owner(), &policy);
+    if let Ok(mut current) = CURRENT.write() {
+        *current = Some(policy);
+    }
+    Ok(())
+}
+
+fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
+    let (Ok(config_dir), Ok(serialized)) = (CliConfig::config_dir(), serde_json::to_string(policy))
+    else {
+        return;
     };
-    let config_dir =
-        CliConfig::config_dir().map_err(|error| CloudError::Transport(error.to_string()))?;
+    let Some(key) = cache_key_or_create() else {
+        tracing::debug!("[workspace_policy] no credential store key; the policy is not cached");
+        return;
+    };
+    let cached = CachedPolicy {
+        owner: owner.to_string(),
+        seal: seal_for(&key, owner, &serialized),
+        policy: serialized,
+    };
     if let Err(error) = write_cache(&cache_path(&config_dir), &cached) {
         crate::output::print_warn(&format!(
             "could not remember the workspace policy on this device: {error}"
         ));
     }
-    if let Ok(mut current) = CURRENT.write() {
-        *current = Some(cached.policy);
-    }
-    Ok(())
 }
 
 fn claim_refresh() -> Option<bool> {
@@ -297,13 +447,12 @@ pub async fn refresh_when_due() {
     let Some(first) = claim_refresh() else {
         return;
     };
-    // Until the first read lands, a workspace-plan account's switches are
-    // unknown, so they count as off rather than defaulting open while the
-    // read is still in flight.
+    // Until the first read lands, the account's switches are unknown, so they
+    // count as off rather than defaulting open while the read is in flight.
     if closes_on_failed_read(
         signed_in_owner().is_some(),
         policy_known(),
-        on_workspace_plan(),
+        known_personal_plan(),
     ) {
         UNREADABLE_FOR_WORKSPACE.store(true, Ordering::Relaxed);
     }
@@ -314,7 +463,7 @@ pub async fn refresh_when_due() {
                 tracing::debug!("[workspace_policy] refresh failed: {error}");
                 let signed_in = !matches!(error, CloudError::SignedOut);
                 UNREADABLE_FOR_WORKSPACE.store(
-                    closes_on_failed_read(signed_in, policy_known(), on_workspace_plan()),
+                    closes_on_failed_read(signed_in, policy_known(), known_personal_plan()),
                     Ordering::Relaxed,
                 );
             }
