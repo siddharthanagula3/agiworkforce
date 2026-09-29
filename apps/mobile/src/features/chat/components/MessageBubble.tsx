@@ -82,7 +82,7 @@ import { ReportFlagButton } from './ReportFlagButton';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, radii } from '@/src/ui/theme';
+import { useThemeColors, radii, motion } from '@/src/ui/theme';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
@@ -1042,7 +1042,7 @@ export const MessageBubble = memo(function MessageBubble({
   const messageContent = (
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
-      entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
+      entering={reducedMotion ? undefined : FadeInDown.duration(motion.quick).springify()}
       className="px-4 py-4"
     >
       <Pressable

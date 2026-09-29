@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Mic, Loader } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
@@ -90,8 +90,8 @@ export function VoiceInputButton({
 
   useEffect(() => {
     if (state === 'recording' || state === 'ptt') {
-      ringOpacity.value = withRepeat(withTiming(0.55, { duration: 900 }), -1, true);
-      ringScale.value = withRepeat(withTiming(1.6, { duration: 900 }), -1, true);
+      ringOpacity.value = withRepeat(withTiming(0.55, { duration: motion.pulse }), -1, true);
+      ringScale.value = withRepeat(withTiming(1.6, { duration: motion.pulse }), -1, true);
     } else {
       cancelAnimation(ringOpacity);
       cancelAnimation(ringScale);
@@ -102,7 +102,7 @@ export function VoiceInputButton({
 
   useEffect(() => {
     if (state === 'processing') {
-      spinRotation.value = withRepeat(withTiming(360, { duration: 1000 }), -1, false);
+      spinRotation.value = withRepeat(withTiming(360, { duration: motion.pulse }), -1, false);
     } else {
       cancelAnimation(spinRotation);
       spinRotation.value = 0;

@@ -72,9 +72,11 @@ export interface CombinedChatState {
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
+  moveConversationToProject: (id: string, projectId: string | null) => Promise<boolean>;
   makeConversationPermanent: (id: string) => void;
   keepTemporaryConversation: (id: string) => Promise<void>;
   markConversationRead: (id: string) => void;
+  markConversationUnread: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   setMessageReaction: (
     conversationId: string,
@@ -201,9 +203,11 @@ function buildCombinedState(
     renameConversation: msg.renameConversation,
     setConversationModel: msg.setConversationModel,
     pinConversation: msg.pinConversation,
+    moveConversationToProject: msg.moveConversationToProject,
     makeConversationPermanent: msg.makeConversationPermanent,
     keepTemporaryConversation: msg.keepTemporaryConversation,
     markConversationRead: msg.markConversationRead,
+    markConversationUnread: msg.markConversationUnread,
     deleteMessage: msg.deleteMessage,
     setMessageReaction: msg.setMessageReaction,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,

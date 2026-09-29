@@ -140,6 +140,7 @@ export default function PermissionsScreen() {
     <SettingsScreenShell title="Permissions" backHref="/(app)/settings/safety-security">
       <View style={{ marginTop: 10, marginBottom: 12 }}>
         <Text
+          accessibilityRole="header"
           style={{
             color: c.textMuted,
             fontSize: 12,

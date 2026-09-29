@@ -12,7 +12,7 @@ import Animated, {
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
@@ -37,7 +37,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   useEffect(() => {
     scanLineY.value = withRepeat(
       withTiming(VIEWFINDER_SIZE - 4, {
-        duration: 2000,
+        duration: motion.ambient,
         easing: Easing.inOut(Easing.ease),
       }),
       -1,

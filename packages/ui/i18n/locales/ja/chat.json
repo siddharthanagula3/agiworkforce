@@ -460,7 +460,11 @@
     "mapPreviewPlaces_other": "{{count}} か所の地図プレビュー",
     "filesCreated_one": "{{count}} 個のファイルを作成",
     "foundSources_one": "{{count}} 件のソースが見つかりました",
-    "mapPreviewPlaces_one": "{{count}} か所の地図プレビュー"
+    "mapPreviewPlaces_one": "{{count}} か所の地図プレビュー",
+    "lines_one": "{{count}} 行",
+    "lines_other": "{{count}} 行",
+    "words_one": "{{count}} 語",
+    "words_other": "{{count}} 語"
   },
   "markdownTable": {
     "label": "表",

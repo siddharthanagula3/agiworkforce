@@ -9,7 +9,6 @@ import {
   Keyboard,
   Linking,
   Modal,
-  Share,
   TextInput,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -31,7 +30,7 @@ import {
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
-import { createSharedLink } from '@/src/features/shared-links/service';
+import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
 import {
@@ -1447,36 +1446,18 @@ export default function ChatScreen() {
         );
         return;
       }
-      Alert.alert(
-        'Share a link to this chat?',
-        'Anyone with the link can read the messages in this chat until the link expires. You can revoke it in Settings, Shared links.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Create link',
-            onPress: () => {
-              if (!isConversationActionCurrent(actionScope)) return;
-              createSharedLink({
-                conversationId: id,
-                title,
-                modelId: conversation?.model ?? null,
-                messages: conversationMessages.map((message) => ({
-                  role: message.role,
-                  content: message.content,
-                  ...(message.createdAt ? { createdAt: message.createdAt } : {}),
-                })),
-              })
-                .then((link) => Share.share({ message: link.shareUrl, url: link.shareUrl }))
-                .catch((error: unknown) => {
-                  Alert.alert(
-                    'Could not create the link',
-                    toUserMessage(error, 'Try again in a moment.'),
-                  );
-                });
-            },
-          },
-        ],
-      );
+      confirmShareConversation({
+        conversationId: id,
+        title,
+        modelId: conversation?.model ?? null,
+        readMessages: () =>
+          conversationMessages.map((message) => ({
+            role: message.role,
+            content: message.content,
+            ...(message.createdAt ? { createdAt: message.createdAt } : {}),
+          })),
+        isCurrent: () => isConversationActionCurrent(actionScope),
+      });
     },
     [conversation, conversationMessages, id, isConversationActionCurrent, title],
   );

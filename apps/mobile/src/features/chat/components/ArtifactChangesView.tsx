@@ -8,6 +8,7 @@ import {
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { translatePlural } from '@/src/i18n/plural';
 
 interface ArtifactChangesViewProps {
   previous: string;
@@ -30,10 +31,6 @@ const LINE_LABELS: Record<ArtifactChangeKind, string> = {
   added: 'Added line: ',
   removed: 'Removed line: ',
 };
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
 
 function spoken(runs: readonly ArtifactChangeRun[]): string {
   return runs
@@ -84,7 +81,17 @@ export function ArtifactChangesView({
   const summary =
     changes.added === 0 && changes.removed === 0
       ? `No changes since version ${fromVersion}`
-      : `Since version ${fromVersion}: ${plural(changes.added, changes.unit === 'line' ? 'line' : 'word')} added, ${changes.removed} removed`;
+      : `Since version ${fromVersion}: ${
+          changes.unit === 'line'
+            ? translatePlural('chat', 'counts.lines', changes.added, {
+                one: '{{count}} line',
+                other: '{{count}} lines',
+              })
+            : translatePlural('chat', 'counts.words', changes.added, {
+                one: '{{count}} word',
+                other: '{{count}} words',
+              })
+        } added, ${changes.removed} removed`;
   const header = (
     <Text
       style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 12 }}

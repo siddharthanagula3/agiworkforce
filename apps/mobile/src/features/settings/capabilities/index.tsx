@@ -262,6 +262,7 @@ function SectionTitle({ title }: { title: string }) {
   const colors = useThemeColors();
   return (
     <Text
+      accessibilityRole="header"
       style={{
         color: colors.textMuted,
         fontSize: 12,

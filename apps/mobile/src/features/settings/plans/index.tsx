@@ -23,7 +23,7 @@ const COMPARED_PLANS: readonly BillingPlanTier[] = [
   'enterprise',
 ];
 
-const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en-US', {
+const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 2,
 });

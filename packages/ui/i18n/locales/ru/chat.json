@@ -592,7 +592,15 @@
     "mapPreviewPlaces_one": "Предпросмотр карты с {{count}} местом",
     "mapPreviewPlaces_few": "Предпросмотр карты с {{count}} местами",
     "mapPreviewPlaces_many": "Предпросмотр карты с {{count}} местами",
-    "mapPreviewPlaces_other": "Предпросмотр карты с {{count}} места"
+    "mapPreviewPlaces_other": "Предпросмотр карты с {{count}} места",
+    "lines_one": "{{count}} строка",
+    "lines_few": "{{count}} строки",
+    "lines_many": "{{count}} строк",
+    "lines_other": "{{count}} строки",
+    "words_one": "{{count}} слово",
+    "words_few": "{{count}} слова",
+    "words_many": "{{count}} слов",
+    "words_other": "{{count}} слова"
   },
   "markdownTable": {
     "label": "Таблица",
