@@ -123,10 +123,10 @@ Code: `apps/mobile/services/streaming.ts:114-114`, `apps/mobile/services/streami
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only Deep Research runs can be resumed from their card; other interrupted cloud turns are not re-attached. | ui |
+| mobile | partial | partials/chat-gates 0ef8d9c292 ports the web's in-flight turn recovery. A cloud chat ending on a user message asks GET /api/llm/v1/chat/completions/runs?conversationId=, rechecks every 5s and on return to the foreground, reloads the messages when the run ends, and reports a run quiet past the 150s silence deadline. A live stream already follows its durable run after a network error (services/streaming.ts recoverFromDurableRun). post-codex/w-chat-s19.20-mobile-in-flight-turn-recovery.patch wires it into the held chat screen with a 'Still answering' line. | codex |
 | cli | partial | /resume reopens a saved session so the conversation continues, but an interrupted turn is not re-run or re-attached. | states |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
+Code: `apps/mobile/src/features/chat/inFlightTurnRecovery.ts:68-68`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
 
 ## S19.29: Background work continuing after UI closure.
 

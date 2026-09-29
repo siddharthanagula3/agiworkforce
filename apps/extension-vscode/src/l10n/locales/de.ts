@@ -488,6 +488,15 @@ const de = {
   'webview.resendMessage': 'Erneut senden',
   'webview.resendMessageLabel': 'Diese Nachricht erneut senden',
   'webview.branchFromMessage': 'Abzweigen',
+  'plan.needsUpdate':
+    'AGI Workforce: Aktualisieren Sie die AGI CLI, um einen Plan in VS Code zu genehmigen oder zu überarbeiten.',
+  'plan.approvedMessage': 'Setzen Sie den Plan um.',
+  'plan.revisedMessage': 'Überarbeiten Sie den Plan: {feedback}',
+  'webview.approvePlan': 'Plan genehmigen',
+  'webview.revisePlan': 'Überarbeiten',
+  'webview.revisePlanPlaceholder': 'Was soll sich am Plan ändern?',
+  'webview.sendRevision': 'Senden',
+  'webview.cancelRevision': 'Abbrechen',
   'webview.branchFromAnswer': 'Hier abzweigen',
   'webview.branchFromAnswerLabel':
     'Neue Sitzung starten, die das Gespräch bis zu dieser Antwort übernimmt',

@@ -15,6 +15,7 @@ import {
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
   routingProfileForModel,
+  isAutoPickerModelId,
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
@@ -27,7 +28,6 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
   getBillingPlanPricing,
-  isAutoModeModelId,
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
@@ -326,6 +326,10 @@ export type WebviewToExtMessage =
   | {
       type: 'messageAction';
       payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
+    }
+  | {
+      type: 'planDecision';
+      payload: { decision: 'approve' } | { decision: 'reject'; feedback: string };
     }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
@@ -1229,6 +1233,11 @@ export class ChatStateManager {
         break;
       }
 
+      case 'planDecision': {
+        await this._decidePlan(msg.payload);
+        break;
+      }
+
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
           await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
@@ -1471,7 +1480,7 @@ export class ChatStateManager {
             models: allItems
               .filter(
                 (item): item is typeof item & { modelId: string } =>
-                  item.modelId !== undefined && isAutoModeModelId(item.modelId),
+                  item.modelId !== undefined && isAutoPickerModelId(item.modelId),
               )
               .map((item) => ({
                 id: item.modelId,
@@ -1523,7 +1532,7 @@ export class ChatStateManager {
           | undefined;
 
         for (const item of allItems) {
-          if (item.modelId !== undefined && isAutoModeModelId(item.modelId)) continue;
+          if (item.modelId !== undefined && isAutoPickerModelId(item.modelId)) continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
               const reachableOnBoundary =
@@ -3531,12 +3540,14 @@ export class ChatStateManager {
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
-                model: requestedModel,
+                model: routingProfile === undefined ? requestedModel : 'auto',
                 routingTaskType: classifyDeveloperTurn(routingText, [
                   ...mentionInputs,
                   ...attachmentInputs,
                 ]),
-                ...(routingProfile === undefined ? {} : { routingProfile }),
+                ...(routingProfile === undefined || routingProfile === 'auto'
+                  ? {}
+                  : { routingProfile }),
               }
             : { model: requestedModel }),
         });
@@ -3687,6 +3698,44 @@ export class ChatStateManager {
       sentMessage.text,
       typed,
     );
+  }
+
+  private async _decidePlan(
+    decision: { decision: 'approve' } | { decision: 'reject'; feedback: string },
+  ): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (this.turnInFlight()) {
+      void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
+      return;
+    }
+    if (!(await thread.runtime.offers('planDecisions'))) {
+      void vscode.window.showWarningMessage(t('plan.needsUpdate'));
+      return;
+    }
+    try {
+      if (decision.decision === 'approve') {
+        await thread.runtime.decidePlan(thread.id, 'approve');
+      } else {
+        await thread.runtime.decidePlan(thread.id, 'reject', decision.feedback);
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    const text =
+      decision.decision === 'approve'
+        ? t('plan.approvedMessage')
+        : t('plan.revisedMessage', { feedback: decision.feedback });
+    this._post({ type: 'addUserMessage', payload: { text } });
+    await this._handleSendMessage(text);
   }
 
   private async _messageAction(action: {

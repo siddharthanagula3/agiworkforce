@@ -10,7 +10,7 @@ use agiworkforce_protocol::developer_session::{
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PlanDecisionParams, PluginInstallParams, PluginListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
@@ -441,13 +441,6 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::PERMISSIONS_ADD))
     }
 
-    async fn decide_plan(
-        &self,
-        _params: PlanDecisionParams,
-    ) -> Result<(), DeveloperSessionHostError> {
-        Err(unsupported(method::THREAD_PLAN_DECISION))
-    }
-
     async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PROVIDERS_LIST))
     }
@@ -475,6 +468,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: TrustRevokeParams,
     ) -> Result<TrustListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::TRUST_REVOKE))
+    }
+
+    async fn decide_plan(
+        &self,
+        _params: PlanDecideParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::PLAN_DECIDE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1203,8 +1203,8 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
-            method::THREAD_PLAN_DECISION => {
-                let params = match parse_params::<PlanDecisionParams>(&request) {
+            method::PLAN_DECIDE => {
+                let params = match parse_params::<PlanDecideParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
