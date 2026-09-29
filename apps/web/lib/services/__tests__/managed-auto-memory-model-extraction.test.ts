@@ -9,7 +9,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock('next/server', () => ({ after: hoisted.after }));
-vi.mock('../model-memory-extraction', () => ({
+vi.mock('../model-memory-extraction', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   extractAutoMemoryFactsWithModel: hoisted.extract,
   isModelMemoryExtractionEnabled: hoisted.enabled,
 }));

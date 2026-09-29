@@ -16,7 +16,11 @@ vi.mock('@/lib/server/tools/memory-tools', async (importOriginal) => ({
 }));
 
 import { SAVE_MEMORY_TOOL_NAME } from '@/lib/server/tools/memory-tools';
-import { GOOGLE_USER_DATA_MEMORY_REFUSAL } from '@/lib/connectors/google-user-data';
+import {
+  GOOGLE_USER_DATA_MEMORY_REFUSAL,
+  GOOGLE_USER_DATA_UNROUTED_MESSAGE,
+} from '@/lib/connectors/google-user-data';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { executeOfferedToolCall } from './tool-loop';
 
 const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
@@ -64,5 +68,65 @@ describe('save_memory in a conversation that holds Google user data', () => {
 
     expect(result.isError).toBe(false);
     expect(mocks.executeMemoryTool).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Google connector calls', () => {
+  const customGoogle: WebMcpToolDef = {
+    qualifiedName: 'mcp__custom-abc123__read_range',
+    serverId: 'custom-abc123',
+    toolName: 'read_range',
+    description: 'Read a range',
+    origin: 'connector',
+    inputSchema: { type: 'object' },
+    googleUserData: true,
+  };
+
+  function callTool(qualifiedName: string, conversationId: string | null) {
+    const connectorExecutor = vi.fn(async () => ({
+      handled: true as const,
+      content: 'rows',
+      isError: false,
+    }));
+    const result = executeOfferedToolCall({
+      call: { id: 'call-2', qualifiedName, args: {} },
+      offeredTools: new Set([qualifiedName]),
+      mcpTools: [customGoogle],
+      connectorExecutor,
+      userId: 'user-1',
+      organizationId: null,
+      conversationId,
+      model: 'auto',
+      requestId: 'request-2',
+      planTier: 'pro',
+      surface: 'web',
+    });
+    return { result, connectorExecutor };
+  }
+
+  it.each(['mcp__gmail__search_threads', customGoogle.qualifiedName])(
+    'blocks %s in a run with no conversation that was not limited to no-training models',
+    async (name) => {
+      const { result, connectorExecutor } = callTool(name, null);
+
+      await expect(result).resolves.toMatchObject({
+        isError: true,
+        content: GOOGLE_USER_DATA_UNROUTED_MESSAGE,
+      });
+      expect(connectorExecutor).not.toHaveBeenCalled();
+    },
+  );
+
+  it('marks the conversation before a Google-hosted custom connector runs', async () => {
+    mocks.query.mockResolvedValue([]);
+
+    const { result, connectorExecutor } = callTool(customGoogle.qualifiedName, CONVERSATION_ID);
+
+    await expect(result).resolves.toMatchObject({ isError: false });
+    const mark = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('set google_user_data_at = now()'),
+    );
+    expect(mark?.[1]).toEqual([CONVERSATION_ID, 'user-1']);
+    expect(connectorExecutor).toHaveBeenCalledOnce();
   });
 });

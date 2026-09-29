@@ -13,14 +13,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/auth-guards', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requirePlatformAdmin: mocks.requirePlatformAdmin,
+}));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/security-audit')>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getNeonDb: () => ({ query: mocks.query, transaction: mocks.transaction }),
 }));
 vi.mock('@/lib/jobs/job-service', async (importOriginal) => {

@@ -62,6 +62,7 @@ import { logger } from '@/lib/logger';
 import {
   GOOGLE_USER_DATA_MEMORY_REFUSAL,
   GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+  GOOGLE_USER_DATA_UNROUTED_MESSAGE,
   isGoogleUserDataToolName,
   markConversationGoogleUserData,
   messagesCarryGoogleToolUse,
@@ -1997,13 +1998,27 @@ function callerScopedDb(
   });
 }
 
+function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
+  return new Set(tools.filter((tool) => tool.googleUserData === true).map((tool) => tool.serverId));
+}
+
 async function recordGoogleUserDataToolUse(
   executionContext:
-    { userId?: string; organizationId: string | null; conversationId?: string | null } | undefined,
+    | {
+        userId?: string;
+        organizationId: string | null;
+        conversationId?: string | null;
+        googleUserDataRouted?: boolean;
+      }
+    | undefined,
 ): Promise<ToolLoopToolResult | null> {
   const userId = executionContext?.userId;
   const conversationId = executionContext?.conversationId;
-  if (!userId || !conversationId) return null;
+  if (!userId || !conversationId) {
+    return executionContext?.googleUserDataRouted === true
+      ? null
+      : { content: GOOGLE_USER_DATA_UNROUTED_MESSAGE, isError: true };
+  }
   try {
     await markConversationGoogleUserData(
       callerScopedDb(executionContext, userId),
@@ -2082,6 +2097,8 @@ async function runMcpTool(
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
     googleUserDataRead?: () => boolean;
+    googleHostedServerIds?: ReadonlySet<string>;
+    googleUserDataRouted?: boolean;
     healthSpaceProjectId?: string | null;
   },
 ): Promise<ToolLoopToolResult> {
@@ -2513,7 +2530,10 @@ async function runMcpTool(
     };
   }
 
-  if (readsGoogleUserData(parsed.serverId, parsed.toolName)) {
+  if (
+    readsGoogleUserData(parsed.serverId, parsed.toolName) ||
+    executionContext?.googleHostedServerIds?.has(parsed.serverId) === true
+  ) {
     const unrecorded = await recordGoogleUserDataToolUse(executionContext);
     if (unrecorded) return unrecorded;
   }
@@ -3317,6 +3337,7 @@ export async function executeOfferedToolCall(
             planTier: input.planTier,
             surface: input.surface,
             conversationId,
+            googleHostedServerIds: googleHostedServerIdsOf(input.mcpTools ?? []),
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
             queueSandboxFiles: async (files) => {
               const { executor } = await resolveExecutor();
@@ -3464,6 +3485,7 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const mcpTools = options.mcpTools ?? [];
+  const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
@@ -4798,13 +4820,20 @@ export async function* runToolLoop(
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
               sensitiveDataRead: () => sensitiveDataRead,
               googleUserDataRead: () => googleUserDataRead,
+              googleHostedServerIds,
+              googleUserDataRouted: processed.googleUserData === true,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
             sensitiveDataRead = true;
           }
-          if (isGoogleUserDataToolName(tc.qualifiedName)) googleUserDataRead = true;
+          if (
+            isGoogleUserDataToolName(tc.qualifiedName) ||
+            googleHostedServerIds.has(parseQualifiedToolName(tc.qualifiedName)?.serverId ?? '')
+          ) {
+            googleUserDataRead = true;
+          }
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
           return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;

@@ -21,19 +21,23 @@ vi.mock('server-only', () => ({}));
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   withRateLimit: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',

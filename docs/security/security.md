@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -1122,6 +1122,22 @@ erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
   re-arms a tombstone whose row came back. The tombstone table is itself in
   `UNDELETED_USER_TABLES`, because erasing an account must not erase the record
   that it must stay erased.
+
+### 5.5 Google user data (Limited Use)
+
+The privacy policy commits to the Google API Services User Data Policy,
+including Limited Use, for data from Google connectors. The routing rule lives
+in `apps/web/lib/connectors/google-user-data.ts`. Two residual risks are
+accepted and recorded here rather than on the privacy page:
+
+- **Legacy memories with no source.** Memory injection leaves out memories
+  whose source conversation holds the Google mark. A memory written before
+  source links were recorded has no source conversation, so it cannot be
+  attributed and is not filtered. New memories are not saved from a turn that
+  holds Google data.
+- **Copies already synced to devices.** Memory sync stops serving memories from
+  marked conversations, but a client that pulled one earlier keeps its local
+  copy until the user clears it or the memory is deleted on the server.
 
 ---
 

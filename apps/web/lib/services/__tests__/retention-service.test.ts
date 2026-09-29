@@ -5,7 +5,8 @@ vi.mock('server-only', () => ({}));
 const { mockResolvePlan } = vi.hoisted(() => ({
   mockResolvePlan: vi.fn(async () => 'pro' as string),
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveOrganizationEntitlementPlan: mockResolvePlan,
 }));
 
