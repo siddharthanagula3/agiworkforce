@@ -61,14 +61,13 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `a
 
 - Done when: A coding session shows the conversation alongside the code workspace (changes, diffs, terminal or editor) in one view.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Remote code sessions show a follow-up input, file changes and diffs stacked in one column and require a paired desktop running a local session; there is no side-by-side workspace. | ui |
-| cli | partial | The TUI runs inside the workspace but shows no code pane; changes are reviewed in a diff overlay drawn over the transcript. | ui |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`, `apps/cli/src/tui/widgets/diff_review.rs:1-4`, `apps/cli/src/tui/tui_app.rs:4022-4022`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`
 
 ## S7.13: Dockable panels.
 

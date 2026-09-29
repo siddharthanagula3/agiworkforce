@@ -60,13 +60,11 @@ export function ArtifactChangesView({
     () =>
       changes.unit === 'line'
         ? changes.runs.flatMap((run, runIndex) =>
-            run.text
-              .split('\n')
-              .map((text, lineIndex) => ({
-                key: `${runIndex}:${lineIndex}`,
-                kind: run.kind,
-                text,
-              })),
+            run.text.split('\n').map((text, lineIndex) => ({
+              key: `${runIndex}:${lineIndex}`,
+              kind: run.kind,
+              text,
+            })),
           )
         : [],
     [changes],

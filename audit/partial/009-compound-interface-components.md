@@ -108,14 +108,11 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: Tabular data is shown in a table with column headers that the user can sort (and scroll) to inspect the rows.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 

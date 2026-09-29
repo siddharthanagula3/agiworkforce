@@ -82,6 +82,24 @@ describe('GET /api/memory/sync?since=, shared cloud contract', () => {
     if (parsed.success) expect(parsed.data.cursor).toBe('8');
   });
 
+  it('pull carries each memory project so clients can keep project memories scoped', async () => {
+    const PROJECT_ID = '018f6f2a-0000-7000-8000-0000000000aa';
+    mockQuery.mockResolvedValueOnce([
+      { ...memoryRow, project_id: PROJECT_ID },
+      { ...memoryRow, id: '018f6f2a-0000-7000-8000-000000000012', project_id: null },
+    ]);
+
+    const res = await GET(
+      new Request('http://localhost:3000/api/memory/sync?since=0', { method: 'GET' }) as never,
+    );
+    const body = await res.json();
+    const parsed = MemorySyncPullResponseSchema.safeParse(body);
+    expect(parsed.success).toBe(true);
+    expect(body.memories[0].project_id).toBe(PROJECT_ID);
+    expect(body.memories[1].project_id).toBeNull();
+    expect(String(mockQuery.mock.calls[0]?.[0])).toContain('m.project_id::text as project_id');
+  });
+
   it('empty pull page parses', async () => {
     mockQuery.mockResolvedValueOnce([]);
     const res = await GET(

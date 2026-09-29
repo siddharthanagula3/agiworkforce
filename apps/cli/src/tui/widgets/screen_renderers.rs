@@ -494,32 +494,31 @@ pub enum PluginGroup {
 
 pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[String]) -> String {
     let title_line = format!(
-        "Plugins  Discover   Installed   Marketplaces   Errors  (current: {})",
-        match tab {
-            PluginTab::Discover => "Discover",
-            PluginTab::Installed => "Installed",
-            PluginTab::Marketplaces => "Marketplaces",
-            PluginTab::Errors => "Errors",
-        }
+        "Plugins  {}",
+        PluginTab::ALL
+            .iter()
+            .map(|candidate| {
+                if *candidate == tab {
+                    format!("[{}]", candidate.label())
+                } else {
+                    format!(" {} ", candidate.label())
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     );
 
     let body = match tab {
         PluginTab::Discover => vec![
             "  Discover plugins".to_string(),
             String::new(),
-            "  No plugins available.".to_string(),
-            "  Add a marketplace first using the Marketplaces tab.".to_string(),
+            "  Browse what your account's marketplaces offer: agi marketplace browse".to_string(),
+            "  Install one on your account: agi marketplace get <plugin>@<marketplace>".to_string(),
+            "  Search the plugin directory: agi marketplace search <query>".to_string(),
+            "  No marketplace yet? Add one from the Marketplaces tab.".to_string(),
         ],
         PluginTab::Installed => {
-            let mut b = vec![
-                "  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮"
-                    .to_string(),
-                "  │ ⌕ Search…                                                                                                    │"
-                    .to_string(),
-                "  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯"
-                    .to_string(),
-                String::new(),
-            ];
+            let mut b = Vec::new();
             let needs: Vec<&PluginSummary> = installed
                 .iter()
                 .filter(|p| p.source_group == PluginGroup::NeedsAttention)
@@ -580,8 +579,97 @@ pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[Stri
     frame(
         title_line,
         &body,
-        "type to search · Space to toggle · f to favorite · Enter to details · Esc to back",
+        "←/→ switch tabs · agi plugin enable|disable <name> · Esc close",
     )
+}
+
+impl PluginTab {
+    pub const ALL: [PluginTab; 4] = [
+        PluginTab::Discover,
+        PluginTab::Installed,
+        PluginTab::Marketplaces,
+        PluginTab::Errors,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PluginTab::Discover => "Discover",
+            PluginTab::Installed => "Installed",
+            PluginTab::Marketplaces => "Marketplaces",
+            PluginTab::Errors => "Errors",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<PluginTab> {
+        PluginTab::ALL
+            .into_iter()
+            .find(|tab| tab.label().eq_ignore_ascii_case(name.trim()))
+    }
+
+    fn step(self, forward: bool) -> PluginTab {
+        let index = PluginTab::ALL
+            .iter()
+            .position(|tab| *tab == self)
+            .unwrap_or(0);
+        let len = PluginTab::ALL.len();
+        let next = if forward {
+            (index + 1) % len
+        } else {
+            (index + len - 1) % len
+        };
+        PluginTab::ALL[next]
+    }
+}
+
+pub struct PluginTabsView {
+    tab: PluginTab,
+    installed: Vec<PluginSummary>,
+    errors: Vec<String>,
+    done: bool,
+}
+
+impl PluginTabsView {
+    pub fn new(tab: PluginTab, installed: Vec<PluginSummary>, errors: Vec<String>) -> Self {
+        Self {
+            tab,
+            installed,
+            errors,
+            done: false,
+        }
+    }
+}
+
+impl super::interactive::InteractiveView for PluginTabsView {
+    fn render(&self) -> String {
+        render_plugin(self.tab, &self.installed, &self.errors)
+    }
+
+    fn handle_key(&mut self, key: super::interactive::KeyAction) -> super::interactive::ViewAction {
+        use super::interactive::{KeyAction, ViewAction};
+        match key {
+            KeyAction::Right | KeyAction::Tab => {
+                self.tab = self.tab.step(true);
+                ViewAction::Continue
+            }
+            KeyAction::Left | KeyAction::ShiftTab => {
+                self.tab = self.tab.step(false);
+                ViewAction::Continue
+            }
+            KeyAction::Esc | KeyAction::Enter => {
+                self.done = true;
+                ViewAction::Close
+            }
+            _ => ViewAction::Continue,
+        }
+    }
+
+    fn is_done(&self) -> bool {
+        self.done
+    }
+
+    fn title(&self) -> Option<&str> {
+        Some("Plugins")
+    }
 }
 
 // `/chrome` has no overlay here on purpose. The CLI ships no browser-control
@@ -1117,8 +1205,8 @@ mod tests {
         assert!(s.contains("Installed"));
         assert!(s.contains("Marketplaces"));
         assert!(s.contains("Errors"));
-        assert!(s.contains("No plugins available."));
-        assert!(s.contains("Add a marketplace first using the Marketplaces tab."));
+        assert!(s.contains("agi marketplace browse"));
+        assert!(s.contains("Add one from the Marketplaces tab."));
     }
 
     #[test]

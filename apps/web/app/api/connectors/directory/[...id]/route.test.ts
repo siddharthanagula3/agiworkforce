@@ -97,6 +97,19 @@ describe('GET /api/connectors/directory/[...id]', () => {
     expect(body.entry.id).toBe('io.github.someone/tool');
   });
 
+  it('matches an id containing a percent sign, since Next already decoded the params', async () => {
+    mocks.getSnapshotRecords.mockResolvedValueOnce([record({ id: 'io.github.someone/100%-tool' })]);
+
+    const response = await GET(
+      request('io.github.someone/100%25-tool'),
+      context('io.github.someone/100%-tool'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.entry.id).toBe('io.github.someone/100%-tool');
+  });
+
   it('resolves an unknown auth mode without writing anything back to the snapshot', async () => {
     mocks.getSnapshotRecords.mockResolvedValueOnce([record()]);
     mocks.resolveAuthModeForRecord.mockResolvedValueOnce(

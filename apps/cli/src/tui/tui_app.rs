@@ -405,6 +405,7 @@ struct TuiApp {
     stream_start: Option<Instant>,
     // Git branch
     git_branch: Option<String>,
+    workspace_pane: Option<Vec<String>>,
     command_registry: CommandRegistry,
     // Fallback rotation banner, shared with the agent send loop. The banner
     // self-clears after FALLBACK_BANNER_TTL seconds.
@@ -610,6 +611,7 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
+            workspace_pane: None,
             command_registry,
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
             active_overlay: None,
@@ -817,6 +819,12 @@ impl TuiApp {
         None
     }
 
+    fn refresh_workspace_pane(&mut self) {
+        if self.workspace_pane.is_some() {
+            self.workspace_pane = Some(workspace_pane_lines());
+        }
+    }
+
     fn sync_stats(&mut self) {
         self.model_name = self.session.model.clone();
         self.provider_name = crate::design_system::provider_label(&self.session.provider);
@@ -995,6 +1003,85 @@ impl TuiApp {
                         settings.max_facts,
                     );
                 }
+            }
+            OverlayResult::DiffReviewed(outcome) => {
+                let staged_files = outcome
+                    .approved
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .arg("add")
+                            .arg("--")
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                let apply = |patch: &str, args: &[&str]| -> bool {
+                    use std::io::Write;
+                    let Ok(mut child) = std::process::Command::new("git")
+                        .arg("apply")
+                        .args(args)
+                        .arg("--recount")
+                        .arg("-")
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                    else {
+                        return false;
+                    };
+                    let written = child
+                        .stdin
+                        .take()
+                        .map(|mut stdin| stdin.write_all(patch.as_bytes()).is_ok())
+                        .unwrap_or(false);
+                    child.wait().map(|s| s.success()).unwrap_or(false) && written
+                };
+                let unstaged_files = outcome
+                    .unstage_files
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .args(["reset", "-q", "--"])
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                let staged_hunks = outcome
+                    .stage_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["--cached"]))
+                    .count();
+                let unstaged_hunks = outcome
+                    .unstage_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["-R", "--cached"]))
+                    .count();
+                let discarded_hunks = outcome
+                    .discard_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["-R"]))
+                    .count();
+                let failed = outcome.stage_hunks.len() - staged_hunks + outcome.unstage_hunks.len()
+                    - unstaged_hunks
+                    + outcome.discard_hunks.len()
+                    - discarded_hunks;
+                let mut text = format!(
+                    "Staged {staged_files} file(s) and {staged_hunks} hunk(s); unstaged {unstaged_files} file(s) and {unstaged_hunks} hunk(s); discarded {discarded_hunks} hunk(s) from the working tree."
+                );
+                if failed > 0 {
+                    text.push_str(&format!(
+                        " {failed} hunk(s) no longer matched the file and were left as they are; run /diff-review again."
+                    ));
+                }
+                self.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text,
+                });
             }
             OverlayResult::DiffApproved(paths) => {
                 // Stage the approved files (reversible via `git reset`). Rejected /
@@ -1667,11 +1754,13 @@ struct FrameCtx<'a> {
     notice: Option<&'a str>,
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
+    workspace_pane: Option<&'a [String]>,
 }
 
 impl<'a> FrameCtx<'a> {
     fn from_app(app: &'a TuiApp) -> Self {
         FrameCtx {
+            workspace_pane: app.workspace_pane.as_deref(),
             model_name: &app.model_name,
             statusline: &app.statusline_config,
             provider_name: &app.provider_name,
@@ -1777,7 +1866,67 @@ fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(Paragraph::new(line), row);
 }
 
+const WORKSPACE_PANE_MIN_WIDTH: u16 = 90;
+const WORKSPACE_PANE_MAX_LINES: usize = 2000;
+
+fn workspace_pane_lines() -> Vec<String> {
+    match crate::runtime::git::diff_for_command("head") {
+        Ok(read) => {
+            let mut lines: Vec<String> = read.summary().lines().map(str::to_string).collect();
+            if !read.diff.is_empty() {
+                lines.push(String::new());
+                lines.extend(read.text.lines().map(str::to_string));
+            }
+            lines.truncate(WORKSPACE_PANE_MAX_LINES);
+            lines
+        }
+        Err(message) => vec![message],
+    }
+}
+
+fn render_workspace_pane(frame: &mut ratatui::Frame, area: Rect, pane: &[String]) {
+    use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success};
+    let lines: Vec<Line> = pane
+        .iter()
+        .map(|line| {
+            let text = crate::terminal_text::sanitize_terminal_text(line);
+            let style = if line.starts_with("+++") || line.starts_with("---") {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else if line.starts_with('+') {
+                Style::default().fg(ui_success())
+            } else if line.starts_with('-') {
+                Style::default().fg(ui_danger())
+            } else if line.starts_with("@@") {
+                Style::default().fg(ui_accent())
+            } else if line.starts_with("diff --git") || line.starts_with("index ") {
+                Style::default().fg(ui_muted())
+            } else {
+                Style::default()
+            };
+            Line::from(Span::styled(text, style))
+        })
+        .collect();
+    let pane = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ui_muted()))
+            .title(" Workspace · changes since the last commit "),
+    );
+    frame.render_widget(pane, area);
+}
+
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    let area = match ctx.workspace_pane {
+        Some(pane) if area.width >= WORKSPACE_PANE_MIN_WIDTH => {
+            let columns = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+                .split(area);
+            render_workspace_pane(frame, columns[1], pane);
+            columns[0]
+        }
+        _ => area,
+    };
     use crate::tui::terminal_palette::{
         ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
     };
@@ -4313,6 +4462,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/worktree" | "/wt" => SlashResult::RunWorktree(arg.to_string()),
 
+        "/diff" if arg.trim() == "panel" => {
+            if app.workspace_pane.take().is_some() {
+                SlashResult::SystemMessage("Closed the workspace pane.".to_string())
+            } else {
+                app.workspace_pane = Some(workspace_pane_lines());
+                SlashResult::SystemMessage(format!(
+                    "The workspace pane now shows the changes since the last commit beside the chat, refreshed after each turn. It needs a window at least {WORKSPACE_PANE_MIN_WIDTH} columns wide. /diff panel again closes it."
+                ))
+            }
+        }
+
         "/diff" => SlashResult::SystemMessage(crate::runtime::git::diff_summary_for_command(arg)),
 
         "/copy" => {
@@ -4348,6 +4508,36 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
             #[cfg(target_os = "android")]
             SlashResult::SystemMessage("Clipboard not available on this platform.".to_string())
+        }
+
+        "/table" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::table_command(reply, arg))
+        }
+
+        "/background" | "/bg" => match crate::background::hand_off(&mut app.session, arg) {
+            Ok(message) => {
+                app.chat_messages.clear();
+                app.scroll_offset = 0;
+                app.sync_stats();
+                SlashResult::SystemMessage(message)
+            }
+            Err(message) => SlashResult::SystemMessage(message),
+        },
+
+        "/links" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::links_command(reply, arg))
         }
 
         "/login" => SlashResult::RunLogin,
@@ -4653,7 +4843,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             use crate::tui::widgets::screen_renderers::{
-                PluginGroup, PluginSummary, PluginTab, render_plugin,
+                PluginGroup, PluginSummary, PluginTab, PluginTabsView,
             };
             // Discover installed plugins from global and project plugin directories.
             let mut manager = crate::features::plugins::plugins::PluginsManager::new();
@@ -4677,7 +4867,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .iter()
                 .filter_map(|p| p.error.clone())
                 .collect();
-            SlashResult::SystemMessage(render_plugin(PluginTab::Installed, &installed, &errors))
+            let tab = PluginTab::parse(arg).unwrap_or(if cmd.starts_with("/market") {
+                PluginTab::Marketplaces
+            } else {
+                PluginTab::Installed
+            });
+            app.open_overlay(Box::new(PluginTabsView::new(tab, installed, errors)));
+            SlashResult::SystemMessage(
+                "Plugins (\u{2190}\u{2192} switch tabs \u{00b7} Esc close)".to_string(),
+            )
         }
 
         // ── Memory ──
@@ -4927,8 +5125,43 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                 .unwrap_or_default();
             let parsed = crate::diff_model::Diff::parse(&tracked_diff);
-            let mut files: Vec<FileDiff> =
-                parsed.files.iter().map(FileDiff::from_model).collect();
+            let read_diff = |args: &[&str]| {
+                std::process::Command::new("git")
+                    .args(args)
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                    .unwrap_or_default()
+            };
+            let mut hunks_by_path: std::collections::HashMap<
+                std::path::PathBuf,
+                Vec<(Vec<String>, String, bool)>,
+            > = std::collections::HashMap::new();
+            for (text, staged) in [(read_diff(&["diff", "--cached"]), true), (read_diff(&["diff"]), false)] {
+                let model = crate::diff_model::Diff::parse(&text);
+                let patches = crate::diff_model::file_hunk_patches(&text);
+                if patches.len() != model.files.len() {
+                    continue;
+                }
+                for (file, patches) in model.files.iter().zip(patches) {
+                    if patches.len() != file.hunks.len() {
+                        continue;
+                    }
+                    let entry = hunks_by_path.entry(file.path().to_path_buf()).or_default();
+                    for (hunk, patch) in file.hunks.iter().zip(patches) {
+                        let mut preview = vec![hunk.header()];
+                        preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
+                        entry.push((preview, patch, staged));
+                    }
+                }
+            }
+            let mut files: Vec<FileDiff> = parsed
+                .files
+                .iter()
+                .map(|file| {
+                    let hunks = hunks_by_path.remove(file.path()).unwrap_or_default();
+                    FileDiff::from_model(file).with_hunks(hunks)
+                })
+                .collect();
             files.extend(untracked.iter().map(|path| {
                 let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
                 file.kind = crate::diff_model::FileChangeKind::Added;
@@ -4940,7 +5173,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(
-                    "Diff review (\u{2191}\u{2193} navigate \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close)".into(),
+                    "Diff review (\u{2191}\u{2193} file \u{00b7} \u{2190}\u{2192} hunk \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close). An approved file or hunk is staged, a rejected one is left unstaged (unstaged if it was staged), and d pressed twice on an unstaged hunk discards it from the working tree.".into(),
                 )
             }
         }
@@ -6333,6 +6566,7 @@ async fn send_message_with_prompt(
                         // mutably borrowed by `send_fut`, so this must stay
                         // field-by-field rather than `FrameCtx::from_app(app)`.
                         let approval_ctx = FrameCtx {
+                            workspace_pane: app.workspace_pane.as_deref(),
                             model_name: &app.model_name,
                             statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
@@ -6489,6 +6723,7 @@ async fn send_message_with_prompt(
                     }
                     app.spinner_tick = app.spinner_tick.wrapping_add(1);
                     let ctx = FrameCtx {
+                        workspace_pane: app.workspace_pane.as_deref(),
                         model_name: &app.model_name,
                         statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
@@ -6669,6 +6904,7 @@ async fn send_message_with_prompt(
         }
     }
 
+    app.refresh_workspace_pane();
     app.scroll_offset = 0;
     render(terminal, app)?;
 
@@ -8498,6 +8734,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8577,6 +8814,7 @@ mod tests {
         notice: Option<&'a str>,
     ) -> FrameCtx<'a> {
         FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-flagship",
             statusline,
             provider_name: "anthropic",
@@ -8915,6 +9153,7 @@ mod tests {
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8967,6 +9206,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -9084,6 +9324,7 @@ mod tests {
             show_mode: true,
         };
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: &model_name,
             statusline: &statusline_cfg,
             provider_name: "ollama",

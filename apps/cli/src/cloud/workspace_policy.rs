@@ -21,6 +21,17 @@ struct EffectiveWorkspacePolicy {
     governed: bool,
     #[serde(default)]
     controls: Option<WorkspaceControls>,
+    #[serde(default)]
+    code: Option<WorkspaceCodeControls>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceCodeControls {
+    #[serde(default)]
+    allow_mcp_servers: Option<bool>,
+    #[serde(default)]
+    allowed_mcp_servers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -73,12 +84,31 @@ fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
             return read(policy);
         }
     }
-    let policy = load_cached().unwrap_or_default();
-    let value = read(&policy);
-    if let Ok(mut current) = CURRENT.write() {
-        current.get_or_insert(policy);
+    match load_cached() {
+        Some(policy) => {
+            let value = read(&policy);
+            if let Ok(mut current) = CURRENT.write() {
+                current.get_or_insert(policy);
+            }
+            value
+        }
+        None => read(&EffectiveWorkspacePolicy::default()),
     }
-    value
+}
+
+fn policy_known() -> bool {
+    CURRENT
+        .read()
+        .map(|current| current.is_some())
+        .unwrap_or(false)
+        || load_cached().is_some()
+}
+
+fn on_workspace_plan() -> bool {
+    matches!(
+        crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
+        Some(crate::tier_cache::UserTier::Team | crate::tier_cache::UserTier::Enterprise)
+    )
 }
 
 pub fn feature_enabled(feature: &str) -> bool {
@@ -87,6 +117,101 @@ pub fn feature_enabled(feature: &str) -> bool {
 
 pub fn governed() -> bool {
     with_current(|policy| policy.governed)
+}
+
+pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
+    if signed_in_owner().is_some() && !policy_known() {
+        let fetched = tokio::time::timeout(FIRST_FETCH_WAIT, fetch(PrivacyMode::Managed)).await;
+        if !matches!(fetched, Ok(Ok(()))) && on_workspace_plan() {
+            return Some(format!(
+                "MCP server '{name}' was not started: your workspace policy could not be read, so MCP servers stay off until it can be. Check your connection and try again"
+            ));
+        }
+    }
+    with_current(|policy| {
+        policy
+            .code
+            .as_ref()
+            .and_then(|code| code_controls_refusal(code, name, url))
+    })
+}
+
+fn host_allowed(allowed: &[String], host: &str) -> bool {
+    allowed.iter().any(|entry| match entry.strip_prefix("*.") {
+        Some(domain) => host
+            .strip_suffix(domain)
+            .is_some_and(|prefix| prefix.len() > 1 && prefix.ends_with('.')),
+        None => entry == host,
+    })
+}
+
+fn code_controls_refusal(
+    code: &WorkspaceCodeControls,
+    name: &str,
+    url: Option<&str>,
+) -> Option<String> {
+    if code.allow_mcp_servers == Some(false) {
+        return Some(format!(
+            "MCP server '{name}' was not started: your workspace administrator has turned MCP servers off"
+        ));
+    }
+    if code.allowed_mcp_servers.is_empty() {
+        return None;
+    }
+    let host = url
+        .and_then(|url| reqwest::Url::parse(url).ok())
+        .and_then(|url| url.host_str().map(str::to_ascii_lowercase));
+    match host {
+        Some(host) if host_allowed(&code.allowed_mcp_servers, &host) => None,
+        Some(host) => Some(format!(
+            "MCP server '{name}' was not started: your workspace allows only listed MCP hosts, and {host} is not one of them"
+        )),
+        None => Some(format!(
+            "MCP server '{name}' was not started: your workspace allows only listed MCP hosts, and this server has no host on that list"
+        )),
+    }
+}
+
+#[cfg(test)]
+mod mcp_control_tests {
+    use super::*;
+
+    fn allow_list(hosts: &[&str]) -> WorkspaceCodeControls {
+        WorkspaceCodeControls {
+            allow_mcp_servers: Some(true),
+            allowed_mcp_servers: hosts.iter().map(|host| host.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn an_allow_list_refuses_local_and_unparseable_servers() {
+        let code = allow_list(&["mcp.example.com"]);
+        assert!(code_controls_refusal(&code, "local", None).is_some());
+        assert!(code_controls_refusal(&code, "odd", Some("not a url")).is_some());
+        assert!(code_controls_refusal(&code, "ok", Some("https://mcp.example.com/mcp")).is_none());
+        assert!(code_controls_refusal(&code, "other", Some("https://evil.test/mcp")).is_some());
+    }
+
+    #[test]
+    fn a_wildcard_host_admits_subdomains_only() {
+        let code = allow_list(&["*.example.com"]);
+        assert!(code_controls_refusal(&code, "a", Some("https://mcp.example.com")).is_none());
+        assert!(code_controls_refusal(&code, "b", Some("https://a.b.example.com")).is_none());
+        assert!(code_controls_refusal(&code, "c", Some("https://example.com")).is_some());
+        assert!(code_controls_refusal(&code, "d", Some("https://badexample.com")).is_some());
+    }
+
+    #[test]
+    fn servers_off_refuses_everything_and_no_list_allows_everything() {
+        let off = WorkspaceCodeControls {
+            allow_mcp_servers: Some(false),
+            allowed_mcp_servers: Vec::new(),
+        };
+        assert!(code_controls_refusal(&off, "local", None).is_some());
+        let open = WorkspaceCodeControls::default();
+        assert!(code_controls_refusal(&open, "local", None).is_none());
+        assert!(code_controls_refusal(&open, "remote", Some("https://any.test")).is_none());
+    }
 }
 
 pub fn hooks_allowed() -> bool {
