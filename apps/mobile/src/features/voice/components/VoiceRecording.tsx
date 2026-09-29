@@ -28,7 +28,7 @@ interface VoiceRecordingProps {
 function RecordingDot() {
   const opacity = useSharedValue(1);
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(0.25, { duration: 700 }), -1, true);
+    opacity.value = withRepeat(withTiming(0.25, { duration: motion.reveal }), -1, true);
   }, [opacity]);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
@@ -54,8 +54,8 @@ export function VoiceRecording({
   const ringOpacity = useSharedValue(0);
   useEffect(() => {
     if (visible) {
-      ringScale.value = withRepeat(withTiming(1.7, { duration: 1100 }), -1, true);
-      ringOpacity.value = withRepeat(withTiming(0.4, { duration: 1100 }), -1, true);
+      ringScale.value = withRepeat(withTiming(1.7, { duration: motion.pulse }), -1, true);
+      ringOpacity.value = withRepeat(withTiming(0.4, { duration: motion.pulse }), -1, true);
     } else {
       ringScale.value = withSpring(1);
       ringOpacity.value = withSpring(0);

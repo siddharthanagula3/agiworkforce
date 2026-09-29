@@ -15,7 +15,7 @@ import { MessageBubble } from './MessageBubble';
 import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { ChatMessage } from '@/types/chat';
 import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
@@ -114,7 +114,7 @@ export function MessageList({
 
   useEffect(() => {
     fabOpacity.value = withTiming(showScrollButton ? 1 : 0, {
-      duration: 200,
+      duration: motion.quick,
       easing: Easing.out(Easing.ease),
     });
   }, [showScrollButton, fabOpacity]);

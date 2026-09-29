@@ -25,7 +25,7 @@ import {
 import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -1046,7 +1046,7 @@ function LibraryImageCard({
               position: 'absolute',
               top: 10,
               right: 10,
-              zIndex: 20,
+              zIndex: zIndex.control,
               width: 24,
               height: 24,
               borderRadius: 12,

@@ -297,6 +297,9 @@ export const motion = {
   quick: 160,
   moved: 260,
   reveal: 700,
+  pulse: 1000,
+  ambient: 2000,
+  orbit: 3000,
 } as const;
 
 export const motionCurves = {

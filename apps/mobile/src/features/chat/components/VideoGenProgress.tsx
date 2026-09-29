@@ -47,10 +47,10 @@ export function VideoGenProgress({
 
   useEffect(() => {
     if (isError || reducedMotion) {
-      pulse.value = withTiming(1, { duration: 200 });
+      pulse.value = withTiming(1, { duration: motion.quick });
       return;
     }
-    pulse.value = withRepeat(withTiming(0.45, { duration: 1000 }), -1, true);
+    pulse.value = withRepeat(withTiming(0.45, { duration: motion.pulse }), -1, true);
   }, [isError, reducedMotion, pulse]);
 
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));

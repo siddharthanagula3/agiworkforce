@@ -8,7 +8,7 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 function SkeletonRow({ align }: { align: 'left' | 'right' }) {
   const colors = useThemeColors();
@@ -17,8 +17,8 @@ function SkeletonRow({ align }: { align: 'left' | 'right' }) {
   useEffect(() => {
     pulse.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.8, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.4, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
