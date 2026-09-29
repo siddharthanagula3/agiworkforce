@@ -552,6 +552,9 @@ const es = {
   'webview.resendMessage': 'Reenviar',
   'webview.resendMessageLabel': 'Reenviar este mensaje',
   'webview.branchFromMessage': 'Crear rama',
+  'webview.branchFromAnswer': 'Crear rama aquí',
+  'webview.branchFromAnswerLabel':
+    'Iniciar una sesión nueva que conserva la conversación hasta esta respuesta',
   'webview.branchFromMessageLabel':
     'Iniciar una sesión nueva desde aquí con este mensaje listo para editar',
   'localServers.running_one': '{provider} está en ejecución · {count} modelo',
