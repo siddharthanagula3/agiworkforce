@@ -34,6 +34,7 @@ import {
 } from './CloudToolApprovalControls';
 import { RunSteerInput } from './RunSteerInput';
 import { CodeRunAgain } from './CodeRunAgain';
+import { translatePlural } from '@/src/i18n/plural';
 
 const ACTIVITY_PAGE_SIZE = 20;
 
@@ -91,10 +92,29 @@ function completedSummary(activity: AgentActivityState): string {
   const tools = activity.entries.filter((entry) => entry.kind === 'tool').length;
   const files = activity.entries.filter((entry) => entry.kind === 'artifact').length;
   const parts: string[] = [];
-  if (tools > 0) parts.push(`${tools} tool${tools === 1 ? '' : 's'}`);
-  if (files > 0) parts.push(`${files} file${files === 1 ? '' : 's'} created`);
+  if (tools > 0) {
+    parts.push(
+      translatePlural('chat', 'counts.tools', tools, {
+        one: '{{count}} tool',
+        other: '{{count}} tools',
+      }),
+    );
+  }
+  if (files > 0) {
+    parts.push(
+      translatePlural('chat', 'counts.filesCreated', files, {
+        one: '{{count}} file created',
+        other: '{{count}} files created',
+      }),
+    );
+  }
   if (parts.length === 0 && activity.entries.length > 0) {
-    parts.push(`${activity.entries.length} step${activity.entries.length === 1 ? '' : 's'}`);
+    parts.push(
+      translatePlural('chat', 'counts.steps', activity.entries.length, {
+        one: '{{count}} step',
+        other: '{{count}} steps',
+      }),
+    );
   }
   return parts.join(' · ');
 }
@@ -346,7 +366,10 @@ function StaticRow({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 4 }}>
           <Globe size={16} color={colors.textMuted} />
           <Text style={{ color: colors.textPrimary, fontSize: 13 }}>
-            Found {entry.sources.length} source{entry.sources.length === 1 ? '' : 's'}
+            {translatePlural('chat', 'counts.foundSources', entry.sources.length, {
+              one: 'Found {{count}} source',
+              other: 'Found {{count}} sources',
+            })}
           </Text>
         </View>
         <View style={{ marginLeft: 25 }}>

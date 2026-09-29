@@ -304,11 +304,11 @@ Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add Edit for queued messages; each queued message can only be cancelled. | ui |
+| mobile | partial | A queued message gets Edit beside Cancel, which takes it out of the queue into the message box, in post-codex/w-chat-s13.39-s14.31-mobile-queue-edit-and-duplicates.patch. ChatInput is held. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:1-1`
 
 ## S13.40: Mid-task steering input.
 

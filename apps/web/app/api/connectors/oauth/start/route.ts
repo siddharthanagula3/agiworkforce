@@ -310,10 +310,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const authorization = await resolveRegistryAuthorization(provider);
-  if (authorization.status === 'authorization-server-changed') {
+  const registryAuth = await resolveRegistryAuthorization(provider);
+  if (registryAuth.status === 'authorization-server-changed') {
     logger.warn(
-      { connectorId, issuer: authorization.issuer },
+      { connectorId, issuer: registryAuth.issuer },
       '[connector-oauth] the server no longer names the issuer its pre-registered app belongs to',
     );
     return fail(
@@ -322,11 +322,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       authorizationServerChangedMessage(connectorDisplayName(connectorId)),
     );
   }
-  if (authorization.status === 'pkce-unsupported') {
+  if (registryAuth.status === 'pkce-unsupported') {
     return fail(
       OAUTH_START_STATUS_ERROR,
       502,
-      new McpPkceUnsupportedError(authorization.issuer).message,
+      new McpPkceUnsupportedError(registryAuth.issuer).message,
     );
   }
 
@@ -344,10 +344,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       requestedScopes,
       returnPath,
       ttlSeconds: sensitiveDataConnector(connectorId)?.authorizationTtlSeconds,
-      issuer: authorization.context.issuer,
-      resourceUrl: authorization.context.resource,
-      ...(authorization.context.discoveryState
-        ? { discoveryState: authorization.context.discoveryState }
+      issuer: registryAuth.context.issuer,
+      resourceUrl: registryAuth.context.resource,
+      ...(registryAuth.context.discoveryState
+        ? { discoveryState: registryAuth.context.discoveryState }
         : {}),
     });
   } catch (error) {
@@ -366,7 +366,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     redirectUri,
     state,
     codeChallenge: pkce.challenge,
-    resource: authorization.context.resource,
+    resource: registryAuth.context.resource,
   });
 
   if (wantsJson) {

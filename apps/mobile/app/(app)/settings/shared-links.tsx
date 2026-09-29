@@ -11,6 +11,7 @@ import { useTheme } from '@/src/ui/theme';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
+import { translatePlural } from '@/src/i18n/plural';
 
 type LoadState =
   | { kind: 'loading' }
@@ -240,7 +241,10 @@ export default function SharedLinksScreen() {
                   {link.title}
                 </Text>
                 <Text style={{ color: c.textSecondary, fontSize: 12 }}>
-                  {link.messageCount} message{link.messageCount === 1 ? '' : 's'}
+                  {translatePlural('common', 'counts.messages', link.messageCount, {
+                    one: '{{count}} message',
+                    other: '{{count}} messages',
+                  })}
                   {formatDate(link.createdAt) ? ` · shared ${formatDate(link.createdAt)}` : ''}
                 </Text>
                 <Text

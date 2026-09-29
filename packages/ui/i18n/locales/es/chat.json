@@ -449,7 +449,13 @@
     "savedMemoriesUsed_one": "Usó {{count}} memoria guardada",
     "savedMemoriesUsed_other": "Usó {{count}} memorias guardadas",
     "moreSavedMemories_one": "Y {{count}} más",
-    "moreSavedMemories_other": "Y {{count}} más"
+    "moreSavedMemories_other": "Y {{count}} más",
+    "filesCreated_one": "{{count}} archivo creado",
+    "filesCreated_other": "{{count}} archivos creados",
+    "foundSources_one": "Se encontró {{count}} fuente",
+    "foundSources_other": "Se encontraron {{count}} fuentes",
+    "mapPreviewPlaces_one": "Vista previa del mapa con {{count}} lugar",
+    "mapPreviewPlaces_other": "Vista previa del mapa con {{count}} lugares"
   },
   "markdownTable": {
     "label": "Tabla",
