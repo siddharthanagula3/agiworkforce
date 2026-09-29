@@ -394,11 +394,11 @@ pub fn render_created_trigger(
     }
     lines.push("Shown once. Copy what you need now.".to_string());
     if let Some(secret) = created.signing_secret.as_deref() {
-        lines.push(format!("  Signing secret: {secret}"));
+        lines.push(format!("  signingSecret: {secret}"));
     }
     if let Some(code) = created.verification_code.as_deref() {
         lines.push(format!(
-            "  Post this code in the workspace to verify it: {code}"
+            "  verificationCode: {code}  (post this code in the Slack workspace to verify it)"
         ));
     }
     lines.join("\n")
@@ -636,10 +636,16 @@ mod tests {
             "{rendered}"
         );
         assert!(
-            rendered.contains("Signing secret: whsec_example"),
+            rendered.contains("signingSecret: whsec_example"),
             "{rendered}"
         );
-        assert!(rendered.contains("verify it: a1b2c3d4e5f6"), "{rendered}");
+        assert!(
+            rendered.contains("verificationCode: a1b2c3d4e5f6"),
+            "{rendered}"
+        );
+        let redacted = crate::secret_redaction::redact_tool_output(&rendered);
+        assert!(!redacted.contains("whsec_example"), "{redacted}");
+        assert!(!redacted.contains("a1b2c3d4e5f6"), "{redacted}");
     }
 
     #[test]
