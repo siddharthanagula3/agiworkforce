@@ -202,11 +202,12 @@ impl SessionActivity {
         let changed_at = Utc::now();
         let mut recorded = Vec::new();
         for (path, existed) in pending.targets {
-            if !path.exists() {
+            let deleted = !path.exists();
+            if deleted && !existed {
                 continue;
             }
             let mut reason = None;
-            if let Some(after) = readable_text(&path) {
+            if let Some(after) = readable_text(&path).filter(|_| !deleted) {
                 let before = pending.before.get(&path).cloned().unwrap_or_default();
                 if before != after {
                     self.turn_diff.push((
@@ -218,7 +219,9 @@ impl SessionActivity {
             }
             let change = ManagedSessionFileChange {
                 path,
-                kind: if existed {
+                kind: if deleted {
+                    ManagedSessionFileChangeKind::Deleted
+                } else if existed {
                     ManagedSessionFileChangeKind::Modified
                 } else {
                     ManagedSessionFileChangeKind::Created
