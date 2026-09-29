@@ -150,12 +150,14 @@ import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPor
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
+  MAX_LISTED_BROWSER_TABS,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_PAGE_CAPTURE_MESSAGE,
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
+  type BrowserTabSummary,
   type SitePolicyAdminState,
 } from '@agiworkforce/types';
 import {
@@ -3080,6 +3082,25 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
   }
 }
 
+async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
+  const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabs = await chrome.tabs.query({});
+  return tabs
+    .filter((tab) => isWebTab(tab) && !tab.incognito)
+    .sort(
+      (a, b) =>
+        Number(b.windowId === focused?.windowId) - Number(a.windowId === focused?.windowId) ||
+        a.index - b.index,
+    )
+    .slice(0, MAX_LISTED_BROWSER_TABS)
+    .map((tab) => ({
+      tabId: tab.id as number,
+      title: tab.title ?? '',
+      url: tab.url as string,
+      active: tab.id === focused?.id,
+    }));
+}
+
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
@@ -3120,7 +3141,8 @@ async function pollDesktopBrowserCommands(): Promise<void> {
       if (!command) continue;
 
       const result = await runDesktopBrowserCommand(command, {
-        resolveTabId: () => resolveBrowserToolTabId(undefined),
+        resolveTabId: (explicitTabId) => resolveBrowserToolTabId(explicitTabId),
+        listTabs: listDesktopBrowserTabs,
         send: async (tabId, message) =>
           (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
             id: chrome.runtime.id,

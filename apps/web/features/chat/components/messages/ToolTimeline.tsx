@@ -41,6 +41,8 @@ import { ConnectorConnectCard } from '../ConnectorConnectCard';
 import { PluginDraftCard } from '../PluginDraftCard';
 import { readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
+import { EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
+import { CodeRunAgain } from './CodeRunAgain';
 
 function getFileName(args?: string): string | null {
   if (!args) return null;
@@ -208,6 +210,7 @@ interface ToolTimelineProps {
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
   renderInputRequest?: (tool: ToolEntry) => ReactNode;
+  codeRunConversationId?: string;
 }
 
 function findConnectRequest(tool: ToolEntry): ConnectorConnectRequest | null {
@@ -433,6 +436,7 @@ function TimelineStepRow({
   onResend,
   onRetryTurn,
   renderInputRequest,
+  codeRunConversationId,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
@@ -444,8 +448,17 @@ function TimelineStepRow({
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
   renderInputRequest?: (tool: ToolEntry) => ReactNode;
+  codeRunConversationId?: string;
 }) {
   const mcpTool = parseQualifiedMcpToolName(tool.name);
+  const rerunCode = toolCall.parameters?.['code'];
+  const rerunLanguage = toolCall.parameters?.['language'];
+  const canRunAgain =
+    codeRunConversationId !== undefined &&
+    tool.name === EXECUTE_CODE_TOOL &&
+    (tool.status === 'completed' || tool.status === 'failed') &&
+    typeof rerunCode === 'string' &&
+    rerunCode.trim() !== '';
   const filename = mcpTool ? null : getFileName(tool.args);
   const hasFile = filename != null;
   const StepIcon = hasFile ? null : getToolIcon(tool.name, null);
@@ -529,6 +542,15 @@ function TimelineStepRow({
           })}
         </div>
       )}
+      {canRunAgain ? (
+        <div className="ps-7 mt-1.5">
+          <CodeRunAgain
+            conversationId={codeRunConversationId}
+            language={typeof rerunLanguage === 'string' ? rerunLanguage : 'python'}
+            code={rerunCode}
+          />
+        </div>
+      ) : null}
       {tool.status === 'awaiting_input' && renderInputRequest ? (
         <div className="ps-7 mt-1.5">{renderInputRequest(tool)}</div>
       ) : null}
@@ -657,6 +679,7 @@ function ToolTimeline({
   onResend,
   onRetryTurn,
   renderInputRequest,
+  codeRunConversationId,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -854,6 +877,7 @@ function ToolTimeline({
                                 onResend={onResend}
                                 onRetryTurn={onRetryTurn}
                                 renderInputRequest={renderInputRequest}
+                                codeRunConversationId={codeRunConversationId}
                               />
                             );
                           })}
@@ -904,6 +928,7 @@ function ToolTimeline({
                           onResend={onResend}
                           onRetryTurn={onRetryTurn}
                           renderInputRequest={renderInputRequest}
+                          codeRunConversationId={codeRunConversationId}
                         />
                       );
                     });
@@ -937,6 +962,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
   if (prev.onRetryTurn !== next.onRetryTurn) return false;
   if (prev.renderInputRequest !== next.renderInputRequest) return false;
+  if (prev.codeRunConversationId !== next.codeRunConversationId) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {
