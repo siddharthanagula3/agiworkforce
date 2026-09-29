@@ -48,15 +48,12 @@ Code: `apps/cli/src/provider.rs:16-19`
 ## S76.08: Audio transcription.
 
 - Done when: The registry names the transcription model(s) and dictation/transcription requests use that registry choice.
-- Wave: 2
-- Already works on: web, desktop, api
+- Wave: 3
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:354-354`
 
 ## S76.09: Realtime audio input.
 

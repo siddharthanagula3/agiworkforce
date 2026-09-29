@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | buildModelPickerShortList, which gives family rows and the recommended short list, moved from unified-chat into @agiworkforce/routing/model-picker (6c257b11db), which mobile already depends on. What remains is the mobile sheet grouping by familySlot. | ui |
+| mobile | partial | Within each tier, the picker keeps a model family's versions together (getModelFamilySlotForModel). ModelPickerSheet is held: post-codex/w-chat-s15.03-s15.07-mobile-model-picker-families.patch. | codex |
 | cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
 
-Code: `packages/ai/routing/src/model-picker.ts:261-261`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
+Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
 
 ## S15.04: Searchable model list.
 
@@ -61,22 +61,10 @@ Code: `packages/ai/routing/src/model-picker.ts:261-261`, `apps/cli/src/tui/widge
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The recommended list is now importable from @agiworkforce/routing/model-picker. What remains is the mobile sheet labelling those rows as recommended. | ui |
+| mobile | partial | A Recommended section lists the registry's picker recommendations (listPickerRecommendedModelIds), in the same post-codex patch as S15.03. | codex |
 | cli | missing | Not built on this surface. |  |
 
-Code: `packages/ai/routing/src/model-picker.ts:261-261`
-
-## S15.09: Default-profile option.
-
-- Done when: The user can set which model or profile new chats start with, as a lasting default.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add an explicit default model setting; today the last model picked carries over (persisted model-store) and there is no separate default. | ui |
-
-Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
+Code: `packages/contracts/types/src/model-catalog.ts:2174-2174`
 
 ## S15.12: Input-modality badges.
 

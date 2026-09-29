@@ -263,7 +263,7 @@ export async function createImageGenerationJob(input: {
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, $18,
        exists (
          select 1 from public.web_conversations c
-          where c.id = $4::uuid and coalesce(c.is_temporary, false)
+          where c.id = $4::uuid and coalesce(c.is_temporary, false) and c.deleted_at is null
        )
      )
      returning ${JOB_COLUMNS}`,

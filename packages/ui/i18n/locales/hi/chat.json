@@ -454,7 +454,13 @@
     "savedMemoriesUsed_one": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
     "savedMemoriesUsed_other": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
     "moreSavedMemories_one": "{{count}} और",
-    "moreSavedMemories_other": "{{count}} और"
+    "moreSavedMemories_other": "{{count}} और",
+    "filesCreated_one": "{{count}} फ़ाइल बनाई गई",
+    "filesCreated_other": "{{count}} फ़ाइलें बनाई गईं",
+    "foundSources_one": "{{count}} स्रोत मिला",
+    "foundSources_other": "{{count}} स्रोत मिले",
+    "mapPreviewPlaces_one": "{{count}} स्थान के साथ मानचित्र पूर्वावलोकन",
+    "mapPreviewPlaces_other": "{{count}} स्थानों के साथ मानचित्र पूर्वावलोकन"
   },
   "markdownTable": {
     "label": "तालिका",

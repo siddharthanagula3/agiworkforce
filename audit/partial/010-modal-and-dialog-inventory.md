@@ -49,10 +49,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Archive runs immediately from the menu with no confirmation or undo; only a failure alert. | states |
+| mobile | partial | Archiving shows 'Chat archived. Find it in Settings, Archived chats.' with Undo, which restores it on the server and puts the row back where it was, in the S8.45 post-codex patch. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:100-100`
+Code: `apps/mobile/src/features/archived-chats/service.ts:69-69`
 
 ## S10.08: Share conversation.
 
@@ -62,12 +62,12 @@ Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:1
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Share' exports the chat as a file through the OS share sheet; creating a share link is only possible on web. | ui |
+| mobile | partial | post-codex/chat-gates-s18.19-mobile-share-link.patch (in the ordered series) creates the link after saying who can open it ('Anyone with the link can read the messages in this chat until the link expires') and hands it to the share sheet to copy or send. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1604`
+Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 
 ## S10.09: Share file or folder.
 
@@ -266,10 +266,10 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
+| mobile | partial | Codex's held chat screen mounts ContextWarningChip above the composer (chat/[id].tsx:1497 in the Codex copy). For every model it warns before sending once the thread nears the model's context window, and offers New chat. Done once Codex commits. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
+Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -348,22 +348,19 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Fix the pairing instructions: the phone says to open Desktop "Settings and select Connections" and /pair says "Mobile companion", but the code is generated in Desktop Settings > Capabilities (Connections opens Connectors). | ui |
+| mobile | partial | The pairing steps now point to Desktop Settings > Capabilities > Pair a phone, where RemoteControlSection lives, in post-codex/w-chat-s10.40-mobile-pairing-steps.patch. ConnectionStateViews is held. | codex |
 
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98-112`, `apps/mobile/services/manualPairing.ts:152-170`
+Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 
 ## S10.41: Unsaved-changes warning.
 
 - Done when: Leaving an editor with unsaved edits warns the user and lets them keep editing or discard.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the Personalization screen asks before discarding edits; other edit screens do not. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
 
 ## S10.42: Edit-conflict resolution.
 
@@ -407,14 +404,11 @@ Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 - Done when: A feedback dialog, reachable product-wide, sends the user's message to the team's feedback store.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S10.46: Diagnostic-sharing consent.
 

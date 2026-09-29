@@ -5,6 +5,7 @@ import {
   isContractPricedPlan,
   isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
+  isFreeBillingPlanTier,
   isPerSeatBillingPlan,
   normalizeBillingPlanTier,
   type BillingPlanTier,
@@ -326,7 +327,7 @@ export async function resolveEntitlementBundle(
     own
       ? bundleFrom(userId, own, 'subscription', ownEntitled)
       : bundleFrom(userId, null, 'none', false);
-  if (own && ownEntitled && normalizeBillingPlanTier(own.plan_tier) !== 'free') {
+  if (own && ownEntitled && !isFreeBillingPlanTier(normalizeBillingPlanTier(own.plan_tier))) {
     return settleOnOwn();
   }
   if (options.includeSeats === false) return settleOnOwn();

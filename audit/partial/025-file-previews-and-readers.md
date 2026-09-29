@@ -32,27 +32,21 @@ nothing is left.
 
 - Done when: Markdown files render formatted in the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi library show prints Markdown as plain text; render it formatted, for example through tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.04: Source-code reader.
 
 - Done when: Source-code files open with syntax-aware display.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi library show prints code as plain text; add syntax highlighting, for example the syntect path in tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.05: Image viewer.
 

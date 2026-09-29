@@ -454,7 +454,13 @@
     "savedMemoriesUsed_one": "使用了 {{count}} 条已保存的记忆",
     "savedMemoriesUsed_other": "使用了 {{count}} 条已保存的记忆",
     "moreSavedMemories_one": "还有 {{count}} 条",
-    "moreSavedMemories_other": "还有 {{count}} 条"
+    "moreSavedMemories_other": "还有 {{count}} 条",
+    "filesCreated_other": "已创建 {{count}} 个文件",
+    "foundSources_other": "找到 {{count}} 个来源",
+    "mapPreviewPlaces_other": "包含 {{count}} 个地点的地图预览",
+    "filesCreated_one": "已创建 {{count}} 个文件",
+    "foundSources_one": "找到 {{count}} 个来源",
+    "mapPreviewPlaces_one": "包含 {{count}} 个地点的地图预览"
   },
   "markdownTable": {
     "label": "表格",

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { randomUUID } from 'node:crypto';
+import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
@@ -517,6 +518,8 @@ async function runArtifactToolLoop(input: {
   };
 }
 
+const ARTIFACT_RUNTIME_USAGE_NAMESPACE = 'agi.artifact.runtime';
+
 export async function completeArtifactPrompt(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -527,6 +530,7 @@ export async function completeArtifactPrompt(input: {
   planTier: string;
   signal: AbortSignal;
   plan?: ArtifactConnectorPlan | null;
+  idempotencyKey: string | null;
 }): Promise<string> {
   const { route } = input;
   const estimatedPromptTokens = Math.ceil(input.prompt.length / 3.5) + 32;
@@ -537,20 +541,25 @@ export async function completeArtifactPrompt(input: {
     MAX_OUTPUT_TOKENS,
   );
   const plan = input.plan && input.plan.mcpTools.length > 0 ? input.plan : null;
+  const identity = {
+    kind: 'artifact_runtime_completion',
+    publishedArtifactId: input.artifact.publishedArtifactId,
+    prompt: input.prompt,
+    provider: route.provider,
+    model: route.modelKey,
+    providerModelId: route.providerModelId,
+    connectors: plan ? [...new Set(plan.mcpTools.map((tool) => tool.serverId))].sort() : [],
+  };
   const reservation = await reserveManagedUsageRequest({
     db: input.db,
     userId: input.userId,
     organizationId: input.organizationId,
-    idempotencyKey: `artifact-runtime:${randomUUID()}`,
-    requestHash: fingerprintManagedUsageRequest({
-      kind: 'artifact_runtime_completion',
-      publishedArtifactId: input.artifact.publishedArtifactId,
-      prompt: input.prompt,
-      provider: route.provider,
-      model: route.modelKey,
-      providerModelId: route.providerModelId,
-      connectors: plan ? [...new Set(plan.mcpTools.map((tool) => tool.serverId))].sort() : [],
+    idempotencyKey: managedUsageIdempotencyKey({
+      namespace: ARTIFACT_RUNTIME_USAGE_NAMESPACE,
+      suppliedKey: input.idempotencyKey,
+      identity,
     }),
+    requestHash: fingerprintManagedUsageRequest(identity),
     provider: route.provider,
     model: route.modelKey,
     estimatedCostMicrousd,

@@ -454,7 +454,13 @@
     "savedMemoriesUsed_one": "Used {{count}} saved memory",
     "savedMemoriesUsed_other": "Used {{count}} saved memories",
     "moreSavedMemories_one": "And {{count}} more",
-    "moreSavedMemories_other": "And {{count}} more"
+    "moreSavedMemories_other": "And {{count}} more",
+    "filesCreated_one": "{{count}} file created",
+    "filesCreated_other": "{{count}} files created",
+    "foundSources_one": "Found {{count}} source",
+    "foundSources_other": "Found {{count}} sources",
+    "mapPreviewPlaces_one": "Map preview with {{count}} place",
+    "mapPreviewPlaces_other": "Map preview with {{count}} places"
   },
   "markdownTable": {
     "label": "Table",

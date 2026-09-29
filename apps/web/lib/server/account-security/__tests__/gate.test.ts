@@ -102,7 +102,6 @@ vi.mock('@/lib/server/identity', () => {
     authorizedParties: () => ['https://agiworkforce.com'],
     verifySessionToken: async () => null,
     getSession: async (id: string) => ({
-      getIdentityAuthorizedParties: vi.fn(),
       id,
       userId: 'user_advanced_security',
       status: 'active',
@@ -114,6 +113,7 @@ vi.mock('@/lib/server/identity', () => {
     revokeSession: async () => undefined,
   };
   return {
+    getIdentityAuthorizedParties: vi.fn(),
     getIdentityProvider: () => provider,
     getRequestIdentity: async () => ({
       subject: 'user_advanced_security',
