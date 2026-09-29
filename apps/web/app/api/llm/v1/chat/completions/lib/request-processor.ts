@@ -4176,6 +4176,7 @@ export async function processRequest(
   if (researchPlanRefusal) return researchPlanRefusal;
   let cloudExecutionSwitchedOff = false;
   let imagesSwitchedOff = false;
+  let webSearchSwitchedOff = false;
   const webSearchAsked = chatRequest.web_search === true || chatRequest.web_fetch === true;
   const imageCardsAsked =
     chatRequest.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) === true;
@@ -4200,22 +4201,22 @@ export async function processRequest(
     if (chatRequest.research === true) {
       await assertCapabilityAvailable(gatedSubject, 'canUseDeepResearch', 'Deep Research');
     }
-    if (webSearchRequestedByCaller && chatRequest.work_mode !== 'agiwork') {
+    if (
+      chatRequest.research === true ||
+      (webSearchRequestedByCaller && chatRequest.work_mode !== 'agiwork')
+    ) {
       await assertCapabilityAvailable(gatedSubject, 'canUseWebSearch', 'Web search');
     }
     const gate = await readKillSwitchGate(gatedSubject).catch((gateError: unknown) => {
       logger.error(
         { error: gateError, userId },
-        'Kill-switch gate unreadable; turn tools are offered as shipped',
+        'Kill-switch gate unreadable; switchable turn tools are withheld',
       );
       return null;
     });
-    cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') === false;
-    imagesSwitchedOff = gate?.capabilityAllowed('canUseImages') === false;
-    if (webSearchAsked && gate?.capabilityAllowed('canUseWebSearch') === false) {
-      chatRequest.web_search = false;
-      chatRequest.web_fetch = false;
-    }
+    cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') !== true;
+    imagesSwitchedOff = gate?.capabilityAllowed('canUseImages') !== true;
+    webSearchSwitchedOff = gate?.capabilityAllowed('canUseWebSearch') !== true;
   }
   const researchMode = researchModeAllowed(
     chatRequest,
@@ -4224,6 +4225,10 @@ export async function processRequest(
   );
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
+  }
+  if (webSearchSwitchedOff) {
+    chatRequest.web_search = false;
+    chatRequest.web_fetch = false;
   }
   const workspaceWebDomainPolicy =
     chatRequest.web_search || chatRequest.web_fetch || researchMode
