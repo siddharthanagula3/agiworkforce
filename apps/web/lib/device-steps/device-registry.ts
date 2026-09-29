@@ -108,7 +108,7 @@ export async function readRegisteredDevice(
     surface: row.surface,
     name: row.name,
     lastSeenAt: row.last_seen_at,
-    presence: devicePresence(row.last_seen_at, params.now ?? Date.now()),
+    presence: devicePresence(row.last_seen_at, params.now ?? Date.now(), row.surface),
     remoteEnabled: row.remote_enabled,
     capabilities: {
       browser: row.browser_available,
