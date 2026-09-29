@@ -657,6 +657,32 @@ export async function getScimUserGroups(
   );
 }
 
+export async function getScimUserGroupsBatch(
+  db: DatabaseAdapter,
+  ctx: ScimConnectionContext,
+  userIds: readonly string[],
+): Promise<Map<string, Array<Pick<ScimGroupRow, 'id' | 'display_name'>>>> {
+  const groupsByUser = new Map(
+    userIds.map((id) => [id, [] as Array<Pick<ScimGroupRow, 'id' | 'display_name'>>]),
+  );
+  if (userIds.length === 0) return groupsByUser;
+
+  const rows = await db.query<{ scim_user_id: string } & Pick<ScimGroupRow, 'id' | 'display_name'>>(
+    `select m.scim_user_id, g.id, g.display_name
+       from scim_group_members m
+       join scim_groups g on g.id = m.group_id
+      where m.scim_user_id = any($1::uuid[])
+        and m.organization_id = $2
+        and g.connection_id = $3
+      order by g.display_name asc`,
+    [[...userIds], ctx.organizationId, ctx.connectionId],
+  );
+  for (const { scim_user_id, id, display_name } of rows) {
+    groupsByUser.get(scim_user_id)?.push({ id, display_name });
+  }
+  return groupsByUser;
+}
+
 function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string })?.code === '23505';
 }
@@ -1290,6 +1316,34 @@ export async function getScimGroupMembers(
       order by u.user_name asc`,
     [groupId, ctx.organizationId, ctx.connectionId],
   );
+}
+
+export async function getScimGroupMembersBatch(
+  db: DatabaseAdapter,
+  ctx: ScimConnectionContext,
+  groupIds: readonly string[],
+): Promise<Map<string, Array<Pick<ScimProvisionedUserRow, 'id' | 'user_name'>>>> {
+  const membersByGroup = new Map(
+    groupIds.map((id) => [id, [] as Array<Pick<ScimProvisionedUserRow, 'id' | 'user_name'>>]),
+  );
+  if (groupIds.length === 0) return membersByGroup;
+
+  const rows = await db.query<
+    { group_id: string } & Pick<ScimProvisionedUserRow, 'id' | 'user_name'>
+  >(
+    `select m.group_id, u.id, u.user_name
+       from scim_group_members m
+       join scim_provisioned_users u on u.id = m.scim_user_id
+      where m.group_id = any($1::uuid[])
+        and m.organization_id = $2
+        and u.connection_id = $3
+      order by u.user_name asc`,
+    [[...groupIds], ctx.organizationId, ctx.connectionId],
+  );
+  for (const { group_id, id, user_name } of rows) {
+    membersByGroup.get(group_id)?.push({ id, user_name });
+  }
+  return membersByGroup;
 }
 
 // Ids travel as one array parameter, so statement arity is fixed at three no
