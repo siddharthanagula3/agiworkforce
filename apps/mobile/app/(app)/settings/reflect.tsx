@@ -20,6 +20,7 @@ import {
   type ReflectRange,
   type ReflectRecap,
 } from '@/src/features/reflect';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ReflectRecapOngoingWork = NonNullable<ReflectRecap['ongoingWork']>[number];
 
@@ -31,7 +32,10 @@ type LoadState =
 
 function describeOngoingWork(item: ReflectRecapOngoingWork): string {
   const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
-  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const followUps = translatePlural('settings', 'counts.followUps', item.followUps, {
+    one: '{{count}} follow-up',
+    other: '{{count}} follow-ups',
+  });
   const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',

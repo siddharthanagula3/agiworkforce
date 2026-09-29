@@ -92,6 +92,7 @@ export default function MemorySummaryScreen() {
         summary.sections.map((section) => (
           <View key={section.key}>
             <Text
+              accessibilityRole="header"
               style={{
                 color: colors.textMuted,
                 fontSize: 12,
