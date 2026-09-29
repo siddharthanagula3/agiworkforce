@@ -280,20 +280,26 @@ fn read_file_store(path: &Path, data: &str) -> Result<AuthStore> {
     serde_json::from_str(data).context("Failed to parse auth.json")
 }
 
+/// A credential the store no longer holds is an error, unless `missing_signs_out`
+/// says that provider is simply signed out. Any other store failure is always
+/// an error, so a caller never saves over credentials it could not read.
 fn load_keyring_auth(
     credentials: &dyn CredentialStore,
     index: AuthKeyringIndex,
+    missing_signs_out: bool,
 ) -> Result<AuthStore> {
     let mut entries = HashMap::with_capacity(index.providers.len());
     for provider in index.providers {
-        let secret = credentials
+        let held = credentials
             .get(&auth_keyring_account(&provider))
-            .with_context(|| format!("Could not read the saved {provider} credential"))?
-            .with_context(|| {
-                format!(
-                    "The saved {provider} credential is missing from the OS credential store; sign in again with `agi login`"
-                )
-            })?;
+            .with_context(|| format!("Could not read the saved {provider} credential"))?;
+        let secret = match held {
+            Some(secret) => secret,
+            None if missing_signs_out => continue,
+            None => bail!(
+                "The saved {provider} credential is missing from the OS credential store; sign in again with `agi login`"
+            ),
+        };
         let entry = serde_json::from_str::<AuthEntry>(&secret)
             .with_context(|| format!("Saved {provider} credential is invalid"))?;
         entries.insert(provider, entry);
@@ -356,12 +362,12 @@ impl AuthStore {
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
         if let Some(index) = parse_auth_keyring_index(&data) {
             if crate::secure_store::uses_keychain() {
-                return load_keyring_auth(&OsKeyring, index);
+                return load_keyring_auth(&OsKeyring, index, false);
             }
             // A Linux install upgraded from the kernel keyring may find it
-            // emptied by a reboot; that is a signed-out store, not a failure
-            // that blocks signing in again.
-            let store = load_keyring_auth(&OsKeyring, index).unwrap_or_default();
+            // emptied by a reboot; a credential it no longer holds is signed
+            // out, not a failure that blocks signing in again.
+            let store = load_keyring_auth(&OsKeyring, index, true)?;
             store.save()?;
             return Ok(store);
         }
@@ -1681,7 +1687,7 @@ mod tests {
         }
 
         let index = parse_auth_keyring_index(&on_disk).expect("index");
-        let reloaded = load_keyring_auth(&keyring, index).expect("load");
+        let reloaded = load_keyring_auth(&keyring, index, false).expect("load");
         assert_eq!(reloaded.entries.len(), 2);
         let mut round_tripped = every_secret(&reloaded);
         let mut original = every_secret(&store);
@@ -1730,8 +1736,42 @@ mod tests {
 
         let index = parse_auth_keyring_index(&std::fs::read_to_string(&path).expect("index"))
             .expect("parse");
-        let error = load_keyring_auth(&keyring, index).expect_err("missing credential must error");
+        let error =
+            load_keyring_auth(&keyring, index, false).expect_err("missing credential must error");
         assert!(format!("{error:#}").contains("openai"), "{error:#}");
+    }
+
+    #[test]
+    fn an_emptied_kernel_keyring_signs_out_only_the_missing_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = MemoryStore::default();
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        keyring
+            .secrets
+            .lock()
+            .expect("store lock")
+            .remove(&auth_keyring_account("openai"));
+
+        let index = parse_auth_keyring_index(&std::fs::read_to_string(&path).expect("index"))
+            .expect("parse");
+        let store = load_keyring_auth(&keyring, index, true).expect("load");
+        assert_eq!(
+            store.entries.keys().collect::<Vec<_>>(),
+            vec!["agiworkforce"]
+        );
+    }
+
+    #[test]
+    fn a_keyring_failure_other_than_a_missing_entry_is_never_a_signed_out_store() {
+        let index = AuthKeyringIndex {
+            version: AUTH_INDEX_VERSION,
+            storage: AUTH_INDEX_STORAGE.to_string(),
+            providers: vec!["openai".to_string()],
+        };
+        let error = load_keyring_auth(&DenyingStore, index, true)
+            .expect_err("a denied read must not become an empty store");
+        assert!(format!("{error:#}").contains("denied"), "{error:#}");
     }
 
     #[test]
