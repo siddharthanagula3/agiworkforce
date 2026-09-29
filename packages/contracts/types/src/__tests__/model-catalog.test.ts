@@ -24,6 +24,7 @@ import {
   resolveProviderDisplayId,
   getSurfaceManualModelOptions,
   isManagedTrafficPermitted,
+  isCurrentModel,
   isModelLive,
   listChatModels,
   listManagedRoutesForModel,
@@ -112,7 +113,7 @@ describe('the shared owner of what a surface may offer', () => {
     expect(executable.length).toBeGreaterThan(named.size);
   });
 
-  it('offers exactly what the send path admits on every managed chat surface', () => {
+  it('offers the current models admitted by the send path on every managed chat surface', () => {
     for (const runtimeProfileId of MANAGED_CHAT_SURFACES) {
       const admittedKeys = routableModelKeys(runtimeProfileId);
       for (const tier of ACCESS_TIERS) {
@@ -123,6 +124,7 @@ describe('the shared owner of what a surface may offer', () => {
           .filter(
             (model) =>
               isModelLive(model) &&
+              isCurrentModel(model) &&
               listManagedRoutesForModel(model.id).length > 0 &&
               admittedKeys.has(model.id) &&
               canAccessModelForSubscriptionTier(model.id, tier),
@@ -145,7 +147,11 @@ describe('the shared owner of what a surface may offer', () => {
         .sort(),
     );
 
-    expect(perSurface[0]).toEqual([...getExecutableModelIds()].sort());
+    expect(perSurface[0]).toEqual(
+      [...getExecutableModelIds()]
+        .filter((modelId) => isCurrentModel(getModelMetadataById(modelId)!))
+        .sort(),
+    );
     for (const surfaceIds of perSurface) expect(surfaceIds).toEqual(perSurface[0]);
   });
 

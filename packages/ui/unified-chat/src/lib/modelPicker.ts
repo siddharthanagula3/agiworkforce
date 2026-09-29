@@ -10,6 +10,7 @@ import {
   getModelMetadataById,
   getModelPriceBand as getRegistryModelPriceBand,
   getModelReasoning,
+  isCurrentModel,
   isAutoModeModelId,
   listChatModels,
   listPickerRecommendedModelIds,
@@ -121,7 +122,7 @@ export interface ModelPickerShortListInput {
 }
 
 export function listPickerChatModels(): readonly ModelMetadata[] {
-  return listChatModels();
+  return listChatModels().filter((model) => isCurrentModel(model));
 }
 
 export function getModelPriceBand(modelId: string): ModelPickerPriceBand | null {
