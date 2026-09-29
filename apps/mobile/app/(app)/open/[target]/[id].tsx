@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/text';
 import { isProductLinkId, isProductLinkTarget } from '@agiworkforce/types';
 import {
   nativeRouteForProductLink,
@@ -9,10 +11,12 @@ import {
 } from '@/src/features/notifications/productLinks';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ProductLinkRoute() {
   const router = useRouter();
   const colors = useThemeColors();
+  const handleCancel = useGoBack('/(app)');
   const { target, id } = useLocalSearchParams<{ target?: string; id?: string }>();
 
   useEffect(() => {
@@ -41,6 +45,14 @@ export default function ProductLinkRoute() {
       accessibilityLabel="Opening the link"
     >
       <ActivityIndicator color={colors.textPrimary} />
+      <Pressable
+        onPress={handleCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+        style={{ marginTop: 24, minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }

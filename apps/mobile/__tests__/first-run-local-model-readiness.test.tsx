@@ -242,6 +242,14 @@ describe('the system-runtime row is selectable for chat', () => {
   });
 });
 
+async function skipAboutYou(getByTestId: (id: string) => unknown) {
+  await waitFor(() => expect(getByTestId('onboarding-about-you-screen')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('about-you-skip-btn') as never);
+    await Promise.resolve();
+  });
+}
+
 describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
   it('recommends the detected built-in model without a download', async () => {
     const { getByTestId, queryByText } = render(<OnboardingScreen />);
@@ -250,6 +258,7 @@ describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
       fireEvent.press(getByTestId('hero-start-chatting-btn'));
       await Promise.resolve();
     });
+    await skipAboutYou(getByTestId);
     await waitFor(() => {
       expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy();
     });

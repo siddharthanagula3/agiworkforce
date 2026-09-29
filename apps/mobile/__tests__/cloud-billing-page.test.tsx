@@ -400,7 +400,9 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
 
     expect(getByText('How plan upgrades are charged')).toBeTruthy();
     expect(
-      getByText(/exact prorated charge for the rest of your current billing period/i),
+      getByText(
+        /new plan's price, minus a credit for the unused time on your current plan\. It starts a new billing period that day/i,
+      ),
     ).toBeTruthy();
     expect(getByText('Usage top-ups')).toBeTruthy();
     expect(getByText(/credits are bought on the web, in settings, billing/i)).toBeTruthy();
