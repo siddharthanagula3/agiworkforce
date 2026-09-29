@@ -137,18 +137,6 @@ Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S15.18: Plan-eligibility information.
-
-- Done when: Models the user's plan cannot use are marked with the plan that unlocks them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Tell signed-in Free and Basic users which plan unlocks a model; the popover labels every cloud group "Unavailable" with "Sign in or add a provider key", even when they are signed in. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`
-
 ## S15.19: Preview or experimental badge.
 
 - Done when: Preview or experimental models carry a visible badge in the selector.

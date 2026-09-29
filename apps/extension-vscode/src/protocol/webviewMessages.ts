@@ -67,7 +67,7 @@ const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') 
 const messageAction = z.object({
   type: z.literal('messageAction'),
   payload: z.object({
-    action: z.enum(['resend', 'branch']),
+    action: z.enum(['resend', 'branch', 'branchAnswer']),
     text: z.string().min(1).max(1_000_000),
     occurrence: z.number().int().nonnegative().max(10_000),
   }),

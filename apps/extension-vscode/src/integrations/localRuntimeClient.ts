@@ -161,6 +161,24 @@ const capabilitiesSchema = z.object({
   pluginUpdates: z.boolean().optional(),
 });
 
+const worktreeSummarySchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  branch: z.string(),
+  hasWork: z.boolean(),
+});
+
+const worktreeListSchema = z.object({ worktrees: z.array(worktreeSummarySchema) });
+
+export type WorktreeSummary = z.infer<typeof worktreeSummarySchema>;
+
+const memoryAddResponseSchema = z.object({
+  scope: z.enum(['user', 'project', 'local']),
+  path: z.string().min(1),
+});
+
+export type MemoryAddResult = z.infer<typeof memoryAddResponseSchema>;
+
 const initializeResponseSchema = z.object({
   serverInfo: z.object({ name: z.string(), title: z.string(), version: z.string() }),
   protocolVersion: z.number().int().positive(),
@@ -1606,6 +1624,30 @@ export class LocalRuntimeClient {
     return slashCommandListResponseSchema.parse(
       await connection.request('commands/list', {}),
     ) as SlashCommandListResponse;
+  }
+
+  async createWorktree(): Promise<WorktreeSummary> {
+    const connection = await this.readyConnection();
+    return worktreeSummarySchema.parse(await connection.request('worktree/create', {}));
+  }
+
+  async listWorktrees(): Promise<WorktreeSummary[]> {
+    const connection = await this.readyConnection();
+    return worktreeListSchema.parse(await connection.request('worktree/list', {})).worktrees;
+  }
+
+  async removeWorktree(name: string, force: boolean): Promise<WorktreeSummary[]> {
+    const connection = await this.readyConnection();
+    return worktreeListSchema.parse(
+      await connection.request('worktree/remove', force ? { name, force } : { name }),
+    ).worktrees;
+  }
+
+  async addMemory(text: string): Promise<MemoryAddResult> {
+    const connection = await this.readyConnection();
+    return memoryAddResponseSchema.parse(
+      await connection.request('memory/add', { text, scope: 'project' }),
+    );
   }
 
   async runCommand(name: string, args?: string): Promise<SlashCommandRunResponse> {

@@ -16,6 +16,7 @@ import {
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
+import { readCloudAgentRunAssistantText } from '@/lib/services/cloud-agent-run-service';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
@@ -124,6 +125,7 @@ export interface ManagedAgentStreamInput {
     userId: string;
     runId: string;
   };
+  persistsRunContinuation?: boolean;
   onTerminal?: (outcome: 'completed' | 'failed' | 'cancelled') => Promise<void>;
   preserveAwaitingInputOnCancel?: () => boolean;
   getServingRequest?: () => ProcessedRequest;
@@ -165,6 +167,24 @@ export function buildManagedAgentStream(
     if (state !== undefined) lastTaskState = state;
   };
 
+  const continuedRunContent = async (legContent: string): Promise<string> => {
+    const runJournal = input.runJournal;
+    if (!input.persistsRunContinuation || !runJournal) return legContent;
+    try {
+      const whole = await readCloudAgentRunAssistantText(runJournal.db, {
+        userId: runJournal.userId,
+        runId: runJournal.runId,
+      });
+      return whole.text.length >= legContent.length ? whole.text : legContent;
+    } catch (error) {
+      logger.warn(
+        { error, runId: runJournal.runId },
+        'Run journal unreadable; the resumed turn keeps only this leg',
+      );
+      return legContent;
+    }
+  };
+
   const persistTurn = async (failed: boolean): Promise<void> => {
     if (!persistable || turnPersisted || !input.userId) return;
     turnPersisted = true;
@@ -175,7 +195,8 @@ export function buildManagedAgentStream(
     const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
     const researchReport = input.getResearchReport?.() ?? null;
-    const content = assistantText + publicText.flush();
+    const legContent = assistantText + publicText.flush();
+    const content = await continuedRunContent(legContent);
     // A run that streamed no answer, no card and no artifact left the reader
     // with a blank bubble. Recording it as a complete turn is what made a
     // reload show a header and an action bar with nothing between them.
