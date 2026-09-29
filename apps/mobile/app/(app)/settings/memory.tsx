@@ -41,7 +41,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
 import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -541,7 +541,7 @@ export default function MemoryScreen() {
 
       {/* Error banner */}
       {error && (
-        <Animated.View entering={FadeIn.duration(200)} className="mx-4 mb-2">
+        <Animated.View entering={FadeIn.duration(motion.quick)} className="mx-4 mb-2">
           <View
             className="rounded-lg px-3 py-2"
             style={{
@@ -685,7 +685,7 @@ export default function MemoryScreen() {
 
       {/* Floating action button */}
       {!addSheetOpen ? (
-        <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 10 }}>
+        <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: zIndex.control }}>
           <Pressable
             onPress={handleAddPress}
             accessibilityRole="button"
@@ -699,11 +699,7 @@ export default function MemoryScreen() {
               backgroundColor: colors.black,
               borderWidth: 1,
               borderColor: colors.border,
-              shadowColor: colors.black,
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.18,
-              shadowRadius: 16,
-              elevation: 6,
+              ...elevation.e3,
             }}
           >
             <Plus size={24} color={colors.white} />

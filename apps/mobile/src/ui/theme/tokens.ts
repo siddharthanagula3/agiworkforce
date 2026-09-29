@@ -280,6 +280,63 @@ export const radii = {
   full: rung('full'),
 } as const;
 
+export const dialogPadding = spacing['2xl'];
+
+export const zIndex = {
+  base: 0,
+  content: 1,
+  control: 10,
+  overlay: 200,
+  modal: 300,
+  notification: 400,
+  fullscreen: 9999,
+} as const;
+
+export const motion = {
+  instant: 90,
+  quick: 160,
+  moved: 260,
+  reveal: 700,
+} as const;
+
+export const motionCurves = {
+  standard: [0.2, 0, 0, 1],
+  exit: [0.4, 0, 1, 1],
+  spring: [0.22, 1.2, 0.36, 1],
+  reveal: [0.22, 1, 0.36, 1],
+} as const satisfies Record<string, readonly [number, number, number, number]>;
+
+export const elevation = {
+  e1: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  e2: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  e3: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  e4: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 32,
+    elevation: 12,
+  },
+} as const;
+
 export const cardRadius = radii['2xl'];
 export const sheetRadius = radii['3xl'];
 

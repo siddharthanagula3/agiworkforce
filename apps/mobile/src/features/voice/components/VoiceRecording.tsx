@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
 import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {
@@ -80,8 +80,8 @@ export function VoiceRecording({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(180)}
-      exiting={FadeOut.duration(140)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={styles.container}
       accessible
       accessibilityLabel="Voice recording in progress"
