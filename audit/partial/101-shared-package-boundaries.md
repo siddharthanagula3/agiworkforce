@@ -24,9 +24,9 @@ Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `packages/co
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 39c899a7b6, c889e57aec: one exhaustive mapping from every AgentEvent type to its MESSAGE_KINDS block, with no wire change. check:content-blocks fails a client module that decides blocks from three or more event types without messageKindForAgentEvent. Twelve modules are recorded as pending with owners: web useChatStream and use-local-session, mobile streaming and runPresentation, Chrome chat-state, cloudRunsPanel and side_panel, VS Code cloudRunPresentation and localRuntimeClient, desktop CloudRuntime, developerSessionService and localInferenceService. Done when that list is empty | surface-only |
+| platform | partial | partials/platform 3a3fa544aa: both web readers classify events through the shared mappings (messageKindForAgentEvent; new messageKindForDeveloperSessionEvent for local sessions) and left BLOCK_KIND_READERS_PENDING. Left: 10 pending modules on mobile, Chrome, VS Code and desktop (surface phases), which can reuse the developer-session table. | mobile, chrome, vscode, desktop |
 
-Code: `packages/contracts/types/src/message-block-kinds.ts:6-6`, `packages/contracts/types/src/message-block-kinds.ts:37-37`, `scripts/check-content-blocks.mjs:65-65`, `scripts/check-content-blocks.mjs:138-138`
+Code: `apps/web/lib/hooks/useChatStream.ts:2523-2523`, `apps/web/features/code/hooks/use-local-session.ts:111-111`, `packages/contracts/local-runtime/src/developer-sessions.ts:275-275`
 
 ## S101.06: Shared model metadata.
 
@@ -90,9 +90,9 @@ Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts:223-2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 5a5cc103fb: readServerSentEvents takes acceptUnterminatedFinalFrame, so a client whose server may close without a blank line keeps the last event; the mobile adoption is saved as post-codex/p-platform-S101.12-mobile-sse-reader.patch. Chrome has adopted the shared decoder. Pending with owners in check:sse-readers: web useChatStream (p-mcp-web), mobile streaming (post-codex patch), VS Code utils/api (p-sessions), desktop cloudApi (p-electron). Retry and reconnect stay per client. | surface-only |
+| platform | partial | partials/platform 3a3fa544aa: web reads both chat streams through the shared ServerSentEventDecoder/readServerSentEvents and left the pending list; Chrome already adopted. Left: mobile streaming.ts (post-codex patch saved), VS Code utils/api.ts, desktop cloudApi.ts (surface phases). | mobile, vscode, desktop |
 
-Code: `packages/client/client-runtime/src/sse.ts:18-18`, `packages/client/client-runtime/src/sse.ts:140-140`, `packages/client/client-runtime/src/sse.ts:150-150`, `scripts/check-sse-readers.mjs:54-54`
+Code: `apps/web/lib/hooks/useChatStream.ts:1173-1173`, `apps/web/lib/hooks/useChatStream.ts:2325-2325`, `scripts/check-sse-readers.mjs:54-54`
 
 ## S101.13: Shared conversation-state logic.
 
@@ -134,9 +134,9 @@ Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Web and mobile read sources as the protocol's AgentEventSource, and check-client-inference now refuses any new client record that restates its fields (six existing copies recorded in its shrinking baseline); the Chrome and VS Code adoption patches are with p-chrome and p-sessions. | surface-only |
+| platform | partial | partials/platform df36f1085b: the last web source-record copies extend AgentEventSource; web and mobile are done. Left: Chrome and VS Code adoption patches (surface phases). | chrome, vscode |
 
-Code: `scripts/check-client-inference.mjs:154-154`, `packages/contracts/types/src/shared-ownership.json:69-69`, `apps/web/features/chat/stores/research-panel-store.ts:6-6`, `apps/mobile/types/chat.ts:115-115`
+Code: `apps/web/shared/types/common.ts:203-203`, `apps/web/features/chat/utils/research-plan.ts:116-116`
 
 ## S101.19: Shared Memory contracts.
 
@@ -189,9 +189,9 @@ Code: `apps/cli/src/ecosystem.rs:1155-1159`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Cloud agent-run schemas are shared by web, mobile, Chrome and VS Code, but 29 shipped web, mobile and Chrome files still restate lifecycle state names (baselined in check-client-inference). | surface-only |
+| platform | partial | partials/platform df36f1085b: every web module that restated lifecycle names now types them from LifecycleStatus (8 files) and the dispatch runner reads TERMINAL_LIFECYCLE_STATUSES; baseline 101 to 89. Left: mobile and Chrome files in the baseline (surface phases). | mobile, chrome |
 
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts:281-285`, `scripts/check-client-inference.baseline.json:3-8`
+Code: `apps/web/features/media/services/media-api-service.ts:51-51`, `apps/web/features/desktop-host/hooks/use-dispatch-task-runner.ts:52-52`, `scripts/check-client-inference.baseline.json:1-2`
 
 ## S101.27: Shared notifications.
 

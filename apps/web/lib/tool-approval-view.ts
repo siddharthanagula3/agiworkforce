@@ -154,6 +154,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Checks a plugin written in the chat the way the create form does and shows it as a draft card. Nothing is saved until you press Save plugin or Save as a skill.',
   },
+  agi_work: {
+    label: 'Start an AGI Work task',
+    description:
+      'Offered in a voice session: hands the goal you spoke to the chat as an AGI Work task, which runs in the background and is tracked in Tasks, where you can stop it. Reversible, no egress path.',
+  },
   device_read_file: {
     label: 'Read a file on your computer',
     description:

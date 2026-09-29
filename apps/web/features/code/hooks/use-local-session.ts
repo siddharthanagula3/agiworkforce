@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  DeveloperAgentMode,
-  LocalDeveloperSession,
+import {
+  messageKindForDeveloperSessionEvent,
+  type DeveloperAgentMode,
+  type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
@@ -107,16 +108,17 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         return;
       }
       if (event.threadId !== threadId) return;
+      const kind = messageKindForDeveloperSessionEvent(event.type);
 
-      if (event.type === 'turn-started') {
+      if (kind === 'status' && event.type === 'turn-started') {
         setTurn((current) => ({ ...current, turnId: event.turnId, outcome: null, error: null }));
         return;
       }
-      if (event.type === 'output-delta') {
+      if (kind === 'text' && event.type === 'output-delta') {
         setTurn((current) => ({ ...current, reply: current.reply + event.delta }));
         return;
       }
-      if (event.type === 'tool-queued') {
+      if (kind === 'tool_call' && event.type === 'tool-queued') {
         setTurn((current) => ({
           ...current,
           tools: [
@@ -135,7 +137,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         }));
         return;
       }
-      if (event.type === 'tool-started') {
+      if (kind === 'tool_call' && event.type === 'tool-started') {
         setTurn((current) => {
           const started: LocalToolRun = {
             toolCallId: event.toolCallId,
@@ -161,7 +163,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         });
         return;
       }
-      if (event.type === 'command-started') {
+      if (kind === 'tool_call' && event.type === 'command-started') {
         setTurn((current) => ({
           ...current,
           tools: current.tools.map((tool) =>
@@ -170,7 +172,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         }));
         return;
       }
-      if (event.type === 'file-changed') {
+      if (kind === 'tool_result' && event.type === 'file-changed') {
         setTurn((current) => ({
           ...current,
           tools: current.tools.map((tool) =>
@@ -181,14 +183,14 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         }));
         return;
       }
-      if (event.type === 'turn-diff') {
+      if (kind === 'tool_result' && event.type === 'turn-diff') {
         setTurn((current) => ({
           ...current,
           diff: { unifiedDiff: event.unifiedDiff, paths: event.paths },
         }));
         return;
       }
-      if (event.type === 'tool-finished') {
+      if (kind === 'tool_result' && event.type === 'tool-finished') {
         setTurn((current) => ({
           ...current,
           tools: current.tools.map((tool) =>
@@ -199,7 +201,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         }));
         return;
       }
-      if (event.type === 'approval-requested') {
+      if (kind === 'approval' && event.type === 'approval-requested') {
         setApproval({
           turnId: event.turnId,
           requestId: event.requestId,
@@ -208,11 +210,11 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         });
         return;
       }
-      if (event.type === 'approval-answered') {
+      if (kind === 'approval' && event.type === 'approval-answered') {
         setApproval((current) => (current?.requestId === event.requestId ? null : current));
         return;
       }
-      if (event.type === 'turn-finished') {
+      if (kind === 'status' && event.type === 'turn-finished') {
         setApproval(null);
         const used = event.inputTokens + event.outputTokens;
         if (used > 0) setContextTokens(used);

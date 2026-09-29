@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { NextRequest } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
@@ -81,6 +82,7 @@ export async function createCustomConnector(
     isCustom: true,
     url,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!hostDecision.allowed) throw createError.forbidden(hostDecision.reason);
 

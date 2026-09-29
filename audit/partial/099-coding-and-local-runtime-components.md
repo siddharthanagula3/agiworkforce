@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
 
-## S99.27: CI integration.
-
-- Done when: CI integration: read check/workflow status and logs for a branch or PR.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | GitHub check_run/workflow_run webhooks become routine triggers; a PR check-run status reader (getGitHubPullRequestStatus) exists but nothing calls it, and no client shows check status or CI logs. | handler |
-
-Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/lib/github-app.ts:941-944`
-
 ## S99.30: Local-to-cloud handoff coordinator.
 
 - Done when: A coordinator hands local work to the cloud (and back) with admission checks.
