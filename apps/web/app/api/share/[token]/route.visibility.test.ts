@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
+
 const mocks = vi.hoisted(() => ({
   scopedQuery: vi.fn(),
   privilegedQuery: vi.fn(),
@@ -95,6 +103,52 @@ describe('PATCH /api/share/[token], workspace audience', () => {
         sql.includes('insert into public.organization_shared_sessions'),
       ),
     ).toBe(true);
+  });
+
+  it('records the workspace grant by conversation id, never the token or transcript', async () => {
+    await call('organization');
+
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      userId: 'user-1',
+      organizationId: ORG,
+      eventType: 'organization_share_granted',
+    });
+    expect(event['detail']).toEqual({ resourceType: 'conversation', resourceId: SESSION });
+    expect(JSON.stringify(event['detail'])).not.toContain(TOKEN);
+  });
+
+  it('records the revoke when moving a workspace share back to its public link', async () => {
+    const response = await call('public');
+
+    expect(response.status).toBe(200);
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    expect(auditSpy.mock.calls[0]![0]).toMatchObject({
+      organizationId: ORG,
+      eventType: 'organization_share_revoked',
+      detail: { resourceType: 'conversation', resourceId: SESSION },
+    });
+  });
+
+  it('records no revoke when the conversation was never shared with the workspace', async () => {
+    const defaultQuery = mocks.scopedQuery.getMockImplementation()!;
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('delete from public.organization_shared_sessions') ? [] : defaultQuery(sql),
+    );
+
+    await call('public');
+
+    expect(auditSpy).not.toHaveBeenCalled();
+  });
+
+  it('records nothing when the grant is refused', async () => {
+    mocks.role = 'viewer';
+    mocks.permissions = ['content.read'];
+
+    await call('organization');
+
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 
   it('refuses a viewer, whose role is read-only, before any grant row is written', async () => {

@@ -147,28 +147,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'agents/tool-executions/route.ts', reason: 'no_governed_state' },
   { route: 'agents/tools/route.ts', reason: 'no_governed_state' },
   { route: 'artifacts/runtime/[token]/connectors/route.ts', reason: 'no_governed_state' },
-  {
-    route: 'chat/conversations/[id]/code-runs/route.ts',
-    reason: 'gap',
-    expectedEvent: 'tool_executed',
-  },
-  {
-    route: 'code/sessions/handoff/route.ts',
-    reason: 'gap',
-    expectedEvent: 'code_session_lifecycle_changed',
-  },
-  {
-    route: 'code/sessions/route.ts',
-    reason: 'gap',
-    expectedEvent: 'code_session_lifecycle_changed',
-  },
-  { route: 'github/install/complete/route.ts', reason: 'gap', expectedEvent: 'connector_added' },
   { route: 'github/install/pending/route.ts', reason: 'no_governed_state' },
-  {
-    route: 'share/[token]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'organization_share_granted',
-  },
   { route: 'usage/deduct/route.ts', reason: 'no_governed_state' },
   { route: 'usage/estimate/route.ts', reason: 'no_governed_state' },
 ] as const;
@@ -180,6 +159,23 @@ export interface RequiredRouteAuditEvents {
 
 export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
   { route: 'billing/refund-requests/route.ts', eventTypes: ['refund_requested'] },
+  {
+    route: 'chat/conversations/[id]/code-runs/route.ts',
+    eventTypes: ['tool_executed'],
+  },
+  {
+    route: 'code/sessions/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/sessions/handoff/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  { route: 'github/install/complete/route.ts', eventTypes: ['connector_added'] },
+  {
+    route: 'share/[token]/route.ts',
+    eventTypes: ['organization_share_granted', 'organization_share_revoked'],
+  },
   {
     route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
     eventTypes: ['code_session_lifecycle_changed'],

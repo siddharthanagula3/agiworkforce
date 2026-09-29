@@ -2,6 +2,14 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
+
 const { mockGetUserScopedDb, mockCsrf, mockRateLimit, mockOpen } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockCsrf: vi.fn(),
@@ -84,6 +92,35 @@ describe('POST /api/code/sessions/handoff', () => {
       repositoryBranch: 'feature/login',
     });
     expect(input.requestId).toMatch(/^handoff-[0-9a-f]{48}$/);
+  });
+
+  it('records the opened session by id, with none of the handoff content', async () => {
+    const response = await POST(postRequest({ handoff: handoff() }));
+
+    expect(response.status).toBe(201);
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      userId: USER_ID,
+      organizationId: null,
+      eventType: 'code_session_lifecycle_changed',
+    });
+    expect(event['detail']).toEqual({
+      resourceType: 'code_session',
+      resourceId: 'session-1',
+      status: 'opened',
+      source: 'handoff',
+    });
+    expect(JSON.stringify(event['detail'])).not.toMatch(/login|acme|widgets|src\//i);
+  });
+
+  it('records nothing when the handoff is refused', async () => {
+    const response = await POST(
+      postRequest({ handoff: handoff({ issuedForAccount: 'f'.repeat(32) }) }),
+    );
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 
   it('gives the same request id to the same handoff so a retry reuses the session', async () => {

@@ -12,6 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 
 import { shareRef } from '@/lib/share-ref';
@@ -186,6 +187,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   try {
     const target = await resolveSessionShareTarget(db, { userId, token });
 
+    let revoked = false;
     if (visibility === 'organization') {
       await requireOrganizationPermission(
         userId,
@@ -199,12 +201,29 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
         actorUserId: userId,
       });
     } else {
-      await unshareSessionFromOrganization(db, target.organizationId, target.sharedSessionId);
+      revoked = await unshareSessionFromOrganization(
+        db,
+        target.organizationId,
+        target.sharedSessionId,
+      );
     }
 
     const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
     if (!updated) {
       throw createError.notFound('Shared session not found');
+    }
+
+    if (visibility === 'organization' || revoked) {
+      await recordAuditEvent({
+        userId,
+        organizationId: target.organizationId,
+        eventType:
+          visibility === 'organization'
+            ? 'organization_share_granted'
+            : 'organization_share_revoked',
+        request,
+        detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
+      });
     }
 
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';

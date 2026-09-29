@@ -14,6 +14,7 @@ import { exchangeGitHubOAuthCode, findGitHubInstallationForUser } from '@/lib/gi
 import { consumeAppInstall, linkVerifiedGitHubInstallation } from '@/lib/github-install-app-return';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 function respond(status: GitHubInstallCompleteStatus): NextResponse {
   return NextResponse.json({ status } satisfies GitHubInstallCompleteResponse, {
@@ -59,7 +60,21 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       return respond('ownership_failed');
     }
     const linked = await linkVerifiedGitHubInstallation(userId, verified);
-    return respond(linked ? 'connected' : 'already_linked');
+    if (!linked) return respond('already_linked');
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_added',
+      request,
+      outcome: 'success',
+      detail: {
+        resourceType: 'github_installation',
+        resourceId: String(verified.installationId),
+        resourceName: verified.accountLogin,
+        source: 'github',
+        status: 'connected',
+      },
+    });
+    return respond('connected');
   } catch (caught) {
     logger.error({ error: caught, userId, installationId }, 'GitHub app install completion failed');
     return respond('failed');

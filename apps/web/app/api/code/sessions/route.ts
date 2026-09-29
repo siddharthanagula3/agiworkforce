@@ -12,6 +12,7 @@ import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   asCloudCodeSessionStatusFilter,
@@ -86,6 +87,13 @@ async function handleCreate(request: NextRequest) {
   const body = await requestObject(request);
   const opened = await openCloudCodeSession(request, db, { userId, organizationId }, body);
   if (opened instanceof Response) return opened;
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    request,
+    eventType: 'code_session_lifecycle_changed',
+    detail: { resourceType: 'code_session', resourceId: opened.id, status: 'opened' },
+  });
   return NextResponse.json({ session: opened, terminalEntries: [] }, { status: 201 });
 }
 
