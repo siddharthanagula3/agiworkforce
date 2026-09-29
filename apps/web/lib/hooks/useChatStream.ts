@@ -718,6 +718,7 @@ const pendingInputTurns = new Map<string, PendingInputTurn>();
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
   pendingInputTurns.clear();
+  remoteApprovalWatches.clear();
 }
 
 export function isInputTurnLive(assistantMessageId: string): boolean {
@@ -3466,6 +3467,27 @@ export function useChatStream(
       // intentionally empty: preserve controller across unmount
     };
   }, []);
+
+  useEffect(() => {
+    if (!followActiveConversation) return undefined;
+    const getAuthToken: AuthTokenProvider = async () => {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+      return token;
+    };
+    const checked = new Set<string>();
+    const followRestored = (messages: readonly Message[]): void => {
+      for (const message of messages) {
+        if (checked.has(message.id) || !message.metadata?.cloudApproval) continue;
+        checked.add(message.id);
+        if (isApprovalTurnLive(message.id)) followRemoteApproval(message.id, getAuthToken);
+      }
+    };
+    followRestored(useChatStore.getState().messages);
+    return useChatStore.subscribe((state, previous) => {
+      if (state.messages !== previous.messages) followRestored(state.messages);
+    });
+  }, [followActiveConversation, getToken]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   useEffect(() => {
