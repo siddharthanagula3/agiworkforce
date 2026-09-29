@@ -861,6 +861,11 @@ enum Command {
         /// Resolve the id against your AGI Workforce account rather than this device.
         #[arg(long)]
         cloud: bool,
+        /// Bring a cloud Code session here: check out its branch in this repository and
+        /// continue it with its history. Without an id, pick one of this repository's
+        /// open sessions.
+        #[arg(long, conflicts_with = "cloud")]
+        teleport: bool,
     },
     /// Fork a previous session.
     Fork { session_id: String },
@@ -2073,6 +2078,99 @@ fn account_privacy_mode() -> platform::runtime::session::PrivacyMode {
 
 /// Pull one conversation out of the account and write it into the managed
 /// session store, returning the local id the resume path takes.
+async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
+    use cloud::{code_sessions, code_teleport};
+
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let session_id = match session_id {
+        Some(id) => id.to_string(),
+        None => pick_code_session(&client).await?,
+    };
+    let detail = code_sessions::show(&client, &session_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let teleported = code_teleport::check_out(&detail.session).map_err(anyhow::Error::msg)?;
+    let local_id = code_teleport::local_session_id(&detail.session.id);
+    let title = code_teleport::title(&detail.session);
+    let conn = sessions::open_db()?;
+    sessions::import_hosted_session(
+        &conn,
+        &local_id,
+        &title,
+        None,
+        code_teleport::history(&detail),
+    )?;
+    eprintln!(
+        "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
+         push the branch to share it.",
+        if teleported.created_branch {
+            "Checked out"
+        } else {
+            "Updated"
+        },
+        teleported.branch,
+        teleported.remote,
+        title,
+        detail.turns.len()
+    );
+    Ok(local_id)
+}
+
+async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
+    use std::io::{BufRead, IsTerminal, Write};
+
+    let checkout = cloud::code_handoff::inspect().ok();
+    let sessions = cloud::code_sessions::list(client, "open")
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?
+        .into_iter()
+        .filter(|session| {
+            let repository = session
+                .repository_url
+                .as_deref()
+                .and_then(cloud::code_handoff::github_full_name);
+            match (&checkout, repository) {
+                (Some(checkout), Some(repository)) => {
+                    repository.eq_ignore_ascii_case(&checkout.full_name)
+                }
+                (None, Some(_)) => true,
+                _ => false,
+            }
+        })
+        .collect::<Vec<_>>();
+    if sessions.is_empty() {
+        anyhow::bail!(
+            "No open cloud Code session works on this repository. See them all with `agi code list`."
+        );
+    }
+    if !std::io::stdin().is_terminal() {
+        anyhow::bail!(
+            "Name the session: `agi resume --teleport <id>`. `agi code list` prints the ids."
+        );
+    }
+    for (index, session) in sessions.iter().enumerate() {
+        eprintln!(
+            "  {}. {}  {}",
+            index + 1,
+            cloud::code_teleport::title(session),
+            session.working_branch.as_deref().unwrap_or("")
+        );
+    }
+    eprint!("Teleport which session? ");
+    std::io::stderr().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().lock().read_line(&mut answer)?;
+    let choice = answer
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .and_then(|index| sessions.get(index))
+        .ok_or_else(|| anyhow::anyhow!("No session picked."))?;
+    Ok(choice.id.clone())
+}
+
 async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
     let privacy = account_privacy_mode();
     let conversation = cloud::hosted_conversation(privacy, conversation_id)
@@ -2119,7 +2217,9 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     let filed: Vec<_> = conversations
         .iter()
-        .filter(|conversation| conversation.project_id.as_deref() == Some(found.id.as_str()))
+        .filter(|conversation| {
+            !conversation.archived && conversation.project_id.as_deref() == Some(found.id.as_str())
+        })
         .collect();
     if filed.is_empty() {
         println!("No conversations are filed under {} yet.", found.name);
@@ -2143,12 +2243,21 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
 async fn print_hosted_history(limit: usize) {
     let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
-        Ok(conversations) if conversations.is_empty() => {
+        Ok(conversations)
+            if conversations
+                .iter()
+                .all(|conversation| conversation.archived) =>
+        {
             println!("No conversations in your AGI Workforce account yet.");
+            print_archived_note(&conversations);
         }
         Ok(conversations) => {
             println!("In your AGI Workforce account:");
-            for conversation in conversations.iter().take(limit) {
+            for conversation in conversations
+                .iter()
+                .filter(|conversation| !conversation.archived)
+                .take(limit)
+            {
                 println!(
                     "  {}  {}  {} messages  {}",
                     conversation.id,
@@ -2159,8 +2268,26 @@ async fn print_hosted_history(limit: usize) {
             }
             println!();
             println!("Resume one with `agi resume --cloud <id>`.");
+            print_archived_note(&conversations);
         }
         Err(error) => println!("Account history unavailable: {error}"),
+    }
+}
+
+fn print_archived_note(conversations: &[cloud::chat::HostedConversation]) {
+    let archived = conversations
+        .iter()
+        .filter(|conversation| conversation.archived)
+        .count();
+    if archived > 0 {
+        println!(
+            "{archived} archived {} not shown; they still resume by id.",
+            if archived == 1 {
+                "conversation is"
+            } else {
+                "conversations are"
+            }
+        );
     }
 }
 
@@ -4858,8 +4985,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
             }
-            Command::Resume { session_id, cloud } => {
+            Command::Resume {
+                session_id,
+                cloud,
+                teleport,
+            } => {
                 let resolved_id = match (session_id, cloud) {
+                    _ if *teleport => Some(teleport_code_session(session_id.as_deref()).await?),
                     (Some(id), true) => Some(adopt_hosted_conversation(id).await?),
                     (Some(id), false) => Some(match resolve_resume_payload(id, false) {
                         Ok(_) => id.clone(),
@@ -5512,7 +5644,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         let preview = cloud::library::text(&client, id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("{}", terminal_text::sanitize_terminal_text(&preview.text));
+                        match cloud::library::formatted_source(&preview) {
+                            Some(source) if std::io::IsTerminal::is_terminal(&std::io::stdout()) => {
+                                print!("{}", tui::markdown_renderer::render_markdown_ansi(&source));
+                            }
+                            _ => {
+                                println!("{}", terminal_text::sanitize_terminal_text(&preview.text))
+                            }
+                        }
                         if preview.truncated {
                             println!(
                                 "\n(The preview stops here; agi library download {id} saves the whole file.)"

@@ -77,13 +77,13 @@ async function handlePull(request: NextRequest, url: URL) {
       .then((policies) => policies.organization.allowMemory && policies.user.enabled)
       .catch((error: unknown) => {
         logger.warn({ error, userId }, 'Memory sync pull could not read the memory switch');
-        return undefined;
+        return false;
       });
     return NextResponse.json({
       memories,
       cursor,
       hasMore: saturated,
-      ...(memoryEnabled === undefined ? {} : { memoryEnabled }),
+      memoryEnabled,
     });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync pull failed');
