@@ -5,6 +5,7 @@ const {
 } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
+const { registerReactPackage } = require('./registerReactPackage.cjs');
 
 const PLUGIN_NAME = 'agi-visionocr-plugin';
 const PLUGIN_VERSION = '1.0.0';
@@ -82,18 +83,7 @@ function withVisionOCRMainApplication(config) {
         );
       }
 
-      if (!mainApp.includes(PACKAGE_REGISTRATION)) {
-        const registered = mainApp.replace(
-          /(getPackages\(\)[^{]*\{[^}]*apply\s*\{)/s,
-          `$1\n      ${PACKAGE_REGISTRATION}`,
-        );
-        if (registered === mainApp) {
-          throw new Error(
-            `${PLUGIN_NAME}: could not find the getPackages() apply block in MainApplication.kt`,
-          );
-        }
-        mainApp = registered;
-      }
+      mainApp = registerReactPackage(mainApp, PACKAGE_REGISTRATION, PLUGIN_NAME);
 
       fs.writeFileSync(mainAppPath, mainApp, 'utf8');
       return c;
