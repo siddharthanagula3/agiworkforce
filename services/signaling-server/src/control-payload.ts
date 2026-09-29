@@ -21,9 +21,16 @@ export const CODE_SESSION_CONTROL_ACTIONS = [
   'code.session.steer',
   'code.turn.interrupt',
   'code.approval.respond',
+  'code.session.start',
+  'code.session.history',
   'code.sessions',
   'code.session.snapshot',
   'code.session.event',
+  'code.session.started',
+  'code.session.transcript',
+  'dispatch.task.create',
+  'dispatch.task.cancel',
+  'dispatch.task.status',
 ] as const;
 
 const CODE_SESSION_ACTION_SET = new Set<string>(CODE_SESSION_CONTROL_ACTIONS);

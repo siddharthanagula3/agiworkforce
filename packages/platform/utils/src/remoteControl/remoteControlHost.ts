@@ -467,7 +467,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         deviceName: options.deviceName(),
         app: 'agiworkforce-desktop',
         version: options.appVersion(),
-        capabilities: ['code-sessions'],
+        capabilities: ['code-sessions', 'code-session-start'],
       },
       heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
       createSocket: options.createSocket,
