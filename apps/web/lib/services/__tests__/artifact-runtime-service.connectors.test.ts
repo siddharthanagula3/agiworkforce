@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/connectors/connector-capability', () => ({
+  connectorsAllowedForTurn: vi.fn(),
   connectorsAllowedWithoutRequest: (...args: unknown[]) => mocks.connectorsAllowed(...args),
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
@@ -17,6 +18,10 @@ vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
   makeUserConnectorExecutor: vi.fn(() => vi.fn()),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', () => ({
+  autonomousToolApprovalsAvailable: vi.fn(),
+  hostedToolRunsUnasked: vi.fn(),
+  loadTurnToolPermissions: vi.fn(),
+  policyAutoApprovesTool: vi.fn(),
   loadToolApprovalPolicy: (...args: unknown[]) => mocks.loadPolicy(...args),
 }));
 vi.mock(

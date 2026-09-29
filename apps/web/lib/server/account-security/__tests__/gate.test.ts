@@ -25,18 +25,59 @@ const state = vi.hoisted(() => {
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueProvider: vi.fn(),
   getKeyValueStore: () => null,
   getKeyValueRateLimiter: () => null,
 }));
 vi.mock('@/lib/security-audit', () => ({
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: vi.fn(),
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  BLOCK_APPEAL_PATH: '/support',
+  getClientIp: vi.fn(() => undefined),
+  logRateLimitExceeded: vi.fn(async () => undefined),
   logAuthFailure: vi.fn(async () => undefined),
   recordAuditEvent: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: vi.fn(),
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: vi.fn(async () => null),
+}));
 vi.mock('@/lib/server/session-sightings', () => ({
   noteSessionSighting: (...args: unknown[]) => state.noteSessionSighting(...args),
 }));
@@ -46,6 +87,11 @@ vi.mock('@/lib/server/account-security/webauthn', async (importOriginal) => ({
     state.attackerPasskeys && credentials[0] ? { credential: credentials[0], signCount: 1 } : null,
 }));
 vi.mock('@/lib/server/desktop-sign-in', () => ({
+  DESKTOP_SIGN_IN_GRANT_TTL_SECONDS: vi.fn(),
+  isDesktopSignInCode: vi.fn(),
+  isDesktopSignInVerifier: vi.fn(),
+  mintDesktopSignInTicket: vi.fn(),
+  redeemDesktopSignInGrant: vi.fn(),
   isDesktopSignInChallenge: (value: unknown) => typeof value === 'string' && value.length === 43,
   createDesktopSignInGrant: (userId: string, challenge: string) =>
     state.createDesktopSignInGrant(userId, challenge),
@@ -56,6 +102,7 @@ vi.mock('@/lib/server/identity', () => {
     authorizedParties: () => ['https://agiworkforce.com'],
     verifySessionToken: async () => null,
     getSession: async (id: string) => ({
+      getIdentityAuthorizedParties: vi.fn(),
       id,
       userId: 'user_advanced_security',
       status: 'active',
@@ -164,7 +211,10 @@ function answeringDb(): AnsweringDb {
   return db;
 }
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => answeringDb() }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => answeringDb(),
+}));
 vi.mock('@agiworkforce/data-layer', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agiworkforce/data-layer')>()),
   createDatabaseClient: () => answeringDb(),
