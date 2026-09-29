@@ -2087,14 +2087,16 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('includes user-curated memory as untrusted turn data', async () => {
     const harness = makeHarness();
+    const facts = [
+      {
+        id: 'memory-1',
+        text: 'Prefer Rust for command-line tools',
+        createdAt: '2026-07-25T00:00:00.000Z',
+      },
+    ];
     setAccountMemoryStore({
-      cachedFacts: () => [
-        {
-          id: 'memory-1',
-          text: 'Prefer Rust for command-line tools',
-          createdAt: '2026-07-25T00:00:00.000Z',
-        },
-      ],
+      cachedFacts: () => facts,
+      turnFacts: () => facts,
     } as unknown as AccountMemoryStore);
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
