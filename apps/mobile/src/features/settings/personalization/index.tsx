@@ -339,6 +339,7 @@ export default function PersonalizationScreen() {
     setPersonalization({
       fullName: fullName.trim(),
       nickname: nickname.trim(),
+      nameOptedOut: nickname.trim() === '',
       occupation: occupation.trim(),
       aboutYou: aboutYou.trim(),
       instructions: instructions.trim(),
