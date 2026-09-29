@@ -367,7 +367,13 @@ impl PermissionStore {
             return None;
         }
 
-        self.check(command_program).or_else(|| self.check(base_cmd))
+        if let Some(decision) = self.check(command_program) {
+            return Some(decision);
+        }
+        match self.check(base_cmd) {
+            Some(true) if base_cmd != command_program => None,
+            decision => decision,
+        }
     }
 
     /// Like [`PermissionStore::check_command`], except that an allow saved for
@@ -923,11 +929,37 @@ mod tests {
 
         assert_eq!(store.check_command("git status"), Some(true));
         assert_eq!(store.check_command("git status && curl evil.test"), None);
-        assert_eq!(store.check_command("/usr/bin/git status"), Some(true));
         assert_eq!(
             store.check_command("/usr/bin/git status; curl evil.test"),
             None
         );
+    }
+
+    #[test]
+    fn a_bare_allow_does_not_cover_a_program_given_by_path() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git");
+
+        assert_eq!(store.check_command("git status"), Some(true));
+        for command in [
+            "./git status",
+            "/tmp/evil/git status",
+            "/usr/bin/git status",
+        ] {
+            assert_eq!(store.check_command(command), None, "{command}");
+        }
+
+        store.allow_always("/usr/bin/git");
+        assert_eq!(store.check_command("/usr/bin/git status"), Some(true));
+    }
+
+    #[test]
+    fn a_bare_deny_still_covers_a_program_given_by_path() {
+        let mut store = PermissionStore::default();
+        store.deny_always("rm");
+
+        assert_eq!(store.check_command("/bin/rm -rf build"), Some(false));
+        assert_eq!(store.check_command("./rm -rf build"), Some(false));
     }
 
     #[test]
