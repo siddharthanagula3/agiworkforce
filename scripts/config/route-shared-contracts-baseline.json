@@ -175,8 +175,6 @@
     "settings/team/[memberId]",
     "settings/team/invitations/[invitationId]",
     "settings/team/invitations/accept",
-    "share",
-    "share/[token]",
     "skills/[name]",
     "skills/[name]/download",
     "skills/[name]/files",
