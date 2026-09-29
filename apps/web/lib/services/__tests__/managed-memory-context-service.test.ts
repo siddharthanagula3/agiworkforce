@@ -30,6 +30,10 @@ describe('loadManagedMemoryContext', () => {
       "google_source.id::text = to_jsonb(user_memories)->>'source_conversation_id'",
     );
     expect(sql).toContain('google_source.google_user_data_at is not null');
+    expect(sql).toContain(
+      "case when to_jsonb(user_memories)->>'source_conversation_id' is null then not exists",
+    );
+    expect(sql).toContain('google_any.user_id = user_memories.user_id');
   });
 
   it('loads only active memories owned by the authenticated user', async () => {

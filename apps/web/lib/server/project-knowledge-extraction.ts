@@ -28,6 +28,7 @@ import {
 import {
   SCANNED_DOCUMENT_OCR_NOTE,
   SCANNED_PAGES_OCR_NOTE,
+  ScannedTextWithheldError,
   transcribeScannedPages,
   type TranscribeScannedPagesInput,
 } from './scanned-document-text';
@@ -124,11 +125,29 @@ function boundWithPageAnchors(
  * into page images; this reads those images back as text and says, in the row
  * itself, where the text came from.
  */
+type PdfText = { text: string | null; anchors: KnowledgeAnchor[]; scannedTextWithheld?: true };
+
+/**
+ * A scan whose pages no permitted model may read keeps the text it already
+ * has; the flag lets the caller tell the user why the scanned part is missing.
+ */
+async function transcribeOrWithhold(
+  ocr: ScannedDocumentTranscription,
+  pageImages: TranscribeScannedPagesInput['pageImages'],
+): Promise<{ recognised: string | null; withheld: boolean }> {
+  try {
+    return { recognised: await transcribeScannedPages({ ...ocr, pageImages }), withheld: false };
+  } catch (error) {
+    if (!(error instanceof ScannedTextWithheldError)) throw error;
+    return { recognised: null, withheld: true };
+  }
+}
+
 async function extractPdfText(
   data: Buffer,
   fileName: string,
   ocr: ScannedDocumentTranscription | undefined,
-): Promise<{ text: string | null; anchors: KnowledgeAnchor[] }> {
+): Promise<PdfText> {
   let content: Awaited<ReturnType<typeof extractPdfAttachmentContent>>;
   try {
     content = await extractPdfAttachmentContent(data, fileName);
@@ -153,7 +172,8 @@ async function extractPdfText(
         'This PDF has more scanned pages than project knowledge extraction reads. Split it and upload the parts.',
       );
     }
-    const recognised = await transcribeScannedPages({ ...ocr, pageImages: content.pageImages });
+    const { recognised, withheld } = await transcribeOrWithhold(ocr, content.pageImages);
+    if (withheld) return { ...boundWithPageAnchors(content.pages), scannedTextWithheld: true };
     if (!recognised) return boundWithPageAnchors(content.pages);
     const parts = recognised.split(/\n{2,}/);
     const merged = [...content.pages];
@@ -170,7 +190,8 @@ async function extractPdfText(
   if (content.text) return boundWithPageAnchors(content.pages);
   if (!ocr || content.pageImages.length === 0) return { text: null, anchors: [] };
 
-  const recognised = await transcribeScannedPages({ ...ocr, pageImages: content.pageImages });
+  const { recognised, withheld } = await transcribeOrWithhold(ocr, content.pageImages);
+  if (withheld) return { text: null, anchors: [], scannedTextWithheld: true };
   if (!recognised) return { text: null, anchors: [] };
   // A transcription covers the page images in the order they were rendered, so
   // its paragraphs are the pages: the same numbering the text layer would give.
@@ -249,6 +270,8 @@ export interface ProjectKnowledgeExtraction {
   extractedText: string | null;
   /** Where each page or heading begins in `extractedText`. */
   anchors: KnowledgeAnchor[];
+  /** Scanned pages were left unread: no permitted model may see them. */
+  scannedTextWithheld?: true;
   objectKey: string;
   etag: string | undefined;
 }
@@ -342,7 +365,12 @@ export async function extractProjectKnowledgeFile(
 
   if (declaredMimeType === 'application/pdf') {
     const pdf = await extractPdfText(object.data, input.fileName, input.transcribeScans);
-    return { ...inspected, extractedText: pdf.text, anchors: pdf.anchors };
+    return {
+      ...inspected,
+      extractedText: pdf.text,
+      anchors: pdf.anchors,
+      ...(pdf.scannedTextWithheld ? { scannedTextWithheld: true as const } : {}),
+    };
   }
   const officeKind = officeDocumentKind(input.fileName, declaredMimeType);
   if (officeKind) {

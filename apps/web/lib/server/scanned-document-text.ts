@@ -3,7 +3,9 @@ import 'server-only';
 import { estimateTokens } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { logger } from '@/lib/logger';
+import { noTrainingProviderIds } from '@/lib/server/side-call-training-policy';
 import {
   buildServerProviderAdapter,
   listAvailableManagedProviderIds,
@@ -56,6 +58,23 @@ export interface TranscribeScannedPagesInput {
   planTier: string;
   documentId: string;
   pageImages: readonly ScannedPageImage[];
+  /**
+   * The document came from a Google connector, so Google API Limited Use lets
+   * only a provider that keeps inputs out of training read its pages.
+   */
+  forceNoTraining?: boolean;
+}
+
+/**
+ * The scan came from Google and no route that keeps inputs out of training can
+ * read it. Thrown rather than returned as null so the caller can tell the user
+ * why the file has no text, instead of reporting it as unreadable.
+ */
+export class ScannedTextWithheldError extends Error {
+  constructor(readonly documentId: string) {
+    super('No vision route that keeps inputs out of training can read this scan.');
+    this.name = 'ScannedTextWithheldError';
+  }
 }
 
 /**
@@ -71,6 +90,12 @@ export async function transcribeScannedPages(
 ): Promise<string | null> {
   if (input.pageImages.length === 0) return null;
 
+  const forceNoTraining = input.forceNoTraining === true;
+  const managedProviders = listAvailableManagedProviderIds();
+  const providers = forceNoTraining ? noTrainingProviderIds(managedProviders) : managedProviders;
+  if (forceNoTraining && providers.size === 0) {
+    throw new ScannedTextWithheldError(input.documentId);
+  }
   const route = resolveWebCloudModelRoute(
     'auto',
     input.planTier,
@@ -78,8 +103,20 @@ export async function transcribeScannedPages(
     undefined,
     undefined,
     undefined,
-    listAvailableManagedProviderIds(),
+    providers,
   );
+  if (
+    forceNoTraining &&
+    (route.status !== 'selected' ||
+      !providerKeepsInputsOutOfTraining(route.provider) ||
+      !providerKeepsInputsOutOfTraining(dispatchProviderForSelectedRoute(route)))
+  ) {
+    logger.warn(
+      { documentId: input.documentId },
+      '[ocr] no vision route keeps inputs out of training; the Google scan is stored without text',
+    );
+    throw new ScannedTextWithheldError(input.documentId);
+  }
   if (route.status !== 'selected') {
     logger.warn(
       { documentId: input.documentId, routeCode: route.code },

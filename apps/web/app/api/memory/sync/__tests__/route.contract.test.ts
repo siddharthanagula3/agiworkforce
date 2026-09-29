@@ -114,6 +114,7 @@ describe('GET /api/memory/sync?since=, shared cloud contract', () => {
     const sql = String(mockQuery.mock.calls[0]?.[0]);
     expect(sql).toContain("google_source.id::text = to_jsonb(m)->>'source_conversation_id'");
     expect(sql).toContain('google_source.google_user_data_at is not null');
+    expect(sql).toContain('google_any.user_id = m.user_id');
   });
 
   it('empty pull page parses', async () => {

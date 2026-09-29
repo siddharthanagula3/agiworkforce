@@ -124,6 +124,8 @@ beforeEach(() => {
     mcpTools: [
       tool(GMAIL_CONNECTOR_ID, 'search_threads'),
       tool('google-calendar', 'list_events'),
+      { ...tool('orgmcp-docs', 'read_doc'), googleUserData: true },
+      tool('custom-sheetsproxy', 'read_range'),
       tool('linear', 'list_issues'),
     ],
     connectorPermissions: {},
@@ -139,8 +141,13 @@ beforeEach(() => {
 });
 
 describe('runSlackAssistantTurn and Google user data', () => {
-  it('never offers a Google connector tool in a Slack direct message', async () => {
-    await expect(runSlackAssistantTurn(turn())).resolves.toMatchObject({
+  it('never offers a Google connector or Google-hosted tool in a Slack direct message', async () => {
+    const query = vi.fn(async (sql: string) =>
+      sql.includes('from public.user_custom_connectors')
+        ? [{ short_id: 'sheetsproxy', url: 'https://sheets.googleapis.com/mcp' }]
+        : [],
+    );
+    await expect(runSlackAssistantTurn(turn({ db: { query } }))).resolves.toMatchObject({
       kind: 'refused',
       code: 'content_policy_violation',
     });

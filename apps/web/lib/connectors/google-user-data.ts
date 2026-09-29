@@ -67,6 +67,9 @@ export const GOOGLE_USER_DATA_MEMORY_REFUSAL =
 export const GOOGLE_USER_DATA_FILE_HELD_MESSAGE =
   'This file holds data from your Google account, and this turn may reach a model whose provider trains on what it is sent, so it was not opened. The chat now keeps to models that do not train on Google data; ask again to read it.';
 
+export const GOOGLE_USER_DATA_VOICE_MESSAGE =
+  'This chat includes data from your Google account, and live voice runs on a provider that may train on what it is sent, so voice is not available in this chat. Start voice in another chat.';
+
 export const GOOGLE_USER_DATA_UNROUTED_MESSAGE =
   'This Google connector did not run because this run is not limited to models that keep Google data out of training.';
 
@@ -284,18 +287,28 @@ export async function resolveGoogleUserDataTurn(
 }
 
 /**
- * SQL that is true when a memory row was not learned in a conversation holding
- * Google user data. `sourceConversationId` is a text expression naming the
- * row's source conversation; a memory with no recorded source stays eligible
- * because nothing links it to one.
+ * SQL that is true when a memory row may reach a chat that is not kept to
+ * no-training providers: it was not learned in a conversation holding Google
+ * user data. A memory with no recorded source cannot be traced, so it is
+ * eligible only while its owner has no such conversation at all.
+ * `sourceConversationId` is a text expression for the row's source
+ * conversation and `ownerUserId` one for its owner.
  */
-export function memoryFreeOfGoogleUserDataSql(sourceConversationId: string): string {
-  return `not exists (
+export function memoryFreeOfGoogleUserDataSql(
+  sourceConversationId: string,
+  ownerUserId: string,
+): string {
+  return `case when ${sourceConversationId} is null then not exists (
+    select 1
+      from public.web_conversations google_any
+     where google_any.user_id = ${ownerUserId}
+       and google_any.google_user_data_at is not null
+  ) else not exists (
     select 1
       from public.web_conversations google_source
      where google_source.id::text = ${sourceConversationId}
        and google_source.google_user_data_at is not null
-  )`;
+  ) end`;
 }
 
 /**
@@ -461,4 +474,43 @@ export function retrievalDocumentGoogleUserDataSql(aliases: {
        where google_file.id = ${document}.project_knowledge_file_id
          and google_ref.connector_id = any($${connectorRefsParam}::text[])
     ))`;
+}
+
+/**
+ * Whether a stored conversation carries Google user data: it is marked, or a
+ * stored message shows a Google connector ran (the same evidence the sync path
+ * reads). Evidence found in an unmarked conversation marks it. Unreadable state
+ * counts as carrying it.
+ */
+export async function storedConversationCarriesGoogleUserData(
+  db: GoogleUserDataDb,
+  userId: string,
+  organizationId: string | null,
+  conversationId: string,
+): Promise<boolean> {
+  if (await conversationHoldsGoogleUserData(db, userId, conversationId)) return true;
+  try {
+    const rows = await db.query<{ metadata: unknown }>(
+      `select m.metadata
+         from public.web_messages m
+         join public.web_conversations c on c.id = m.conversation_id
+        where m.conversation_id = $1::uuid
+          and c.user_id = $2
+          and m.deleted_at is null
+          and (m.metadata ? 'tools' or m.metadata ? 'toolInvocations'
+               or m.metadata ? 'tool_calls' or m.metadata ? 'toolCalls')`,
+      [conversationId, userId],
+    );
+    const ids = rows.flatMap((row) => storedMessageToolServerIds(row.metadata));
+    if (ids.length === 0) return false;
+    if (!(await connectorIdsReadGoogleUserData(db, userId, organizationId, ids))) return false;
+    await markConversationGoogleUserData(db, userId, conversationId);
+    return true;
+  } catch (error) {
+    logger.warn(
+      { error, userId, conversationId },
+      'Stored conversation tool evidence unreadable; treating it as holding Google data',
+    );
+    return true;
+  }
 }

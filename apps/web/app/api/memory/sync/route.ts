@@ -71,7 +71,7 @@ async function handlePull(request: NextRequest, url: URL) {
          and origin.deleted_at is null
          and coalesce(origin.is_temporary, false) = false
         where m.user_id = $1 and m.server_version > $2 and ${workspaceMemoryPredicate(3, 'm.')}
-          and ${memoryFreeOfGoogleUserDataSql("to_jsonb(m)->>'source_conversation_id'")}
+          and ${memoryFreeOfGoogleUserDataSql("to_jsonb(m)->>'source_conversation_id'", 'm.user_id')}
         order by m.server_version asc
         limit ${MAX_MEMORIES_PULL}
       `,
