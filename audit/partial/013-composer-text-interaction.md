@@ -116,13 +116,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
-| desktop | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
+| web | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
+| desktop | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:74-74`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:45-45`, `apps/web/app/api/chat/conversations/[id]/messages/lib/generate-follow-ups.ts:170-170`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 ## S13.21: Prompt-template insertion.
 

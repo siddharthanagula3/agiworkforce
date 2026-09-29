@@ -49,13 +49,13 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/pr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector client), then a live check of the Picker under the page CSP. Code complete; Slack as a source declined. | config |
-| desktop | partial | owner: GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector client), then a live check of the Picker under the page CSP. Code complete; Slack as a source declined. | config |
+| web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
+| desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:126-126`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-139`
+Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-139`
 
 ## S23.11: Project Memory.
 

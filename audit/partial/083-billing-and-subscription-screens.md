@@ -110,10 +110,10 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-496`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Open paid checkout to all eligible users: seat count is chosen at checkout and increased in place, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first Team purchase is blocked. | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | api | partial | POST /checkout accepts a seat count, but a first Team purchase hits the upgrade-waitlist gate (403); seat increases are app-only (/api/upgrade). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 
-Code: `apps/web/app/pricing/page.tsx:1078-1093`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
 
 ## S83.29: Seat assignment.
 
