@@ -25,6 +25,10 @@ pub struct BackgroundRun {
     pub exit_code: Option<i32>,
     #[serde(default)]
     pub stopped: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session: Option<String>,
+    #[serde(default)]
+    pub gathered: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +57,7 @@ pub struct StartRequest<'a> {
     pub resume_session: Option<&'a str>,
     pub model: Option<&'a str>,
     pub permission_mode: Option<&'a str>,
+    pub parent_session: Option<&'a str>,
 }
 
 fn root() -> Result<PathBuf> {
@@ -184,6 +189,8 @@ pub fn start(request: StartRequest<'_>) -> Result<BackgroundRun> {
         finished_at: None,
         exit_code: None,
         stopped: false,
+        parent_session: request.parent_session.map(str::to_string),
+        gathered: false,
     };
     save(&run)?;
 
@@ -226,6 +233,7 @@ pub fn hand_off(
         resume_session: Some(&session_id),
         model: None,
         permission_mode: mode.as_deref(),
+        parent_session: None,
     })
     .map_err(|error| format!("Could not start the background run: {error:#}"))?;
     if let Err(error) = session.start_fresh_managed_session() {
@@ -237,6 +245,138 @@ pub fn hand_off(
     Ok(format!(
         "Moved this conversation to background run {id}; it keeps going after this terminal closes. This is a new conversation.\n  agi background logs {id}    see its output\n  agi background attach {id}  continue it when it is done",
         id = run.id
+    ))
+}
+
+pub fn spawn_thread(
+    session: &mut crate::agent::AgentSession,
+    instruction: &str,
+) -> std::result::Result<String, String> {
+    let instruction = instruction.trim();
+    if instruction.is_empty() {
+        return Err("/thread <instruction> starts a parallel thread with a copy of this conversation. /threads lists them and /gather brings their results back here.".to_string());
+    }
+    session
+        .persist_managed_session()
+        .map_err(|error| format!("Could not save this conversation for the thread: {error:#}"))?;
+    let parent = session
+        .managed_session_id()
+        .map(str::to_string)
+        .ok_or_else(|| {
+            "This conversation is not being saved, so it cannot start threads.".to_string()
+        })?;
+    let fork = crate::runtime::session_control::fork_managed_session(&parent)
+        .map_err(|error| format!("Could not copy this conversation: {error:#}"))?;
+    let mode = clap::ValueEnum::to_possible_value(&session.permission_mode)
+        .map(|value| value.get_name().to_string());
+    let run = start(StartRequest {
+        prompt: instruction,
+        resume_session: Some(&fork.summary.session_id),
+        model: None,
+        permission_mode: mode.as_deref(),
+        parent_session: Some(&parent),
+    })
+    .map_err(|error| format!("Could not start the thread: {error:#}"))?;
+    Ok(format!(
+        "Started thread {} on a copy of this conversation. It runs in parallel; /threads shows progress and /gather brings finished results back here.",
+        run.id
+    ))
+}
+
+fn threads_of(parent: &str) -> Vec<BackgroundRun> {
+    let mut runs: Vec<BackgroundRun> = list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|run| run.parent_session.as_deref() == Some(parent))
+        .collect();
+    runs.reverse();
+    runs
+}
+
+pub fn threads_summary(session: &crate::agent::AgentSession) -> String {
+    let Some(parent) = session.managed_session_id() else {
+        return "This conversation is not being saved, so it has no threads.".to_string();
+    };
+    let runs = threads_of(parent);
+    if runs.is_empty() {
+        return "No threads yet. /thread <instruction> starts one.".to_string();
+    }
+    let mut lines = vec![format!("Threads from this conversation ({}):", runs.len())];
+    for run in &runs {
+        let gathered = if run.gathered { ", gathered" } else { "" };
+        lines.push(format!(
+            "  {}  {}{gathered}  {}",
+            run.id,
+            state(run).label(),
+            crate::terminal_text::sanitize_terminal_text(&run.prompt)
+        ));
+    }
+    lines.push("/gather brings the finished ones back here.".to_string());
+    lines.join("\n")
+}
+
+pub fn gather_prompt(session: &crate::agent::AgentSession) -> std::result::Result<String, String> {
+    let Some(parent) = session.managed_session_id() else {
+        return Err("This conversation is not being saved, so it has no threads.".to_string());
+    };
+    let runs = threads_of(parent);
+    let still_running = runs
+        .iter()
+        .filter(|run| state(run) == RunState::Running)
+        .count();
+    let mut sections = Vec::new();
+    let mut gathered = Vec::new();
+    for run in runs.into_iter().filter(|run| !run.gathered) {
+        let answer = match state(&run) {
+            RunState::Running => continue,
+            RunState::Finished => {
+                crate::runtime::session_control::load_managed_session(&run.session_id)
+                    .ok()
+                    .and_then(|managed| {
+                        managed
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|message| message.role == "assistant")
+                            .map(|message| message.text_content())
+                    })
+                    .unwrap_or_else(|| "(the thread finished without an answer)".to_string())
+            }
+            other => format!(
+                "(the thread {} without an answer; `agi background logs {}` shows why)",
+                other.label(),
+                run.id
+            ),
+        };
+        sections.push(format!(
+            "### Thread {}: {}\n{}",
+            run.id,
+            run.prompt,
+            answer.trim()
+        ));
+        gathered.push(run);
+    }
+    if sections.is_empty() {
+        return Err(if still_running > 0 {
+            format!(
+                "{still_running} thread(s) still running and none finished since the last /gather."
+            )
+        } else {
+            "No finished threads to gather. /thread <instruction> starts one.".to_string()
+        });
+    }
+    for mut run in gathered {
+        run.gathered = true;
+        let _ = save(&run);
+    }
+    let pending = if still_running > 0 {
+        format!("\n{still_running} more thread(s) are still running; they are not included.")
+    } else {
+        String::new()
+    };
+    Ok(format!(
+        "These are the results of the parallel threads started from this conversation.{pending}\n\n{}\n\nBring them together: reconcile any conflicts between them, and give one combined answer.",
+        sections.join("\n\n")
     ))
 }
 

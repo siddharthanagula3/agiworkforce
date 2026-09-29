@@ -288,7 +288,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 101);
+        assert_eq!(commands.len(), 104);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
