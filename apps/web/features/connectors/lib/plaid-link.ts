@@ -1,3 +1,7 @@
+import {
+  BankAccountsExchangeResponseSchema,
+  BankAccountsLinkResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { PLAID_LINK_SCRIPT_URL } from '@/lib/connectors/plaid-config';
 
@@ -133,18 +137,17 @@ export async function connectBankAccountsWithPlaid(
   headers: HeaderBuilder = passHeaders,
 ): Promise<string | null> {
   const started = await postJson(routes.linkPath, headers);
-  const linkToken = (started.body as { linkToken?: unknown } | null)?.linkToken;
-  if (!started.ok || typeof linkToken !== 'string') {
+  const link = BankAccountsLinkResponseSchema.safeParse(started.body);
+  if (!started.ok || !link.success) {
     throw new Error(messageOf(started.body) ?? START_FAILED);
   }
-  const linked = await runPlaidLink(await loadPlaidLink(), linkToken);
+  const linked = await runPlaidLink(await loadPlaidLink(), link.data.linkToken);
   if (!linked) return null;
   const saved = await postJson(routes.exchangePath, headers, {
     publicToken: linked.publicToken,
     ...(linked.institutionName ? { institutionName: linked.institutionName } : {}),
   });
-  if (!saved.ok) throw new Error(messageOf(saved.body) ?? SAVE_FAILED);
-  const connectedAt = (saved.body as { connector?: { connectedAt?: unknown } } | null)?.connector
-    ?.connectedAt;
-  return typeof connectedAt === 'string' ? connectedAt : new Date().toISOString();
+  const connected = BankAccountsExchangeResponseSchema.safeParse(saved.body);
+  if (!saved.ok || !connected.success) throw new Error(messageOf(saved.body) ?? SAVE_FAILED);
+  return connected.data.connector.connectedAt;
 }

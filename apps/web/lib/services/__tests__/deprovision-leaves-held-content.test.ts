@@ -101,7 +101,7 @@ describe('offboarding a member cuts their access without touching what a hold pr
     const writes = statements.filter((entry) => /^\s*(update|delete)/i.test(entry.sql));
     expect(writes.length).toBeGreaterThan(0);
     for (const write of writes) {
-      expect(write.sql).toMatch(/device_refresh_tokens|api_keys/);
+      expect(write.sql).toMatch(/device_refresh_tokens|api_keys|mobile_intent_tokens/);
       expect(write.sql).toContain('organization_id = $2');
       expect(write.params).toEqual([HELD_MEMBER, ORGANIZATION_ID]);
     }

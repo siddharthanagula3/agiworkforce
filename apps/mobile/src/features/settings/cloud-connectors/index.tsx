@@ -51,8 +51,8 @@ import {
   type ConnectorListing,
   type ConnectorListingCategory,
 } from '@/services/connectors';
+import { BANK_ACCOUNTS_CONNECTOR_ID } from '@agiworkforce/cloud-contracts';
 
-const BANK_ACCOUNTS_CONNECTOR_ID = 'bank-accounts';
 const BANK_LINK_LABEL = 'Link a bank account';
 const BANK_LINK_HINT =
   'Read-only balances and transactions from US banks, linked through Plaid. Nothing can move money.';

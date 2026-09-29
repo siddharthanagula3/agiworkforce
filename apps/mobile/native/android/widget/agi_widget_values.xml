@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="agi_widget_label">AGI Workforce</string>
+  <string name="agi_widget_description">Start a new chat, open the camera or dictate.</string>
+  <string name="agi_widget_new_chat">New chat</string>
+  <string name="agi_widget_camera">Camera</string>
+  <string name="agi_widget_voice">Dictate</string>
+  <style name="AGIWidgetAction">
+    <item name="android:layout_width">0dp</item>
+    <item name="android:layout_height">match_parent</item>
+    <item name="android:layout_weight">1</item>
+    <item name="android:gravity">center</item>
+    <item name="android:minHeight">48dp</item>
+    <item name="android:drawablePadding">4dp</item>
+    <item name="android:textSize">12sp</item>
+    <item name="android:textColor">?android:attr/textColorPrimary</item>
+  </style>
+</resources>

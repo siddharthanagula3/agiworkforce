@@ -2,7 +2,11 @@ import 'server-only';
 
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import type { z } from 'zod';
+import {
+  BankAccountsExchangeRequestSchema,
+  type BankAccountsExchangeResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import {
   bankAccountsUnavailableReason,
@@ -23,16 +27,6 @@ import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-
 export const runtime = 'nodejs';
 
 const RATE_LIMIT_BUCKET = 'chat-conversation';
-const PUBLIC_TOKEN_MAX_LENGTH = 512;
-const INSTITUTION_NAME_MAX_LENGTH = 200;
-
-const BodySchema = z.union([
-  z.object({
-    publicToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH),
-    institutionName: z.string().trim().min(1).max(INSTITUTION_NAME_MAX_LENGTH).optional(),
-  }),
-  z.object({ linkToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH) }).strict(),
-]);
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
@@ -56,7 +50,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
-  const parsed = BodySchema.safeParse(await request.json().catch(() => null));
+  const parsed = BankAccountsExchangeRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) throw createError.validation('publicToken or linkToken is required');
 
   if ('linkToken' in parsed.data) {
@@ -79,12 +75,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
   });
 
-  return NextResponse.json(
-    {
-      connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
-    },
-    { status: 201, headers: { 'Cache-Control': 'private, no-store' } },
-  );
+  const body: z.infer<typeof BankAccountsExchangeResponseSchema> = {
+    connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
+  };
+  return NextResponse.json(body, {
+    status: 201,
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePost));

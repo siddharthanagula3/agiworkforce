@@ -721,8 +721,24 @@ async function selectScheduledRoute(
   subscriptionTier: string,
   googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
+  return selectUnattendedRoute(
+    scope,
+    task.model ?? 'auto',
+    taskType,
+    subscriptionTier,
+    googleUserData,
+  );
+}
+
+export async function selectUnattendedRoute(
+  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
+  selection: string,
+  taskType: ReturnType<typeof classifyTaskLocally>['type'],
+  subscriptionTier: string,
+  googleUserData: boolean,
+): Promise<ScheduledRunRoute> {
   const baseRouting: AutoRoutingRequest = {
-    selection: task.model ?? 'auto',
+    selection,
     taskType,
     subscriptionTier,
     trustMode: 'managed_cloud',

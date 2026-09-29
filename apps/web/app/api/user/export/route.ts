@@ -177,6 +177,16 @@ const desktopDeviceExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const mobileIntentTokenExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  install_id: z.string(),
+  capability: z.string(),
+  created_at: timestampSchema,
+  last_used_at: timestampSchema.nullable(),
+  revoked_at: timestampSchema.nullable(),
+});
+
 const deviceRegistrationExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -2056,6 +2066,8 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     "Per-turn cost accounting: estimated and actual cost, reservation and settlement state, and a usage blob carrying each provider observation's own cost. Exporting it would hand every requester this product's provider economics. The subject's own managed usage is exported as the managed usage summary.",
   user_two_factor:
     'Holds the live second factor. This download is a file handed to whoever ends up with it, and a credential in it stays valid.',
+  bank_account_items:
+    'Holds the live Plaid access token of each linked bank. Which banks are linked is visible in the finance view; the balances and transactions are read from the bank, not stored here.',
   connector_oauth_grants:
     'Holds the live tokens a connector authenticates with. The connection itself is exported as user_connectors.',
   connector_oauth_authorizations:
@@ -2323,6 +2335,18 @@ async function collectUserData(
     ledger,
   });
   if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
+
+  const intentTokenRows = await queryExportRows({
+    db,
+    sql: `select id, organization_id, install_id, capability, created_at, last_used_at, revoked_at
+          from mobile_intent_tokens where user_id = $1`,
+    values: [user.id],
+    schema: mobileIntentTokenExportSchema,
+    section: 'mobile_intent_tokens',
+    userId: user.id,
+    ledger,
+  });
+  if (intentTokenRows.length > 0) exportData['mobile_intent_tokens'] = intentTokenRows;
 
   const installationRows = await queryExportRows({
     db,

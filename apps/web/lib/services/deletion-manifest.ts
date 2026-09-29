@@ -27,6 +27,7 @@ export type DataClass =
 export type StoreKind = 'table' | 'object_store' | 'cache';
 
 const CUSTOMER_CONTENT = [
+  'bank_account_items',
   'chat_folders',
   'chat_messages',
   'cloud_agent_approval_checkpoints',
@@ -49,6 +50,7 @@ const CUSTOMER_CONTENT = [
   'media_assets',
   'message_bookmarks',
   'message_reactions',
+  'mobile_intent_tokens',
   'notebook_runs',
   'notifications',
   'organization_plugin_files',
