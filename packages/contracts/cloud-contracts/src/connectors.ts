@@ -576,6 +576,38 @@ export function normalizeWebDomain(raw: string): string | null {
   return WEB_DOMAIN_PATTERN.test(value) ? value : null;
 }
 
+/** A workspace's website rules: when `allow` is non-empty, nothing else may be read. */
+export interface WebDomainRules {
+  readonly allow: readonly string[];
+  readonly deny: readonly string[];
+}
+
+/** The hostname a rule is compared with: lower case, no `www.`, no trailing dot. */
+export function webHostnameOf(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/\.+$/, '');
+    return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the rules let the assistant read this URL. A rule covers its
+ * subdomains and a block beats an allow. A URL that will not parse is refused
+ * only when an allow list is in force. Every surface that opens a page, the
+ * gateway's fetch and search and the desktop's paired browser, asks this.
+ */
+export function webDomainAllowed(rules: WebDomainRules | null | undefined, url: string): boolean {
+  if (!rules) return true;
+  const hostname = webHostnameOf(url);
+  if (!hostname) return rules.allow.length === 0;
+  const matches = (rule: string) => hostname === rule || hostname.endsWith(`.${rule}`);
+  if (rules.deny.some(matches)) return false;
+  if (rules.allow.length === 0) return true;
+  return rules.allow.some(matches);
+}
+
 const WORKSPACE_MEMBER_ROLES = [
   'owner',
   'admin',

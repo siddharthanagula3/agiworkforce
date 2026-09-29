@@ -305,7 +305,7 @@ describe('runToolLoop, device step boundary', () => {
       deviceWebDomainPolicy: { allow: ['allowed.example'], deny: [] },
     } as unknown as ProcessedRequest;
 
-    await drain(
+    const output = await drain(
       runToolLoop(processed, {
         onDeviceCheckpoint,
         eventSessionId: 'session-1',
@@ -314,6 +314,12 @@ describe('runToolLoop, device step boundary', () => {
     );
 
     expect(onDeviceCheckpoint).toHaveBeenCalled();
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { siteRules: { allow: ['allowed.example'], deny: [] } },
+    });
   });
 
   it('always asks on the phone before adding a calendar event, even with no untrusted content', async () => {

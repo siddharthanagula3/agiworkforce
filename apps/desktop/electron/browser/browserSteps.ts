@@ -7,7 +7,9 @@ import {
   BROWSER_CDP_COMMANDS,
   TOOL_APPROVAL_ACTION_LABELS,
   isBrowserCommand,
+  type BrowserCommand,
 } from '@agiworkforce/types';
+import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contracts';
 import {
   consumeSingleUse,
   getPermissionState,
@@ -29,7 +31,7 @@ const BROWSER_STEP_REASON =
   'AGI wants to use your paired Chrome browser while it answers you: open pages, read them, click and type. Chrome carries out each action only on sites you approved in the extension, and AGI asks before it downloads a file.';
 
 export class BrowserStepRefused extends Error {
-  readonly reason: 'permission' | 'cancelled';
+  readonly reason: 'permission' | 'cancelled' | 'site';
 
   constructor(reason: BrowserStepRefused['reason'], message: string) {
     super(message);
@@ -50,6 +52,60 @@ function reviewFor(plan: BrowserCommandPlan, review: unknown): string | null {
   if (plan.command === 'browser_download') return `Download ${String(plan.args['url'])}`;
   if (BROWSER_CDP_COMMANDS.includes(plan.command)) return plan.summary.replace(/\?$/, '');
   return null;
+}
+
+function siteRulesFrom(value: unknown): WebDomainRules | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const list = (entry: unknown) =>
+    Array.isArray(entry) ? entry.filter((item): item is string => typeof item === 'string') : [];
+  const rules = { allow: list(record['allow']), deny: list(record['deny']) };
+  return rules.allow.length > 0 || rules.deny.length > 0 ? rules : null;
+}
+
+/** Commands after which the active tab may be on a page the step did not name. */
+const LANDING_COMMANDS: ReadonlySet<BrowserCommand> = new Set([
+  'browser_navigate',
+  'browser_click',
+  'browser_download',
+  'browser_history',
+]);
+
+async function activeTabAddress(): Promise<string | null> {
+  const tabs = await sendBrowserCommand('browser_list_tabs', {});
+  if (!Array.isArray(tabs)) return null;
+  const active = tabs.find(
+    (tab) => tab && typeof tab === 'object' && (tab as { active?: unknown }).active === true,
+  ) as { url?: unknown } | undefined;
+  return typeof active?.url === 'string' ? active.url : null;
+}
+
+/**
+ * The workspace's website rules, applied to the page the step ended on: a
+ * redirect or a click can land somewhere the request never named. A blocked
+ * landing is left, by going back, and the step reports it instead of content.
+ */
+async function refuseBlockedLanding(
+  command: BrowserCommand,
+  value: unknown,
+  rules: WebDomainRules | null,
+): Promise<void> {
+  if (!rules) return;
+  const read = value && typeof value === 'object' ? (value as { url?: unknown }).url : undefined;
+  const landed =
+    command === 'browser_read_page' && typeof read === 'string'
+      ? read
+      : LANDING_COMMANDS.has(command)
+        ? await activeTabAddress().catch(() => null)
+        : null;
+  if (landed === null || webDomainAllowed(rules, landed)) return;
+  if (command !== 'browser_read_page') {
+    await sendBrowserCommand('browser_history', { direction: 'back' }).catch(() => undefined);
+  }
+  throw new BrowserStepRefused(
+    'site',
+    `The page moved to ${landed}, a site your workspace administrator does not allow, so the browser went back and nothing from it was read.`,
+  );
 }
 
 async function allowedByUser(window: BrowserWindow | null, reason: string): Promise<boolean> {
@@ -77,6 +133,14 @@ export async function runBrowserStep(
     throw new InvalidBrowserArguments('That is not a browser step the assistant can take.');
   }
   const plan = planBrowserCommand(command, stepArguments(args['args']));
+  const siteRules = siteRulesFrom(args['siteRules']);
+  const target = plan.args['url'];
+  if (siteRules && typeof target === 'string' && !webDomainAllowed(siteRules, target)) {
+    throw new BrowserStepRefused(
+      'site',
+      `Your workspace administrator does not allow the assistant to open ${target}, so the step did not run.`,
+    );
+  }
   const state =
     getPermissionState(plan.capability, GLOBAL_SCOPE) === 'prompt'
       ? await requestPermission(window, plan.capability, GLOBAL_SCOPE, BROWSER_STEP_REASON)
@@ -95,11 +159,11 @@ export async function runBrowserStep(
     );
   }
   const activity = recordBrowserActivity(ASSISTANT_BROWSER_CLIENT, plan.command, plan.args);
+  let value: unknown;
   try {
-    const value = await sendBrowserCommand(plan.command, plan.args);
+    value = await sendBrowserCommand(plan.command, plan.args);
     settleBrowserActivity(activity, null);
     consumeSingleUse(plan.capability, GLOBAL_SCOPE);
-    return value;
   } catch (error) {
     settleBrowserActivity(
       activity,
@@ -107,4 +171,6 @@ export async function runBrowserStep(
     );
     throw error;
   }
+  await refuseBlockedLanding(plan.command, value, siteRules);
+  return value;
 }

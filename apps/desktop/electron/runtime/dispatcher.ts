@@ -1315,7 +1315,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
   if (error instanceof BrowserStepRefused) {
     return runtimeFailure(
-      error.reason === 'permission' ? 'permission-denied' : 'cancelled',
+      error.reason === 'cancelled' ? 'cancelled' : 'permission-denied',
       error.message,
     );
   }
