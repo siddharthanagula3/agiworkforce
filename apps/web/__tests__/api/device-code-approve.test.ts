@@ -22,6 +22,7 @@ vi.mock('@/lib/server/device-signin-policy', () => ({
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
+  mustAcceptTerms: async (userId: string) => !(await mockHasAcceptedCurrentTerms(userId)),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({

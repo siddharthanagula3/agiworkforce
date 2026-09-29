@@ -2,7 +2,7 @@ import 'server-only';
 
 import { redirect } from 'next/navigation';
 
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { mustAcceptTerms } from '@/lib/server/terms';
 import { requireAccountSecurityVerification } from '@/lib/server/account-security/page-gate';
 
 export async function requireCurrentTermsAcceptance(
@@ -10,7 +10,7 @@ export async function requireCurrentTermsAcceptance(
   returnTo: string,
 ): Promise<void> {
   await requireAccountSecurityVerification(returnTo);
-  if (await hasAcceptedCurrentTerms(userId)) return;
+  if (!(await mustAcceptTerms(userId, 'page'))) return;
 
   redirect(`/login/complete?redirectTo=${encodeURIComponent(returnTo)}`);
 }

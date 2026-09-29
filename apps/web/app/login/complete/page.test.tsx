@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   accepted: vi.fn(),
+  must: vi.fn(),
   redirect: vi.fn(),
   recorder: vi.fn(),
   continue: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mocks.accepted(userId),
+  mustAcceptTerms: (userId: string) => mocks.must(userId),
 }));
 vi.mock('../../signup/TermsGate', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -78,7 +80,30 @@ describe('/login/complete', () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.accepted.mockResolvedValue(false);
+    mocks.must.mockImplementation(async (userId: string) => !(await mocks.accepted(userId)));
     mocks.access.mockResolvedValue({ allowed: true });
+  });
+
+  it('lets an account on an older valid version continue without a click-through', async () => {
+    mocks.must.mockResolvedValue(false);
+
+    render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(mocks.recorder).not.toHaveBeenCalled();
+    expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
+  });
+
+  it('offers the published revision to an account that asked to review it', async () => {
+    mocks.must.mockResolvedValue(false);
+
+    render(
+      await LoginCompletePage({
+        searchParams: Promise.resolve({ redirectTo: '/chat', review: 'terms' }),
+      }),
+    );
+
+    expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
+    expect(mocks.must).not.toHaveBeenCalled();
   });
 
   it('does not rewrite a current durable acceptance', async () => {
