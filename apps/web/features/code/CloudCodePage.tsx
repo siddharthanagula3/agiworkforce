@@ -38,6 +38,7 @@ import {
   type CodeApprovalPrompt,
   type CodeTurnRecord,
 } from '@agiworkforce/cloud-contracts';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
@@ -1124,6 +1125,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                           onChange={(event) => setTitleDraft(event.target.value)}
                           onBlur={() => void handleRename()}
                           onKeyDown={(event) => {
+                            if (isImeComposingKey(event.nativeEvent)) return;
                             if (event.key === RENAME_COMMIT_KEY) {
                               event.preventDefault();
                               void handleRename();
