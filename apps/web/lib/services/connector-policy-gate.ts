@@ -107,8 +107,21 @@ export async function evaluateConnectorPolicyForUser(
     connectorId: string | null;
     isCustom?: boolean;
     url?: string | null;
+    surface?: string | null;
   },
 ): Promise<ConnectorPolicyGateResult> {
+  const organizationId =
+    params.organizationId !== undefined || !params.userId
+      ? (params.organizationId ?? null)
+      : await resolveActiveOrganizationId(params.db, params.userId, params.request).catch(
+          (error: unknown) => {
+            logger.error(
+              { error, userId: params.userId },
+              '[connector-policy] workspace unresolved',
+            );
+            return null;
+          },
+        );
   const subscription = await SubscriptionService.getSubscription(params.db, params.userId).catch(
     (error: unknown) => {
       logger.error({ error, userId: params.userId }, '[connector-policy] plan unreadable');
@@ -117,15 +130,16 @@ export async function evaluateConnectorPolicyForUser(
   );
   const connectorsAllowed = await connectorsAllowedWithoutRequest({
     userId: params.userId,
-    organizationId: params.organizationId,
+    organizationId,
     planTier: subscription?.plan_tier ?? null,
+    surface: params.surface ?? null,
   });
   if (!connectorsAllowed) {
     return {
       allowed: false,
       code: 'connectors_unavailable',
       reason: 'Connectors are unavailable right now.',
-      organizationId: params.organizationId ?? null,
+      organizationId,
     };
   }
   return evaluateWorkspacePolicy(

@@ -46,6 +46,7 @@ export async function connectorsAllowedWithoutRequest(input: {
   userId: string;
   organizationId: string | null | undefined;
   planTier: string | null | undefined;
+  surface?: string | null;
 }): Promise<boolean> {
   if (!getTierPolicy(input.planTier).allowMCP) return false;
   return connectorSwitchOpen({
@@ -53,7 +54,7 @@ export async function connectorsAllowedWithoutRequest(input: {
     workspaceId: input.organizationId ?? null,
     role: null,
     plan: input.planTier ?? null,
-    surface: null,
+    surface: input.surface ?? null,
     region: managedCloudDataRegion(),
     country: null,
     clientVersion: null,

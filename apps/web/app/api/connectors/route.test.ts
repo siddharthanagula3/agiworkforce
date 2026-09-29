@@ -16,6 +16,12 @@ interface DirectoryTargetFixture {
 }
 
 const mocks = vi.hoisted(() => ({
+  connectorPolicy: vi.fn(async () => ({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  })),
   query: vi.fn(),
   execute: vi.fn(),
   githubInstallations: vi.fn(),
@@ -45,12 +51,7 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/services/connector-policy-gate', () => ({
-  evaluateConnectorPolicyForUser: vi.fn(async () => ({
-    allowed: true,
-    code: 'ungoverned',
-    reason: '',
-    organizationId: null,
-  })),
+  evaluateConnectorPolicyForUser: (...args: unknown[]) => mocks.connectorPolicy(...args),
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -617,6 +618,29 @@ describe('/api/connectors directory records', () => {
       }),
     );
     expect(mocks.cacheToolNames).toHaveBeenCalledWith(OPEN_RECORD_ID, ['search_docs', 'get_doc']);
+  });
+
+  it('asks the connection gate before connecting an open server, and stores nothing when refused', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'connectors_unavailable',
+      reason: 'Connectors are unavailable right now.',
+      organizationId: null,
+    });
+
+    const response = await POST(postRequest(OPEN_RECORD_ID));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: OPEN_RECORD_ID,
+        isCustom: true,
+        url: 'https://tandem.ac/mcp',
+        organizationId: null,
+      }),
+    );
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
   });
 
   it('answers an open server that is already connected without probing again', async () => {
