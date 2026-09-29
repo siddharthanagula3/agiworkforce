@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-22
+Last updated: 2026-09-29
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -89,9 +89,13 @@ depends on contracts. `pnpm check:boundaries` fails an import that reaches past
 a package's published entrypoints.
 
 `crates/` mirrors this for Rust: `agiworkforce-protocol` is the contract crate,
-and `agent-core`, `llm`, `mcp`, `model-registry`, `app-server`,
-`command-registry`, `execpolicy`, `sandbox-policy` and `licensing` sit on it.
-Both the desktop and the CLI path-depend on these rather than reimplementing.
+built on `execpolicy`, `utils-absolute-path` and `utils-image`. `mcp` and
+`app-server` sit on it, `agent-core` sits on `llm`, and `model-registry`,
+`sandbox-policy`, `command-registry` and `licensing` stand alone. The desktop
+and the CLI both path-depend on `agent-core`, `execpolicy`, `llm`, `mcp`,
+`model-registry`, `protocol` and `sandbox-policy` rather than reimplementing
+them; the CLI adds `app-server`, `command-registry` and `utils-image`, and
+nothing depends on `licensing` yet.
 
 ## Load-bearing seams
 
