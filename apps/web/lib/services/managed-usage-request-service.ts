@@ -645,6 +645,17 @@ async function attributeToApiKey(
   );
 }
 
+/** Whether usage credits are turned on, which fast mode needs whatever bonus credits remain. */
+export async function usageCreditsEnabled(db: DatabaseAdapter, userId: string): Promise<boolean> {
+  const rows = await db.query<{ enabled: boolean | null }>(
+    `select coalesce(bool_or(subscription_row.overage_enabled), false) as enabled
+       from public.subscriptions subscription_row
+      where subscription_row.user_id = $1`,
+    [userId],
+  );
+  return rows[0]?.enabled === true;
+}
+
 export async function reserveManagedUsageRequest(
   input: {
     db: DatabaseAdapter;
@@ -662,7 +673,7 @@ export async function reserveManagedUsageRequest(
     attribution?: UsageAttribution;
     apiKeyId?: string;
     conversationId?: string;
-    /** Extra usage bills the request to purchased credits whatever the plan windows hold. */
+    /** Extra usage bills the request to usage credits whatever the plan windows hold, only while they are turned on. */
     funding?: 'plan' | 'extra_usage';
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
@@ -691,7 +702,7 @@ export async function reserveManagedUsageRequest(
           input.db,
           `select * from public.reserve_managed_usage_request_on_extra_usage_microusd(
             $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-            $7::text, $8::integer, $9::boolean, $10::bigint
+            $7::text, $8::integer, $9::boolean
           )`,
           [
             input.userId,
@@ -703,7 +714,6 @@ export async function reserveManagedUsageRequest(
             leaseToken,
             input.leaseSeconds ?? 900,
             input.isFlagship,
-            topUpHeadroomMicrousd,
           ],
         )
       : await queryOne(
