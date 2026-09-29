@@ -67,7 +67,11 @@ export interface E2BGitExecutor {
 }
 
 export interface E2BExecutor {
-  runCode(input: { language: string; code: string }): Promise<ExecutionResult>;
+  runCode(input: {
+    language: string;
+    code: string;
+    signal?: AbortSignal;
+  }): Promise<ExecutionResult>;
   writeFile(input: {
     path: string;
     content: string;
@@ -88,4 +92,6 @@ export interface E2BExecutor {
 }
 
 export const MAX_EXECUTION_OUTPUT_BYTES = 100_000;
+export const CODE_RUN_STOPPED_MESSAGE =
+  'The run was stopped. Stopping restarts the code session, so values that earlier code in this chat defined are gone.';
 export const MAX_KEPT_TOOL_OUTPUT_CHARS = 900_000;

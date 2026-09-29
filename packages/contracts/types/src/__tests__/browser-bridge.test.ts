@@ -23,6 +23,7 @@ describe('browser bridge contract', () => {
 
   it('names the command family the desktop may send', () => {
     expect(BROWSER_COMMANDS).toEqual([
+      'browser_list_tabs',
       'browser_read_page',
       'browser_click',
       'browser_type',

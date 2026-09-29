@@ -103,6 +103,7 @@ import {
   ensureCloudConversation,
   isTemporaryCloudConversation,
   markCloudConversationReady,
+  readTemporaryChatPreference,
   updateCloudConversation,
   waitForCloudConversationReady,
   type CloudConversationBoundary,
@@ -243,15 +244,6 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
     CLOUD_API_BASE_URL,
   );
   return raw.parentId === undefined ? mapped : { ...mapped, parentId: raw.parentId };
-}
-
-async function readTemporaryChatPreference(): Promise<boolean> {
-  try {
-    const { useSettingsStore } = await import('../stores/settingsStore');
-    return useSettingsStore.getState().chatPreferences.temporaryChat === true;
-  } catch {
-    return false;
-  }
 }
 
 export class CloudRuntime implements ChatRuntime {
@@ -989,7 +981,11 @@ export class CloudRuntime implements ChatRuntime {
 
       uploadedAttachments =
         !isContinuation && options?.attachments?.length
-          ? await uploadDesktopCloudAttachments(options.attachments, controller.signal)
+          ? await uploadDesktopCloudAttachments(
+              options.attachments,
+              controller.signal,
+              conversationId,
+            )
           : [];
       if (shouldStopBeforeDispatch()) return;
       this.assertBoundary(boundary);
