@@ -420,6 +420,12 @@ function reservationError(decision: string): ManagedUsageRequestError {
         402,
         'insufficient_credits',
       );
+    case 'extra_usage_required':
+      return new ManagedUsageRequestError(
+        'Fast mode is billed to usage credits, and they do not cover this message. Turn on usage credits or add more in Settings > Billing, or turn fast mode off.',
+        402,
+        'extra_usage_required',
+      );
     case 'session_limit':
       return new ManagedUsageRequestError(
         'Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
@@ -656,6 +662,8 @@ export async function reserveManagedUsageRequest(
     attribution?: UsageAttribution;
     apiKeyId?: string;
     conversationId?: string;
+    /** Extra usage bills the request to purchased credits whatever the plan windows hold. */
+    funding?: 'plan' | 'extra_usage';
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
@@ -677,29 +685,50 @@ export async function reserveManagedUsageRequest(
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
-  const row = await queryOne(
-    input.db,
-    `select * from public.reserve_managed_usage_request_with_limits_microusd(
+  const row =
+    input.funding === 'extra_usage'
+      ? await queryOne(
+          input.db,
+          `select * from public.reserve_managed_usage_request_on_extra_usage_microusd(
+            $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+            $7::text, $8::integer, $9::boolean, $10::bigint
+          )`,
+          [
+            input.userId,
+            idempotencyKey,
+            input.requestHash,
+            input.provider,
+            input.model,
+            resolveEstimatedMicrousd(input),
+            leaseToken,
+            input.leaseSeconds ?? 900,
+            input.isFlagship,
+            topUpHeadroomMicrousd,
+          ],
+        )
+      : await queryOne(
+          input.db,
+          `select * from public.reserve_managed_usage_request_with_limits_microusd(
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
       $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean,
       $13::bigint
     )`,
-    [
-      input.userId,
-      idempotencyKey,
-      input.requestHash,
-      input.provider,
-      input.model,
-      resolveEstimatedMicrousd(input),
-      leaseToken,
-      input.leaseSeconds ?? 900,
-      sessionCapMicrousd,
-      weeklyCapMicrousd,
-      flagshipWeeklyCapMicrousd,
-      input.isFlagship,
-      topUpHeadroomMicrousd,
-    ],
-  );
+          [
+            input.userId,
+            idempotencyKey,
+            input.requestHash,
+            input.provider,
+            input.model,
+            resolveEstimatedMicrousd(input),
+            leaseToken,
+            input.leaseSeconds ?? 900,
+            sessionCapMicrousd,
+            weeklyCapMicrousd,
+            flagshipWeeklyCapMicrousd,
+            input.isFlagship,
+            topUpHeadroomMicrousd,
+          ],
+        );
 
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';

@@ -1467,6 +1467,38 @@ export function fastTierFor(
   return getModelMetadataById(model)?.fastTier ?? null;
 }
 
+/**
+ * Fast mode follows Claude's rules: a model that offers it, a paid plan (never a
+ * free trial, the free lane or a promotion), and on a workspace only once an
+ * administrator has turned it on. It is billed to usage credits.
+ */
+export function fastModeRefusal(input: {
+  model: string;
+  modelOffersFast: boolean;
+  paidPlan: boolean;
+  workspaceAllowsFast: boolean;
+}): { message: string; status: 403 | 422 } | null {
+  if (!input.modelOffersFast) {
+    return {
+      message: `Fast mode is not available for ${input.model}. Turn it off or choose a model that offers it.`,
+      status: 422,
+    };
+  }
+  if (!input.paidPlan) {
+    return {
+      message: 'Fast mode is available on paid plans and is billed to usage credits.',
+      status: 403,
+    };
+  }
+  if (!input.workspaceAllowsFast) {
+    return {
+      message: 'Fast mode has been disabled by your organization.',
+      status: 403,
+    };
+  }
+  return null;
+}
+
 export function buildThinkingConfig({
   provider,
   model,
@@ -4791,24 +4823,35 @@ export async function processRequest(
     };
   }
 
-  let fastTier =
-    chatRequest.speed === 'fast' ? fastTierFor(providerLower, chatRequest.model) : null;
-  if (chatRequest.speed === 'fast' && !fastTier) {
+  const fastRefusal =
+    chatRequest.speed === 'fast'
+      ? fastModeRefusal({
+          model: chatRequest.model,
+          modelOffersFast: fastTierFor(providerLower, chatRequest.model) !== null,
+          paidPlan: !isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled && !freeLanePlan,
+          workspaceAllowsFast: workspaceControls
+            ? workspaceControls.featureAccess.fast_mode === true
+            : true,
+        })
+      : null;
+  if (fastRefusal) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Fast mode is not available for ${chatRequest.model}. Turn it off or choose a model that offers it.`,
+            message: fastRefusal.message,
             type: 'invalid_request_error',
             code: 'fast_mode_unavailable',
             param: 'speed',
           },
         },
-        { status: 422 },
+        { status: fastRefusal.status },
       ),
     };
   }
+  let fastTier =
+    chatRequest.speed === 'fast' ? fastTierFor(providerLower, chatRequest.model) : null;
 
   const effectiveEffort = clampReasoningEffort(
     resolveRequestEffort(
@@ -5118,6 +5161,7 @@ export async function processRequest(
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
+          ...(fastTier ? { funding: 'extra_usage' as const } : {}),
           quotaFeature,
           attribution: {
             workload: resolveChatWorkload({
