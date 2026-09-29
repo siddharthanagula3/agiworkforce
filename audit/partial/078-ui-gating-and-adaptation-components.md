@@ -28,11 +28,11 @@ Code: `apps/web/lib/services/capability-handshake-service.ts:137-137`, `apps/web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | On-device chat switches to a vision model when an image is attached, but the cloud composer accepts the same files for every model and relies on the server refusal. | ui |
+| mobile | partial | The composer reacts to images the chosen model cannot read with a visible warning, in the S9.34 post-codex patch. Document types are not yet checked against the model. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`
+Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 ## S78.06: Model-dependent media settings.
 

@@ -4,7 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { logger } from '@/lib/logger';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
 import {
@@ -124,16 +124,17 @@ export async function evaluateConnectorPolicyForUser(
       };
     }
   }
-  const subscription = await SubscriptionService.getSubscription(params.db, params.userId).catch(
+  const planTier = await resolveEntitledPlanTier(params.db, params.userId).catch(
     (error: unknown) => {
       logger.error({ error, userId: params.userId }, '[connector-policy] plan unreadable');
       return null;
     },
   );
+
   const connectorsAllowed = await connectorsAllowedWithoutRequest({
     userId: params.userId,
     organizationId,
-    planTier: subscription?.plan_tier ?? null,
+    planTier,
     surface: params.surface ?? null,
   });
   if (!connectorsAllowed) {

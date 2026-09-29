@@ -170,7 +170,11 @@
     "toolsAwaitingApproval_one": "Uno strumento è in attesa della tua approvazione.",
     "toolsAwaitingApproval_other": "{{count}} strumenti sono in attesa della tua approvazione.",
     "unsentMessages_one": "Hai un messaggio non inviato.",
-    "unsentMessages_other": "Hai {{count}} messaggi non inviati."
+    "unsentMessages_other": "Hai {{count}} messaggi non inviati.",
+    "packages_one": "{{count}} pacchetto",
+    "packages_other": "{{count}} pacchetti",
+    "unreadNotifications_one": "{{count}} notifica non letta",
+    "unreadNotifications_other": "{{count}} notifiche non lette"
   },
   "relative": {
     "minutesAgo_one": "{{count}} minuto fa",

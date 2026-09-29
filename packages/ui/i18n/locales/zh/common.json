@@ -170,7 +170,11 @@
     "toolsAwaitingApproval_one": "有一个工具正在等待您批准。",
     "toolsAwaitingApproval_other": "有 {{count}} 个工具正在等待您批准。",
     "unsentMessages_one": "您有一条未发送的消息。",
-    "unsentMessages_other": "您有 {{count}} 条未发送的消息。"
+    "unsentMessages_other": "您有 {{count}} 条未发送的消息。",
+    "packages_other": "{{count}} 个软件包",
+    "unreadNotifications_other": "{{count}} 条未读通知",
+    "packages_one": "{{count}} 个软件包",
+    "unreadNotifications_one": "{{count}} 条未读通知"
   },
   "relative": {
     "minutesAgo_one": "{{count}} 分钟前",
