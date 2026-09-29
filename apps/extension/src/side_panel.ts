@@ -38,6 +38,7 @@ import {
   MAX_CUSTOM_INSTRUCTIONS_CHARS,
   normalizeModelId,
   getProviderDisplayLabel,
+  messageKindForAgentEvent,
   PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
   RESPONSE_STYLES,
@@ -16213,18 +16214,18 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.agentEvent) {
     removeThinking();
     const before = _ctx.messages.find((message) => message.id === chunk.id);
+    const approvalEventType =
+      messageKindForAgentEvent(chunk.agentEvent.event.type) === 'approval'
+        ? chunk.agentEvent.event.type
+        : null;
     const alreadyAwaitingApproval = before?.agentActivity?.entries.some(
       (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
     );
-    if (
-      chunk.agentEvent.event.type === 'approval-requested' &&
-      !alreadyAwaitingApproval &&
-      before
-    ) {
+    if (approvalEventType === 'approval-requested' && !alreadyAwaitingApproval && before) {
       before.cloudApprovalDecisions = undefined;
       before.cloudApprovalError = undefined;
     }
-    if (chunk.agentEvent.event.type === 'input-requested' && before) {
+    if (approvalEventType === 'input-requested' && before) {
       connectorInputResponses.delete(before.id);
       before.cloudApprovalError = undefined;
     }
@@ -16233,7 +16234,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (streamUsedQuick) assistant.managedQuickMode = true;
     stampResolvedRoute(chunk.id, assistant);
     if (
-      chunk.agentEvent.event.type === 'approval-resolved' &&
+      approvalEventType === 'approval-resolved' &&
       !assistant.agentActivity?.entries.some(
         (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
       )
@@ -16241,10 +16242,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       assistant.cloudApprovalDecisions = undefined;
       assistant.cloudApprovalError = undefined;
     }
-    if (
-      chunk.agentEvent.event.type === 'input-resolved' &&
-      pendingConnectorInputs(assistant).length === 0
-    ) {
+    if (approvalEventType === 'input-resolved' && pendingConnectorInputs(assistant).length === 0) {
       connectorInputResponses.delete(assistant.id);
       assistant.cloudApprovalError = undefined;
     }

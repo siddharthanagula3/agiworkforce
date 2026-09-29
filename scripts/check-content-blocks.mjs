@@ -67,10 +67,7 @@ export const BLOCK_KIND_READERS_PENDING = Object.freeze({
   'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${WEB_FIX}`,
   'apps/mobile/src/features/tasks/runPresentation.ts': `mobile, post-codex patch: ${WEB_FIX}`,
   'apps/extension/src/features/side-panel/chat-state.ts': `p-chrome: ${WEB_FIX}`,
-  'apps/extension/src/features/side-panel/cloudRunsPanel.ts': `p-chrome: ${WEB_FIX}`,
-  'apps/extension/src/side_panel.ts': `p-chrome: ${WEB_FIX}`,
   'apps/desktop/src/runtime/CloudRuntime.ts': `p-electron: ${WEB_FIX}`,
-  'apps/desktop/electron/runtime/developerSessionService.ts': `p-electron: ${WEB_FIX}`,
   'apps/desktop/electron/runtime/localInferenceService.ts': `p-electron: ${WEB_FIX}`,
 });
 
