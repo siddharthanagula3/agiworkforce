@@ -29,8 +29,9 @@
  *   - `settings`, the operator kill switches resolved by the caller from
  *     `lib/feature-flags/capability-gate`, and the capabilities the account
  *     turned off itself (the Capabilities settings' cloud code execution
- *     toggle, read by `resolveCloudCodeExecutionPolicy`), each denied with
- *     its own reason.
+ *     toggle, read by `resolveCloudCodeExecutionPolicy`), and the workspace
+ *     features an administrator turned off for the member (Deep Research, AGI
+ *     Work, skills, plugins), each denied with its own reason.
  *
  * Every layer starts from "grant everything" (`ALL_PLATFORM_CAPABILITIES`)
  * and SUBTRACTS only the specific ids it has real evidence to restrict. This
@@ -123,12 +124,17 @@ function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant
 function buildSettingsLayerGrant(
   closedCapabilities: readonly PlatformCapability[],
   userDisabledCapabilities: readonly PlatformCapability[],
+  workspaceDisabledCapabilities: readonly PlatformCapability[],
 ): CapabilityLayerGrant {
   const granted = allCapabilities();
   const denialReasons: Partial<Record<PlatformCapability, CapabilityDenialReason>> = {};
   for (const capability of userDisabledCapabilities) {
     granted.delete(capability);
     denialReasons[capability] = 'disabled_by_user';
+  }
+  for (const capability of workspaceDisabledCapabilities) {
+    granted.delete(capability);
+    denialReasons[capability] = 'disabled_by_workspace';
   }
   for (const capability of closedCapabilities) {
     granted.delete(capability);
@@ -140,6 +146,9 @@ function buildSettingsLayerGrant(
       : []),
     ...(userDisabledCapabilities.length > 0
       ? [`user:${[...userDisabledCapabilities].sort().join(',')}`]
+      : []),
+    ...(workspaceDisabledCapabilities.length > 0
+      ? [`workspace:${[...workspaceDisabledCapabilities].sort().join(',')}`]
       : []),
   ];
   if (sources.length === 0) {
@@ -286,6 +295,8 @@ export interface BuildMeCapabilityHandshakeInput {
   closedCapabilities?: readonly PlatformCapability[];
   /** Capabilities the account turned off in its own settings. */
   userDisabledCapabilities?: readonly PlatformCapability[];
+  /** Capabilities the active workspace's feature access turns off for this member. */
+  workspaceDisabledCapabilities?: readonly PlatformCapability[];
   resets?: CapabilityLimitResets;
   computedAt?: string;
 }
@@ -302,6 +313,7 @@ export function buildMeCapabilityHandshake(
     settings: buildSettingsLayerGrant(
       input.closedCapabilities ?? [],
       input.userDisabledCapabilities ?? [],
+      input.workspaceDisabledCapabilities ?? [],
     ),
   };
   const limits = buildLimits(
