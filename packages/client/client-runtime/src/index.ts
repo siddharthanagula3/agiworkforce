@@ -135,11 +135,16 @@ export type {
   SyncManagerState,
 } from './offline-sync';
 
-export { pollDeviceAuthorization, requestDeviceAuthorization } from './deviceAuthorization';
+export {
+  pollDeviceAuthorization,
+  refreshDeviceSession,
+  requestDeviceAuthorization,
+} from './deviceAuthorization';
 export type {
   DeviceAuthorizationPollResult,
   DeviceAuthorizationPost,
   DeviceAuthorizationRequest,
+  DeviceSessionRefreshResult,
 } from './deviceAuthorization';
 
 export {

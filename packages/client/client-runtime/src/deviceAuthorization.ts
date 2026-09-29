@@ -27,6 +27,13 @@ export type DeviceAuthorizationPollResult =
   | { kind: 'expired' }
   | { kind: 'rejected'; message: string };
 
+export type DeviceSessionRefreshResult =
+  | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
+  | { kind: 'unavailable' }
+  | { kind: 'revoked' }
+  | { kind: 'terms-required'; acceptanceUrl: string | null }
+  | { kind: 'account-unavailable'; message: string };
+
 function parseRecord(body: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(body) as unknown;
@@ -172,4 +179,56 @@ export async function pollDeviceAuthorization(
     ...(tokenResponse.refresh_token ? { refreshToken: tokenResponse.refresh_token } : {}),
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
   };
+}
+
+/**
+ * Rotates a device session against the same endpoint every other surface uses.
+ * A transport failure is 'unavailable', not 'revoked': losing the credential
+ * because the network blinked would send the editor back through device code.
+ */
+export async function refreshDeviceSession(
+  origin: string,
+  refreshToken: string,
+  post: DeviceAuthorizationPost,
+): Promise<DeviceSessionRefreshResult> {
+  let response: { status: number; body: string };
+  try {
+    response = await post(`${new URL(origin).origin}/api/auth/device/refresh`, {
+      refresh_token: refreshToken,
+    });
+  } catch {
+    return { kind: 'unavailable' };
+  }
+
+  const body = parseRecord(response.body);
+  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
+  if (error === 'terms_acceptance_required') {
+    const url = body['acceptance_url'];
+    return { kind: 'terms-required', acceptanceUrl: typeof url === 'string' ? url : null };
+  }
+  if (error === 'invalid_grant') return { kind: 'revoked' };
+  if (error === 'account_unavailable') {
+    const description = body['error_description'];
+    return {
+      kind: 'account-unavailable',
+      message:
+        typeof description === 'string' && description.trim() !== ''
+          ? description
+          : 'This AGI Cloud account cannot be used right now. Sign in on the web to see why.',
+    };
+  }
+  if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
+
+  try {
+    const tokenType = requiredString(body, 'token_type');
+    if (tokenType.toLowerCase() !== 'bearer') return { kind: 'unavailable' };
+    return {
+      kind: 'renewed',
+      token: requiredString(body, 'access_token'),
+      expiresAt: Date.now() + requiredPositiveNumber(body, 'expires_in') * 1000,
+      refreshToken: requiredString(body, 'refresh_token'),
+    };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
