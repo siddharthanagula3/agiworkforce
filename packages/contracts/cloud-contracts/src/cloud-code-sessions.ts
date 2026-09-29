@@ -14,6 +14,37 @@ export const CLOUD_CODE_SHARED_SESSIONS_PATH = '/api/code/shared';
 export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
 export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
+export const GITHUB_INSTALL_APP_START_PATH = '/api/github/install/app-start';
+export const GITHUB_INSTALL_COMPLETE_PATH = '/api/github/install/complete';
+export const GITHUB_INSTALL_APP_RETURN_URL = 'agiworkforce://github/installed';
+
+export const GitHubInstallAppStartResponseSchema = z.object({
+  url: z.string().url(),
+});
+export type GitHubInstallAppStartResponse = z.infer<typeof GitHubInstallAppStartResponseSchema>;
+
+export const GITHUB_INSTALL_COMPLETE_STATUSES = [
+  'connected',
+  'already_linked',
+  'ownership_failed',
+  'denied',
+  'invalid_state',
+  'failed',
+] as const;
+export type GitHubInstallCompleteStatus = (typeof GITHUB_INSTALL_COMPLETE_STATUSES)[number];
+
+export const GitHubInstallCompleteRequestSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+  code: z.string().min(1).max(512).optional(),
+  error: z.string().max(64).optional(),
+});
+export type GitHubInstallCompleteRequest = z.infer<typeof GitHubInstallCompleteRequestSchema>;
+
+export const GitHubInstallCompleteResponseSchema = z.object({
+  status: z.enum(GITHUB_INSTALL_COMPLETE_STATUSES),
+});
+export type GitHubInstallCompleteResponse = z.infer<typeof GitHubInstallCompleteResponseSchema>;
+
 export function cloudCodeSessionPath(sessionId: string): string {
   return `${CLOUD_CODE_SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
 }
