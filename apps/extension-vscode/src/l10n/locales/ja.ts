@@ -394,6 +394,8 @@ const ja = {
   'webview.resendMessage': '再送信',
   'webview.resendMessageLabel': 'このメッセージを再送信',
   'webview.branchFromMessage': '分岐',
+  'webview.branchFromAnswer': 'ここから分岐',
+  'webview.branchFromAnswerLabel': 'この回答までの会話を引き継いで新しいセッションを開始します',
   'webview.branchFromMessageLabel':
     'ここから新しいセッションを開始し、このメッセージを編集できる状態にします',
   'localServers.running_other': '{provider} は実行中 · モデル {count} 個',

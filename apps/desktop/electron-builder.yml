@@ -35,20 +35,25 @@ extraResources:
 
 beforePack: ./electron/bundleBinaries.mjs
 
+# The cloud-shell link scheme, declared once for every platform: the macOS
+# Info.plist (handled through `open-url`), the Linux desktop entry's
+# x-scheme-handler MimeType and the Windows package manifests (handled through
+# `second-instance` and the launch argv). A Windows NSIS install is registered
+# at runtime by app.setAsDefaultProtocolClient in main.ts.
+protocols:
+  - name: AGI Cloud link
+    role: Viewer
+    schemes:
+      - agiworkforce-cloud
+
 mac:
   category: public.app-category.productivity
-  # The main process handles Electron's macOS `open-url` event. Register the
-  # distinct cloud-shell callback scheme in the packaged Info.plist so OAuth
-  # and account deep links reach that handler after installation.
-  protocols:
-    - name: AGI Cloud authentication callback
-      role: Viewer
-      schemes:
-        - agiworkforce-cloud
   # Explicit arch marker on every artifact: the default x64 names omit it
   # ("AGI Cloud-1.0.0.dmg"), which breaks arch-aware selection in the
-  # website download route and human triage on the releases page.
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # website download route and human triage on the releases page. No space
+  # either: GitHub stores an uploaded "AGI Cloud-..." as "AGI.Cloud-...", so
+  # the asset would match neither SHA256SUMS nor the file a user downloads.
+  artifactName: AGI-Cloud-${version}-${arch}.${ext}
   target:
     - target: dmg
       arch: [arm64, x64]

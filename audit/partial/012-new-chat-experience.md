@@ -206,18 +206,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 
 Code: `apps/mobile/src/features/team/service.ts:62-62`
 
-## S12.20: Default-Project selection.
-
-- Done when: Before sending, the user can pick the project a new chat will be created in.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The active project is a workspaceState memento turned into a text prelude; nothing passes a project id to the thread or the CLI app server, so the chat is not created in the project (only `agiworkforce projects link` does that, per directory, outside VS Code). |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448-2465`, `apps/extension-vscode/src/core/commandSetup.ts:2265-2268`, `apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts:73-73`, `apps/extension-vscode/src/core/chatSetup.ts:60-60`
-
 ## S12.21: Mode explanation and examples.
 
 - Done when: The new-chat screen explains the available modes and gives examples of what each is for.

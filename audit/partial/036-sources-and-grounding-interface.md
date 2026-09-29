@@ -95,9 +95,6 @@ Code: `apps/mobile/src/features/research/service.ts:52-52`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Activity-step source links always carry the same Globe icon; plain chat answers carry no citations. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.08: Quoted supporting excerpt.
 

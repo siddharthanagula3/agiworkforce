@@ -690,6 +690,8 @@ const ar = {
   'webview.resendMessage': 'إعادة الإرسال',
   'webview.resendMessageLabel': 'إعادة إرسال هذه الرسالة',
   'webview.branchFromMessage': 'تفرّع',
+  'webview.branchFromAnswer': 'تفرّع من هنا',
+  'webview.branchFromAnswerLabel': 'بدء جلسة جديدة تحتفظ بالمحادثة حتى هذه الإجابة',
   'webview.branchFromMessageLabel': 'بدء جلسة جديدة من هنا مع هذه الرسالة جاهزة للتعديل',
   'localServers.running_zero': '{provider} قيد التشغيل · لا نماذج',
   'localServers.running_one': '{provider} قيد التشغيل · نموذج واحد',

@@ -85,9 +85,8 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile cannot apply any promotion: its invite-code modal is unmounted and stubbed, and store purchases (where store offers would apply) are gated off. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code (plan/trial grant) but shows no promotional credit or discount; bonus credits and promo codes are applied on web. | surface-only |
 
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/extension/src/side_panel.ts:8149-8168`, `apps/extension/src/lib/waitlistService.ts:116-125`
+Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
 ## S81.20: Purchased credit balances.
 

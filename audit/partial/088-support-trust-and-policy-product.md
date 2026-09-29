@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | /docs and /help now honour ?topic= (permissions opens the tool approvals guide; ids, section headings and tags resolve). No help article covers CLI configuration (config.toml) or local custom instructions yet, so those two VS Code links land on the index with a notice; the CLI lane would write and claim-index those two guides. | content |
-
-Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics.ts:25-25`, `apps/web/app/docs/page.tsx:128-128`, `apps/web/app/docs/page.tsx:151-151`
 
 ## S88.02: Searchable help center.
 

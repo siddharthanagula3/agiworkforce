@@ -3,37 +3,35 @@ id: custom-instructions
 title: Custom instructions for the CLI and VS Code
 path: /cli
 category: surfaces
-tags: custom instructions, agents.md, claude.md, instructions.md, project instructions, vscode instructions, personalize
+tags: custom instructions, instructions, agents.md, claude.md, instructions.md, rules, repository memory, remember for this repository, project instructions
 platforms: cli, vscode, macos, windows, linux
 updated: 2026-09-28
 scope: public
 ---
 
-## Instruction files
+## Files every session reads
 
-The CLI and the VS Code extension's local sessions read instructions from
-files. In each folder from the top of the drive down to the one you work in,
-they read `AGENTS.md`, `CLAUDE.md` and `.agiworkforce/instructions.md`. Your own
-`~/.agiworkforce/instructions.md` is read first, and a deeper folder's file
-comes after a shallower one, so the closest instructions are read last.
+Before a session starts, `agi` reads your own instructions from
+`~/.agiworkforce/instructions.md`, then walks from the folder you are in up to
+the top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and
+`.agiworkforce/instructions.md`. Your own file comes first and the folder you
+are in comes last, so the closest file has the final word. Together they may
+use about 10,000 tokens; files past that are left out and the session says so.
 
-Together the files can use about 10,000 tokens, and files past that are left
-out. The same file is never
-read twice. An edited, added or removed file reaches the next turn, and so does
-moving to another worktree.
+Rules in `.agiworkforce/rules/*.md` in the repository and in
+`~/.agiworkforce/rules/*.md` are added too, some only for matching files.
+
+## Repository memory
+
+Notes the agent should keep for a repository are saved in `CLAUDE.md` at the
+repository root. In VS Code, run **Remember for This Repository** to add one;
+it tells you which file it saved to. Notes for every repository go in
+`~/.agiworkforce/CLAUDE.md`. Each note can be up to 4,000 characters.
 
 ## Instructions set in VS Code
 
-Settings, Custom instructions in the extension holds instructions of up to
-8,000 characters, either for every workspace on this computer or for the open
-workspace only. A workspace's own instructions replace the computer-wide ones
-while it is open. They are kept in VS Code's workspace storage, not in a project
-file, and the instruction files above are read separately.
-
-## Your account's instructions
-
-`/personalize` in the CLI shows and changes your account's personalization,
-such as what to call you, your work and how answers are written; the same
-settings are in Settings, General on the web. In a Managed session, your
-account's memories and the instructions of the account project you linked are
-added to the turn as well.
+VS Code Settings also has instruction boxes for all workspaces and for the
+current one, up to 8,000 characters each. The workspace box replaces the
+general one when it has text, and whichever applies is sent with every
+message. The Settings panel lists the instruction files it found in the
+workspace folder.

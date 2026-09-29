@@ -551,6 +551,9 @@ const pt = {
   'webview.resendMessage': 'Reenviar',
   'webview.resendMessageLabel': 'Reenviar esta mensagem',
   'webview.branchFromMessage': 'Ramificar',
+  'webview.branchFromAnswer': 'Ramificar daqui',
+  'webview.branchFromAnswerLabel':
+    'Iniciar uma nova sessão que mantém a conversa até esta resposta',
   'webview.branchFromMessageLabel':
     'Iniciar uma nova sessão a partir daqui com esta mensagem pronta para editar',
   'localServers.running_one': '{provider} está em execução · {count} modelo',

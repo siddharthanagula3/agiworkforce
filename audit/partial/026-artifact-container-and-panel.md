@@ -16,9 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only files a managed agent run creates get a 'Created <name>' step with an Open or download link; documents and code that a reply produces get no card in the side-panel chat. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/extension/src/features/side-panel/bubbles.ts:391-391`
 
 ## S26.04: Artifact status.
 
@@ -31,9 +28,8 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/extensi
 | mobile | partial | Only generated-file cards show a status label (e.g. running, completed); code and document artifacts appear only after the reply finishes and never show writing, stopped or failed. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Agent-created files show a finished 'Created <name>' step, but nothing shows a document or code artifact being written, stopped or failed, and the drawer rows carry no state. | states |
 
-Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`, `apps/extension/src/features/side-panel/bubbles.ts:381-385`, `apps/extension/src/features/side-panel/bubbles.ts:391-391`
+Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`
 
 ## S26.08: Docked side panel.
 

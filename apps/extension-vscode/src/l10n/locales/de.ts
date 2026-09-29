@@ -488,6 +488,9 @@ const de = {
   'webview.resendMessage': 'Erneut senden',
   'webview.resendMessageLabel': 'Diese Nachricht erneut senden',
   'webview.branchFromMessage': 'Abzweigen',
+  'webview.branchFromAnswer': 'Hier abzweigen',
+  'webview.branchFromAnswerLabel':
+    'Neue Sitzung starten, die das Gespräch bis zu dieser Antwort übernimmt',
   'webview.branchFromMessageLabel':
     'Ab hier eine neue Sitzung starten, mit dieser Nachricht zum Bearbeiten',
   'localServers.running_one': '{provider} läuft · {count} Modell',

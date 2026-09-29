@@ -36,6 +36,7 @@ import { logger } from '@/lib/logger';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import {
+  CODE_RUN_STOPPED_MESSAGE,
   MAX_EXECUTION_OUTPUT_BYTES,
   type CommandExecutionResult,
   type E2BExecutor,
@@ -1055,18 +1056,30 @@ export const getE2BExecutor = tracedCodeAction(
     }
 
     const executor: E2BExecutor = {
-      async runCode({ language, code }): Promise<ExecutionResult> {
+      async runCode({ language, code, signal }): Promise<ExecutionResult> {
+        const interruptions: Array<() => void> = [];
         try {
           const lang = mapLanguage(language);
           // A notebook cell needs the variables a prior cell defined, so a code
           // session's own id persists a context exactly as a chat conversation's
           // id already did; only a scope-less bare-API call stays stateless.
           const context = conversationId || codeSessionId ? await getContext(lang) : undefined;
+          if (signal?.aborted) return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
+          if (signal && context) {
+            const interrupt = () => {
+              void sandbox.restartCodeContext(context.id).catch((err: unknown) => {
+                logger.warn({ err }, '[e2b] a stopped code run could not be interrupted');
+              });
+            };
+            signal.addEventListener('abort', interrupt, { once: true });
+            interruptions.push(() => signal.removeEventListener('abort', interrupt));
+          }
           const execution = context
             ? await sandbox.runCode(code, {
                 context: { id: context.id, language: context.language, cwd: context.cwd },
               })
             : await sandbox.runCode(code, { language: lang });
+          if (signal?.aborted) return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
           // Bounded here rather than at the caller: what a cell prints is chosen
           // by the executed code, and runCommand already truncates its own
           // streams the same way.
@@ -1099,7 +1112,10 @@ export const getE2BExecutor = tracedCodeAction(
             outputs: notebookOutputs(stdout, stderr, results),
           };
         } catch (err) {
+          if (signal?.aborted) return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
           return fail(err);
+        } finally {
+          for (const release of interruptions) release();
         }
       },
       async writeFile({ path, content, encoding }): Promise<ExecutionResult> {

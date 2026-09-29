@@ -171,17 +171,17 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788
 
 - Done when: A failed or finished execution can be re-run in place.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
-| desktop | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
+| web | partial | partials/chat-gates cc4f6e2462: a completed or failed code step (execute_code) offers Run again. It reruns the cell in the chat's own sandbox, so earlier variables still exist, and shows the new output, error and plots in place. Owner, deployment switch, canUseCloudExecution, the account setting and managed-compute access are all checked, and compute is billed as a turn's is. Left: switch-on AGI_E2B_EXECUTION. Until then no execute_code step exists, and provider-native code results (CodeExecutionBlock) keep no code to rerun. | switch |
+| desktop | partial | partials/chat-gates cc4f6e2462: a completed or failed code step (execute_code) offers Run again. It reruns the cell in the chat's own sandbox, so earlier variables still exist, and shows the new output, error and plots in place. Owner, deployment switch, canUseCloudExecution, the account setting and managed-compute access are all checked, and compute is billed as a turn's is. Left: switch-on AGI_E2B_EXECUTION. Until then no execute_code step exists, and provider-native code results (CodeExecutionBlock) keep no code to rerun. | switch |
 | mobile | partial | Matches web: Regenerate re-runs the whole answer; ChatGPT runs a code block in place, and a Run control needs a server sandbox execution route first. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Web and desktop are partial because Regenerate re-runs the whole answer; VS Code has the same class of control, a Retry button on a failed turn that resends lastSendPayload, and was scored missing. Same evidence, same status. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1180-1180`
+Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:547-547`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:113-113`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:74-74`, `packages/contracts/cloud-contracts/src/chat-code-runs.ts:6-6`
 
 ## S21.22: Stop execution.
 
@@ -191,12 +191,12 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
-| desktop | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
+| web | partial | partials/chat-gates ae8cda75e1, cc4f6e2462: Stop now interrupts a running sandbox cell. The turn's abort signal restarts the cell's code context, where before the cell ran on to its own timeout. A rerun has its own Stop, which ends that execution alone. Left: switch-on AGI_E2B_EXECUTION. A per-execution stop inside a streaming turn (as opposed to the whole reply) was not confirmed at either leader (help.openai.com 403), so Stop keeps ChatGPT's whole-reply behaviour. | switch |
+| desktop | partial | partials/chat-gates ae8cda75e1, cc4f6e2462: Stop now interrupts a running sandbox cell. The turn's abort signal restarts the cell's code context, where before the cell ran on to its own timeout. A rerun has its own Stop, which ends that execution alone. Left: switch-on AGI_E2B_EXECUTION. A per-execution stop inside a streaming turn (as opposed to the whole reply) was not confirmed at either leader (help.openai.com 403), so Stop keeps ChatGPT's whole-reply behaviour. | switch |
 | mobile | partial | Matches web: Stop generating halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed from official pages. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/SendButton.tsx:90-90`
+Code: `apps/web/lib/e2b/runtime.ts:1070-1070`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2429-2429`, `apps/web/features/chat/components/messages/CodeRunAgain.tsx:97-97`, `apps/mobile/src/features/chat/components/SendButton.tsx:90-90`
 
 ## S21.23: Reset runtime.
 

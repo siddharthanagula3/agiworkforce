@@ -426,9 +426,18 @@ describe('the lethal-trifecta escalation, and the three limits published for it'
       sensitiveSourceReachable({
         privateContextPresent: false,
         offeredTools: [],
-        availableToolNames: Object.keys(PLATFORM_TOOL_METADATA),
+        availableToolNames: Object.entries(PLATFORM_TOOL_METADATA)
+          .filter(([, metadata]) => metadata.readsPrivateData !== true)
+          .map(([name]) => name),
       }),
     ).toBe(false);
+    expect(
+      sensitiveSourceReachable({
+        privateContextPresent: false,
+        offeredTools: [],
+        availableToolNames: ['device_read_file'],
+      }),
+    ).toBe(true);
   });
 
   it('counts a sibling in the same batch but never the call being gated', () => {

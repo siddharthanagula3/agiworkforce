@@ -132,11 +132,10 @@ Code: `apps/web/app/api/github/webhook/route.ts:223-223`, `apps/web/lib/services
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The design source can be viewed and downloaded, a dedicated spec handoff was declined (D-2026-09-27-02), and cloud Code needs AGI_E2B_EXECUTION=1 and edits files only through approved shell commands. | ui, flag-off |
-| desktop | partial | Local sessions run the bundled CLI with full file tools, but the design must be downloaded and referenced by hand. | ui |
 | mobile | partial | The phone can steer an existing desktop Code session and download the design source as text; no design-to-code handoff. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/desktop/electron/runtime/developerSessionService.ts:169-169`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -204,23 +203,21 @@ Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/develope
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Continue in VS Code hands the cloud branch to VS Code, which pulls it into the checkout after a review and an overwrite check; it needs VS Code with the extension and AGI_E2B_EXECUTION=1 for cloud sessions to exist. | flag-off, handler |
-| desktop | partial | The same Continue in VS Code handoff opens from the desktop through its editor-handoff allowance (the ledger's 'missing' is stale); no native pull, and AGI_E2B_EXECUTION=1 is needed. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Bring the branch in pulls a cloud session's branch after review; needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/desktop/electron/windowPolicy.ts:47-47`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
+Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
 
 ## S110.24: Existing notebook → main assistant context.
 
 - Done when: From the main chat, the user brings an existing notebook (project) into the conversation so its instructions and sources ground the answers.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A selected project adds only its instructions locally; the stream request carries no conversation or project id, so the server never loads the project's sources. | handler |
 | cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
-| vscode | partial | 'Use in this chat' adds the project's instructions to each turn but not its files, the same shape as S37.37 vscode partial (the ledger's n/a for this flow contradicts it). |  |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
 
@@ -261,7 +258,6 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `
 | desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
-| chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
 

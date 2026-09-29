@@ -653,7 +653,8 @@ function deliverDeepLink(url: string): void {
   const signIn = readBrowserSignInLink(url);
   if (signIn.kind !== 'not-sign-in') {
     showMainWindow();
-    void mainWindow?.loadURL(signIn.url);
+    if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
+    if (signIn.kind === 'expired') sendRuntimeEvent({ kind: 'browser-sign-in-expired' });
     return;
   }
 
@@ -820,6 +821,7 @@ function adoptReportedAccount(account: string | null): void {
   signedInAccount = account;
   patchShellWindowState(adoptAccount(readShellWindowState(), account));
   if (!changed) return;
+  if (remoteControlActive()) stopRemoteControl();
 
   const plan = planSignOut(openWindows());
   for (const id of plan.close) {

@@ -76,7 +76,7 @@ export function DesktopSignInHandoff({ challenge }: { challenge: string | null }
         window.location.assign(accountSecurityVerifyPageHref(returnPathFor(challenge)));
         return { kind: 'preparing' };
       }
-      window.location.assign(desktopSignInLink(grant.code));
+      window.location.assign(desktopSignInLink(grant.code, challenge));
       return { kind: 'ready' };
     } catch (cause) {
       return { kind: 'failed', message: toUserMessage(cause, GRANT_FAILED) };
