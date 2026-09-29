@@ -1692,6 +1692,9 @@ enum PluginSubcommand {
         /// settings forbid the override. A signature that fails to verify is never accepted.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
+        /// Install this tag or branch of a git plugin. A tag stays pinned: `agi plugin update` leaves it in place.
+        #[arg(long = "ref", value_name = "TAG_OR_BRANCH")]
+        git_ref: Option<String>,
     },
     /// Show one installed plugin's publisher, signature, version, links and source.
     Info { name: String },
@@ -5502,6 +5505,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         integrity,
                         unsafe_no_integrity,
                         unsafe_allow_unsigned,
+                        git_ref,
                     } => {
                         // AUDIT-FIX: H-16, supply-chain integrity is required.
                         let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
@@ -5525,6 +5529,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             name.as_deref(),
                             pintegrity,
                             psignature,
+                            git_ref.as_deref(),
                         )
                         .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
                         match outcome {

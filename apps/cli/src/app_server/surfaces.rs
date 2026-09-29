@@ -861,6 +861,7 @@ pub fn install_plugin(
         params.name.as_deref(),
         integrity,
         signature,
+        None,
     )
     .map_err(invalid)?
     {
