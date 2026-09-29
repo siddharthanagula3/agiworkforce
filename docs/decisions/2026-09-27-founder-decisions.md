@@ -349,3 +349,12 @@ command; the desktop app does not pull a cloud result into a repository itself
 terminal). The desktop app therefore hands a cloud session to VS Code or the
 terminal and adds no native pull and review of its own (S110.23 desktop).
 Checked 2026-09-28.
+
+## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
+
+When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
+reconnect prompt and the person sends the request again once the app is
+connected; neither resumes the interrupted turn on its own. The web and
+desktop apps do the same: the chat card offers Reconnect and Retry, and
+Settings offers Connect on an expired connection, with no automatic resume
+(S110.27 web and desktop).

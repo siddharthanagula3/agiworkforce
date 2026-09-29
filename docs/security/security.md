@@ -106,6 +106,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `search_files`              | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `create_schedule`           | asks                   | asks                           | write, reversible                                                                |
 | `draft_plugin`              | asks                   | runs                           | read, reversible                                                                 |
+| `agi_work`                  | asks                   | asks                           | write, reversible                                                                |
 | `device_read_file`          | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `device_list_folder`        | asks                   | asks                           | read, reversible                                                                 |
 | `device_find_files`         | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |

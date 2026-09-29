@@ -38,8 +38,8 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     subheading:
       'A scheduled task completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
     channels: [
-      { id: 'emailScheduleDone', channel: 'Email', defaultValue: false },
-      { id: 'mobilePushScheduleDone', channel: 'Mobile push', defaultValue: false },
+      { id: 'emailScheduleDone', channel: 'Email', defaultValue: true },
+      { id: 'mobilePushScheduleDone', channel: 'Mobile push', defaultValue: true },
     ],
   },
   {

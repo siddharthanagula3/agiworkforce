@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { TERMINAL_LIFECYCLE_STATUSES } from '@agiworkforce/types';
 import {
   isDeviceStepTool,
   type DesktopRuntimeEvent,
@@ -49,11 +50,7 @@ const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Cloud on t
 const CANCELLED = 'The task was stopped.';
 const RUNNER_NOT_READY = 'AGI Cloud on the computer was not ready to run this task.';
 
-const TERMINAL: ReadonlySet<DispatchTaskReport['status']> = new Set([
-  'completed',
-  'failed',
-  'cancelled',
-]);
+const TERMINAL: ReadonlySet<string> = new Set(TERMINAL_LIFECYCLE_STATUSES);
 
 const runs = new Map<string, DispatchRun>();
 let latestRuntime: DesktopChatRuntime | null = null;

@@ -1,5 +1,6 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 export type AgiWorkPlanStepStatus =
-  'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+  Extract<LifecycleStatus, 'pending' | 'completed' | 'failed' | 'cancelled'> | 'in_progress';
 
 export interface AgiWorkPlanStep {
   id: string;
