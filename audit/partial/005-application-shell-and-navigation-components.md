@@ -68,7 +68,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 | --- | --- | --- | --- |
 | mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The auditor searched only icon identifiers. openWorkSurface composes cloud tasks and schedules into one quick pick (surfaces/index.ts:306-318) whose rows carry each item's ThemeIcon as a $(icon) label prefix plus a section separator per type (treeQuickPick.ts:83-108; cloudTasksTree.ts:34, schedulesTree.ts:37). Partial: only that pick mixes types, the row icons encode run state rather than type, the separator is the type marker, and no list mixes chats, projects or files. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`

@@ -1951,20 +1951,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            for line in ctx
-                .stream_buffer
-                .lines()
-                .rev()
-                .take(40)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-            {
-                lines.push(Line::from(Span::styled(
-                    format!("    {line}"),
-                    Style::default(),
-                )));
-            }
+            lines.extend(streaming_markdown_tail(&ctx.stream_buffer));
         }
     }
 
@@ -3922,10 +3909,6 @@ enum SlashResult {
     RunLogin,
     RunLogout,
     StatusReport(String),
-    SendFeedback {
-        kind: crate::feedback::FeedbackKind,
-        text: String,
-    },
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
     RunDictate(String),
@@ -3940,6 +3923,7 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunFeedback(crate::cloud::feedback::FeedbackKind, String),
 }
 
 const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
@@ -3952,6 +3936,28 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
   /attach list     Show what is staged · /attach remove [n|all]";
+
+const STREAM_SOURCE_TAIL_LINES: usize = 200;
+const STREAM_RENDERED_TAIL_LINES: usize = 40;
+
+fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
+    let source: Vec<&str> = buffer.lines().collect();
+    let start = source.len().saturating_sub(STREAM_SOURCE_TAIL_LINES);
+    let open_fence = source[..start]
+        .iter()
+        .filter(|line| line.trim_start().starts_with("```"))
+        .count()
+        % 2
+        == 1;
+    let mut tail = String::new();
+    if open_fence {
+        tail.push_str("```\n");
+    }
+    tail.push_str(&source[start..].join("\n"));
+    let rendered = super::markdown_renderer::render_markdown(&tail);
+    let skip = rendered.len().saturating_sub(STREAM_RENDERED_TAIL_LINES);
+    rendered.into_iter().skip(skip).collect()
+}
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
     let normalized = input_command.to_lowercase();
@@ -4336,11 +4342,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/login" => SlashResult::RunLogin,
 
         "/logout" => SlashResult::RunLogout,
-
-        "/feedback" | "/bug" => match crate::feedback::parse_feedback_command(cmd.as_str(), arg) {
-            Ok((kind, text)) => SlashResult::SendFeedback { kind, text },
-            Err(usage) => SlashResult::SystemMessage(usage),
-        },
 
         "/help" | "/h" | "/?" => {
             SlashResult::SystemMessage(crate::command_registry::format_command_help(
@@ -5028,8 +5029,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         }
                     ))
                 }
-                crate::claude_parity::ParityCommandResult::SendFeedback { kind, text } => {
-                    SlashResult::SendFeedback { kind, text }
+                crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
+                    SlashResult::RunFeedback(kind, message)
                 }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
@@ -5872,11 +5873,11 @@ async fn run_event_loop(
                                     text: format!("{report}\n{connectivity}"),
                                 });
                             }
-                            SlashResult::SendFeedback { kind, text } => {
-                                let reply = crate::feedback::send_feedback(kind, &text).await;
+                            SlashResult::RunFeedback(kind, message) => {
+                                let text = crate::cloud::send_feedback(kind, &message).await;
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: reply,
+                                    text,
                                 });
                             }
                             SlashResult::RunLogout => {

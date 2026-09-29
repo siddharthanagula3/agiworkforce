@@ -63,10 +63,9 @@ Code: `apps/cli/src/tui/tui_app.rs:1588-1600`, `apps/cli/src/tui/tui_app.rs:1528
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | A file being written shows only as a running write tool row; there is no artifact-building state. | ui |
-| vscode | partial | File writes show as running tool rows and then diff proposals; no artifact-building state in the transcript. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5643-5646`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5377-5383`
+Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`
 
 ## S19.13: Generating media.
 
@@ -132,13 +131,12 @@ Code: `apps/mobile/services/streaming.ts:114-114`, `apps/mobile/services/streami
 
 - Done when: Work that was already running is picked up again (after reconnect/reopen) and shown as resuming rather than restarting.
 - Wave: 3
-- Already works on: web, desktop, chrome, api
+- Already works on: web, desktop, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only Deep Research runs can be resumed from their card; other interrupted cloud turns are not re-attached. | ui |
 | cli | partial | /resume reopens a saved session so the conversation continues, but an interrupted turn is not re-run or re-attached. | states |
-| vscode | partial | Opening a session reloads its transcript (conversationLoaded); a turn that was running is not re-attached. | states |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
 

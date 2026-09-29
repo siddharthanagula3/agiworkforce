@@ -73,12 +73,17 @@ async function handlePull(request: NextRequest, url: URL) {
 
     const saturated = memories.length >= MAX_MEMORIES_PULL;
     const cursor = computeMemoryPullCursor(since, memories);
-    const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+    const memoryEnabled = await loadMemoryWritePolicies(db, { userId, organizationId })
+      .then((policies) => policies.organization.allowMemory && policies.user.enabled)
+      .catch((error: unknown) => {
+        logger.warn({ error, userId }, 'Memory sync pull could not read the memory switch');
+        return false;
+      });
     return NextResponse.json({
       memories,
       cursor,
       hasMore: saturated,
-      memoryEnabled: policies.organization.allowMemory && policies.user.enabled,
+      memoryEnabled,
     });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync pull failed');
