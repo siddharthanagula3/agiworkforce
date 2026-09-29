@@ -76,7 +76,9 @@ describe('shared i18n bundles', () => {
         } catch {
           continue;
         }
-        const orphans = target.filter((k) => !en.includes(k));
+        const orphans = target.filter(
+          (k) => !en.includes(k) && !en.includes(k.replace(/_(zero|one|two|few|many)$/, '_other')),
+        );
         expect(orphans, `${locale}/${ns} defines keys English does not`).toEqual([]);
       }
     }

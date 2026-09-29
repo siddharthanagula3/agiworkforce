@@ -1394,6 +1394,7 @@
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/ide-runtime": "workspace:*",
     "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
