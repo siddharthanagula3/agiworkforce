@@ -98,7 +98,6 @@ const NO_MODEL_SWITCH_CODES = new Set([
   FREE_CAPACITY_UNAVAILABLE_CODE,
   // The Free plan has one model, so another model is not a way out of its spent pool.
   'free_allowance_exhausted',
-  // Every model draws on the same exhausted budget.
   'monthly_limit_exceeded',
   'insufficient_credits',
   'insufficient_quota',
