@@ -136,56 +136,37 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431
 
 - Done when: The user sees which of their machines are available to run sessions.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone pairs with one desktop by scanning its code; there is no list of machines to choose from. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/companion/index.tsx:246-251`
 
 ## S68.20: Remote-machine card.
 
 - Done when: Each remote machine appears as a card with its name, platform and status.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the paired desktop gets a card (name, OS, arch, capabilities); no other machine is shown. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
-
-## S68.21: Host capabilities.
-
-- Done when: Each machine advertises what it can host (local models, browser, MCP, computer use, code sessions).
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only the code-sessions capability is used, to gate the AGI Code card. | surface-only |
-
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
 
 ## S68.22: Device pairing.
 
 - Done when: The user pairs a phone or another client with a machine so it can reach that machine's sessions.
 - Wave: 3
-- Already works on: vscode
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
 | desktop | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
-| mobile | partial | Pairing is phone-to-desktop only by scanning the desktop's code. | surface-only |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/pair/claim/route.ts:70-70`, `apps/mobile/app/(app)/companion/index.tsx:248-248`, `apps/mobile/stores/connectionStore.ts:236-239`
+Code: `apps/web/app/api/pair/claim/route.ts:70-70`
 
 ## S68.23: Pairing revocation.
 

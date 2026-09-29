@@ -11,6 +11,7 @@ import {
   parseTestSummary,
   type RemoteCodeDiff,
   type RemoteCodeFileChange,
+  type RemoteCodeIndexedMessage,
   type RemoteCodeLiveEvent,
   type RemoteCodePendingApproval,
   type RemoteCodeRequest,
@@ -18,6 +19,7 @@ import {
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
   type RemoteCodeTestRun,
+  type RemoteCodeToolRecord,
   type DispatchTaskControlRequest,
   type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
@@ -83,6 +85,7 @@ interface ThreadState {
   tools: Map<string, ToolInFlight>;
   toolDiffs: Map<string, RemoteCodeDiff>;
   testRuns: RemoteCodeTestRun[];
+  toolHistory: RemoteCodeToolRecord[];
   queuedGuidance: string[];
 }
 
@@ -140,6 +143,12 @@ export function parseDispatchTask(
   return null;
 }
 
+function settleTools(tools: RemoteCodeToolRecord[]): RemoteCodeToolRecord[] {
+  return tools.map((tool) =>
+    tool.state === 'running' ? { ...tool, state: 'failed' as const } : tool,
+  );
+}
+
 function clipDiff(path: string, patch: string): RemoteCodeDiff {
   const truncated = patch.length > REMOTE_CODE_LIMITS.diffLength;
   return { path, patch: patch.slice(0, REMOTE_CODE_LIMITS.diffLength), truncated };
@@ -176,6 +185,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         tools: new Map(),
         toolDiffs: new Map(),
         testRuns: [],
+        toolHistory: [],
         queuedGuidance: [],
       };
       threads.set(key, state);
@@ -197,6 +207,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
 
   async function publishSessions(): Promise<void> {
     const list = await deps.listSessions();
+    const roots = list.groups.slice(0, REMOTE_CODE_LIMITS.roots).map((group) => ({
+      rootId: group.rootId,
+      name: group.name,
+      branch: group.branch,
+      available: group.unavailable === undefined,
+    }));
     const sessions: RemoteCodeSessionSummary[] = list.groups
       .flatMap((group) =>
         group.sessions.map((session) => ({
@@ -220,6 +236,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       unavailable: list.groups.flatMap((group) =>
         group.unavailable ? [{ folder: group.name, message: group.unavailable.message }] : [],
       ),
+      roots,
       syncedAt: iso(),
     });
   }
@@ -287,6 +304,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       pendingApprovals: [...state.pendingApprovals.values()],
       fileChanges,
       queuedGuidance: state.queuedGuidance,
+      tools: state.toolHistory,
       syncedAt: iso(),
     };
     await deps.send(snapshot.action, { ...fitRemoteSnapshot(snapshot) });
@@ -296,6 +314,96 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     for (const testRun of state.testRuns) {
       await sendEvent(state, { type: 'test-run', testRun });
     }
+  }
+
+  async function startSession(
+    request: Extract<RemoteCodeRequest, { action: 'code.session.start' }>,
+  ): Promise<void> {
+    const reply = (detail: { threadId: string } | { error: string }) =>
+      deps.send('code.session.started', {
+        action: 'code.session.started',
+        version: REMOTE_CODE_PROTOCOL_VERSION,
+        requestId: request.requestId,
+        rootId: request.rootId,
+        threadId: 'threadId' in detail ? detail.threadId : null,
+        error: 'error' in detail ? detail.error : null,
+        sentAt: iso(),
+      });
+    const list = await deps.listSessions();
+    const root = list.groups.find((group) => group.rootId === request.rootId);
+    if (!root || root.unavailable) {
+      await reply({
+        error:
+          root?.unavailable?.message ??
+          'That folder is not approved for AGI Code on this computer.',
+      });
+      return;
+    }
+    let threadId: string;
+    try {
+      const title =
+        request.title ?? clipRemoteText(request.text, REMOTE_CODE_LIMITS.titleLength).text;
+      threadId = (await deps.startSession(root.rootId, title)).threadId;
+      const { turnId } = await deps.startTurn({
+        rootId: root.rootId,
+        threadId,
+        text: request.text,
+      });
+      stateFor(root.rootId, threadId).activeTurnId ??= turnId;
+    } catch (error) {
+      await reply({
+        error: clipRemoteText(
+          error instanceof Error ? error.message : String(error),
+          REMOTE_CODE_LIMITS.messageLength,
+        ).text,
+      });
+      return;
+    }
+    await reply({ threadId });
+    await publishSessions();
+  }
+
+  async function publishTranscript(
+    request: Extract<RemoteCodeRequest, { action: 'code.session.history' }>,
+  ): Promise<void> {
+    const activity = await deps.readActivity(request.rootId, request.threadId);
+    const eligible = activity.transcript.messages.flatMap((message, position) => {
+      const index = message.index ?? position;
+      if (message.role !== 'user' && message.role !== 'assistant') return [];
+      if (request.before !== null && index >= request.before) return [];
+      return [
+        {
+          role: message.role,
+          text: clipRemoteText(message.text, REMOTE_CODE_LIMITS.historyMessageLength).text,
+          index,
+        } satisfies RemoteCodeIndexedMessage,
+      ];
+    });
+    const page: RemoteCodeIndexedMessage[] = [];
+    let bytes = 0;
+    for (let position = eligible.length - 1; position >= 0; position -= 1) {
+      const message = eligible[position];
+      if (!message) continue;
+      const size = JSON.stringify(message).length + 1;
+      if (
+        page.length >= REMOTE_CODE_LIMITS.historyMessages ||
+        (page.length > 0 && bytes + size > REMOTE_CODE_LIMITS.payloadBytes - 1_000)
+      ) {
+        break;
+      }
+      bytes += size;
+      page.unshift(message);
+    }
+    await deps.send('code.session.transcript', {
+      action: 'code.session.transcript',
+      version: REMOTE_CODE_PROTOCOL_VERSION,
+      rootId: request.rootId,
+      threadId: request.threadId,
+      before: request.before,
+      messages: page,
+      hasEarlier: page.length < eligible.length || activity.transcript.truncated,
+      syncedAt: iso(),
+    });
   }
 
   async function deliverGuidance(state: ThreadState): Promise<void> {
@@ -451,6 +559,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       case 'code.turn.interrupt':
         await deps.interruptTurn(request.rootId, request.threadId, request.turnId);
         return;
+      case 'code.session.start':
+        await startSession(request);
+        return;
+      case 'code.session.history':
+        await publishTranscript(request);
+        return;
       case 'code.approval.respond': {
         const state = stateFor(request.rootId, request.threadId);
         if (!state.pendingApprovals.has(request.approvalRequestId)) return;
@@ -488,6 +602,19 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   ): RemoteCodeLiveEvent[] {
     const started = state.tools.get(event.toolCallId);
     state.tools.delete(event.toolCallId);
+    const output = clipRemoteText(event.output, REMOTE_CODE_LIMITS.toolOutputLength).text;
+    const record: RemoteCodeToolRecord = {
+      toolCallId: event.toolCallId,
+      name: event.name,
+      summary: clipRemoteText(started?.summary ?? event.name, REMOTE_CODE_LIMITS.messageLength)
+        .text,
+      state: event.isError ? 'failed' : 'done',
+      output,
+    };
+    state.toolHistory = [
+      ...state.toolHistory.filter((tool) => tool.toolCallId !== event.toolCallId),
+      record,
+    ].slice(-REMOTE_CODE_LIMITS.tools);
     const events: RemoteCodeLiveEvent[] = [];
     const patch = extractUnifiedDiff(event.output);
     if (patch) {
@@ -520,6 +647,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         if (state.rootId !== rootId) continue;
         state.activeTurnId = null;
         state.pendingApprovals.clear();
+        state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, { type: 'runtime-stopped', message: event.message });
       }
       for (const task of [...dispatches.values()]) {
@@ -553,6 +681,16 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       case 'tool-started':
         state.tools.set(event.toolCallId, { name: event.name, summary: event.summary });
+        state.toolHistory = [
+          ...state.toolHistory.filter((tool) => tool.toolCallId !== event.toolCallId),
+          {
+            toolCallId: event.toolCallId,
+            name: event.name,
+            summary: clipRemoteText(event.summary, REMOTE_CODE_LIMITS.messageLength).text,
+            state: 'running' as const,
+            output: '',
+          },
+        ].slice(-REMOTE_CODE_LIMITS.tools);
         await sendEvent(state, {
           type: 'tool-started',
           turnId: event.turnId,
@@ -569,6 +707,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           toolCallId: event.toolCallId,
           name: event.name,
           isError: event.isError,
+          output: clipRemoteText(event.output, REMOTE_CODE_LIMITS.toolOutputLength).text,
         });
         for (const live of derived) await sendEvent(state, live);
         return;
@@ -618,6 +757,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         state.partialResponse = '';
         state.pendingApprovals.clear();
         state.tools.clear();
+        state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, {
           type: 'turn-finished',
           turnId: event.turnId,

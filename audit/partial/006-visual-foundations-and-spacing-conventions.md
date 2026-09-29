@@ -53,27 +53,3 @@ Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/setting
 | mobile | partial | dialogPadding is defined and used by 6 files, but 46 files render a Modal and most do not use it. | ui |
 
 Code: `apps/mobile/src/ui/theme/tokens.ts:283-283`, `apps/mobile/src/features/chat/components/MessageEditModal.tsx:149-149`
-
-## S6.29: Layering and z-index rules.
-
-- Done when: Stacking order uses one named z-index ladder; components never invent numeric layers.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | zIndex ladder is used by 7 sites, but two literals remain: CloudSyncErrorBanner zIndex 9998 and library/index.tsx zIndex 20. | ui |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`, `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`
-
-## S6.30: Motion durations and easing.
-
-- Done when: Animations and transitions use named durations and easing curves.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Motion tokens exist, but about 49 literal duration values remain (ImageFullScreen, VoiceOrb, PairingStatus, OfflineBanner and others). | ui |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:295-295`
