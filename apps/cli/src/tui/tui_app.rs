@@ -4824,7 +4824,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             use crate::tui::widgets::screen_renderers::{
-                PluginGroup, PluginSummary, PluginTab, render_plugin,
+                PluginGroup, PluginSummary, PluginTab, PluginTabsView,
             };
             // Discover installed plugins from global and project plugin directories.
             let mut manager = crate::features::plugins::plugins::PluginsManager::new();
@@ -4848,7 +4848,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .iter()
                 .filter_map(|p| p.error.clone())
                 .collect();
-            SlashResult::SystemMessage(render_plugin(PluginTab::Installed, &installed, &errors))
+            let tab = PluginTab::parse(arg).unwrap_or(if cmd.starts_with("/market") {
+                PluginTab::Marketplaces
+            } else {
+                PluginTab::Installed
+            });
+            app.open_overlay(Box::new(PluginTabsView::new(tab, installed, errors)));
+            SlashResult::SystemMessage(
+                "Plugins (\u{2190}\u{2192} switch tabs \u{00b7} Esc close)".to_string(),
+            )
         }
 
         // ── Memory ──
