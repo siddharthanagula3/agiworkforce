@@ -46,6 +46,9 @@ export function appleAppSiteAssociationResponse(): Response {
           },
         ],
       },
+      webcredentials: {
+        apps: [IOS_APPLICATION_IDENTIFIER],
+      },
     },
     { headers: ASSOCIATION_HEADERS },
   );

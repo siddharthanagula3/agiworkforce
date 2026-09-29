@@ -1,7 +1,7 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import {
-  GITHUB_INSTALL_APP_RETURN_URL,
+  GITHUB_INSTALL_APP_LINK_RETURN_URL,
   GITHUB_INSTALL_APP_START_PATH,
   GITHUB_INSTALL_COMPLETE_PATH,
   GITHUB_INSTALL_PENDING_PATH,
@@ -14,6 +14,7 @@ import {
   type GitHubInstallPendingResponse,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
+import { API_URL } from '@/lib/constants';
 
 export type GitHubInstallReturn = GitHubInstallCompleteRequest;
 
@@ -23,7 +24,17 @@ export type GitHubInstallStart =
   | { kind: 'dismissed' }
   | { kind: 'failed' };
 
-const GITHUB_HOSTS = new Set(['github.com']);
+const HTTPS_AUTH_CALLBACK_IOS = [17, 4] as const;
+
+export function iosSupportsHttpsAuthCallback(version: string | number): boolean {
+  const [major = 0, minor = 0] = String(version).split('.').map(Number);
+  const [needMajor, needMinor] = HTTPS_AUTH_CALLBACK_IOS;
+  return major > needMajor || (major === needMajor && minor >= needMinor);
+}
+
+function isOwnHost(url: URL): boolean {
+  return url.protocol === 'https:' && url.host === new URL(API_URL).host;
+}
 
 export function readGitHubInstallReturn(
   params: Readonly<Record<string, string | string[] | undefined>>,
@@ -41,33 +52,35 @@ export function readGitHubInstallReturn(
 }
 
 export async function startGitHubInstallInApp(): Promise<GitHubInstallStart> {
-  const android = Platform.OS === 'android';
   const started = GitHubInstallAppStartResponseSchema.parse(
-    await api.post<unknown>(GITHUB_INSTALL_APP_START_PATH, {
-      platform: android ? 'android' : 'ios',
-    }),
+    await api.post<unknown>(GITHUB_INSTALL_APP_START_PATH),
   );
-  const installUrl = new URL(started.url);
-  if (installUrl.protocol !== 'https:' || !GITHUB_HOSTS.has(installUrl.hostname)) {
-    return { kind: 'failed' };
+  const connectUrl = new URL(started.url);
+  if (!isOwnHost(connectUrl)) return { kind: 'failed' };
+
+  if (Platform.OS === 'ios' && iosSupportsHttpsAuthCallback(Platform.Version)) {
+    const session = await WebBrowser.openAuthSessionAsync(
+      connectUrl.toString(),
+      GITHUB_INSTALL_APP_LINK_RETURN_URL,
+      { preferUniversalLinks: true },
+    );
+    if (session.type !== 'success') return { kind: 'dismissed' };
+    let returned: URL;
+    try {
+      returned = new URL(session.url);
+    } catch {
+      return { kind: 'failed' };
+    }
+    const result = readGitHubInstallReturn(Object.fromEntries(returned.searchParams.entries()));
+    return result ? { kind: 'returned', result } : { kind: 'failed' };
   }
-  if (android) {
-    await WebBrowser.openBrowserAsync(installUrl.toString());
-    return { kind: 'opened' };
+
+  if (Platform.OS === 'ios') {
+    await Linking.openURL(connectUrl.toString());
+  } else {
+    await WebBrowser.openBrowserAsync(connectUrl.toString());
   }
-  const session = await WebBrowser.openAuthSessionAsync(
-    installUrl.toString(),
-    GITHUB_INSTALL_APP_RETURN_URL,
-  );
-  if (session.type !== 'success') return { kind: 'dismissed' };
-  let returned: URL;
-  try {
-    returned = new URL(session.url);
-  } catch {
-    return { kind: 'failed' };
-  }
-  const result = readGitHubInstallReturn(Object.fromEntries(returned.searchParams.entries()));
-  return result ? { kind: 'returned', result } : { kind: 'failed' };
+  return { kind: 'opened' };
 }
 
 export async function fetchPendingGitHubInstall(

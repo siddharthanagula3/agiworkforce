@@ -41,7 +41,9 @@ const iosEntitlements = shouldUseProductionEntitlements
     }
   : {};
 
-const associatedDomains = shouldUseProductionEntitlements ? ['applinks:agiworkforce.com'] : [];
+const associatedDomains = shouldUseProductionEntitlements
+  ? ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com']
+  : [];
 
 const conditionalPlugins = [
   ...(shouldUseProductionEntitlements

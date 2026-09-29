@@ -35,6 +35,7 @@ describe('mobile app domain association', () => {
           },
         ],
       },
+      webcredentials: { apps: ['D2PR62RLT4.com.agiworkforce.app'] },
     });
   });
 

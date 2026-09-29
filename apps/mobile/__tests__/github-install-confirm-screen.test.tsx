@@ -94,4 +94,16 @@ describe('GitHub install confirm screen', () => {
     expect(mockPending).not.toHaveBeenCalled();
     expect(mockComplete).not.toHaveBeenCalled();
   });
+
+  it('closes the pending install when cancelled while it is still loading', async () => {
+    mockPending.mockReturnValue(new Promise(() => undefined));
+    mockComplete.mockResolvedValue('denied');
+    const screen = render(<GitHubInstallReturnRoute />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Cancel'));
+    });
+
+    expect(mockComplete).toHaveBeenCalledWith({ state: STATE, error: 'denied' });
+  });
 });
