@@ -1697,6 +1697,20 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
     })
 }
 
+fn powershell_command_safety(
+    command: &str,
+    permission_command: &str,
+) -> crate::safety::CommandSafety {
+    use crate::safety::{classify_command, CommandSafety};
+    if classify_command(command) == CommandSafety::Dangerous
+        || classify_command(permission_command) == CommandSafety::Dangerous
+    {
+        CommandSafety::Dangerous
+    } else {
+        CommandSafety::Unknown
+    }
+}
+
 async fn execute_powershell(
     args: &HashMap<String, String>,
     require_confirmation: bool,
@@ -1745,7 +1759,11 @@ async fn execute_powershell(
 
     if require_confirmation {
         let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
-        match perms.check_command(&permission_command) {
+        match bash::saved_command_decision(
+            &perms,
+            &permission_command,
+            powershell_command_safety(&command, &permission_command),
+        ) {
             Some(true) => {}
             Some(false) => {
                 return Ok(ToolResult {
@@ -3624,5 +3642,34 @@ mod private_ip_classifier_tests {
         assert!(reg.get("write_file").is_none());
         assert!(reg.get("run_command").is_none());
         assert!(reg.get("edit_file").is_none());
+    }
+}
+
+#[cfg(test)]
+mod powershell_permission_tests {
+    #[test]
+    fn a_saved_powershell_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("powershell -NoProfile -NonInteractive -Command");
+        let wrap =
+            |command: &str| format!("powershell -NoProfile -NonInteractive -Command {command}");
+        let dangerous = "rm -rf build";
+        assert_eq!(
+            super::bash::saved_command_decision(
+                &perms,
+                &wrap(dangerous),
+                super::powershell_command_safety(dangerous, &wrap(dangerous)),
+            ),
+            None
+        );
+        let routine = "Get-ChildItem";
+        assert_eq!(
+            super::bash::saved_command_decision(
+                &perms,
+                &wrap(routine),
+                super::powershell_command_safety(routine, &wrap(routine)),
+            ),
+            Some(true)
+        );
     }
 }

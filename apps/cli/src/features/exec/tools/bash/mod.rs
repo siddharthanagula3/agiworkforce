@@ -671,7 +671,7 @@ fn policy_waives_confirmation(
     evaluation.every_segment_matched_rule && classify_command(command) != CommandSafety::Dangerous
 }
 
-fn saved_command_decision(
+pub(super) fn saved_command_decision(
     perms: &crate::permissions::PermissionStore,
     command: &str,
     safety: CommandSafety,
