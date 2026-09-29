@@ -626,6 +626,9 @@ importers:
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/ai/routing
+      '@agiworkforce/sync':
+        specifier: workspace:*
+        version: link:../../packages/client/sync
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/contracts/types

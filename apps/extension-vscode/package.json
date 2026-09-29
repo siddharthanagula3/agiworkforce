@@ -1399,6 +1399,7 @@
     "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.15",
