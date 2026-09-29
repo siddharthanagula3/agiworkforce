@@ -604,6 +604,10 @@ pub async fn login_to_remote_server_for_client(
     Ok(credential_state(config))
 }
 
+pub fn is_remote_server(config: &McpServerConfig) -> bool {
+    !matches!(config.as_transport(), McpTransport::Stdio { .. })
+}
+
 /// Authorize a registered remote MCP server and leave its token in the store
 /// every later connection reads.
 pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {

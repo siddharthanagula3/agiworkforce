@@ -1700,6 +1700,8 @@ enum PluginSubcommand {
     },
     /// Show one installed plugin's publisher, signature, version, links and source.
     Info { name: String },
+    /// Sign in to the remote connections an installed plugin bundles.
+    Login { name: String },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -5615,6 +5617,69 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Login { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let shown = terminal_text::sanitize_terminal_text(name);
+                        if !plugin.enabled {
+                            anyhow::bail!(
+                                "Plugin '{shown}' is turned off. Turn it on with `agi plugin enable {shown}` first."
+                            );
+                        }
+                        let bundled: Vec<String> = plugin.mcp_servers.keys().cloned().collect();
+                        let configs = mgr.mcp_configs();
+                        let mut remote: Vec<(String, crate::mcp::McpServerConfig)> = bundled
+                            .into_iter()
+                            .filter_map(|server| {
+                                let config = configs.get(&server)?.clone();
+                                crate::mcp::is_remote_server(&config).then_some((server, config))
+                            })
+                            .collect();
+                        remote.sort_by(|a, b| a.0.cmp(&b.0));
+                        if remote.is_empty() {
+                            println!(
+                                "Plugin '{shown}' bundles no remote connections, so there is nothing to sign in to."
+                            );
+                            return Ok(());
+                        }
+                        let mut failed = 0usize;
+                        for (server, config) in &remote {
+                            let server_shown = terminal_text::sanitize_terminal_text(server);
+                            match crate::mcp::login_to_remote_server(server, config).await {
+                                Ok(()) => println!("Signed in to '{server_shown}'."),
+                                Err(error) => {
+                                    failed += 1;
+                                    eprintln!(
+                                        "Could not sign in to '{server_shown}': {}",
+                                        terminal_text::sanitize_terminal_text(&format!(
+                                            "{error:#}"
+                                        ))
+                                    );
+                                }
+                            }
+                        }
+                        if failed > 0 {
+                            anyhow::bail!(
+                                "{failed} of {} connections in plugin '{shown}' are not signed in. Run `agi plugin login {shown}` again to retry.",
+                                remote.len()
+                            );
+                        }
+                        println!(
+                            "Every connection in plugin '{shown}' is signed in. The tokens are stored in the OS credential store."
+                        );
+                        Ok(())
                     }
                     PluginSubcommand::Enable { name } => {
                         println!("{}", installs::set_plugin_enabled(name, true)?);
