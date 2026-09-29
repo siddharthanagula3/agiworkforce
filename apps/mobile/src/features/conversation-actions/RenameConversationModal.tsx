@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -24,7 +25,7 @@ import type {
  * three `Alert` buttons, which dropped Delete and Cancel from a Cloud chat's
  * five-action menu.
  */
-function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
+export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
   const pendingRef = useRef<(() => void) | null>(null);
@@ -94,22 +95,29 @@ function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
                   onPress={() => select(action)}
                   accessibilityRole="button"
                   accessibilityLabel={action.label}
+                  accessibilityState={action.selected ? { selected: true } : undefined}
                   style={{
                     minHeight: 52,
-                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
                     paddingHorizontal: 20,
                     borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
                     borderBottomColor: colors.border,
                   }}
                 >
                   <Text
+                    numberOfLines={1}
                     style={{
+                      flexShrink: 1,
                       fontSize: 16,
                       color: action.destructive ? colors.agentError : colors.textPrimary,
                     }}
                   >
                     {action.label}
                   </Text>
+                  {action.selected ? <Check size={18} color={colors.textPrimary} /> : null}
                 </Pressable>
               ))}
             </ScrollView>
@@ -149,7 +157,7 @@ export function RenameConversationModal({
 
   return (
     <>
-      <ConversationMenuSheet menu={rename.menu} />
+      <ActionMenuSheet menu={rename.menu} />
       <Modal
         visible={rename.visible && !inline}
         transparent
