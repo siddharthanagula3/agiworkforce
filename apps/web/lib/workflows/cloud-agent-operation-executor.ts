@@ -238,6 +238,7 @@ export async function executeCloudAgentOperation<TResult extends object>(
     resultSchema: ZodType<TResult>;
     execute: () => Promise<TResult>;
     usage?: (result: TResult) => Record<string, unknown>;
+    failureUsage?: (error: unknown) => Record<string, unknown> | null;
     /** Reads the external system to settle an outcome that was never observed. */
     reconcile?: () => Promise<CloudAgentOperationProbe<TResult>>;
   },
@@ -312,11 +313,13 @@ export async function executeCloudAgentOperation<TResult extends object>(
     );
   } catch (rawError) {
     const error = sanitizeExecutionError(rawError, input.operationKind);
+    const spent = input.failureUsage?.(rawError) ?? null;
     await failCloudAgentExecutionOperation(db, {
       userId: input.userId,
       operationId: claim.operationId,
       leaseToken: claim.leaseToken,
       error: executionError(error),
+      ...(spent ? { usage: { billingIdempotencyKey: input.billingIdempotencyKey, ...spent } } : {}),
     });
     throw error;
   }

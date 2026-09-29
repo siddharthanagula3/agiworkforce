@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -173,7 +173,15 @@ function CenteredState({ children }: { children: ReactNode }) {
   );
 }
 
-function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+function SessionView({
+  sessionId,
+  initialGoal,
+  onBack,
+}: {
+  sessionId: string;
+  initialGoal?: string;
+  onBack: () => void;
+}) {
   const colors = useThemeColors();
   const keyboard = useKeyboardSafeComposer('screen');
   const tier = useTierStore((state) => state.tier);
@@ -187,6 +195,19 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
+  const initialGoalSent = useRef(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const goal = initialGoal?.trim();
+    if (!goal || initialGoalSent.current) return;
+    if (view.status !== 'ready' || view.session?.state !== 'ready') return;
+    initialGoalSent.current = true;
+    router.setParams({ goal: undefined });
+    void send(goal).then((sent) => {
+      if (!sent) setDraft((current) => (current.trim() ? current : goal));
+    });
+  }, [initialGoal, router, send, view.session?.state, view.status]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -385,7 +406,13 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
   );
 }
 
-export function CloudCodeSessionScreen({ sessionId }: { sessionId: string }) {
+export function CloudCodeSessionScreen({
+  sessionId,
+  initialGoal,
+}: {
+  sessionId: string;
+  initialGoal?: string;
+}) {
   const router = useRouter();
   const access = useCloudCodeAccess();
 
@@ -404,6 +431,7 @@ export function CloudCodeSessionScreen({ sessionId }: { sessionId: string }) {
     <SessionView
       key={`${access.accountKey}:${sessionId}`}
       sessionId={sessionId}
+      initialGoal={initialGoal}
       onBack={handleBack}
     />
   );

@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/connectors/connector-capability', () => ({
-  connectorsAllowedWithoutRequest: (...args: unknown[]) => mocks.connectorsAllowed(...args),
+  connectorsAllowedForTurn: (...args: unknown[]) => mocks.connectorsAllowed(...args),
+  connectorsAllowedWithoutRequest: vi.fn(),
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -17,6 +19,10 @@ vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
   makeUserConnectorExecutor: vi.fn(() => vi.fn()),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', () => ({
+  autonomousToolApprovalsAvailable: vi.fn(),
+  hostedToolRunsUnasked: vi.fn(),
+  loadTurnToolPermissions: vi.fn(),
+  policyAutoApprovesTool: vi.fn(),
   loadToolApprovalPolicy: (...args: unknown[]) => mocks.loadPolicy(...args),
 }));
 vi.mock(
@@ -40,6 +46,8 @@ const input = {
   planTier: 'pro',
   modelKey: 'tool-model',
   connectors: ['linear'],
+  allowedTools: [],
+  request: new NextRequest('https://agiworkforce.test/api/artifacts/runtime/token/complete'),
 };
 
 describe('buildArtifactConnectorPlan connector decision', () => {
@@ -65,10 +73,10 @@ describe('buildArtifactConnectorPlan connector decision', () => {
 
     const plan = await buildArtifactConnectorPlan(input);
 
-    expect(mocks.connectorsAllowed).toHaveBeenCalledWith({
-      userId: 'user-1',
+    expect(mocks.connectorsAllowed).toHaveBeenCalledWith(input.request, 'user-1', {
       organizationId: null,
-      planTier: 'pro',
+      subscriptionTier: 'pro',
+      chatSurface: 'unknown',
     });
     expect(mocks.loadCatalog).toHaveBeenCalled();
     expect(plan?.unusable).toEqual(['linear']);

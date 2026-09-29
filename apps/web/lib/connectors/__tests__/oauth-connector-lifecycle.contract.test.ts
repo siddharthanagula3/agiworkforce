@@ -37,12 +37,18 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+}));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getGitHubAppInstallUrl: vi.fn(() => null),
   isGitHubAppConfigured: vi.fn(() => false),
   isGitHubInstallationLinkingAvailable: vi.fn(() => false),

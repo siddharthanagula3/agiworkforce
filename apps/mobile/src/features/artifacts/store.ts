@@ -46,7 +46,9 @@ function requireArtifactProvenance(provenance: MobileArtifactProvenance): Mobile
 type VersionsById = Record<string, MobileArtifact[]>;
 
 function appendVersion(versions: MobileArtifact[], next: MobileArtifact): MobileArtifact[] {
-  return [...versions, next].slice(-MAX_VERSIONS_PER_ARTIFACT);
+  return [...versions, { ...next, savedAt: new Date().toISOString() }].slice(
+    -MAX_VERSIONS_PER_ARTIFACT,
+  );
 }
 
 function versionsForArtifacts(

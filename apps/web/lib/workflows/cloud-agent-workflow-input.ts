@@ -15,7 +15,17 @@ import type {
   ResumeInputResponse,
   ToolApprovalDecision,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
-import type { PromptCachePrivacyClass, PromptCacheScope } from '@agiworkforce/types';
+import {
+  isResearchStep,
+  type PromptCachePrivacyClass,
+  type PromptCacheScope,
+  type ResearchStep,
+} from '@agiworkforce/types';
+import type {
+  ResearchLoopCheckpoint,
+  ResearchSourceEntry,
+} from '@/app/api/llm/v1/chat/completions/lib/research-loop';
+import type { ResearchFileSource } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { FreeTrialReservation } from '@/lib/services/free-trial-service';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
@@ -279,6 +289,13 @@ export interface CloudAgentWorkflowInput {
     checkpointId: string;
     leaseToken: string;
   };
+  research?: CloudAgentWorkflowResearch;
+}
+
+export interface CloudAgentWorkflowResearch {
+  connectorIds: string[];
+  fileSources: ResearchFileSource[];
+  checkpoint?: ResearchLoopCheckpoint;
 }
 
 const ToolApprovalDecisionSchema = z
@@ -363,6 +380,70 @@ const continuationSchemaCoversWorkflowInput: SameKeys<
 > = true;
 void continuationSchemaCoversWorkflowInput;
 
+const ResearchSourceEntrySchema = z
+  .object({
+    url: z.string().min(1),
+    title: z.string(),
+    snippet: z.string().optional(),
+    date: z.string().optional(),
+    retrievedAt: z.string().optional(),
+  })
+  .strict();
+const researchSourceEntrySchemaCoversEntry: SameKeys<
+  z.infer<typeof ResearchSourceEntrySchema>,
+  ResearchSourceEntry
+> = true;
+void researchSourceEntrySchemaCoversEntry;
+
+const ResearchFileSourceSchema = z
+  .object({ url: z.string().min(1), title: z.string(), snippet: z.string() })
+  .strict();
+const researchFileSourceSchemaCoversSource: SameKeys<
+  z.infer<typeof ResearchFileSourceSchema>,
+  ResearchFileSource
+> = true;
+void researchFileSourceSchemaCoversSource;
+
+const ResearchCheckpointSchema = z
+  .object({
+    stage: z.enum(['gathering', 'synthesis']),
+    round: z.number().int().positive(),
+    iteration: z.number().int().nonnegative(),
+    startedAtMs: z.number().finite().nonnegative(),
+    nextEventSequence: z.number().int().nonnegative(),
+    nextOperationOrdinal: z.number().int().nonnegative(),
+    plan: z.array(z.custom<ResearchStep>(isResearchStep)),
+    sources: z.array(ResearchSourceEntrySchema),
+    messages: z.array(MessageSchema),
+    totalSearches: z.number().int().nonnegative(),
+    totalFetches: z.number().int().nonnegative(),
+    rewritesUsed: z.number().int().nonnegative(),
+    newSourcesPerRound: z.array(z.number().int().nonnegative()),
+    cutShortReason: z.string().nullable(),
+    lastTurnError: z.string().nullable(),
+    sensitiveSourceAvailable: z.boolean(),
+    untrustedContentInContext: z.boolean(),
+  })
+  .strict();
+const researchCheckpointSchemaCoversCheckpoint: SameKeys<
+  z.infer<typeof ResearchCheckpointSchema>,
+  ResearchLoopCheckpoint
+> = true;
+void researchCheckpointSchemaCoversCheckpoint;
+
+const ResearchSchema = z
+  .object({
+    connectorIds: z.array(z.string().min(1)),
+    fileSources: z.array(ResearchFileSourceSchema),
+    checkpoint: ResearchCheckpointSchema.optional(),
+  })
+  .strict();
+const researchSchemaCoversWorkflowInput: SameKeys<
+  z.infer<typeof ResearchSchema>,
+  CloudAgentWorkflowResearch
+> = true;
+void researchSchemaCoversWorkflowInput;
+
 const PredecessorApprovalSchema = z
   .object({
     checkpointId: z.string().uuid(),
@@ -396,6 +477,7 @@ const CloudAgentWorkflowInputSchema = z
       .optional(),
     continuation: ContinuationSchema.optional(),
     predecessorApproval: PredecessorApprovalSchema.optional(),
+    research: ResearchSchema.optional(),
   })
   .strict()
   .superRefine((input, context) => {
@@ -480,6 +562,7 @@ export function buildCloudAgentWorkflowInput(input: {
   connectorPermissions?: ConnectorToolPermissions;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
+  research?: CloudAgentWorkflowResearch;
 }): CloudAgentWorkflowInput {
   const billing = serializeBilling(input.processed);
 
@@ -496,6 +579,7 @@ export function buildCloudAgentWorkflowInput(input: {
     connectorPermissions: input.connectorPermissions?.entries,
     continuation: input.continuation,
     predecessorApproval: input.predecessorApproval,
+    research: input.research,
   };
 
   return parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(candidate)));
