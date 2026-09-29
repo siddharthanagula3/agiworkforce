@@ -262,6 +262,27 @@ describe('cloud conversation rename durability', () => {
   });
 });
 
+describe('cloud conversation star and archive state', () => {
+  it('receives a star set on another device and drops a conversation archived there', () => {
+    applyConversationDeltas([{ ...convDelta('c1', 'Starred', null), starred: true }]);
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')?.starred,
+    ).toBe(true);
+
+    applyConversationDeltas([
+      { ...convDelta('c1', 'Starred', null), starred: false, server_version: '6' },
+    ]);
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')?.starred,
+    ).toBe(false);
+
+    applyConversationDeltas([
+      { ...convDelta('c1', 'Starred', null), archived: true, server_version: '7' },
+    ]);
+    expect(convExists('c1')).toBe(false);
+  });
+});
+
 describe('cloud conversation model durability', () => {
   it('updates the owning conversation and queues the model for cross-device sync', async () => {
     seedCloud('c1');
