@@ -32,6 +32,7 @@ pub mod device_registry;
 pub mod diagnostics_bundle;
 pub mod diff_model;
 pub mod doctor;
+pub mod documents;
 pub mod errors;
 pub mod hex;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
@@ -7680,6 +7681,38 @@ pub fn load_image_attachment_with(
     })
 }
 
+pub const MAX_DOCUMENT_ATTACHMENT_BYTES: u64 = 12 * 1024 * 1024;
+
+/// Read a PDF or Office file as a document block. Whether it reaches the model
+/// natively or as extracted text is settled when the turn is sent.
+pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
+    use base64::Engine as _;
+
+    let file = std::path::Path::new(path);
+    let kind = documents::DocumentKind::for_path(file)
+        .with_context(|| format!("'{path}' is not a PDF or Office document"))?;
+    let size = std::fs::metadata(file)
+        .with_context(|| format!("Failed to read '{path}'"))?
+        .len();
+    if size > MAX_DOCUMENT_ATTACHMENT_BYTES {
+        anyhow::bail!(
+            "'{path}' is {}; attachments are limited to {}",
+            tools::format_size(size),
+            tools::format_size(MAX_DOCUMENT_ATTACHMENT_BYTES)
+        );
+    }
+    let bytes = std::fs::read(file).with_context(|| format!("Failed to read '{path}'"))?;
+    Ok(models::ContentBlock::Document {
+        name: file
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string()),
+        mime: kind.mime(file),
+        data_b64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        asset_id: None,
+    })
+}
+
 /// Turn a clipboard bitmap into a prompt attachment through the same encoder.
 pub fn clipboard_image_attachment(
     width: u32,
@@ -7702,8 +7735,8 @@ pub fn clipboard_image_attachment(
 pub struct FileContextResult {
     /// Formatted text from non-image files (XML-wrapped, as before).
     pub text: String,
-    /// Image files encoded and ready for multipart message injection.
-    pub images: Vec<ImageAttachment>,
+    /// Image and document files encoded and ready for multipart message injection.
+    pub images: Vec<models::ContentBlock>,
 }
 
 /// Image file extensions recognised for vision attachment.
@@ -7726,7 +7759,15 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
     for path in files {
         if is_image_extension(path) {
             match load_image_attachment(path) {
-                Ok(attachment) => images.push(attachment),
+                Ok(attachment) => images.push(attachment.into_image_block()),
+                Err(e) => {
+                    output::print_error(&format!("{e:#}"));
+                    std::process::exit(1);
+                }
+            }
+        } else if documents::DocumentKind::for_path(std::path::Path::new(path)).is_some() {
+            match load_document_attachment(path) {
+                Ok(block) => images.push(block),
                 Err(e) => {
                     output::print_error(&format!("{e:#}"));
                     std::process::exit(1);
@@ -7993,7 +8034,7 @@ pub async fn run_oneshot(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
-    image_attachments: Vec<ImageAttachment>,
+    image_attachments: Vec<models::ContentBlock>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
     resume_session: Option<ManagedResumeSession>,
@@ -8107,10 +8148,7 @@ pub async fn run_oneshot(
     // blocks on the session.  The next `session.send()` call will prepend them
     // to the user message so text + images arrive in a single multipart turn.
     if !image_attachments.is_empty() {
-        session.pending_image_blocks = image_attachments
-            .into_iter()
-            .map(ImageAttachment::into_image_block)
-            .collect();
+        session.pending_image_blocks = image_attachments;
     }
 
     let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {

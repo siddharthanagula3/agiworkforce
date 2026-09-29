@@ -267,8 +267,8 @@ pub struct MentionExpansion {
     pub prompt: String,
     /// Paths whose contents were inlined.
     pub inlined: Vec<String>,
-    /// Image paths a mention named; the caller stages these the way `/attach`
-    /// does rather than inlining bytes into the text.
+    /// Image and document paths a mention named; the caller stages these the
+    /// way `/attach` does rather than inlining bytes into the text.
     pub images: Vec<String>,
     /// Paths that resolved but were not inlined, each with the reason.
     pub skipped: Vec<(String, String)>,
@@ -335,7 +335,9 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
             ));
             continue;
         }
-        if crate::is_image_extension(&mention) {
+        if crate::is_image_extension(&mention)
+            || crate::documents::DocumentKind::for_path(&resolved).is_some()
+        {
             expansion.images.push(mention);
             continue;
         }

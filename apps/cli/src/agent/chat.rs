@@ -636,6 +636,60 @@ impl AgentSession {
         })
     }
 
+    async fn prepare_documents(&mut self) -> Result<()> {
+        use base64::Engine as _;
+
+        let privacy = self.privacy_mode;
+        let native_pdf =
+            crate::model_catalog::find(&self.model).is_some_and(|model| model.supports_pdf);
+        for block in &mut self.pending_image_blocks {
+            let ContentBlock::Document {
+                name,
+                mime,
+                data_b64,
+                asset_id,
+            } = block
+            else {
+                continue;
+            };
+            if asset_id.is_some()
+                || (privacy != super::PrivacyMode::Managed
+                    && native_pdf
+                    && mime == "application/pdf")
+            {
+                continue;
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data_b64.as_bytes())
+                .with_context(|| format!("{name} could not be attached"))?;
+            if privacy == super::PrivacyMode::Managed {
+                let id = crate::cloud::attachments::upload_chat_attachment(
+                    privacy, name, mime, bytes, None,
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("{name} could not be uploaded: {error}"))?;
+                *asset_id = Some(id);
+                data_b64.clear();
+                continue;
+            }
+            let kind =
+                crate::documents::DocumentKind::for_path(std::path::Path::new(name.as_str()))
+                    .with_context(|| format!("{name} is not a PDF or Office document"))?;
+            let document = tokio::task::spawn_blocking(move || {
+                std::panic::catch_unwind(|| {
+                    crate::documents::extract_bytes(&bytes, kind, Some(1..=usize::MAX))
+                })
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("the file could not be parsed")))
+            })
+            .await?
+            .with_context(|| format!("{name} could not be read"))?;
+            *block = ContentBlock::Text {
+                text: format!("<file path=\"{name}\">\n{}\n</file>\n\n", document.text),
+            };
+        }
+        Ok(())
+    }
+
     fn image_limit_refusal(&self) -> Option<String> {
         let is_image = |block: &&ContentBlock| matches!(block, ContentBlock::Image { .. });
         let attached = self.pending_image_blocks.iter().filter(is_image).count() as u64;
@@ -870,6 +924,10 @@ impl AgentSession {
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
 
+        if let Err(error) = self.prepare_documents().await {
+            self.pending_image_blocks.clear();
+            return Err(error);
+        }
         if let Some(refusal) = self.image_limit_refusal() {
             self.pending_image_blocks.clear();
             anyhow::bail!(refusal);

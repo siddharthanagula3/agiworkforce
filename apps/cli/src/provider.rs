@@ -15,13 +15,7 @@ use crate::model_catalog;
 use serde_json::Value;
 
 /// Static model catalog entry.
-///
-/// Some capability fields (`supports_audio_input`, `supports_audio_output`,
-/// `supports_pdf`, `release_date`) are currently only surfaced by the reserved
-/// `format_model_detail` view, so the struct carries a scoped `dead_code` allow
-/// for its not-yet-wired fields rather than a module-wide suppression.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // reserved capability fields surfaced only by format_model_detail
 pub struct ModelInfo {
     pub id: String,
     pub provider: String,
@@ -205,7 +199,6 @@ pub fn is_deprecated(model_id: &str) -> bool {
 ///   Audio in/out:    no / no
 ///   PDF:             yes
 /// ```
-#[allow(dead_code)] // reserved: verbose per-model detail view (exercised by tests)
 pub fn format_model_detail(model: &ModelInfo) -> String {
     let ctx = format_context_size(model.context_window);
     let max_out = format_context_size(model.max_output_tokens);
@@ -267,6 +260,8 @@ pub fn format_model_list() -> String {
         let tools_icon = if model.supports_tools { "T" } else { " " };
         let vision_icon = if model.supports_vision { "V" } else { " " };
         let reasoning_icon = if model.supports_reasoning { "R" } else { " " };
+        let pdf_icon = if model.supports_pdf { "P" } else { " " };
+        let audio_icon = if model.supports_audio_input { "A" } else { " " };
         let ctx = format_context_size(model.context_window);
         let max_out = format_context_size(model.max_output_tokens);
         let price = if model.input_price_per_1m == 0.0 {
@@ -287,8 +282,17 @@ pub fn format_model_list() -> String {
         };
 
         out.push_str(&format!(
-            "  {}{:<30} [{}{}{}] {:>6} ctx {:>5} out  {}\n",
-            status_icon, model.id, tools_icon, vision_icon, reasoning_icon, ctx, max_out, price
+            "  {}{:<30} [{}{}{}{}{}] {:>6} ctx {:>5} out  {}\n",
+            status_icon,
+            model.id,
+            tools_icon,
+            vision_icon,
+            reasoning_icon,
+            pdf_icon,
+            audio_icon,
+            ctx,
+            max_out,
+            price
         ));
         if let Some(date) =
             model_catalog::model_detail(&model.id).and_then(|detail| detail.deprecation_date)
@@ -298,7 +302,7 @@ pub fn format_model_list() -> String {
     }
 
     out.push_str(
-        "\nFlags: T=tools, V=vision, R=reasoning. !=deprecated, B=beta.\n\
+        "\nFlags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input. !=deprecated, B=beta.\n\
          Prices per 1M tokens (input/output); `base+tiered` has request-input bands shown by `agi --cost MODEL`.\n",
     );
     out

@@ -6,6 +6,7 @@
 
 pub mod api_keys;
 pub mod artifacts;
+pub mod attachments;
 pub mod chat;
 pub mod client;
 pub mod code_handoff;
