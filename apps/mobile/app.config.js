@@ -199,6 +199,7 @@ const config = {
           { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
           { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
+          { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/open/' },
         ],
       },
     ],
