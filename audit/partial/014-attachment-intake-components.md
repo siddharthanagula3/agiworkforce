@@ -95,18 +95,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S14.15: Multiple-file selection.
-
-- Done when: One pick action can select several files, and all of them are attached.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The File picker allows several documents in one pick in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch (both chat screens are held). | ui |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/chat/[id].tsx:851-851`
-
 ## S14.17: File-type icon.
 
 - Done when: Each non-image attachment shows an icon matching its file type (PDF, spreadsheet, code, other).
@@ -137,31 +125,16 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S14.23: Partial-extraction notice.
-
-- Done when: When only part of a file could be read or it was cut to a size limit, the user is told.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The stream reads X-AGI-Attachments-Truncated, the store records it on the sent message, and the bubble shows describeAttachmentTruncation under it, in post-codex/w-chat-s14.23-mobile-attachment-truncation-notice.patch (streaming, store and bubble are held). | codex |
-
-Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-50`
-
 ## S14.31: Duplicate-file treatment.
 
 - Done when: Adding the same file twice is detected and handled visibly (skipped, merged or flagged) rather than sent twice silently.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A file already attached (same name, type and size) is skipped with an Already attached notice, in the same post-codex patch as S13.39. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:1-1`
 
 ## S14.33: Batch-upload summary.
 
