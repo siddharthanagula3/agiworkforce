@@ -24,10 +24,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.04: Prompt-based creation.
 
@@ -37,10 +34,7 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI publishes an artifact already produced in an account conversation (`agi artifacts publish <id>`); no single command turns a prompt into a hosted site. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.05: Source-code workspace.
 
@@ -49,9 +43,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints or saves the source; an edited file cannot be pushed back to the artifact. | ui |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`
 
 ## S33.07: Preview deployment.
 
@@ -70,10 +61,7 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.09: Deployment history.
 
@@ -114,10 +102,7 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.23: Rollback.
 

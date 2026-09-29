@@ -13,6 +13,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Install and update verify a signed release manifest. Still open, owner only: set AGI_CLI_RELEASE_SIGNING_KEY, publish the first signed release, then mark the CLI available (surface-status.ts:7). | flag-off |
+| cli | partial | Owner only: set AGI_CLI_RELEASE_SIGNING_KEY, publish the first signed release, then mark the CLI available (surface-status.ts:7). | flag-off |
 
 Code: `apps/web/public/install.sh:139-139`, `apps/cli/src/update_check.rs:221-221`

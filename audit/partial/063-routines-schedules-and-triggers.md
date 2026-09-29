@@ -126,10 +126,7 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The local daemon serves bearer-token webhook triggers on port 7891, configured only by hand in triggers.json and run with `agi --daemon`. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:675-675`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.19: Manual run.
 

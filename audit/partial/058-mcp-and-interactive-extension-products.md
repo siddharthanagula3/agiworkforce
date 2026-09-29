@@ -229,11 +229,8 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only debug log output (--debug=mcp, AGIWORKFORCE_MCP_DEBUG); no console to watch protocol messages or send test calls. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:342-344`, `crates/agiworkforce-mcp/src/client.rs:296-296`
 
 ## S58.27: Developer-mode connection flow.
 

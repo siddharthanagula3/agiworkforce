@@ -27,18 +27,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S78.11: Regional restrictions.
-
-- Done when: Features or routes restricted by region are enforced and the restriction is visible to the user.
-- Wave: 3
-- Already works on: web, desktop, mobile, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | No member-readable endpoint names the workspace's residency region (only /api/admin/data-region, platform admin), so the CLI cannot show or explain a regional restriction. | ui |
-
-Code: `apps/cli/src/provider.rs:341-341`
-
 ## S78.13: Required-connection detection.
 
 - Done when: The product detects when a feature needs an account connection that is missing and says which one.
