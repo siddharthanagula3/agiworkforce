@@ -282,6 +282,20 @@ export const radii = {
 
 export const dialogPadding = spacing['2xl'];
 
+export const typeScale = {
+  caption: 12,
+  footnote: 13,
+  subhead: 14,
+  body: 15,
+  callout: 16,
+  headline: 17,
+  title3: 20,
+  title2: 22,
+  title1: 28,
+  largeTitle: 34,
+  display: 48,
+} as const;
+
 export const zIndex = {
   base: 0,
   content: 1,
@@ -297,6 +311,9 @@ export const motion = {
   quick: 160,
   moved: 260,
   reveal: 700,
+  pulse: 1000,
+  ambient: 2000,
+  orbit: 3000,
 } as const;
 
 export const motionCurves = {

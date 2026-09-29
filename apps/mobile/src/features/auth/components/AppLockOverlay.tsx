@@ -3,6 +3,7 @@ import { Fingerprint } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 // Renders ABOVE the mounted app instead of replacing it. Swapping the tree for
 // a lock screen unmounted the navigator, so every resume through the gate threw
@@ -74,8 +75,8 @@ export function AppLockOverlay({
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: zIndex.fullscreen },
-  title: { fontSize: 18, fontWeight: '600' },
-  subtitle: { fontSize: 14 },
+  title: { fontSize: typeScale.headline, fontWeight: '600' },
+  subtitle: { fontSize: typeScale.subhead },
   button: {
     marginTop: 8,
     minHeight: 44,

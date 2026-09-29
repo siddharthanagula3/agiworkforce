@@ -263,7 +263,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
             {formatLastRun(schedule.lastRunAt) ? (
-              <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+              <Text className="text-xs" style={{ color: colors.textMuted }}>
                 Last run {formatLastRun(schedule.lastRunAt)}
               </Text>
             ) : null}
@@ -271,7 +271,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
           {/* Footer: Next run + history toggle + delete */}
           <View className="flex-row items-center justify-between mt-1">
-            <Text className="text-[11px] text-white/30">
+            <Text className="text-xs text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
             <View className="flex-row items-center gap-1">
@@ -285,9 +285,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityState={{ disabled: starting, busy: starting }}
               >
                 <Play size={11} color={colors.textMuted} />
-                <Text className="text-[10px] text-white/40">
-                  {starting ? 'Starting…' : 'Run now'}
-                </Text>
+                <Text className="text-xs text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
               </Pressable>
               {/* History toggle */}
               <Pressable
@@ -297,7 +295,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityLabel={historyExpanded ? 'Hide run history' : 'Show run history'}
                 accessibilityRole="button"
               >
-                <Text className="text-[10px] text-white/40">History</Text>
+                <Text className="text-xs text-white/40">History</Text>
                 {historyExpanded ? (
                   <ChevronUp size={11} color={colors.textMuted} />
                 ) : (

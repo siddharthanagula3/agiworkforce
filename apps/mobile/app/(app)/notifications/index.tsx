@@ -125,7 +125,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 )}
               </View>
               <Text
-                className="text-[11px] leading-4"
+                className="text-xs leading-4"
                 style={{ color: item.read ? colors.textMuted : colors.textSecondary }}
                 numberOfLines={2}
               >
@@ -141,7 +141,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
               label={getPriorityLabel(item.priority)}
               color={getPriorityBadgeColor(item.priority)}
             />
-            <Text className="text-[10px] flex-1" style={{ color: colors.textMuted }}>
+            <Text className="text-xs flex-1" style={{ color: colors.textMuted }}>
               {timeLabel}
             </Text>
             {!item.read && (
@@ -154,7 +154,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 accessibilityLabel="Mark as read"
                 accessibilityRole="button"
               >
-                <Text className="text-[10px]" style={{ color: colors.textSecondary }}>
+                <Text className="text-xs" style={{ color: colors.textSecondary }}>
                   Mark read
                 </Text>
               </Pressable>
@@ -250,7 +250,7 @@ export default function NotificationCenterScreen() {
             className="rounded-full px-2 py-0.5 mr-2"
             style={{ backgroundColor: colors.successSurface }}
           >
-            <Text className="text-[10px] font-bold" style={{ color: colors.teal }}>
+            <Text className="text-xs font-bold" style={{ color: colors.teal }}>
               {unreadCount}
             </Text>
           </View>

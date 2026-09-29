@@ -24,9 +24,11 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   fetchInstalledSkillNames,
   fetchSkillCatalog,
+  fetchCanAuthorSkills,
   installSkill,
   isAuthoredSkill,
   isPluginOwnedSkill,
@@ -37,6 +39,7 @@ import {
   type ManagedSkillSummary,
 } from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
+import { NewSkillSheet } from './NewSkillSheet';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -80,7 +83,14 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
       >
         <ArrowLeft size={21} color={colors.textSecondary} />
       </Pressable>
-      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textPrimary,
+          fontSize: typeScale.headline,
+          fontWeight: '700',
+        }}
+      >
         Skills
       </Text>
       <View
@@ -98,7 +108,11 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         }}
       >
         <Cloud size={13} color={colors.textSecondary} />
-        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>Cloud</Text>
+        <Text
+          style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
+        >
+          Cloud
+        </Text>
       </View>
     </View>
   );
@@ -142,7 +156,7 @@ function SkillsGate({
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -153,7 +167,7 @@ function SkillsGate({
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}
@@ -200,7 +214,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
-        style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
+        style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body, paddingVertical: 0 }}
       />
       {value.length > 0 ? (
         <Pressable
@@ -270,7 +284,12 @@ function SkillRow({
             <Text
               selectable
               numberOfLines={1}
-              style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+              style={{
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.body,
+                fontWeight: '600',
+              }}
             >
               {skill.name}
             </Text>
@@ -284,24 +303,29 @@ function SkillRow({
                 borderColor: colors.neutralBorder,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}
+              >
                 {SOURCE_LABELS[skill.source]}
               </Text>
             </View>
           </View>
-          <Text selectable style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          <Text
+            selectable
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}
+          >
             {skill.description || 'No description provided.'}
           </Text>
           {requirementNote ? (
             <Text
               accessibilityLabel={`${skill.name} ${requirementNote}`}
-              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}
             >
               {requirementNote}
             </Text>
           ) : null}
           {included && pluginOwned ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
               {PLUGIN_OWNED_NOTE}
             </Text>
           ) : null}
@@ -319,7 +343,7 @@ function SkillRow({
               style={{
                 flex: 1,
                 color: installed ? colors.textSecondary : colors.textMuted,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
               }}
             >
@@ -349,7 +373,7 @@ function SkillRow({
             <Text
               selectable
               accessibilityRole="alert"
-              style={{ color: colors.agentError, fontSize: 12, lineHeight: 17 }}
+              style={{ color: colors.agentError, fontSize: typeScale.caption, lineHeight: 17 }}
             >
               {actionError}
             </Text>
@@ -376,17 +400,17 @@ function CatalogIntro({ count }: { count: number }) {
           borderColor: colors.accentBorder,
         }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}>
           Managed Cloud catalog
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
           Install a Skill to use it in your AGI Cloud messages, and uninstall it when you no longer
           need it. Draft entries are marked Coming later.
         </Text>
       </View>
       <Text
         accessibilityLabel={count === 1 ? '1 skill installed' : `${count} skills installed`}
-        style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}
+        style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
       >
         {count === 1 ? '1 SKILL INSTALLED' : `${count} SKILLS INSTALLED`}
       </Text>
@@ -412,7 +436,10 @@ function CatalogRefreshError({ message, onRetry }: { message: string; onRetry: (
         borderColor: colors.dangerBorder,
       }}
     >
-      <Text selectable style={{ flex: 1, color: colors.agentError, fontSize: 12, lineHeight: 18 }}>
+      <Text
+        selectable
+        style={{ flex: 1, color: colors.agentError, fontSize: typeScale.caption, lineHeight: 18 }}
+      >
         Refresh failed: {message}
       </Text>
       <Pressable
@@ -422,7 +449,9 @@ function CatalogRefreshError({ message, onRetry }: { message: string; onRetry: (
         hitSlop={8}
         style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 }}
       >
-        <Text style={{ color: colors.agentError, fontSize: 12, fontWeight: '700' }}>Retry</Text>
+        <Text style={{ color: colors.agentError, fontSize: typeScale.caption, fontWeight: '700' }}>
+          Retry
+        </Text>
       </Pressable>
     </View>
   );
@@ -462,7 +491,7 @@ function CatalogEmptyState({ query, onClear }: { query: string; onClear: () => v
         style={{
           marginTop: 18,
           color: colors.textPrimary,
-          fontSize: 18,
+          fontSize: typeScale.headline,
           fontWeight: '700',
           textAlign: 'center',
         }}
@@ -473,7 +502,7 @@ function CatalogEmptyState({ query, onClear }: { query: string; onClear: () => v
         style={{
           marginTop: 8,
           color: colors.textSecondary,
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           lineHeight: 21,
           textAlign: 'center',
         }}
@@ -534,7 +563,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
         style={{
           marginTop: 18,
           color: colors.textPrimary,
-          fontSize: 18,
+          fontSize: typeScale.headline,
           fontWeight: '700',
           textAlign: 'center',
         }}
@@ -546,7 +575,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
         style={{
           marginTop: 8,
           color: colors.textSecondary,
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           lineHeight: 21,
           textAlign: 'center',
         }}
@@ -580,6 +609,8 @@ export function SkillsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [canAuthor, setCanAuthor] = useState(false);
+  const [newSkillOpen, setNewSkillOpen] = useState(false);
 
   const cloudActive = appMode === 'cloud';
   const canLoad = FEATURES.skills && isClerkLoaded && isClerkSignedIn && cloudActive;
@@ -651,13 +682,15 @@ export function SkillsScreen() {
       setError(null);
 
       try {
-        const [nextSkills, nextInstalled] = await Promise.all([
+        const [nextSkills, nextInstalled, authoring] = await Promise.all([
           fetchSkillCatalog(signal),
           fetchInstalledSkillNames(signal),
+          fetchCanAuthorSkills(signal).catch(() => false),
         ]);
         if (!isCloudAccountEpochCurrent(account)) return;
         setSkills(nextSkills);
         setInstalled(nextInstalled);
+        setCanAuthor(authoring);
       } catch (loadError) {
         if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
         setError('Could not load Skills. Check your connection and try again.');
@@ -752,6 +785,9 @@ export function SkillsScreen() {
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
               <CatalogIntro count={installedSkillCount} />
+              {canAuthor ? (
+                <Button title="New skill" variant="outline" onPress={() => setNewSkillOpen(true)} />
+              ) : null}
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />
               ) : null}
@@ -769,6 +805,11 @@ export function SkillsScreen() {
           }
         />
       )}
+      <NewSkillSheet
+        visible={newSkillOpen}
+        onClose={() => setNewSkillOpen(false)}
+        onCreated={() => void load('refresh')}
+      />
     </SafeAreaView>
   );
 }

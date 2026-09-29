@@ -17,7 +17,7 @@ describe('code-card header row', () => {
     const screen = renderFence('```python\nprint("hi")\n```');
 
     expect(screen.getByText('python')).toHaveStyle({
-      fontSize: 11,
+      fontSize: 12,
       color: lightColors.textMuted,
     });
     expect(screen.queryByText('Plain text')).toBeNull();
@@ -28,7 +28,7 @@ describe('code-card header row', () => {
     const screen = renderFence('```\nplain block content\n```');
 
     expect(screen.getByText('Plain text')).toHaveStyle({
-      fontSize: 11,
+      fontSize: 12,
       color: lightColors.textMuted,
     });
     expect(screen.toJSON()).toMatchSnapshot();

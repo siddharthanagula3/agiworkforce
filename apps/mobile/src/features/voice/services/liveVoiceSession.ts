@@ -5,9 +5,11 @@ import {
   mediaDevices,
 } from 'react-native-webrtc';
 import {
+  LIVE_VOICE_WORK_TASK_TOOL,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
   liveVoiceFunctionCallOf,
+  liveVoiceWorkTaskGoal,
   liveVoiceToolCallPath,
   type LiveVoicePendingApproval,
   type LiveVoiceToolCallRequest,
@@ -88,6 +90,7 @@ export interface LiveVoiceSessionCallbacks {
   onClosed: (closed: LiveSessionClosed) => void;
   onError: (message: string) => void;
   onConnectionLost?: (message: string) => void;
+  onStartWorkTask?: (goal: string) => boolean;
 }
 
 export interface LiveVoiceSessionOptions {
@@ -96,6 +99,9 @@ export interface LiveVoiceSessionOptions {
   language: string | null;
   callbacks: LiveVoiceSessionCallbacks;
 }
+
+const WORK_TASK_NOT_STARTED =
+  'The task did not start because the chat could not send it right now. Tell the user to type the request in the chat with Work mode on.';
 
 interface CreateSessionResponse {
   sessionId: string;
@@ -278,6 +284,9 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           ...(options.language ? { language: options.language } : {}),
           surface: 'mobile',
+          ...(options.callbacks.onStartWorkTask
+            ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
+            : {}),
         }),
       });
       if (!response.ok) throw await readErrorMessage(response);
@@ -311,7 +320,17 @@ export class LiveVoiceSession {
       body: JSON.stringify(request),
     });
     if (!response.ok) throw await readErrorMessage(response);
-    return LiveVoiceToolCallResponseSchema.parse(await response.json());
+    const parsed = LiveVoiceToolCallResponseSchema.parse(await response.json());
+    if (
+      request.name !== LIVE_VOICE_WORK_TASK_TOOL ||
+      parsed.status !== 'completed' ||
+      parsed.isError
+    ) {
+      return parsed;
+    }
+    const goal = liveVoiceWorkTaskGoal(request.arguments);
+    if (goal && this.callbacks.onStartWorkTask?.(goal)) return parsed;
+    return { status: 'completed', isError: true, output: WORK_TASK_NOT_STARTED };
   }
 
   cancelBackendWork(): void {

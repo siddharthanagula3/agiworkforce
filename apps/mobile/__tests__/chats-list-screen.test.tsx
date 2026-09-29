@@ -369,7 +369,7 @@ describe('ChatsListScreen', () => {
     fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
 
     expect(getAllByTestId(/^conversation-action-/).map((node) => node.props.accessibilityLabel)) //
-      .toEqual(['Rename', 'Pin', 'Delete', 'Cancel']);
+      .toEqual(['Rename', 'Pin', 'Move to project', 'Mark as unread', 'Delete', 'Cancel']);
 
     fireEvent.press(getByTestId('conversation-action-pin'));
     dismissSheet();

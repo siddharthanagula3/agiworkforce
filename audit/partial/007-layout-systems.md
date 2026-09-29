@@ -6,30 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S7.03: Full-width data-analysis layout.
-
-- Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | No wide data layout: tables open in a full-screen modal and there is no tablet/full-width layout for tables inside answers. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
-
-## S7.04: Conversation plus artifact split view.
-
-- Done when: An artifact opens in its own pane beside the conversation so both are visible and usable at once.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Artifacts open as a full-screen modal; there is no side-by-side artifact pane even on tablets (useTabletLayout only drives the persistent drawer). | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`
-
 ## S7.05: Conversation plus source-inspector split view.
 
 - Done when: Sources behind an answer open in an inspector pane beside the conversation, so the reader can check a source without leaving the transcript.
@@ -38,11 +14,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources are a collapsible list and full-screen report; there is no inspector pane beside the conversation. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:34-34`
 
 ## S7.06: Conversation plus browser split view.
 
@@ -56,18 +29,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `a
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S7.07: Conversation plus code workspace.
-
-- Done when: A coding session shows the conversation alongside the code workspace (changes, diffs, terminal or editor) in one view.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Cloud code and remote sessions show conversation, changes and diffs stacked in one column; no side-by-side workspace. | ui |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`
 
 ## S7.13: Dockable panels.
 
@@ -112,15 +73,3 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S7.32: Print-specific layouts.
-
-- Done when: Printing a conversation or report produces a print-specific layout: no app chrome, the whole content, paper-friendly colours and sensible page breaks.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Conversation export makes a paper-styled PDF with page-break-inside avoidance on table rows, but there is no Print action (no printAsync) and no wider page-break rules. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:35-36`, `apps/mobile/services/fileCreation.ts:197-198`

@@ -1675,7 +1675,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1767,7 +1767,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1859,7 +1859,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1951,7 +1951,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -2043,7 +2043,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }

@@ -27,30 +27,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S86.04: Multifactor authentication.
-
-- Done when: The user can turn on a second factor that is then required when signing in, and turn it off.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile only reads authenticator status ("Mobile does not enroll or disable account factors"); turning the second factor on or off is not in the app. | ui, handler |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
-
-## S86.05: Recovery codes.
-
-- Done when: The user can view, download and regenerate recovery codes that let them back into the account if the second factor is lost.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows only whether backup codes are Ready; it cannot view, download or regenerate recovery codes. | ui |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
-
 ## S86.06: Active sessions.
 
 - Done when: The user can see their signed-in sessions (device, place, last active) and end any of them.

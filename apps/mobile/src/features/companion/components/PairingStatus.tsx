@@ -12,6 +12,7 @@ import Animated, {
 import { Wifi, WifiOff, WifiLow } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 import type { ConnectionStatus, ConnectionQuality } from '@/stores/connectionStore';
 
 interface PairingStatusProps {
@@ -94,14 +95,14 @@ function ConnectionQualityBadge({
       return (
         <View className="flex-row items-center gap-1">
           <Wifi size={11} color={colors.agentSuccess} />
-          {latencyMs != null && <Text className="text-[10px] text-emerald-400">{latencyMs}ms</Text>}
+          {latencyMs != null && <Text className="text-xs text-emerald-400">{latencyMs}ms</Text>}
         </View>
       );
     case 'weak':
       return (
         <View className="flex-row items-center gap-1">
           <WifiLow size={11} color={colors.agentWarning} />
-          {latencyMs != null && <Text className="text-[10px] text-amber-400">{latencyMs}ms</Text>}
+          {latencyMs != null && <Text className="text-xs text-amber-400">{latencyMs}ms</Text>}
         </View>
       );
     case 'disconnected':
@@ -125,16 +126,16 @@ export function PairingStatus({
     if (config.animate) {
       pulseOpacity.value = withRepeat(
         withSequence(
-          withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
         false,
       );
       pulseScale.value = withRepeat(
         withSequence(
-          withTiming(1.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.3, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
         false,
@@ -142,8 +143,8 @@ export function PairingStatus({
     } else {
       cancelAnimation(pulseOpacity);
       cancelAnimation(pulseScale);
-      pulseOpacity.value = withTiming(1, { duration: 200 });
-      pulseScale.value = withTiming(1, { duration: 200 });
+      pulseOpacity.value = withTiming(1, { duration: motion.quick });
+      pulseScale.value = withTiming(1, { duration: motion.quick });
     }
   }, [config.animate, pulseOpacity, pulseScale]);
 

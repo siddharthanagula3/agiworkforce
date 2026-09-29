@@ -174,7 +174,9 @@
     "packages_one": "{{count}} पैकेज",
     "packages_other": "{{count}} पैकेज",
     "unreadNotifications_one": "{{count}} अपठित सूचना",
-    "unreadNotifications_other": "{{count}} अपठित सूचनाएँ"
+    "unreadNotifications_other": "{{count}} अपठित सूचनाएँ",
+    "textBlocks_one": "{{count}} टेक्स्ट ब्लॉक",
+    "textBlocks_other": "{{count}} टेक्स्ट ब्लॉक"
   },
   "relative": {
     "minutesAgo_one": "{{count}} मिनट पहले",

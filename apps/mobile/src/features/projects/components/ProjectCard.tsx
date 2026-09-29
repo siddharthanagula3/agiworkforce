@@ -1,14 +1,17 @@
 import { View, Pressable } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
-import { FolderOpen, Check } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
+import { projectAccentHex, projectIcon } from '@/src/features/projects/projectAppearance';
 interface ProjectCardProject {
   id: string;
   name: string;
   description: string;
   updatedAt: string;
+  iconId?: string | null;
+  accentId?: string | null;
 }
 
 interface ProjectCardProps {
@@ -22,6 +25,8 @@ interface ProjectCardProps {
 export function ProjectCard({ project, index, isActive, onPress, onLongPress }: ProjectCardProps) {
   const reducedMotion = useReducedMotion();
   const colors = useThemeColors();
+  const Icon = projectIcon(project.iconId);
+  const accent = projectAccentHex(project.accentId);
   return (
     <Animated.View
       entering={
@@ -51,10 +56,14 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             <View
               className="w-10 h-10 rounded-xl items-center justify-center"
               style={{
-                backgroundColor: isActive ? colors.accentSurface : colors.neutralSurface,
+                backgroundColor: accent
+                  ? `${accent}22`
+                  : isActive
+                    ? colors.accentSurface
+                    : colors.neutralSurface,
               }}
             >
-              <FolderOpen size={20} color={isActive ? colors.teal : colors.textMuted} />
+              <Icon size={20} color={accent ?? (isActive ? colors.teal : colors.textMuted)} />
             </View>
             <View className="flex-1">
               <Text
@@ -89,7 +98,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
 
           {/* Footer: last updated */}
           <View className="flex-row items-center justify-between pt-1">
-            <Text variant="caption" className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
               Updated {formatRelativeTime(project.updatedAt)}
             </Text>
           </View>

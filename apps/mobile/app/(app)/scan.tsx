@@ -19,6 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
@@ -28,6 +29,7 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -335,7 +337,10 @@ export default function ScanScreen() {
                 <ScanText size={14} color={c.teal} />
                 <Text style={styles.topBadgeText}>
                   {regions.length > 0
-                    ? `${regions.length} text block${regions.length !== 1 ? 's' : ''}`
+                    ? translatePlural('common', 'counts.textBlocks', regions.length, {
+                        one: '{{count}} text block',
+                        other: '{{count}} text blocks',
+                      })
                     : ocrError
                       ? 'No text found'
                       : 'No text detected'}
@@ -631,7 +636,7 @@ function createStyles(colors: ColorScheme) {
     },
     processingLabel: {
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       fontWeight: '500',
     },
 
@@ -651,7 +656,7 @@ function createStyles(colors: ColorScheme) {
     },
     screenTitle: {
       color: colors.cameraOverlayText,
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
     },
     iconButton: {
@@ -675,7 +680,7 @@ function createStyles(colors: ColorScheme) {
     },
     topBadgeText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
 
@@ -742,7 +747,7 @@ function createStyles(colors: ColorScheme) {
     },
     hintText: {
       color: colors.cameraOverlayTextMuted,
-      fontSize: 13,
+      fontSize: typeScale.footnote,
       fontWeight: '400',
     },
 
@@ -802,7 +807,7 @@ function createStyles(colors: ColorScheme) {
     },
     copyPillText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
     promptContainer: {
@@ -819,7 +824,7 @@ function createStyles(colors: ColorScheme) {
     promptInput: {
       flex: 1,
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       lineHeight: 22,
       maxHeight: 140,
       paddingVertical: 0,

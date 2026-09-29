@@ -1,9 +1,20 @@
 import { useCallback, useRef } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import type {
   ConversationMenuAction,
   ConversationMenuState,
@@ -15,8 +26,9 @@ import type {
  * three `Alert` buttons, which dropped Delete and Cancel from a Cloud chat's
  * five-action menu.
  */
-function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
+export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
   const pendingRef = useRef<(() => void) | null>(null);
 
   const runPending = useCallback(() => {
@@ -67,40 +79,49 @@ function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
           >
             <Text
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 color: colors.textMuted,
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 paddingBottom: 8,
               }}
               numberOfLines={1}
             >
               {menu.title}
             </Text>
-            {menu.actions.map((action, index) => (
-              <Pressable
-                key={action.key}
-                testID={`conversation-action-${action.key}`}
-                onPress={() => select(action)}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                style={{
-                  minHeight: 52,
-                  justifyContent: 'center',
-                  paddingHorizontal: 20,
-                  borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <Text
+            <ScrollView style={{ maxHeight: height * 0.6 }} bounces={false}>
+              {menu.actions.map((action, index) => (
+                <Pressable
+                  key={action.key}
+                  testID={`conversation-action-${action.key}`}
+                  onPress={() => select(action)}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  accessibilityState={action.selected ? { selected: true } : undefined}
                   style={{
-                    fontSize: 16,
-                    color: action.destructive ? colors.agentError : colors.textPrimary,
+                    minHeight: 52,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    paddingHorizontal: dialogPadding,
+                    borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.border,
                   }}
                 >
-                  {action.label}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      flexShrink: 1,
+                      fontSize: typeScale.callout,
+                      color: action.destructive ? colors.agentError : colors.textPrimary,
+                    }}
+                  >
+                    {action.label}
+                  </Text>
+                  {action.selected ? <Check size={18} color={colors.textPrimary} /> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
             <Pressable
               testID="conversation-action-cancel"
               onPress={menu.close}
@@ -109,12 +130,18 @@ function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
               style={{
                 minHeight: 52,
                 justifyContent: 'center',
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                }}
+              >
                 Cancel
               </Text>
             </Pressable>
@@ -137,7 +164,7 @@ export function RenameConversationModal({
 
   return (
     <>
-      <ConversationMenuSheet menu={rename.menu} />
+      <ActionMenuSheet menu={rename.menu} />
       <Modal
         visible={rename.visible && !inline}
         transparent
@@ -163,7 +190,7 @@ export function RenameConversationModal({
                 width: '100%',
                 backgroundColor: colors.surfaceElevated,
                 borderRadius: 14,
-                padding: 20,
+                padding: dialogPadding,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}
@@ -171,7 +198,7 @@ export function RenameConversationModal({
             >
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   marginBottom: 12,
@@ -184,7 +211,7 @@ export function RenameConversationModal({
                   backgroundColor: colors.inputSurface,
                   borderRadius: 8,
                   padding: 12,
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: colors.textPrimary,
                   borderWidth: 1,
                   borderColor: colors.border,
@@ -206,7 +233,9 @@ export function RenameConversationModal({
                   accessibilityRole="button"
                   accessibilityLabel="Cancel rename"
                 >
-                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
+                    Cancel
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
@@ -214,7 +243,7 @@ export function RenameConversationModal({
                   accessibilityRole="button"
                   accessibilityLabel="Submit rename"
                 >
-                  <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>
+                  <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                     Rename
                   </Text>
                 </Pressable>
@@ -236,7 +265,7 @@ export function InlineRenameField({ rename }: { rename: ConversationRenameState 
         minHeight: 36,
         borderRadius: 8,
         paddingHorizontal: 8,
-        fontSize: 15,
+        fontSize: typeScale.body,
         color: colors.textPrimary,
         backgroundColor: colors.inputSurface,
         borderWidth: 1,

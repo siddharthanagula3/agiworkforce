@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { FileText, Plus, Trash2 } from 'lucide-react-native';
+import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
+import { FileText, Plus, Trash2, Type } from 'lucide-react-native';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { ALLOWED_ATTACHMENT_MIME_PREFIXES, IMAGE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -13,6 +25,7 @@ import {
 } from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProjectSourcesTabProps {
   projectId: string;
@@ -81,7 +94,7 @@ function SourceRow({
         >
           {source.name}
         </Text>
-        <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
           {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
         </Text>
       </View>
@@ -238,6 +251,47 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     }
   }, [projectId, target, addSource, refreshCloudSources]);
 
+  const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [textTitle, setTextTitle] = useState('');
+  const [textBody, setTextBody] = useState('');
+
+  const closeTextEditor = useCallback(() => {
+    setTextEditorOpen(false);
+    setTextTitle('');
+    setTextBody('');
+  }, []);
+
+  const handleSaveText = useCallback(async () => {
+    const body = textBody.trim();
+    if (!body || !cacheDirectory) return;
+    const baseName =
+      textTitle
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, ' ')
+        .trim() || 'Text';
+    const name = baseName.toLowerCase().endsWith('.txt') ? baseName : `${baseName}.txt`;
+    const uri = `${cacheDirectory}project-text-${uuidv7()}.txt`;
+    setBusy(true);
+    try {
+      await writeAsStringAsync(uri, body);
+      await addSource(projectId, {
+        name,
+        mimeType: 'text/plain',
+        size: new TextEncoder().encode(body).length,
+        uri,
+      });
+      if (target === 'cloud') await refreshCloudSources();
+      if (mounted.current) closeTextEditor();
+    } catch (error) {
+      Alert.alert(
+        'Text was not added',
+        projectSourceErrorMessage(error, 'Check your connection and try again.'),
+      );
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }, [addSource, closeTextEditor, projectId, refreshCloudSources, target, textBody, textTitle]);
+
   const handleRemove = useCallback(
     async (sourceId: string) => {
       try {
@@ -284,7 +338,119 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
             Add sources
           </Text>
         </Pressable>
+        <Pressable
+          onPress={() => setTextEditorOpen(true)}
+          disabled={busy || target === 'unknown'}
+          className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
+          style={{
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: busy || target === 'unknown' ? 0.5 : 1,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Add text"
+          accessibilityState={{ disabled: busy || target === 'unknown' }}
+        >
+          <Type size={16} color={colors.textPrimary} />
+          <Text className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>
+            Add text
+          </Text>
+        </Pressable>
       </View>
+
+      <Modal
+        visible={textEditorOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={closeTextEditor}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.surfaceElevated,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              padding: 16,
+              paddingBottom: 32,
+              gap: 12,
+            }}
+          >
+            <Text
+              style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
+            >
+              Add text
+            </Text>
+            <TextInput
+              value={textTitle}
+              onChangeText={setTextTitle}
+              placeholder="Title"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Text source title"
+              maxLength={120}
+              style={{
+                minHeight: 44,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                color: colors.textPrimary,
+              }}
+            />
+            <TextInput
+              value={textBody}
+              onChangeText={setTextBody}
+              placeholder="Paste or type the text this project should use"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Text source content"
+              multiline
+              textAlignVertical="top"
+              style={{
+                minHeight: 160,
+                maxHeight: 320,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 10,
+                padding: 12,
+                color: colors.textPrimary,
+              }}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <Pressable
+                onPress={closeTextEditor}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleSaveText()}
+                disabled={busy || !textBody.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Add"
+                accessibilityState={{ disabled: busy || !textBody.trim() }}
+                style={{
+                  minHeight: 44,
+                  paddingHorizontal: 16,
+                  justifyContent: 'center',
+                  opacity: busy || !textBody.trim() ? 0.5 : 1,
+                }}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.teal} />
+                ) : (
+                  <Text style={{ color: colors.teal, fontWeight: '600' }}>Add</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {target === 'unknown' ? (
         <Notice
@@ -307,7 +473,10 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           </Pressable>
         </View>
       ) : sources.length === 0 ? (
-        <Notice title="No sources added yet" body="Add files to give the project more context." />
+        <Notice
+          title="No sources added yet"
+          body="Add files or text to give the project more context."
+        />
       ) : (
         <ScrollView
           className="flex-1"

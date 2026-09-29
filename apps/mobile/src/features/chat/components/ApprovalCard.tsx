@@ -192,7 +192,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
           <View className="flex-1">
             <Text
-              className="text-[10px] uppercase tracking-wider font-medium"
+              className="text-xs uppercase tracking-wider font-medium"
               style={{ color: colors.textMuted }}
             >
               Approval Required
@@ -210,7 +210,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             className="px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.neutralSurface }}
           >
-            <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
+            <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
               {approval.toolName}
             </Text>
           </View>
@@ -227,7 +227,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
         {countdown != null && countdown > 0 && isPending ? (
           <View className="px-3 pb-2">
             <View className="flex-row items-center gap-2 mb-1">
-              <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
+              <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
                 Auto-approving in {countdown}s
               </Text>
             </View>

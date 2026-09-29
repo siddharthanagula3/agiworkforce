@@ -14,6 +14,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import * as TTS from '@/src/features/voice/services/tts';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
@@ -55,8 +56,12 @@ function PresetRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{name}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{description}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+          {name}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
+          {description}
+        </Text>
       </View>
       {selected ? <Check size={18} color={colors.teal} /> : null}
     </Pressable>
@@ -96,10 +101,10 @@ function SystemVoiceRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           {voice.name}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
           {voice.quality} · {voice.language}
         </Text>
       </View>
@@ -153,10 +158,10 @@ function SystemDefaultRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           System default
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
           Use the default voice on this device
         </Text>
       </View>
@@ -303,7 +308,7 @@ export default function VoiceLanguageScreen() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           fontWeight: '700',
           marginBottom: 8,
           paddingHorizontal: 2,
@@ -339,10 +344,19 @@ export default function VoiceLanguageScreen() {
               borderTopColor: colors.border,
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
               No installed voices returned
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16, marginTop: 3 }}>
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: typeScale.caption,
+                lineHeight: 16,
+                marginTop: 3,
+              }}
+            >
               AGI will keep using the device default.
             </Text>
           </View>
@@ -360,7 +374,7 @@ export default function VoiceLanguageScreen() {
         )}
       </SettingsGroup>
 
-      <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
         Speed {speechRate.toFixed(2)}x · Pitch {speechPitch.toFixed(2)}x
       </Text>
     </SettingsScreenShell>

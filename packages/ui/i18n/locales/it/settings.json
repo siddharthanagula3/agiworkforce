@@ -196,6 +196,10 @@
     "windowMinutes_one": "minuto",
     "windowMinutes_other": "{{count}} minuti",
     "windowSeconds_one": "secondo",
-    "windowSeconds_other": "{{count}} secondi"
+    "windowSeconds_other": "{{count}} secondi",
+    "memoriesAdded_one": "Aggiunto {{count}} ricordo",
+    "memoriesAdded_other": "Aggiunti {{count}} ricordi",
+    "factsFound_one": "Trovato {{count}} fatto da {{source}}.",
+    "factsFound_other": "Trovati {{count}} fatti da {{source}}."
   }
 }

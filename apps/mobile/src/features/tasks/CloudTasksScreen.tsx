@@ -25,6 +25,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudRunCard } from './components/CloudRunCard';
 import { CloudRunDetailSheet } from './components/CloudRunDetailSheet';
 import { StartWorkSheet, type StartWorkSubmission } from './components/StartWorkSheet';
@@ -72,7 +73,9 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         <Text variant="subheading" style={{ color: colors.textPrimary }}>
           {SCREEN_TITLE}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>{SCREEN_SUBTITLE}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+          {SCREEN_SUBTITLE}
+        </Text>
       </View>
       <View
         style={{
@@ -88,7 +91,11 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         }}
       >
         <Cloud size={13} color={colors.textSecondary} />
-        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>Cloud</Text>
+        <Text
+          style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
+        >
+          Cloud
+        </Text>
       </View>
       {onStartWork ? (
         <Pressable
@@ -147,7 +154,7 @@ function CloudTasksGate({
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -158,7 +165,7 @@ function CloudTasksGate({
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}
@@ -192,7 +199,7 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
         borderColor: colors.accentBorder,
       }}
     >
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         {SCOPE_NOTE}
       </Text>
       <Pressable
@@ -202,7 +209,9 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
         hitSlop={6}
         style={{ minHeight: 32, justifyContent: 'center' }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '700' }}
+        >
           {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
         </Text>
       </Pressable>
@@ -231,7 +240,14 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
       }}
     >
       <BellOff size={16} color={colors.agentWarning} />
-      <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textSecondary,
+          fontSize: typeScale.caption,
+          lineHeight: 18,
+        }}
+      >
         {BACKGROUND_ALERTS_OFF_NOTE}
       </Text>
     </Pressable>
@@ -467,7 +483,7 @@ export function CloudTasksScreen() {
               <Text
                 style={{
                   color: selected ? colors.accentText : colors.textSecondary,
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   fontWeight: '600',
                 }}
               >
@@ -508,7 +524,7 @@ export function CloudTasksScreen() {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 textTransform: 'uppercase',
                 letterSpacing: 0.6,

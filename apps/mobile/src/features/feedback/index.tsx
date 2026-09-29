@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
@@ -29,9 +30,31 @@ function resolveReturnTo(value: unknown): typeof SETTINGS_RETURN_PATH | typeof A
 export default function FeedbackScreen() {
   const { colors, statusBarStyle } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    returnTo?: string | string[];
+    appeal?: string;
+    conversationId?: string;
+    messageId?: string;
+    finishReason?: string;
+  }>();
   const returnTo = resolveReturnTo(
     Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo,
+  );
+  const appeal = useMemo(
+    () =>
+      params.appeal === 'safety_refusal' && typeof params.messageId === 'string'
+        ? {
+            kind: 'safety_refusal' as const,
+            messageId: params.messageId,
+            ...(typeof params.conversationId === 'string'
+              ? { conversationId: params.conversationId }
+              : {}),
+            ...(typeof params.finishReason === 'string'
+              ? { finishReason: params.finishReason }
+              : {}),
+          }
+        : null,
+    [params.appeal, params.conversationId, params.finishReason, params.messageId],
   );
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
@@ -47,16 +70,23 @@ export default function FeedbackScreen() {
 
     setSending(true);
     try {
-      await api.post('/api/mobile/feedback', { type, message: trimmed });
+      await api.post('/api/mobile/feedback', {
+        type,
+        message: trimmed,
+        ...(appeal ? { context: appeal } : {}),
+      });
       Alert.alert('Thank You!', 'Your feedback has been submitted.', [
-        { text: 'OK', onPress: () => router.replace(returnTo) },
+        {
+          text: 'OK',
+          onPress: () => (appeal && router.canGoBack() ? router.back() : router.replace(returnTo)),
+        },
       ]);
     } catch {
       Alert.alert('Submission Failed', 'Could not submit feedback. Please try again later.');
     } finally {
       setSending(false);
     }
-  }, [type, message, router, returnTo]);
+  }, [appeal, type, message, router, returnTo]);
 
   const handleBack = useGoBack(returnTo);
 
@@ -95,7 +125,7 @@ export default function FeedbackScreen() {
             variant="subheading"
             style={{ marginLeft: 4, color: colors.textPrimary, fontWeight: '700' }}
           >
-            Send Feedback
+            {appeal ? 'Report an incorrect refusal' : 'Send Feedback'}
           </Text>
         </View>
 
@@ -110,73 +140,79 @@ export default function FeedbackScreen() {
             gap: 18,
           }}
         >
-          <View style={{ gap: 8 }}>
-            <Text
-              style={{
-                color: colors.textMuted,
-                fontSize: 12,
-                fontWeight: '700',
-                textTransform: 'uppercase',
-                letterSpacing: 0,
-              }}
-            >
-              Type
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {FEEDBACK_TYPES.map((ft) => {
-                const Icon = ft.icon;
-                const selected = type === ft.type;
-                return (
-                  <Pressable
-                    key={ft.type}
-                    onPress={() => setType(ft.type)}
-                    style={{
-                      flex: 1,
-                      minHeight: 70,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      paddingHorizontal: 6,
-                      paddingVertical: 10,
-                      borderRadius: 14,
-                      backgroundColor: selected ? `${colors.teal}20` : colors.surfaceElevated,
-                      borderWidth: 1,
-                      borderColor: selected ? `${colors.teal}40` : colors.border,
-                    }}
-                    accessibilityLabel={ft.label}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Icon size={18} color={selected ? colors.teal : colors.textMuted} />
-                    <Text
-                      numberOfLines={2}
+          {appeal ? null : (
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.caption,
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0,
+                }}
+              >
+                Type
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {FEEDBACK_TYPES.map((ft) => {
+                  const Icon = ft.icon;
+                  const selected = type === ft.type;
+                  return (
+                    <Pressable
+                      key={ft.type}
+                      onPress={() => setType(ft.type)}
                       style={{
-                        color: selected ? colors.teal : colors.textSecondary,
-                        fontSize: 12,
-                        lineHeight: 15,
-                        fontWeight: '600',
-                        textAlign: 'center',
+                        flex: 1,
+                        minHeight: 70,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingHorizontal: 6,
+                        paddingVertical: 10,
+                        borderRadius: 14,
+                        backgroundColor: selected ? `${colors.teal}20` : colors.surfaceElevated,
+                        borderWidth: 1,
+                        borderColor: selected ? `${colors.teal}40` : colors.border,
                       }}
+                      accessibilityLabel={ft.label}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
                     >
-                      {ft.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Icon size={18} color={selected ? colors.teal : colors.textMuted} />
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          color: selected ? colors.teal : colors.textSecondary,
+                          fontSize: typeScale.caption,
+                          lineHeight: 15,
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {ft.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={{ gap: 8 }}>
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 textTransform: 'uppercase',
                 letterSpacing: 0,
               }}
             >
-              {type === 'bug' ? 'Describe the issue' : 'Your feedback'}
+              {appeal
+                ? 'What should the answer have been?'
+                : type === 'bug'
+                  ? 'Describe the issue'
+                  : 'Your feedback'}
             </Text>
             <TextInput
               value={message}
@@ -201,12 +237,14 @@ export default function FeedbackScreen() {
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 color: colors.textPrimary,
-                fontSize: 15,
+                fontSize: typeScale.body,
                 lineHeight: 22,
               }}
               accessibilityLabel={type === 'bug' ? 'Bug description' : 'Feedback message'}
             />
-            <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'right' }}>
+            <Text
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, textAlign: 'right' }}
+            >
               {message.length}/2000
             </Text>
           </View>
@@ -240,7 +278,7 @@ export default function FeedbackScreen() {
                 <Text
                   style={{
                     color: canSubmit ? colors.accentText : colors.textMuted,
-                    fontSize: 14,
+                    fontSize: typeScale.subhead,
                     fontWeight: '600',
                   }}
                 >

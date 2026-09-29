@@ -85,7 +85,7 @@ function NewCodeSession() {
                     {root.name}
                   </Text>
                   {root.branch ? (
-                    <Text className="text-[10px] text-white/45" numberOfLines={1}>
+                    <Text className="text-xs text-white/45" numberOfLines={1}>
                       {root.branch}
                     </Text>
                   ) : null}
@@ -230,7 +230,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
                   <Text className="text-xs font-medium text-white" numberOfLines={1}>
                     {session.title}
                   </Text>
-                  <Text className="text-[10px] text-white/45" numberOfLines={1}>
+                  <Text className="text-xs text-white/45" numberOfLines={1}>
                     {[
                       session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
                       session.folder,
@@ -251,7 +251,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         )}
 
         {unavailable.map((folder) => (
-          <Text key={folder.folder} className="mt-2 text-[10px] text-white/40">
+          <Text key={folder.folder} className="mt-2 text-xs text-white/40">
             {`${folder.folder}: ${folder.message}`}
           </Text>
         ))}

@@ -33,7 +33,7 @@ function PulsingDot() {
     if (reducedMotion) {
       opacity.value = 1;
     } else {
-      opacity.value = withRepeat(withTiming(0.3, { duration: 800 }), -1, true);
+      opacity.value = withRepeat(withTiming(0.3, { duration: motion.reveal }), -1, true);
     }
   }, [opacity, reducedMotion]);
 

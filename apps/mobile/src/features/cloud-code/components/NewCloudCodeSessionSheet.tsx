@@ -24,6 +24,7 @@ import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from '../service';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
 const TITLE_WORDS = 6;
@@ -132,7 +133,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   const colors = useThemeColors();
   return (
     <View style={{ gap: 6 }}>
-      <Text accessibilityRole="header" style={{ color: colors.textSecondary, fontSize: 13 }}>
+      <Text
+        accessibilityRole="header"
+        style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+      >
         {title}
       </Text>
       {children}
@@ -175,9 +179,11 @@ function Choice({
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15 }}>{label}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>{label}</Text>
         {description ? (
-          <Text style={{ color: colors.textMuted, fontSize: 13 }}>{description}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+            {description}
+          </Text>
         ) : null}
       </View>
       {trailing}
@@ -191,7 +197,10 @@ function Note({ children, tone = 'muted' }: { children: string; tone?: 'muted' |
   return (
     <Text
       accessibilityRole={tone === 'error' ? 'alert' : undefined}
-      style={{ color: tone === 'error' ? colors.agentError : colors.textMuted, fontSize: 13 }}
+      style={{
+        color: tone === 'error' ? colors.agentError : colors.textMuted,
+        fontSize: typeScale.footnote,
+      }}
     >
       {children}
     </Text>
@@ -415,7 +424,12 @@ export function NewCloudCodeSessionSheet({
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <Text
               accessibilityRole="header"
-              style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+              style={{
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.headline,
+                fontWeight: '600',
+              }}
             >
               New cloud session
             </Text>
@@ -468,7 +482,13 @@ export function NewCloudCodeSessionSheet({
                 />
               ) : repositoryState.status === 'no-installation' ? (
                 <View style={{ gap: 6 }}>
-                  <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.body,
+                      fontWeight: '600',
+                    }}
+                  >
                     {COPY.firstRunHeading}
                   </Text>
                   <Note>{`${COPY.firstRunConnect}. ${COPY.firstRunCopy}`}</Note>
@@ -541,7 +561,13 @@ export function NewCloudCodeSessionSheet({
                 accessibilityRole="button"
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
                   {urlMode ? COPY.repositoryUrlHide : COPY.repositoryUrlToggle}
                 </Text>
               </Pressable>
@@ -605,7 +631,9 @@ export function NewCloudCodeSessionSheet({
                           selected={branch === candidate.name}
                           trailing={
                             candidate.isProtected ? (
-                              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                              <Text
+                                style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+                              >
                                 {COPY.branchProtected}
                               </Text>
                             ) : null
@@ -667,7 +695,9 @@ export function NewCloudCodeSessionSheet({
                   >
                     {fullAccepted ? <Check size={14} color={colors.accentText} /> : null}
                   </View>
-                  <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 13 }}>
+                  <Text
+                    style={{ flex: 1, color: colors.textSecondary, fontSize: typeScale.footnote }}
+                  >
                     {COPY.fullNetworkAcknowledgement}
                   </Text>
                 </Pressable>

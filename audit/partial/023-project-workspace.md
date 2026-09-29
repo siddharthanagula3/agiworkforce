@@ -9,27 +9,12 @@ nothing is left.
 ## S23.03: Project icon and color.
 
 - Done when: The user can choose a project's icon and colour, and the choice is shown wherever the project appears.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No mobile UI to choose a project icon or colour and the cloud project header shows only the name; the project header component with icon/colour no longer exists. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`
-
-## S23.05: Project overview.
-
-- Done when: Opening a project shows an overview: its name, description, counts and its main sections (chats, files, instructions).
-- Wave: 2
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Cloud project screen shows the name, a sync line and Chats/Work/Sources tabs, but no description or counts. | flag-off |
-
-Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
 
 ## S23.07: Project files.
 
@@ -51,11 +36,11 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/pr
 | --- | --- | --- | --- |
 | web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
-| mobile | partial | Sources tab adds picked files only; there is no text or connected-service source, and the 0-byte upload cap for never-paid Free users and Team seats is unchanged. | handler, ui |
+| mobile | partial | Files and Add text work on mobile; a connected-service (Google Drive) source has no phone picker yet (web uses the Google Picker, itself waiting on GOOGLE_PICKER_API_KEY/APP_ID). The 0-byte cap text is stale: free is 100 MB and team seats resolve to team (billing-catalog.ts:358, :413). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-139`
+Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:264-264`, `packages/contracts/types/src/billing-catalog.ts:358-358`
 
 ## S23.11: Project Memory.
 

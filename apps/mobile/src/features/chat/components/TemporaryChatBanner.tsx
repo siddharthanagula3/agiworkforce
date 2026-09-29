@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export const TEMPORARY_CHAT_CLOUD_EXPLAINER =
   "This chat won't appear in your history or search, and it won't use or update memory. Anything kept to run it, including files you attach, is deleted after 30 days.";
@@ -52,12 +53,19 @@ export function TemporaryChatBanner() {
     >
       <EyeOff size={14} color={colors.purple} style={{ marginTop: 1 }} />
       <View style={{ flex: 1, gap: 8 }}>
-        <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary }}>
+        <Text style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textSecondary }}>
           {isCloud ? TEMPORARY_CHAT_CLOUD_EXPLAINER : TEMPORARY_CHAT_LOCAL_EXPLAINER}
         </Text>
         {isCloud ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
+            <Text
+              style={{
+                flex: 1,
+                fontSize: typeScale.caption,
+                lineHeight: 17,
+                color: colors.textPrimary,
+              }}
+            >
               {personalized ? PERSONALIZED_LABEL : UNPERSONALIZED_LABEL}
             </Text>
             <Switch

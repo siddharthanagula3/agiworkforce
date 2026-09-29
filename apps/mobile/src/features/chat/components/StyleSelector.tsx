@@ -7,6 +7,7 @@ import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -106,7 +107,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 20,
+              paddingHorizontal: dialogPadding,
               paddingBottom: 16,
             }}
           >
@@ -120,7 +121,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             </Pressable>
             <Text
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 fontWeight: '600',
                 color: themeColors.textPrimary,
               }}
@@ -132,7 +133,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
 
           {/* Options */}
           <View
-            style={{ paddingHorizontal: 20, gap: 4 }}
+            style={{ paddingHorizontal: dialogPadding, gap: 4 }}
             accessibilityRole="radiogroup"
             accessibilityLabel="Chat style"
           >
@@ -184,7 +185,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
-                        fontSize: 15,
+                        fontSize: typeScale.body,
                         fontWeight: '500',
                         color: themeColors.textPrimary,
                       }}
@@ -193,7 +194,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                     </Text>
                     <Text
                       style={{
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         color: themeColors.textMuted,
                         marginTop: 2,
                       }}

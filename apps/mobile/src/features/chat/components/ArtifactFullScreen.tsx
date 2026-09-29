@@ -31,12 +31,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import {
   fetchArtifactPublication,
   publishArtifact,
   publishFailureMessage,
+  recordPublishedArtifactAudience,
+  usePublishedArtifactAudiences,
   type ArtifactPublication,
 } from '../services/artifactPublishing';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -48,6 +51,8 @@ import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome
 import type { Artifact } from '@/types/chat';
 import { ArtifactSwitcher } from './ArtifactSwitcher';
 import { renderMarkdownContent } from './MessageContentRenderer';
+import { ReportChart } from './ReportChart';
+import { chartArtifactToChart } from '@/src/features/chat/utils/chartArtifact';
 import { GeneratedFileCard } from './GeneratedFileCard';
 import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
 import { ArtifactChangesView } from './ArtifactChangesView';
@@ -175,6 +180,7 @@ export function ArtifactFullScreen({
   const currentPublication =
     published && published.artifactId === artifact?.id ? published.publication : null;
   const publishedUrl = currentPublication?.shareUrl ?? null;
+  const publicationKnown = usePublishedArtifactAudiences((s) => s.ownerId !== null);
 
   const artifactId = artifact?.id;
 
@@ -417,6 +423,7 @@ export function ArtifactFullScreen({
   const canPreview = isPreviewable(artifact);
   const previewKind = livePreviewKind(artifact);
   const isMonospace = isMonospaceArtifact(artifact);
+  const chartArtifact = artifact.type === 'chart' ? chartArtifactToChart(activeContent) : null;
 
   const titleLabel = `${artifact.title} · ${typeLabel(artifact)}`;
 
@@ -496,7 +503,7 @@ export function ArtifactFullScreen({
             <Text
               style={{
                 flex: 1,
-                fontSize: 15,
+                fontSize: typeScale.body,
                 fontWeight: '600',
                 color: colors.textPrimary,
               }}
@@ -680,7 +687,7 @@ export function ArtifactFullScreen({
               >
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     color: colors.textSecondary,
                     minWidth: 42,
                     textAlign: 'center',
@@ -721,7 +728,13 @@ export function ArtifactFullScreen({
                   accessibilityState={{ selected: showChanges }}
                   testID="artifact-show-changes"
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '500',
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Show changes
                   </Text>
                 </Pressable>
@@ -734,7 +747,13 @@ export function ArtifactFullScreen({
                   accessibilityRole="button"
                   testID="artifact-restore-version"
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '500',
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Restore
                   </Text>
                 </Pressable>
@@ -745,6 +764,14 @@ export function ArtifactFullScreen({
             <ArtifactSwitcher artifacts={switchable} activeId={artifact.id} onSelect={onSwitch} />
           ) : null}
 
+          {artifact && appMode === 'cloud' && publicationKnown && !publishedUrl ? (
+            <Text
+              style={{ marginTop: 10, fontSize: typeScale.caption, color: colors.textSecondary }}
+              testID="artifact-private-state"
+            >
+              Private. Only you can open it until you publish it.
+            </Text>
+          ) : null}
           {/* Row 3: the hosted link, once published */}
           {publishedUrl ? (
             <View
@@ -760,7 +787,7 @@ export function ArtifactFullScreen({
               }}
             >
               <Text
-                style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}
+                style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
                 numberOfLines={1}
                 selectable
                 testID="artifact-published-url"
@@ -796,8 +823,14 @@ export function ArtifactFullScreen({
               title={artifact.title}
               publication={currentPublication}
               workspaceMemberCount={workspaceMemberCount}
-              onChanged={(publication) => setPublished({ artifactId: artifact.id, publication })}
-              onUnpublished={() => setPublished(null)}
+              onChanged={(publication) => {
+                setPublished({ artifactId: artifact.id, publication });
+                recordPublishedArtifactAudience(artifact.id, publication.visibility);
+              }}
+              onUnpublished={() => {
+                setPublished(null);
+                recordPublishedArtifactAudience(artifact.id, null);
+              }}
             />
           ) : null}
         </View>
@@ -831,7 +864,7 @@ export function ArtifactFullScreen({
             <Eye size={32} color={colors.textMuted} />
             <Text
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 fontWeight: '600',
                 color: colors.textPrimary,
                 textAlign: 'center',
@@ -841,7 +874,7 @@ export function ArtifactFullScreen({
             </Text>
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 color: colors.textMuted,
                 textAlign: 'center',
                 lineHeight: 20,
@@ -862,7 +895,13 @@ export function ArtifactFullScreen({
               accessibilityLabel="Switch to source view"
               accessibilityRole="button"
             >
-              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '500',
+                  color: colors.textSecondary,
+                }}
+              >
                 View Source
               </Text>
             </Pressable>
@@ -896,19 +935,19 @@ export function ArtifactFullScreen({
                 }}
               >
                 {artifact.metadata.from != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>{'From: '}</Text>
                     {String(artifact.metadata.from)}
                   </Text>
                 )}
                 {artifact.metadata.to != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>{'To: '}</Text>
                     {String(artifact.metadata.to)}
                   </Text>
                 )}
                 {artifact.metadata.subject != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>
                       {'Subject: '}
                     </Text>
@@ -943,7 +982,7 @@ export function ArtifactFullScreen({
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 20,
                     color: colors.textPrimary,
                     fontFamily: Platform.select({
@@ -968,6 +1007,10 @@ export function ArtifactFullScreen({
                   )}
                 </Text>
               </ScrollView>
+            ) : chartArtifact ? (
+              <View testID="artifact-fullscreen-chart">
+                <ReportChart chart={chartArtifact} colors={colors} />
+              </View>
             ) : (
               <View testID="artifact-fullscreen-markdown">
                 {renderMarkdownContent(activeContent, colors)}
@@ -979,7 +1022,7 @@ export function ArtifactFullScreen({
               <View style={{ marginTop: 16 }}>
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     fontWeight: '600',
                     color: colors.textMuted,
                     marginBottom: 8,
@@ -989,7 +1032,13 @@ export function ArtifactFullScreen({
                 >
                   Citations
                 </Text>
-                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: colors.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
                   {String(artifact.metadata.citations)}
                 </Text>
               </View>
@@ -1030,10 +1079,17 @@ export function ArtifactFullScreen({
                 accessibilityLabel="Cancel editing"
                 style={{ padding: 8 }}
               >
-                <Text style={{ fontSize: 15, color: colors.textSecondary }}>Cancel</Text>
+                <Text style={{ fontSize: typeScale.body, color: colors.textSecondary }}>
+                  Cancel
+                </Text>
               </Pressable>
               <Text
-                style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+                style={{
+                  flex: 1,
+                  fontSize: typeScale.body,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
                 numberOfLines={1}
               >
                 {artifact.title}
@@ -1044,7 +1100,9 @@ export function ArtifactFullScreen({
                 accessibilityLabel="Save as a new version"
                 style={{ padding: 8 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.teal }}>Save</Text>
+                <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.teal }}>
+                  Save
+                </Text>
               </Pressable>
             </View>
             <TextInput
@@ -1059,7 +1117,7 @@ export function ArtifactFullScreen({
                 flex: 1,
                 margin: 12,
                 padding: 12,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 20,
                 color: colors.textPrimary,
                 borderWidth: 1,

@@ -15,9 +15,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native purchase is still gated off (FEATURES.billing false, MOBILE_IAP_ENABLED unset) and the IAP catalog returns no products without an upgrade-waitlist redemption. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.06: Tax and total-price display.
 
@@ -27,9 +27,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tax and total come from the store sheet, but native purchase is gated off (MOBILE_IAP_ENABLED unset, FEATURES.billing false), so no checkout shows them. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:407-411`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.13: Purchase confirmation.
 
@@ -39,9 +39,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:407-411`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Purchase verified confirmation exists but native purchase is gated off (MOBILE_IAP_ENABLED unset, FEATURES.billing false) and the catalog is empty without a waitlist redemption. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:506-514`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.25: Mobile purchase restoration.
 
@@ -50,9 +50,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:506-514`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Restore purchases only renders when the native catalog is enabled, which needs MOBILE_IAP_ENABLED (unset by default). | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-496`, `apps/mobile/src/features/billing/useMobileIap.ts:345-365`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.28: Team seat purchase.
 

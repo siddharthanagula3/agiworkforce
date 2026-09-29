@@ -3,6 +3,7 @@ import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 
@@ -227,18 +228,18 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 16,
     paddingBottom: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: typeScale.title2,
     fontWeight: '700',
     marginBottom: 16,
     letterSpacing: 0,
   },
   summary: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -250,15 +251,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   privacyTitle: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   privacyBody: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     lineHeight: 19,
   },
   privacyLink: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '500',
   },
   providerRow: {
@@ -270,14 +271,14 @@ const styles = StyleSheet.create({
   },
   providerLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   legalToggle: {
     paddingVertical: 4,
     marginBottom: 8,
   },
   legalToggleText: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '500',
   },
   legalBox: {
@@ -288,15 +289,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   legalText: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     lineHeight: 18,
     fontStyle: 'italic',
   },
   legalSource: {
-    fontSize: 11,
+    fontSize: typeScale.caption,
   },
   actions: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 12,
     paddingBottom: 32,
     borderTopWidth: 1,
@@ -309,13 +310,13 @@ const styles = StyleSheet.create({
   },
   acceptBtnText: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: typeScale.callout,
   },
   declineBtn: {
     paddingVertical: 12,
     alignItems: 'center',
   },
   declineBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 });
