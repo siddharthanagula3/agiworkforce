@@ -50,6 +50,8 @@ import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome
 import type { Artifact } from '@/types/chat';
 import { ArtifactSwitcher } from './ArtifactSwitcher';
 import { renderMarkdownContent } from './MessageContentRenderer';
+import { ReportChart } from './ReportChart';
+import { chartArtifactToChart } from '@/src/features/chat/utils/chartArtifact';
 import { GeneratedFileCard } from './GeneratedFileCard';
 import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
 import { ArtifactChangesView } from './ArtifactChangesView';
@@ -420,6 +422,7 @@ export function ArtifactFullScreen({
   const canPreview = isPreviewable(artifact);
   const previewKind = livePreviewKind(artifact);
   const isMonospace = isMonospaceArtifact(artifact);
+  const chartArtifact = artifact.type === 'chart' ? chartArtifactToChart(activeContent) : null;
 
   const titleLabel = `${artifact.title} · ${typeLabel(artifact)}`;
 
@@ -985,6 +988,10 @@ export function ArtifactFullScreen({
                   )}
                 </Text>
               </ScrollView>
+            ) : chartArtifact ? (
+              <View testID="artifact-fullscreen-chart">
+                <ReportChart chart={chartArtifact} colors={colors} />
+              </View>
             ) : (
               <View testID="artifact-fullscreen-markdown">
                 {renderMarkdownContent(activeContent, colors)}
