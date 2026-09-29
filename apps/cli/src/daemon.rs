@@ -65,7 +65,7 @@ fn webhook_request_authenticated(
     false
 }
 
-fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+pub(crate) fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     const BLOCK: usize = 64;
     let mut block = [0u8; BLOCK];

@@ -368,6 +368,7 @@ interface PendingApprovalTurn {
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
+const SHARED_PAGE_URL = /\bhttps?:\/\/[^\s<>"]+/i;
 const TERMINAL_RESUME_STATUSES = new Set([404, 409, 410]);
 
 function isTerminalResumeError(error: unknown): boolean {
@@ -2354,6 +2355,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               thinking: thinkingEnabled,
               ...(turnEffort ? { effort: turnEffort } : {}),
               ...(webSearchEnabled ? { web_search: true } : {}),
+              ...(webSearchEnabled || SHARED_PAGE_URL.test(content) ? { web_fetch: true } : {}),
               ...(webSearchEnabled && options?.searchRequested ? { search_requested: true } : {}),
               ...(researchEnabled ? { research: true } : {}),
               ...(researchEnabled && options?.researchResume
