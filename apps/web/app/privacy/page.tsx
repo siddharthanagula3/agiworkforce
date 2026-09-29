@@ -724,6 +724,18 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
+    label: 'Background jobs (Managed Cloud)',
+    value: (
+      <>
+        <strong>Retention:</strong> up to 30 days.
+        <br />
+        <strong>Enforced by:</strong> the job runner, every few minutes. Jobs that finished are
+        deleted within 30 days. Jobs that failed for good, including Gmail and Google Calendar
+        trigger events, are deleted 30 days after they fail.
+      </>
+    ),
+  },
+  {
     label: 'Deleted files',
     value: (
       <>
@@ -899,12 +911,17 @@ const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Use',
     value:
-      'Only to provide the feature you asked for: reading and drafting mail, sending a message you approve, reading and creating calendar events, finding Drive files and looking up contacts.',
+      'Only to provide the feature you asked for, such as reading and drafting mail, sending a message you approve, reading and creating calendar events, searching and reading your Drive files and looking up contacts.',
   },
   {
     label: 'AI training',
     value:
       'We do not use Google user data to develop, improve or train generalized AI or machine learning models. Once a chat or routine can reach Google data, we send it only to AI providers whose terms bar training on it. If the model you picked cannot run that way, we tell you and send nothing.',
+  },
+  {
+    label: 'Memory',
+    value:
+      'We do not save memories from a chat that holds Google data, and we leave those chats and the memories drawn from them out of what AGI recalls in your other chats.',
   },
   {
     label: 'Transfer',
@@ -1150,9 +1167,9 @@ export default function PrivacyPage() {
                       Google user data
                     </h2>
                     <Prose>
-                      This covers the Gmail, Google Calendar, Google Drive and Google Contacts
-                      connectors. AGI&rsquo;s use and transfer to any other app of information
-                      received from Google APIs will adhere to the{' '}
+                      This covers every Google connector, including Gmail, Google Calendar, Google
+                      Drive and Google Contacts. AGI&rsquo;s use and transfer to any other app of
+                      information received from Google APIs will adhere to the{' '}
                       <a
                         href="https://developers.google.com/terms/api-services-user-data-policy"
                         className="agi-ds-link"

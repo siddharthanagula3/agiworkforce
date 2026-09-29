@@ -89,6 +89,11 @@
           "date": "2026-09-29",
           "digest": "e301293a3ab8f014",
           "note": "Same-day revision before release: account deletion now revokes connector tokens at Google, Google data routes only to no-training providers, workspace retention covers routine runs, and deleted chats state the 30-day purge. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "25028c9a8392c809",
+          "note": "Same-day revision before release: covers every Google connector including whole-Drive read-only search, adds the memory commitment and the background job retention row. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
