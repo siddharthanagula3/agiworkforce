@@ -1,29 +1,10 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
-
-const SKIP_DIRS = new Set([
-  '.agent',
-  '.claude',
-  '.git',
-  '.next',
-  '.vercel',
-  '.vscode-test',
-  'build',
-  'coverage',
-  'dist',
-  'dist-web',
-  'node_modules',
-  'out',
-  'Pods',
-  'playwright-report',
-  'target',
-  'test-results',
-]);
 
 /**
  * Unit and integration tests only. A `.spec.` file in this repository drives a
@@ -130,29 +111,6 @@ const MOCK_CALL = /\b(?:vi|jest)\s*\.\s*(?:mock|doMock)\s*\(\s*['"]([^'"]+)['"]/
 const TEST_CALL =
   /(?:^|[^.\w$])(?:it|test)(?:\s*\.\s*(?:only|concurrent|sequential|fails|extend|each\s*(?:\([^)]*\)|`(?:[^`\\]|\\.)*`)))?\s*\(/g;
 
-function walk(dir, files = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return files;
-  }
-  for (const entry of entries) {
-    if (SKIP_DIRS.has(entry)) continue;
-    const full = path.join(dir, entry);
-    let stat;
-    try {
-      stat = lstatSync(full);
-    } catch {
-      continue;
-    }
-    if (stat.isSymbolicLink()) continue;
-    if (stat.isDirectory()) walk(full, files);
-    else if (TEST_FILE_RE.test(entry)) files.push(full);
-  }
-  return files;
-}
-
 function gitFiles(args) {
   try {
     return execSync(`git ${args}`, {
@@ -160,7 +118,7 @@ function gitFiles(args) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     })
-      .split('\n')
+      .split(args.includes('-z') ? '\0' : '\n')
       .map((line) => line.trim())
       .filter((line) => line && TEST_FILE_RE.test(line))
       .map((file) => path.join(root, file))
@@ -519,7 +477,7 @@ export function main(argv = process.argv.slice(2)) {
     ? gitFiles('diff --cached --name-only --diff-filter=ACMRTUXB')
     : changedMode
       ? gitFiles('diff --name-only --diff-filter=ACMRTUXB HEAD')
-      : walk(root);
+      : gitFiles('ls-files -c -o --exclude-standard -z');
 
   const findings = [];
   for (const file of files) {

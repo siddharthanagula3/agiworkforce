@@ -46,6 +46,9 @@ const cloudModules = [
   'plugin-marketplaces',
   'device-registry',
   'header-names',
+  'free-quota',
+  'account-deletion',
+  'terms-acceptance',
 ];
 
 const cloudMovedFiles = [
