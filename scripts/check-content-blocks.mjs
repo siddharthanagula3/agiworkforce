@@ -66,14 +66,15 @@ const WEB_FIX =
 export const BLOCK_KIND_READERS_PENDING = Object.freeze({
   'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${WEB_FIX}`,
   'apps/mobile/src/features/tasks/runPresentation.ts': `mobile, post-codex patch: ${WEB_FIX}`,
-  'apps/extension/src/features/side-panel/chat-state.ts': `p-chrome: ${WEB_FIX}`,
-  'apps/extension/src/features/side-panel/cloudRunsPanel.ts': `p-chrome: ${WEB_FIX}`,
-  'apps/extension/src/side_panel.ts': `p-chrome: ${WEB_FIX}`,
-  'apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts': `p-sessions: ${WEB_FIX}`,
-  'apps/extension-vscode/src/integrations/localRuntimeClient.ts': `p-sessions: ${WEB_FIX}`,
-  'apps/desktop/src/runtime/CloudRuntime.ts': `p-electron: ${WEB_FIX}`,
-  'apps/desktop/electron/runtime/developerSessionService.ts': `p-electron: ${WEB_FIX}`,
-  'apps/desktop/electron/runtime/localInferenceService.ts': `p-electron: ${WEB_FIX}`,
+});
+
+export const NOT_BLOCK_KIND_READERS = Object.freeze({
+  'apps/desktop/electron/runtime/localInferenceService.ts':
+    'Reads provider-adapter stream chunks (text-delta, thinking-delta, error, stop), a separate vocabulary from agent events.',
+  'apps/desktop/src/runtime/CloudRuntime.ts':
+    "Matches only text-delta and stop on agent events; the third match is a stop event's reason.reason === 'error'.",
+  'apps/extension/src/features/side-panel/chat-state.ts':
+    'An exhaustive switch deciding which events are safe to persist, not which block to render.',
 });
 
 export const SEPARATE_VOCABULARIES = Object.freeze({
@@ -134,8 +135,9 @@ export function eventTypesDecided(source, eventTypes) {
   );
 }
 
-function findBlockKindReaders(root, eventTypes, pending, findings) {
+function findBlockKindReaders(root, eventTypes, pending, notReaders, findings) {
   const pendingSeen = new Set();
+  const notReadersSeen = new Set();
   let readers = 0;
   for (const rootDir of CLIENT_ROOTS) {
     for (const relative of sourceFiles(root, rootDir)) {
@@ -143,6 +145,10 @@ function findBlockKindReaders(root, eventTypes, pending, findings) {
       const source = read(root, relative);
       const decided = eventTypesDecided(source, eventTypes);
       if (decided.length < MIN_EVENT_TYPES_DECIDED) continue;
+      if (notReaders[relative] !== undefined) {
+        notReadersSeen.add(relative);
+        continue;
+      }
       if (KIND_MAPPING_READ.test(source)) {
         readers += 1;
         continue;
@@ -153,6 +159,16 @@ function findBlockKindReaders(root, eventTypes, pending, findings) {
       }
       findings.push(
         `${relative}: decides blocks from agent event types (${decided.slice(0, 5).join(', ')}) without reading the kind through messageKindForAgentEvent in ${KIND_MAPPING}`,
+      );
+    }
+  }
+  for (const [relative, reason] of Object.entries(notReaders)) {
+    if (typeof reason !== 'string' || reason.trim().length < 20) {
+      findings.push(`${relative}: recorded as not a block-kind reader without a reason`);
+    }
+    if (!notReadersSeen.has(relative)) {
+      findings.push(
+        `${relative}: no longer matches the event-type scan. Delete its not-a-reader entry; the list only shrinks.`,
       );
     }
   }
@@ -171,7 +187,7 @@ function findBlockKindReaders(root, eventTypes, pending, findings) {
 
 export function runContentBlocksGuard(
   root = process.cwd(),
-  { pending = BLOCK_KIND_READERS_PENDING } = {},
+  { pending = BLOCK_KIND_READERS_PENDING, notReaders = NOT_BLOCK_KIND_READERS } = {},
 ) {
   const findings = [];
   const kinds = messageKinds(read(root, VOCABULARY));
@@ -252,13 +268,13 @@ export function runContentBlocksGuard(
           findings.push(`${KIND_MAPPING}: maps no block kind for the event type '${type}'`);
         }
       }
-      readers = findBlockKindReaders(root, eventTypes, pending, findings);
+      readers = findBlockKindReaders(root, eventTypes, pending, notReaders, findings);
     }
   }
 
   const summary =
     findings.length === 0
-      ? `content blocks: ${kinds.length} kinds declared once and degraded under test, ${scanned} files carry no second copy, ${readers} client module(s) read block kinds through the mapping, ${Object.keys(pending).length} pending`
+      ? `content blocks: ${kinds.length} kinds declared once and degraded under test, ${scanned} files carry no second copy, ${readers} client module(s) read block kinds through the mapping, ${Object.keys(pending).length} pending, ${Object.keys(notReaders).length} recorded as not block-kind readers`
       : findings.join('\n');
   return { findings, summary };
 }

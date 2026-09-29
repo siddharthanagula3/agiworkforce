@@ -118,10 +118,10 @@ pub mod method {
     pub const PERMISSIONS_ADD: &str = "permissions/add";
     pub const TRUST_LIST: &str = "trust/list";
     pub const TRUST_REVOKE: &str = "trust/revoke";
-    pub const THREAD_PLAN_DECISION: &str = "thread/planDecision";
     pub const PROVIDERS_LIST: &str = "providers/list";
     pub const PROVIDERS_SET_KEY: &str = "providers/setKey";
     pub const PROVIDERS_REMOVE_KEY: &str = "providers/removeKey";
+    pub const PLAN_DECIDE: &str = "plan/decide";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -399,11 +399,12 @@ pub struct AppServerCapabilities {
     #[serde(default, skip_serializing_if = "is_false")]
     pub turn_tool_filters: bool,
     #[serde(default, skip_serializing_if = "is_false")]
-    pub plan_decision: bool,
-    #[serde(default, skip_serializing_if = "is_false")]
     pub provider_keys: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub questions: bool,
+    /// `plan/decide` approves or rejects the plan a plan-mode turn proposed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan_decisions: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2520,6 +2521,27 @@ pub struct PermissionsRemoveParams {
     pub id: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PlanDecision {
+    Approve,
+    Reject,
+}
+
+/// Approve the thread's current plan, or reject it with the feedback the
+/// next turn carries to the model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PlanDecideParams {
+    pub thread_id: String,
+    pub decision: PlanDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub feedback: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -2560,25 +2582,6 @@ impl std::fmt::Debug for ProviderSetKeyParams {
 #[ts(rename_all = "camelCase")]
 pub struct ProviderParams {
     pub provider: String,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(rename_all = "snake_case")]
-pub enum PlanDecision {
-    Approve,
-    Reject,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(rename_all = "camelCase")]
-pub struct PlanDecisionParams {
-    pub thread_id: String,
-    pub decision: PlanDecision,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub feedback: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

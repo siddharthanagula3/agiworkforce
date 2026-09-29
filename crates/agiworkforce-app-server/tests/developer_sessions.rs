@@ -352,9 +352,9 @@ fn capabilities() -> AppServerCapabilities {
         permission_rules: false,
         trust: false,
         turn_tool_filters: false,
-        plan_decision: false,
         provider_keys: false,
         questions: false,
+        plan_decisions: false,
     }
 }
 

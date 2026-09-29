@@ -72,6 +72,13 @@ const messageAction = z.object({
     occurrence: z.number().int().nonnegative().max(10_000),
   }),
 });
+const planDecision = z.object({
+  type: z.literal('planDecision'),
+  payload: z.discriminatedUnion('decision', [
+    z.object({ decision: z.literal('approve') }),
+    z.object({ decision: z.literal('reject'), feedback: z.string().trim().min(1).max(4_000) }),
+  ]),
+});
 const searchSessions = z.object({
   type: z.literal('searchSessions'),
   payload: z.object({ query: z.string().trim().min(2).max(200) }),
@@ -306,6 +313,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openArchivedSessions,
   searchSessions,
   messageAction,
+  planDecision,
   openAccount,
   completeOnboarding,
   openPermissionDocs,

@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees';
-import { normalizeSelectableConfiguredModelId } from '../model-picker/modelConstants';
+import {
+  normalizeSelectableConfiguredModelId,
+  routingProfileForModel,
+} from '../model-picker/modelConstants';
 import { getWorkspaceDisplayName } from '../../platform/workspaceFolders';
 import { Config } from '../../platform/config';
 import {
@@ -60,6 +63,13 @@ function gatherEditorContext(): EditorContext {
     surroundingCode,
     workspaceName,
   };
+}
+
+function autoRoutingProfileParam(model: string): {
+  routingProfile?: Exclude<ReturnType<typeof routingProfileForModel>, undefined | 'auto'>;
+} {
+  const routingProfile = routingProfileForModel(model);
+  return routingProfile === undefined || routingProfile === 'auto' ? {} : { routingProfile };
 }
 
 function isExecutionConfirmation(text: string): boolean {
@@ -557,7 +567,11 @@ export function createChatHandler(
         ...contextFilesParam(cwd),
         ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
         ...(isAutoRoutingModel(model)
-          ? { model, routingTaskType: classifyDeveloperTurn(userMessage, promptReferenceInputs) }
+          ? {
+              model: routingProfileForModel(model) === undefined ? model : 'auto',
+              routingTaskType: classifyDeveloperTurn(userMessage, promptReferenceInputs),
+              ...autoRoutingProfileParam(model),
+            }
           : { model }),
       });
       turnId = turn.id;
