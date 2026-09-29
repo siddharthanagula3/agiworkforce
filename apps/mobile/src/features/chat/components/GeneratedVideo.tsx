@@ -1,13 +1,12 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { Image } from 'expo-image';
-import { WebView } from 'react-native-webview';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Download, Film, Play, X } from 'lucide-react-native';
+import { Download, Film, Play } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { prepareLocalVideoPlayer, shareFile, type LocalVideoPlayer } from '@/services/fileCreation';
+import { VideoPlayerModal } from './VideoPlayerModal';
 
 export interface GeneratedVideoProps {
   videoUrl: string;
@@ -157,47 +156,13 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
         </Pressable>
       </View>
 
-      <Modal
-        visible={playerOpen && player !== null}
-        animationType="fade"
-        onRequestClose={closePlayer}
-        supportedOrientations={['portrait', 'landscape']}
-        accessibilityViewIsModal
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.black }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 8 }}>
-            <Pressable
-              onPress={closePlayer}
-              accessibilityRole="button"
-              accessibilityLabel="Close video"
-              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <X size={22} color={colors.white} />
-            </Pressable>
-          </View>
-          {player ? (
-            <WebView
-              source={{ uri: player.playerUri }}
-              style={{ flex: 1, backgroundColor: colors.black }}
-              originWhitelist={['file://*']}
-              allowingReadAccessToURL={player.directoryUri}
-              allowFileAccess
-              allowFileAccessFromFileURLs
-              javaScriptEnabled={false}
-              allowsInlineMediaPlayback
-              allowsFullscreenVideo
-              mediaPlaybackRequiresUserAction={false}
-              setSupportMultipleWindows={false}
-              onShouldStartLoadWithRequest={(request) => request.url === player.playerUri}
-              onError={() => {
-                closePlayer();
-                Alert.alert('Could not play the video', 'Try Save to open it in another app.');
-              }}
-              accessibilityLabel={prompt ? `Video: ${prompt}` : 'Generated video'}
-            />
-          ) : null}
-        </SafeAreaView>
-      </Modal>
+      <VideoPlayerModal
+        player={player}
+        visible={playerOpen}
+        onClose={closePlayer}
+        label={prompt ? `Video: ${prompt}` : 'Generated video'}
+        failureHint="Try Save to open it in another app."
+      />
     </View>
   );
 }

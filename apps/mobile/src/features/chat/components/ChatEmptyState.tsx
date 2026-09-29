@@ -30,7 +30,12 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
   const nickname = isCloud ? cloudNickname : localNickname;
   const fullName = isCloud ? cloudFullName : localFullName;
   const clerkFirstName = clerkUser?.firstName || clerkUser?.fullName?.split(' ')[0] || '';
-  const displayName = nickname || fullName?.split(' ')[0] || (isCloud ? clerkFirstName : '');
+  const localNameOptedOut = useLocalSettingsStore((s) => s.personalization.nameOptedOut === true);
+  const cloudNameOptedOut = useCloudSettingsStore((s) => s.personalization.nameOptedOut === true);
+  const nameOptedOut = isCloud ? cloudNameOptedOut : localNameOptedOut;
+  const displayName = nameOptedOut
+    ? ''
+    : nickname || fullName?.split(' ')[0] || (isCloud ? clerkFirstName : '');
 
   const reducedMotion = useReducedMotion();
   const [bannerVisible, setBannerVisible] = useState(false);
