@@ -10,8 +10,10 @@ import {
 } from '@agiworkforce/types';
 import {
   acceptConnectorInput,
+  connectorInputFieldError,
   readConnectorInputPrompts,
   type ConnectorInputField,
+  type ConnectorInputPrompt,
 } from '@agiworkforce/client-runtime';
 import {
   isDeviceStepTool,
@@ -43,7 +45,7 @@ export type DesktopChatRuntime = Pick<
 
 type DispatchUpdate = Omit<DispatchTaskReport, 'requestId' | 'conversationId'>;
 
-interface DispatchRun {
+export interface DispatchRun {
   requestId: string;
   conversationId: string | null;
   runtime: DesktopChatRuntime;
@@ -63,6 +65,8 @@ const WAITING_ON_ANSWER = 'Waiting for your answer in AGI Cloud on the computer.
 const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Cloud on the computer.';
 const CANCELLED = 'The task was stopped.';
 const RUNNER_NOT_READY = 'AGI Cloud on the computer was not ready to run this task.';
+const REPLY_NOT_ACCEPTED = 'The computer could not use this answer. Check it and send it again.';
+const CHOICE_NOT_OFFERED = 'Choose one of the options offered.';
 
 const TERMINAL: ReadonlySet<string> = new Set(TERMINAL_LIFECYCLE_STATUSES);
 
@@ -114,8 +118,17 @@ function waitsOnAnswer(answer: Message | undefined): boolean {
 
 function phoneField(field: ConnectorInputField): DispatchTaskPendingField | null {
   const title = field.title.slice(0, DISPATCH_TASK_REPLY_LIMITS.summaryLength);
-  if (field.kind === 'text')
-    return { key: field.key, title, kind: 'text', required: field.required };
+  if (field.kind === 'text') {
+    return {
+      key: field.key,
+      title,
+      kind: 'text',
+      required: field.required,
+      ...(field.format === undefined ? {} : { format: field.format }),
+      ...(field.minLength === undefined ? {} : { minLength: field.minLength }),
+      ...(field.maxLength === undefined ? {} : { maxLength: field.maxLength }),
+    };
+  }
   if (field.kind !== 'choice') return null;
   return {
     key: field.key,
@@ -302,31 +315,85 @@ function cancelRun(requestId: string): void {
   send(run, { status: 'cancelled', message: CANCELLED });
 }
 
+export function replyFieldError(
+  prompt: ConnectorInputPrompt,
+  values: Readonly<Record<string, string>>,
+): string | null {
+  if (prompt.mode !== 'form') return REPLY_NOT_ACCEPTED;
+  for (const field of prompt.fields) {
+    const value = values[field.key];
+    if (
+      field.kind === 'choice' &&
+      value !== undefined &&
+      value !== '' &&
+      !field.options.some((option) => option.value === value)
+    ) {
+      return `${field.title}: ${CHOICE_NOT_OFFERED}`;
+    }
+    const error = connectorInputFieldError(field, value);
+    if (error) return `${field.title}: ${error}`;
+  }
+  return null;
+}
+
+function rejectReply(run: DispatchRun, toolCallId: string, message: string): void {
+  send(run, { ...updateFor(run), replyError: { toolCallId, message } });
+}
+
+async function answerStep(
+  run: DispatchRun,
+  answer: Message,
+  step: DispatchTaskPendingStep,
+  reply: DispatchTaskStepReply,
+): Promise<void> {
+  if (reply.kind === 'approval') {
+    await run.runtime.resolveToolApproval(
+      answer.id,
+      reply.toolCallId,
+      reply.approved ? 'approved' : 'rejected',
+    );
+    return;
+  }
+  const tool = answer.metadata?.tools?.find((entry) => entry.toolCallId === reply.toolCallId);
+  if (step.kind !== 'input' || reply.inputKey !== step.inputKey || !tool?.inputRequests) return;
+  const prompt = readConnectorInputPrompts(tool.inputRequests).find(
+    (candidate) => candidate.key === step.inputKey,
+  );
+  if (!prompt) return;
+  const error = replyFieldError(prompt, reply.values);
+  if (error) {
+    rejectReply(run, reply.toolCallId, error);
+    return;
+  }
+  await run.runtime.resolveToolInput(
+    answer.id,
+    reply.toolCallId,
+    acceptConnectorInput([prompt], { [step.inputKey]: reply.values }),
+  );
+}
+
 async function replyToRun(requestId: string, replies: DispatchTaskStepReply[]): Promise<void> {
   const run = runs.get(requestId);
   if (!run || run.conversationId === null) return;
   const answer = finalAnswer(run.conversationId);
   if (!answer) return;
+  await answerReplies(run, answer, replies);
+}
+
+export async function answerReplies(
+  run: DispatchRun,
+  answer: Message,
+  replies: DispatchTaskStepReply[],
+): Promise<void> {
   const pending = new Map(pendingSteps(answer).map((step) => [step.toolCallId, step]));
   for (const reply of replies) {
     const step = pending.get(reply.toolCallId);
     if (!step || step.kind !== reply.kind) continue;
-    if (reply.kind === 'approval') {
-      await run.runtime.resolveToolApproval(
-        answer.id,
-        reply.toolCallId,
-        reply.approved ? 'approved' : 'rejected',
-      );
-      continue;
+    try {
+      await answerStep(run, answer, step, reply);
+    } catch {
+      rejectReply(run, reply.toolCallId, REPLY_NOT_ACCEPTED);
     }
-    const tool = answer.metadata?.tools?.find((entry) => entry.toolCallId === reply.toolCallId);
-    if (step.kind !== 'input' || reply.inputKey !== step.inputKey || !tool?.inputRequests) continue;
-    const prompts = readConnectorInputPrompts(tool.inputRequests);
-    await run.runtime.resolveToolInput(
-      answer.id,
-      reply.toolCallId,
-      acceptConnectorInput(prompts, { [step.inputKey]: reply.values }),
-    );
   }
 }
 

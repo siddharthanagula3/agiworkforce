@@ -6,6 +6,7 @@ import {
   isRelayPairingCode,
   type DispatchTaskLifecycleStatus,
   type DispatchTaskPendingStep,
+  type DispatchTaskReplyError,
 } from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
@@ -192,6 +193,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       result?: string;
       error?: string;
       pending?: DispatchTaskPendingStep[];
+      replyError?: DispatchTaskReplyError;
     } = {},
   ): Promise<void> {
     const message = clipped(detail.message);
@@ -209,6 +211,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       ...(result === undefined ? {} : { result }),
       ...(error === undefined ? {} : { error }),
       ...(status === 'awaiting_input' && detail.pending?.length ? { pending: detail.pending } : {}),
+      ...(detail.replyError ? { replyError: detail.replyError } : {}),
       updatedAt: new Date().toISOString(),
     };
     const delivered = await send('dispatch.task.status', payload);
@@ -298,6 +301,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         ...(report.result === undefined ? {} : { result: report.result }),
         ...(report.error === undefined ? {} : { error: report.error }),
         ...(report.pending === undefined ? {} : { pending: report.pending }),
+        ...(report.replyError === undefined ? {} : { replyError: report.replyError }),
       }),
     );
     return true;

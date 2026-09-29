@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Check, X } from 'lucide-react-native';
-import type { DispatchTaskPendingStep, DispatchTaskStepReply } from '@agiworkforce/types';
+import { connectorInputFieldError, type ConnectorInputField } from '@agiworkforce/client-runtime';
+import type {
+  DispatchTaskPendingField,
+  DispatchTaskPendingStep,
+  DispatchTaskReplyError,
+  DispatchTaskStepReply,
+} from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { replyToDispatchTask } from '@/services/companion';
@@ -10,6 +16,32 @@ import { useThemeColors } from '@/src/ui/theme';
 const SEND_FAILED = 'Your answer was not sent. Check the Desktop connection and try again.';
 
 type InputStep = Extract<DispatchTaskPendingStep, { kind: 'input' }>;
+
+function connectorField(field: DispatchTaskPendingField): ConnectorInputField {
+  const base = { key: field.key, title: field.title, required: field.required };
+  if (field.kind === 'choice') return { ...base, kind: 'choice', options: field.options ?? [] };
+  return {
+    ...base,
+    kind: 'text',
+    ...(field.format === undefined ? {} : { format: field.format }),
+    ...(field.minLength === undefined ? {} : { minLength: field.minLength }),
+    ...(field.maxLength === undefined ? {} : { maxLength: field.maxLength }),
+  };
+}
+
+export function dispatchFieldError(
+  field: DispatchTaskPendingField,
+  value: string | undefined,
+): string | null {
+  if (
+    field.kind === 'choice' &&
+    value &&
+    !(field.options ?? []).some((option) => option.value === value)
+  ) {
+    return 'Choose one of the options offered.';
+  }
+  return connectorInputFieldError(connectorField(field), value);
+}
 
 function ActionButton({
   label,
@@ -67,7 +99,16 @@ function InputStepForm({
 }) {
   const colors = useThemeColors();
   const [values, setValues] = useState<Record<string, string>>({});
-  const complete = step.fields.every((field) => !field.required || values[field.key]?.trim());
+  const [touched, setTouched] = useState(false);
+  const errors = Object.fromEntries(
+    step.fields.map((field) => [field.key, dispatchFieldError(field, values[field.key])]),
+  );
+  const valid = step.fields.every((field) => errors[field.key] === null);
+
+  const submit = () => {
+    setTouched(true);
+    if (valid) onSubmit(values);
+  };
 
   return (
     <View style={{ gap: 8 }}>
@@ -84,6 +125,15 @@ function InputStepForm({
               value={values[field.key] ?? ''}
               onChangeText={(text) => setValues((current) => ({ ...current, [field.key]: text }))}
               editable={!disabled}
+              autoCapitalize="none"
+              keyboardType={
+                field.format === 'email'
+                  ? 'email-address'
+                  : field.format === 'uri'
+                    ? 'url'
+                    : 'default'
+              }
+              {...(field.maxLength === undefined ? {} : { maxLength: field.maxLength })}
               accessibilityLabel={field.title}
               style={{
                 minHeight: 44,
@@ -119,14 +169,19 @@ function InputStepForm({
               })}
             </View>
           )}
+          {touched && errors[field.key] ? (
+            <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 12 }}>
+              {errors[field.key]}
+            </Text>
+          ) : null}
         </View>
       ))}
       <ActionButton
         label="Send answer"
         accessibilityLabel={`Send answer: ${step.message}`}
         tone="approve"
-        disabled={disabled || !complete}
-        onPress={() => onSubmit(values)}
+        disabled={disabled}
+        onPress={submit}
       />
     </View>
   );
@@ -135,15 +190,27 @@ function InputStepForm({
 export function DispatchTaskReply({
   taskRequestId,
   steps,
+  replyError,
 }: {
   taskRequestId: string;
   steps: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
 }) {
   const colors = useThemeColors();
   const [sent, setSent] = useState<ReadonlySet<string>>(() => new Set());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const open = steps.filter((step) => !sent.has(step.toolCallId));
+
+  useEffect(() => {
+    if (!replyError) return;
+    setSent((current) => {
+      const next = new Set(current);
+      next.delete(replyError.toolCallId);
+      return next;
+    });
+    setError(replyError.message);
+  }, [replyError]);
 
   const send = async (reply: DispatchTaskStepReply) => {
     if (sending) return;

@@ -153,7 +153,11 @@ export function DispatchTaskComposer() {
                     )}
                   </View>
                   {pending ? (
-                    <DispatchTaskReply taskRequestId={task.requestId} steps={pending} />
+                    <DispatchTaskReply
+                      taskRequestId={task.requestId}
+                      steps={pending}
+                      {...(task.replyError ? { replyError: task.replyError } : {})}
+                    />
                   ) : null}
                   {!pending && (task.error || task.message) && (
                     <Text

@@ -45,6 +45,7 @@ import {
 } from '@/src/features/companion/remote-code/store';
 import {
   parseDispatchTaskPendingSteps,
+  parseDispatchTaskReplyError,
   type ControlReceiptEvent,
   type ControlReceiptOutcome,
   type DispatchTaskLifecycleStatus,
@@ -513,8 +514,13 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     normalized['pending'] === undefined
       ? undefined
       : parseDispatchTaskPendingSteps(normalized['pending']);
+  const replyError =
+    normalized['replyError'] === undefined
+      ? undefined
+      : parseDispatchTaskReplyError(normalized['replyError']);
   if (
     pending === null ||
+    replyError === null ||
     (normalized['taskId'] !== undefined && !taskId) ||
     (normalized['message'] !== undefined && !message) ||
     (normalized['result'] !== undefined && !result) ||
@@ -533,6 +539,7 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     ...(result ? { result } : {}),
     ...(error ? { error } : {}),
     ...(pending && pending.length > 0 ? { pending } : {}),
+    ...(replyError ? { replyError } : {}),
     updatedAt,
   };
 }

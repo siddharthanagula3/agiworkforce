@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   DispatchTaskLifecycleStatus,
   DispatchTaskPendingStep,
+  DispatchTaskReplyError,
   DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 
@@ -15,6 +16,7 @@ export interface MobileDispatchTask {
   result?: string;
   error?: string;
   pending?: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +73,7 @@ export const useDispatchTaskStore = create<DispatchTaskState>((set) => ({
               result: event.result,
               error: event.error,
               pending: event.status === 'awaiting_input' ? event.pending : undefined,
+              replyError: event.replyError,
               updatedAt: event.updatedAt,
             }
           : task,
