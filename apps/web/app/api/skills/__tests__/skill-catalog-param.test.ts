@@ -50,6 +50,7 @@ vi.mock('@/lib/services/skill-install-service', () => ({
   resolveInstalledManagedSkills: mockResolveInstalled,
 }));
 vi.mock('@/lib/services/user-skill-service', () => ({
+  findUserSkillWithFiles: vi.fn(async () => null),
   findUserSkillByName: vi.fn(async () => null),
   listUserSkillsAsManagedSkills: vi.fn(async () => []),
   toManagedSkillFromUserSkill: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock('@/lib/services/user-skill-authoring', () => ({
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
 

@@ -17,7 +17,11 @@ import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';
 import { AudioRoutePicker } from './AudioRoutePicker';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
-import type { LiveTranscriptTurn } from '@/src/features/voice/services/liveVoiceSession';
+import type {
+  LiveTranscriptTurn,
+  LiveVoiceToolActivity,
+  LiveVoiceToolOutcome,
+} from '@/src/features/voice/services/liveVoiceSession';
 
 export interface LiveVoiceBarProps {
   visible: boolean;
@@ -30,6 +34,8 @@ export interface LiveVoiceBarProps {
   turns: LiveTranscriptTurn[];
   error: string | null;
   approvals: readonly LiveVoicePendingApproval[];
+  toolActivity: readonly LiveVoiceToolActivity[];
+  toolOutcomes: readonly LiveVoiceToolOutcome[];
   onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
   onStopTask: () => void;
@@ -40,6 +46,15 @@ export interface LiveVoiceBarProps {
 
 const TRANSCRIPT_MAX_HEIGHT = 180;
 const APPROVAL_TITLE = 'Waiting for your approval';
+const BACKEND_BUSY_LABEL = 'Working on your request';
+const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
+const TOOL_RESULTS_TITLE = 'What the actions returned';
+const TOOL_FAILED_LABEL = 'Did not complete';
+const TOOL_OUTPUT_LINES = 3;
+
+function activityMessage(activity: LiveVoiceToolActivity): string {
+  return activity.state === 'timed_out' ? `${activity.label} ${SLOW_TOOL_SUFFIX}` : activity.label;
+}
 
 function statusLabel(
   status: LiveVoiceStatus,
@@ -68,6 +83,8 @@ export function LiveVoiceBar({
   turns,
   error,
   approvals,
+  toolActivity,
+  toolOutcomes,
   onDecideApproval,
   onToggleMute,
   onStopTask,
@@ -200,6 +217,38 @@ export function LiveVoiceBar({
         </ScrollView>
       ) : null}
 
+      {toolOutcomes.length > 0 ? (
+        <View testID="live-voice-tool-results" style={{ marginBottom: 12, gap: 8 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+            {TOOL_RESULTS_TITLE}
+          </Text>
+          {toolOutcomes.map((outcome) => (
+            <View
+              key={outcome.callId}
+              testID="live-voice-tool-result"
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: outcome.isError ? colors.dangerBorder : colors.border,
+                backgroundColor: colors.inputSurface,
+                padding: 10,
+                gap: 4,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+                {outcome.isError ? `${outcome.label} · ${TOOL_FAILED_LABEL}` : outcome.label}
+              </Text>
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}
+                numberOfLines={TOOL_OUTPUT_LINES}
+              >
+                {outcome.output}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       {approvals.map((approval) => (
         <View
           key={approval.callId}
@@ -293,14 +342,28 @@ export function LiveVoiceBar({
 
       {backendBusy ? (
         <View testID="live-voice-activity" style={{ marginBottom: 12 }}>
-          <StatusStep
-            step={{
-              id: 'live-voice-backend',
-              icon: 'thinking',
-              message: 'Working on your request',
-              status: 'running',
-            }}
-          />
+          {toolActivity.length > 0 ? (
+            toolActivity.map((activity) => (
+              <StatusStep
+                key={activity.delegationId}
+                step={{
+                  id: activity.delegationId,
+                  icon: 'thinking',
+                  message: activityMessage(activity),
+                  status: 'running',
+                }}
+              />
+            ))
+          ) : (
+            <StatusStep
+              step={{
+                id: 'live-voice-backend',
+                icon: 'thinking',
+                message: BACKEND_BUSY_LABEL,
+                status: 'running',
+              }}
+            />
+          )}
           <Pressable
             onPress={tap(onStopTask)}
             accessibilityRole="button"

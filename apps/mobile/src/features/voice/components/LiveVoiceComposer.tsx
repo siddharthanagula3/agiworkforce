@@ -41,6 +41,8 @@ export function LiveVoiceComposer({
       turns={controller.turns}
       error={controller.error}
       approvals={controller.approvals}
+      toolActivity={controller.toolActivity}
+      toolOutcomes={controller.toolOutcomes}
       onDecideApproval={controller.decideToolApproval}
       onToggleMute={controller.toggleMute}
       onStopTask={controller.cancelBackendWork}

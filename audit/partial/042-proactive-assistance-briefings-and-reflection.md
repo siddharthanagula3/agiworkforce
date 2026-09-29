@@ -110,7 +110,7 @@ Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a per-schedule run history. | ui |
+| mobile | partial | Codex copy of the schedules store and service diverges from integration; waits for the Codex merge (lead ruling). | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | chrome | missing | Not built on this surface. |  |
 

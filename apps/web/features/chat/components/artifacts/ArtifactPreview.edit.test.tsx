@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
@@ -21,6 +22,21 @@ function storedArtifact() {
   return useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID);
 }
 
+async function sourceEditor(): Promise<EditorView> {
+  const host = await screen.findByTestId('artifact-source-editor');
+  return waitFor(() => {
+    const view = EditorView.findFromDOM(host.querySelector<HTMLElement>('.cm-editor')!);
+    if (!view) throw new Error('The source editor has not mounted yet');
+    return view;
+  });
+}
+
+function replaceSource(view: EditorView, value: string) {
+  act(() => {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+  });
+}
+
 function renderPanel() {
   const artifact = storedArtifact()!;
   return render(
@@ -37,17 +53,17 @@ describe('ArtifactPreview · manual source editing', () => {
     useArtifactsStore.getState().reset();
   });
 
-  it('saves an edited source as a new content-keyed version', () => {
+  it('saves an edited source as a new content-keyed version', async () => {
     seedArtifact();
     const view = renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
 
-    const editor = screen.getByTestId('artifact-source-editor') as HTMLTextAreaElement;
-    expect(editor.value).toBe('<p>original</p>');
+    const editor = await sourceEditor();
+    expect(editor.state.doc.toString()).toBe('<p>original</p>');
 
-    fireEvent.change(editor, { target: { value: '<p>edited by hand</p>' } });
+    replaceSource(editor, '<p>edited by hand</p>');
     fireEvent.click(screen.getByTestId('artifact-save-source'));
 
     expect(storedArtifact()?.content).toBe('<p>edited by hand</p>');
@@ -57,15 +73,13 @@ describe('ArtifactPreview · manual source editing', () => {
     view.unmount();
   });
 
-  it('discards the draft on Cancel without touching the store', () => {
+  it('discards the draft on Cancel without touching the store', async () => {
     seedArtifact();
     const view = renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
-    fireEvent.change(screen.getByTestId('artifact-source-editor'), {
-      target: { value: '<p>never saved</p>' },
-    });
+    replaceSource(await sourceEditor(), '<p>never saved</p>');
     fireEvent.click(screen.getByTestId('artifact-cancel-source-edit'));
 
     expect(screen.queryByTestId('artifact-source-editor')).toBeNull();

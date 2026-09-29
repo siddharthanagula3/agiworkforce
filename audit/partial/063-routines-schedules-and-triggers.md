@@ -34,18 +34,6 @@ Code: `apps/mobile/app/(app)/schedules/index.tsx:1-1`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S63.04: Routine name and description.
-
-- Done when: A routine has a user-set name and an optional description, both editable.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Name only; add a description field (the server already stores one). | ui |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`
-
 ## S63.06: Source selection.
 
 - Done when: The user chooses which sources (project files, instructions, docs, web) a routine run may read.
@@ -108,10 +96,7 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only once/daily/weekly (multi-day)/monthly; no cron, interval or rule, and those schedules cannot be edited on mobile. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/policy.ts:47-47`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:240-240`
 
 ## S63.15: Event-trigger selection.
 

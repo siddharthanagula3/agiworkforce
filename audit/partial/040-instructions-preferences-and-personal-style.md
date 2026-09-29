@@ -50,7 +50,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chat Style sheet changes style for the next messages, but it is one global setting, not saved per conversation. | persistence |
+| mobile | partial | post-codex/w-work-s40.19-mobile-style-per-conversation.patch: the chat Style choice is kept per conversation (persisted); each chat screen binds its conversation on focus, a new chat starts from the default and its pre-send choice moves onto the created chat; sends read the conversation style, as web style-store bindConversation/adoptSelection. Waits on the Codex hold. | persistence |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

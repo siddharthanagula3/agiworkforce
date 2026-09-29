@@ -25,6 +25,7 @@ import {
   readRunnableArtifact,
   selectArtifactRuntimeRoute,
 } from '@/lib/services/artifact-runtime-service';
+import { artifactConnectorsGateResponse } from '@/lib/services/artifact-connector-gate';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   buildManagedComputeAccessGateResponse,
@@ -112,6 +113,15 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   );
   const accessGate = buildManagedComputeAccessGateResponse(access, NO_STORE);
   if (accessGate) return accessGate;
+  if (connectors.length > 0) {
+    const connectorGate = await artifactConnectorsGateResponse(
+      scoped.userId,
+      request,
+      entitlement.plan,
+      NO_STORE,
+    );
+    if (connectorGate) return connectorGate;
+  }
 
   const retention = await resolveZeroDataRetentionPolicy(scoped.db, scoped.userId);
   if (retention.required) {
@@ -189,6 +199,8 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
           planTier: entitlement.plan,
           modelKey: route.modelKey,
           connectors,
+          allowedTools: parsed.data.allowedTools,
+          request,
         })
       : null;
   if (connectors.length > 0 && !plan) {

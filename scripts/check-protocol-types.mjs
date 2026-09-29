@@ -216,11 +216,11 @@ export const BILLING_CATALOG = path.join(
   'billing-catalog.ts',
 );
 export const USAGE_HISTORY_OWNER = path.join(
-  'apps',
-  'web',
-  'lib',
-  'services',
-  'account-usage-history-service.ts',
+  'packages',
+  'contracts',
+  'types',
+  'src',
+  'account-usage-wire.ts',
 );
 export const USAGE_AGGREGATION_OWNER = path.join(
   'apps',
@@ -235,7 +235,7 @@ export const CLI_USAGE_MIRRORS = [
   { rust: 'UsageCreditWindow', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageCreditWindow' },
   { rust: 'PurchasedCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsagePurchasedCredits' },
   { rust: 'UsageCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageCredits' },
-  { rust: 'UsageHistory', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageHistory' },
+  { rust: 'UsageHistory', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageHistoryResponse' },
   { rust: 'UsageHistoryTotals', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageTotals' },
   { rust: 'UsageHistoryPeriod', owner: USAGE_HISTORY_OWNER, type: 'AccountUsagePeriodRow' },
   { rust: 'UsageHistoryBreakdown', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageBreakdownRow' },

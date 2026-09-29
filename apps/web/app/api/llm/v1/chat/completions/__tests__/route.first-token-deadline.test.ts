@@ -131,6 +131,7 @@ vi.mock('@agiworkforce/providers-perplexity', () => inertAdapter('Perplexity'));
 
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 vi.mock('@/services/neon-db', () => ({ createNeonServerClient: vi.fn().mockResolvedValue({}) }));

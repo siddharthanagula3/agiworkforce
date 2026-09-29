@@ -90,6 +90,7 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  listAvailableManagedProviderIds: vi.fn(() => new Set<string>()),
   buildServerProviderAdapter: (provider: string) => buildServerProviderAdapterMock(provider),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   buildProtocolRouteAdapter: vi.fn(),
