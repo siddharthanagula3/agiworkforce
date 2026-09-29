@@ -167,8 +167,13 @@ One Google Cloud project and one OAuth client serve all four connectors.
    - `drive.file`: open files the user picks. `drive.metadata.readonly`: list
      and search file names so the user can pick them.
    - `contacts.readonly`, `directory.readonly`: look up a recipient's address.
-   - `bigquery.readonly`, `devstorage.read_only`: run the user's read-only
-     queries and read the tables they reference.
+   - Leave the BigQuery scopes out of this submission. Google's hosted
+     BigQuery server accepts only the full `bigquery` scope, which our ceiling
+     refuses, so the `bigquery` connector stays off until that is decided (see
+     `docs/development/connectors-setup.md`, BigQuery).
+   - The privacy policy must state that Google user data is used under the
+     Google API Services User Data Policy, including the Limited Use
+     requirements, before you submit.
    - **Demo video:** record it on the live site after the keys are deployed,
      with the app in Testing and your account as a test user: the consent
      screen with the client ID visible in the address bar, then one request per
