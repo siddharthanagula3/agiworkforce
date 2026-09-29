@@ -232,7 +232,10 @@ const sourceScans = [
     include: /^apps\/cli\/src\/.*\.rs$/,
     exclude: /(?:^|\/)tests\//,
     pattern: /env::var(?:_os)?\(\s*"([A-Z][A-Z0-9_]*)"\s*\)/g,
-    productSource: (contents) => contents.split(/#\[cfg\(test\)\]\s*mod /)[0],
+    productSource: (contents) => {
+      const testModule = [...contents.matchAll(/#\[cfg\(test\)\]\s*mod\s+\w+\s*\{/g)].at(-1);
+      return testModule ? contents.slice(0, testModule.index) : contents;
+    },
   },
   {
     scope: 'mobile',
