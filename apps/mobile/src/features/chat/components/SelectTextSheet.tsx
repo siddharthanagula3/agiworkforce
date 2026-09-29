@@ -6,6 +6,7 @@ import { X } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { markdownToPlainText } from '@/src/features/chat/utils/markdownPlainText';
 
 interface SelectTextSheetProps {
@@ -64,7 +65,7 @@ export function SelectTextSheet({
           >
             <Text
               accessibilityRole="header"
-              style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}
+              style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
             >
               Select Text
             </Text>
@@ -93,7 +94,7 @@ export function SelectTextSheet({
                 style={{
                   flex: 1,
                   padding: 16,
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   lineHeight: 24,
                   color: colors.textPrimary,
                   textAlignVertical: 'top',
@@ -107,7 +108,10 @@ export function SelectTextSheet({
                   borderTopColor: colors.border,
                 }}
               >
-                <Text style={{ fontSize: 13, color: colors.textMuted }} numberOfLines={2}>
+                <Text
+                  style={{ fontSize: typeScale.footnote, color: colors.textMuted }}
+                  numberOfLines={2}
+                >
                   {selectedText
                     ? `“${selectedText}”`
                     : 'Select part of the message to quote it in your reply.'}
@@ -123,7 +127,10 @@ export function SelectTextSheet({
             </>
           ) : (
             <ScrollView contentContainerStyle={{ padding: 16 }}>
-              <Text selectable style={{ fontSize: 16, lineHeight: 24, color: colors.textPrimary }}>
+              <Text
+                selectable
+                style={{ fontSize: typeScale.callout, lineHeight: 24, color: colors.textPrimary }}
+              >
                 {plainText}
               </Text>
             </ScrollView>

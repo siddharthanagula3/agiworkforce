@@ -201,9 +201,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Cloud mode edits never-remember terms server-side, but Local mode learning has no credential or special-category filter (prohibitedMemoryCategory is not available to apps/mobile). | handler |
+| mobile | partial | waits on lead approval for apps/mobile to depend on @agiworkforce/context (lockfile at merge); then refuse prohibitedMemoryCategory facts in the Local memory writer | handler |
 
-Code: `apps/mobile/app/(app)/settings/memory.tsx:460-460`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:15-15`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:98-98`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:248-248`
+Code: `apps/mobile/src/features/memory/services/consolidation.ts:175-176`, `packages/contracts/context/src/memory-content-policy.ts:110-110`
 
 ## S39.30: Memory reset independent from chat deletion.
 

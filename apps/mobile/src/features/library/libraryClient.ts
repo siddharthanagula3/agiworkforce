@@ -3,10 +3,12 @@ import {
   LIBRARY_DEFAULT_SORT,
   LibraryListResponseSchema,
   LibraryMediaDeleteResponseSchema,
+  MediaJobListResponseSchema,
   type LibraryItem,
   type LibraryKind,
   type LibraryOrigin,
   type LibrarySort,
+  type MediaJobEntry,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 
@@ -24,6 +26,7 @@ export interface LibraryAsset {
   sourceLabel: string;
   eraseAfter: string | null;
   model: string | null;
+  conversationId: string | null;
 }
 
 export interface LibraryPage {
@@ -63,6 +66,7 @@ export function mapLibraryItem(item: LibraryItem): LibraryAsset {
       item.model ?? item.source_surface ?? (item.origin === 'uploaded' ? 'Upload' : 'Generated'),
     eraseAfter: item.erase_after ?? null,
     model: item.model ?? null,
+    conversationId: item.conversation_id ?? null,
   };
 }
 
@@ -136,4 +140,21 @@ export async function permanentlyDeleteLibraryAsset(id: string): Promise<void> {
   );
   if (!response.success || !response.data.success)
     throw new Error('The file could not be deleted. Try again.');
+}
+
+export async function listMediaJobs(signal?: AbortSignal): Promise<MediaJobEntry[]> {
+  const parsed = MediaJobListResponseSchema.safeParse(
+    await api.get<unknown>('/api/media/jobs', signal ? { signal } : undefined),
+  );
+  if (!parsed.success) throw new Error('Your generations could not be loaded.');
+  return parsed.data.jobs;
+}
+
+export async function cancelMediaJob(job: MediaJobEntry): Promise<void> {
+  if (job.kind === 'video') await api.post('/api/media/video/cancel', { task_id: job.id });
+  else await api.post('/api/media/image/cancel', { job_id: job.id });
+}
+
+export async function retryMediaJob(job: MediaJobEntry): Promise<void> {
+  await api.post('/api/media/image/retry', { job_id: job.id });
 }

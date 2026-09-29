@@ -7,6 +7,7 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 import { Text } from '@/components/ui/text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
 interface FileExportButtonProps {
@@ -158,7 +159,7 @@ export function FileExportButton({
             >
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                   color: colors.textPrimary,
                 }}
@@ -228,7 +229,7 @@ export function FileExportButton({
                         <View style={{ flex: 1 }}>
                           <Text
                             style={{
-                              fontSize: 15,
+                              fontSize: typeScale.body,
                               fontWeight: '500',
                               color: isSuccess ? colors.agentSuccess : colors.textPrimary,
                             }}
@@ -237,7 +238,7 @@ export function FileExportButton({
                           </Text>
                           <Text
                             style={{
-                              fontSize: 12,
+                              fontSize: typeScale.caption,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}

@@ -34,11 +34,11 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
             {
               "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
-              "fontSize": 11,
+              "fontSize": 12,
               "fontWeight": "500",
             },
             {
-              "lineHeight": 14,
+              "lineHeight": 15,
             },
           ]
         }
@@ -270,11 +270,11 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
             {
               "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
-              "fontSize": 11,
+              "fontSize": 12,
               "fontWeight": "500",
             },
             {
-              "lineHeight": 14,
+              "lineHeight": 15,
             },
           ]
         }

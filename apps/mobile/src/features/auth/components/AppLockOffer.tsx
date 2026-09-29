@@ -15,6 +15,7 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { hasAcknowledgedContinuityOnboarding } from '@/src/features/continuity/continuity-onboarding';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 
 function canOfferToAccount(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
   return (
@@ -131,13 +132,15 @@ export function AppLockOffer() {
           style={{
             backgroundColor: colors.surfaceElevated,
             borderRadius: 20,
-            padding: 24,
+            padding: dialogPadding,
             alignItems: 'center',
             gap: 16,
           }}
         >
           <Fingerprint size={36} color={colors.teal} />
-          <Text style={{ color: colors.textPrimary, fontSize: 21, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
+          >
             Protect AGI with App Lock
           </Text>
           <Text style={{ color: colors.textSecondary, textAlign: 'center', lineHeight: 21 }}>

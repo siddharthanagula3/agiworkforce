@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronRight, Clock, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 
 interface ThinkingChipProps {
@@ -68,7 +69,7 @@ export function ThinkingChip({
         <Clock size={13} color={colors.textMuted} />
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 13, color: colors.textMuted }} numberOfLines={1}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }} numberOfLines={1}>
             {headerLabel}
           </Text>
         </View>
@@ -106,10 +107,18 @@ export function ThinkingChip({
 
               <View style={styles.header}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.headline,
+                      fontWeight: '600',
+                      color: colors.textPrimary,
+                    }}
+                  >
                     {isStreaming ? 'Thinking' : 'Thought process'}
                   </Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                  <Text
+                    style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}
+                  >
                     {headerLabel}
                   </Text>
                 </View>
@@ -129,7 +138,9 @@ export function ThinkingChip({
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
               >
-                <Text style={{ fontSize: 14, lineHeight: 21, color: colors.textPrimary }}>
+                <Text
+                  style={{ fontSize: typeScale.subhead, lineHeight: 21, color: colors.textPrimary }}
+                >
                   {thinkingText}
                 </Text>
               </ScrollView>

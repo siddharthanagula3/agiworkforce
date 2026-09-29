@@ -9,6 +9,7 @@ import { ArrowLeft, AlertCircle, Brain } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -20,6 +21,7 @@ import {
   type ReflectRange,
   type ReflectRecap,
 } from '@/src/features/reflect';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ReflectRecapOngoingWork = NonNullable<ReflectRecap['ongoingWork']>[number];
 
@@ -31,7 +33,10 @@ type LoadState =
 
 function describeOngoingWork(item: ReflectRecapOngoingWork): string {
   const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
-  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const followUps = translatePlural('settings', 'counts.followUps', item.followUps, {
+    one: '{{count}} follow-up',
+    other: '{{count}} follow-ups',
+  });
   const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -127,7 +132,13 @@ export default function ReflectScreen() {
         <ArrowLeft size={22} color={c.textPrimary} />
       </Pressable>
       <Text
-        style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}
+        style={{
+          flex: 1,
+          color: c.textPrimary,
+          fontSize: typeScale.title3,
+          fontWeight: '700',
+          marginLeft: 4,
+        }}
       >
         Reflect
       </Text>
@@ -174,7 +185,14 @@ export default function ReflectScreen() {
           </View>
         ) : null}
 
-        <Text style={{ color: c.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 14 }}>
+        <Text
+          style={{
+            color: c.textSecondary,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginBottom: 14,
+          }}
+        >
           Patterns in how you use AGI, without scores or judgment. Your recap is built only when you
           open this screen.
         </Text>
@@ -203,7 +221,7 @@ export default function ReflectScreen() {
               >
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     fontWeight: '600',
                     color: selected ? c.accentText : c.textSecondary,
                   }}
@@ -216,7 +234,9 @@ export default function ReflectScreen() {
         </View>
 
         {state.kind === 'loading' && appMode === 'cloud' && (
-          <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
+          <Text
+            style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}
+          >
             Building your recap…
           </Text>
         )}
@@ -236,12 +256,14 @@ export default function ReflectScreen() {
               >
                 <Brain size={26} color={c.teal} strokeWidth={1.5} />
               </View>
-              <Text style={{ fontSize: 17, fontWeight: '600', color: c.textPrimary }}>
+              <Text
+                style={{ fontSize: typeScale.headline, fontWeight: '600', color: c.textPrimary }}
+              >
                 Memory is off
               </Text>
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: c.textSecondary,
                   textAlign: 'center',
                   lineHeight: 18,
@@ -258,7 +280,7 @@ export default function ReflectScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open memory settings"
               >
-                <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
                   Open memory settings
                 </Text>
               </Pressable>
@@ -280,11 +302,13 @@ export default function ReflectScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertCircle size={14} color={c.agentWarning} />
-              <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{ color: c.agentWarning, fontSize: typeScale.footnote, fontWeight: '600' }}
+              >
                 Reflect could not load
               </Text>
             </View>
-            <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
+            <Text style={{ color: c.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}>
               {state.message}
             </Text>
             <Pressable
@@ -293,7 +317,9 @@ export default function ReflectScreen() {
               accessibilityLabel="Retry loading Reflect"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
-              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                Retry
+              </Text>
             </Pressable>
           </View>
         )}
@@ -304,7 +330,7 @@ export default function ReflectScreen() {
               <View style={{ padding: 16, gap: 6 }}>
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     fontWeight: '600',
                     letterSpacing: 0.6,
                     textTransform: 'uppercase',
@@ -313,10 +339,14 @@ export default function ReflectScreen() {
                 >
                   {recap.period.label}
                 </Text>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: c.textPrimary }}>
+                <Text
+                  style={{ fontSize: typeScale.title3, fontWeight: '700', color: c.textPrimary }}
+                >
                   {recap.summary.headline}
                 </Text>
-                <Text style={{ fontSize: 13, lineHeight: 19, color: c.textSecondary }}>
+                <Text
+                  style={{ fontSize: typeScale.footnote, lineHeight: 19, color: c.textSecondary }}
+                >
                   {recap.summary.body}
                 </Text>
               </View>
@@ -342,10 +372,12 @@ export default function ReflectScreen() {
                     padding: 12,
                   }}
                 >
-                  <Text style={{ fontSize: 20, fontWeight: '700', color: c.textPrimary }}>
+                  <Text
+                    style={{ fontSize: typeScale.title3, fontWeight: '700', color: c.textPrimary }}
+                  >
                     {stat.value}
                   </Text>
-                  <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+                  <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>
                     {stat.label}
                   </Text>
                 </View>
@@ -356,7 +388,12 @@ export default function ReflectScreen() {
             {recap.dailyActivity.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
-                  style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 8 }}
+                  style={{
+                    fontSize: typeScale.body,
+                    fontWeight: '600',
+                    color: c.textPrimary,
+                    marginBottom: 8,
+                  }}
                 >
                   Activity
                 </Text>
@@ -396,7 +433,12 @@ export default function ReflectScreen() {
             {recap.topics.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
-                  style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 8 }}
+                  style={{
+                    fontSize: typeScale.body,
+                    fontWeight: '600',
+                    color: c.textPrimary,
+                    marginBottom: 8,
+                  }}
                 >
                   What you worked on
                 </Text>
@@ -414,18 +456,26 @@ export default function ReflectScreen() {
                         <Text
                           style={{
                             flex: 1,
-                            fontSize: 14,
+                            fontSize: typeScale.subhead,
                             fontWeight: '600',
                             color: c.textPrimary,
                           }}
                         >
                           {topic.label}
                         </Text>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: c.teal }}>
+                        <Text
+                          style={{ fontSize: typeScale.footnote, fontWeight: '700', color: c.teal }}
+                        >
                           {topic.percentage}%
                         </Text>
                       </View>
-                      <Text style={{ fontSize: 12, lineHeight: 17, color: c.textSecondary }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          lineHeight: 17,
+                          color: c.textSecondary,
+                        }}
+                      >
                         {topic.description}
                       </Text>
                       <View
@@ -453,7 +503,12 @@ export default function ReflectScreen() {
             {recap.ongoingWork && recap.ongoingWork.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
-                  style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 8 }}
+                  style={{
+                    fontSize: typeScale.body,
+                    fontWeight: '600',
+                    color: c.textPrimary,
+                    marginBottom: 8,
+                  }}
                 >
                   Work in progress
                 </Text>
@@ -470,10 +525,22 @@ export default function ReflectScreen() {
                   >
                     <Card>
                       <View style={{ padding: 14, gap: 4 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: c.textPrimary }}>
+                        <Text
+                          style={{
+                            fontSize: typeScale.subhead,
+                            fontWeight: '600',
+                            color: c.textPrimary,
+                          }}
+                        >
                           {item.title}
                         </Text>
-                        <Text style={{ fontSize: 12, lineHeight: 17, color: c.textSecondary }}>
+                        <Text
+                          style={{
+                            fontSize: typeScale.caption,
+                            lineHeight: 17,
+                            color: c.textSecondary,
+                          }}
+                        >
                           {describeOngoingWork(item)}
                         </Text>
                       </View>
@@ -486,10 +553,17 @@ export default function ReflectScreen() {
             {/* Insights */}
             {recap.insights.length > 0 && (
               <View style={{ marginTop: 18 }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+                <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
                   Expanding your skills
                 </Text>
-                <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2, marginBottom: 8 }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    color: c.textMuted,
+                    marginTop: 2,
+                    marginBottom: 8,
+                  }}
+                >
                   Observations and optional next steps, not a performance score.
                 </Text>
                 {recap.insights.map((insight) => (
@@ -497,7 +571,7 @@ export default function ReflectScreen() {
                     <View style={{ padding: 14, gap: 6 }}>
                       <Text
                         style={{
-                          fontSize: 10,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           letterSpacing: 0.6,
                           textTransform: 'uppercase',
@@ -506,13 +580,31 @@ export default function ReflectScreen() {
                       >
                         {insight.dimension}
                       </Text>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: c.textPrimary }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.subhead,
+                          fontWeight: '600',
+                          color: c.textPrimary,
+                        }}
+                      >
                         {insight.title}
                       </Text>
-                      <Text style={{ fontSize: 12, lineHeight: 17, color: c.textSecondary }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          lineHeight: 17,
+                          color: c.textSecondary,
+                        }}
+                      >
                         {insight.observation}
                       </Text>
-                      <Text style={{ fontSize: 12, lineHeight: 17, color: c.textPrimary }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          lineHeight: 17,
+                          color: c.textPrimary,
+                        }}
+                      >
                         {insight.nextStep}
                       </Text>
                     </View>
@@ -522,7 +614,14 @@ export default function ReflectScreen() {
             )}
 
             {recap.sampled && (
-              <Text style={{ fontSize: 11, lineHeight: 16, color: c.textMuted, marginTop: 14 }}>
+              <Text
+                style={{
+                  fontSize: typeScale.caption,
+                  lineHeight: 16,
+                  color: c.textMuted,
+                  marginTop: 14,
+                }}
+              >
                 Activity, topic, and behavior patterns use the {recap.sampledConversationCount} most
                 recent eligible conversations in this range. The conversation total is exact.
               </Text>
@@ -530,7 +629,9 @@ export default function ReflectScreen() {
           </>
         )}
 
-        <Text style={{ fontSize: 11, lineHeight: 16, color: c.textMuted, marginTop: 18 }}>
+        <Text
+          style={{ fontSize: typeScale.caption, lineHeight: 16, color: c.textMuted, marginTop: 18 }}
+        >
           Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics, broad
           topic labels and the titles of chats you kept working on, not message text, and viewing it
           does not use model quota.

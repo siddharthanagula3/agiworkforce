@@ -157,11 +157,10 @@ nothing is left.
 
 - Done when: When a response is refused for safety reasons, the user can appeal or report the refusal from that notice.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The refusal notice offers only Switch model; there is no appeal or report action from the notice itself (only the generic per-message Report flag below the turn). |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

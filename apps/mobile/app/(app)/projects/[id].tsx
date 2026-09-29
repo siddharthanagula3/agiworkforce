@@ -12,9 +12,14 @@ import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTa
 import { Text } from '@/components/ui/text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
-import { loadMissingCloudProject } from '@/src/features/projects/service';
+import {
+  loadMissingCloudProject,
+  refreshCloudProjectDetails,
+} from '@/src/features/projects/service';
+import { CloudProjectOverview } from '@/src/features/projects/components/CloudProjectOverview';
 
 type TabId = 'chats' | 'work' | 'sources';
 
@@ -40,39 +45,11 @@ function LocalOnlyFallback({
       }}
       testID="project-detail-local-fallback"
     >
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>
+      <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.textPrimary }}>
         {localProject?.name ?? projectId}
       </Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+      <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
         Local project. Details, chats, and sources stay on this device.
-      </Text>
-    </View>
-  );
-}
-
-function CloudProjectHeader({
-  name,
-  colors,
-}: {
-  name: string;
-  colors: ReturnType<typeof useThemeColors>;
-}) {
-  return (
-    <View
-      style={{
-        margin: 16,
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        backgroundColor: colors.surfaceElevated,
-        borderColor: colors.border,
-        gap: 12,
-      }}
-      testID="project-detail-cloud-header"
-    >
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{name}</Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-        Cloud project · synced across your devices.
       </Text>
     </View>
   );
@@ -103,8 +80,10 @@ function ProjectNotice({
         gap: 12,
       }}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}>{title}</Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{message}</Text>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}>
+        {title}
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{message}</Text>
       {action && onPress ? (
         <Pressable
           accessibilityRole="button"
@@ -112,7 +91,9 @@ function ProjectNotice({
           onPress={onPress}
           style={{ minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>{action}</Text>
+          <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
+            {action}
+          </Text>
         </Pressable>
       ) : null}
     </View>
@@ -169,7 +150,7 @@ function TabBar({
           >
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 fontWeight: isActive ? '600' : '500',
                 color: isActive ? colors.textPrimary : colors.textMuted,
               }}
@@ -206,6 +187,14 @@ export default function ProjectDetailScreen() {
     s.projects.find((p) => p.id === id && p.deletedAt === null),
   );
   const isCloudProject = target === 'cloud' && !!cloudProject;
+  const cloudDetails = useCloudProjectStore((s) => (id ? s.details[id] : undefined));
+
+  useEffect(() => {
+    if (!isCloudProject || appMode !== 'cloud' || !isClerkSignedIn) return;
+    const controller = new AbortController();
+    void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [appMode, isClerkSignedIn, isCloudProject]);
 
   useEffect(() => {
     if (!id || target !== 'unknown' || appMode !== 'cloud' || !isClerkSignedIn) return;
@@ -252,7 +241,9 @@ export default function ProjectDetailScreen() {
 
   const renderHeader = () => {
     if (isCloudProject) {
-      return <CloudProjectHeader name={cloudProject?.name ?? 'Project'} colors={colors} />;
+      return cloudProject ? (
+        <CloudProjectOverview project={cloudProject} details={cloudDetails} />
+      ) : null;
     }
     return target === 'local' ? (
       <LocalOnlyFallback projectId={id} localProject={localProject} colors={colors} />
@@ -290,7 +281,7 @@ export default function ProjectDetailScreen() {
           style={{
             flex: 1,
             textAlign: 'center',
-            fontSize: 16,
+            fontSize: typeScale.callout,
             fontWeight: '600',
             color: colors.textPrimary,
             marginHorizontal: 8,

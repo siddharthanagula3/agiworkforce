@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { AgiWorkPlanDecision, AgiWorkPlanStep } from '@/src/features/chat/utils/agiWorkPlan';
 
 const LABEL = {
@@ -67,9 +68,9 @@ export function AgiWorkPlanReview({
     const step = steps[retryIndex]!;
     return (
       <View testID="agiwork-plan-retry" accessibilityLabel="Retry a step" style={frame}>
-        <Text style={{ fontSize: 13, color: colors.textPrimary }}>
+        <Text style={{ fontSize: typeScale.footnote, color: colors.textPrimary }}>
           {retryIndex + 1}. {step.description}
-          <Text style={{ fontSize: 13, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
             {' · '}
             {STATUS_LABEL[step.status]}
           </Text>
@@ -96,7 +97,9 @@ export function AgiWorkPlanReview({
           })}
         >
           <RotateCcw size={14} color={colors.textPrimary} />
-          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.textPrimary }}
+          >
             {LABEL.retryFrom}
           </Text>
         </PressableBox>
@@ -110,14 +113,23 @@ export function AgiWorkPlanReview({
   return (
     <View testID="agiwork-plan-review" accessibilityLabel="Review the plan" style={frame}>
       <View style={{ gap: 4 }}>
-        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+        <Text style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textPrimary }}>
           {LABEL.heading}
         </Text>
-        <Text style={{ fontSize: 12, color: colors.textMuted }}>{LABEL.explanation}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          {LABEL.explanation}
+        </Text>
       </View>
       {draft.map((description, index) => (
         <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-          <Text style={{ width: 18, marginTop: 10, fontSize: 12, color: colors.textMuted }}>
+          <Text
+            style={{
+              width: 18,
+              marginTop: 10,
+              fontSize: typeScale.caption,
+              color: colors.textMuted,
+            }}
+          >
             {index + 1}.
           </Text>
           <TextInput
@@ -143,7 +155,7 @@ export function AgiWorkPlanReview({
               borderColor: colors.border,
               backgroundColor: colors.surfaceElevated,
               color: colors.textPrimary,
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               textAlignVertical: 'top',
             }}
           />
@@ -189,7 +201,9 @@ export function AgiWorkPlanReview({
           })}
         >
           <Plus size={14} color={colors.textPrimary} />
-          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.textPrimary }}
+          >
             {LABEL.addStep}
           </Text>
         </PressableBox>
@@ -211,7 +225,9 @@ export function AgiWorkPlanReview({
           testID="agiwork-plan-cancel"
         />
         {!ready ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>{LABEL.empty}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+            {LABEL.empty}
+          </Text>
         ) : null}
       </View>
     </View>

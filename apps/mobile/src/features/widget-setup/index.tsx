@@ -194,7 +194,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2 mb-3"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   Example phrases
                 </Text>
                 {SIRI_EXAMPLES.map((example) => (
@@ -228,7 +228,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
                 <Text className="text-xs text-fg-muted">
@@ -260,7 +260,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
                 <Text className="text-xs text-fg-muted">

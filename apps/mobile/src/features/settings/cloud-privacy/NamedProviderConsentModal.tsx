@@ -2,6 +2,7 @@ import { Modal, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { PRIVACY_POLICY_URL } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import type { ChineseHqProviderId } from '@/services/providerConsent';
@@ -42,17 +43,19 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
             borderRadius: 20,
             borderWidth: 1,
             borderColor: colors.border,
-            padding: 22,
+            padding: dialogPadding,
             gap: 16,
           }}
         >
           <Text
             accessibilityRole="header"
-            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
           >
             Enable {displayName}?
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21 }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 21 }}
+          >
             {displayName} is a China-headquartered AI provider. If you choose its models, the text,
             images, and files you send with those models will be sent from AGI Cloud to this
             provider for inference. You can turn it off again in Settings, Privacy.
@@ -61,7 +64,9 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
             onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
             accessibilityRole="link"
           >
-            <Text style={{ color: colors.teal, fontSize: 14 }}>Read Privacy Policy</Text>
+            <Text style={{ color: colors.teal, fontSize: typeScale.subhead }}>
+              Read Privacy Policy
+            </Text>
           </PressableBox>
           <View
             style={{

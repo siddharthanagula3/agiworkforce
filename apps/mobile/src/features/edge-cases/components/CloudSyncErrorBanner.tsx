@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
@@ -45,7 +46,7 @@ export function CloudSyncErrorBanner() {
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 9998,
+        zIndex: zIndex.notification,
         paddingTop: insets.top + 8,
         paddingBottom: 10,
         paddingHorizontal: 16,
@@ -57,7 +58,14 @@ export function CloudSyncErrorBanner() {
         borderBottomColor: colors.dangerBorder,
       }}
     >
-      <Text style={{ color: colors.agentError, fontSize: 12, fontWeight: '600', flex: 1 }}>
+      <Text
+        style={{
+          color: colors.agentError,
+          fontSize: typeScale.caption,
+          fontWeight: '600',
+          flex: 1,
+        }}
+      >
         Cloud changes haven’t synced. Check your connection and retry.
       </Text>
       <PressableBox

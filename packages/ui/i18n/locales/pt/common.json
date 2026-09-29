@@ -174,7 +174,9 @@
     "packages_one": "{{count}} pacote",
     "packages_other": "{{count}} pacotes",
     "unreadNotifications_one": "{{count}} notificação não lida",
-    "unreadNotifications_other": "{{count}} notificações não lidas"
+    "unreadNotifications_other": "{{count}} notificações não lidas",
+    "textBlocks_one": "{{count}} bloco de texto",
+    "textBlocks_other": "{{count}} blocos de texto"
   },
   "relative": {
     "minutesAgo_one": "há {{count}} minuto",

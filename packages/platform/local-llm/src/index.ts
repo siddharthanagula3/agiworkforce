@@ -1,4 +1,13 @@
-export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
+export {
+  localGenerate,
+  selectTier,
+  getCapabilities,
+  refreshCapabilities,
+  loadLocalModel,
+  loadedLocalModel,
+  unloadLocalModels,
+  type LoadedLocalModel,
+} from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
 export {

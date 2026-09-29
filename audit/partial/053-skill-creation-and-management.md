@@ -38,10 +38,10 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| mobile | partial | Mobile lists personal skills the server returns but has no way to create or add one. | ui, flag-off |
+| mobile | partial | mobile New skill is built (POST /api/skills, shown when canAuthorSkills); same switch-on as web: AGI_USER_SKILL_AUTHORING=1 in production after migration 0157 | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/SkillsScreen.tsx:789-789`, `apps/web/lib/services/user-skill-authoring.ts:5-5`
 
 ## S53.04: Project Skills.
 

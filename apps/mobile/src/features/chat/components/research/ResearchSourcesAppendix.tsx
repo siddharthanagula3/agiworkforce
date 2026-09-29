@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { ToolSearchResult } from '@/types/chat';
 import { CitationChip } from '../CitationChip';
 import { WebSearchResultCard } from '../WebSearchResultCard';
@@ -24,7 +25,9 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
   if (sources.length <= CHIP_THRESHOLD) {
     return (
       <View testID="research-sources-appendix" style={{ gap: 6, marginTop: 6 }}>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>{heading}</Text>
+        <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
+          {heading}
+        </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {sources.map((source, index) => (
             <CitationChip
@@ -55,7 +58,9 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
         paddingTop: 8,
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>{heading}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
+        {heading}
+      </Text>
       {visible.map((source, index) => (
         <WebSearchResultCard key={`${source.url}-${index}`} result={source} />
       ))}
@@ -70,7 +75,9 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
           hitSlop={6}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6 }}
         >
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}
+          >
             {expanded ? 'Show fewer' : `Show all ${sources.length}`}
           </Text>
           {expanded ? (

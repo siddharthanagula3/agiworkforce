@@ -61,6 +61,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
@@ -468,7 +469,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           <View style={{ width: 28 }} />
           <Text
             style={{
-              fontSize: 16,
+              fontSize: typeScale.callout,
               fontWeight: '600',
               color: themeColors.textPrimary,
             }}
@@ -530,7 +531,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               paddingHorizontal: 20,
               marginTop: -8,
               paddingBottom: 16,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 17,
               color: themeColors.textMuted,
             }}
@@ -547,7 +548,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               style={{
                 paddingHorizontal: 20,
                 paddingBottom: 9,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: themeColors.textMuted,
                 textTransform: 'uppercase',
@@ -566,7 +567,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 accessibilityLiveRegion="polite"
               >
                 <ActivityIndicator size="small" color={themeColors.textMuted} />
-                <Text style={{ fontSize: 13, color: themeColors.textMuted }}>
+                <Text style={{ fontSize: typeScale.footnote, color: themeColors.textMuted }}>
                   Loading your Library
                 </Text>
               </View>
@@ -579,7 +580,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   paddingHorizontal: 20,
                 }}
               >
-                <Text style={{ flex: 1, fontSize: 13, color: themeColors.textSecondary }}>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: typeScale.footnote,
+                    color: themeColors.textSecondary,
+                  }}
+                >
                   Your Library could not load.
                 </Text>
                 <Pressable
@@ -588,7 +595,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   accessibilityLabel="Try loading your Library again"
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: themeColors.teal }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                      color: themeColors.teal,
+                    }}
+                  >
                     Try again
                   </Text>
                 </Pressable>
@@ -638,13 +651,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text
                         numberOfLines={2}
-                        style={{ color: themeColors.textPrimary, fontSize: 13, fontWeight: '600' }}
+                        style={{
+                          color: themeColors.textPrimary,
+                          fontSize: typeScale.footnote,
+                          fontWeight: '600',
+                        }}
                       >
                         {pick.fileName}
                       </Text>
                       <Text
                         numberOfLines={1}
-                        style={{ color: themeColors.textMuted, fontSize: 11, marginTop: 3 }}
+                        style={{
+                          color: themeColors.textMuted,
+                          fontSize: typeScale.caption,
+                          marginTop: 3,
+                        }}
                       >
                         {pick.subtitle}
                       </Text>
@@ -694,7 +715,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: themeColors.textMuted,
                   letterSpacing: 0,
@@ -747,7 +768,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 <View style={{ paddingTop: 4, paddingBottom: 2 }}>
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: typeScale.caption,
                       fontWeight: '600',
                       color: themeColors.textMuted,
                       textTransform: 'uppercase',
@@ -778,7 +799,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <Text
                       testID="image-reference-hint"
                       style={{
-                        fontSize: 11,
+                        fontSize: typeScale.caption,
                         color: themeColors.textMuted,
                         paddingHorizontal: 4,
                         marginTop: 6,
@@ -798,7 +819,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -850,7 +871,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -882,7 +903,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -919,7 +940,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -952,7 +973,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       testID="video-cost-estimate"
                       accessibilityRole="text"
                       style={{
-                        fontSize: 12,
+                        fontSize: typeScale.caption,
                         color: themeColors.textMuted,
                         paddingHorizontal: 4,
                         marginTop: 8,
@@ -973,7 +994,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   accessibilityLabel="Back to text chat"
                   style={{ paddingVertical: 10, paddingHorizontal: 4 }}
                 >
-                  <Text style={{ fontSize: 13, color: themeColors.teal }}>Back to text chat</Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: themeColors.teal }}>
+                    Back to text chat
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
@@ -988,7 +1011,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: themeColors.textMuted,
                   textTransform: 'uppercase',
@@ -1116,7 +1139,9 @@ function AttachmentCard({
       accessibilityRole="button"
     >
       {icon}
-      <Text style={{ fontSize: 12, fontWeight: '500', color: textColor }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '500', color: textColor }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -1160,8 +1185,13 @@ function MediaModeRow({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
         {icon}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, color: active ? activeColor : textColor }}>{label}</Text>
-          <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+          <Text style={{ fontSize: typeScale.body, color: active ? activeColor : textColor }}>
+            {label}
+          </Text>
+          <Text
+            style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
+            numberOfLines={2}
+          >
             {description}
           </Text>
         </View>
@@ -1229,11 +1259,13 @@ function MediaModelRow({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>
+        <Text style={{ fontSize: typeScale.subhead, color: selected ? activeColor : textColor }}>
           {meta?.name ?? modelId}
         </Text>
         {price ? (
-          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{price}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}>
+            {price}
+          </Text>
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}
@@ -1281,10 +1313,13 @@ function CapabilityRow(props: CapabilityRowProps) {
       {icon}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+          <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
           {badge && <StatusPill label={badge} tone="danger" />}
         </View>
-        <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+        <Text
+          style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
+          numberOfLines={2}
+        >
           {description}
         </Text>
       </View>
@@ -1370,7 +1405,9 @@ function StatusPill({
         borderRadius: 5,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: '600', color: palette.fg }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: palette.fg }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -1411,7 +1448,7 @@ function ConfigLink({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {icon}
-        <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         {pending ? (
@@ -1424,7 +1461,7 @@ function ConfigLink({
           <>
             {value &&
               (statusTone === 'neutral' ? (
-                <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>
+                <Text style={{ fontSize: typeScale.footnote, color: mutedColor }}>{value}</Text>
               ) : (
                 <StatusPill label={value} tone={statusTone} />
               ))}
@@ -1471,9 +1508,13 @@ function MediaOptionRow({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.subhead, color: selected ? activeColor : textColor }}>
+          {label}
+        </Text>
         {hint ? (
-          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{hint}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}>
+            {hint}
+          </Text>
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}

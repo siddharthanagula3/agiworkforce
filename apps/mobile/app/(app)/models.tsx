@@ -164,7 +164,7 @@ export default function ModelsScreen() {
       <View style={{ flex: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16 }}>
         <Card>
           <Text
-            className="text-[11px] uppercase font-semibold mb-3"
+            className="text-xs uppercase font-semibold mb-3"
             style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Active Model
@@ -203,7 +203,7 @@ export default function ModelsScreen() {
         {favoriteModels.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase font-semibold mb-3"
+              className="text-xs uppercase font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Favorites
@@ -236,7 +236,7 @@ export default function ModelsScreen() {
         {recentModelDefs.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase font-semibold mb-3"
+              className="text-xs uppercase font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Recent

@@ -2,6 +2,7 @@ import { Alert, View, Pressable } from 'react-native';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';
@@ -68,19 +69,24 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
               backgroundColor: badgeColorFor(hostname, colors),
             }}
           >
-            <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
+            >
               {hostname.charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               numberOfLines={1}
-              style={{ fontSize: 12.5, color: colors.textPrimary, fontWeight: '500' }}
+              style={{ fontSize: typeScale.caption, color: colors.textPrimary, fontWeight: '500' }}
             >
               {result.title}
             </Text>
             {result.snippet ? (
-              <Text numberOfLines={2} style={{ fontSize: 11, color: colors.textSecondary }}>
+              <Text
+                numberOfLines={2}
+                style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+              >
                 {result.snippet}
               </Text>
             ) : null}
@@ -88,12 +94,18 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
           <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Globe size={11} color={colors.textMuted} />
-              <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: typeScale.caption, color: colors.textMuted }}
+              >
                 {hostname}
               </Text>
             </View>
             {published ? (
-              <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: typeScale.caption, color: colors.textMuted }}
+              >
                 {published}
               </Text>
             ) : null}

@@ -93,3 +93,24 @@ export function skillActionFailureMessage(error: unknown, installing: boolean): 
   }
   return installing ? SKILL_INSTALL_FAILED_COPY : SKILL_UNINSTALL_FAILED_COPY;
 }
+
+export interface SkillDraftInput {
+  name: string;
+  description: string;
+  body: string;
+}
+
+export async function fetchCanAuthorSkills(signal?: AbortSignal): Promise<boolean> {
+  assertSkillsAvailable();
+  const response = await api.get<{ canAuthorSkills?: unknown }>(SKILLS_PATH, { signal });
+  return response?.canAuthorSkills === true;
+}
+
+export async function createPersonalSkill(draft: SkillDraftInput): Promise<void> {
+  assertSkillsAvailable();
+  await api.post<unknown>(SKILLS_PATH, {
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    body: draft.body.trim(),
+  });
+}

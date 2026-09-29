@@ -162,7 +162,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
 export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'microphone',
   'camera',
-  'photos',
+  ...(Platform.OS === 'ios' ? (['photos'] as const) : []),
   'notifications',
   'calendar',
   ...(Platform.OS === 'ios' ? (['reminders'] as const) : []),

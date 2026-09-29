@@ -43,7 +43,7 @@ function PulsingIndicator({ color }: { color: string }) {
 
   useEffect(() => {
     opacity.value = withRepeat(
-      withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
@@ -135,7 +135,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
             {stepNumber != null && totalSteps != null ? (
               <Text
                 variant="caption"
-                className="text-[10px] mt-0.5"
+                className="text-xs mt-0.5"
                 style={{ color: colors.textMuted }}
               >
                 Step {stepNumber} of {totalSteps}
@@ -166,7 +166,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
                 ) : (
                   <ChevronRight size={10} color={colors.textMuted} />
                 )}
-                <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
+                <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
                   {expanded ? 'Hide details' : 'Show details'}
                 </Text>
               </View>
@@ -177,11 +177,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
                 className="mt-1.5 rounded-md px-2 py-1.5"
                 style={{ backgroundColor: colors.inputSurface }}
               >
-                <Text
-                  variant="mono"
-                  className="text-[11px]"
-                  style={{ color: colors.textSecondary }}
-                >
+                <Text variant="mono" className="text-xs" style={{ color: colors.textSecondary }}>
                   {step.detail}
                 </Text>
               </View>

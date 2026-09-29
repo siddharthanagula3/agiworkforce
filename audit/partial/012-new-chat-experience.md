@@ -42,18 +42,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
 
-## S12.06: Recent Project shortcuts.
-
-- Done when: The new-chat screen offers shortcuts to the user's recent projects that open the project or start a chat in it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | New-chat screen has no recent-projects shortcuts; projects are reached through the + sheet picker (ProjectSelectorBar has no recency ordering) and the drawer. | ui |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`
-
 ## S12.08: Recommended Skills.
 
 - Done when: The new-chat screen recommends Skills relevant to the user, which can be applied to the next message.
@@ -71,14 +59,13 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 - Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | New-chat screen recommends no connected apps; the connectors screen is separate and deferred. | codex |
 | cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
 
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:247-247`
 
 ## S12.10: Search entry.
 

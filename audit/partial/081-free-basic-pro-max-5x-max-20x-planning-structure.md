@@ -14,6 +14,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | In-app upgrade still cannot be started: FEATURES.billing is false and MOBILE_IAP_ENABLED is unset, so no charge/renewal confirmation is shown in the app. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:388-388`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`

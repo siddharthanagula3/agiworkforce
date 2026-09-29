@@ -42,7 +42,16 @@ export const EXPORT_CONTENT_STYLES = `
     vertical-align: top;
   }
   .content th { background: ${lightColors.surfaceBase}; font-weight: 600; }
-  .content tr { page-break-inside: avoid; }
+  .content tr, .content blockquote, .content img, .content .math.display {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .content h1, .content h2, .content h3, .content h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .content thead { display: table-header-group; }
+  .content img { max-width: 100%; }
   .content blockquote {
     margin: 8px 0;
     padding: 2px 12px;

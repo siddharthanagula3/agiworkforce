@@ -10,6 +10,7 @@ import Animated, {
   withDelay,
   type SharedValue,
 } from 'react-native-reanimated';
+import { motion } from '@/src/ui/theme/tokens';
 
 interface WaveformProps {
   color: string;
@@ -53,8 +54,12 @@ function WaveformBar({
         index * 80,
         withRepeat(
           withSequence(
-            withTiming(minHeight + (maxHeight - minHeight) * 0.3, { duration: 400 + index * 60 }),
-            withTiming(minHeight + (maxHeight - minHeight) * 0.1, { duration: 350 + index * 50 }),
+            withTiming(minHeight + (maxHeight - minHeight) * 0.3, {
+              duration: motion.moved + index * 60,
+            }),
+            withTiming(minHeight + (maxHeight - minHeight) * 0.1, {
+              duration: motion.moved + index * 50,
+            }),
           ),
           -1,
           true,

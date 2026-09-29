@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import {
   PERMISSION_REGISTRY,
@@ -65,12 +66,17 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>
+          <Text style={{ color: c.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}>
             {entry.label}
           </Text>
           <Text
             numberOfLines={2}
-            style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}
+            style={{
+              color: c.textMuted,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 2,
+            }}
           >
             {entry.description}
           </Text>
@@ -89,7 +95,7 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
           <Text
             style={{
               color: granted ? c.agentSuccess : c.textMuted,
-              fontSize: 13,
+              fontSize: typeScale.footnote,
               fontWeight: '600',
             }}
           >
@@ -140,9 +146,10 @@ export default function PermissionsScreen() {
     <SettingsScreenShell title="Permissions" backHref="/(app)/settings/safety-security">
       <View style={{ marginTop: 10, marginBottom: 12 }}>
         <Text
+          accessibilityRole="header"
           style={{
             color: c.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '700',
             textTransform: 'uppercase',
           }}
@@ -184,7 +191,7 @@ export default function PermissionsScreen() {
           borderColor: c.border,
         }}
       >
-        <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
+        <Text style={{ color: c.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
           Permissions are managed by your device. Changing a permission may open Settings. AGI asks
           only when a feature you started needs one: the microphone for voice, the camera and photos
           for what you attach, notifications for a reply that arrives after you leave. Nothing is
@@ -196,7 +203,7 @@ export default function PermissionsScreen() {
           accessibilityLabel="Get help with permissions, opens the help centre"
           style={{ minHeight: 44, justifyContent: 'center', marginTop: 6 }}
         >
-          <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+          <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
             Get help with permissions
           </Text>
         </Pressable>

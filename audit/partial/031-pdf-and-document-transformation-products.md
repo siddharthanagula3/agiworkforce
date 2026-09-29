@@ -10,31 +10,25 @@ nothing is left.
 
 - Done when: The user can turn a text document (Word, text, markdown) into a PDF file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No convert-this-file action; Word/Excel files cannot be attached on mobile, only message export as PDF and office-tool rewrite of text/CSV. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.02: Spreadsheet to PDF conversion.
 
 - Done when: The user can turn a spreadsheet into a PDF file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No convert-this-file action for spreadsheets; only message export as PDF and office-tool rewrite of CSV. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.03: Presentation to PDF conversion.
 
@@ -116,16 +110,13 @@ Code: `apps/web/scripts/build-e2b-office-template.mjs:29-29`
 
 - Done when: Tables in a PDF come out as structured rows and columns the user can use.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | PDF text is flattened, so table structure is guessed by the model; no table extractor exists. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:156-163`
 
 ## S31.23: Signature-service integration.
 

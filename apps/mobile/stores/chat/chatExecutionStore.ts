@@ -14,6 +14,7 @@ import { api, ApiPaywallError } from '@/services/api';
 import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
+import { getThermalState, recordPerfEvent } from '@/services/performanceMonitor';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { imageLimitRefusal } from '@/src/features/chat/utils/attachmentValidation';
 import {
@@ -97,7 +98,6 @@ import {
   isCapabilityRequestable,
 } from '@/src/features/billing/store';
 import { useProjectStore } from '@/src/features/projects/store';
-import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -331,6 +331,7 @@ export const LOCAL_NO_MODEL_MESSAGE =
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const MAX_DEFERRED_SENDS = 5;
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const deferredSends = new Map<string, DeferredSend[]>();
 const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
@@ -1794,13 +1795,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     const activeProjectId = conversation?.projectId ?? null;
-    if (activeProjectId) {
-      const activeProject =
-        executionMode === 'local'
-          ? useProjectStore.getState().projects.find((p) => p.id === activeProjectId)
-          : useCloudProjectStore
-              .getState()
-              .projects.find((p) => p.id === activeProjectId && p.deletedAt === null);
+    if (activeProjectId && executionMode === 'local') {
+      const activeProject = useProjectStore
+        .getState()
+        .projects.find((p) => p.id === activeProjectId);
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
@@ -2075,6 +2073,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           }));
         };
 
+        const localStartedAt = Date.now();
         const result = await localGenerate(localRef.modelPath, {
           modelId: localRef.modelId,
           prompt: messageContent,
@@ -2113,6 +2112,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           decodeMs > 0 && localTokenCount > 1
             ? Math.round((localTokenCount / decodeMs) * 1000 * 10) / 10
             : undefined;
+        if (tokensPerSecond !== undefined) {
+          recordPerfEvent({
+            ts: Date.now(),
+            tokensPerSecond,
+            firstTokenLatencyMs: localFirstTokenAt - localStartedAt,
+            peakMemoryMB: 0,
+            backend: result.runtime,
+            thermalState: getThermalState(),
+          });
+        }
 
         const currentMsgStore = getConversationMessageStore(conversationId);
         const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -2281,7 +2290,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               messages: historyMessages,
               stream: true,
               operationId: assistantMessageId,
-              ...(isTemporaryChat || temporaryConversation
+              ...(CLOUD_CONVERSATION_ID.test(conversationId)
                 ? { conversation_id: conversationId }
                 : {}),
               thinking: thinkingEnabled,

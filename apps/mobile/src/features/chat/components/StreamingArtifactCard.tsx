@@ -9,18 +9,22 @@ import {
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 
 const STREAMING_ARTIFACT_MIN_LINES = 4;
 const STREAMING_ARTIFACT_TITLE = 'Generating artifact';
 const STOPPED_ARTIFACT_TITLE = 'Stopped artifact';
+const INTERRUPTED_ARTIFACT_NOTICE =
+  'This artifact stopped before it finished. What arrived is kept; regenerate for the whole document.';
 
 interface StreamingArtifactCardProps {
   conversationId: string;
   messageId: string;
   content: string;
   isStreaming: boolean;
+  failed: boolean;
   finalArtifacts: Artifact[];
 }
 
@@ -29,13 +33,13 @@ export function StreamingArtifactCard({
   messageId,
   content,
   isStreaming,
+  failed,
   finalArtifacts,
 }: StreamingArtifactCardProps) {
   const colors = useThemeColors();
   const [opened, setOpened] = useState<{ id: string; ordinal: number } | null>(null);
 
   const artifact = useMemo<(Artifact & { ordinal: number }) | null>(() => {
-    if (!isStreaming) return null;
     const block = extractTrailingUnclosedBlock(content);
     if (!block) return null;
     if (block.content.split('\n').length < STREAMING_ARTIFACT_MIN_LINES) return null;
@@ -43,11 +47,12 @@ export function StreamingArtifactCard({
       ordinal: block.ordinal,
       id: computeDerivedArtifactId(conversationId, messageId, block.ordinal),
       type: 'code',
-      title: STREAMING_ARTIFACT_TITLE,
+      title: isStreaming ? STREAMING_ARTIFACT_TITLE : STOPPED_ARTIFACT_TITLE,
       content: block.content,
       ...(block.language ? { language: block.language } : {}),
     };
   }, [content, conversationId, isStreaming, messageId]);
+  const stateLabel = isStreaming ? 'Writing…' : failed ? 'Failed' : 'Stopped';
 
   const viewed = useMemo<Artifact | null>(() => {
     if (!opened) return null;
@@ -85,7 +90,7 @@ export function StreamingArtifactCard({
       <PressableBox
         onPress={() => setOpened({ id: artifact.id, ordinal: artifact.ordinal })}
         accessibilityRole="button"
-        accessibilityLabel={`${STREAMING_ARTIFACT_TITLE}, ${typeLabel}, writing`}
+        accessibilityLabel={`${artifact.title}, ${typeLabel}, ${stateLabel}`}
         style={{
           borderRadius: 12,
           borderWidth: 1,
@@ -107,17 +112,29 @@ export function StreamingArtifactCard({
           <Code2 size={14} color={colors.textSecondary} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+            style={{
+              flex: 1,
+              fontSize: typeScale.footnote,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
           >
-            {`${STREAMING_ARTIFACT_TITLE} · ${typeLabel}`}
+            {`${artifact.title} · ${typeLabel}`}
           </Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>Writing…</Text>
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              color: failed ? colors.agentError : colors.textMuted,
+            }}
+          >
+            {stateLabel}
+          </Text>
         </View>
         <Text
           style={{
             paddingHorizontal: 12,
             paddingBottom: 10,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 18,
             color: colors.textMuted,
             fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
@@ -126,6 +143,18 @@ export function StreamingArtifactCard({
         >
           {tail}
         </Text>
+        {isStreaming ? null : (
+          <Text
+            style={{
+              paddingHorizontal: 12,
+              paddingBottom: 10,
+              fontSize: typeScale.caption,
+              color: colors.textSecondary,
+            }}
+          >
+            {INTERRUPTED_ARTIFACT_NOTICE}
+          </Text>
+        )}
       </PressableBox>
       {viewer}
     </>
