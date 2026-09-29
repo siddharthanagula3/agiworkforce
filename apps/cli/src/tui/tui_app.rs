@@ -5133,6 +5133,7 @@ pub async fn run(
         effective_provider_override,
     )?;
     session.apply_ui_config(config);
+    crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
