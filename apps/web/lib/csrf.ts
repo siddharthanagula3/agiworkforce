@@ -1,6 +1,15 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+import {
+  deploymentEnvironment,
+  type DeploymentEnvironment,
+} from '@/lib/config/runtime-environment';
+
 const MIN_CSRF_SECRET_BYTES = 32;
+const EPHEMERAL_SECRET_ENVIRONMENTS: ReadonlySet<DeploymentEnvironment> = new Set([
+  'development',
+  'test',
+]);
 let cachedSecret: string | null = null;
 let cachedPrevSecret: string | null | undefined = undefined;
 
@@ -18,13 +27,13 @@ function getCsrfSecret(): string {
   }
   const secret = process.env['CSRF_SECRET'];
   if (!secret) {
-    console.error(
-      '[csrf] CRITICAL: CSRF_SECRET environment variable is not set. ' +
-        'Cookie-session CSRF protection is DISABLED. ' +
-        'Set CSRF_SECRET (≥32 bytes) in your Vercel/environment config. ' +
-        'Bearer-authenticated requests (web app) are unaffected.',
-    );
-    cachedSecret = randomBytes(32).toString('hex');
+    const environment = deploymentEnvironment();
+    if (!EPHEMERAL_SECRET_ENVIRONMENTS.has(environment)) {
+      throw new Error(
+        `CSRF protection needs CSRF_SECRET (at least ${MIN_CSRF_SECRET_BYTES} bytes) in ${environment}; a per-instance secret would reject tokens minted by any other instance`,
+      );
+    }
+    cachedSecret = randomBytes(MIN_CSRF_SECRET_BYTES).toString('hex');
     return cachedSecret;
   }
   assertSufficientEntropy('CSRF_SECRET', secret);
