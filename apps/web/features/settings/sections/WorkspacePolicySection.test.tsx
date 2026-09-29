@@ -43,6 +43,7 @@ function policy(overrides: Partial<AdminPolicy> = {}): AdminPolicy {
     requireMfa: false,
     monthlySpendCapCents: null,
     zeroDataRetentionOnly: false,
+    allowProductAnalytics: true,
     ipAllowList: [],
     controls: DEFAULT_WORKSPACE_CONTROLS,
     updatedAt: '2026-08-01T00:00:00.000Z',

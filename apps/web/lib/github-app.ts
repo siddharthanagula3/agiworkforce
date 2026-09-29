@@ -963,10 +963,10 @@ export class GitHubWriteOutcomeUnknownError extends Error {
   }
 }
 
-async function sendGitHubWrite(url: string, init: RequestInit): Promise<Response> {
+async function sendGitHubWrite(url: string, init: Omit<RequestInit, 'signal'>): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) });
   } catch (error) {
     throw new GitHubWriteOutcomeUnknownError(error);
   }
@@ -1730,7 +1730,6 @@ export async function postPrReview(
             }
           : {}),
       }),
-      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {
@@ -1833,7 +1832,6 @@ export async function postIssueComment(
         'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({ body }),
-      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {

@@ -24,6 +24,7 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "dependencies": {
+    "@agiworkforce/utils": "workspace:*",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
   },

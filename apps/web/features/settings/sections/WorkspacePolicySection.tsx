@@ -135,6 +135,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     monthlySpendCapCredits:
       policy.monthlySpendCapCents === null ? null : creditsFromCents(policy.monthlySpendCapCents),
     zeroDataRetentionOnly: policy.zeroDataRetentionOnly,
+    allowProductAnalytics: policy.allowProductAnalytics,
     ipAllowList: [...policy.ipAllowList],
   };
 }
@@ -487,6 +488,23 @@ export function WorkspacePolicySection() {
             disabled={!canEdit}
             label="Allow memory"
             onChange={(next) => setDraft({ ...draft, allowMemory: next })}
+          />
+        }
+      />
+
+      <Row
+        title="Product analytics"
+        description={
+          draft.allowProductAnalytics
+            ? 'Each member decides in their own privacy choices whether AGI records product usage events such as a stopped response or an accepted edit. Nothing is recorded for a member who has not allowed it.'
+            : 'Off for every member. AGI records no product usage events for anyone in this workspace, whatever their own privacy choice says.'
+        }
+        control={
+          <Toggle
+            checked={draft.allowProductAnalytics}
+            disabled={!canEdit}
+            label="Follow each member's product analytics choice"
+            onChange={(next) => setDraft({ ...draft, allowProductAnalytics: next })}
           />
         }
       />

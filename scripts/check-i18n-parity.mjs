@@ -38,6 +38,14 @@ function unexpectedKeys(localeKeys, referenceKeys, locale) {
   });
 }
 
+function unusedPluralForm(key, localeKeys, locale) {
+  const match = PLURAL_SUFFIX.exec(key);
+  if (!match) return false;
+  return (
+    !pluralCategories(locale).has(match[1]) && localeKeys.has(`${key.slice(0, match.index)}_other`)
+  );
+}
+
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
@@ -72,7 +80,9 @@ export function compareLocales(localesDir) {
         continue;
       }
       const expected = referenceKeys.get(ns);
-      const missing = [...expected].filter((key) => !keys.has(key));
+      const missing = [...expected].filter(
+        (key) => !keys.has(key) && !unusedPluralForm(key, keys, locale),
+      );
       const extra = unexpectedKeys(keys, expected, locale);
       if (missing.length > 0) findings.push(`${locale}/${ns}: missing ${missing.join(', ')}`);
       if (extra.length > 0) findings.push(`${locale}/${ns}: extra ${extra.join(', ')}`);

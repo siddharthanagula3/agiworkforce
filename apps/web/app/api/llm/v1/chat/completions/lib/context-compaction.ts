@@ -19,7 +19,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { reserveBackgroundUsage } from '@/lib/services/background-usage-lease';
 import { drainToLlmResponse } from './adapter-response';
-import { redactSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   applyDroppedSpanReplacement,
@@ -142,14 +142,14 @@ async function generateCompactionSummary(params: {
   // it runs inside processRequest, before the turn reaches the secret-handling
   // gate. Bounded first, then redacted, so a credential in the dropped span is
   // not what summarizes it.
-  const transcript = redactSecrets(
+  const transcript = redactAuditedSecrets(
     params.spanMessages
       .map((message) => `${message.role}: ${message.content}`.trim())
       .filter(Boolean)
       .join('\n\n')
       .slice(0, MAX_COMPACTION_SOURCE_CHARS),
   );
-  const priorSummary = params.priorSummary ? redactSecrets(params.priorSummary) : null;
+  const priorSummary = params.priorSummary ? redactAuditedSecrets(params.priorSummary) : null;
 
   const systemPrompt = params.priorSummary
     ? COMPACTION_CONTINUATION_SYSTEM_PROMPT

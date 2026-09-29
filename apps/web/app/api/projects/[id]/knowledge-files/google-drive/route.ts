@@ -53,7 +53,7 @@ function extensionOf(name: string): string {
 }
 
 type ImportOutcome =
-  | { fileId: string; status: 'added'; file: unknown }
+  | { fileId: string; status: 'added'; file: unknown; notice?: string }
   | { fileId: string; status: 'failed'; message: string };
 
 async function handleImport(request: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -171,7 +171,12 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
         throw createError.capabilityUnavailable('Project sources are not available yet.');
       }
       writtenKey = null;
-      outcomes.push({ fileId, status: 'added', file: registration.file });
+      outcomes.push({
+        fileId,
+        status: 'added',
+        file: registration.file,
+        ...(registration.notice ? { notice: registration.notice } : {}),
+      });
     } catch (error) {
       if (writtenKey) {
         await deleteProjectKnowledgeObject(writtenKey).catch((deleteError: unknown) =>

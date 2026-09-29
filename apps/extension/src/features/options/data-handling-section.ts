@@ -115,7 +115,31 @@ function buildToggleRow(storage: DataHandlingStorage, config: ToggleRowConfig): 
   return { row, toggle, status, loaded };
 }
 
-export function createDataHandlingSection(storage: DataHandlingStorage): DataHandlingSection {
+function buildLinkRow(label: string, hint: string, href: string): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'opt-row';
+  const text = document.createElement('div');
+  const title = document.createElement('div');
+  title.className = 'opt-row-label';
+  title.textContent = label;
+  const body = document.createElement('div');
+  body.className = 'opt-row-hint';
+  body.textContent = hint;
+  text.append(title, body);
+  const link = document.createElement('a');
+  link.className = 'opt-link';
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noreferrer noopener';
+  link.textContent = 'Manage';
+  row.append(text, link);
+  return row;
+}
+
+export function createDataHandlingSection(
+  storage: DataHandlingStorage,
+  productAnalyticsUrl?: string,
+): DataHandlingSection {
   const element = document.createElement('section');
   element.className = 'opt-section';
   element.id = 'opt-privacy';
@@ -167,6 +191,16 @@ export function createDataHandlingSection(storage: DataHandlingStorage): DataHan
     saveFailureMessage: SAVE_FAILURE_TEXT,
   });
   element.appendChild(errorReporting.row);
+
+  if (productAnalyticsUrl) {
+    element.appendChild(
+      buildLinkRow(
+        'Product analytics',
+        'Whether your AGI account records product usage events, such as a stopped response, from every AGI app. Never your messages or page content. Only Managed Cloud chats send them.',
+        productAnalyticsUrl,
+      ),
+    );
+  }
 
   const loaded = Promise.all([cloudMirroring.loaded, errorReporting.loaded]).then(() => undefined);
 

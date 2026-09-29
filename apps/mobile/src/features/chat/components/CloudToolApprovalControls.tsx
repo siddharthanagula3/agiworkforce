@@ -1,4 +1,5 @@
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRecyclingState } from '@shopify/flash-list';
 import { ShieldAlert } from 'lucide-react-native';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -221,7 +222,7 @@ export function CloudToolApprovalControls({
       ) : null}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <Pressable
+        <PressableBox
           onPress={() => resolve('approved')}
           disabled={disabled}
           accessibilityRole="button"
@@ -246,9 +247,9 @@ export function CloudToolApprovalControls({
                 : TOOL_APPROVAL_ACTION_LABELS.allow}
             </Text>
           </View>
-        </Pressable>
+        </PressableBox>
         {canAllowForChat ? (
-          <Pressable
+          <PressableBox
             onPress={() => onAllowForChat?.(toolCallId, toolName, guidance.trim() || undefined)}
             accessibilityRole="button"
             accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allowForChat}: ${summary}`}
@@ -273,9 +274,9 @@ export function CloudToolApprovalControls({
                 {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
               </Text>
             </View>
-          </Pressable>
+          </PressableBox>
         ) : null}
-        <Pressable
+        <PressableBox
           onPress={() => resolve('rejected')}
           disabled={disabled}
           accessibilityRole="button"
@@ -301,9 +302,9 @@ export function CloudToolApprovalControls({
                 : TOOL_APPROVAL_ACTION_LABELS.deny}
             </Text>
           </View>
-        </Pressable>
+        </PressableBox>
         {guidanceOpen || disabled ? null : (
-          <Pressable
+          <PressableBox
             onPress={() => setGuidanceOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={`Add guidance for ${summary}`}
@@ -320,7 +321,7 @@ export function CloudToolApprovalControls({
                 Add guidance
               </Text>
             </View>
-          </Pressable>
+          </PressableBox>
         )}
       </View>
     </View>

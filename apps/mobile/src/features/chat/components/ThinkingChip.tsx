@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronRight, Clock, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -54,7 +55,7 @@ export function ThinkingChip({
   return (
     <View style={{ marginVertical: 2 }}>
       {/* Status line, no card, no fill, no border. */}
-      <Pressable
+      <PressableBox
         onPress={() => setSheetOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="Show reasoning"
@@ -75,7 +76,7 @@ export function ThinkingChip({
         </View>
 
         <ChevronRight size={14} color={colors.textMuted} />
-      </Pressable>
+      </PressableBox>
 
       {/*
         Native Modal, not an inline overlay: this app has no
@@ -90,7 +91,7 @@ export function ThinkingChip({
         onRequestClose={() => setSheetOpen(false)}
         accessibilityViewIsModal
       >
-        <Pressable
+        <PressableBox
           style={[styles.backdrop, { backgroundColor: colors.scrim }]}
           onPress={() => setSheetOpen(false)}
           accessibilityLabel="Dismiss reasoning"
@@ -98,7 +99,7 @@ export function ThinkingChip({
           accessible={false}
         >
           <SafeAreaView edges={['bottom']} style={styles.safeArea}>
-            <Pressable
+            <PressableBox
               style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
               onPress={() => undefined}
               accessible={false}
@@ -122,14 +123,14 @@ export function ThinkingChip({
                     {headerLabel}
                   </Text>
                 </View>
-                <Pressable
+                <PressableBox
                   onPress={() => setSheetOpen(false)}
                   hitSlop={12}
                   accessibilityRole="button"
                   accessibilityLabel="Close reasoning"
                 >
                   <X size={20} color={colors.textMuted} />
-                </Pressable>
+                </PressableBox>
               </View>
 
               <ScrollView
@@ -144,9 +145,9 @@ export function ThinkingChip({
                   {thinkingText}
                 </Text>
               </ScrollView>
-            </Pressable>
+            </PressableBox>
           </SafeAreaView>
-        </Pressable>
+        </PressableBox>
       </Modal>
     </View>
   );

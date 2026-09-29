@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, View, Pressable } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -73,7 +74,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
           backgroundColor: themeColors.scrim,
         }}
       >
-        <Pressable
+        <PressableBox
           style={{ flex: 1 }}
           onPress={closeSheet}
           accessibilityLabel="Close style selector"
@@ -111,14 +112,14 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
               paddingBottom: 16,
             }}
           >
-            <Pressable
+            <PressableBox
               onPress={closeSheet}
               style={{ padding: 4 }}
               accessibilityLabel="Close style selector"
               accessibilityRole="button"
             >
               <X size={20} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
             <Text
               style={{
                 fontSize: typeScale.callout,
@@ -140,7 +141,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             {STYLE_OPTIONS.map((option) => {
               const isSelected = chatStyle === option.id;
               return (
-                <Pressable
+                <PressableBox
                   key={option.id}
                   onPress={() => handleSelect(option.id)}
                   style={{
@@ -202,7 +203,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                       {option.description}
                     </Text>
                   </View>
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>

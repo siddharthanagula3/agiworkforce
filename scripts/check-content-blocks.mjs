@@ -60,13 +60,7 @@ const SKIPPED_DIRS = new Set([
 ]);
 const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 
-const WEB_FIX =
-  'classify each event with messageKindForAgentEvent and keep per-type branches only for payload details';
-
-export const BLOCK_KIND_READERS_PENDING = Object.freeze({
-  'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${WEB_FIX}`,
-  'apps/mobile/src/features/tasks/runPresentation.ts': `mobile, post-codex patch: ${WEB_FIX}`,
-});
+export const BLOCK_KIND_READERS_PENDING = Object.freeze({});
 
 export const NOT_BLOCK_KIND_READERS = Object.freeze({
   'apps/desktop/electron/runtime/localInferenceService.ts':

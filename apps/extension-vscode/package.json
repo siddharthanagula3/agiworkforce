@@ -1192,7 +1192,7 @@
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "description": "Send anonymous usage telemetry to help improve AGI Workforce"
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI Workforce account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them, and scrubbed crash reports. Also subject to VS Code's telemetry setting."
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
@@ -1278,7 +1278,7 @@
           "type": "string",
           "default": "https://telemetry.agiworkforce.com/v1/events",
           "scope": "machine",
-          "description": "Endpoint URL for sending anonymous telemetry events"
+          "description": "Endpoint URL for scrubbed crash reports"
         },
         "agiWorkforce.currentTier": {
           "type": "string",
@@ -1394,10 +1394,12 @@
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/ide-runtime": "workspace:*",
     "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.15",

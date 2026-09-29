@@ -262,6 +262,54 @@ async function refreshLockedGrant(
 }
 
 /**
+ * Account erasure hands every live connector credential back to its provider
+ * before the grant rows are deleted, the same way disconnect does, so a
+ * deleted account leaves no refresh token live upstream. Best effort: a
+ * provider that refuses or times out is logged and never blocks the erasure.
+ */
+export async function revokeAllConnectorTokensAtProviders(
+  userId: string,
+): Promise<{ attempted: number; revoked: number }> {
+  let connectorIds: string[];
+  try {
+    const rows = await getNeonDb().query<{ connector_id: string }>(
+      `select distinct connector_id from public.connector_oauth_grants
+        where user_id = $1 and revoked_at is null`,
+      [userId],
+    );
+    connectorIds = rows.map((row) => row.connector_id);
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.name : 'unknown' },
+      '[connector-oauth] erasure could not list grants to revoke upstream',
+    );
+    return { attempted: 0, revoked: 0 };
+  }
+
+  let attempted = 0;
+  let revoked = 0;
+  for (const connectorId of connectorIds) {
+    const provider = getConnectorOAuthProvider(connectorId);
+    if (!provider?.revocationUrl) continue;
+    try {
+      const revocable = await listRevocableConnectorTokens(userId, connectorId);
+      for (const credential of revocable) {
+        attempted += 1;
+        if (await revokeTokenAtProvider(provider, credential.token, credential.tokenTypeHint)) {
+          revoked += 1;
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        { connectorId, error: error instanceof Error ? error.name : 'unknown' },
+        '[connector-oauth] erasure could not revoke a grant upstream; erasing locally',
+      );
+    }
+  }
+  return { attempted, revoked };
+}
+
+/**
  * With no account key this disconnects every account of the connector, so every
  * one of their credentials is handed back to the provider before the local rows
  * are destroyed. Revoking only the default would leave a second mailbox's

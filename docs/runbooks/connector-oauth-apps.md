@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
@@ -174,7 +174,20 @@ One Google Cloud project and one OAuth client serve all four connectors.
      `docs/development/connectors-setup.md`, BigQuery).
    - The privacy policy must state that Google user data is used under the
      Google API Services User Data Policy, including the Limited Use
-     requirements, before you submit.
+     requirements, before you submit. It is published at `/privacy#s-google`.
+   - **Deploy step, after migration 0344 applies:** mark the conversations
+     that already hold Google user data. Dry run first, then apply; it walks
+     conversations in batches of 1,000, each its own short transaction, and a
+     second run changes nothing. If it stops, rerun with the `--after` id it
+     printed.
+
+     ```bash
+     NEON_DATABASE_URL=... node scripts/backfill-google-user-data-mark.mjs
+     NEON_DATABASE_URL=... node scripts/backfill-google-user-data-mark.mjs --apply
+     ```
+
+   - **Deploy step:** set `SOFT_DELETED_RESOURCE_PURGE_ENABLED=true` so deleted
+     chats and projects are purged 30 days after deletion, as `/privacy` states.
    - **Demo video:** record it on the live site after the keys are deployed,
      with the app in Testing and your account as a test user: the consent
      screen with the client ID visible in the address bar, then one request per

@@ -26,13 +26,13 @@ export async function applyLlmEdit(
   options?: {
     autoApply?: boolean;
   },
-): Promise<void> {
+): Promise<'accepted' | 'dismissed' | undefined> {
   const lang = editor.document.languageId;
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
   if (codeBlock === undefined || selection.isEmpty) {
     await openInNewTab(llmResponse, commandLabel);
-    return;
+    return undefined;
   }
 
   if (options?.autoApply === true) {
@@ -42,9 +42,9 @@ export async function applyLlmEdit(
     if (!applied) {
       vscode.window.showWarningMessage(t('applyEdit.autoApplyFailed'));
       await openInNewTab(llmResponse, commandLabel);
-      return;
+      return undefined;
     }
-    return;
+    return 'accepted';
   }
 
   const applyInline = t('applyEdit.applyInline');
@@ -60,13 +60,13 @@ export async function applyLlmEdit(
     const edit = new vscode.WorkspaceEdit();
     edit.replace(editor.document.uri, selection, codeBlock);
     const applied = await vscode.workspace.applyEdit(edit);
-    if (!applied) {
-      vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
-      await openInNewTab(llmResponse, commandLabel);
-    }
-  } else if (choice === viewInNewTab) {
+    if (applied) return 'accepted';
+    vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
     await openInNewTab(llmResponse, commandLabel);
+    return undefined;
   }
+  if (choice === viewInNewTab) await openInNewTab(llmResponse, commandLabel);
+  return 'dismissed';
 }
 
 async function openInNewTab(content: string, label: string): Promise<void> {

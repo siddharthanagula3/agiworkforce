@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useTheme, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -92,7 +93,7 @@ export function MermaidDiagramBlock({ source, colors, sourceBlock }: MermaidDiag
         >
           {drawnHeight === null ? 'Drawing diagram…' : 'Diagram'}
         </Text>
-        <Pressable
+        <PressableBox
           onPress={() => setShowSource((shown) => !shown)}
           accessibilityRole="button"
           accessibilityState={{ expanded: showSource }}
@@ -103,7 +104,7 @@ export function MermaidDiagramBlock({ source, colors, sourceBlock }: MermaidDiag
           >
             {showSource ? 'Hide source' : 'Show source'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
       {showSource ? sourceBlock : null}
     </View>

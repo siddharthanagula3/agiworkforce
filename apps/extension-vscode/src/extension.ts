@@ -48,6 +48,7 @@ import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostN
 import { markInUse, whenInUse } from './core/startupWork';
 import * as telemetry from './core/telemetry';
 import { installGlobalErrorReporting } from './core/errorReporting';
+import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
@@ -86,6 +87,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   runBoot('telemetry', () => {
     context.subscriptions.push(telemetry.activate(context));
+    context.subscriptions.push(activateProductAnalytics(context));
   });
 
   runBoot('error-reporting', () => {

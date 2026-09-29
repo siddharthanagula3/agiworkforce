@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Pressable,
   RefreshControl,
   ScrollView,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ExternalLink, GitBranch, X } from 'lucide-react-native';
@@ -87,7 +87,7 @@ function Header({
         gap: 8,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -95,7 +95,7 @@ function Header({
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <View style={{ flex: 1 }}>
         <Text
           numberOfLines={1}
@@ -121,7 +121,7 @@ function Header({
         />
       ) : null}
       {onOpenChanges ? (
-        <Pressable
+        <PressableBox
           onPress={onOpenChanges}
           accessibilityRole="button"
           accessibilityLabel={CLOUD_CODE_CHANGES_COPY.open}
@@ -130,7 +130,7 @@ function Header({
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <GitBranch size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -178,14 +178,14 @@ function Notice({
         {message}
       </Text>
       {onDismiss ? (
-        <Pressable
+        <PressableBox
           onPress={onDismiss}
           accessibilityRole="button"
           accessibilityLabel="Dismiss"
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <X size={16} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -383,7 +383,7 @@ function SessionView({
           }
         >
           {pullRequestLabel && pullRequestUrl ? (
-            <Pressable
+            <PressableBox
               onPress={() => void openUntrustedUrlInAppBrowser(pullRequestUrl)}
               accessibilityRole="link"
               accessibilityLabel={pullRequestLabel}
@@ -410,7 +410,7 @@ function SessionView({
               >
                 {pullRequestLabel}
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {failedMessage ? (

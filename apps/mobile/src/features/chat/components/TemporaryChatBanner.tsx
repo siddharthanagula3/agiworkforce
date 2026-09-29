@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Switch, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { EyeOff, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -77,14 +78,14 @@ export function TemporaryChatBanner() {
           </View>
         ) : null}
       </View>
-      <Pressable
+      <PressableBox
         onPress={() => setVisible(false)}
         hitSlop={8}
         accessibilityLabel="Dismiss temporary chat explainer"
         accessibilityRole="button"
       >
         <X size={14} color={colors.textMuted} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

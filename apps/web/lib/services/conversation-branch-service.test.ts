@@ -164,6 +164,46 @@ describe('conversation branch service', () => {
     ]);
   });
 
+  it.each([
+    ['carries the Google user data marker of a marked source', '2026-09-29T08:00:00.000Z'],
+    ['leaves the marker empty for an unmarked source', null],
+  ])('%s onto the branch', async (_label, marker) => {
+    const { db, query, execute } = adapter();
+    const targetConversation = {
+      ...sourceConversation,
+      id: '0190a000-0000-7000-8000-0000000000dd',
+      title: 'Source chat (branch)',
+    };
+    query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ ...sourceConversation, google_user_data_at: marker }])
+      .mockResolvedValueOnce([{ id: '0190a000-0000-7000-8000-0000000000bb' }])
+      .mockResolvedValueOnce([{ sibling_count: 0, group_count: 0 }])
+      .mockResolvedValueOnce([targetConversation])
+      .mockResolvedValueOnce([]);
+    execute.mockResolvedValue(1);
+
+    await forkConversation(db, 'user-1', {
+      sourceConversationId: sourceConversation.id,
+      messageId: '0190a000-0000-7000-8000-0000000000bb',
+      requestId: targetConversation.id,
+    });
+
+    expect(query.mock.calls[1]![0]).toContain('google_user_data_at');
+    const [insertSql, insertParams] = query.mock.calls[4]!;
+    expect(insertSql).toContain('insert into public.web_conversations');
+    expect(insertSql).toContain('google_user_data_at');
+    expect(insertParams).toEqual([
+      targetConversation.id,
+      'user-1',
+      'Source chat (branch)',
+      sourceConversation.model,
+      sourceConversation.project_id,
+      sourceConversation.is_temporary,
+      marker,
+    ]);
+  });
+
   it('returns the first target for an idempotent retry without writing again', async () => {
     const { db, query, execute } = adapter();
     const targetConversation = {

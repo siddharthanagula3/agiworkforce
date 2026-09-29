@@ -60,13 +60,64 @@ export const ManagedCloudEventTriggerSchema = z.object({
 });
 export type ManagedCloudEventTrigger = z.infer<typeof ManagedCloudEventTriggerSchema>;
 
+const TriggerPageSchema = z.object({
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+
 export const ManagedCloudEventTriggerListResponseSchema = z.object({
   triggers: z.array(ManagedCloudEventTriggerSchema),
+  pagination: TriggerPageSchema.optional(),
 });
+export type ManagedCloudEventTriggerListResponse = z.infer<
+  typeof ManagedCloudEventTriggerListResponseSchema
+>;
 
 export const ManagedCloudEventTriggerResponseSchema = z.object({
   trigger: ManagedCloudEventTriggerSchema,
 });
+export type ManagedCloudEventTriggerResponse = z.infer<
+  typeof ManagedCloudEventTriggerResponseSchema
+>;
+
+export const ManagedCloudEventTriggerDeletedResponseSchema = z.object({
+  success: z.literal(true),
+});
+export type ManagedCloudEventTriggerDeletedResponse = z.infer<
+  typeof ManagedCloudEventTriggerDeletedResponseSchema
+>;
+
+export const MANAGED_CLOUD_TRIGGER_DELIVERY_OUTCOMES = [
+  'received',
+  'filtered',
+  'debounced',
+  'enqueued',
+  'fired',
+  'failed',
+  'dead',
+] as const;
+
+export const ManagedCloudEventTriggerDeliverySchema = z.object({
+  id: z.string().min(1),
+  triggerId: z.string().min(1),
+  source: ManagedCloudTriggerSourceSchema,
+  eventType: z.string(),
+  deliveryId: z.string(),
+  outcome: z.enum(MANAGED_CLOUD_TRIGGER_DELIVERY_OUTCOMES),
+  detail: z.string().nullable(),
+  jobId: z.string().nullable(),
+  runId: z.string().nullable(),
+  receivedAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const ManagedCloudEventTriggerDeliveryListResponseSchema = z.object({
+  events: z.array(ManagedCloudEventTriggerDeliverySchema),
+  pagination: TriggerPageSchema,
+});
+export type ManagedCloudEventTriggerDeliveryListResponse = z.infer<
+  typeof ManagedCloudEventTriggerDeliveryListResponseSchema
+>;
 
 export const ManagedCloudEventTriggerCreatedResponseSchema = z.object({
   trigger: ManagedCloudEventTriggerSchema,

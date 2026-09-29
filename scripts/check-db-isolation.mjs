@@ -110,6 +110,28 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
       'request workspace to constrain by',
   },
   {
+    match: /lib\/connectors\/google-user-data\.ts$/,
+    reason:
+      'Google Limited Use routing reads whether Google user data can reach a turn: a connector ' +
+      'grant is account-wide like the connector catalog it gates, and each statement is keyed ' +
+      'by the account plus a conversation, project or connector id and returns only ids or a ' +
+      'flag, so reading across workspaces can only add a restriction, never expose a row',
+  },
+  {
+    match: /lib\/connectors\/google-user-data-runs\.ts$/,
+    reason:
+      'Google Limited Use routing for runs outside a chat and for retrieval embeddings: each ' +
+      'statement is keyed by the account plus a source id and returns only a conversation id ' +
+      'or a flag, so reading across workspaces can only add a restriction, never expose a row',
+  },
+  {
+    match: /lib\/jobs\/google-user-data-jobs\.ts$/,
+    reason:
+      'the operator dead-jobs view already spans every tenant behind the break-glass gate; this ' +
+      'reads only the connector list of the routines those jobs name, by id, to decide what to ' +
+      'withhold, so it can only hide content, never expose a row',
+  },
+  {
     match: /lib\/services\/tier-unit-quota-service\.ts$/,
     reason:
       'a Free daily cap limits the account, not one workspace: it counts the messages and ' +

@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -37,7 +38,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
               .springify()
       }
     >
-      <Pressable
+      <PressableBox
         onPress={() => onPress(project.id)}
         onLongPress={() => onLongPress(project.id)}
         className="rounded-xl overflow-hidden active:opacity-80"
@@ -103,7 +104,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             </Text>
           </View>
         </View>
-      </Pressable>
+      </PressableBox>
     </Animated.View>
   );
 }

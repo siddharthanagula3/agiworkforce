@@ -61,6 +61,8 @@ export interface TokenUsage {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
+  /** The output tier that served the call, as the provider reported it. */
+  speed?: 'standard' | 'fast';
 }
 
 export interface ModelPricing {
@@ -415,12 +417,27 @@ export class LLMCostCalculator {
       const outputCost = (billableOutput / 1_000_000) * pricing.outputCostPer1MTokens;
 
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
-      return totalCostDollars;
+      return totalCostDollars * this.speedMultiplier(provider, model, usage.speed);
     } catch (error) {
       if (error instanceof UnpricedModelError) throw error;
       logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
       return 0;
     }
+  }
+
+  /**
+   * A call served on a model's fast tier costs that tier's multiple of every
+   * token rate. A fast call on a model with no declared tier is unpriced, never
+   * billed at the standard rate.
+   */
+  static speedMultiplier(provider: string, model: string, speed: TokenUsage['speed']): number {
+    if (speed !== 'fast') return 1;
+    const canonical = normalizeModelId(model) ?? model;
+    const multiplier = getModelMetadataById(canonical)?.fastTier?.priceMultiplier;
+    if (!Number.isFinite(multiplier) || multiplier === undefined || multiplier < 1) {
+      throw new UnpricedModelError(provider, `${model} (fast)`);
+    }
+    return multiplier;
   }
 
   static getCacheWriteCostPerMtok(

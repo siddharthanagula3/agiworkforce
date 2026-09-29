@@ -105,6 +105,13 @@ import {
   isGmailActionTool,
 } from '@/lib/connectors/gmail-actions';
 import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  CUSTOM_SERVER_PREFIX,
+  customServerId,
+  ORG_SHARED_SERVER_PREFIX,
+  orgSharedServerId,
+} from '@/lib/connectors/custom-server-ids';
+import { isGoogleApiUrl, isGoogleUserDataConnector } from '@/lib/connectors/google-user-data';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
@@ -155,8 +162,6 @@ function resolveConnectorToolLimit(planTier: string | null | undefined): number 
 }
 
 const GITHUB_SERVER_ID = 'github';
-
-const CUSTOM_SERVER_PREFIX = 'custom-';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -888,10 +893,6 @@ interface CustomConnectorRow {
   auth_header_enc: string | null;
 }
 
-function customServerId(shortId: string): string {
-  return `${CUSTOM_SERVER_PREFIX}${shortId}`;
-}
-
 function customShortIdFromServerId(serverId: string): string | null {
   return serverId.startsWith(CUSTOM_SERVER_PREFIX)
     ? serverId.slice(CUSTOM_SERVER_PREFIX.length)
@@ -1618,14 +1619,9 @@ async function executeOAuthConnectorTool(
   }
 }
 
-const ORG_SHARED_SERVER_PREFIX = 'orgmcp-';
 // A member's shared connector (0086) or a workspace-published server (0250),
 // which carries a leading 'p' so the two never share a short id.
 const ORG_SHORT_ID_RE = /^p?[0-9a-f]{10}$/;
-
-function orgSharedServerId(orgShortId: string): string {
-  return `${ORG_SHARED_SERVER_PREFIX}${orgShortId}`;
-}
 
 function orgShortIdFromServerId(serverId: string): string | null {
   if (!serverId.startsWith(ORG_SHARED_SERVER_PREFIX)) return null;
@@ -1897,6 +1893,12 @@ export interface LoadUserConnectorToolOptions {
   planTier?: string | null;
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
   healthSpace?: boolean;
+  /**
+   * The caller serves this catalog only to models that keep inputs out of
+   * training. Without it, a custom, shared or directory server on a Google API
+   * host is not dialled.
+   */
+  googleUserDataRouted?: boolean;
 }
 
 /**
@@ -2417,6 +2419,20 @@ export async function loadUserConnectorToolCatalog(
       : [];
 
     const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];
+    const googleHosted = (
+      url: string,
+      load: () => Promise<WebMcpToolDef[]>,
+    ): Promise<WebMcpToolDef[]> => {
+      if (!isGoogleApiUrl(url)) return load();
+      if (options.googleUserDataRouted !== true) {
+        logger.info(
+          { userId },
+          '[user-connector] Google-hosted connector withheld from a turn that may train',
+        );
+        return Promise.resolve([]);
+      }
+      return load().then((defs) => defs.map((def) => ({ ...def, googleUserData: true as const })));
+    };
 
     const offersHealthSpaceConnectors = options.healthSpace === true;
     for (const entry of map.values()) {
@@ -2424,10 +2440,17 @@ export async function loadUserConnectorToolCatalog(
       if (isHealthSpaceConnector(entry.connectorId) && !offersHealthSpaceConnectors) continue;
       dials.push({
         member: false,
-        load: async () => {
-          const catalog = await buildRemoteConnectorCatalog(entry);
-          return catalog ? catalogToConnectorToolDefs(catalog) : [];
-        },
+        load:
+          isGoogleUserDataConnector(entry.connectorId) || !isGoogleApiUrl(entry.url)
+            ? async () => {
+                const catalog = await buildRemoteConnectorCatalog(entry);
+                return catalog ? catalogToConnectorToolDefs(catalog) : [];
+              }
+            : () =>
+                googleHosted(entry.url, async () => {
+                  const catalog = await buildRemoteConnectorCatalog(entry);
+                  return catalog ? catalogToConnectorToolDefs(catalog) : [];
+                }),
       });
     }
 
@@ -2474,15 +2497,17 @@ export async function loadUserConnectorToolCatalog(
           const directory = await resolveDirectoryTarget(grant.connectorId);
           if (!directory) return [];
           const target = directoryMcpTarget(directory);
-          const access = await resolveConnectorAccessToken(userId, target.connectorId, {
-            discovered: true,
+          return googleHosted(target.mcpUrl, async () => {
+            const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+              discovered: true,
+            });
+            if (access.status === 'reauthorization-required') {
+              return reconnectToolDefs(target.serverId, target.displayName ?? target.connectorId);
+            }
+            if (access.status !== 'ready') return [];
+            const catalog = await buildOAuthConnectorCatalog(userId, target, access);
+            return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
           });
-          if (access.status === 'reauthorization-required') {
-            return reconnectToolDefs(target.serverId, target.displayName ?? target.connectorId);
-          }
-          if (access.status !== 'ready') return [];
-          const catalog = await buildOAuthConnectorCatalog(userId, target, access);
-          return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
         },
       });
     }
@@ -2501,8 +2526,10 @@ export async function loadUserConnectorToolCatalog(
             );
             return [];
           }
-          const catalog = await buildCustomConnectorCatalog(userId, row);
-          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          return googleHosted(row.url, async () => {
+            const catalog = await buildCustomConnectorCatalog(userId, row);
+            return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          });
         },
       });
     }
@@ -2512,8 +2539,10 @@ export async function loadUserConnectorToolCatalog(
         member: true,
         load: async () => {
           if (!mcpHostPermitted(await customHostPolicy, row.url)) return [];
-          const catalog = await buildOrgSharedConnectorCatalog(row);
-          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          return googleHosted(row.url, async () => {
+            const catalog = await buildOrgSharedConnectorCatalog(row);
+            return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          });
         },
       });
     }

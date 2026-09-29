@@ -126,6 +126,7 @@ const LlmRequestSchema = z
     thinking_mode: z.boolean().optional(),
     thinking: ThinkingConfigSchema.optional(),
     effort: z.string().optional(),
+    speed: z.literal('fast').optional(),
     usePromptCache: z.boolean().optional(),
     responseFormat: ResponseFormatSchema.optional(),
     requestParameters: RequestParametersSchema.optional(),
@@ -237,6 +238,7 @@ const McpToolSchema = z
     origin: z.enum(['operator', 'connector']).optional(),
     serverLabel: z.string().optional(),
     inputSchema: z.record(z.string(), z.unknown()),
+    googleUserData: z.literal(true).optional(),
   })
   .strict();
 const mcpToolSchemaCoversWebMcpToolDef: SameKeys<

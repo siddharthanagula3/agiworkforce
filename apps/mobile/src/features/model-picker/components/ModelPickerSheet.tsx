@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View, Pressable } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -125,7 +126,7 @@ function AutoModeRow({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${mode.name}: ${mode.description}`}
@@ -170,7 +171,7 @@ function AutoModeRow({
         </Text>
       </View>
       {selected ? <Check size={17} color={colors.teal} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -187,7 +188,7 @@ function RoutingProfileRow({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Auto, ${label}: ${description}`}
@@ -221,7 +222,7 @@ function RoutingProfileRow({
         </Text>
       </View>
       {selected ? <Check size={17} color={colors.teal} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -594,7 +595,7 @@ export function ModelPickerSheet({
             >
               Models
             </Text>
-            <Pressable
+            <PressableBox
               onPress={() => sheetRef.current?.close()}
               testID="model-picker-close"
               accessible
@@ -611,7 +612,7 @@ export function ModelPickerSheet({
               }}
             >
               <XIcon size={16} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
             {modelScope === 'cloud'
@@ -630,7 +631,7 @@ export function ModelPickerSheet({
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
                 {freeQuotaError}
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={() => void refreshFreeQuotaCatalogue()}
                 accessibilityRole="button"
                 accessibilityLabel="Retry loading provider-funded Free models"
@@ -639,7 +640,7 @@ export function ModelPickerSheet({
                 <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
                   Retry Free models
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
           ) : null}
           {cloudUnlocked &&
@@ -700,9 +701,9 @@ export function ModelPickerSheet({
             accessibilityValue={{ text: search }}
           />
           {search.length > 0 ? (
-            <Pressable onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
+            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
               <XIcon size={14} color={colors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
         </View>
 
@@ -745,7 +746,7 @@ export function ModelPickerSheet({
               const tradeoff = EFFORT_DESCRIPTION[effort];
               const active = effort === selectedEffort;
               return (
-                <Pressable
+                <PressableBox
                   key={effort}
                   testID={`model-picker-effort-${effort}`}
                   onPress={() => handleSelectEffort(effort)}
@@ -796,7 +797,7 @@ export function ModelPickerSheet({
                       {active ? <Check size={16} color={colors.teal} /> : null}
                     </View>
                   )}
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>

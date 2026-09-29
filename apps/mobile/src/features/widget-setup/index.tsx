@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, ScrollView, Pressable, Platform } from 'react-native';
+import { View, ScrollView, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -143,14 +144,14 @@ export default function WidgetSetupScreen() {
         className="flex-row items-center px-3 h-12"
         style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2">
           Quick Access
         </Text>

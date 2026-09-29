@@ -7,21 +7,21 @@ import {
   normalizeAttemptedActions,
   normalizeCitations,
   normalizeTranscript,
-  redactSecrets,
+  redactTranscriptText,
 } from '../transcript';
 
 const OPENAI_KEY = `sk-${'a'.repeat(48)}`;
 const STRIPE_KEY = `sk_live_${'b'.repeat(30)}`;
 const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0';
 
-describe('redactSecrets', () => {
+describe('redactTranscriptText', () => {
   it.each([
     [OPENAI_KEY, 'api-key'],
     [STRIPE_KEY, 'stripe-live-key'],
     [JWT, 'jwt'],
     [`Bearer ${'c'.repeat(30)}`, 'bearer-token'],
   ])('replaces %s with a labelled marker', (secret, label) => {
-    const out = redactSecrets(`before ${secret} after`);
+    const out = redactTranscriptText(`before ${secret} after`);
     expect(out).not.toContain(secret);
     expect(out).toContain(`[redacted:${label}]`);
     expect(out).toContain('before');
@@ -29,17 +29,19 @@ describe('redactSecrets', () => {
   });
 
   it('replaces EVERY occurrence, not just the first', () => {
-    const out = redactSecrets(`${OPENAI_KEY} and again ${OPENAI_KEY}`);
+    const out = redactTranscriptText(`${OPENAI_KEY} and again ${OPENAI_KEY}`);
     expect(out).not.toContain(OPENAI_KEY);
     expect(out.match(/\[redacted:api-key\]/gu)).toHaveLength(2);
   });
 
   it('leaves ordinary text alone', () => {
-    expect(redactSecrets('my invoice doubled last month')).toBe('my invoice doubled last month');
+    expect(redactTranscriptText('my invoice doubled last month')).toBe(
+      'my invoice doubled last month',
+    );
   });
 
   it('does not throw on a secret, a user pasting their own key must still get help', () => {
-    expect(() => redactSecrets(OPENAI_KEY)).not.toThrow();
+    expect(() => redactTranscriptText(OPENAI_KEY)).not.toThrow();
   });
 });
 

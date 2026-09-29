@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -62,14 +63,14 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
           {preview}
         </Text>
       </View>
-      <Pressable
+      <PressableBox
         onPress={onDismiss}
         hitSlop={12}
         accessibilityLabel="Dismiss reply"
         accessibilityRole="button"
       >
         <X size={16} color={colors.textMuted} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

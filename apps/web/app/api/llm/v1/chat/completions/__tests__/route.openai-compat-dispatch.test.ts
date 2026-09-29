@@ -609,6 +609,7 @@ describe('Managed Web AGI Work dispatch', () => {
       customConnectorLimit: undefined,
       planTier: 'max',
       isToolDenied: expect.any(Function),
+      googleUserDataRouted: false,
     });
   });
 

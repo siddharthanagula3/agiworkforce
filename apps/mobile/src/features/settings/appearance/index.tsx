@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Check, Monitor, Moon, Sun } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -38,7 +39,7 @@ export default function AppearanceScreen() {
         {OPTIONS.map(({ mode, label, description, icon: Icon }, index) => {
           const selected = themeMode === mode;
           return (
-            <Pressable
+            <PressableBox
               key={mode}
               onPress={() => setThemeMode(mode)}
               accessibilityRole="button"
@@ -68,7 +69,7 @@ export default function AppearanceScreen() {
                 </Text>
               </View>
               {selected ? <Check size={18} color={colors.teal} /> : null}
-            </Pressable>
+            </PressableBox>
           );
         })}
       </SettingsGroup>

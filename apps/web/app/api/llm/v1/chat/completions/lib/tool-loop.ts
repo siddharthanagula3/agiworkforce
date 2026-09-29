@@ -59,6 +59,16 @@ import {
   type OperationIdentity,
 } from '@/lib/identity/operation-identity';
 import { logger } from '@/lib/logger';
+import {
+  GOOGLE_USER_DATA_MEMORY_REFUSAL,
+  GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+  GOOGLE_USER_DATA_UNROUTED_MESSAGE,
+  isGoogleUserDataToolName,
+  markConversationGoogleUserData,
+  messagesCarryGoogleToolUse,
+  readsGoogleUserData,
+  turnHoldsGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
@@ -92,7 +102,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
@@ -1988,6 +1998,43 @@ function callerScopedDb(
   });
 }
 
+function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
+  return new Set(tools.filter((tool) => tool.googleUserData === true).map((tool) => tool.serverId));
+}
+
+async function recordGoogleUserDataToolUse(
+  executionContext:
+    | {
+        userId?: string;
+        organizationId: string | null;
+        conversationId?: string | null;
+        googleUserDataRouted?: boolean;
+      }
+    | undefined,
+): Promise<ToolLoopToolResult | null> {
+  const userId = executionContext?.userId;
+  const conversationId = executionContext?.conversationId;
+  if (!userId || !conversationId) {
+    return executionContext?.googleUserDataRouted === true
+      ? null
+      : { content: GOOGLE_USER_DATA_UNROUTED_MESSAGE, isError: true };
+  }
+  try {
+    await markConversationGoogleUserData(
+      callerScopedDb(executionContext, userId),
+      userId,
+      conversationId,
+    );
+    return null;
+  } catch (error) {
+    logger.error(
+      { error, userId, conversationId },
+      'Google connector withheld: the conversation could not be marked as holding Google data',
+    );
+    return { content: GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE, isError: true };
+  }
+}
+
 function placesSearchBilling(
   executionContext:
     | {
@@ -2049,6 +2096,9 @@ async function runMcpTool(
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
+    googleUserDataRead?: () => boolean;
+    googleHostedServerIds?: ReadonlySet<string>;
+    googleUserDataRouted?: boolean;
     healthSpaceProjectId?: string | null;
   },
 ): Promise<ToolLoopToolResult> {
@@ -2150,6 +2200,8 @@ async function runMcpTool(
       organizationId: executionContext.organizationId,
       temporaryChat: executionContext.temporaryChat === true,
       healthSpaceProjectId: executionContext.healthSpaceProjectId ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      googleUserDataRouted: executionContext.googleUserDataRouted === true,
     });
   }
 
@@ -2165,6 +2217,20 @@ async function runMcpTool(
       executionContext.sensitiveDataRead?.() === true
     ) {
       return { content: SENSITIVE_DATA_MEMORY_REFUSAL, isError: true };
+    }
+    if (
+      toolCall.qualifiedName === SAVE_MEMORY_TOOL_NAME &&
+      (await turnHoldsGoogleUserData(
+        callerScopedDb(executionContext, executionContext.userId),
+        executionContext.userId,
+        {
+          conversationId: executionContext.conversationId,
+          messages: [],
+          googleToolRan: executionContext.googleUserDataRead?.() === true,
+        },
+      ))
+    ) {
+      return { content: GOOGLE_USER_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
@@ -2464,6 +2530,14 @@ async function runMcpTool(
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
     };
+  }
+
+  if (
+    readsGoogleUserData(parsed.serverId, parsed.toolName) ||
+    executionContext?.googleHostedServerIds?.has(parsed.serverId) === true
+  ) {
+    const unrecorded = await recordGoogleUserDataToolUse(executionContext);
+    if (unrecorded) return unrecorded;
   }
 
   if (connectorExecutor) {
@@ -2996,7 +3070,7 @@ export async function applyToolResultSecretPolicy(
   let nextContent = content;
   if (action === 'redacted') {
     const highConfidenceNames = new Set(highConfidence.map((detection) => detection.name));
-    nextContent = redactSecrets(content, highConfidenceNames);
+    nextContent = redactAuditedSecrets(content, highConfidenceNames);
   } else if (action === 'blocked') {
     nextContent = toolResultSecretBlockedMessage(toolName);
   }
@@ -3264,6 +3338,8 @@ export async function executeOfferedToolCall(
             requestId,
             planTier: input.planTier,
             surface: input.surface,
+            conversationId,
+            googleHostedServerIds: googleHostedServerIdsOf(input.mcpTools ?? []),
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
             queueSandboxFiles: async (files) => {
               const { executor } = await resolveExecutor();
@@ -3358,6 +3434,7 @@ export async function* runToolLoop(
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;
+  let googleUserDataRead = messagesCarryGoogleToolUse(processed.chatRequest?.messages ?? []);
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -3410,6 +3487,7 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const mcpTools = options.mcpTools ?? [];
+  const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
@@ -4038,7 +4116,9 @@ export async function* runToolLoop(
     processed.chatSurface === 'web' &&
     searchRequired &&
     getModelMetadataById(processed.requestedModel)?.webSearchToolOfferPolicy === 'required_only';
-  const serverOwnedSearchQuery = redactSecrets(lastUserTurnText(processed.chatRequest?.messages))
+  const serverOwnedSearchQuery = redactAuditedSecrets(
+    lastUserTurnText(processed.chatRequest?.messages),
+  )
     .slice(0, WEB_SEARCH_MAX_QUERY_LENGTH)
     .trim();
   let searchObserved = false;
@@ -4743,11 +4823,20 @@ export async function* runToolLoop(
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
               sensitiveDataRead: () => sensitiveDataRead,
+              googleUserDataRead: () => googleUserDataRead,
+              googleHostedServerIds,
+              googleUserDataRouted: processed.googleUserData === true,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
             sensitiveDataRead = true;
+          }
+          if (
+            isGoogleUserDataToolName(tc.qualifiedName) ||
+            googleHostedServerIds.has(parseQualifiedToolName(tc.qualifiedName)?.serverId ?? '')
+          ) {
+            googleUserDataRead = true;
           }
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudAgentRunReply } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -70,10 +71,10 @@ async function handleArchive(request: NextRequest, context: RouteContext) {
       request,
       detail: { resourceId: runId, status: 'archived' },
     });
-    return NextResponse.json(
-      { run },
-      { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-    );
+    const reply: CloudAgentRunReply = { run };
+    return NextResponse.json(reply, {
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    });
   } catch (error) {
     return translate(error);
   }
@@ -97,10 +98,10 @@ async function handleUnarchive(request: NextRequest, context: RouteContext) {
       request,
       detail: { resourceId: runId, status: 'unarchived' },
     });
-    return NextResponse.json(
-      { run },
-      { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-    );
+    const reply: CloudAgentRunReply = { run };
+    return NextResponse.json(reply, {
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    });
   } catch (error) {
     return translate(error);
   }

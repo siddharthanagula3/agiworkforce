@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-native';
 import type { ReactElement } from 'react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
@@ -150,7 +151,7 @@ export function SendPreview({
   if (variant === 'compact') {
     return (
       <View testID="send-preview" style={{ gap: 6 }}>
-        <Pressable
+        <PressableBox
           testID="send-preview-toggle"
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
@@ -178,7 +179,7 @@ export function SendPreview({
           ) : (
             <ChevronDown size={10} color={colors.textMuted} />
           )}
-        </Pressable>
+        </PressableBox>
         {expanded ? (
           <View
             testID="send-preview-panel"
@@ -308,7 +309,7 @@ export function SendPreview({
         {getMobileBannerCopy(presentation)}
       </Text>
       {detailsAvailable ? (
-        <Pressable
+        <PressableBox
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide send details' : 'Show send details'}
@@ -330,7 +331,7 @@ export function SendPreview({
           >
             {expanded ? 'Hide details' : 'Show details'}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
       {expanded && detailsAvailable ? (
         <DetailBlock presentation={presentation} colors={colors} />

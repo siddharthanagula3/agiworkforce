@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, ActivityIndicator, Modal, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Modal, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native';
@@ -135,7 +136,7 @@ export function FileExportButton({
       onRequestClose={handleClose}
       accessibilityViewIsModal
     >
-      <Pressable
+      <PressableBox
         style={[styles.backdrop, { backgroundColor: colors.scrim }]}
         onPress={handleClose}
         accessibilityLabel="Dismiss export menu"
@@ -143,7 +144,7 @@ export function FileExportButton({
         accessible={false}
       >
         <SafeAreaView edges={['bottom']} style={styles.safeArea}>
-          <Pressable
+          <PressableBox
             style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
             onPress={() => undefined}
             accessible={false}
@@ -166,14 +167,14 @@ export function FileExportButton({
               >
                 Export Message
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={handleClose}
                 hitSlop={12}
                 accessibilityLabel="Close export menu"
                 accessibilityRole="button"
               >
                 <X size={20} color={colors.textMuted} />
-              </Pressable>
+              </PressableBox>
             </View>
 
             {/* Action list */}
@@ -184,7 +185,7 @@ export function FileExportButton({
                 const ActionIcon = action.icon;
 
                 return (
-                  <Pressable
+                  <PressableBox
                     key={action.key}
                     onPress={() => handleAction(action.key)}
                     disabled={loading !== null}
@@ -248,13 +249,13 @@ export function FileExportButton({
                         </View>
                       </View>
                     )}
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </View>
-          </Pressable>
+          </PressableBox>
         </SafeAreaView>
-      </Pressable>
+      </PressableBox>
     </Modal>
   );
 }

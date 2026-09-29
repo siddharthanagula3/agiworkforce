@@ -451,6 +451,8 @@ interface ChatComposerProps {
   sendPreviewPresentation?: SendPreviewPresentation;
   /** Opens the upgrade plan dialog from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
+  /** The workspace has not turned fast mode on for this account. */
+  fastModeDisabledByWorkspace?: boolean;
   /** Persists a model switch for the active conversation before it becomes current. */
   onModelChange?: (modelId: string) => Promise<boolean>;
   /**
@@ -742,6 +744,7 @@ const ChatComposerNewComponent = ({
   emptyState = false,
   attachmentPrivacyShortLabel,
   onUpgradeRequest,
+  fastModeDisabledByWorkspace = false,
   onModelChange,
   freeTrial,
   usageBlock,
@@ -5714,6 +5717,7 @@ const ChatComposerNewComponent = ({
                   pendingAttachmentCount={attachments.length}
                   onUpgradeRequest={onUpgradeRequest}
                   onModelChange={onModelChange}
+                  fastModeDisabledByWorkspace={fastModeDisabledByWorkspace}
                 />
               )}
 
@@ -6348,6 +6352,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
     prev.sendPreviewPresentation === next.sendPreviewPresentation &&
     prev.onUpgradeRequest === next.onUpgradeRequest &&
+    prev.fastModeDisabledByWorkspace === next.fastModeDisabledByWorkspace &&
     prev.onModelChange === next.onModelChange &&
     prev.onGenerateImage === next.onGenerateImage &&
     prev.onGenerateVideo === next.onGenerateVideo &&

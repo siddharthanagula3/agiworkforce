@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -46,7 +47,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
   const isSelected = selected && !disabled;
 
   return (
-    <Pressable
+    <PressableBox
       testID={`${meta.testIdPrefix}-card`}
       onPress={disabled ? undefined : onSelect}
       accessibilityRole="button"
@@ -124,7 +125,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
       </Text>
 
       {mode !== 'decide_later' && (
-        <Pressable
+        <PressableBox
           testID={`${meta.testIdPrefix}-privacy-toggle`}
           onPress={() => setPrivacyExpanded((v) => !v)}
           accessibilityRole="button"
@@ -144,7 +145,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
           ) : (
             <ChevronDown size={13} color={colors.teal} />
           )}
-        </Pressable>
+        </PressableBox>
       )}
 
       {privacyExpanded && mode !== 'decide_later' && (
@@ -162,6 +163,6 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
           {meta.privacy}
         </Text>
       )}
-    </Pressable>
+    </PressableBox>
   );
 }

@@ -217,6 +217,13 @@ export const ManagedMediaModelAdmissionSchema = z
   })
   .strict();
 
+export const MANAGED_MEDIA_AVAILABILITY_PATH = '/api/media/availability';
+export const MANAGED_MEDIA_KEEP_PATH = '/api/media/keep';
+
+export const ManagedMediaKeepRequestSchema = z.object({ id: z.string().uuid() });
+export const ManagedMediaKeepResponseSchema = z.object({ kept: z.literal(true) });
+export type ManagedMediaKeepResponse = z.input<typeof ManagedMediaKeepResponseSchema>;
+
 export const ManagedMediaModelAvailabilityResponseSchema = z
   .object({
     catalog_version: z.string().trim().min(1).max(80),
@@ -241,6 +248,9 @@ export type ManagedMediaVideoOutputSize = z.infer<typeof ManagedMediaVideoOutput
 export type ManagedMediaModelAdmissionState = z.infer<typeof ManagedMediaModelAdmissionStateSchema>;
 export type ManagedMediaModelAdmission = z.infer<typeof ManagedMediaModelAdmissionSchema>;
 export type ManagedMediaModelAvailabilityResponse = z.infer<
+  typeof ManagedMediaModelAvailabilityResponseSchema
+>;
+export type ManagedMediaModelAvailabilityReply = z.input<
   typeof ManagedMediaModelAvailabilityResponseSchema
 >;
 export type ManagedMediaImageGenerationRequest = z.input<

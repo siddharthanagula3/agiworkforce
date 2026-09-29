@@ -95,6 +95,14 @@ export const ManagedCloudProjectResponseSchema = z.object({
   project: ManagedCloudProjectSchema,
 });
 
+export const ManagedCloudProjectDuplicateResponseSchema = z.object({
+  project: ManagedCloudProjectSchema,
+  copiedKnowledgeFiles: z.number().int().nonnegative(),
+});
+export type ManagedCloudProjectDuplicateResponse = z.infer<
+  typeof ManagedCloudProjectDuplicateResponseSchema
+>;
+
 export const ManagedCloudProjectDeleteResponseSchema = z.object({ success: z.literal(true) });
 
 export function managedCloudProjectPath(projectId: string): string {

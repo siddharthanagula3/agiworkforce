@@ -1,5 +1,6 @@
 import { useRef, useState, type RefObject } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Svg, { Circle, G, Line, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import type { ColorScheme } from '@/src/ui/theme';
@@ -460,7 +461,7 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
         </Text>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 16 }}>
-        <Pressable
+        <PressableBox
           onPress={() => setShowData((shown) => !shown)}
           accessibilityRole="button"
           accessibilityState={{ expanded: showData }}
@@ -471,8 +472,8 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
           >
             {showData ? 'Hide data' : 'Show data'}
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={saveImage}
           disabled={saving}
           accessibilityRole="button"
@@ -485,7 +486,7 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
           >
             {saving ? 'Saving…' : 'Save image'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
       {showData ? <ChartDataTable chart={chart} colors={colors} /> : null}
     </View>

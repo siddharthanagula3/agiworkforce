@@ -7,7 +7,8 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { Alert, View, TextInput, Pressable, Keyboard } from 'react-native';
+import { Alert, View, TextInput, Keyboard } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -847,7 +848,7 @@ ${current}`
           >
             {selectedSkillName}
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClearSelectedSkill}
             accessibilityRole="button"
             accessibilityLabel="Clear selected Skill"
@@ -855,7 +856,7 @@ ${current}`
             style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={14} color={themeColors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
       ) : null}
 
@@ -970,7 +971,7 @@ ${current}`
               >
                 {item.text}
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={() => editQueuedFollowUp(item)}
                 testID={`chat.composer.queued-followup-edit.${item.id}`}
                 accessibilityLabel="Edit queued message"
@@ -986,8 +987,8 @@ ${current}`
                 }}
               >
                 <Pencil size={13} color={themeColors.textMuted} />
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={() => cancelQueuedFollowUp(item.id)}
                 testID={`chat.composer.queued-followup-cancel.${item.id}`}
                 accessibilityLabel="Cancel queued message"
@@ -1003,7 +1004,7 @@ ${current}`
                 }}
               >
                 <X size={14} color={themeColors.textMuted} />
-              </Pressable>
+              </PressableBox>
             </View>
           ))}
         </View>
@@ -1028,7 +1029,7 @@ ${current}`
             (IMG_0687): it was previously disabled the moment capture stopped,
             which stranded a mis-heard long dictation with no way out. */}
         {stacked ? null : isRecording || isTranscribing ? (
-          <Pressable
+          <PressableBox
             onPress={handleDictationCancel}
             style={{
               width: 40,
@@ -1045,7 +1046,7 @@ ${current}`
             accessibilityRole="button"
           >
             <X size={20} color={themeColors.textPrimary} />
-          </Pressable>
+          </PressableBox>
         ) : null}
 
         {/* Pill -- text input + mic, inside the rounded border. When stacked it
@@ -1072,7 +1073,7 @@ ${current}`
               expand. The stacked TextInput reserves room for it on the right so
               the first line never runs underneath the glyph. */}
           {stacked ? (
-            <Pressable
+            <PressableBox
               onPress={handleExpandEditor}
               style={{
                 position: 'absolute',
@@ -1091,7 +1092,7 @@ ${current}`
               accessibilityRole="button"
             >
               <Maximize2 size={16} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {/* [+] sits INSIDE the pill on the left, matching ChatGPT
@@ -1101,7 +1102,7 @@ ${current}`
               pill is showing recording/transcribing state, and while stacked,
               where the plus moves to the controls row beneath the text. */}
           {onOpenAddToChat && !stacked && !isRecording && !isTranscribing ? (
-            <Pressable
+            <PressableBox
               testID="chat.composer.plus"
               onPress={handlePlusPress}
               style={{
@@ -1117,7 +1118,7 @@ ${current}`
               accessibilityRole="button"
             >
               <Plus size={20} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {/* Dictation state, in place of the input: one live waveform that
@@ -1216,7 +1217,7 @@ ${current}`
             {stacked ? (
               <>
                 {onOpenAddToChat ? (
-                  <Pressable
+                  <PressableBox
                     testID="chat.composer.plus.stacked"
                     onPress={handlePlusPress}
                     style={{
@@ -1233,7 +1234,7 @@ ${current}`
                     accessibilityRole="button"
                   >
                     <Plus size={18} color={themeColors.textMuted} />
-                  </Pressable>
+                  </PressableBox>
                 ) : null}
                 {/* The model answering this chat, on the control row beside [+]
                     - Claude's arrangement (IMG_0730); ChatGPT puts the same
@@ -1277,7 +1278,7 @@ ${current}`
             Both dim while the transcript resolves; cancel (left) stays live. */}
         {isRecording || isTranscribing ? (
           <>
-            <Pressable
+            <PressableBox
               onPress={isRecording ? handleDictationStop : undefined}
               disabled={!isRecording}
               style={{
@@ -1301,8 +1302,8 @@ ${current}`
                   like it offered only cancel-or-send and users could not find a
                   way to stop. ChatGPT shows a stop square in the same slot. */}
               <Square size={14} color={themeColors.textPrimary} fill={themeColors.textPrimary} />
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
               style={{
@@ -1321,7 +1322,7 @@ ${current}`
               accessibilityRole="button"
             >
               <ArrowUp size={18} color={themeColors.surfaceElevated} />
-            </Pressable>
+            </PressableBox>
           </>
         ) : (
           <>
@@ -1339,7 +1340,7 @@ ${current}`
             ) : null}
             <View testID="chat.composer.send">
               {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
-                <Pressable
+                <PressableBox
                   onPress={onOpenVoiceMode}
                   style={{
                     width: 40,
@@ -1355,7 +1356,7 @@ ${current}`
                   accessibilityRole="button"
                 >
                   <AudioLines size={18} color={themeColors.surfaceElevated} />
-                </Pressable>
+                </PressableBox>
               ) : (
                 <SendButton
                   state={sendButtonState}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Plug,
   Link,
@@ -134,7 +135,7 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
   const detail = statusLabel ?? row.description;
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${row.name}${row.publisher ? `, ${row.publisher}` : ''}. ${statusLabel ?? 'Not connected'}`}
@@ -213,7 +214,7 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
           </View>
         </View>
       )}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -628,7 +629,7 @@ export default function CloudConnectorsScreen({
               <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
                 {error}
               </Text>
-              <Pressable
+              <PressableBox
                 onPress={() => void load()}
                 disabled={loading}
                 accessibilityLabel="Retry loading connectors"
@@ -651,13 +652,13 @@ export default function CloudConnectorsScreen({
                 >
                   {loading ? 'Retrying…' : 'Retry'}
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
           )}
 
         {directoryVisible && (
           <>
-            <Pressable
+            <PressableBox
               onPress={() => setAddCustomVisible(true)}
               accessibilityRole="button"
               accessibilityLabel="Add custom MCP connector"
@@ -680,10 +681,10 @@ export default function CloudConnectorsScreen({
               >
                 Add custom MCP
               </Text>
-            </Pressable>
+            </PressableBox>
 
             {bankLinkOffered ? (
-              <Pressable
+              <PressableBox
                 onPress={() => void openBankLinking()}
                 accessibilityRole="button"
                 accessibilityLabel={BANK_LINK_LABEL}
@@ -712,7 +713,7 @@ export default function CloudConnectorsScreen({
                 >
                   {BANK_LINK_HINT}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             <ScrollView
@@ -723,7 +724,7 @@ export default function CloudConnectorsScreen({
               {filters.map((f) => {
                 const active = f === activeFilter;
                 return (
-                  <Pressable
+                  <PressableBox
                     key={f}
                     onPress={() => setActiveFilter(f)}
                     accessibilityRole="button"
@@ -748,7 +749,7 @@ export default function CloudConnectorsScreen({
                     >
                       {f}
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </ScrollView>
@@ -801,7 +802,7 @@ export default function CloudConnectorsScreen({
                 <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
                   {listingsError}
                 </Text>
-                <Pressable
+                <PressableBox
                   onPress={() => void loadListings(listings.length > 0 ? nextCursor : null)}
                   accessibilityRole="button"
                   accessibilityLabel="Retry loading the connector directory"
@@ -823,7 +824,7 @@ export default function CloudConnectorsScreen({
                   >
                     Retry
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
             ) : browsesListings && listingsLoading ? (
               <View
@@ -833,7 +834,7 @@ export default function CloudConnectorsScreen({
                 <ActivityIndicator color={colors.teal} />
               </View>
             ) : browsesListings && nextCursor ? (
-              <Pressable
+              <PressableBox
                 onPress={() => void loadListings(nextCursor)}
                 accessibilityRole="button"
                 accessibilityLabel="Show more connectors"
@@ -857,7 +858,7 @@ export default function CloudConnectorsScreen({
                 >
                   Show more
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             <View style={{ height: bottomSearchSpace }} />

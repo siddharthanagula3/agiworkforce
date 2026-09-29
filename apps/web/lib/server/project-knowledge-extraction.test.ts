@@ -438,6 +438,56 @@ describe('extractProjectKnowledgeFile', () => {
       expect(result.extractedText).toBeNull();
     });
 
+    it('keeps a Google scan with no text when no model that keeps it out of training can read it', async () => {
+      scannedDocument();
+      const { ScannedTextWithheldError } = await import('./scanned-document-text');
+      transcribeMocks.transcribeScannedPages.mockRejectedValue(
+        new ScannedTextWithheldError('project-1:scan', 'google_user_data'),
+      );
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+            forceNoTraining: true,
+          },
+        }),
+      );
+
+      expect(result.extractedText).toBeNull();
+      expect(result.scannedTextWithheld).toBe('google_user_data');
+      expect(transcribeMocks.transcribeScannedPages).toHaveBeenCalledWith(
+        expect.objectContaining({ forceNoTraining: true }),
+      );
+    });
+
+    it('keeps a scan with no text for a user whose training opt-out no reader honours', async () => {
+      scannedDocument();
+      const { ScannedTextWithheldError } = await import('./scanned-document-text');
+      transcribeMocks.transcribeScannedPages.mockRejectedValue(
+        new ScannedTextWithheldError('project-1:scan', 'training_opt_out'),
+      );
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+          },
+        }),
+      );
+
+      expect(result.extractedText).toBeNull();
+      expect(result.scannedTextWithheld).toBe('training_opt_out');
+    });
+
     it('does not read the pictures for a caller that cannot pay for it', async () => {
       scannedDocument();
 

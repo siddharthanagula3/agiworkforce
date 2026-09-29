@@ -145,6 +145,8 @@ export interface ConversationSummary {
   createdAt: string;
   messageCount: number;
   pinned: boolean;
+  /** Starred on another device; synced read-only, like web's star on a chat row. */
+  starred?: boolean;
   lastMessage?: string;
   model?: string;
   provider?: string;

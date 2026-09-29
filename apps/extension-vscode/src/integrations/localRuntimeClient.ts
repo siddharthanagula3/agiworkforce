@@ -1,12 +1,15 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type {
   AgentEventApprovalRiskLevel,
+  AgentEventEnvelope,
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 import type {
+  AgentEventSource,
   AppServerCapabilities,
   AppServerNotification,
   ApprovalResponseParams,
@@ -58,7 +61,7 @@ import {
   isSupportedRuntimeVersion as isSupportedCliVersion,
   messageKindForAgentEvent,
 } from '@agiworkforce/types';
-import { redactSecrets } from '../core/telemetry';
+import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
@@ -943,19 +946,16 @@ const progressUpdateSchema = z.object({
   detail: z.string().optional(),
   status: z.enum(['running', 'completed', 'failed']),
 });
+const agentEventSourceSchema: z.ZodType<AgentEventSource> = z.object({
+  url: z.string().min(1).max(8_192),
+  title: z.string().max(2_000),
+  snippet: z.string().max(8_000).optional(),
+});
 const sourceListSchema = z.object({
   type: z.literal('source-list'),
   toolCallId: z.string().max(200).optional(),
   query: z.string().max(2_000).optional(),
-  sources: z
-    .array(
-      z.object({
-        url: z.string().min(1).max(8_192),
-        title: z.string().max(2_000),
-        snippet: z.string().max(8_000).optional(),
-      }),
-    )
-    .max(500),
+  sources: z.array(agentEventSourceSchema).max(500),
 });
 
 const agentEventEnvelopeSchema = z.object({
@@ -984,6 +984,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionStartSchema>, 'type'>)
   | ({
       type: 'tool_execution_end';
@@ -991,6 +992,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionEndSchema>, 'type'>)
   | ({
       type: 'progress_update';
@@ -998,16 +1000,19 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
   | ({
       type: 'source_list';
       threadId: string;
       turnId: string;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof sourceListSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
     } & z.infer<typeof mcpStatusEventSchema>)
+  | { type: 'agent_event'; threadId: string; turnId: string; envelope: AgentEventEnvelope }
   | { type: 'runtime_disconnected'; error: string };
 
 function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEvent | undefined {
@@ -1028,13 +1033,25 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     return parsed.success ? { type: 'approval_requested', ...parsed.data } : undefined;
   }
   if (notification.method === 'turn/agent_event') {
+    const shared = parseAgentEventDelta(notification.params);
+    const envelope = shared === null ? {} : { envelope: shared };
     const parsed = agentEventEnvelopeSchema.safeParse(notification.params);
-    if (!parsed.success) return undefined;
+    if (!parsed.success) {
+      return shared === null
+        ? undefined
+        : {
+            type: 'agent_event',
+            threadId: shared.sessionId,
+            turnId: shared.turnId,
+            envelope: shared,
+          };
+    }
     const { sessionId: threadId, turnId, sequence, emittedAtMs, event } = parsed.data;
     const kind = messageKindForAgentEvent(event.type);
     if (kind === 'tool_call' && event.type === 'tool-execution-start') {
       return {
         type: 'tool_execution_start',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -1049,6 +1066,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (kind === 'citation' && event.type === 'source-list') {
       return {
         type: 'source_list',
+        ...envelope,
         threadId,
         turnId,
         sources: event.sources,
@@ -1059,6 +1077,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (kind === 'tool_result' && event.type === 'tool-execution-end') {
       return {
         type: 'tool_execution_end',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -1073,6 +1092,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     if (event.type !== 'progress-update') return undefined;
     return {
       type: 'progress_update',
+      ...envelope,
       threadId,
       turnId,
       sequence,
@@ -1230,7 +1250,7 @@ class JsonlConnection {
       this.close(
         new Error(
           `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
-            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+            redactTelemetryText(line.slice(0, MAX_REJECTED_LINE_CHARS)),
           )}`,
         ),
       );

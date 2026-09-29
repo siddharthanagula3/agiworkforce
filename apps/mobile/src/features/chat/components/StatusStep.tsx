@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -97,7 +98,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
 
   return (
     <Animated.View entering={FadeInDown.duration(motion.moved).springify()}>
-      <Pressable
+      <PressableBox
         onPress={toggleExpanded}
         disabled={!hasDetail}
         accessibilityLabel={`Step: ${step.message}, status: ${step.status}`}
@@ -184,7 +185,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
             ) : null}
           </View>
         </View>
-      </Pressable>
+      </PressableBox>
     </Animated.View>
   );
 }

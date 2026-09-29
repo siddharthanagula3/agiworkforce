@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import type {
+  ConversationShareCreated,
+  ConversationShareListResponse,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -262,17 +266,15 @@ async function handleCreateShare(request: NextRequest) {
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const shareUrl = `${appUrl}/share/${data.token}`;
 
-  return NextResponse.json(
-    {
-      shareUrl,
-      token: data.token,
-      expiresAt: data.expires_at,
-      messageCount: data.total_messages,
-      visibility: toSharedSessionVisibility(data.visibility),
-      workspace: await describeWorkspaceAudience(db, organizationId),
-    },
-    { status: 201 },
-  );
+  const created: ConversationShareCreated = {
+    shareUrl,
+    token: data.token,
+    expiresAt: data.expires_at,
+    messageCount: data.total_messages,
+    visibility: toSharedSessionVisibility(data.visibility),
+    workspace: await describeWorkspaceAudience(db, organizationId),
+  };
+  return NextResponse.json(created, { status: 201 });
 }
 
 type SharedSessionListRow = {
@@ -318,7 +320,7 @@ async function handleListShares(request: NextRequest) {
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const now = Date.now();
 
-  return NextResponse.json({
+  const listed: ConversationShareListResponse = {
     shares: rows.map((row) => ({
       token: row.token,
       title: row.title ?? 'Shared Session',
@@ -331,7 +333,8 @@ async function handleListShares(request: NextRequest) {
       expiresAt: row.expires_at,
       expired: new Date(row.expires_at).getTime() <= now,
     })),
-  });
+  };
+  return NextResponse.json(listed);
 }
 
 export const POST = withErrorHandler(handleCreateShare);

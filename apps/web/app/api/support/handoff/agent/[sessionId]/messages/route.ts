@@ -5,7 +5,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import {
   appendHandoffMessage,
   getSessionById,
@@ -75,7 +75,7 @@ async function handleAgentPost(request: NextRequest, context: RouteContext) {
   const row = await appendHandoffMessage({
     sessionId,
     author: 'agent',
-    body: redactSecrets(parsed.data.body),
+    body: redactTranscriptText(parsed.data.body),
   });
   if (!row) throw createError.internal('Could not send that message');
 

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { FreeQuotaCatalogue } from '@agiworkforce/cloud-contracts';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -39,19 +40,15 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     freeQuotaContextFor({ url: request.url, userId: scoped.userId }),
   );
   const catalogue = decisions ? buildFreeQuotaCatalogue(decisions) : null;
-  return NextResponse.json(
-    catalogue
-      ? {
-          ...catalogue,
-          models: catalogue.models.filter((model) =>
-            freeQuotaPlanAllowsOffering(planTier, model.category),
-          ),
-        }
-      : null,
-    {
-      headers: NO_STORE,
-    },
-  );
+  const offered: FreeQuotaCatalogue | null = catalogue
+    ? {
+        ...catalogue,
+        models: catalogue.models.filter((model) =>
+          freeQuotaPlanAllowsOffering(planTier, model.category),
+        ),
+      }
+    : null;
+  return NextResponse.json(offered, { headers: NO_STORE });
 }
 
 export const GET = withErrorHandler(handleGet);
