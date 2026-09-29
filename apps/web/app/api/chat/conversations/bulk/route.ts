@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
+import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -94,7 +95,11 @@ async function handleBulkConversationAction(request: NextRequest) {
           userId,
           conversationIds: pending.map(({ id }) => id),
         });
-        return { deleted, revoked };
+        const revokedShares = await revokeSharesOfDeletedConversations(tx, {
+          userId,
+          organizationId,
+        });
+        return { deleted, revoked, revokedShares };
       });
       affected = outcome.deleted;
       if (outcome.revoked.length > 0) {

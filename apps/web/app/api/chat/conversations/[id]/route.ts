@@ -10,6 +10,7 @@ import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
+import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import {
   CONVERSATION_WORK_MODE_SELECT,
@@ -514,10 +515,15 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
             conversationIds: pending.map(({ id: pendingId }) => pendingId),
           })
         : [];
-      return { row, revoked };
+      const revokedShares = await revokeSharesOfDeletedConversations(tx, {
+        userId,
+        organizationId,
+        conversationId: id,
+      });
+      return { row, revoked, revokedShares };
     });
     deletedConversation = outcome.row;
-    revokedCount = outcome.revoked.length;
+    revokedCount = outcome.revoked.length + outcome.revokedShares;
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');
     throw createError.internal('Failed to delete conversation');
