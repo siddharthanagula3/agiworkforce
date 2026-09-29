@@ -32,21 +32,33 @@ function requestedModel(request: unknown): string | undefined {
   return typeof model === 'string' ? model : undefined;
 }
 
-function combineSignals(
-  a: AbortSignal | undefined,
-  b: AbortSignal | undefined,
-): AbortSignal | undefined {
-  if (!a) return b;
-  if (!b) return a;
+interface CombinedSignal {
+  signal: AbortSignal | undefined;
+  release: () => void;
+}
+
+const NOTHING_TO_RELEASE = (): void => undefined;
+
+function combineSignals(a: AbortSignal | undefined, b: AbortSignal | undefined): CombinedSignal {
+  if (!a) return { signal: b, release: NOTHING_TO_RELEASE };
+  if (!b) return { signal: a, release: NOTHING_TO_RELEASE };
   const controller = new AbortController();
-  for (const signal of [a, b]) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      return controller.signal;
-    }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  const alreadyAborted = [a, b].find((signal) => signal.aborted);
+  if (alreadyAborted) {
+    controller.abort(alreadyAborted.reason);
+    return { signal: controller.signal, release: NOTHING_TO_RELEASE };
   }
-  return controller.signal;
+  const removers = [a, b].map((signal) => {
+    const forward = () => controller.abort(signal.reason);
+    signal.addEventListener('abort', forward, { once: true });
+    return () => signal.removeEventListener('abort', forward);
+  });
+  return {
+    signal: controller.signal,
+    release: () => {
+      for (const remove of removers) remove();
+    },
+  };
 }
 
 async function* decodeSseFrames<TChunk>(
@@ -142,7 +154,10 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
     : idleWatchdog === true
       ? DEFAULT_STREAM_IDLE_TIMEOUT_MS
       : (idleWatchdog.idleMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS);
-  const effectiveSignal = combineSignals(signal, watchdogController?.signal);
+  const { signal: effectiveSignal, release: releaseSignals } = combineSignals(
+    signal,
+    watchdogController?.signal,
+  );
 
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   const armIdleTimer = () => {
@@ -237,6 +252,7 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
     }
   } finally {
     disposeIdleTimer();
+    releaseSignals();
   }
 }
 
