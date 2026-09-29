@@ -147,7 +147,12 @@ describe('remote control of a developer session', () => {
             status: 'running',
           },
         ],
-        unavailable: [{ folder: 'web', message: 'The AGI CLI is not on this app PATH.' }],
+        unavailable: [
+          {
+            folder: 'web',
+            message: 'AGI Code could not open this folder on the computer. Check it there.',
+          },
+        ],
       },
     });
   });

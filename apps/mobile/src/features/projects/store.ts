@@ -58,7 +58,11 @@ interface ProjectState {
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
-  addSource: (projectId: string, source: Omit<ProjectSource, 'id' | 'addedAt'>) => Promise<void>;
+  addSource: (
+    projectId: string,
+    source: Omit<ProjectSource, 'id' | 'addedAt'>,
+    options?: ProjectSourceUploadOptions,
+  ) => Promise<void>;
   removeSource: (projectId: string, sourceId: string) => Promise<void>;
 }
 
@@ -71,6 +75,23 @@ export class ProjectSourceError extends Error {
     super(message);
     this.name = 'ProjectSourceError';
   }
+}
+
+export class ProjectSourceCancelledError extends Error {
+  constructor(name: string) {
+    super(`Adding "${name}" was cancelled.`);
+    this.name = 'ProjectSourceCancelledError';
+  }
+}
+
+export interface ProjectSourceUploadProgress {
+  bytesSent: number;
+  totalBytes: number;
+}
+
+export interface ProjectSourceUploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: ProjectSourceUploadProgress) => void;
 }
 
 export type ProjectSourceTarget = 'local' | 'cloud' | 'unknown';
@@ -142,7 +163,12 @@ export const cloudProjectSources = {
   async upload(
     projectId: string,
     source: Omit<ProjectSource, 'id' | 'addedAt'>,
+    { signal, onProgress }: ProjectSourceUploadOptions = {},
   ): Promise<ManagedCloudProjectKnowledgeFile> {
+    const throwIfCancelled = () => {
+      if (signal?.aborted) throw new ProjectSourceCancelledError(source.name);
+    };
+    throwIfCancelled();
     const info = await getInfoAsync(source.uri);
     if (!info.exists || info.isDirectory) {
       throw new ProjectSourceError(`"${source.name}" could not be read from this device.`);
@@ -152,6 +178,7 @@ export const cloudProjectSources = {
     if (!validation.ok) throw new ProjectSourceError(validation.message);
 
     const checksumSha256 = await sha256HexOfFile(source.uri, byteCount);
+    throwIfCancelled();
     const presign = ManagedCloudProjectKnowledgePresignResponseSchema.parse(
       await api.post<unknown>(
         MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
@@ -171,13 +198,43 @@ export const cloudProjectSources = {
     if (uploadUrl.protocol !== 'https:' || uploadUrl.username !== '' || uploadUrl.password !== '') {
       throw new ProjectSourceError(`Refusing an insecure upload destination for "${source.name}".`);
     }
+    if (signal?.aborted) {
+      await releasePresignedUpload(projectId, presign.storageKey);
+      throwIfCancelled();
+    }
 
-    const putResult = await createUploadTask(uploadUrl.toString(), source.uri, {
-      httpMethod: 'PUT',
-      uploadType: FileSystemUploadType.BINARY_CONTENT,
-      headers: presign.uploadHeaders,
-    }).uploadAsync();
-    if (!putResult || putResult.status < 200 || putResult.status >= 300) {
+    const task = createUploadTask(
+      uploadUrl.toString(),
+      source.uri,
+      {
+        httpMethod: 'PUT',
+        uploadType: FileSystemUploadType.BINARY_CONTENT,
+        headers: presign.uploadHeaders,
+      },
+      (data) =>
+        onProgress?.({
+          bytesSent: data.totalBytesSent,
+          totalBytes: data.totalBytesExpectedToSend,
+        }),
+    );
+    const cancelTask = () => {
+      task.cancelAsync().catch(() => undefined);
+    };
+    signal?.addEventListener('abort', cancelTask);
+    let putResult: Awaited<ReturnType<typeof task.uploadAsync>> = null;
+    let uploadError: unknown = null;
+    try {
+      putResult = await task.uploadAsync();
+    } catch (error) {
+      uploadError = error;
+    } finally {
+      signal?.removeEventListener('abort', cancelTask);
+    }
+    if (signal?.aborted) {
+      await releasePresignedUpload(projectId, presign.storageKey);
+      throwIfCancelled();
+    }
+    if (uploadError || !putResult || putResult.status < 200 || putResult.status >= 300) {
       await releasePresignedUpload(projectId, presign.storageKey);
       throw new ProjectSourceError(`Uploading "${source.name}" to storage failed. Please retry.`);
     }
@@ -338,10 +395,11 @@ export const useProjectStore = create<ProjectState>()(
         }
       },
 
-      addSource: async (projectId, source) => {
+      addSource: async (projectId, source, options) => {
+        if (options?.signal?.aborted) throw new ProjectSourceCancelledError(source.name);
         const target = resolveProjectSourceTarget(projectId);
         if (target === 'cloud') {
-          await cloudProjectSources.upload(projectId, source);
+          await cloudProjectSources.upload(projectId, source, options);
           return;
         }
         if (target === 'unknown') {

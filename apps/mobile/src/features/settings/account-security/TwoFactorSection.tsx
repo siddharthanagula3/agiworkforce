@@ -225,6 +225,7 @@ export function TwoFactorSection({
         onRequestClose={() => (stage.name === 'enrolling' ? setStage({ name: 'idle' }) : null)}
       >
         <KeyboardAvoidingView
+          accessibilityViewIsModal
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         >

@@ -190,15 +190,12 @@ nothing is left.
 
 - Done when: A dedicated image studio where the user writes a prompt, picks style/size options, generates images and sees results/history in one place.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | : Edit with brush selection (size slider, undo/redo, inpaint mask), copy, share and delete (source chat) are done in chat and Library viewers. Save to Photos waits on approval to add expo-media-library (manifest, lockfile, config plugin). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:219-219`, `apps/mobile/src/features/image/components/ImageAreaEditor.tsx:284-284`, `apps/mobile/src/features/image/services/imageMask.ts:187-187`, `apps/mobile/app/(app)/chat/[id].tsx:1434-1436`
 
 ## S4.28: Image collection.
 

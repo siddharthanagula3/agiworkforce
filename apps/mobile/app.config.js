@@ -81,6 +81,8 @@ const config = {
         'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
       NSPhotoLibraryUsageDescription:
         'AGI Workforce accesses your photo library to select images for AI analysis and conversations.',
+      NSPhotoLibraryAddUsageDescription:
+        'AGI Workforce saves images you choose to save into your photo library.',
       NSFaceIDUsageDescription:
         'AGI Workforce uses Face ID to securely unlock the app and protect your data.',
       NSSpeechRecognitionUsageDescription:
@@ -177,6 +179,11 @@ const config = {
     versionCode: 1,
     allowBackup: false,
     permissions: ['RECORD_AUDIO'],
+    blockedPermissions: [
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+      'android.permission.ACCESS_MEDIA_LOCATION',
+    ],
     intentFilters: [
       {
         action: 'SEND',
@@ -292,6 +299,15 @@ const config = {
       {
         photosPermission: 'Allow $(DISPLAYNAME) to access your photos.',
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
+      },
+    ],
+    [
+      'expo-media-library',
+      {
+        savePhotosPermission:
+          'AGI Workforce saves images you choose to save into your photo library.',
+        isAccessMediaLocationEnabled: false,
+        granularPermissions: [],
       },
     ],
     ['expo-sqlite', { useSQLCipher: true }],

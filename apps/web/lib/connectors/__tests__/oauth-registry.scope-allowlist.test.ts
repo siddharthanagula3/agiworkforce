@@ -113,6 +113,17 @@ describe('connector OAuth scope ceiling, operator descriptors cannot exceed it',
     ]);
   });
 
+  it('admits read-only whole-Drive search alongside drive.file', () => {
+    configure('google-drive', [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ]);
+    expect(getConnectorOAuthProvider('google-drive')?.scopes).toEqual([
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ]);
+  });
+
   it('refuses the unrestricted Drive scope while keeping drive.file', () => {
     configure('google-drive', [
       'https://www.googleapis.com/auth/drive',

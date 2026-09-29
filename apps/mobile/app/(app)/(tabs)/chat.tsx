@@ -181,8 +181,6 @@ export default function ChatTabScreen() {
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const skillSelection = useMobileSkillSelectionStore((s) => s.selection);
   const clearSelectedSkill = useMobileSkillSelectionStore((s) => s.clearSkill);
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
@@ -932,9 +930,7 @@ export default function ChatTabScreen() {
       <View style={{ alignItems: 'center', paddingBottom: 4 }}>
         <ModeToggle
           mode={activeMode}
-          cloudJoined={waitlistJoined}
           cloudUnlocked={cloudUnlocked}
-          waitlistRank={waitlistRank}
           onTapLocal={handleTapLocalMode}
           onTapCloud={handleTapCloudMode}
           compact
