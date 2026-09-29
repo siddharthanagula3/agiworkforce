@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Text component has heading/subheading variants, but screens set roughly 20 literal fontSize values directly (10-34pt), so there is no enforced scale. | ui |
+| mobile | partial | Text component has heading variants but about 1,330 literal fontSize values remain in screens, so no enforced heading scale. | ui |
 
 Code: `apps/mobile/components/ui/text.tsx:9-10`
 
@@ -26,7 +26,7 @@ Code: `apps/mobile/components/ui/text.tsx:9-10`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A default Text variant exists, but most screens hard-code fontSize (13, 12, 14 and 15 are all common for body copy). | ui |
+| mobile | partial | A default Text variant exists but body copy hard-codes fontSize (12-15) across screens. | ui |
 
 Code: `apps/mobile/components/ui/text.tsx:8-8`
 
@@ -38,7 +38,7 @@ Code: `apps/mobile/components/ui/text.tsx:8-8`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The caption variant no longer dilutes text, but metadata text is still set ad hoc at 10-11px in about 175 places, below the 12px floor web enforces. | ui |
+| mobile | partial | No named caption role: about 195 literal fontSize values at 11px or below remain, under the 12px floor. | ui |
 
 Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/settings/auto-approve.tsx:163-163`
 
@@ -50,21 +50,9 @@ Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/setting
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates c65ff13697: dialogPadding is defined and the edit dialog uses it. ModeSwitchModal is held by Codex and is in post-codex/w-chat-s6.23-s6.28-s6.29-s6.30-mobile-tokens.patch. | ui |
+| mobile | partial | dialogPadding is defined and used by 6 files, but 46 files render a Modal and most do not use it. | ui |
 
 Code: `apps/mobile/src/ui/theme/tokens.ts:283-283`, `apps/mobile/src/features/chat/components/MessageEditModal.tsx:149-149`
-
-## S6.28: Shadow and elevation scale.
-
-- Done when: Shadows come from a small named elevation scale per theme.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates c65ff13697: four elevation levels are defined, the memory button uses e3, and an invisible zero shadow is removed. FirstRunDisclosureModal (held) is in the tokens post-codex patch. The QR scanner's accent glow is a highlight, not elevation, and stays. | ui |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:309-309`
 
 ## S6.29: Layering and z-index rules.
 
@@ -74,7 +62,7 @@ Code: `apps/mobile/src/ui/theme/tokens.ts:309-309`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates c65ff13697: a z-index ladder mirroring the web's is defined and used by the memory button, lock screen and offline banner. voice.tsx, GeneratedImage and ImageFullScreen (held) are in the tokens post-codex patch. | ui |
+| mobile | partial | zIndex ladder is used by 7 sites, but two literals remain: CloudSyncErrorBanner zIndex 9998 and library/index.tsx zIndex 20. | ui |
 
 Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`, `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`
 
@@ -86,6 +74,6 @@ Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`, `apps/mobile/src/features/au
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates c65ff13697: motion durations (instant 90, quick 160, moved 260, reveal 700) and curves mirror the web. 63 entering and exiting animations in 31 files use them. Five held files are in the tokens post-codex patch; MessageBubble's one duration is left for its own patches. | ui |
+| mobile | partial | Motion tokens exist, but about 49 literal duration values remain (ImageFullScreen, VoiceOrb, PairingStatus, OfflineBanner and others). | ui |
 
 Code: `apps/mobile/src/ui/theme/tokens.ts:295-295`

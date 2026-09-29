@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Switching workspace exists only inside Settings > Workspace; the drawer/shell has no workspace switcher. | ui |
+| mobile | partial | Active workspace shows only as a label on the new-chat screen; switching is only in Settings > Workspace, the drawer has no switcher. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -41,7 +41,7 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
+| mobile | partial | Drawer lists Projects and Recents as separate blocks; chats are not grouped under their projects. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -66,7 +66,7 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
+| mobile | partial | Mixed search results show the type as a text chip (ChatsListScreen); other lists carry no type icon. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -80,7 +80,7 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after Codex commits ChatsListScreen.tsx and DrawerContent.tsx | ui |
+| mobile | partial | Unread pip and label render and clear on open, but nothing on mobile ever sets a conversation unread (no unread: true write), so the marker never appears for new results. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -95,7 +95,7 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after Codex commits ChatsListScreen.tsx; share and move stay out until leader research (founder file) |  |
+| mobile | partial | Row overflow (⋯) menu offers Rename, Pin, Archive and Delete; Share and Move are absent from it. |  |
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
@@ -104,15 +104,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `a
 
 - Done when: A row can be renamed in place (inline field, Enter to save, Escape to cancel) and the new title persists.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after w-auth-S5.19-S5.20-mobile-chat-rows once Codex commits |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
 
 ## S5.28: Notification center.
 
@@ -136,7 +133,7 @@ Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx
 | --- | --- | --- | --- |
 | web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
-| mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
+| mobile | partial | No Upgrade entry in the shell; the paywall Upgrade routes to the subscription screen where FEATURES.billing=false disables plan changes. | flag-off |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 

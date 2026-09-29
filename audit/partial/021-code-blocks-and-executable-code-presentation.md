@@ -174,7 +174,7 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
-| mobile | partial | partials/chat-gates 93ad61382c: finished execute_code steps offer Run again and Stop through the code-runs route. MessageBubble passes the conversation in post-codex/w-chat-s21.21-mobile-code-run-again.patch. The web cell's switch-on (AGI_E2B_EXECUTION) applies. | switch |
+| mobile | partial | Run again and Stop exist (CodeRunAgain in AgentActivityTimeline) but code runs are live only once AGI_E2B_EXECUTION=1 and E2B_API_KEY are set in production, the same switch-on as the web cell. | switch |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -190,7 +190,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
-| mobile | partial | Stop generating now also interrupts the sandbox cell on the server (ae8cda75e1), and a rerun has its own Stop. Waits on AGI_E2B_EXECUTION, as on web. | switch |
+| mobile | partial | Stop generating interrupts the sandbox and a rerun has its own Stop, but it is live only once AGI_E2B_EXECUTION=1 and E2B_API_KEY are set in production, as on web. | switch |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/runtime.ts:1070-1070`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:95-96`
