@@ -4,8 +4,9 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookAddParams,
-    HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
+    ContextInstructionsResponse, DeveloperSessionHandoff, GitPullRequestParams,
+    GitPullRequestPlanParams, GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission,
+    HookAddParams, HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
@@ -441,6 +442,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::PERMISSIONS_ADD))
     }
 
+    async fn decide_plan(
+        &self,
+        _params: PlanDecideParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::PLAN_DECIDE))
+    }
+
     async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PROVIDERS_LIST))
     }
@@ -470,11 +478,18 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::TRUST_REVOKE))
     }
 
-    async fn decide_plan(
+    async fn plan_pull_request(
         &self,
-        _params: PlanDecideParams,
-    ) -> Result<(), DeveloperSessionHostError> {
-        Err(unsupported(method::PLAN_DECIDE))
+        _params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST_PLAN))
+    }
+
+    async fn create_pull_request(
+        &self,
+        _params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1194,12 +1209,46 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PERMISSIONS_ADD => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "permissions/add is refused on this connection: save a rule only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<PermissionsAddParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
                 self.host
                     .add_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST_PLAN => {
+                let params = match parse_optional_params::<GitPullRequestPlanParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .plan_pull_request(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "git/pullRequest is refused on this connection: push and open a pull request only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<GitPullRequestParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .create_pull_request(params)
                     .await
                     .map(serde_json::to_value)
             }
@@ -1223,6 +1272,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_SET_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/setKey is refused on this connection: save a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<ProviderSetKeyParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1233,6 +1289,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_REMOVE_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/removeKey is refused on this connection: remove a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<ProviderParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1252,6 +1315,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::TRUST_REVOKE => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "trust/revoke is refused on this connection: revoke a folder only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<TrustRevokeParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,

@@ -55,10 +55,12 @@ jest.mock('react-native-safe-area-context', () => ({
 
 import VoiceSettingsScreen from '@/src/features/settings/voice';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 describe('Voice settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
       ttsProvider: 'system',
       voiceEnabled: true,
@@ -81,14 +83,22 @@ describe('Voice settings', () => {
     ).toHaveLength(0);
   });
 
-  it('states the device speech engine as a caption on the Voice row', () => {
+  it('explains the reply model and transcript destination', () => {
     const { getByText, queryByText } = render(<VoiceSettingsScreen />);
 
     expect(
-      getByText('Spoken by the system speech engine, using voices installed on this device.'),
+      getByText(
+        'Voice replies use the current chat model. Cloud Mode sends your transcript to AGI Cloud. Speech plays through voices installed on this device.',
+      ),
     ).toBeTruthy();
     expect(queryByText("Cloud voice isn't available on mobile yet.")).toBeNull();
     expect(queryByText('Requires AGI Cloud access.')).toBeNull();
+  });
+
+  it('opens the existing model picker from the Voice answer-model row', () => {
+    const { getByLabelText } = render(<VoiceSettingsScreen />);
+    fireEvent.press(getByLabelText(/^Answer model\./));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/models');
   });
 
   it('offers the live conversation mode the voice companion reads, on the same preference', () => {

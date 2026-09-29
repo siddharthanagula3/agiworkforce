@@ -187,15 +187,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S41.18: Separate history, training, and retention controls.
-
-- Done when: History, model training and data retention each have their own clearly separate control or statement.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /privacy-settings lists privacy mode, sync and telemetry, but says nothing about training or retention. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`

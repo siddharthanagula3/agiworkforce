@@ -1,6 +1,34 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Mobile project-detail screen snapshots (round-17) locks the local-only fallback tree when FEATURES.auth is false 1`] = `
+exports[`Mobile project-detail screen snapshots (round-17) locks the no-id empty tree when no params are provided 1`] = `
+<View
+  edges={
+    [
+      "top",
+    ]
+  }
+  style={
+    {
+      "alignItems": "center",
+      "backgroundColor": "#0f0f0f",
+      "flex": 1,
+      "justifyContent": "center",
+    }
+  }
+>
+  <Text
+    style={
+      {
+        "color": "rgba(244, 244, 244, 0.74)",
+      }
+    }
+  >
+    No project selected
+  </Text>
+</View>
+`;
+
+exports[`Mobile project-detail screen snapshots (round-17) requires an explicit switch before opening a Local project from Cloud mode 1`] = `
 <View
   edges={
     [
@@ -183,26 +211,46 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         {
           "backgroundColor": "#212121",
           "borderColor": "rgba(255, 255, 255, 0.10)",
-          "borderRadius": 10,
+          "borderRadius": 12,
           "borderWidth": 1,
-          "flexDirection": "row",
-          "marginBottom": 4,
-          "marginHorizontal": 16,
-          "marginTop": 12,
-          "padding": 3,
+          "gap": 12,
+          "margin": 16,
+          "padding": 20,
         }
       }
+      testID="project-detail-scope-notice"
     >
+      <Text
+        style={
+          {
+            "color": "#f4f4f4",
+            "fontSize": 16,
+            "fontWeight": "600",
+          }
+        }
+      >
+        Local project
+      </Text>
+      <Text
+        style={
+          {
+            "color": "rgba(244, 244, 244, 0.74)",
+            "fontSize": 14,
+          }
+        }
+      >
+        Switch to Local mode to open this project's chats and sources.
+      </Text>
       <View
-        accessibilityLabel="Chats"
-        accessibilityRole="tab"
+        accessibilityLabel="Switch to Local mode"
+        accessibilityRole="button"
         accessibilityState={
           {
             "busy": undefined,
             "checked": undefined,
             "disabled": undefined,
             "expanded": undefined,
-            "selected": true,
+            "selected": undefined,
           }
         }
         accessibilityValue={
@@ -227,11 +275,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "alignItems": "center",
-            "backgroundColor": "#2a2a2a",
-            "borderRadius": 8,
-            "flex": 1,
-            "paddingVertical": 7,
+            "justifyContent": "center",
+            "minHeight": 44,
           }
         }
       >
@@ -239,262 +284,20 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           style={
             {
               "color": "#f4f4f4",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
             }
           }
         >
-          Chats
+          Switch to Local mode
         </Text>
-      </View>
-      <View
-        accessibilityLabel="Sources"
-        accessibilityRole="tab"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": false,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderRadius": 8,
-            "flex": 1,
-            "paddingVertical": 7,
-          }
-        }
-      >
-        <Text
-          style={
-            {
-              "color": "rgba(244, 244, 244, 0.56)",
-              "fontSize": 13,
-              "fontWeight": "500",
-            }
-          }
-        >
-          Sources
-        </Text>
-      </View>
-    </View>
-    <View
-      className="flex-1"
-    >
-      <View
-        className="px-4 pt-4 pb-2"
-      >
-        <View
-          accessibilityLabel="New chat in this project"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
-          collapsable={false}
-          focusable={true}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
-          style={
-            {
-              "backgroundColor": "#f4f4f418",
-              "borderColor": "#f4f4f435",
-              "borderWidth": 1,
-            }
-          }
-        >
-          <View
-            color="#f4f4f4"
-            size={16}
-            testID="icon-square-pen"
-          />
-          <Text
-            className="text-[14px] font-semibold"
-            style={
-              {
-                "color": "#f4f4f4",
-              }
-            }
-          >
-            New chat
-          </Text>
-        </View>
-      </View>
-      <View
-        className="items-center justify-center py-16 px-6"
-      >
-        <View
-          className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-          style={
-            {
-              "backgroundColor": "rgba(244, 244, 244, 0.56)14",
-            }
-          }
-        >
-          <View
-            color="rgba(244, 244, 244, 0.56)"
-            size={28}
-            testID="icon-message-square"
-          />
-        </View>
-        <Text
-          className="text-[15px] font-semibold text-center mb-2"
-          style={
-            {
-              "color": "#f4f4f4",
-            }
-          }
-        >
-          No chats yet
-        </Text>
-        <Text
-          className="text-[13px] text-center leading-[19px] mb-6"
-          style={
-            {
-              "color": "rgba(244, 244, 244, 0.74)",
-            }
-          }
-        >
-          Start a conversation in this project.
-        </Text>
-        <View
-          accessibilityLabel="New chat"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl"
-          collapsable={false}
-          focusable={true}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
-          style={
-            {
-              "backgroundColor": "#f4f4f418",
-              "borderColor": "#f4f4f435",
-              "borderWidth": 1,
-            }
-          }
-        >
-          <View
-            color="#f4f4f4"
-            size={15}
-            testID="icon-square-pen"
-          />
-          <Text
-            className="text-[13px] font-semibold"
-            style={
-              {
-                "color": "#f4f4f4",
-              }
-            }
-          >
-            New chat
-          </Text>
-        </View>
       </View>
     </View>
   </View>
 </View>
 `;
 
-exports[`Mobile project-detail screen snapshots (round-17) locks the no-id empty tree when no params are provided 1`] = `
-<View
-  edges={
-    [
-      "top",
-    ]
-  }
-  style={
-    {
-      "alignItems": "center",
-      "backgroundColor": "#0f0f0f",
-      "flex": 1,
-      "justifyContent": "center",
-    }
-  }
->
-  <Text
-    style={
-      {
-        "color": "rgba(244, 244, 244, 0.74)",
-      }
-    }
-  >
-    No project selected
-  </Text>
-</View>
-`;
-
-exports[`Mobile project-detail screen snapshots (round-17) locks the success tree after fetchProject resolves 1`] = `
+exports[`Mobile project-detail screen snapshots (round-17) shows local project chats only in Local mode 1`] = `
 <View
   edges={
     [
@@ -639,343 +442,38 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
     <View
       style={
         {
-          "paddingHorizontal": 16,
-          "paddingTop": 12,
+          "backgroundColor": "#212121",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
+          "borderRadius": 12,
+          "borderWidth": 1,
+          "gap": 12,
+          "margin": 16,
+          "padding": 16,
         }
       }
+      testID="project-detail-local-fallback"
     >
-      <View
-        accessibilityLabel="Project: Snapshot project"
+      <Text
         style={
           {
-            "backgroundColor": "#212121",
-            "borderColor": "rgba(255, 255, 255, 0.10)",
-            "borderRadius": 12,
-            "borderWidth": 1,
-            "flexDirection": "column",
-            "gap": 12,
-            "padding": 16,
+            "color": "#f4f4f4",
+            "fontSize": 15,
+            "fontWeight": "600",
           }
         }
-        testID="project-header"
       >
-        <View
-          style={
-            {
-              "alignItems": "flex-start",
-              "flexDirection": "row",
-              "gap": 12,
-            }
+        Snapshot project
+      </Text>
+      <Text
+        style={
+          {
+            "color": "rgba(244, 244, 244, 0.74)",
+            "fontSize": 13,
           }
-        >
-          <View
-            style={
-              {
-                "alignItems": "center",
-                "backgroundColor": "rgba(16, 185, 129, 0.16)",
-                "borderColor": "rgba(16, 185, 129, 0.32)",
-                "borderRadius": 12,
-                "borderWidth": 1,
-                "height": 48,
-                "justifyContent": "center",
-                "width": 48,
-              }
-            }
-          >
-            <View
-              color="#6ee7b7"
-              size={22}
-              testID="icon-folder"
-            />
-          </View>
-          <View
-            style={
-              {
-                "flex": 1,
-              }
-            }
-          >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "flexDirection": "row",
-                  "flexWrap": "wrap",
-                  "gap": 6,
-                }
-              }
-            >
-              <Text
-                numberOfLines={1}
-                style={
-                  {
-                    "color": "#f4f4f4",
-                    "fontSize": 16,
-                    "fontWeight": "600",
-                  }
-                }
-              >
-                Snapshot project
-              </Text>
-              <View
-                style={
-                  {
-                    "backgroundColor": "rgba(139, 92, 246, 0.16)",
-                    "borderColor": "rgba(139, 92, 246, 0.32)",
-                    "borderRadius": 9999,
-                    "borderWidth": 1,
-                    "paddingHorizontal": 6,
-                    "paddingVertical": 2,
-                  }
-                }
-                testID="project-header-imported-from"
-              >
-                <Text
-                  style={
-                    {
-                      "color": "#c4b5fd",
-                      "fontSize": 10,
-                      "fontWeight": "500",
-                      "letterSpacing": 0.4,
-                      "textTransform": "uppercase",
-                    }
-                  }
-                >
-                  Created in AGI
-                </Text>
-              </View>
-            </View>
-            <Text
-              numberOfLines={2}
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.74)",
-                  "fontSize": 12,
-                  "marginTop": 2,
-                }
-              }
-            >
-              Stays on this device.
-            </Text>
-          </View>
-        </View>
-        <View
-          style={
-            {
-              "flexDirection": "row",
-              "flexWrap": "wrap",
-              "gap": 6,
-            }
-          }
-        >
-          <View
-            accessibilityLabel="Privacy: Local"
-            style={
-              {
-                "alignItems": "center",
-                "backgroundColor": "rgba(16, 185, 129, 0.12)",
-                "borderColor": "rgba(16, 185, 129, 0.4)",
-                "borderRadius": 9999,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 4,
-                "paddingHorizontal": 8,
-                "paddingVertical": 2,
-              }
-            }
-            testID="project-header-privacy-chip"
-          >
-            <View
-              color="#6ee7b7"
-              size={11}
-              testID="icon-lock"
-            />
-            <Text
-              style={
-                {
-                  "color": "#6ee7b7",
-                  "fontSize": 11,
-                  "fontWeight": "500",
-                }
-              }
-            >
-              Local
-            </Text>
-          </View>
-          <View
-            accessibilityLabel="Provider mode: Local"
-            style={
-              {
-                "backgroundColor": "rgba(16, 185, 129, 0.16)",
-                "borderColor": "rgba(16, 185, 129, 0.32)",
-                "borderRadius": 9999,
-                "borderWidth": 1,
-                "paddingHorizontal": 8,
-                "paddingVertical": 2,
-              }
-            }
-            testID="project-header-provider-chip"
-          >
-            <Text
-              style={
-                {
-                  "color": "#6ee7b7",
-                  "fontSize": 11,
-                  "fontWeight": "500",
-                }
-              }
-            >
-              Local
-            </Text>
-          </View>
-        </View>
-        <View
-          style={
-            {
-              "columnGap": 12,
-              "flexDirection": "row",
-              "flexWrap": "wrap",
-              "rowGap": 4,
-            }
-          }
-          testID="project-header-meta-row"
-        >
-          <View
-            style={
-              {
-                "alignItems": "center",
-                "flexDirection": "row",
-                "gap": 4,
-              }
-            }
-          >
-            <View
-              color="rgba(244, 244, 244, 0.56)"
-              size={11}
-              testID="icon-users"
-            />
-            <Text
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.56)",
-                  "fontSize": 11,
-                }
-              }
-            >
-              2 files
-            </Text>
-          </View>
-          <View
-            style={
-              {
-                "alignItems": "center",
-                "flexDirection": "row",
-                "gap": 4,
-              }
-            }
-          >
-            <Text
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.56)",
-                  "fontSize": 11,
-                }
-              }
-            >
-              1 member
-            </Text>
-          </View>
-        </View>
-        <View
-          style={
-            {
-              "flexDirection": "row",
-              "flexWrap": "wrap",
-              "gap": 4,
-            }
-          }
-          testID="project-header-surface-chips"
-        >
-          <View
-            style={
-              {
-                "backgroundColor": "#2a2a2a",
-                "borderColor": "rgba(255, 255, 255, 0.10)",
-                "borderRadius": 4,
-                "borderWidth": 1,
-                "paddingHorizontal": 6,
-                "paddingVertical": 2,
-              }
-            }
-          >
-            <Text
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.74)",
-                  "fontSize": 10,
-                  "fontWeight": "500",
-                  "letterSpacing": 0.4,
-                  "textTransform": "uppercase",
-                }
-              }
-            >
-              Web
-            </Text>
-          </View>
-          <View
-            style={
-              {
-                "backgroundColor": "#2a2a2a",
-                "borderColor": "rgba(255, 255, 255, 0.10)",
-                "borderRadius": 4,
-                "borderWidth": 1,
-                "paddingHorizontal": 6,
-                "paddingVertical": 2,
-              }
-            }
-          >
-            <Text
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.74)",
-                  "fontSize": 10,
-                  "fontWeight": "500",
-                  "letterSpacing": 0.4,
-                  "textTransform": "uppercase",
-                }
-              }
-            >
-              Desktop
-            </Text>
-          </View>
-          <View
-            style={
-              {
-                "backgroundColor": "#2a2a2a",
-                "borderColor": "rgba(255, 255, 255, 0.10)",
-                "borderRadius": 4,
-                "borderWidth": 1,
-                "paddingHorizontal": 6,
-                "paddingVertical": 2,
-              }
-            }
-          >
-            <Text
-              style={
-                {
-                  "color": "rgba(244, 244, 244, 0.74)",
-                  "fontSize": 10,
-                  "fontWeight": "500",
-                  "letterSpacing": 0.4,
-                  "textTransform": "uppercase",
-                }
-              }
-            >
-              Mobile
-            </Text>
-          </View>
-        </View>
-      </View>
+        }
+      >
+        Local project. Details, chats, and sources stay on this device.
+      </Text>
     </View>
     <View
       style={

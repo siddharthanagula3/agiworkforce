@@ -148,6 +148,23 @@ describe('POST /api/mobile/iap/verify', () => {
     );
   });
 
+  it('grants a completed store purchase after new purchases are switched off', async () => {
+    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
+    harness({});
+    mockVerifyStorePurchase.mockResolvedValue(verifiedTopUp());
+
+    const response = await POST(
+      request({ platform: 'android', productId: PRODUCT_ID, purchaseToken: PURCHASE_TOKEN }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'granted',
+      unitsGranted: 500,
+    });
+    expect(mockVerifyStorePurchase).toHaveBeenCalledOnce();
+  });
+
   it('answers a replayed purchase token from the ledger without crediting it again', async () => {
     const h = harness({ existingReceiptUser: 'user-1' });
     mockVerifyStorePurchase.mockResolvedValue(verifiedTopUp());

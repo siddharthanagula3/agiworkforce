@@ -4,6 +4,11 @@ import { render } from '@testing-library/react-native';
 const mockPush = jest.fn();
 const mockSelectedModel = { id: '' };
 
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: 'disconnected' }),
+}));
+
 jest.mock('@clerk/expo', () => ({
   useUser: () => ({ user: null, isLoaded: true }),
 }));

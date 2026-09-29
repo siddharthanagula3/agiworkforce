@@ -360,16 +360,13 @@ Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 
 - Done when: When the same item was changed elsewhere, the user sees both versions and chooses which to keep (or merges).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi sync import` keeps the local file on a conflict and lists it in the report; the user cannot compare or pick the imported version. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 ## S10.43: Export options.
 

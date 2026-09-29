@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
@@ -116,5 +117,23 @@ describe('Create schedule template handoff', () => {
         initialData: existingSchedule,
       }),
     );
+  });
+
+  it('keeps the edit screen open when deletion fails', async () => {
+    mockSearchParams = { id: 'schedule-1' };
+    useScheduleStore.setState({
+      schedules: [{ id: 'schedule-1', name: 'Existing schedule' }] as never,
+      deleteSchedule: jest.fn().mockResolvedValue(false),
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    render(<CreateScheduleScreen />);
+    const formProps = mockScheduleForm.mock.lastCall?.[0] as { onDelete: () => void };
+    formProps.onDelete();
+    const buttons = alert.mock.lastCall?.[2];
+    await buttons?.find((button) => button.text === 'Delete')?.onPress?.();
+
+    expect(mockBack).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 });

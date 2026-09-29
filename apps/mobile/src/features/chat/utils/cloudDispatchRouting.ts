@@ -20,11 +20,32 @@ export interface MobileCloudDispatchRequest {
   history?: ReadonlyArray<RoutingMessage>;
   attachments?: ReadonlyArray<RoutingAttachment>;
   currentModelKey?: string | null;
+  preferSlots?: readonly string[];
 }
 
 export type MobileCloudDispatchDecision =
-  | (SelectedAutoRoute & { dispatch: 'chat' | 'media' })
-  | UnavailableAutoRoute;
+  (SelectedAutoRoute & { dispatch: 'chat' | 'media' }) | UnavailableAutoRoute;
+
+export function cloudDispatchUnavailableMessage(route: UnavailableAutoRoute): string {
+  switch (route.code) {
+    case 'explicit_model_ineligible':
+    case 'explicit_route_ineligible':
+      return 'This model is not available for this request or plan. Choose another AGI Cloud model to continue.';
+    case 'mandatory_capability_unavailable':
+      return 'No available AGI Cloud model supports this request. Try a different model or remove the attachment.';
+    case 'unknown_selection':
+      return 'This model selection is no longer available. Choose a model again to continue.';
+    case 'trust_mode_not_permitted':
+      return 'This request cannot run in AGI Cloud. Check the chat mode before trying again.';
+    case 'unknown_task':
+      return 'AGI Cloud could not route this request. Rephrase it or choose another model.';
+    case 'unknown_runtime_profile':
+    case 'runtime_profile_unavailable':
+    case 'runtime_profile_mismatch':
+    case 'no_eligible_route':
+      return 'No AGI Cloud model is available right now. Try again shortly or choose another model.';
+  }
+}
 
 export function resolveMobileCloudDispatch(
   request: MobileCloudDispatchRequest,
@@ -69,6 +90,9 @@ export function resolveMobileCloudDispatch(
     runtimeProfileId: 'mobile/cloud-chat',
     currentModelKey: request.currentModelKey,
     fallbackToAutoForCapabilityMismatch: true,
+    ...(request.preferSlots && request.preferSlots.length > 0
+      ? { preferSlots: request.preferSlots }
+      : {}),
   });
 
   if (route.status === 'unavailable') return route;

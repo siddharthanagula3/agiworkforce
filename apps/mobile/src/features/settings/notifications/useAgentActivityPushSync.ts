@@ -61,7 +61,7 @@ export function useAgentActivityPushSync(): AgentActivityPushSync {
       } catch (caught) {
         if (cancelled) return;
         setStatus('error');
-        setError(caught instanceof Error ? caught.message : 'Could not load agent run push.');
+        setError('Could not load agent run notifications. Check your connection and try again.');
       }
     })();
 
@@ -85,7 +85,7 @@ export function useAgentActivityPushSync(): AgentActivityPushSync {
         .then(() => setStatus('synced'))
         .catch((caught: unknown) => {
           setStatus('error');
-          setError(caught instanceof Error ? caught.message : 'Could not save agent run push.');
+          setError('Could not save agent run notifications. Check your connection and try again.');
         });
     },
     [isCloud],

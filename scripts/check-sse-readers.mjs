@@ -51,9 +51,7 @@ const SERVER_PREFIXES = Object.freeze([
 const FIX =
   'read the stream with readServerSentEvents or ServerSentEventDecoder from @agiworkforce/client-runtime';
 
-export const PENDING = Object.freeze({
-  'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${FIX}`,
-});
+export const PENDING = Object.freeze({});
 
 const SOURCE_FILE = /\.(?:tsx?|mts)$/;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?tsx?$/;

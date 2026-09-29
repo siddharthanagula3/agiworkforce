@@ -1,4 +1,3 @@
-
 import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
@@ -43,14 +42,20 @@ export async function generateImage(
     throw new Error('Image generation requires a non-empty prompt');
   }
 
-  const idempotencyKey = createManagedMediaIdempotencyKey({
-    surface: 'mobile',
-    operation: 'image',
-    operationId: options.operationId ?? Crypto.randomUUID(),
-  });
+  const idempotencyKey = imageIdempotencyKey(options.operationId ?? Crypto.randomUUID());
 
   return api.post<ImageGenResponse>('/api/media/image/generate', request, {
     headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
+function imageIdempotencyKey(operationId: string): string {
+  return createManagedMediaIdempotencyKey({ surface: 'mobile', operation: 'image', operationId });
+}
+
+export async function cancelImageGeneration(operationId: string): Promise<void> {
+  await api.post('/api/media/image/cancel', {
+    idempotency_key: imageIdempotencyKey(operationId),
   });
 }
 
@@ -74,4 +79,3 @@ export function resolveGeneratedImageUri(path: string): string | null {
   if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;
   return `${API_URL.replace(/\/+$/, '')}${candidate}`;
 }
-

@@ -656,6 +656,18 @@ const ru = {
   'savedApprovals.removeAllowed':
     'AGI снова спросит, когда в следующий раз захочет сделать это: {label}',
   'savedApprovals.removeDenied': 'AGI сможет снова попросить сделать это вместо отказа: {label}',
+  'pullRequest.titlePrompt': 'Заголовок pull request',
+  'pullRequest.basePrompt': 'Ветка, в которую сливать',
+  'pullRequest.confirmPush':
+    'Отправить {count} коммит(ов) из {branch} в {remote} и открыть pull request в {base}?',
+  'pullRequest.confirmOpen': 'Открыть pull request из {branch} в {base}?',
+  'pullRequest.confirmAction': 'Отправить и открыть',
+  'pullRequest.openAction': 'Открыть pull request',
+  'pullRequest.created': 'AGI Workforce: pull request открыт.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'Открыть',
+  'pullRequest.blocked': 'AGI Workforce: не удаётся открыть pull request: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'сохранённые подтверждения',
   'webview.alwaysAllow': 'Всегда разрешать',
   'webview.alwaysAllowHint':

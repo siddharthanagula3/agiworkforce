@@ -1,20 +1,14 @@
 import {
   CHAT_MODEL_TYPES,
   canAccessModelForSubscriptionTier,
-  getAllowedModelsForTier,
   getModelsForTierAndSurface,
-  normalizeModelId,
 } from '@agiworkforce/types';
 import { getModelListForCloudAccess } from '../src/features/model-picker/service';
 
 const TIERS = ['free', 'basic', 'pro', 'max', 'team', 'enterprise'] as const;
 
-const ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
-
 function serverAllows(modelId: string, tier: string): boolean {
-  if (canAccessModelForSubscriptionTier(modelId, tier)) return true;
-  const canonical = normalizeModelId(modelId) ?? modelId;
-  return ECONOMY_MODEL_IDS.has(canonical);
+  return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
 describe('cloud model picker × subscription tier matrix', () => {

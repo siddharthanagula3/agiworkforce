@@ -38,17 +38,15 @@ nothing is left.
 
 - Done when: Each child agent is labelled with its role.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagent tasks show only their description, and only in the REPL /tasks list; no role label. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:45-61`
 
 ## S62.04: Model labels.
 

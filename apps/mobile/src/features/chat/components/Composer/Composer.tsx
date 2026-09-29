@@ -4,6 +4,7 @@ import type { SendPreviewInput } from '@agiworkforce/types';
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
 import {
   TaskChips,
+  TASK_CHIP_DRAFT_STARTERS,
   type TaskChipType,
   type TaskSuggestionType,
 } from '@/src/features/chat/components/TaskChips';
@@ -35,6 +36,8 @@ interface ComposerProps {
   draftProvenance?: DraftProvenance;
   sendPreview?: SendPreviewInput;
   attachmentPrivacyShortLabel?: string;
+  selectedSkillName?: string;
+  onClearSelectedSkill?: () => void;
 }
 
 export function Composer({
@@ -56,6 +59,8 @@ export function Composer({
   draftProvenance,
   sendPreview,
   attachmentPrivacyShortLabel,
+  selectedSkillName,
+  onClearSelectedSkill,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
   const appMode = useChatAppModeStore((state) => state.appMode);
@@ -66,11 +71,13 @@ export function Composer({
       if (chip === 'image') {
         setActiveChip(null);
         setMediaMode('image');
+        attachRef?.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[chip]);
         attachRef?.current?.focus?.();
         return;
       }
       setMediaMode('text');
       setActiveChip((prev) => (prev === chip ? null : chip));
+      attachRef?.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[chip]);
       attachRef?.current?.focus?.();
     },
     [attachRef, setMediaMode],
@@ -96,6 +103,7 @@ export function Composer({
             activeChip={activeChip}
             onChipPress={handleChipPress}
             showCloudSuggestions={appMode === 'cloud'}
+            modelId={sendPreview?.modelId}
           />
         </View>
       ) : null}
@@ -117,6 +125,8 @@ export function Composer({
         draftProvenance={draftProvenance}
         sendPreview={sendPreview}
         attachmentPrivacyShortLabel={attachmentPrivacyShortLabel}
+        selectedSkillName={selectedSkillName}
+        onClearSelectedSkill={onClearSelectedSkill}
       />
     </View>
   );

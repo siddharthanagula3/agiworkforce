@@ -7,6 +7,8 @@ import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
+import { deviceSpeechLocale } from '@/src/features/voice/services/speechSettings';
+import { chosenSpeechLanguage } from '@/src/features/voice/speechLanguage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -188,7 +190,10 @@ export default function VoiceLanguageScreen() {
 
   const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
   const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
-  const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;
+  const speechLanguage =
+    chosenSpeechLanguage(isCloud ? cloudSpeechLanguage : localSpeechLanguage) ??
+    deviceSpeechLocale().split('-')[0] ??
+    '';
 
   useEffect(() => {
     let cancelled = false;

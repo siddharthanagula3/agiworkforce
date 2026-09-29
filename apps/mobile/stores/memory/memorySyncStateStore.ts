@@ -5,10 +5,12 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 interface MemorySyncState {
   memoryCursor: string;
   dirtyMemoryIds: string[];
+  accountMemoryEnabled: boolean | null;
 
   setMemoryCursor: (cursor: string) => void;
   markMemoryDirty: (id: string) => void;
   clearMemoryDirty: (ids: string[]) => void;
+  setAccountMemoryEnabled: (enabled: boolean) => void;
   resetMemorySync: () => void;
 }
 
@@ -17,6 +19,7 @@ export const useMemorySyncStateStore = create<MemorySyncState>()(
     (set) => ({
       memoryCursor: '0',
       dirtyMemoryIds: [],
+      accountMemoryEnabled: null,
 
       setMemoryCursor: (cursor) => set({ memoryCursor: cursor }),
 
@@ -28,10 +31,13 @@ export const useMemorySyncStateStore = create<MemorySyncState>()(
       clearMemoryDirty: (ids) =>
         set((s) => ({ dirtyMemoryIds: s.dirtyMemoryIds.filter((id) => !ids.includes(id)) })),
 
+      setAccountMemoryEnabled: (enabled) => set({ accountMemoryEnabled: enabled }),
+
       resetMemorySync: () =>
         set({
           memoryCursor: '0',
           dirtyMemoryIds: [],
+          accountMemoryEnabled: null,
         }),
     }),
     {
@@ -41,6 +47,7 @@ export const useMemorySyncStateStore = create<MemorySyncState>()(
       partialize: (s) => ({
         memoryCursor: s.memoryCursor,
         dirtyMemoryIds: s.dirtyMemoryIds,
+        accountMemoryEnabled: s.accountMemoryEnabled,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[memorySyncStateStore] Hydration failed:', error);

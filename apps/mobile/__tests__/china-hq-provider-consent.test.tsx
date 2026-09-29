@@ -38,8 +38,23 @@ import {
 } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import CloudPrivacyScreen from '@/src/features/settings/cloud-privacy';
 import { PROVIDER_CONSENT_TEST_ID_PREFIX } from '@/src/features/settings/cloud-privacy/ChineseHqProviderConsentGroup';
-import { mmkvDisclosureLedger, mmkvConsentLedger } from '@/services/complianceLedger';
-import { applyChineseHqProviderConsent } from '@/services/providerConsent';
+import {
+  mmkvDisclosureLedger,
+  mmkvConsentLedger,
+  mmkvRoutingConsentLedger,
+} from '@/services/complianceLedger';
+import {
+  applyChineseHqProviderConsent,
+  setChineseHqProviderConsent,
+} from '@/services/providerConsent';
+import {
+  ProviderConsentBanner,
+  PROVIDER_CONSENT_ENABLE_TEST_ID,
+} from '@/src/features/chat/components/ProviderConsentBanner';
+import {
+  PROVIDER_CONSENT_CANCEL_TEST_ID,
+  PROVIDER_CONSENT_CONFIRM_TEST_ID,
+} from '@/src/features/settings/cloud-privacy/NamedProviderConsentModal';
 import { ensureLlmGateOpen } from '@/services/llmGate';
 import { providerConsentErrorStateFromError } from '@/src/features/chat/utils/providerConsentRecovery';
 
@@ -52,12 +67,23 @@ const copy = composeFirstRunDisclosure({
 const GATED_PROVIDER: ChineseHqProviderId = 'deepseek';
 
 function routingAllowed(providerId: string): boolean {
-  return isProviderRoutingAllowed(providerId, mmkvConsentLedger);
+  return isProviderRoutingAllowed(providerId, mmkvRoutingConsentLedger);
 }
 
 beforeEach(() => {
   mockStorage.clear();
 });
+
+function acceptDisclosureOnly() {
+  mmkvDisclosureLedger.write({
+    version: 1,
+    acceptedAt: new Date().toISOString(),
+    surface: 'mobile',
+    disclosureCopyHash: 'test-copy-hash',
+    managedCloudAccepted: true,
+    chineseHqProvidersAccepted: [],
+  });
+}
 
 describe('first-run disclosure: per-provider China-HQ opt-in', () => {
   it('renders a toggle for every China-HQ provider, all OFF by default', () => {
@@ -84,6 +110,7 @@ describe('first-run disclosure: per-provider China-HQ opt-in', () => {
     fireEvent.press(getByTestId('disclosure-accept-btn'));
 
     expect(onAccept).toHaveBeenCalledWith([GATED_PROVIDER]);
+    acceptDisclosureOnly();
     applyChineseHqProviderConsent(onAccept.mock.calls[0][0]);
 
     expect(routingAllowed(GATED_PROVIDER)).toBe(true);
@@ -137,7 +164,15 @@ describe('first-run disclosure: per-provider China-HQ opt-in', () => {
 });
 
 describe('settings privacy screen: China-HQ provider consent', () => {
+  it('refuses to enable a provider when disclosure acceptance is missing', () => {
+    expect(() => setChineseHqProviderConsent(GATED_PROVIDER, true)).toThrow(
+      'Accept the privacy disclosure',
+    );
+    expect(routingAllowed(GATED_PROVIDER)).toBe(false);
+  });
+
   it('reflects the stored ledger state and flips a declined provider on later', () => {
+    acceptDisclosureOnly();
     applyChineseHqProviderConsent([]);
     expect(routingAllowed(GATED_PROVIDER)).toBe(false);
 
@@ -147,6 +182,12 @@ describe('settings privacy screen: China-HQ provider consent', () => {
 
     fireEvent(toggle, 'valueChange', true);
 
+    expect(routingAllowed(GATED_PROVIDER)).toBe(false);
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_CANCEL_TEST_ID));
+    expect(routingAllowed(GATED_PROVIDER)).toBe(false);
+    fireEvent(toggle, 'valueChange', true);
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_CONFIRM_TEST_ID));
+
     expect(routingAllowed(GATED_PROVIDER)).toBe(true);
     expect(getByTestId(`${PROVIDER_CONSENT_TEST_ID_PREFIX}${GATED_PROVIDER}`).props.value).toBe(
       true,
@@ -154,6 +195,7 @@ describe('settings privacy screen: China-HQ provider consent', () => {
   });
 
   it('revokes a previously accepted provider, re-blocking routing', () => {
+    acceptDisclosureOnly();
     applyChineseHqProviderConsent([GATED_PROVIDER]);
     expect(routingAllowed(GATED_PROVIDER)).toBe(true);
 
@@ -176,17 +218,6 @@ describe('settings privacy screen: China-HQ provider consent', () => {
 });
 
 describe('the real send-time gate follows the consent the UI wrote', () => {
-  function acceptDisclosureOnly() {
-    mmkvDisclosureLedger.write({
-      version: 1,
-      acceptedAt: new Date().toISOString(),
-      surface: 'mobile',
-      disclosureCopyHash: 'test-copy-hash',
-      managedCloudAccepted: true,
-      chineseHqProvidersAccepted: [],
-    });
-  }
-
   it('throws a provider-named gate error when the toggle was left OFF', () => {
     acceptDisclosureOnly();
     applyChineseHqProviderConsent([]);
@@ -215,6 +246,8 @@ describe('the real send-time gate follows the consent the UI wrote', () => {
       'valueChange',
       true,
     );
+    expect(() => ensureLlmGateOpen(GATED_PROVIDER)).toThrow();
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_CONFIRM_TEST_ID));
 
     expect(() => ensureLlmGateOpen(GATED_PROVIDER)).not.toThrow();
   });
@@ -224,5 +257,30 @@ describe('the real send-time gate follows the consent the UI wrote', () => {
     applyChineseHqProviderConsent([]);
 
     expect(() => ensureLlmGateOpen('openai')).not.toThrow();
+  });
+});
+
+describe('in-chat provider consent', () => {
+  it('requires review and explicit confirmation before routing can resume', () => {
+    acceptDisclosureOnly();
+    const onEnabled = jest.fn();
+    const state = {
+      providerId: GATED_PROVIDER,
+      displayName: 'DeepSeek (China)',
+      code: 'cn_hq_provider_not_opted_in' as const,
+    };
+    const { getByTestId } = render(
+      <ProviderConsentBanner state={state} onEnabled={onEnabled} onDismiss={jest.fn()} />,
+    );
+
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_ENABLE_TEST_ID));
+    expect(routingAllowed(GATED_PROVIDER)).toBe(false);
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_CANCEL_TEST_ID));
+    expect(onEnabled).not.toHaveBeenCalled();
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_ENABLE_TEST_ID));
+    fireEvent.press(getByTestId(PROVIDER_CONSENT_CONFIRM_TEST_ID));
+
+    expect(routingAllowed(GATED_PROVIDER)).toBe(true);
+    expect(onEnabled).toHaveBeenCalledWith(state);
   });
 });

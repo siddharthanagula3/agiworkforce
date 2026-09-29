@@ -107,7 +107,7 @@ describe('Capabilities settings screen', () => {
   });
 
   const WEB_SEARCH_LABEL =
-    'Web search. Let supported Cloud models search the web automatically when they need current information.';
+    'Web search. Let supported Cloud models search the web automatically when they need current information. Turning this off may produce outdated answers.';
 
   it('renders real Cloud preference switches and keeps automatic capabilities as status rows', () => {
     const { getByText, getByLabelText, queryAllByRole, queryByText } = render(

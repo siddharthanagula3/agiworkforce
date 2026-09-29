@@ -208,18 +208,6 @@ Code: `apps/web/app/api/pair/claim/route.ts:70-70`, `apps/mobile/app/(app)/compa
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S68.26: Resume after reconnect.
-
-- Done when: After a dropped connection, the client reconnects and resumes the same session state.
-- Wave: 3
-- Already works on: desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The app-server advertises reconnect support for its clients; a restarted CLI resumes via agi resume. | surface-only |
-
-Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`
-
 ## S68.27: Session export.
 
 - Done when: The user exports a coding session (transcript and context) to a file from any client.

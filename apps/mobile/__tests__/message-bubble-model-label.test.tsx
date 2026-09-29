@@ -178,6 +178,7 @@ jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
+import { lightColors } from '@/src/ui/theme/tokens';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { DEFAULT_LOCAL_MODEL_ID, getShortDisplayName } from '@/src/features/model-picker/service';
@@ -189,6 +190,36 @@ describe('MessageBubble model label', () => {
   beforeEach(() => {
     useArtifactStore.setState({ artifacts: [] });
     useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  it('follows the stored rating when a failed write restores the previous value', () => {
+    const message: ChatMessage = {
+      id: 'm-rated',
+      role: 'assistant',
+      content: 'A rated answer.',
+      createdAt: new Date().toISOString(),
+      metadata: { reaction: null },
+    };
+    const onReaction = jest.fn();
+    const view = render(<MessageBubble message={message} onReaction={onReaction} />);
+    const goodButton = () => view.getByLabelText('Good response');
+    const iconColor = () =>
+      goodButton().findAll((node) => node.props.color !== undefined)[0]?.props.color;
+
+    fireEvent.press(goodButton());
+    expect(onReaction).toHaveBeenCalledTimes(1);
+    expect(onReaction).toHaveBeenCalledWith('m-rated', 'thumbsUp');
+
+    view.rerender(
+      <MessageBubble
+        message={{ ...message, metadata: { reaction: 'thumbsUp' } }}
+        onReaction={onReaction}
+      />,
+    );
+    expect(iconColor()).toBe(lightColors.agentSuccess);
+
+    view.rerender(<MessageBubble message={message} onReaction={onReaction} />);
+    expect(iconColor()).toBe(lightColors.textMuted);
   });
 
   it('shows the friendly local model name instead of the internal model ID', () => {

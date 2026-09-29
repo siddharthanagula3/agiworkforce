@@ -18,6 +18,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { ChatMessage } from '@/types/chat';
+import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
 
@@ -27,6 +28,9 @@ interface MessageListProps {
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
+  onRetryWithModel?: (messageId: string) => void;
+  variantInfoByMessageId?: VariantInfoByMessageId;
+  onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRefresh?: () => void;
@@ -38,10 +42,12 @@ interface MessageListProps {
     messageId: string,
     toolCallId: string,
     decision: 'approved' | 'rejected',
+    guidance?: string,
   ) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
   onRetryResearch?: (messageId: string) => void;
   onStopResearch?: () => void;
+  onPauseResearch?: (messageId: string) => Promise<boolean>;
   resumingResearchMessageId?: string | null;
 }
 
@@ -62,6 +68,9 @@ export function MessageList({
   onReject,
   onDeleteMessage,
   onRetryMessage,
+  onRetryWithModel,
+  variantInfoByMessageId,
+  onSelectVariant,
   onSwitchModel,
   onEditMessage,
   onRefresh,
@@ -73,6 +82,7 @@ export function MessageList({
   onResearchPlanDecision,
   onRetryResearch,
   onStopResearch,
+  onPauseResearch,
   resumingResearchMessageId = null,
 }: MessageListProps) {
   const colors = useThemeColors();
@@ -109,6 +119,11 @@ export function MessageList({
     });
   }, [showScrollButton, fabOpacity]);
 
+  const handleQuoteSelection = useCallback(
+    (message: ChatMessage, text: string) => onQuoteReply?.({ ...message, content: text }),
+    [onQuoteReply],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
       // The column is on the row, not on the list, so a swipe anywhere in the
@@ -121,6 +136,9 @@ export function MessageList({
             onReject={onReject}
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={onRetryMessage}
+            onRetryWithModel={onRetryWithModel}
+            variant={variantInfoByMessageId?.[item.id]}
+            onSelectVariant={onSelectVariant}
             onSwitchModel={onSwitchModel}
             onEditMessage={onEditMessage}
             onReaction={onReaction}
@@ -128,17 +146,23 @@ export function MessageList({
             onResearchPlanDecision={onResearchPlanDecision}
             onRetryResearch={onRetryResearch}
             onStopResearch={onStopResearch}
+            onPauseResearch={onPauseResearch}
             isResumingResearch={resumingResearchMessageId === item.id}
+            onQuoteSelection={onQuoteReply ? handleQuoteSelection : undefined}
           />
         </SwipeReplyWrapper>
       </View>
     ),
     [
       colors,
+      handleQuoteSelection,
       onApprove,
       onReject,
       onDeleteMessage,
       onRetryMessage,
+      onRetryWithModel,
+      variantInfoByMessageId,
+      onSelectVariant,
       onSwitchModel,
       onEditMessage,
       onQuoteReply,
@@ -147,6 +171,7 @@ export function MessageList({
       onResearchPlanDecision,
       onRetryResearch,
       onStopResearch,
+      onPauseResearch,
       resumingResearchMessageId,
     ],
   );

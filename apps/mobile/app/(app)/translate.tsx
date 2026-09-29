@@ -105,12 +105,13 @@ export default function TranslateScreen() {
       if (!abortRef.current) {
         setState({ isTranslating: false, result, errorMessage: null, tokensAccum: '' });
       }
-    } catch (err) {
+    } catch {
       if (!abortRef.current) {
         setState({
           isTranslating: false,
           result: null,
-          errorMessage: err instanceof Error ? err.message : 'Translation failed',
+          errorMessage:
+            'Translation could not finish on this device. Check your local model and try again.',
           tokensAccum: '',
         });
       }

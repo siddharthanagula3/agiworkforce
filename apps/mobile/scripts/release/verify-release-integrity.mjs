@@ -24,10 +24,7 @@ export const CANONICAL_IDENTITY = Object.freeze({
   easProjectId: '38f0941c-88a7-468a-9750-fcd8b357ff4c',
 });
 
-const PRODUCTION_ENTITLEMENTS = Object.freeze([
-  'com.apple.developer.siri',
-  'com.apple.developer.natural-language.translation',
-]);
+const PRODUCTION_ENTITLEMENTS = Object.freeze(['com.apple.developer.siri']);
 
 const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze(['applinks:agiworkforce.com']);
 
@@ -256,6 +253,35 @@ export function readReleaseNumbers(configSource) {
   };
 }
 
+export function assertStoreMetadataAlignment(version, iosMetadata, androidMetadata) {
+  for (const [store, metadata] of [
+    ['iOS', iosMetadata],
+    ['Android', androidMetadata],
+  ]) {
+    if (metadata?._meta?.version !== version) {
+      throw new Error(`${store} listing version must match app version ${version}`);
+    }
+    for (const [field, limit] of Object.entries(metadata._meta.char_limits ?? {})) {
+      const value = metadata[field === 'name' ? 'app_name' : field];
+      const recordedCount = metadata._meta.char_counts?.[field];
+      if (typeof value !== 'string' || value.length !== recordedCount) {
+        throw new Error(`${store} listing ${field} character count is stale`);
+      }
+      if (typeof limit !== 'number' || value.length > limit) {
+        throw new Error(`${store} listing ${field} exceeds its store limit`);
+      }
+    }
+  }
+
+  if (!iosMetadata.whats_new?.startsWith(`AGI ${version},`)) {
+    throw new Error(`iOS release notes must name app version ${version}`);
+  }
+  const androidNotesKey = `release_notes_v${version.replaceAll('.', '_')}`;
+  if (!androidMetadata[androidNotesKey]?.startsWith(`AGI ${version},`)) {
+    throw new Error(`Android release notes must name app version ${version}`);
+  }
+}
+
 function previousReleaseTag(currentVersion) {
   const tags = execFileSync('git', ['tag', '--list', 'v-mobile-*'], {
     cwd: REPO_ROOT,
@@ -278,6 +304,17 @@ export async function verifyReleaseIntegrity({ log = console.log } = {}) {
   const configModule = await import(pathToFileURL(join(MOBILE_ROOT, 'app.config.js')).href);
   const config = (configModule.default ?? configModule).expo;
   const easJson = JSON.parse(readFileSync(join(MOBILE_ROOT, 'eas.json'), 'utf8'));
+
+  assertStoreMetadataAlignment(
+    config.version,
+    JSON.parse(
+      readFileSync(join(MOBILE_ROOT, 'store-listing', 'LISTING-METADATA-IOS.json'), 'utf8'),
+    ),
+    JSON.parse(
+      readFileSync(join(MOBILE_ROOT, 'store-listing', 'LISTING-METADATA-ANDROID.json'), 'utf8'),
+    ),
+  );
+  log('[release-integrity] store metadata versions and character counts checked');
 
   assertStableIdentifiers(config);
   log('[release-integrity] app identifiers unchanged');

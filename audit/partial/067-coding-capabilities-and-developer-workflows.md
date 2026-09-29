@@ -192,15 +192,12 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 - Done when: The agent starts a development server and keeps it running while it continues working.
 - Wave: 3
-- Already works on: desktop, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | run_command blocks until the command exits or times out; there is no background shell, so a dev server cannot keep running while the agent continues. | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
 
 ## S67.16: Inspect browser behavior.
 
@@ -387,14 +384,13 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 - Done when: The agent opens a pull request for its branch on the code host.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
-| vscode | partial | Same local runtime: no pull-request tool, only gh through the shell tool. | handler |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/cli/src/tui/tui_app.rs:4747-4749`
 

@@ -54,6 +54,72 @@ fn normalize_rule(prefix: &str) -> Option<String> {
 
 pub const DOMAIN_RULE_PREFIX: &str = "domain:";
 
+const OPEN_ENDED_PROGRAMS: &[&str] = &[
+    "bash",
+    "sh",
+    "zsh",
+    "fish",
+    "pwsh",
+    "powershell",
+    "env",
+    "sudo",
+    "xargs",
+    "python",
+    "python3",
+    "node",
+    "npx",
+    "npm exec",
+    "pnpm dlx",
+    "bun",
+    "bunx",
+    "bun x",
+    "bun run",
+    "uv run",
+    "deno",
+    "deno run",
+    "deno eval",
+    "ruby",
+    "perl",
+    "php",
+    "bash -c",
+    "sh -c",
+    "zsh -c",
+    "fish -c",
+    "pwsh -c",
+    "pwsh -command",
+    "powershell -c",
+    "powershell -command",
+    "python -c",
+    "python -m",
+    "python3 -c",
+    "python3 -m",
+    "node -e",
+    "node -p",
+    "node --eval",
+    "ruby -e",
+    "perl -e",
+    "php -r",
+];
+
+pub fn open_ended_allow_error(rule: &str) -> Option<String> {
+    let mut tokens: Vec<&str> = rule.split_whitespace().collect();
+    let program = tokens.first().copied()?;
+    let base = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program);
+    tokens[0] = base;
+    let named = tokens.join(" ");
+    OPEN_ENDED_PROGRAMS
+        .contains(&named.to_ascii_lowercase().as_str())
+        .then(|| {
+            format!(
+                "An allow rule for `{named}` alone would run any script or command without \
+                 asking. Name the full command instead."
+            )
+        })
+}
+
 fn normalize_domain(text: &str) -> String {
     text.trim().trim_end_matches('.').to_ascii_lowercase()
 }
@@ -87,6 +153,28 @@ pub fn domain_pattern_matches(pattern: &str, host: &str) -> bool {
         }
         None => labels_match(&pattern.split('.').collect::<Vec<_>>(), &host_labels),
     }
+}
+
+pub fn website_allow_error(pattern: &str) -> Option<String> {
+    let pattern = normalize_domain(pattern);
+    let host = pattern.strip_prefix("*.").unwrap_or(&pattern);
+    let literal = host.trim_matches(|c| c == '[' || c == ']');
+    if host.is_empty() || host.contains('*') {
+        return Some(
+            "A site allow rule names a host such as example.com or *.example.com".to_string(),
+        );
+    }
+    if literal.parse::<std::net::IpAddr>().is_ok()
+        || host.parse::<u32>().is_ok()
+        || crate::safety::network_target::is_internal_host(host)
+        || host == "metadata.google"
+    {
+        return Some(format!(
+            "{host} is an address on this computer, its private network or a cloud metadata \
+             service, so it cannot be allowed ahead of time. Approve each fetch when asked."
+        ));
+    }
+    None
 }
 
 pub fn url_blocked_by_domain_rule(url: &str) -> Option<String> {
@@ -336,6 +424,9 @@ impl PermissionStore {
         }
 
         for allowed in self.always_allow.iter().chain(self.session_allow.iter()) {
+            if open_ended_allow_error(allowed).is_some() {
+                continue;
+            }
             if token_prefix_matches(allowed, &candidate_tokens) {
                 return Some(true);
             }
@@ -367,7 +458,13 @@ impl PermissionStore {
             return None;
         }
 
-        self.check(command_program).or_else(|| self.check(base_cmd))
+        if let Some(decision) = self.check(command_program) {
+            return Some(decision);
+        }
+        match self.check(base_cmd) {
+            Some(true) if base_cmd != command_program => None,
+            decision => decision,
+        }
     }
 
     /// Like [`PermissionStore::check_command`], except that an allow saved for
@@ -438,7 +535,8 @@ impl PermissionStore {
             .iter()
             .chain(self.session_allow.iter())
             .filter_map(|rule| rule.strip_prefix(DOMAIN_RULE_PREFIX))
-            .any(|pattern| !pattern.contains('*') && normalize_domain(pattern) == host)
+            .filter(|pattern| website_allow_error(pattern).is_none())
+            .any(|pattern| domain_pattern_matches(pattern, &host))
     }
 
     /// Check a path-scoped file mutation rule. File rules use exact keys so
@@ -923,11 +1021,37 @@ mod tests {
 
         assert_eq!(store.check_command("git status"), Some(true));
         assert_eq!(store.check_command("git status && curl evil.test"), None);
-        assert_eq!(store.check_command("/usr/bin/git status"), Some(true));
         assert_eq!(
             store.check_command("/usr/bin/git status; curl evil.test"),
             None
         );
+    }
+
+    #[test]
+    fn a_bare_allow_does_not_cover_a_program_given_by_path() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git");
+
+        assert_eq!(store.check_command("git status"), Some(true));
+        for command in [
+            "./git status",
+            "/tmp/evil/git status",
+            "/usr/bin/git status",
+        ] {
+            assert_eq!(store.check_command(command), None, "{command}");
+        }
+
+        store.allow_always("/usr/bin/git");
+        assert_eq!(store.check_command("/usr/bin/git status"), Some(true));
+    }
+
+    #[test]
+    fn a_bare_deny_still_covers_a_program_given_by_path() {
+        let mut store = PermissionStore::default();
+        store.deny_always("rm");
+
+        assert_eq!(store.check_command("/bin/rm -rf build"), Some(false));
+        assert_eq!(store.check_command("./rm -rf build"), Some(false));
     }
 
     #[test]
@@ -1135,5 +1259,97 @@ mod tests {
         assert!(store.ask_list.is_empty());
         assert!(store.workspace_rules.is_empty());
         assert!(store.recently_denied.is_empty());
+    }
+
+    #[test]
+    fn one_word_allows_for_shells_and_interpreters_are_refused() {
+        for rule in [
+            "bash",
+            "sh",
+            "zsh",
+            "env",
+            "python",
+            "python3",
+            "node",
+            "npx",
+            "npm exec",
+            "pnpm  dlx",
+            "pwsh",
+            "fish",
+            "bun",
+            "php",
+            "sudo",
+            "xargs",
+            "uv run",
+            "python3 -m",
+            "bash -c",
+            "/usr/bin/python3 -c",
+            "pwsh -Command",
+            "bunx",
+            "deno",
+            "ruby",
+            "perl",
+            "/bin/bash",
+        ] {
+            assert!(open_ended_allow_error(rule).is_some(), "{rule}");
+        }
+        for rule in [
+            "git",
+            "npm test",
+            "python3 scripts/build.py",
+            "node --version",
+            "",
+        ] {
+            assert!(open_ended_allow_error(rule).is_none(), "{rule}");
+        }
+    }
+
+    #[test]
+    fn website_allows_refuse_addresses_and_internal_hosts() {
+        for pattern in [
+            "169.254.169.254",
+            "127.0.0.1",
+            "10.0.0.5",
+            "[::1]",
+            "::1",
+            "2130706433",
+            "localhost",
+            "dev.localhost",
+            "*.localhost",
+            "metadata.google.internal",
+            "*",
+            "*.*.example.com",
+            "",
+        ] {
+            assert!(website_allow_error(pattern).is_some(), "{pattern:?}");
+        }
+        for pattern in ["example.com", "*.example.com", "intranet.corp.example"] {
+            assert!(website_allow_error(pattern).is_none(), "{pattern}");
+        }
+    }
+
+    #[test]
+    fn saved_site_allows_skip_addresses_and_honour_wildcards() {
+        let mut store = PermissionStore::default();
+        store.allow_always("domain:169.254.169.254");
+        store.allow_always("domain:*");
+        store.allow_always("domain:*.corp.example");
+        assert!(!store.names_domain("169.254.169.254"));
+        assert!(!store.names_domain("localhost"));
+        assert!(store.names_domain("wiki.corp.example"));
+        assert!(!store.names_domain("corp.example"));
+        assert!(!store.names_domain("wiki.other.example"));
+    }
+
+    #[test]
+    fn a_saved_open_ended_allow_approves_nothing() {
+        let mut store = PermissionStore::default();
+        store.always_allow.insert("bash".to_string());
+        store.always_allow.insert("python3 -m".to_string());
+        store.always_allow.insert("python3 -m pytest".to_string());
+        assert_eq!(store.check_command("bash -c 'curl evil.test'"), None);
+        assert_eq!(store.check_command("/bin/bash deploy.sh"), None);
+        assert_eq!(store.check_command("python3 -m http.server"), None);
+        assert_eq!(store.check_command("python3 -m pytest -q"), Some(true));
     }
 }

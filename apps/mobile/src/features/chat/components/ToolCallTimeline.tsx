@@ -23,6 +23,7 @@ import {
   CloudToolApprovalControls,
   cloudToolApprovalPreview,
   parseToolArguments,
+  type AllowCloudToolForChat,
   type ResolveCloudToolApproval,
 } from './CloudToolApprovalControls';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
@@ -160,6 +161,7 @@ function ToolCallTimelineRow({
   isLast,
   onOpenFullScreen,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired,
   onResendApproval,
 }: {
@@ -168,6 +170,7 @@ function ToolCallTimelineRow({
   isLast: boolean;
   onOpenFullScreen: (tool: ToolCall) => void;
   onResolveApproval?: ResolveCloudToolApproval;
+  onAllowApprovalForChat?: AllowCloudToolForChat;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {
@@ -340,7 +343,9 @@ function ToolCallTimelineRow({
                   args={approvalArgs}
                   riskLevel={tool.approvalRiskLevel}
                   decision={tool.approvalDecision}
+                  guidance={tool.approvalGuidance}
                   onResolve={onResolveApproval}
+                  onAllowForChat={onAllowApprovalForChat}
                 />
               </>
             )}
@@ -644,6 +649,7 @@ export function ToolCallTimeline({
   toolCalls,
   summary,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired,
   onResendApproval,
 }: {
@@ -651,6 +657,7 @@ export function ToolCallTimeline({
   toolCalls: ToolCall[];
   summary: string;
   onResolveApproval?: ResolveCloudToolApproval;
+  onAllowApprovalForChat?: AllowCloudToolForChat;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {
@@ -710,6 +717,7 @@ export function ToolCallTimeline({
               isLast={i === toolCalls.length - 1 && !allDone}
               onOpenFullScreen={setFullScreenTool}
               onResolveApproval={onResolveApproval}
+              onAllowApprovalForChat={onAllowApprovalForChat}
               approvalExpired={approvalExpired}
               onResendApproval={onResendApproval}
             />

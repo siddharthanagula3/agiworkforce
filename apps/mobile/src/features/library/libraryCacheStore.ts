@@ -7,6 +7,7 @@ interface LibraryCacheState {
   ownerId: string | null;
   assets: LibraryAsset[];
   rememberLibraryPage: (ownerId: string, assets: LibraryAsset[]) => void;
+  removeLibraryAsset: (ownerId: string, id: string) => void;
   readLibraryPage: (ownerId: string | null) => LibraryAsset[] | null;
   clearLibraryCache: () => void;
 }
@@ -18,6 +19,13 @@ export const useLibraryCacheStore = create<LibraryCacheState>()(
       assets: [],
 
       rememberLibraryPage: (ownerId, assets) => set({ ownerId, assets }),
+
+      removeLibraryAsset: (ownerId, id) =>
+        set((state) =>
+          state.ownerId === ownerId
+            ? { assets: state.assets.filter((asset) => asset.id !== id) }
+            : state,
+        ),
 
       readLibraryPage: (ownerId) => {
         const state = get();

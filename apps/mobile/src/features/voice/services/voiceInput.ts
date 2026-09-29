@@ -1,11 +1,10 @@
 import { Platform } from 'react-native';
-import * as Localization from 'expo-localization';
 import {
   ExpoSpeechRecognitionModule,
   type ExpoSpeechRecognitionErrorCode,
 } from 'expo-speech-recognition';
 import { audioSessionCategoryFor, type AudioRoute } from './audioRoute';
-import { activeAudioRoute } from './speechSettings';
+import { activeAudioRoute, deviceSpeechLocale } from './speechSettings';
 
 export type VoiceCaptureErrorCode =
   | 'mic-permission-denied'
@@ -134,22 +133,13 @@ export function isCapturing(): boolean {
   return _active;
 }
 
-function deviceLocaleTag(): string {
-  try {
-    const locales = Localization.getLocales();
-    return locales[0]?.languageTag ?? 'en-US';
-  } catch {
-    return 'en-US';
-  }
-}
-
 function baseLanguage(tag: string): string {
   return tag.toLowerCase().replace('_', '-').split('-')[0] ?? '';
 }
 
 /** A setting like "fr" keeps the device's region when the two agree. */
 export function resolveRecognitionLocale(preferred?: string): string {
-  const deviceTag = deviceLocaleTag();
+  const deviceTag = deviceSpeechLocale();
   if (!preferred) return deviceTag;
   if (baseLanguage(deviceTag) === baseLanguage(preferred)) return deviceTag;
   return preferred;

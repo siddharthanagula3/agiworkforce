@@ -1,5 +1,5 @@
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
+import { hasAcceptedAnyTerms, hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
 import { StaleSessionRecovery } from './StaleSessionRecovery';
 import {
@@ -11,6 +11,7 @@ import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
+import { TermsReviewSignOut } from './TermsReviewSignOut';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -65,6 +66,7 @@ export default async function LoginCompletePage({
   if (!mustAccept) {
     return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
   }
+  const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
 
   return (
     <AuthLayout>
@@ -73,9 +75,14 @@ export default async function LoginCompletePage({
         detail={
           <p className="text-center">Review and accept our terms to continue to your account.</p>
         }
+        footer={<TermsReviewSignOut />}
       >
         <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
-          <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />
+          <RecordTermsAcceptance
+            redirectTo={redirectTo}
+            surface="web-login"
+            confirmAge={firstAcceptance}
+          />
         </TermsGate>
       </AuthStepFrame>
     </AuthLayout>

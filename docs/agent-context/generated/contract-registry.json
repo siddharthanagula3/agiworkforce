@@ -83,6 +83,7 @@
     "on-device-models",
     "pairing",
     "paywall-vocabulary",
+    "phone-steps",
     "places-search",
     "plugins",
     "product-analytics",
@@ -91,6 +92,7 @@
     "product-routes",
     "project-file-citations",
     "project-instructions",
+    "project-templates",
     "prompt-cache-plan",
     "prompt-enhancement",
     "provider",
@@ -144,6 +146,7 @@
     "workspace-analytics"
   ],
   "cloudContractsModules": [
+    "account-deletion",
     "account-security",
     "agent-events",
     "artifact-index",
@@ -168,6 +171,7 @@
     "embeddings",
     "file-digest",
     "finance",
+    "free-quota",
     "generated-files",
     "header-names",
     "health-space",
@@ -198,9 +202,10 @@
     "slack",
     "support",
     "sync",
+    "terms-acceptance",
     "tool-approval-resume",
     "tool-events",
     "triggers"
   ],
-  "generatedProtocolTypeCount": 415
+  "generatedProtocolTypeCount": 422
 }
