@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 interface ItemRow {
   id: string;
   user_id: string;
-  plaid_item_id: string;
+  plaid_item_id: string | null;
   access_token_enc: string;
   institution_name: string | null;
   excluded_account_ids: string[] | null;
@@ -70,7 +70,8 @@ vi.mock('@/lib/server/neon-db', () => ({
       const [first, second, third] = params as [string, string, unknown];
       if (/insert into public\.bank_account_items/.test(sql)) {
         if (state.failInsert) throw new Error('insert failed');
-        const existing = state.rows.find((row) => row.plaid_item_id === second);
+        const existing =
+          second === null ? undefined : state.rows.find((row) => row.plaid_item_id === second);
         if (existing) {
           existing.access_token_enc = third as string;
           return [{ id: existing.id }];
@@ -173,6 +174,14 @@ describe('removing one bank', () => {
     expect(state.revokeGrant).not.toHaveBeenCalled();
   });
 
+  it('keeps the link when Plaid does not accept the token, since the item may still be live', async () => {
+    seed(ITEM_A, 'token-a');
+    state.plaid['/item/remove'] = () => plaidError('INVALID_ACCESS_TOKEN');
+
+    await expect(removeBankItem(USER, ITEM_A)).rejects.toThrow('Try again in a few minutes');
+    expect(state.rows.map((row) => row.id)).toEqual([ITEM_A]);
+  });
+
   it('drops the link when Plaid no longer knows the item', async () => {
     seed(ITEM_A, 'token-a');
     state.grantToken = 'token-a';
@@ -242,13 +251,26 @@ describe('linking another bank', () => {
     });
   });
 
-  it('records the new bank and moves on when the older link is dead at Plaid', async () => {
+  it('records the new bank and moves on when the older link is gone at Plaid', async () => {
     state.grantToken = 'token-dead';
-    state.plaid['/item/get'] = () => plaidError('INVALID_ACCESS_TOKEN');
+    state.plaid['/item/get'] = () => plaidError('ITEM_NOT_FOUND');
 
     await connectBankAccounts(USER, 'public-token', 'New Bank');
 
     expect(state.rows.map((row) => row.plaid_item_id)).toEqual(['item-new']);
+    expect(state.grantToken).toBe('token-new');
+  });
+
+  it('keeps an older link Plaid did not accept, next to the new bank, so it can be removed', async () => {
+    state.grantToken = 'token-other-env';
+    state.plaid['/item/get'] = () => plaidError('INVALID_ACCESS_TOKEN');
+
+    await connectBankAccounts(USER, 'public-token', 'New Bank');
+
+    expect(state.rows.map((row) => [row.plaid_item_id, row.access_token_enc])).toEqual([
+      [null, 'enc:token-other-env'],
+      ['item-new', 'enc:token-new'],
+    ]);
     expect(state.grantToken).toBe('token-new');
   });
 

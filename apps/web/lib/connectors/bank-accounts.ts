@@ -45,7 +45,8 @@ const PLAID_TOKEN_TYPE = 'Bearer';
 const PLAID_REQUEST_TIMEOUT_MS = 20_000;
 const PLAID_PRODUCT_NOT_READY = 'PRODUCT_NOT_READY';
 const PLAID_ITEM_LOGIN_REQUIRED = 'ITEM_LOGIN_REQUIRED';
-const PLAID_GONE_CODES: ReadonlySet<string> = new Set(['ITEM_NOT_FOUND', 'INVALID_ACCESS_TOKEN']);
+const PLAID_ITEM_NOT_FOUND = 'ITEM_NOT_FOUND';
+const PLAID_INVALID_ACCESS_TOKEN = 'INVALID_ACCESS_TOKEN';
 const REMOVE_FAILED = 'The bank could not be removed right now. Try again in a few minutes.';
 const TRANSACTIONS_DEFAULT_COUNT = 100;
 const TRANSACTIONS_MAX_COUNT = 500;
@@ -262,7 +263,7 @@ async function readBankAccountsToken(userId: string): Promise<string | null> {
 }
 
 function isGoneAtPlaid(error: unknown): boolean {
-  return error instanceof PlaidApiError && PLAID_GONE_CODES.has(error.plaidCode);
+  return error instanceof PlaidApiError && error.plaidCode === PLAID_ITEM_NOT_FOUND;
 }
 
 async function removePlaidItem(accessToken: string): Promise<void> {
@@ -329,7 +330,7 @@ async function readBankItems(userId: string): Promise<BankItem[]> {
 
 async function recordBankItem(
   userId: string,
-  item: { plaidItemId: string; accessToken: string; institutionName: string | null },
+  item: { plaidItemId: string | null; accessToken: string; institutionName: string | null },
 ): Promise<string> {
   const [recorded] = await getNeonDb().query<{ id: string }>(
     `insert into public.bank_account_items (user_id, plaid_item_id, access_token_enc, institution_name)
@@ -372,8 +373,17 @@ async function carryOverLegacyItem(userId: string, newAccessToken: string): Prom
   try {
     await adoptLegacyItem(userId, legacy);
   } catch (error) {
-    if (!isGoneAtPlaid(error)) throw error;
-    logger.info('[bank-accounts] the earlier bank link is gone at Plaid; nothing to carry over');
+    if (isGoneAtPlaid(error)) {
+      logger.info('[bank-accounts] the earlier bank link is gone at Plaid; nothing to carry over');
+      return;
+    }
+    if (!(error instanceof PlaidApiError && error.plaidCode === PLAID_INVALID_ACCESS_TOKEN)) {
+      throw error;
+    }
+    logger.warn(
+      '[bank-accounts] Plaid did not accept the earlier bank link; it is kept so it can be removed',
+    );
+    await recordBankItem(userId, { plaidItemId: null, accessToken: legacy, institutionName: null });
   }
 }
 
