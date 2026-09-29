@@ -327,6 +327,10 @@ export type WebviewToExtMessage =
       type: 'messageAction';
       payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
     }
+  | {
+      type: 'planDecision';
+      payload: { decision: 'approve' } | { decision: 'reject'; feedback: string };
+    }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
@@ -1226,6 +1230,11 @@ export class ChatStateManager {
 
       case 'messageAction': {
         await this._messageAction(msg.payload);
+        break;
+      }
+
+      case 'planDecision': {
+        await this._decidePlan(msg.payload);
         break;
       }
 
@@ -3687,6 +3696,44 @@ export class ChatStateManager {
       sentMessage.text,
       typed,
     );
+  }
+
+  private async _decidePlan(
+    decision: { decision: 'approve' } | { decision: 'reject'; feedback: string },
+  ): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (this.turnInFlight()) {
+      void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
+      return;
+    }
+    if (!(await thread.runtime.offers('planDecisions'))) {
+      void vscode.window.showWarningMessage(t('plan.needsUpdate'));
+      return;
+    }
+    try {
+      if (decision.decision === 'approve') {
+        await thread.runtime.decidePlan(thread.id, 'approve');
+      } else {
+        await thread.runtime.decidePlan(thread.id, 'reject', decision.feedback);
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    const text =
+      decision.decision === 'approve'
+        ? t('plan.approvedMessage')
+        : t('plan.revisedMessage', { feedback: decision.feedback });
+    this._post({ type: 'addUserMessage', payload: { text } });
+    await this._handleSendMessage(text);
   }
 
   private async _messageAction(action: {
