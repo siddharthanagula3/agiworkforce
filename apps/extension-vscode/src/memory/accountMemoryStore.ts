@@ -331,7 +331,8 @@ export class AccountMemoryStore {
   }
 
   private async discardAnotherWorkspacesCache(scope: MemoryScope): Promise<void> {
-    if (this.scope()?.organizationId !== scope.organizationId) {
+    const recorded = this.scope();
+    if (recorded !== undefined && recorded.organizationId !== scope.organizationId) {
       await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
       await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);

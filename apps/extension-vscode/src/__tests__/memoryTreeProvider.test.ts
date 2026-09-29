@@ -13,6 +13,7 @@ function makeStore(initial: MemoryFact[] = [], state: AccountMemoryState['status
   return {
     store: {
       cachedFacts: () => facts,
+      scope: () => undefined,
       onDidChange: (listener: () => void) => {
         listeners.push(listener);
         return new vscode.Disposable(() => undefined);
