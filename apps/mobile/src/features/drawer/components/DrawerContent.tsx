@@ -10,6 +10,7 @@ import {
   Bell,
   CalendarClock,
   ChevronRight,
+  Code2,
   FolderOpen,
   HelpCircle,
   BarChart3,
@@ -28,6 +29,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -65,6 +67,7 @@ type RoutePath =
   | '/(app)/reports'
   | '/(app)/schedules'
   | '/(app)/companion'
+  | '/(app)/cloud-code'
   | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
@@ -76,7 +79,16 @@ type RoutePath =
   | ShellShortcutRoute;
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
+  key:
+    | 'chats'
+    | 'projects'
+    | 'library'
+    | 'reports'
+    | 'skills'
+    | 'schedules'
+    | 'code'
+    | 'remote'
+    | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -131,6 +143,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Schedules',
     icon: CalendarClock,
     route: '/(app)/schedules',
+    cloud: true,
+  },
+  {
+    key: 'code',
+    label: CLOUD_CODE_SCREEN_TITLE,
+    icon: Code2,
+    route: '/(app)/cloud-code',
     cloud: true,
   },
   {
@@ -396,6 +415,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
+      if (key === 'code') return p.includes('/cloud-code');
       if (key === 'remote') return p.includes('/companion');
       if (key === 'tasks') return p.includes('/tasks');
       return false;
