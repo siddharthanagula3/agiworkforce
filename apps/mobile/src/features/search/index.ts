@@ -5,3 +5,5 @@ export type {
   SearchableMobileFile,
   SearchableMobileProject,
 } from './mobileGlobalSearch';
+export { MOBILE_DESTINATIONS, searchMobileDestinations } from './mobileDestinations';
+export type { MobileDestination } from './mobileDestinations';

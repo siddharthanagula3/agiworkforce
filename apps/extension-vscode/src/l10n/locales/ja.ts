@@ -394,6 +394,15 @@ const ja = {
   'webview.resendMessage': '再送信',
   'webview.resendMessageLabel': 'このメッセージを再送信',
   'webview.branchFromMessage': '分岐',
+  'plan.needsUpdate':
+    'AGI Workforce: VS Code からプランを承認または修正するには AGI CLI を更新してください。',
+  'plan.approvedMessage': 'このプランで進めてください。',
+  'plan.revisedMessage': 'プランを修正してください: {feedback}',
+  'webview.approvePlan': 'プランを承認',
+  'webview.revisePlan': '修正',
+  'webview.revisePlanPlaceholder': 'プランのどこを変更しますか？',
+  'webview.sendRevision': '送信',
+  'webview.cancelRevision': 'キャンセル',
   'webview.branchFromAnswer': 'ここから分岐',
   'webview.branchFromAnswerLabel': 'この回答までの会話を引き継いで新しいセッションを開始します',
   'webview.branchFromMessageLabel':

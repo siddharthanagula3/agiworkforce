@@ -128,11 +128,8 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile imports memory from an exported file only; no guided migration of other data or settings. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 ## S88.16: Privacy-rights request portal.
 

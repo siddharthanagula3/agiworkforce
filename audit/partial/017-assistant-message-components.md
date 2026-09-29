@@ -192,12 +192,12 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Swipe-to-quote quotes the whole message into the composer; add selecting a span of the answer to revise or ask about. | ui |
+| mobile | partial | post-codex/w-chat-s17.26-mobile-quote-selection.patch (plus -test.patch): Select text now tracks the selected span and offers 'Quote in reply', which quotes only that span through the existing quoted-reply bar. The whole-message swipe quote is unchanged. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageList.tsx:91-91`, `apps/mobile/app/(app)/chat/[id].tsx:1454-1455`, `apps/mobile/app/(app)/chat/[id].tsx:1449-1449`
+Code: `apps/mobile/src/features/chat/components/MessageList.tsx:117-117`
 
 ## S17.27: Branch from answer.
 

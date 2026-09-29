@@ -349,6 +349,7 @@ fn capabilities() -> AppServerCapabilities {
         saved_permissions: false,
         mcp_inspect: false,
         plugin_updates: false,
+        plan_decisions: false,
     }
 }
 

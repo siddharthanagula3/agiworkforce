@@ -22,19 +22,19 @@ use agiworkforce_protocol::developer_session::{
     McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
     McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
     ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    PlanDecideParams, PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginSetEnabledParams, PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
+    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
+    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -89,6 +89,7 @@ const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
 const MAX_TOTAL_IMAGE_INPUT_BYTES: usize = 20_000_000;
 const MAX_IMAGE_DATA_URL_HEADER_BYTES: usize = 256;
 const MAX_IMAGE_MIME_BYTES: usize = 127;
+const MAX_PLAN_FEEDBACK_CHARS: usize = 4_000;
 const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
@@ -439,6 +440,7 @@ impl CliDeveloperSessionHost {
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
             plugin_updates: true,
+            plan_decisions: true,
         }
     }
 
@@ -3540,6 +3542,81 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .map_err(internal_error)?
     }
 
+    async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Wait for the running turn to finish before deciding on its plan",
+            ));
+        }
+        let feedback = match params.decision {
+            PlanDecision::Approve => None,
+            PlanDecision::Reject => {
+                let feedback = params
+                    .feedback
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|feedback| !feedback.is_empty())
+                    .ok_or_else(|| {
+                        DeveloperSessionHostError::invalid_request(
+                            "Rejecting a plan needs feedback for the next attempt",
+                        )
+                    })?;
+                if feedback.chars().count() > MAX_PLAN_FEEDBACK_CHARS {
+                    return Err(DeveloperSessionHostError::invalid_request(format!(
+                        "Plan feedback is limited to {MAX_PLAN_FEEDBACK_CHARS} characters"
+                    )));
+                }
+                Some(feedback.to_string())
+            }
+        };
+        let session = self.load_agent(&params.thread_id).await?;
+        {
+            let mut agent = session.lock().await;
+            if !matches!(
+                agent.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread is not in plan mode",
+                ));
+            }
+            if agent.current_plan.is_none() {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread has no plan to decide on yet",
+                ));
+            }
+            match feedback {
+                None => {
+                    agent.plan_approved = true;
+                }
+                Some(feedback) => {
+                    agent.plan_rejection_feedback = Some(feedback);
+                    agent.current_plan = None;
+                    agent.current_plan_path = None;
+                    agent.plan_approved = false;
+                }
+            }
+        }
+        if params.decision == PlanDecision::Reject {
+            self.emit(
+                agiworkforce_protocol::developer_session::method::THREAD_PLAN,
+                serde_json::to_value(ThreadPlanNotification {
+                    thread_id: params.thread_id,
+                    plan: Some(Vec::new()),
+                    todos: None,
+                })
+                .map_err(internal_error)?,
+            );
+        }
+        Ok(())
+    }
+
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         let mut worktrees = Vec::new();
@@ -4500,8 +4577,11 @@ fn apply_agent_controls(
     effort: Option<DeveloperReasoningEffort>,
 ) {
     if let Some(mode) = mode {
+        let stays_in_plan = agent.plan_mode && matches!(mode, DeveloperAgentMode::Plan);
         agent.plan_mode = matches!(mode, DeveloperAgentMode::Plan);
-        agent.plan_approved = false;
+        if !stays_in_plan {
+            agent.plan_approved = false;
+        }
         agent.permission_mode = match mode {
             DeveloperAgentMode::Ask => crate::cli_options::PermissionMode::Default,
             DeveloperAgentMode::Auto => crate::cli_options::PermissionMode::AcceptEdits,
