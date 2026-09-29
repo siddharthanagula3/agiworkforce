@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A signed-in user can browse a catalogue of connectors they could add, with each entry's name, publisher and state.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.02: Connector search.
 
@@ -39,18 +36,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S55.04: Connector detail page.
-
-- Done when: Selecting a connector opens a detail page with its description, publisher, sign-in requirement, tools and links.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
-
 ## S55.05: Supported-operation list.
 
 - Done when: The connector page lists the operations/tools the connector exposes (before or after connecting).
@@ -71,18 +56,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-
-## S55.09: API-key authorization.
-
-- Done when: A connector that needs an API key offers a form to enter it, stores it encrypted, and connects.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.10: Service-account authorization.
 
@@ -125,18 +98,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S55.18: Connection health.
-
-- Done when: Each connector shows whether it is healthy, needs reauthorization or is not responding.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.20: Reconnect/reauthorize.
 
@@ -181,18 +142,6 @@ Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S55.27: Write-action settings.
-
-- Done when: The user controls whether a connector's write actions run automatically, need approval, or are blocked.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.28: Data-retention explanation.
 

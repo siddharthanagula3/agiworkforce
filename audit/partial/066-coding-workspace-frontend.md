@@ -221,7 +221,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only in-flight tool lines while a turn runs; finished commands and their output are not kept in view. | ui |
+| mobile | partial | Only in-flight tool lines and test runs are shown; finished commands with output and exit status are not kept in view. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`
 
@@ -344,7 +344,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Usage lives on the Settings > Cloud usage screen; the AGI Code session view shows no usage or cost. | ui |
+| mobile | partial | The AGI Code session view shows no usage or cost; usage lives only on Settings > Cloud usage. | ui |
 
 Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 

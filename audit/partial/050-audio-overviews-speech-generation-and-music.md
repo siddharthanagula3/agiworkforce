@@ -23,33 +23,27 @@ nothing is left.
 
 - Done when: The user can choose the voice and language used for spoken playback.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S50.03: Speaking-rate control where supported.
 
 - Done when: Where supported, the user can set the speaking rate of playback.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S50.04: Download generated speech.
 
