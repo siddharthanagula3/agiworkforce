@@ -4039,6 +4039,73 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 terminal_text::sanitize_terminal_text(&row.target)
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
+            if !row.enabled {
+                println!("\nTurn it on with `agi mcp enable {name}` to see what it offers.");
+                return Ok(());
+            }
+            let config: crate::mcp::McpServerConfig = registry_file
+                .entry(name)
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .with_context(|| format!("registry entry for '{name}' is not a server config"))?
+                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let connected = tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                crate::mcp::McpConnection::connect(name, &config),
+            )
+            .await;
+            let mut connection = match connected {
+                Ok(Ok(connection)) => connection,
+                Ok(Err(error)) => {
+                    println!("{:<10} could not connect: {error:#}", "connection");
+                    return Ok(());
+                }
+                Err(_) => {
+                    println!("{:<10} did not answer within 20 seconds", "connection");
+                    return Ok(());
+                }
+            };
+            let negotiated = connection.negotiated().clone();
+            if let Some(info) = negotiated.server_info.as_ref() {
+                println!(
+                    "{:<10} {} {}",
+                    "server",
+                    terminal_text::sanitize_terminal_text(&info.name),
+                    terminal_text::sanitize_terminal_text(&info.version)
+                );
+            }
+            if let Some(instructions) = negotiated
+                .instructions
+                .as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+            {
+                println!(
+                    "{:<10} {}",
+                    "about",
+                    terminal_text::sanitize_terminal_text(
+                        instructions.lines().next().unwrap_or(instructions)
+                    )
+                );
+            }
+            match connection.list_tools().await {
+                Ok(tools) if tools.is_empty() => println!("\nIt offers no tools."),
+                Ok(tools) => {
+                    println!("\nTools ({}):", tools.len());
+                    for tool in tools {
+                        println!(
+                            "  {}  {}",
+                            terminal_text::sanitize_terminal_text(&tool.original_name),
+                            terminal_text::sanitize_terminal_text(
+                                tool.description.lines().next().unwrap_or_default()
+                            )
+                        );
+                    }
+                }
+                Err(error) => println!("\nIts tools could not be listed: {error:#}"),
+            }
+            let _ = connection.shutdown().await;
             Ok(())
         }
         McpSubcommand::Login { name } => {
