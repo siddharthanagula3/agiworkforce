@@ -31,6 +31,7 @@ import { timePhase } from '@/lib/observability/phase-timer';
 import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { CHAT_TURN_PHASE } from './turn-phases';
+import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
@@ -250,6 +251,31 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     withRateLimit(request, 'llm-completion', `user:${userId}`),
   );
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
+
+  const termsAccepted = await hasAcceptedCurrentTerms(userId).catch((error: unknown) => {
+    logger.error({ error, userId }, '[auth-gate] terms acceptance unreadable; refusing the turn');
+    return false;
+  });
+  if (!termsAccepted) {
+    const acceptanceUrl = new URL('/login/complete', new URL(request.url).origin);
+    acceptanceUrl.searchParams.set('redirectTo', '/chat');
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Accept the current Terms of Service to keep using AGI Workforce, then try again.',
+            type: 'invalid_request_error',
+            code: 'terms_acceptance_required',
+          },
+          terms_version: CURRENT_TERMS_VERSION,
+          acceptance_url: acceptanceUrl.toString(),
+        },
+        { status: 403 },
+      ),
+    };
+  }
 
   if (apiKeyId) {
     const spendRefusal = await developerProjectSpendRefusal({ userId, apiKeyId });
