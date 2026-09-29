@@ -350,6 +350,7 @@ fn capabilities() -> AppServerCapabilities {
         mcp_inspect: false,
         plugin_updates: false,
         plan_decisions: false,
+        permission_rules: false,
     }
 }
 

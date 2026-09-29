@@ -34,6 +34,7 @@ export const CLI_CAPABILITY_METHODS = {
   accountToken: 'accountToken',
   savedPermissions: 'listSavedPermissions',
   savedPermissionsRemove: 'removeSavedPermission',
+  savedPermissionsAdd: 'addSavedPermission',
   mcpInspect: 'inspectMcpServer',
   pluginsUpdate: 'updatePlugin',
   memoryAdd: 'addMemory',
@@ -61,6 +62,7 @@ export type CliFamily = keyof Pick<
   | 'pluginUpdates'
   | 'memory'
   | 'worktrees'
+  | 'permissionRules'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -93,6 +95,7 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   accountToken: 'account',
   savedPermissions: 'savedPermissions',
   savedPermissionsRemove: 'savedPermissions',
+  savedPermissionsAdd: 'permissionRules',
   mcpInspect: 'mcpInspect',
   pluginsUpdate: 'pluginUpdates',
   memoryAdd: 'memory',
@@ -117,6 +120,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   pluginUpdates: 'updating plugins',
   memory: 'repository memory',
   worktrees: 'session worktrees',
+  permissionRules: 'adding approval rules',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

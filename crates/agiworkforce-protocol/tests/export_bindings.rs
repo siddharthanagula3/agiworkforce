@@ -198,6 +198,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session permissions remove params graph");
     agiworkforce_protocol::developer_session::PlanDecideParams::export_all_to(dir)
         .expect("export developer-session plan decide params graph");
+    agiworkforce_protocol::developer_session::PermissionsAddParams::export_all_to(dir)
+        .expect("export developer-session permissions add params graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so

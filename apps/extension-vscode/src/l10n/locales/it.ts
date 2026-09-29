@@ -596,6 +596,21 @@ const it = {
     'AGI chiederà di nuovo la prossima volta che vorrà fare questo: {label}',
   'savedApprovals.removeDenied':
     'AGI potrà chiedere di nuovo di fare questo invece di essere rifiutato: {label}',
+  'savedApprovals.add': 'Aggiungi una regola',
+  'savedApprovals.addDetail': 'Consenti o nega sempre un comando o un sito web in ogni sessione',
+  'savedApprovals.targetCommand': 'Un comando della shell',
+  'savedApprovals.targetCommandDetail': "Confrontato dall'inizio del comando, ad esempio npm test",
+  'savedApprovals.targetDomain': 'Un sito web',
+  'savedApprovals.targetDomainDetail':
+    "Pagine che l'agente recupera o apre: example.com, *.example.com o *",
+  'savedApprovals.decisionAllow': 'Consenti sempre',
+  'savedApprovals.decisionDeny': 'Nega sempre',
+  'savedApprovals.patternCommand': 'Il comando, o la sua parte iniziale',
+  'savedApprovals.patternDomain': 'Il sito web, ad esempio example.com',
+  'savedApprovals.allowCommandTitle': 'Consentire sempre {pattern}?',
+  'savedApprovals.allowCommandDetail':
+    'AGI esegue qualsiasi comando che inizi così, in ogni sessione, senza chiedere.',
+  'savedApprovals.allowConfirm': 'Consenti sempre',
   'savedApprovals.noun': 'approvazioni salvate',
   'webview.alwaysAllow': 'Consenti sempre',
   'webview.alwaysAllowHint':

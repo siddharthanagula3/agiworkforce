@@ -49,8 +49,6 @@ export type AppServerCapabilities = {
   savedPermissions?: boolean;
   mcpInspect?: boolean;
   pluginUpdates?: boolean;
-  /**
-   * `plan/decide` approves or rejects the plan a plan-mode turn proposed.
-   */
   planDecisions?: boolean;
+  permissionRules?: boolean;
 };

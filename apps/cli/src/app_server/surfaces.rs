@@ -14,11 +14,12 @@ use agiworkforce_protocol::developer_session::{
     McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
     McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
-    PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginScope, PluginSummary, PluginUpdateResponse, SavedPermission, SavedPermissionDecision,
-    SavedPermissionKind, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
-    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    PermissionRuleTarget, PermissionsAddParams, PermissionsListResponse, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse,
+    SavedPermission, SavedPermissionDecision, SavedPermissionKind, SettingsReadResponse,
+    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
+    SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
 
@@ -1073,6 +1074,84 @@ pub fn list_saved_permissions() -> Result<PermissionsListResponse, DeveloperSess
         });
     }
     Ok(PermissionsListResponse { permissions })
+}
+
+const MAX_PERMISSION_PATTERN_CHARS: usize = 1_000;
+
+const COMMAND_RULE_METACHARACTERS: &[char] = &[';', '&', '|', '`', '$', '<', '>', '(', ')', '\\'];
+
+fn domain_rule_pattern(pattern: &str) -> Option<String> {
+    let pattern = pattern.trim().trim_end_matches('.').to_ascii_lowercase();
+    if pattern == "*" {
+        return Some(pattern);
+    }
+    let host = pattern.strip_prefix("*.").unwrap_or(&pattern);
+    let valid_label = |label: &str| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    };
+    (host.len() <= 253 && host.contains('.') && host.split('.').all(valid_label)).then_some(pattern)
+}
+
+pub fn add_saved_permission(
+    params: &PermissionsAddParams,
+) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+    let pattern = params.pattern.trim();
+    if pattern.is_empty() {
+        return Err(invalid("A rule needs a command prefix or a website"));
+    }
+    if pattern.chars().count() > MAX_PERMISSION_PATTERN_CHARS {
+        return Err(invalid(format!(
+            "A rule is limited to {MAX_PERMISSION_PATTERN_CHARS} characters"
+        )));
+    }
+    if pattern.chars().any(char::is_control) {
+        return Err(invalid("A rule must be a single line of text"));
+    }
+    let rule = match params.target {
+        PermissionRuleTarget::Command => {
+            if pattern.starts_with(crate::permissions::DOMAIN_RULE_PREFIX)
+                || pattern.starts_with("file:")
+            {
+                return Err(invalid(
+                    "Add a website as a website rule rather than a command",
+                ));
+            }
+            if params.decision == SavedPermissionDecision::Allow
+                && pattern.contains(COMMAND_RULE_METACHARACTERS)
+            {
+                return Err(invalid(
+                    "An allow rule cannot contain shell operators such as ; | & or $; allow the command on its own",
+                ));
+            }
+            pattern.split_whitespace().collect::<Vec<_>>().join(" ")
+        }
+        PermissionRuleTarget::Domain => {
+            let domain = domain_rule_pattern(
+                pattern
+                    .strip_prefix(crate::permissions::DOMAIN_RULE_PREFIX)
+                    .unwrap_or(pattern),
+            )
+            .ok_or_else(|| invalid("Name a website such as example.com, *.example.com or *"))?;
+            format!("{}{domain}", crate::permissions::DOMAIN_RULE_PREFIX)
+        }
+    };
+    let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
+    match params.decision {
+        SavedPermissionDecision::Allow => {
+            store.always_deny.remove(&rule);
+            store.allow_always(&rule);
+        }
+        SavedPermissionDecision::Deny => {
+            store.always_allow.remove(&rule);
+            store.deny_always(&rule);
+        }
+    }
+    store.save().map_err(internal)?;
+    list_saved_permissions()
 }
 
 pub fn remove_saved_permission(
