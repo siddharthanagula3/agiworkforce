@@ -24,6 +24,13 @@ export async function savePreferenceNamespace<T extends object>(
   await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value });
 }
 
+export async function patchPreferenceNamespace<T extends object>(
+  namespace: string,
+  patch: T,
+): Promise<void> {
+  await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, patch });
+}
+
 export async function fetchAccountSettings(): Promise<Record<string, unknown>> {
   const data = await api.get<PreferenceReadResponse>(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH);
   const settings = data?.settings;
