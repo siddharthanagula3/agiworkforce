@@ -1,4 +1,7 @@
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
+
+const SHARED_LINK_TITLE_MAX_LENGTH = 200;
 
 export interface SharedLink {
   token: string;
@@ -48,7 +51,12 @@ export async function fetchSharedLinks(): Promise<SharedLink[]> {
 }
 
 export async function revokeSharedLink(token: string): Promise<void> {
-  await api.delete(`/api/share/${encodeURIComponent(token)}`);
+  try {
+    await api.delete(`/api/share/${encodeURIComponent(token)}`);
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 404) return;
+    throw error;
+  }
 }
 
 export interface SharedLinkMessage {
@@ -66,8 +74,8 @@ export async function createSharedLink(input: {
   const created = toSharedLink(
     await api.post<unknown>('/api/share', {
       conversation_id: input.conversationId,
-      title: input.title || 'Shared Session',
-      model_id: input.modelId,
+      title: (input.title.trim() || 'Shared Session').slice(0, SHARED_LINK_TITLE_MAX_LENGTH),
+      ...(input.modelId ? { model_id: input.modelId } : {}),
       messages: input.messages.map((message) => ({
         role: message.role,
         content: message.content,

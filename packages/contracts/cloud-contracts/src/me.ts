@@ -13,6 +13,7 @@ export const MePlanSchema = z.object({
   current_period_end: z.number().nullable(),
   cancel_at_period_end: z.boolean().optional(),
   subscription_source: MeSubscriptionSourceSchema.optional(),
+  effective_tier: z.string().optional(),
 });
 
 export const MeFeatureFlagsSchema = z

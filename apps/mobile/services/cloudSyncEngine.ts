@@ -24,6 +24,8 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  SYNC_PROTOCOL_VERSION,
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
   MemorySyncPullResponseSchema,
@@ -89,7 +91,7 @@ const conversationPort: ConversationStorePort = {
     if (!c) return undefined;
     return {
       id: c.id,
-      title: c.title,
+      title: c.title.slice(0, CONVERSATION_TITLE_MAX_LENGTH),
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       messageCount: c.messageCount,
@@ -544,6 +546,9 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     const res = MemorySyncPullResponseSchema.parse(raw);
     if (res.memoryEnabled !== undefined) {
       useMemorySyncStateStore.getState().setAccountMemoryEnabled(res.memoryEnabled);
+      if (!useCloudSettingsStore.getState().memoryPolicyInitialized) {
+        useCloudSettingsStore.setState({ memoryEnabled: res.memoryEnabled });
+      }
     }
     const memories = res.memories;
     if (memories.length > 0) {
@@ -557,6 +562,8 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     if (!res.hasMore) break;
   }
 }
+
+const MEMORY_PUSH_BATCH_MAX = 1_000;
 
 const MEMORY_REFUSED_MESSAGE =
   'Your account memory settings refused this memory, so it was not saved.';
@@ -572,7 +579,7 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const deadIds: string[] = [];
   const payload = [] as ReturnType<typeof toMemoryPushItem>[];
 
-  for (const id of dirtyMemoryIds) {
+  for (const id of dirtyMemoryIds.slice(0, MEMORY_PUSH_BATCH_MAX)) {
     const entry = entryById.get(id);
     if (!entry) {
       deadIds.push(id);
@@ -586,7 +593,7 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const resolvedIds = new Set<string>();
   if (payload.length > 0) {
     const raw = await api.post<unknown>(MEMORY_SYNC_PATH, {
-      protocolVersion: 2,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
       memories: payload,
     });
     assertCloudAccountEpochCurrent(account);

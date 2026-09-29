@@ -3,6 +3,10 @@ import {
   MANAGED_MEMORY_MAX_CATEGORY_CHARS,
   MANAGED_MEMORY_MAX_CONTENT_CHARS,
 } from '@agiworkforce/types';
+import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
+} from './conversations';
 
 export const ServerVersionSchema = z
   .string()
@@ -168,7 +172,7 @@ export type ChatSyncPullResponse = z.infer<typeof ChatSyncPullResponseSchema>;
 
 export const ConversationSyncPushItemSchema = z.object({
   id: z.string().uuid(),
-  title: z.string().max(500),
+  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH),
   model: z.string().max(200).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
@@ -181,7 +185,7 @@ export const MessageSyncPushItemSchema = z.object({
   id: z.string().uuid(),
   conversationId: z.string().uuid(),
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().max(1_000_000),
+  content: z.string().max(MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH),
   model: z.string().max(200).nullable().optional(),
   provider: z.string().max(200).nullable().optional(),
   inputTokens: z.number().int().nonnegative().optional(),
@@ -264,6 +268,7 @@ export const MemoryWireDeltaSchema = z.object({
   source_conversation_id: z.string().nullable().optional(),
   source_conversation_title: z.string().nullable().optional(),
   project_id: z.string().nullable().optional(),
+  project_name: z.string().nullable().optional(),
 });
 export type MemoryWireDelta = z.infer<typeof MemoryWireDeltaSchema>;
 

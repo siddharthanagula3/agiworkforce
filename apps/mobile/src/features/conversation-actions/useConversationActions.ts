@@ -116,7 +116,10 @@ export function useConversationActions(): ConversationActions {
                     if (!isAccountScopedUiStateOwned(ownership)) return;
                     useChatCloudMessageStore
                       .getState()
-                      .restoreCloudConversation(conversation, Math.max(0, index));
+                      .restoreCloudConversation(
+                        { ...conversation, pinned: false },
+                        Math.max(0, index),
+                      );
                   } catch {
                     Alert.alert(
                       'Could not unarchive',

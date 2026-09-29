@@ -15,6 +15,21 @@ describe('what this app is allowed to say about paying us', () => {
     );
   });
 
+  it('replaces the outside top-up errand with where to see the reset', () => {
+    expect(
+      withoutExternalPurchaseSteering(
+        'Usage budget exhausted for this billing period. Upgrade your plan or add credits.',
+      ),
+    ).toBe(
+      'Usage budget exhausted for this billing period. See Usage in Settings for when it resets.',
+    );
+    expect(
+      withoutExternalPurchaseSteering(
+        'This request could not be paid for. Top up credits and try again.',
+      ),
+    ).toBe('This request could not be paid for. See Usage in Settings for when it resets.');
+  });
+
   it('leaves the advice a reader can act on inside the app untouched', () => {
     const inApp =
       'Auto could not find a model for this request on your plan. Choose a model from the picker.';

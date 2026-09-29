@@ -40,8 +40,8 @@ const MAX_SHARE_SERIALIZED_CHARS = 1_000_000;
 const CreateShareSchema = z.object({
   conversation_id: z.string().uuid().optional(),
   title: z.string().min(1).max(200).default('Shared Session'),
-  model_id: z.string().optional(),
-  provider: z.string().optional(),
+  model_id: z.string().nullish(),
+  provider: z.string().nullish(),
   messages: z
     .array(z.record(z.string(), z.unknown()))
     .max(MAX_SHARE_MESSAGES)
