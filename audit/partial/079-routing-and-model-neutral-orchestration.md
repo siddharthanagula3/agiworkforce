@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: A project can set a default model that new chats in the project use.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | CloudProject on mobile has no defaultModelId and new project chats do not take a project default model. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 ## S79.17: Provider lock.
 

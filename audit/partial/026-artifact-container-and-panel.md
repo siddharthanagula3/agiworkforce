@@ -21,15 +21,12 @@ nothing is left.
 
 - Done when: The artifact shows its lifecycle state: being written, finished, stopped before it finished, or failed.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only generated-file cards show a status label; a streaming code card shows Writing, but a stopped or failed artifact leaves no status on the card and code/document artifacts never show finished/failed. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`
 
 ## S26.08: Docked side panel.
 
@@ -179,18 +176,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 | cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
 
 Code: `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
-
-## S26.32: Public/private state.
-
-- Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The viewer shows the link and audience only once published; inline artifact cards and the gallery show no private/published/workspace state. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
 
 ## S26.36: Dependency-loading state.
 
