@@ -6654,6 +6654,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
                     speed_first: false,
+                    policy_version: crate::runtime::session::current_routing_policy_version(),
                 },
                 tier: tier.clone(),
             });

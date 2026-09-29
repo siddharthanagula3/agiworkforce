@@ -1241,6 +1241,7 @@ impl CliDeveloperSessionHost {
                 task_type,
                 trust_mode,
                 speed_first,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             }),
             fallback_model_ids,
         })
@@ -6156,6 +6157,7 @@ mod tests {
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
             speed_first: false,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         };
 
         let resolved = host
