@@ -12,18 +12,46 @@ const mocks = vi.hoisted(() => ({
   neonDb: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.neonDb }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.neonDb,
+}));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
+  evaluateActiveWorkspacePolicy: vi.fn(),
+  readOrganizationIpAllowList: vi.fn(),
+  resolveEffectiveWorkspaceControls: vi.fn(),
+  resolveIpAllowListPolicy: vi.fn(),
+  resolveMfaPolicy: vi.fn(),
+  resolveSecretHandlingPolicy: vi.fn(),
+  resolveZeroDataRetentionPolicy: vi.fn(),
   diagnoseMemberPolicy: mocks.diagnoseMemberPolicy,
 }));
 vi.mock('@/app/api/settings/organization/policy/policy-subject', () => ({
   policyScopeSubjectExists: mocks.policyScopeSubjectExists,
 }));
 vi.mock('@/app/api/settings/organization/workspace-access', () => ({
+  resolveWorkspaceConsoleAccess: vi.fn(),
   requireWorkspaceConsolePermission: mocks.requireWorkspaceConsolePermission,
 }));
 

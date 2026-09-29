@@ -16,6 +16,7 @@ import {
   replyToSupportTicket,
   type SupportTicketThreadView,
 } from './service';
+import { toUserMessage } from '@/services/userMessage';
 
 function formatDateTime(iso: string): string {
   const at = new Date(iso);
@@ -39,7 +40,7 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
         setThread(await readSupportTicket(ticketId, signal));
       } catch (error) {
         if (signal?.aborted) return;
-        setLoadError(error instanceof Error ? error.message : 'This ticket could not be loaded.');
+        setLoadError(toUserMessage(error, 'This ticket could not be loaded.'));
       }
     },
     [ticketId],
@@ -60,10 +61,7 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
         setThread(await replyToSupportTicket(ticketId, trimmed));
         setReply('');
       } catch (error) {
-        Alert.alert(
-          'That reply was not added',
-          error instanceof Error ? error.message : 'Please try again.',
-        );
+        Alert.alert('That reply was not added', toUserMessage(error, 'Please try again.'));
       } finally {
         setSending(false);
       }
@@ -86,10 +84,7 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
                 await closeSupportTicket(ticketId);
                 await load();
               } catch (error) {
-                Alert.alert(
-                  'The ticket was not closed',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
+                Alert.alert('The ticket was not closed', toUserMessage(error, 'Please try again.'));
               } finally {
                 setClosing(false);
               }

@@ -12,8 +12,8 @@ const SOURCES = [
     marker: 'CONNECTOR_LOGO_URLS: Record',
   },
   {
-    label: 'apps/mobile connectors screen',
-    path: 'apps/mobile/src/features/settings/cloud-connectors/index.tsx',
+    label: 'apps/mobile connector logo',
+    path: 'apps/mobile/src/features/settings/cloud-connectors/ConnectorLogo.tsx',
     marker: 'LOGO_URLS: Record',
   },
 ];

@@ -15,6 +15,7 @@ import { useScheduleStore, type Schedule } from '../store';
 import { triggerScheduleNow } from '../service';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
+import { toUserMessage } from '@/services/userMessage';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -183,7 +184,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         setHistoryExpanded(true);
         await Promise.all([fetchRuns(schedule.id), fetchSchedules()]);
       } catch (error) {
-        setRunError(error instanceof Error && error.message ? error.message : RUN_NOW_FAILED);
+        setRunError(toUserMessage(error, RUN_NOW_FAILED));
       } finally {
         setStarting(false);
       }

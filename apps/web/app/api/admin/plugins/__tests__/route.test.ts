@@ -12,16 +12,51 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
   getClerkAuthUser: mocks.getClerkAuthUser,
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityUser: vi.fn() }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityProvider: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
+  getIdentityUser: vi.fn(),
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.db,
+}));
 vi.mock('@/lib/services/plugin-registry-service', () => ({
+  PLUGIN_REGISTRY_DEFAULT_LIMIT: 50,
+  PLUGIN_REGISTRY_MAX_LIMIT: 100,
+  PluginRegistryDataError: class PluginRegistryDataError extends Error {},
+  getPluginRegistryEntry: vi.fn(),
+  listPluginRegistryEntries: vi.fn(),
   listPluginModerationEntries: mocks.listPluginModerationEntries,
 }));
 

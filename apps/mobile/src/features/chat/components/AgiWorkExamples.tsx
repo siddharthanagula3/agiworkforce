@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ListChecks } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/text';
@@ -26,7 +27,7 @@ export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => vo
       {PROMPT_SLOTS.map((slot) => {
         const prompt = t(`newChat.agiWork.${slot}`);
         return (
-          <Pressable
+          <PressableBox
             key={slot}
             onPress={() => onChoose(prompt)}
             accessibilityRole="button"
@@ -42,7 +43,7 @@ export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => vo
             <Text style={{ fontSize: 14, lineHeight: 19, color: colors.textPrimary }}>
               {prompt}
             </Text>
-          </Pressable>
+          </PressableBox>
         );
       })}
     </View>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { RefreshCw, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -59,22 +60,22 @@ export function CloudSyncErrorBanner() {
       <Text style={{ color: colors.agentError, fontSize: 12, fontWeight: '600', flex: 1 }}>
         Cloud changes haven’t synced. Check your connection and retry.
       </Text>
-      <Pressable
+      <PressableBox
         accessibilityRole="button"
         accessibilityLabel="Retry Cloud sync"
         onPress={() => void syncNow()}
         hitSlop={8}
       >
         <RefreshCw size={18} color={colors.agentError} />
-      </Pressable>
-      <Pressable
+      </PressableBox>
+      <PressableBox
         accessibilityRole="button"
         accessibilityLabel="Dismiss Cloud sync error"
         onPress={() => setDismissedError(errorKey)}
         hitSlop={8}
       >
         <X size={18} color={colors.agentError} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

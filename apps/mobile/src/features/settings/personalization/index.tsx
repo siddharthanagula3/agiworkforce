@@ -25,6 +25,7 @@ import {
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { toUserMessage } from '@/services/userMessage';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
@@ -332,7 +333,7 @@ export default function PersonalizationScreen() {
       api.patch('/api/me', { display_name: trimmedName }).catch((error: unknown) => {
         Alert.alert(
           'Name not saved to your account',
-          error instanceof Error ? error.message : 'Try again from Personalization.',
+          toUserMessage(error, 'Try again from Personalization.'),
         );
       });
     }

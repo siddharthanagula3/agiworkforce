@@ -60,6 +60,7 @@ import {
   type SessionTimeoutMinutes,
   type SignInMethods,
 } from './service';
+import { toUserMessage } from '@/services/userMessage';
 
 const PROVIDER_LABELS: Readonly<Record<string, string>> = {
   google: 'Google',
@@ -240,7 +241,7 @@ export default function AccountSecurityScreen() {
           setLockdown(previous);
           Alert.alert(
             'Lockdown mode was not changed',
-            saveError instanceof Error ? saveError.message : 'Please try again.',
+            toUserMessage(saveError, 'Please try again.'),
           );
         } finally {
           setSavingLockdown(false);
@@ -274,7 +275,7 @@ export default function AccountSecurityScreen() {
                 if (isStepUpCancelled(revokeError)) return;
                 Alert.alert(
                   'Could not log out of all devices',
-                  revokeError instanceof Error ? revokeError.message : 'Please try again.',
+                  toUserMessage(revokeError, 'Please try again.'),
                 );
               } finally {
                 setRevokingAll(false);
@@ -336,10 +337,7 @@ export default function AccountSecurityScreen() {
           await clerkUser?.reload();
         } catch (changeError) {
           if (isStepUpCancelled(changeError)) return;
-          Alert.alert(
-            'Could not change password',
-            changeError instanceof Error ? changeError.message : 'Please try again.',
-          );
+          Alert.alert('Could not change password', toUserMessage(changeError, 'Please try again.'));
         } finally {
           setChangingPassword(false);
         }

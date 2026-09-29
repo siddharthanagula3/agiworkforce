@@ -14,18 +14,80 @@ const mocks = vi.hoisted(() => ({
   neonDb: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.neonDb }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.neonDb,
+}));
 vi.mock('@/lib/services/organization-role-service', () => ({
+  MAX_WORKSPACE_GROUP_NAME_CHARS: 255,
+  assertPermissionsWithinActor: vi.fn(),
+  createCustomRole: vi.fn(),
+  createWorkspaceGroup: vi.fn(),
+  deleteCustomRole: vi.fn(),
+  deleteWorkspaceGroup: vi.fn(),
+  isDirectoryGroupManager: vi.fn(),
+  listDirectoryGroupsWithRoles: vi.fn(),
+  listMemberRoleGrants: vi.fn(),
+  listOrganizationRoles: vi.fn(),
+  renameWorkspaceGroup: vi.fn(),
+  setDirectoryGroupManagers: vi.fn(),
+  setDirectoryGroupRoles: vi.fn(),
+  setMemberRoles: vi.fn(),
+  updateCustomRole: vi.fn(),
   readWorkspaceGroupMembers: mocks.readWorkspaceGroupMembers,
   setWorkspaceGroupMembers: mocks.setWorkspaceGroupMembers,
 }));
 vi.mock('@/app/api/settings/organization/workspace-access', () => ({
+  resolveWorkspaceConsoleAccess: vi.fn(),
   requireWorkspaceConsolePermission: mocks.requireWorkspaceConsolePermission,
 }));
 

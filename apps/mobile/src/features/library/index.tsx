@@ -271,11 +271,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       try {
         const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
         setVideoPlayer({ player, label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName });
-      } catch (error) {
-        Alert.alert(
-          'Could not play the video',
-          error instanceof Error ? error.message : 'Check your connection and try again.',
-        );
+      } catch {
+        Alert.alert('Could not play the video', 'Check your connection and try again.');
       } finally {
         videoLoadingRef.current = false;
       }
