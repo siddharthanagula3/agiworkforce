@@ -1,4 +1,4 @@
-import { normalizeToolStatus } from '@agiworkforce/types';
+import { isPhoneStepTool, isPhoneWriteStep, normalizeToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 import type { StreamDelta } from '@/services/streaming';
 
@@ -182,6 +182,19 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     acc.idToKey.set(agentEvent.toolCallId, key);
     const t = ensure(acc, key, { name: agentEvent.name });
     t.approvalRiskLevel = agentEvent.riskLevel;
+    changed = true;
+  }
+
+  if (agentEvent?.type === 'device-step-requested' && isPhoneStepTool(agentEvent.toolName)) {
+    const key = acc.idToKey.get(agentEvent.toolCallId) ?? `id:${agentEvent.toolCallId}`;
+    acc.idToKey.set(agentEvent.toolCallId, key);
+    const t = ensure(acc, key, { name: agentEvent.toolName });
+    t.name = agentEvent.toolName;
+    t.toolCallId = agentEvent.toolCallId;
+    if (!t.input) t.input = safeStringify(agentEvent.input);
+    if (t.status === 'pending' && !t.approvalDecision) {
+      t.requiresApproval = isPhoneWriteStep(agentEvent.toolName);
+    }
     changed = true;
   }
 

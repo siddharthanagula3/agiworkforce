@@ -207,6 +207,78 @@ describe('device tools are bound to a declared desktop host', () => {
   });
 });
 
+describe('phone steps are bound to the mobile app', () => {
+  const PHONE: DesktopHostDeclaration = {
+    deviceId: 'install-phone-1',
+    deviceName: 'iPhone',
+    platform: 'ios',
+    appVersion: '1.0.0',
+    capabilities: ['calendar.read', 'calendar.write', 'reminders.write', 'shell.execute'],
+    roots: [],
+  };
+
+  function phoneRequest(key: string, surface: string): NextRequest {
+    return new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        'x-agi-surface': surface,
+        [DEVICE_HOST_HEADER]: encodeDesktopHostDeclaration(PHONE),
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'what is on my calendar tomorrow' }],
+        stream: true,
+      }),
+    });
+  }
+
+  it('offers the phone steps, and only those, to the mobile app', async () => {
+    const result = await processRequest(
+      phoneRequest('phone-mobile-1', 'mobile'),
+      auth({ boundSurface: 'mobile' }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatSurface).toBe('mobile');
+    expect(result.deviceHost?.capabilities).toEqual([
+      'calendar.read',
+      'calendar.write',
+      'reminders.write',
+    ]);
+    const names = toolNames(result.llmRequest.tools).filter((name) => name.startsWith('device_'));
+    expect(names.sort()).toEqual([
+      'device_calendar_availability',
+      'device_calendar_create_event',
+      'device_calendar_events',
+      'device_reminder_create',
+    ]);
+  });
+
+  it('offers no phone step to a desktop that claims one', async () => {
+    const result = await processRequest(phoneRequest('phone-desktop-1', 'desktop'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceHost?.capabilities).toEqual(['shell.execute']);
+    expect(toolNames(result.llmRequest.tools)).not.toContain('device_calendar_events');
+  });
+
+  it('offers nothing to the mobile app when it declares only desktop steps', async () => {
+    const result = await processRequest(
+      chatRequest('phone-mobile-2', 'mobile', true),
+      auth({ boundSurface: 'mobile' }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceHost).toBeUndefined();
+    expect(toolNames(result.llmRequest.tools)).not.toContain('device_read_file');
+  });
+});
+
 describe('workspace feature controls reach the turn', () => {
   const computerUseOff = {
     ...DEFAULT_WORKSPACE_CONTROLS,
