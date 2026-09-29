@@ -14,6 +14,8 @@ pub mod code_push;
 pub mod code_sessions;
 pub mod code_teleport;
 pub mod connectors;
+#[cfg(test)]
+mod contract_fixtures;
 pub mod data_export;
 pub mod devices;
 pub mod feedback;

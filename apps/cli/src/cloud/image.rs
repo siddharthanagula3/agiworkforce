@@ -36,7 +36,7 @@ const UNSUPPORTED_ASPECT_RATIO: &str = "unsupported_aspect_ratio";
 const SLUG_MAX_CHARS: usize = 32;
 const DEFAULT_STEM: &str = "image";
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImageGenerationRequest {
     pub prompt: String,
     pub n: u8,
