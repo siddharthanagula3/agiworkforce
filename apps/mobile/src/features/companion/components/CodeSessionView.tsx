@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   Check,
+  ChevronRight,
   FileEdit,
   FilePlus,
   FlaskConical,
@@ -10,17 +12,24 @@ import {
   Square,
   X,
 } from 'lucide-react-native';
-import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import {
+  REMOTE_CODE_LIMITS,
+  managedUsageBucketLabel,
+  type RemoteCodeToolRecord,
+} from '@agiworkforce/types';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   answerCodeApproval,
   attachCodeSession,
   detachCodeSession,
   interruptCodeTurn,
+  requestCodeTranscript,
   steerCodeSession,
 } from '../remote-code/service';
 import { remoteCodeThreadKey, useRemoteCodeStore } from '../remote-code/store';
@@ -43,6 +52,99 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
+const TOOL_STATE_LABELS: Record<RemoteCodeToolRecord['state'], string> = {
+  running: 'Running',
+  done: 'Done',
+  failed: 'Failed',
+};
+
+function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
+  const colors = useThemeColors();
+  const [expanded, setExpanded] = useState(false);
+  const failed = tool.state === 'failed';
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setExpanded((open) => !open)}
+        disabled={!tool.output}
+        accessibilityRole="button"
+        accessibilityState={{ expanded, disabled: !tool.output }}
+        accessibilityLabel={`${TOOL_STATE_LABELS[tool.state]}: ${tool.summary}`}
+        style={{ minHeight: 44 }}
+        className="flex-row items-center gap-2"
+      >
+        <Text
+          className="text-[10px]"
+          style={{ width: 52, color: failed ? colors.agentError : colors.textMuted }}
+        >
+          {TOOL_STATE_LABELS[tool.state]}
+        </Text>
+        <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
+          {tool.summary || tool.name}
+        </Text>
+        {tool.output ? (
+          <View style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
+            <ChevronRight size={12} color={colors.textMuted} />
+          </View>
+        ) : null}
+      </Pressable>
+      {expanded && tool.output ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Text
+            variant="mono"
+            selectable
+            className="text-[11px]"
+            style={{ color: failed ? colors.agentError : colors.textSecondary }}
+          >
+            {tool.output}
+          </Text>
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
+function PlanUsageLine() {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const ownerId = useCloudUsageStore((state) => state.ownerId);
+  const cached = useCloudUsageStore((state) => state.snapshot);
+  const refresh = useCloudUsageStore((state) => state.refresh);
+  const snapshot = clerkUserId && ownerId === clerkUserId ? cached : null;
+
+  useEffect(() => {
+    if (clerkUserId) void refresh();
+  }, [clerkUserId, refresh]);
+
+  if (!snapshot) return null;
+  const parts = [
+    snapshot.sessionResetAt !== null
+      ? `${managedUsageBucketLabel('session')} ${Math.round(snapshot.sessionUsagePercentage)}%`
+      : null,
+    snapshot.weeklyResetAt !== null
+      ? `${managedUsageBucketLabel('weekly')} ${Math.round(snapshot.weeklyUsagePercentage)}%`
+      : null,
+    `${managedUsageBucketLabel('period')} ${Math.round(snapshot.usagePercentage)}%`,
+  ].filter((part): part is string => part !== null);
+
+  return (
+    <Pressable
+      onPress={() =>
+        router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+      }
+      accessibilityRole="link"
+      accessibilityLabel={`Plan usage: ${parts.join(', ')}. See detailed usage`}
+      style={{ minHeight: 32, justifyContent: 'center' }}
+    >
+      <Text className="text-[11px]" style={{ color: colors.textMuted }} numberOfLines={1}>
+        {`Plan usage · ${parts.join(' · ')}`}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessionViewProps) {
   const colors = useThemeColors();
   const thread = useRemoteCodeStore(
@@ -59,6 +161,12 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
       void detachCodeSession(rootId, threadId);
     };
   }, [rootId, threadId]);
+
+  const transcriptLoaded = thread?.transcript != null;
+  const syncedAt = thread?.syncedAt;
+  useEffect(() => {
+    if (transcriptLoaded && syncedAt) void requestCodeTranscript(rootId, threadId, null);
+  }, [rootId, syncedAt, threadId, transcriptLoaded]);
 
   if (!thread) {
     return (
@@ -111,6 +219,8 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           color={codeSessionStatusColor(thread.status)}
         />
       </View>
+
+      <PlanUsageLine />
 
       {thread.hostMessage ? (
         <Text className="text-xs" style={{ color: colors.agentError }} accessibilityRole="alert">
@@ -255,17 +365,19 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
         ) : null}
       </Card>
 
-      {running && (thread.partialResponse || thread.tools.length > 0) ? (
+      {running && thread.partialResponse ? (
         <Card variant="elevated">
           <SectionTitle>Working</SectionTitle>
+          <Text className="text-sm text-white">{thread.partialResponse}</Text>
+        </Card>
+      ) : null}
+
+      {thread.tools.length > 0 ? (
+        <Card variant="elevated">
+          <SectionTitle>Commands and tools</SectionTitle>
           {thread.tools.map((tool) => (
-            <Text key={tool.toolCallId} className="text-xs text-white/60" numberOfLines={1}>
-              {`${tool.state === 'running' ? 'Running' : tool.state === 'failed' ? 'Failed' : 'Done'} · ${tool.summary}`}
-            </Text>
+            <ToolRow key={tool.toolCallId} tool={tool} />
           ))}
-          {thread.partialResponse ? (
-            <Text className="mt-2 text-sm text-white">{thread.partialResponse}</Text>
-          ) : null}
         </Card>
       ) : null}
 
@@ -362,16 +474,35 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
         </Card>
       ))}
 
-      {thread.messages.length > 0 ? (
+      {thread.messages.length > 0 || thread.transcript ? (
         <Card variant="elevated">
           <SectionTitle>Conversation</SectionTitle>
+          {thread.transcript?.hasEarlier || !thread.transcript ? (
+            <Pressable
+              onPress={() =>
+                void requestCodeTranscript(
+                  rootId,
+                  threadId,
+                  thread.transcript?.messages[0]?.index ?? null,
+                )
+              }
+              accessibilityRole="button"
+              style={{ minHeight: 44, justifyContent: 'center' }}
+            >
+              <Text className="text-xs font-semibold" style={{ color: colors.teal }}>
+                {thread.transcript ? 'Load earlier messages' : 'Show the full conversation'}
+              </Text>
+            </Pressable>
+          ) : null}
           <View className="gap-2">
-            {thread.messages.map((message, index) => (
-              <View key={index}>
+            {(thread.transcript?.messages ?? thread.messages).map((message, index) => (
+              <View key={'index' in message ? `m${message.index}` : index}>
                 <Text className="text-[10px] text-white/40">
                   {message.role === 'user' ? 'You' : 'AGI'}
                 </Text>
-                <Text className="text-sm text-white">{message.text}</Text>
+                <Text selectable className="text-sm text-white">
+                  {message.text}
+                </Text>
               </View>
             ))}
           </View>
