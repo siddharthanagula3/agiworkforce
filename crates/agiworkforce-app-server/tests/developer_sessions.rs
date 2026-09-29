@@ -355,6 +355,7 @@ fn capabilities() -> AppServerCapabilities {
         provider_keys: false,
         questions: false,
         plan_decisions: false,
+        pull_requests: false,
     }
 }
 

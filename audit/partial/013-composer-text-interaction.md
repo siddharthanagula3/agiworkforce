@@ -228,7 +228,7 @@ Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show chosen sources as chips; the composer only shows tool status chips (Research, Code), not which sources a message will use. | ui |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; source chips need a connector or resource picker on mobile. | codex |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
