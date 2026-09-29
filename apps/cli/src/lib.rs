@@ -2217,7 +2217,9 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     let filed: Vec<_> = conversations
         .iter()
-        .filter(|conversation| conversation.project_id.as_deref() == Some(found.id.as_str()))
+        .filter(|conversation| {
+            !conversation.archived && conversation.project_id.as_deref() == Some(found.id.as_str())
+        })
         .collect();
     if filed.is_empty() {
         println!("No conversations are filed under {} yet.", found.name);
@@ -2241,12 +2243,21 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
 async fn print_hosted_history(limit: usize) {
     let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
-        Ok(conversations) if conversations.is_empty() => {
+        Ok(conversations)
+            if conversations
+                .iter()
+                .all(|conversation| conversation.archived) =>
+        {
             println!("No conversations in your AGI Workforce account yet.");
+            print_archived_note(&conversations);
         }
         Ok(conversations) => {
             println!("In your AGI Workforce account:");
-            for conversation in conversations.iter().take(limit) {
+            for conversation in conversations
+                .iter()
+                .filter(|conversation| !conversation.archived)
+                .take(limit)
+            {
                 println!(
                     "  {}  {}  {} messages  {}",
                     conversation.id,
@@ -2257,8 +2268,26 @@ async fn print_hosted_history(limit: usize) {
             }
             println!();
             println!("Resume one with `agi resume --cloud <id>`.");
+            print_archived_note(&conversations);
         }
         Err(error) => println!("Account history unavailable: {error}"),
+    }
+}
+
+fn print_archived_note(conversations: &[cloud::chat::HostedConversation]) {
+    let archived = conversations
+        .iter()
+        .filter(|conversation| conversation.archived)
+        .count();
+    if archived > 0 {
+        println!(
+            "{archived} archived {} not shown; they still resume by id.",
+            if archived == 1 {
+                "conversation is"
+            } else {
+                "conversations are"
+            }
+        );
     }
 }
 
