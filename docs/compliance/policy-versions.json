@@ -94,6 +94,11 @@
           "date": "2026-09-29",
           "digest": "25028c9a8392c809",
           "note": "Same-day revision before release: covers every Google connector including whole-Drive read-only search, adds the memory commitment and the background job retention row. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "4cbe9937d3461d21",
+          "note": "Same-day revision before release: the memory row now also covers search and research results from chats holding Google data and files imported from Google. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
