@@ -10,20 +10,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/services/organization-policy-code-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-code-gate')>()),
   buildWorkspaceCodeGateResponse: (...args: unknown[]) => mocks.codeGate(...args),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
   getGitHubAppInstallUrl: () => mocks.installUrl(),
 }));
-vi.mock('@/lib/github-install-app-return', () => ({
+vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
   startAppInstall: (...args: unknown[]) => mocks.startAppInstall(...args),
 }));
 
