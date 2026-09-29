@@ -104,9 +104,6 @@ pub fn load_disabled_skills() -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Skill names a trusted project turns off by default for chats in it, from
-/// `.agiworkforce/disabled-skills.json`, the project's counterpart to the
-/// user's /skills-toggle set.
 pub fn project_disabled_skills(project_root: &Path) -> std::collections::HashSet<String> {
     if !crate::trust::is_trusted(project_root) {
         return std::collections::HashSet::new();

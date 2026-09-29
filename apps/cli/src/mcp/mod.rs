@@ -725,8 +725,6 @@ pub struct McpLogout {
     pub revocation: Option<McpRevocation>,
 }
 
-/// Hand the stored OAuth token back to the server's authorization server when
-/// it offers revocation, then forget it locally whatever the provider said.
 pub async fn logout_from_remote_server(
     server_url: &str,
     config: &McpServerConfig,

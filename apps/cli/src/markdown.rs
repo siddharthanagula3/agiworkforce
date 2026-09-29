@@ -470,7 +470,6 @@ pub struct MarkdownTable {
     pub rows: Vec<Vec<String>>,
 }
 
-/// Every pipe table in a reply that has a header and a separator row.
 pub fn tables_in(text: &str) -> Vec<MarkdownTable> {
     let lines: Vec<&str> = text.lines().collect();
     let mut tables = Vec::new();
@@ -624,8 +623,6 @@ fn canonicalize_language(lang: &str) -> &str {
 // Bare URL extraction
 // ---------------------------------------------------------------------------
 
-/// Every web link in a reply, in reading order, each URL once, with the
-/// visible text a markdown link gave it.
 pub fn web_links(text: &str) -> Vec<(Option<String>, String)> {
     let chars: Vec<char> = text.chars().collect();
     let mut links: Vec<(Option<String>, String)> = Vec::new();
