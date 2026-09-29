@@ -54,6 +54,28 @@ fn normalize_rule(prefix: &str) -> Option<String> {
 
 pub const DOMAIN_RULE_PREFIX: &str = "domain:";
 
+const OPEN_ENDED_PROGRAMS: &[&str] = &[
+    "bash", "sh", "zsh", "env", "python", "python3", "node", "npx", "npm exec", "pnpm dlx", "bunx",
+    "deno", "ruby", "perl",
+];
+
+pub fn open_ended_allow_error(rule: &str) -> Option<String> {
+    let mut tokens: Vec<&str> = rule.split_whitespace().collect();
+    let program = tokens.first().copied()?;
+    let base = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program);
+    tokens[0] = base;
+    let named = tokens.join(" ");
+    OPEN_ENDED_PROGRAMS.contains(&named.as_str()).then(|| {
+        format!(
+            "An allow rule for `{named}` alone would run any script or command without asking. \
+             Name the command, such as `{named} scripts/build.sh`."
+        )
+    })
+}
+
 fn normalize_domain(text: &str) -> String {
     text.trim().trim_end_matches('.').to_ascii_lowercase()
 }
@@ -1167,5 +1189,37 @@ mod tests {
         assert!(store.ask_list.is_empty());
         assert!(store.workspace_rules.is_empty());
         assert!(store.recently_denied.is_empty());
+    }
+
+    #[test]
+    fn one_word_allows_for_shells_and_interpreters_are_refused() {
+        for rule in [
+            "bash",
+            "sh",
+            "zsh",
+            "env",
+            "python",
+            "python3",
+            "node",
+            "npx",
+            "npm exec",
+            "pnpm  dlx",
+            "bunx",
+            "deno",
+            "ruby",
+            "perl",
+            "/bin/bash",
+        ] {
+            assert!(open_ended_allow_error(rule).is_some(), "{rule}");
+        }
+        for rule in [
+            "git",
+            "npm test",
+            "python3 scripts/build.py",
+            "node --version",
+            "",
+        ] {
+            assert!(open_ended_allow_error(rule).is_none(), "{rule}");
+        }
     }
 }

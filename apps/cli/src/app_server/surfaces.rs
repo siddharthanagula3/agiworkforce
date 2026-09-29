@@ -1251,6 +1251,11 @@ pub fn add_permission(
                     target.to_ascii_lowercase()
                 )
             } else {
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::open_ended_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
                 target.to_string()
             };
             let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
@@ -1567,5 +1572,21 @@ mod tests {
             );
         }
         assert!(crate::cli_options::persisted_permission_mode("bypassPermissions").is_none());
+    }
+
+    #[test]
+    fn an_allow_for_a_bare_interpreter_is_refused_before_anything_is_saved() {
+        for target in ["bash", "python3", "npm exec", "/usr/bin/env"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Command,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("without asking"),
+                "{target}: {error}"
+            );
+        }
     }
 }

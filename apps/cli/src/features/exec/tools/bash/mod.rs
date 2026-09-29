@@ -439,7 +439,7 @@ pub(super) async fn approve_command(
         if !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
 
-            match perms.check_command_allowing_hook_bypass(command) {
+            match saved_command_decision(&perms, command, safety) {
                 Some(true) => {
                     // Previously allowed, skip prompt
                 }
@@ -661,6 +661,17 @@ async fn sandbox_network_policy(
         crate::sandbox::NetworkPolicy::AllowExternal
     } else {
         crate::sandbox::NetworkPolicy::Deny
+    }
+}
+
+fn saved_command_decision(
+    perms: &crate::permissions::PermissionStore,
+    command: &str,
+    safety: CommandSafety,
+) -> Option<bool> {
+    match perms.check_command_allowing_hook_bypass(command) {
+        Some(true) if safety == CommandSafety::Dangerous => None,
+        decision => decision,
     }
 }
 
@@ -907,6 +918,28 @@ mod tests {
             Some(ApprovalRequestKind::Exec {
                 command: "rm -rf /tmp/agiworkforce-callback-test".to_string()
             })
+        );
+    }
+
+    #[test]
+    fn a_saved_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("rm");
+        perms.allow_always("cargo");
+        let dangerous = "rm -rf build";
+        assert_eq!(classify_command(dangerous), CommandSafety::Dangerous);
+        assert_eq!(
+            saved_command_decision(&perms, dangerous, classify_command(dangerous)),
+            None
+        );
+        assert_eq!(
+            saved_command_decision(&perms, "cargo build", CommandSafety::Unknown),
+            Some(true)
+        );
+        perms.deny_always("rm");
+        assert_eq!(
+            saved_command_decision(&perms, dangerous, CommandSafety::Dangerous),
+            Some(false)
         );
     }
 }
