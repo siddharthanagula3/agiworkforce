@@ -45,13 +45,22 @@ import {
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import { ApiHttpError } from '@/services/apiErrors';
 import {
-  BillingUpgradeRequestError,
+  billingRequestMessage,
   joinBillingUpgradeWaitlist,
   redeemBillingUpgradeCode,
 } from '@/src/features/billing/mobileIapService';
 
 const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
+
+function portalErrorTitle(error: unknown): string {
+  if (error instanceof ApiHttpError) {
+    if (error.code === 'waitlist_access_required') return 'Upgrade access needed';
+    if (error.status === 409) return 'Billing managed elsewhere';
+  }
+  return 'Billing portal unavailable';
+}
 
 function PlanBadge() {
   const colors = useThemeColors();
@@ -200,8 +209,8 @@ export default function CloudBillingScreen() {
     try {
       const url = await fetchPortalSessionUrl();
       await openExternalUrl(url);
-    } catch {
-      Alert.alert('Billing portal unavailable', 'Please try again later.');
+    } catch (error) {
+      Alert.alert(portalErrorTitle(error), billingRequestMessage(error, 'Please try again later.'));
     } finally {
       setPortalLoading(false);
     }
@@ -220,9 +229,7 @@ export default function CloudBillingScreen() {
       await nativeIap.reload();
     } catch (error) {
       setUpgradeGateError(
-        error instanceof BillingUpgradeRequestError
-          ? error.userMessage
-          : 'Could not redeem this code. Check it and try again.',
+        billingRequestMessage(error, 'Could not redeem this code. Check it and try again.'),
       );
     } finally {
       setUpgradeGateBusy(false);
@@ -237,11 +244,7 @@ export default function CloudBillingScreen() {
       await joinBillingUpgradeWaitlist(nextUpgradeTier);
       setUpgradeGateJoined(true);
     } catch (error) {
-      setUpgradeGateError(
-        error instanceof BillingUpgradeRequestError
-          ? error.userMessage
-          : 'Could not join the waitlist. Try again.',
-      );
+      setUpgradeGateError(billingRequestMessage(error, 'Could not join the waitlist. Try again.'));
     } finally {
       setUpgradeGateBusy(false);
     }

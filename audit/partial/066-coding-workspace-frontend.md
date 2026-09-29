@@ -240,14 +240,13 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: The user sees a summary of which files the session created, modified or deleted.
 - Wave: 3
-- Already works on: desktop, mobile, cli
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| vscode | partial | Only the host Source Control view lists changed files; the extension shows no per-session summary of what the agent changed. | ui |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/core/commandSetup.ts:1383-1396`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.21: Hunk acceptance/rejection.
 

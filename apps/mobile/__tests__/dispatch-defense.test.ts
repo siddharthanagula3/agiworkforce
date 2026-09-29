@@ -126,10 +126,9 @@ jest.mock('@/stores/notificationPrefsStore', () => {
   const mockShouldNotify = jest.fn().mockReturnValue(true);
   const notifState = {
     categoryEnabled: {
-      approvals: true,
-      task_updates: true,
-      errors: true,
-      status: false,
+      chat_replies: true,
+      tasks: true,
+      product: false,
     },
     vibrationEnabled: { critical: true, high: true, normal: false, low: false },
     quietHours: { enabled: false, startTime: '22:00', endTime: '08:00' },
@@ -1368,45 +1367,35 @@ describe('logEmergencyStop', () => {
 });
 
 describe('getCategoryForType', () => {
-  it('maps agent_approval_needed → approvals', () => {
-    expect(getCategoryForType('agent_approval_needed')).toBe('approvals');
+  it('maps chat_message → chat_replies', () => {
+    expect(getCategoryForType('chat_message')).toBe('chat_replies');
   });
 
-  it('maps approval_pending_escalation → approvals', () => {
-    expect(getCategoryForType('approval_pending_escalation')).toBe('approvals');
+  it.each([
+    'agent_approval_needed',
+    'approval_pending_escalation',
+    'task_completed',
+    'agent_failed',
+    'emergency_stop_triggered',
+    'agent_paused',
+    'schedule_run',
+    'schedule_triggered',
+    'companion_connected',
+  ] as const)('maps %s → tasks', (type) => {
+    expect(getCategoryForType(type)).toBe('tasks');
   });
 
-  it('maps agent_failed → errors', () => {
-    expect(getCategoryForType('agent_failed')).toBe('errors');
+  it('maps status_update → product', () => {
+    expect(getCategoryForType('status_update')).toBe('product');
   });
 
-  it('maps emergency_stop_triggered → errors', () => {
-    expect(getCategoryForType('emergency_stop_triggered')).toBe('errors');
+  it('maps heartbeat_info → product', () => {
+    expect(getCategoryForType('heartbeat_info')).toBe('product');
   });
 
-  it('maps task_completed → task_updates', () => {
-    expect(getCategoryForType('task_completed')).toBe('task_updates');
-  });
-
-  it('maps agent_paused → task_updates', () => {
-    expect(getCategoryForType('agent_paused')).toBe('task_updates');
-  });
-
-  it('maps companion_connected → task_updates', () => {
-    expect(getCategoryForType('companion_connected')).toBe('task_updates');
-  });
-
-  it('maps status_update → status', () => {
-    expect(getCategoryForType('status_update')).toBe('status');
-  });
-
-  it('maps heartbeat_info → status', () => {
-    expect(getCategoryForType('heartbeat_info')).toBe('status');
-  });
-
-  it('maps unknown types → task_updates as fallback', () => {
+  it('maps unknown types → tasks as fallback', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(getCategoryForType('some_future_type' as any)).toBe('task_updates');
+    expect(getCategoryForType('some_future_type' as any)).toBe('tasks');
   });
 });
 
@@ -1424,10 +1413,9 @@ describe('NotificationPrefsStore, shouldNotify real logic', () => {
     } = {},
   ) {
     const categoryEnabled = {
-      approvals: true,
-      task_updates: true,
-      errors: true,
-      status: false,
+      chat_replies: true,
+      tasks: true,
+      product: false,
       ...overrides.categoryEnabled,
     };
     const quietHours = {
@@ -1452,12 +1440,12 @@ describe('NotificationPrefsStore, shouldNotify real logic', () => {
   });
 
   it('returns false when the category is disabled', () => {
-    const shouldNotify = makeShouldNotify({ categoryEnabled: { task_updates: false } });
+    const shouldNotify = makeShouldNotify({ categoryEnabled: { tasks: false } });
     expect(shouldNotify('task_completed')).toBe(false);
   });
 
-  it('status category is disabled by default', () => {
-    const shouldNotify = makeShouldNotify({ categoryEnabled: { status: false } });
+  it('product category is disabled by default', () => {
+    const shouldNotify = makeShouldNotify({ categoryEnabled: { product: false } });
     expect(shouldNotify('status_update')).toBe(false);
   });
 

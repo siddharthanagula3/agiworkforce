@@ -62,10 +62,29 @@ describe('ResetPasswordScreen', () => {
     fireEvent.press(getByLabelText('Open Web Account'));
 
     await waitFor(() => {
-      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-        'https://agiworkforce.com/auth/reset-password',
-      );
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/login');
     });
+  });
+
+  it('never opens a link the app claims, which Android would hand straight back to this screen', async () => {
+    const { expo } = jest.requireActual('../app.config.js') as {
+      expo: { android?: { intentFilters?: Array<{ data?: Array<Record<string, string>> }> } };
+    };
+    const claims = (expo.android?.intentFilters ?? []).flatMap((filter) => filter.data ?? []);
+    expect(claims.some((claim) => claim['path'] === '/auth/reset-password')).toBe(true);
+    const { getByLabelText } = render(<ResetPasswordScreen />);
+
+    fireEvent.press(getByLabelText('Open Web Account'));
+
+    await waitFor(() => expect(mockOpenExternalUrl).toHaveBeenCalled());
+    const opened = new URL(mockOpenExternalUrl.mock.calls[0]![0] as string);
+    const claimed = claims.some(
+      (claim) =>
+        claim['host'] === opened.host &&
+        (claim['path'] === opened.pathname ||
+          (claim['pathPrefix'] !== undefined && opened.pathname.startsWith(claim['pathPrefix']))),
+    );
+    expect(claimed).toBe(false);
   });
 
   it('can return to the mobile sign-in route', () => {
