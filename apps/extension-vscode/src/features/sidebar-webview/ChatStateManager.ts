@@ -24,6 +24,9 @@ import {
   capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canAccessManualModelSelection,
+  getBillingPlanPricing,
   isAutoModeModelId,
   managedUsageBucketLabel,
   modelDisplayNameById,
@@ -762,6 +765,15 @@ interface DeveloperThreadState {
   provider?: string;
   runtime: LocalRuntimeClient;
   updatedAt: string;
+}
+
+function manualModelUnlockText(): string {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canAccessManualModelSelection(candidate),
+  );
+  return tier === undefined
+    ? 'Your plan uses Auto; upgrade your AGI plan to choose these models'
+    : `Your plan uses Auto; upgrade to ${getBillingPlanPricing(tier).label} to choose these models`;
 }
 
 export class ChatStateManager {
@@ -1530,7 +1542,9 @@ export class ChatStateManager {
                     ? 'Requests go directly to this provider using your key'
                     : reachableOnBoundary === 'cloud'
                       ? 'Prompts are sent to AGI infrastructure under your plan'
-                      : 'Sign in or add a provider key to unlock these models',
+                      : tier === 'free' || tier === 'basic'
+                        ? manualModelUnlockText()
+                        : 'Sign in or add a provider key to unlock these models',
                 boundary: reachableOnBoundary,
                 models: [],
               };
