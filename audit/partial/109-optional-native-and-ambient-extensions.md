@@ -14,7 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | iOS App Shortcuts exist but there are no home-screen quick actions and nothing on Android. |  |
+| mobile | partial | home-screen quick actions and Android equivalent; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile |  |
+
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.05: Compact floating assistant.
 
@@ -34,10 +36,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Siri Ask AGI opens the prompt for review in chat rather than starting dictation or voice mode; Android has no voice entry. | handler |
+| mobile | partial | Siri Ask opens for review instead of sending or starting voice; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/app/_layout.tsx:529-544`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.08: Selected-text rewrite shortcut.
 
@@ -47,9 +49,9 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mob
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | No action rewrites selected text and puts it back; Android share-target opens chat review only, iOS has no selected-text action. | handler |
+| mobile | partial | system-wide selected-text rewrite; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
 
-Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGIShareIntent.cjs:48-52`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.09: Screenshot-to-chat shortcut.
 
@@ -59,9 +61,9 @@ Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGISh
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Screenshots reach chat only through the share sheet; no shortcut captures the screen into a chat. | ui |
+| mobile | partial | screen-capture shortcut; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
 
-Code: `apps/mobile/app.config.js:166-176`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.11: Hardware shortcut/macropad integration.
 
@@ -71,10 +73,10 @@ Code: `apps/mobile/app.config.js:166-176`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS App Shortcuts can be run from the Action Button, but nothing in the app explains it and Android has no equivalent. | ui |
+| mobile | partial | Action Button guidance; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/app/_layout.tsx:529-544`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.13: Headset/earbud invocation.
 
@@ -84,9 +86,9 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mob
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Siri via earbuds opens the app for review (phone unlocked, nothing spoken back); no headset-button trigger and no Android path. | handler |
+| mobile | partial | Siri over earbuds answering aloud; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
 
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.16: Messaging-platform access.
 
@@ -136,26 +138,12 @@ Code: `apps/web/app/api/github/webhook/route.ts:253-253`
 
 - Done when: The user can load a local model into memory and unload it to free resources.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No control lets the user load or unload a local model; models load on first use only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/platform/local-llm/src/tier3.ts:228-238`, `packages/platform/local-llm/src/tier3.ts:83-96`
-
-## S109.22: Local runtime health.
-
-- Done when: The app shows whether the local model runtime is running and healthy, with errors when it is not.
-- Wave: 3
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Performance screen does not show whether a model is actually loaded or failing; "No local model loaded" reflects the selection, not the runtime. | ui |
-
-Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app/(app)/settings/performance.tsx:636-642`
 
 ## S109.25: Local resource/compute dashboard.
 
@@ -164,8 +152,8 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | recordPerfEvent still has no caller, so tok/s, latency and memory charts stay empty. | handler |
+| mobile | partial | tok/s, first-token latency and thermal state now recorded for every local reply; peak memory stays 0 because no runtime reports it and no memory sampler is installed (needs a native module or an approved dependency) | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/services/performanceMonitor.ts:74-81`, `apps/mobile/services/performanceMonitor.ts:159-169`, `apps/mobile/app/(app)/settings/performance.tsx:355-385`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2116-2116`

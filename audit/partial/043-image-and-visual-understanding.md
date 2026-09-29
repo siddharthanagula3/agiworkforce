@@ -16,9 +16,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.02: Multiple-image comparison.
 
@@ -30,9 +30,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/app/(app)/(tabs)/chat.tsx:614-617`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.03: Screenshot interpretation.
 
@@ -44,9 +44,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/app/(app)/(ta
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.04: Document-image interpretation.
 
@@ -58,9 +58,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.05: Chart interpretation.
 
@@ -72,9 +72,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.06: Diagram interpretation.
 
@@ -86,9 +86,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.07: Handwriting recognition.
 
@@ -100,9 +100,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.08: Visual text extraction.
 
@@ -127,9 +127,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.13: Scene comparison.
 
@@ -141,9 +141,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.14: Visual troubleshooting.
 
@@ -155,9 +155,9 @@ Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/
 | --- | --- | --- | --- |
 | web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 | desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
-| mobile | partial | Code path is complete (Photos picker to presigned upload to file part); Cloud images pass the upload scanner gate, so it needs a live check once UPLOAD_SCAN_WEBHOOK_URL is provisioned in production (same gate as web); Local mode only OCRs text. | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`, `apps/mobile/services/api.ts:434-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1323-1331`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.17: Reference-image selection for another task.
 

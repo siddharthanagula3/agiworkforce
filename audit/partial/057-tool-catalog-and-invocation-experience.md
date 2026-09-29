@@ -27,13 +27,13 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 | --- | --- | --- | --- |
 | web | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | desktop | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
-| mobile | partial | Served url_fetch description is still v1 (tool.url_fetch_description@2 needs a canary advance) and uploaded files and connector sources are not opened by reference. | handler |
+| mobile | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval signal; server-only, the phone uses the same completions path | handler |
 | cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
 | api | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 
-Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/cli/src/features/exec/tools/mod.rs:365-372`
+Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
 
 ## S57.05: File-read tool.
 
@@ -44,11 +44,11 @@ Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-regist
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | Chat sandbox read_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | code_execution and its sandbox file tools are now documented; read_file still runs only when AGI_E2B_EXECUTION=1 (switched on by the lead at run end). | flag-off |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.06: File-write tool.
 
@@ -59,11 +59,11 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/stores/chat/chatExecutionSt
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | Chat sandbox write_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; write_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.07: Spreadsheet tool.
 
@@ -121,11 +121,11 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | Chat sandbox edit_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.13: Browser-navigation tool.
 
@@ -204,11 +204,11 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/execution-tools.ts:18-
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
-| mobile | partial | Calendar connectors have no MCP endpoint until the operator supplies one in CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool works, but the connected-calendar path is flag-gated. |  |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works |  |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
 
-Code: `apps/web/lib/connectors/mcp-endpoints.ts:183-183`
+Code: `apps/web/lib/connectors/mcp-endpoints.ts:183-183`, `apps/web/lib/connectors/oauth-registry.ts:21-21`
 
 ## S57.26: Clarification/input tool.
 
