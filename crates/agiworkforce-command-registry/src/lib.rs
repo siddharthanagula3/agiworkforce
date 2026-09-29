@@ -530,6 +530,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "schedule",
+            "Create, change, run or trigger routines that run in AGI cloud",
+            false,
+            true,
+            vec!["routines"],
+        ),
+        RegistryCommand::builtin_slash(
             "theme",
             "Change syntax highlighting theme",
             false,

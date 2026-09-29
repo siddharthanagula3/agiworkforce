@@ -64,9 +64,9 @@ vi.mock('@/lib/services/managed-content-safety-service', () => ({
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
     constructor(
+      message: string,
       readonly status: number,
       readonly code: string,
-      message: string,
     ) {
       super(message);
     }
@@ -249,9 +249,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
   });
 
   it('answers 503 when no model route is available', async () => {
-    mocks.selectArtifactRuntimeRoute.mockRejectedValue(
-      new ArtifactRuntimeRouteUnavailableError('No model can answer right now.'),
-    );
+    mocks.selectArtifactRuntimeRoute.mockRejectedValue(new ArtifactRuntimeRouteUnavailableError());
 
     const response = await call({ prompt: 'Summarize' });
 
@@ -281,7 +279,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
 
   it('maps a managed usage refusal to its status', async () => {
     mocks.completeArtifactPrompt.mockRejectedValue(
-      new ManagedUsageRequestError(402, 'usage_limit_reached', 'Out of usage'),
+      new ManagedUsageRequestError('Out of usage', 402, 'usage_limit_reached'),
     );
 
     const response = await call({ prompt: 'Summarize' });

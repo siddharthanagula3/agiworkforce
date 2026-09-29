@@ -96,6 +96,7 @@ pub(super) async fn execute_run_command(
             None => crate::process_tree::shell_command(command),
         };
         let mut command_process = command_process;
+        crate::interactive::mark_agent_spawned(&mut command_process);
         if let Some(dir) = &working_dir {
             command_process.current_dir(dir);
         }

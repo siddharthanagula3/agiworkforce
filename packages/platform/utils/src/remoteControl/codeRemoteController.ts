@@ -256,6 +256,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       }
     }
     const fileChanges: RemoteCodeFileChange[] = activity.fileChanges
+      .flatMap((change) => (change.kind === 'deleted' ? [] : [{ ...change, kind: change.kind }]))
       .slice(-REMOTE_CODE_LIMITS.fileChanges)
       .map((change) => ({
         path: change.path,
