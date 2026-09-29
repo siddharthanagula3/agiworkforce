@@ -59,11 +59,10 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 
 - Done when: Chats in the notebook answer from its sources.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Non-temporary mobile turns still send no conversation_id (only temporary chats do), so the server never loads project sources for a mobile turn. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -207,15 +206,3 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S37.37: Notebook-to-main-chat context handoff.
-
-- Done when: From the main chat the user can bring a notebook's context into the conversation.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The chat project selector applies only project instructions locally; sources are not brought in because turns carry no conversation_id. | handler |
-
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`

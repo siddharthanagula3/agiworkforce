@@ -194,7 +194,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | On mobile, opening a generated or library image offers Edit with a brush selection (size slider, undo/redo) plus copy, save, share and delete (deletes the source conversation); no separate image studio screen required. | ui |
+| mobile | partial | Needs lead ruling. Mobile creates images in chat image mode (model picker in the + sheet), and the Library now has Images, Remix and Generations. The web's standalone Image Studio (apps/web/app/chat/images) has no mobile screen. help.openai.com and openai.com returned 403, and Claude has no image generation. A dedicated screen would repeat chat image mode; build it only if the lead wants web parity. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -284,10 +284,7 @@ Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Proposed decline at parity: Claude documents skill create/upload/delete only under Customize > Skills on web (support.claude.com/en/articles/12512180, 12512198, read 2026-09-29); ChatGPT GPT page refused (403). Authoring also waits on AGI_USER_SKILL_AUTHORING. Needs lead ruling. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`
 
 ## S4.36: Plugins manager.
 
@@ -331,8 +328,5 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Proposed decline: admin policies, SSO, audit and sharing controls stay web-only; no official leader page found (help.openai.com 403). Needs lead or founder ruling. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`

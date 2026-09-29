@@ -38,6 +38,8 @@ import {
   fetchArtifactPublication,
   publishArtifact,
   publishFailureMessage,
+  recordPublishedArtifactAudience,
+  usePublishedArtifactAudiences,
   type ArtifactPublication,
 } from '../services/artifactPublishing';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -49,6 +51,8 @@ import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome
 import type { Artifact } from '@/types/chat';
 import { ArtifactSwitcher } from './ArtifactSwitcher';
 import { renderMarkdownContent } from './MessageContentRenderer';
+import { ReportChart } from './ReportChart';
+import { chartArtifactToChart } from '@/src/features/chat/utils/chartArtifact';
 import { GeneratedFileCard } from './GeneratedFileCard';
 import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
 import { ArtifactChangesView } from './ArtifactChangesView';
@@ -176,6 +180,7 @@ export function ArtifactFullScreen({
   const currentPublication =
     published && published.artifactId === artifact?.id ? published.publication : null;
   const publishedUrl = currentPublication?.shareUrl ?? null;
+  const publicationKnown = usePublishedArtifactAudiences((s) => s.ownerId !== null);
 
   const artifactId = artifact?.id;
 
@@ -418,6 +423,7 @@ export function ArtifactFullScreen({
   const canPreview = isPreviewable(artifact);
   const previewKind = livePreviewKind(artifact);
   const isMonospace = isMonospaceArtifact(artifact);
+  const chartArtifact = artifact.type === 'chart' ? chartArtifactToChart(activeContent) : null;
 
   const titleLabel = `${artifact.title} · ${typeLabel(artifact)}`;
 
@@ -758,6 +764,14 @@ export function ArtifactFullScreen({
             <ArtifactSwitcher artifacts={switchable} activeId={artifact.id} onSelect={onSwitch} />
           ) : null}
 
+          {artifact && appMode === 'cloud' && publicationKnown && !publishedUrl ? (
+            <Text
+              style={{ marginTop: 10, fontSize: typeScale.caption, color: colors.textSecondary }}
+              testID="artifact-private-state"
+            >
+              Private. Only you can open it until you publish it.
+            </Text>
+          ) : null}
           {/* Row 3: the hosted link, once published */}
           {publishedUrl ? (
             <View
@@ -809,8 +823,14 @@ export function ArtifactFullScreen({
               title={artifact.title}
               publication={currentPublication}
               workspaceMemberCount={workspaceMemberCount}
-              onChanged={(publication) => setPublished({ artifactId: artifact.id, publication })}
-              onUnpublished={() => setPublished(null)}
+              onChanged={(publication) => {
+                setPublished({ artifactId: artifact.id, publication });
+                recordPublishedArtifactAudience(artifact.id, publication.visibility);
+              }}
+              onUnpublished={() => {
+                setPublished(null);
+                recordPublishedArtifactAudience(artifact.id, null);
+              }}
             />
           ) : null}
         </View>
@@ -987,6 +1007,10 @@ export function ArtifactFullScreen({
                   )}
                 </Text>
               </ScrollView>
+            ) : chartArtifact ? (
+              <View testID="artifact-fullscreen-chart">
+                <ReportChart chart={chartArtifact} colors={colors} />
+              </View>
             ) : (
               <View testID="artifact-fullscreen-markdown">
                 {renderMarkdownContent(activeContent, colors)}

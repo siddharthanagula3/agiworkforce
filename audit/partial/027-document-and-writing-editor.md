@@ -154,11 +154,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add Word (.docx) to the artifact Download as sheet on mobile so document artifacts download as .docx alongside Markdown, PDF and text. | ui |
+| mobile | partial | DOCX export waits on lead approval to add the docx library to apps/mobile (asked 2026-09-29); then add a Word option to the Download as sheet | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `apps/mobile/src/features/chat/components/FileExportButton.tsx:97-101`
+Code: `apps/mobile/src/features/chat/utils/artifactExport.ts:1-1`
 
 ## S27.36: Export to PDF.
 

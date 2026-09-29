@@ -36,6 +36,7 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { syncNow } from '@/services/cloudSyncEngine';
+import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import {
   accountScopedUiStateKey,
   captureAccountScopedUiState,
@@ -49,6 +50,8 @@ type DisplayProject = {
   description: string;
   instructions: string;
   updatedAt: string;
+  iconId?: string | null;
+  accentId?: string | null;
 };
 
 function toDisplayProject(p: Project | CloudProject): DisplayProject {
@@ -104,9 +107,17 @@ export default function ProjectsTabScreen() {
     () => cloudProjectsRaw.filter((p) => p.deletedAt === null && !p.isArchived),
     [cloudProjectsRaw],
   );
+  const cloudDetails = useCloudProjectStore((s) => s.details);
   const projects: DisplayProject[] = useMemo(
-    () => (isCloud ? cloudProjects.map(toDisplayProject) : localProjects.map(toDisplayProject)),
-    [isCloud, cloudProjects, localProjects],
+    () =>
+      isCloud
+        ? cloudProjects.map((p) => ({
+            ...toDisplayProject(p),
+            iconId: cloudDetails[p.id]?.iconEmoji ?? null,
+            accentId: cloudDetails[p.id]?.accentColor ?? null,
+          }))
+        : localProjects.map(toDisplayProject),
+    [isCloud, cloudProjects, cloudDetails, localProjects],
   );
 
   const localActiveId = useProjectStore((s) => s.activeProjectId);
@@ -157,7 +168,11 @@ export default function ProjectsTabScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (isCloud && clerkUserId) void syncNow();
+      if (!isCloud || !clerkUserId) return;
+      void syncNow();
+      const controller = new AbortController();
+      void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+      return () => controller.abort();
     }, [clerkUserId, isCloud]),
   );
 
