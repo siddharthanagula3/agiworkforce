@@ -1,3 +1,5 @@
+import { pushOverlayLayer } from './overlay-stack';
+
 const NAV_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
 const DEFAULT_ITEM_SELECTOR = '[role="menuitem"]';
 
@@ -23,20 +25,21 @@ export function attachMenuKeyboard(options: MenuKeyboardOptions): () => void {
     list[((index % list.length) + list.length) % list.length]?.focus();
   };
 
-  const onKeyDown = (event: KeyboardEvent): void => {
+  const onKeyDown = (event: KeyboardEvent): boolean => {
     if (event.key === 'Escape') {
       event.stopPropagation();
+      event.preventDefault();
       options.onClose();
       options.trigger?.focus();
-      return;
+      return true;
     }
     if (event.key === 'Tab') {
       options.onClose();
-      return;
+      return false;
     }
-    if (!NAV_KEYS.includes(event.key)) return;
+    if (!NAV_KEYS.includes(event.key)) return false;
     const list = items();
-    if (list.length === 0) return;
+    if (list.length === 0) return false;
     event.preventDefault();
     event.stopPropagation();
     const current = list.indexOf(document.activeElement as HTMLElement);
@@ -44,11 +47,12 @@ export function attachMenuKeyboard(options: MenuKeyboardOptions): () => void {
     else if (event.key === 'ArrowUp') focusItem(current - 1);
     else if (event.key === 'Home') focusItem(0);
     else focusItem(list.length - 1);
+    return true;
   };
 
-  document.addEventListener('keydown', onKeyDown, true);
+  const popLayer = pushOverlayLayer(onKeyDown);
   if (options.autoFocusFirstItem !== false) focusItem(0);
-  return () => document.removeEventListener('keydown', onKeyDown, true);
+  return popLayer;
 }
 
 export interface DomMenuItem {
