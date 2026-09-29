@@ -436,22 +436,6 @@ const ja = {
   'savedApprovals.removeAllowed': '次にこれを行おうとするとき、AGI は再び確認します: {label}',
   'savedApprovals.removeDenied':
     '拒否される代わりに、AGI が再びこれの許可を求めることがあります: {label}',
-  'savedApprovals.add': 'ルールを追加',
-  'savedApprovals.addDetail':
-    'すべてのセッションでコマンドまたはウェブサイトを常に許可または常に拒否します',
-  'savedApprovals.targetCommand': 'シェルコマンド',
-  'savedApprovals.targetCommandDetail': 'コマンドの先頭から照合します。例: npm test',
-  'savedApprovals.targetDomain': 'ウェブサイト',
-  'savedApprovals.targetDomainDetail':
-    'エージェントが取得または開くページ: example.com、*.example.com、または *',
-  'savedApprovals.decisionAllow': '常に許可',
-  'savedApprovals.decisionDeny': '常に拒否',
-  'savedApprovals.patternCommand': 'コマンド、またはその先頭部分',
-  'savedApprovals.patternDomain': 'ウェブサイト。例: example.com',
-  'savedApprovals.allowCommandTitle': '{pattern} を常に許可しますか？',
-  'savedApprovals.allowCommandDetail':
-    'AGI はこれで始まるコマンドを、すべてのセッションで確認なしに実行します。',
-  'savedApprovals.allowConfirm': '常に許可',
   'savedApprovals.noun': '保存済みの承認',
   'webview.alwaysAllow': '常に許可',
   'webview.alwaysAllowHint':

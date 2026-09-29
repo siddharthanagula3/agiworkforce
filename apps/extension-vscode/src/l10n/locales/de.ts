@@ -534,23 +534,6 @@ const de = {
   'savedApprovals.removeAllowed':
     'AGI fragt wieder, wenn es das nächste Mal Folgendes tun will: {label}',
   'savedApprovals.removeDenied': 'AGI darf wieder fragen, statt abgelehnt zu werden: {label}',
-  'savedApprovals.add': 'Regel hinzufügen',
-  'savedApprovals.addDetail':
-    'Einen Befehl oder eine Website in jeder Sitzung immer erlauben oder immer verweigern',
-  'savedApprovals.targetCommand': 'Ein Shell-Befehl',
-  'savedApprovals.targetCommandDetail':
-    'Wird ab dem Anfang des Befehls abgeglichen, zum Beispiel npm test',
-  'savedApprovals.targetDomain': 'Eine Website',
-  'savedApprovals.targetDomainDetail':
-    'Seiten, die der Agent abruft oder öffnet: example.com, *.example.com oder *',
-  'savedApprovals.decisionAllow': 'Immer erlauben',
-  'savedApprovals.decisionDeny': 'Immer verweigern',
-  'savedApprovals.patternCommand': 'Der Befehl oder sein Anfang',
-  'savedApprovals.patternDomain': 'Die Website, zum Beispiel example.com',
-  'savedApprovals.allowCommandTitle': '{pattern} immer erlauben?',
-  'savedApprovals.allowCommandDetail':
-    'AGI führt jeden Befehl, der damit beginnt, in jeder Sitzung ohne Rückfrage aus.',
-  'savedApprovals.allowConfirm': 'Immer erlauben',
   'savedApprovals.noun': 'gespeicherte Genehmigungen',
   'webview.alwaysAllow': 'Immer erlauben',
   'webview.alwaysAllowHint':

@@ -482,22 +482,6 @@ const en = {
   'savedApprovals.removeTitle': 'Remove this saved approval?',
   'savedApprovals.removeAllowed': 'AGI asks again the next time it wants to do this: {label}',
   'savedApprovals.removeDenied': 'AGI may ask to do this again instead of being refused: {label}',
-  'savedApprovals.add': 'Add a rule',
-  'savedApprovals.addDetail': 'Always allow or always deny a command or a website in every session',
-  'savedApprovals.targetCommand': 'A shell command',
-  'savedApprovals.targetCommandDetail':
-    'Matched from the start of the command, for example npm test',
-  'savedApprovals.targetDomain': 'A website',
-  'savedApprovals.targetDomainDetail':
-    'Pages the agent fetches or opens: example.com, *.example.com or *',
-  'savedApprovals.decisionAllow': 'Always allow',
-  'savedApprovals.decisionDeny': 'Always deny',
-  'savedApprovals.patternCommand': 'The command, or the start of it',
-  'savedApprovals.patternDomain': 'The website, for example example.com',
-  'savedApprovals.allowCommandTitle': 'Always allow {pattern}?',
-  'savedApprovals.allowCommandDetail':
-    'AGI runs any command that starts with this, in every session, without asking.',
-  'savedApprovals.allowConfirm': 'Always allow',
   'savedApprovals.noun': 'saved approvals',
   'webview.alwaysAllow': 'Always allow',
   'webview.alwaysAllowHint':

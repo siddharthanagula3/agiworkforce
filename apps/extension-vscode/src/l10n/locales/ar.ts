@@ -735,20 +735,6 @@ const ar = {
   'savedApprovals.removeAllowed':
     'سيسأل AGI مرة أخرى في المرة القادمة التي يريد فيها فعل هذا: {label}',
   'savedApprovals.removeDenied': 'قد يطلب AGI فعل هذا مرة أخرى بدلًا من رفضه: {label}',
-  'savedApprovals.add': 'إضافة قاعدة',
-  'savedApprovals.addDetail': 'اسمح دائمًا أو ارفض دائمًا أمرًا أو موقعًا في كل جلسة',
-  'savedApprovals.targetCommand': 'أمر في الطرفية',
-  'savedApprovals.targetCommandDetail': 'تتم المطابقة من بداية الأمر، مثل npm test',
-  'savedApprovals.targetDomain': 'موقع ويب',
-  'savedApprovals.targetDomainDetail':
-    'الصفحات التي يجلبها الوكيل أو يفتحها: example.com أو *.example.com أو *',
-  'savedApprovals.decisionAllow': 'السماح دائمًا',
-  'savedApprovals.decisionDeny': 'الرفض دائمًا',
-  'savedApprovals.patternCommand': 'الأمر أو بدايته',
-  'savedApprovals.patternDomain': 'الموقع، مثل example.com',
-  'savedApprovals.allowCommandTitle': 'السماح دائمًا بـ {pattern}؟',
-  'savedApprovals.allowCommandDetail': 'سيشغّل AGI أي أمر يبدأ بهذا، في كل جلسة، دون أن يسأل.',
-  'savedApprovals.allowConfirm': 'السماح دائمًا',
   'savedApprovals.noun': 'الموافقات المحفوظة',
   'webview.alwaysAllow': 'السماح دائمًا',
   'webview.alwaysAllowHint':
