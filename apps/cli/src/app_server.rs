@@ -65,7 +65,6 @@ const MCP_SERVER_CORE_TOOLS: &[&str] = &[
     "list_worktrees",
     "lsp_definition",
     "lsp_hover",
-    "lsp_diagnostics",
     "lsp_completion",
     "lsp_document_symbols",
     "lsp_format",

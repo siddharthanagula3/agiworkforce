@@ -931,15 +931,6 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).read_only().deferred(),
         def(
-            "lsp_diagnostics",
-            "Collect language-server diagnostics for <file> (errors, warnings, hints).",
-            serde_json::json!({
-                "type": "object",
-                "properties": {"file": {"type": "string"}},
-                "required": ["file"]
-            }),
-        ).read_only().deferred(),
-        def(
             "lsp_completion",
             "Get language-server completion suggestions at <file>:<line>:<character>.",
             serde_json::json!({
@@ -1723,7 +1714,6 @@ mod tests {
                 "list_worktrees",
                 "lsp_definition",
                 "lsp_hover",
-                "lsp_diagnostics",
                 "lsp_completion",
                 "lsp_document_symbols",
                 "lsp_format",
@@ -2045,7 +2035,6 @@ mod tests {
                 "list_worktrees",
                 "lsp_completion",
                 "lsp_definition",
-                "lsp_diagnostics",
                 "lsp_document_symbols",
                 "lsp_format",
                 "lsp_hover",

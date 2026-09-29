@@ -444,7 +444,6 @@ pub(crate) fn rule_paths_from_tool_call(
         "resolve_conflict",
         "lsp_definition",
         "lsp_hover",
-        "lsp_diagnostics",
         "lsp_completion",
         "lsp_document_symbols",
         "lsp_format",
@@ -2491,7 +2490,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 65);
+        assert_eq!(defs.len(), 64);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
