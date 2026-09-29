@@ -81,6 +81,11 @@ import {
   reconcileManagedCloudPublicText,
   readPersistedCloudToolApproval,
   readManagedCloudAgentRunHandle,
+  managedCloudAgentRunPath,
+  MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
+  MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
+  MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+  MANAGED_CLOUD_TOOL_LOOP_HEADER,
   CloudToolApprovalProjectionSchema,
   DEVICE_STEP_RESUME_PATH,
   TOOL_APPROVAL_RESUME_PATH,
@@ -1110,6 +1115,133 @@ function autoResolvePendingApprovals(
       void resolve(assistantMessageId, call.toolCallId, 'rejected');
     }
   }
+}
+
+const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
+const WAITING_RUN_STATES: ReadonlySet<string> = new Set(['awaiting_input', 'paused']);
+const remoteApprovalWatches = new Set<string>();
+
+function journalFollowResponse(runId: string): Response {
+  const frame = { choices: [{ index: 0, delta: { x_run_detached: { run_id: runId } } }] };
+  return new Response(`data: ${JSON.stringify(frame)}\n\n`, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      [MANAGED_CLOUD_AGENT_RUN_ID_HEADER]: runId,
+      [MANAGED_CLOUD_AGENT_RUN_URL_HEADER]: managedCloudAgentRunPath(runId),
+      [MANAGED_CLOUD_TOOL_LOOP_HEADER]: MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+    },
+  });
+}
+
+async function continueRemotelyAnsweredTurn(
+  assistantMessageId: string,
+  turn: PendingTurn,
+  getAuthToken: AuthTokenProvider,
+): Promise<void> {
+  const store = useChatStore.getState();
+  pendingTurns.delete(assistantMessageId);
+  for (const call of turn.calls) {
+    store.updateToolEntry(
+      assistantMessageId,
+      call.toolCallId,
+      { requiresApproval: false, status: 'running' },
+      turn.conversationId,
+    );
+  }
+  const message = findConversationMessage(turn.conversationId, assistantMessageId);
+  const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
+  store.updateMessage(assistantMessageId, { metadata }, turn.conversationId);
+  store.startStreaming(assistantMessageId, turn.conversationId);
+  store.setLoading(true, turn.conversationId);
+  try {
+    const outcome = await consumeAssistantStream({
+      response: journalFollowResponse(turn.runId),
+      assistantMessageId,
+      model: turn.model,
+      conversationId: turn.conversationId,
+      isTemporaryConversation: turn.isTemporaryConversation,
+      getAuthToken,
+      seedContent: message?.content ?? '',
+      ...(message?.metadata?.tools
+        ? { seedTools: message.metadata.tools.map((tool) => ({ ...tool })) }
+        : {}),
+    });
+    if (outcome.suspended && outcome.pendingCalls.length > 0) {
+      pendingTurns.set(assistantMessageId, {
+        runId: turn.runId,
+        model: turn.model,
+        conversationId: turn.conversationId,
+        isTemporaryConversation: turn.isTemporaryConversation,
+        calls: outcome.pendingCalls,
+        decisions: new Map(),
+        resolving: false,
+      });
+      followRemoteApproval(assistantMessageId, getAuthToken);
+    }
+    if (outcome.suspended && outcome.pendingInputs.length > 0) {
+      pendingInputTurns.set(assistantMessageId, {
+        runId: turn.runId,
+        model: turn.model,
+        conversationId: turn.conversationId,
+        isTemporaryConversation: turn.isTemporaryConversation,
+        calls: outcome.pendingInputs,
+        responses: new Map(),
+        resolving: false,
+      });
+    }
+  } catch (error) {
+    await handleStreamError(error, {
+      assistantMessageId,
+      model: turn.model,
+      conversationId: turn.conversationId,
+      isTemporaryConversation: turn.isTemporaryConversation,
+      getAuthToken,
+      setError: store.setError,
+      stopStreaming: store.stopStreaming,
+      setLoading: store.setLoading,
+      updateMessage: store.updateMessage,
+    });
+  }
+}
+
+async function watchRemoteApproval(
+  assistantMessageId: string,
+  getAuthToken: AuthTokenProvider,
+): Promise<void> {
+  const client = createManagedCloudAgentRunClient({ getAuthToken });
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, REMOTE_APPROVAL_POLL_INTERVAL_MS));
+    const turn = pendingTurns.get(assistantMessageId);
+    if (!turn || turn.resolving) return;
+    const lastSequence =
+      findConversationMessage(turn.conversationId, assistantMessageId)?.metadata?.agentActivity
+        ?.lastSequence ?? -1;
+    let progressed: boolean;
+    try {
+      const snapshot = await client.getRun(turn.runId, {
+        afterSequence: lastSequence,
+        limit: 1,
+      });
+      progressed =
+        !WAITING_RUN_STATES.has(snapshot.run.state) ||
+        (lastSequence >= 0 && snapshot.events.length > 0);
+    } catch (error) {
+      logger.warn('[useChatStream] Could not check a waiting run for a remote answer', error);
+      continue;
+    }
+    if (pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
+    if (!progressed) continue;
+    await continueRemotelyAnsweredTurn(assistantMessageId, turn, getAuthToken);
+    return;
+  }
+}
+
+function followRemoteApproval(assistantMessageId: string, getAuthToken: AuthTokenProvider): void {
+  if (remoteApprovalWatches.has(assistantMessageId)) return;
+  remoteApprovalWatches.add(assistantMessageId);
+  void watchRemoteApproval(assistantMessageId, getAuthToken).finally(() => {
+    remoteApprovalWatches.delete(assistantMessageId);
+  });
 }
 
 export interface PendingDeviceStep {
@@ -3961,6 +4093,7 @@ export function useChatStream(
               settled.pendingCalls,
               resolveToolApproval,
             );
+            followRemoteApproval(assistantMessageId, getAuthToken);
             break;
           }
 
@@ -4656,6 +4789,7 @@ export function useResolveToolApproval(
             settled.pendingCalls,
             resolveToolApproval,
           );
+          followRemoteApproval(assistantMessageId, getAuthToken);
         } else {
           pendingTurns.delete(assistantMessageId);
         }
@@ -4906,6 +5040,7 @@ function useResolveToolInput(
             resolving: false,
           });
           autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
+          followRemoteApproval(assistantMessageId, getAuthToken);
         }
         if (runId && pendingInputs.length > 0) {
           pendingInputTurns.set(assistantMessageId, {
