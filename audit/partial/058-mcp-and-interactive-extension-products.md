@@ -66,9 +66,9 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Server tools are discovered and offered in chat, but mobile shows no tool list per server (only tools with a saved permission). | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S58.09: Resource discovery.
 
@@ -111,9 +111,9 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S58.13: Enable/disable server.
 

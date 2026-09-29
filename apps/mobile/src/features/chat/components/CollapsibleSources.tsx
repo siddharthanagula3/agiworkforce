@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { translatePlural } from '@/src/i18n/plural';
 
 interface CollapsibleSourcesProps {
   sources: AgentEventSource[];
@@ -103,7 +104,10 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
           >
             {expanded
               ? 'Sources'
-              : `View ${sources.length} source${sources.length === 1 ? '' : 's'}`}
+              : translatePlural('chat', 'counts.viewSources', sources.length, {
+                  one: 'View {{count}} source',
+                  other: 'View {{count}} sources',
+                })}
           </Text>
         </View>
         {expanded ? (
