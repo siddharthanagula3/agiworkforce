@@ -201,6 +201,7 @@ import {
   isAutoModeModelId,
   WORKSPACE_FEATURE_LABELS,
   type Effort,
+  type ModelMetadata,
   getSlotForModel,
   isFlagshipRoutingSlot,
   normalizeModelId,
@@ -632,6 +633,7 @@ export const ChatCompletionRequestSchema = z
       })
       .optional(),
     effort: z.string().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
     use_prompt_cache: z.boolean().optional(),
     client_timezone: z
       .string()
@@ -1372,6 +1374,8 @@ export type ProcessedRequest = {
     thinking_mode?: boolean;
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
+    /** Only ever set for a first-party Anthropic model with a fast tier. */
+    speed?: 'fast';
     usePromptCache?: boolean;
     responseFormat?: ChatResponseFormat;
     requestParameters?: RequestedParameters;
@@ -1452,6 +1456,15 @@ const EFFORT_ORDER: readonly Effort[] = [
 function effortExceeds(effort: Effort | undefined, maximum: Effort | undefined): boolean {
   if (!effort || !maximum) return false;
   return EFFORT_ORDER.indexOf(effort) > EFFORT_ORDER.indexOf(maximum);
+}
+
+/** Fast mode is Anthropic's first-party tier; a gateway or cloud route does not offer it. */
+export function fastTierFor(
+  provider: string,
+  model: string,
+): NonNullable<ModelMetadata['fastTier']> | null {
+  if (provider !== 'anthropic') return null;
+  return getModelMetadataById(model)?.fastTier ?? null;
 }
 
 export function buildThinkingConfig({
@@ -4778,6 +4791,25 @@ export async function processRequest(
     };
   }
 
+  let fastTier =
+    chatRequest.speed === 'fast' ? fastTierFor(providerLower, chatRequest.model) : null;
+  if (chatRequest.speed === 'fast' && !fastTier) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Fast mode is not available for ${chatRequest.model}. Turn it off or choose a model that offers it.`,
+            type: 'invalid_request_error',
+            code: 'fast_mode_unavailable',
+            param: 'speed',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
   const effectiveEffort = clampReasoningEffort(
     resolveRequestEffort(
       providerLower,
@@ -4873,6 +4905,9 @@ export async function processRequest(
       estimatedPromptTokens,
       maxTokens,
     );
+  if (fastTier) {
+    estimatedCostMicrousd = Math.ceil(estimatedCostMicrousd * fastTier.priceMultiplier);
+  }
   const turnCodeExecutionInput = {
     provider: providerLower,
     stream: chatRequest.stream,
@@ -5037,6 +5072,7 @@ export async function processRequest(
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
           estimatedCostMicrousd = fallbackCostMicrousd;
+          fastTier = null;
         } else {
           return monthlyLimitRefusal();
         }
@@ -5434,6 +5470,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(fastTier ? { speed: 'fast' as const } : {}),
     ...(responseFormat ? { responseFormat } : {}),
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({

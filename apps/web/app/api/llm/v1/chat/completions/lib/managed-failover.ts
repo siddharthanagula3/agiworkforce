@@ -74,7 +74,7 @@ import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/mode
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { isGatewayBackedHarness, type FailoverRoute } from './failover-plan';
 import type { ProcessedRequest } from './request-processor';
-import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
+import { buildThinkingConfig, fastTierFor, resolveRequestEffort } from './request-processor';
 
 /** Availability classes only, plus direct-provider rate limits. A managed Auto
  *  request should not fail because one upstream project exhausted quota;
@@ -340,6 +340,10 @@ export function buildFailoverAttemptView(
       model,
       effort,
       thinking: thinking ?? undefined,
+      speed:
+        processed.llmRequest.speed === 'fast' && fastTierFor(providerLower, model)
+          ? 'fast'
+          : undefined,
     },
   };
 }

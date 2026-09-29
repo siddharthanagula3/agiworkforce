@@ -1268,6 +1268,7 @@
         }
       },
       "tierPolicy": { "minTier": "max" },
+      "fastTier": { "priceMultiplier": 2 },
       "promptCacheMinimumTokens": 512,
       "providerCompatibility": { "nativeWebFetch": false },
       "lifecycle": {

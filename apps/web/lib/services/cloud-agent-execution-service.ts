@@ -578,6 +578,7 @@ const ProviderUsageObservationSchema = z
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
   })
   .strict();
 const providerUsageObservationSchemaCoversObservation: SameKeys<
