@@ -15,10 +15,9 @@ import {
   BellOff,
   Bot,
   CheckSquare,
-  AlertTriangle,
-  AlertOctagon,
   ChevronRight,
   Info,
+  MessageSquare,
   Moon,
   Clock,
   Vibrate,
@@ -72,20 +71,16 @@ interface CategoryMeta {
 
 function getCategories(c: ColorScheme): CategoryMeta[] {
   const presentation: Record<NotificationCategory, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
-    approvals: {
+    chat_replies: {
+      icon: MessageSquare,
+      iconColor: c.teal,
+    },
+    tasks: {
       icon: CheckSquare,
       iconColor: c.agentWarning,
     },
-    task_updates: {
+    product: {
       icon: Info,
-      iconColor: c.teal,
-    },
-    errors: {
-      icon: AlertOctagon,
-      iconColor: c.agentError,
-    },
-    status: {
-      icon: AlertTriangle,
       iconColor: c.textMuted,
     },
   };

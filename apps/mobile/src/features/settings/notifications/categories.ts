@@ -6,21 +6,17 @@ export interface NotificationCategoryCopy {
 }
 
 export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, NotificationCategoryCopy> = {
-  approvals: {
-    label: 'Approvals',
-    description: 'Agent approval requests and questions',
+  chat_replies: {
+    label: 'Chat replies',
+    description: 'When a reply to your message is ready',
   },
-  task_updates: {
-    label: 'Work Updates',
-    description: 'Task results, schedule runs, and chat replies',
+  tasks: {
+    label: 'Task and approval updates',
+    description: 'Approval requests, finished or failed tasks, and scheduled runs',
   },
-  errors: {
-    label: 'Errors & Stops',
-    description: 'Agent failures and emergency stops',
-  },
-  status: {
-    label: 'Status Updates',
-    description: 'Heartbeat and connection info',
+  product: {
+    label: 'Product',
+    description: 'Service status and connection info',
   },
 };
 
@@ -33,4 +29,19 @@ export function isNotificationCategory(value: unknown): value is NotificationCat
     typeof value === 'string' &&
     Object.prototype.hasOwnProperty.call(NOTIFICATION_CATEGORY_COPY, value)
   );
+}
+
+const LEGACY_NOTIFICATION_CATEGORY: Readonly<Record<string, NotificationCategory>> = {
+  approvals: 'tasks',
+  task_updates: 'tasks',
+  errors: 'tasks',
+  status: 'product',
+};
+
+export function resolveNotificationCategory(value: unknown): NotificationCategory | null {
+  if (isNotificationCategory(value)) return value;
+  if (typeof value !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(LEGACY_NOTIFICATION_CATEGORY, value)
+    ? (LEGACY_NOTIFICATION_CATEGORY[value] ?? null)
+    : null;
 }
