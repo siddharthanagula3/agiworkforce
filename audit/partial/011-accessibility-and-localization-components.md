@@ -10,13 +10,10 @@ nothing is left.
 
 - Done when: Every interactive control exposes an accessible name (visible text, aria-label or platform equivalent) that says what it does.
 - Wave: 3
-- Already works on: vscode
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Controls are widely labelled, but notification rows omit their unread state and activity rows omit their status; include state in the label. | states |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
 
 ## S11.02: Semantic heading hierarchy.
 
@@ -60,18 +57,6 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S11.09: Accessible tool and approval status.
-
-- Done when: Tool steps and approval requests expose their state (running, done, failed, waiting for approval) to assistive tech, with labelled approve and deny controls.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Approve and reject are labelled, but activity rows announce only "Show details for <step>", not whether it is running, done or failed. | states |
-
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
 
 ## S11.12: Text resizing.
 
@@ -147,10 +132,10 @@ Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Usage, schedules and connector dates hard-code en-US; use the device locale. | ui |
+| mobile | partial | partials/chat-gates 5760fe27ab: schedule cards and the PDF export follow the device locale. Usage and connector dates are held and are in post-codex/w-chat-s11.22-mobile-device-locale.patch, which composes with no-yearly-s82-mobile-usage.patch in either order. | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:37-37`, `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
+Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
 
 ## S11.23: Currency formatting.
 

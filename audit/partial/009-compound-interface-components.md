@@ -55,7 +55,6 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 | web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The extension has no branch choice of its own; it works on whatever VS Code has checked out and can only switch to a cloud task's branch ("Bring the branch in"). | ui |
 
 Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
 
@@ -112,15 +111,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 - Done when: Tabular data is shown in a table with column headers that the user can sort (and scroll) to inspect the rows.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
 | cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`
+Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 
@@ -166,18 +164,6 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S9.23: Multi-step setup wizard.
-
-- Done when: A guided setup runs as ordered steps that collect the user's choices (name, model, sign-in) and saves them when it finishes.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The intro and the Get Started walkthrough explain steps and link to commands but collect no choices; add steps that sign in, pick a model and set autonomy inside the flow. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`
 
 ## S9.24: Split-pane container.
 
@@ -296,16 +282,13 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 - Done when: An inbox lists the user's notifications newest first, marks which are unread (visibly and for screen readers), and lets them open or mark them read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Unread is shown by colour and weight only and the row label omits it; add "unread" to the accessibility label. The inbox also holds only pushes this device received. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(app)/notifications/index.tsx:113-113`, `apps/mobile/app/(app)/notifications/index.tsx:170-170`
 
 ## S9.38: Keyboard-command palette.
 

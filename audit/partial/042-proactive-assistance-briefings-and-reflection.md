@@ -112,7 +112,6 @@ Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
 | --- | --- | --- | --- |
 | mobile | partial | Only a per-schedule run history. | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
-| vscode | partial | Only a per-schedule run list. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`, `apps/extension-vscode/src/core/commandSetup.ts:2237-2237`, `apps/extension-vscode/src/features/schedules/scheduleActions.ts:126-126`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`

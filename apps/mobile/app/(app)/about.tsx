@@ -13,6 +13,7 @@ import {
   Mail,
   Info,
   LifeBuoy,
+  BookOpen,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -256,6 +257,12 @@ export default function AboutScreen() {
           >
             Support
           </Text>
+          <LinkRow
+            icon={BookOpen}
+            label="Help Center"
+            onPress={() => void openWebPage('https://agiworkforce.com/help')}
+          />
+          <Separator />
           <Pressable
             onPress={() =>
               router.push({

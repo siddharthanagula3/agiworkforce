@@ -149,18 +149,6 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-50`
 
-## S14.25: Password-protected-file notice.
-
-- Done when: A password-protected file produces a notice that says it is locked and how to fix it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Tell the user a PDF is password protected; the on-device parser detects it (ENCRYPTED_PDF) but the message only tells the model the content could not be extracted. | ui |
-
-Code: `apps/mobile/services/docParser.ts:272-276`, `apps/mobile/services/attachmentContext.ts:24-27`
-
 ## S14.31: Duplicate-file treatment.
 
 - Done when: Adding the same file twice is detected and handled visibly (skipped, merged or flagged) rather than sent twice silently.

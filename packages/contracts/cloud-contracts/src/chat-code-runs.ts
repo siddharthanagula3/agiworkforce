@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+export const CHAT_CODE_RUN_TOOL_NAME = 'execute_code';
 export const CHAT_CODE_RUN_MAX_CODE_CHARS = 100_000;
 export const CHAT_CODE_RUN_MAX_LANGUAGE_CHARS = 32;
 

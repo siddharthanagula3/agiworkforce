@@ -27,7 +27,11 @@ import {
   type WorkspaceFeature,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { MeDisabledFeature, MeResponse } from '@agiworkforce/cloud-contracts';
+import type {
+  MeDisabledFeature,
+  MeResponse,
+  MeWorkspaceDataRegion,
+} from '@agiworkforce/cloud-contracts';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
@@ -41,6 +45,8 @@ import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { readOrganizationRegion } from '@/lib/server/data-region';
+import { DATA_REGIONS } from '@agiworkforce/compliance';
 import { resolveEffectiveWorkspaceControls } from '@/lib/services/organization-policy-gate';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 import {
@@ -322,6 +328,7 @@ async function handleGetMe(request: NextRequest) {
       routing_preferences,
       capability_handshake: toWireCapabilityHandshake(capability_handshake),
       disabled_features: await closedFeatures(killSwitches?.closedCapabilities ?? []),
+      workspace_data_region: await workspaceDataRegion(db, membership?.organizationId ?? null),
     };
     return NextResponse.json(responseBody);
   } catch (error) {
@@ -332,6 +339,23 @@ async function handleGetMe(request: NextRequest) {
       'Error in /api/me',
     );
     throw error;
+  }
+}
+
+async function workspaceDataRegion(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+): Promise<MeWorkspaceDataRegion | null> {
+  if (!organizationId) return null;
+  try {
+    const { effective } = await readOrganizationRegion(db, organizationId);
+    return { id: effective, label: DATA_REGIONS[effective].label };
+  } catch (error) {
+    logger.warn(
+      { organizationId, error },
+      'Workspace data region unreadable; omitted from /api/me',
+    );
+    return null;
   }
 }
 

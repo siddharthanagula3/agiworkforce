@@ -222,9 +222,9 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
+| mobile | partial | 7d2553d889: a runtime error replaces the preview with an error panel and Retry. View source needs the viewer to pass onViewSource: post-codex/w-work-s28-mobile-preview-view-source.patch (ArtifactFullScreen.tsx is Codex-held; apply after no-yearly-s32-34-mobile-show-changes.patch). | ui |
 
-Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
+Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:96-96`
 
 ## S26.36: Dependency-loading state.
 

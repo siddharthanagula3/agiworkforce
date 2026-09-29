@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { createError, isAppError } from '@/lib/errors';
+import { AppError, ErrorCode, createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAuthFailure } from '@/lib/security-audit';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -121,7 +121,14 @@ async function withDeadline<T>(
 function assertStatusAllowsAccess(status: string | null): void {
   const decision = accountAccessDecision(status);
   if (decision.allowed) return;
-  throw createError.forbidden(decision.message);
+  throw new AppError(ErrorCode.ACCOUNT_UNAVAILABLE, decision.message, 403, {
+    reason: decision.reason,
+    recoveryPath: decision.recoveryPath,
+  });
+}
+
+export function isAccountUnavailableError(error: unknown): error is AppError {
+  return isAppError(error) && error.code === ErrorCode.ACCOUNT_UNAVAILABLE;
 }
 
 /**

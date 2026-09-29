@@ -254,7 +254,7 @@ export async function buildScheduledToolPlan(input: {
     loadToolApprovalPolicy(input.db, input.userId),
     !connectorsAllowed
       ? Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS)
-      : loadConnectorToolPermissions(input.db, input.userId),
+      : loadConnectorToolPermissions(input.db, input.userId, input.organizationId ?? null),
   ]);
   const asks = (name: string) => !runsWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
   const withheldTools: string[] = [];

@@ -85,7 +85,7 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Route supports transparent_background on OpenAI edits; mobile never sends it. | ui |
+| mobile | partial | post-codex/w-work-s44.11-s46.06-mobile-media-options.patch: Transparent background toggle in the image options for edit-capable models (as on web), sent as transparent_background. Held: chatViewStore.ts, chat/[id].tsx, runImageGenerationTurn.ts. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
@@ -98,10 +98,10 @@ Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Stop only marks the message stopped on the phone; it never calls the cancel route, so the server job continues. | handler |
+| mobile | partial | post-codex/w-work-s44.18-mobile-cancel-image-job.patch: Stop calls /api/media/image/cancel with the job's idempotency key (keyed by the assistant message id) and says so when the cancel cannot reach AGI Cloud. Held: chatMessageStore.ts, runImageGenerationTurn.ts; free: imagegen.ts. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/media/image/cancel/route.ts:26-30`
+Code: `apps/web/app/api/media/image/cancel/route.ts:1-1`
 
 ## S44.19: Retry generation.
 
@@ -225,7 +225,7 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only via the OS share sheet; no Copy image action. | ui |
+| mobile | partial | post-codex/w-work-s44.30-mobile-copy-image.patch: Copy image in the full-screen viewer puts the saved image on the clipboard (expo-clipboard, already a dependency). Held: ImageFullScreen.tsx; free: services/fileCreation.ts. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

@@ -9,9 +9,7 @@ import {
 } from '@/lib/github-app';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { buildWorkspaceCodeGateResponse } from '@/lib/services/organization-policy-code-gate';
@@ -24,7 +22,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);
