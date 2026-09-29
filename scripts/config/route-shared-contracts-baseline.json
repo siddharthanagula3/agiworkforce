@@ -103,7 +103,6 @@
     "mobile/agent-status",
     "mobile/content-report",
     "mobile/feedback",
-    "mobile/push-token",
     "models/experiential-free",
     "models/experiential-free/completions",
     "models/free-quota",

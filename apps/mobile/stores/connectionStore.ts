@@ -968,11 +968,16 @@ export const useConnectionStore = create<ConnectionState>()(
             app: string;
             version: string;
             dispatchSalt: string;
+            deviceName?: string;
           } = {
             deviceType: 'mobile',
             app: 'agiworkforce-mobile',
             version: appVersion,
             dispatchSalt: '',
+            // The computer names the phone it is paired with from this.
+            ...(Constants.deviceName?.trim()
+              ? { deviceName: Constants.deviceName.trim().slice(0, 120) }
+              : {}),
           };
 
           try {
