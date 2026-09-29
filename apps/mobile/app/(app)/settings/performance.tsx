@@ -26,7 +26,11 @@ import {
   getCapabilities,
   getDefaultModel as getDefaultLocalModel,
   getModelById as getLocalModelById,
+  loadLocalModel,
+  loadedLocalModel,
+  unloadLocalModels,
 } from '@agiworkforce/local-llm';
+import { resolveLocalModelRef } from '@/src/features/model-picker/localModelRuntime';
 import type { DeviceCapabilities } from '@agiworkforce/local-llm';
 import {
   getThermalState,
@@ -409,6 +413,37 @@ export default function PerformanceScreen() {
     return getLocalModelById(selectedModelId) ?? null;
   }, [selectedModelId]);
 
+  const [runtimeState, setRuntimeState] = useState<
+    { kind: 'idle' | 'busy' } | { kind: 'failed'; message: string }
+  >({ kind: 'idle' });
+  const [loadedModel, setLoadedModel] = useState(() => loadedLocalModel());
+  const systemManaged = activeLocalModel?.fileSizeBytes === 0;
+
+  const handleLoadModel = useCallback(async () => {
+    if (!selectedModelId) return;
+    setRuntimeState({ kind: 'busy' });
+    try {
+      const ref = await resolveLocalModelRef(selectedModelId);
+      await loadLocalModel(ref.modelPath, ref.modelId);
+      setLoadedModel(loadedLocalModel());
+      setRuntimeState({ kind: 'idle' });
+    } catch (error) {
+      setLoadedModel(loadedLocalModel());
+      setRuntimeState({
+        kind: 'failed',
+        message:
+          error instanceof Error && error.message ? error.message : 'The model did not load.',
+      });
+    }
+  }, [selectedModelId]);
+
+  const handleUnloadModel = useCallback(async () => {
+    setRuntimeState({ kind: 'busy' });
+    await unloadLocalModels();
+    setLoadedModel(loadedLocalModel());
+    setRuntimeState({ kind: 'idle' });
+  }, []);
+
   const tIndicator = useMemo(
     () => thermalColor(thermalState, c.teal, c.agentWarning, c.agentError),
     [thermalState, c.teal, c.agentWarning, c.agentError],
@@ -620,6 +655,62 @@ export default function PerformanceScreen() {
                   : 'Device-managed model'}
               </Text>
 
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    flex: 1,
+                    fontSize: typeScale.caption,
+                    color: runtimeState.kind === 'failed' ? c.agentError : c.textSecondary,
+                  }}
+                >
+                  {systemManaged
+                    ? 'Managed by the system, ready when needed'
+                    : runtimeState.kind === 'busy'
+                      ? 'Working…'
+                      : runtimeState.kind === 'failed'
+                        ? `Failed to load: ${runtimeState.message}`
+                        : loadedModel
+                          ? 'Loaded in memory'
+                          : 'Not loaded, loads on first use'}
+                </Text>
+                {systemManaged ? null : (
+                  <Pressable
+                    onPress={() => void (loadedModel ? handleUnloadModel() : handleLoadModel())}
+                    disabled={runtimeState.kind === 'busy'}
+                    accessibilityRole="button"
+                    accessibilityLabel={loadedModel ? 'Unload model from memory' : 'Load model now'}
+                    accessibilityState={{ disabled: runtimeState.kind === 'busy' }}
+                    style={{
+                      minHeight: 44,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: c.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: typeScale.subhead,
+                        fontWeight: '600',
+                        color: c.textPrimary,
+                      }}
+                    >
+                      {loadedModel ? 'Unload' : 'Load'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <StatChip
                   label="avg tok/s"
@@ -658,7 +749,7 @@ export default function PerformanceScreen() {
             </>
           ) : (
             <Text style={{ fontSize: typeScale.subhead, color: c.textMuted }}>
-              No local model loaded. Download a model to see performance stats.
+              No local model selected. Download a model to see performance stats.
             </Text>
           )}
 
