@@ -136,6 +136,11 @@ export default function CloudBillingScreen() {
   // this app cannot act on it.
   const canRecoverBilling = managementTarget !== null || subscriptionGuard.blocked;
   const isActiveStripePlan = billingSource === 'stripe' && !isFreeTier && isEntitled;
+  const renewsThroughStore =
+    (billingSource === 'apple' || billingSource === 'google') &&
+    !isFreeTier &&
+    isEntitled &&
+    !billingCancelsAtPeriodEnd;
   const nativeSubscriptionSource =
     nativeIap.catalog?.platform === 'ios'
       ? 'apple'
@@ -434,6 +439,18 @@ export default function CloudBillingScreen() {
           ) : null}
         </View>
       </View>
+
+      {renewsThroughStore ? (
+        <SettingsInfo
+          title="Deleting this app does not cancel your plan"
+          body={
+            managementTarget?.kind === 'external'
+              ? `Your plan renews through ${subscriptionGuard.sourceLabel} until you cancel it there. To cancel, tap ${managementTarget.label} above.`
+              : "Your plan renews through the store you bought it from until you cancel it in that store's subscription settings."
+          }
+          icon={ShoppingBag}
+        />
+      ) : null}
 
       {isActiveStripePlan && (
         <>
