@@ -695,7 +695,9 @@ function handleControlMessageInner(payload: unknown): void {
     }
     case 'code.sessions':
     case 'code.session.snapshot':
-    case 'code.session.event': {
+    case 'code.session.event':
+    case 'code.session.started':
+    case 'code.session.transcript': {
       ingestRemoteCodeControl(action, normalizedPayload);
       break;
     }
