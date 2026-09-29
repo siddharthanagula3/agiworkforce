@@ -34,7 +34,7 @@ interface TierState {
   capabilityHandshakeReceived: boolean;
   currentConversationProvider: string | null;
 
-  refreshTier: () => Promise<void>;
+  refreshTier: () => Promise<boolean>;
   setTier: (tier: BillingPlanTier) => void;
   clearAccountEntitlements: () => void;
   setCurrentConversationProvider: (provider: string | null) => void;
@@ -60,15 +60,15 @@ export const useTierStore = create<TierState>()(
       currentConversationProvider: null,
 
       refreshTier: async () => {
-        if (get().isRefreshing) return;
-        if (useChatAppModeStore.getState().appMode !== 'cloud') return;
+        if (get().isRefreshing) return false;
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return false;
         const account = captureCloudAccountEpoch();
-        if (!account) return;
+        if (!account) return false;
 
         set({ isRefreshing: true });
         try {
           const response = await api.get<unknown>('/api/me?surface=mobile');
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
           const data = parseMeResponse(response);
           const billingTier = normalizeBillingPlanTier(data.plan.tier ?? null);
           const tier = normalizeBillingPlanTier(
@@ -93,9 +93,11 @@ export const useTierStore = create<TierState>()(
             capabilityHandshakeVersion: data.capability_handshake?.version ?? null,
             capabilityHandshakeReceived: data.capability_handshake !== undefined,
           });
+          return true;
         } catch (err) {
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
           console.warn('[tierStore] refreshTier failed (keeping cached tier):', err);
+          return false;
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ isRefreshing: false });
         }

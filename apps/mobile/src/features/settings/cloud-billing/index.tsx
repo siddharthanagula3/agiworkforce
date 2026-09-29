@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Alert } from 'react-native';
+import { View, Alert, TextInput } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import {
   CreditCard,
   ExternalLink,
   FileText,
-  Check,
   RefreshCw,
   ShoppingBag,
   CircleHelp,
+  Check,
 } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -40,21 +41,19 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   billingManagementTarget,
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import {
+  BillingUpgradeRequestError,
+  joinBillingUpgradeWaitlist,
+  redeemBillingUpgradeCode,
+} from '@/src/features/billing/mobileIapService';
 
 const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
-
-const FREE_FEATURES = [
-  'Chat on web, iOS, Android, and desktop',
-  'Generate code and visualize data',
-  'Write, edit, and create content',
-  'Analyze text and images',
-  'Search the web',
-];
 
 function requireTopUpUnits(amountUsd: number): number {
   const units = topUpUnitsForUsd(amountUsd);
@@ -108,6 +107,10 @@ export default function CloudBillingScreen() {
   }, [isClerkSignedIn, isCloudModeActive, refreshTier]);
 
   const [portalLoading, setPortalLoading] = useState(false);
+  const [upgradeCode, setUpgradeCode] = useState('');
+  const [upgradeGateBusy, setUpgradeGateBusy] = useState(false);
+  const [upgradeGateJoined, setUpgradeGateJoined] = useState(false);
+  const [upgradeGateError, setUpgradeGateError] = useState<string | null>(null);
   const paywallSheetRef = useRef<BottomSheet>(null);
 
   const tierLabel = getBillingPlanPricing(billingTier).label;
@@ -124,6 +127,7 @@ export default function CloudBillingScreen() {
         });
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
+  const upgradeGateVisible = nativeIap.catalog?.unavailableCode === 'waitlist_access_required';
   const subscriptionGuard = getSubscriptionOwnerGuard(billingSource, billingStatus);
   const managementTarget = billingManagementTarget({
     source: billingSource,
@@ -217,8 +221,44 @@ export default function CloudBillingScreen() {
   }, [managementTarget, showSubscriptionOwnerGuard]);
 
   const handleSignIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-billing'));
   }, [router]);
+
+  const handleRedeemUpgradeCode = useCallback(async () => {
+    setUpgradeGateBusy(true);
+    setUpgradeGateError(null);
+    try {
+      await redeemBillingUpgradeCode(upgradeCode);
+      setUpgradeCode('');
+      await nativeIap.reload();
+    } catch (error) {
+      setUpgradeGateError(
+        error instanceof BillingUpgradeRequestError
+          ? error.userMessage
+          : 'Could not redeem this code. Check it and try again.',
+      );
+    } finally {
+      setUpgradeGateBusy(false);
+    }
+  }, [nativeIap, upgradeCode]);
+
+  const handleJoinUpgradeWaitlist = useCallback(async () => {
+    if (!nextUpgradeTier) return;
+    setUpgradeGateBusy(true);
+    setUpgradeGateError(null);
+    try {
+      await joinBillingUpgradeWaitlist(nextUpgradeTier);
+      setUpgradeGateJoined(true);
+    } catch (error) {
+      setUpgradeGateError(
+        error instanceof BillingUpgradeRequestError
+          ? error.userMessage
+          : 'Could not join the waitlist. Try again.',
+      );
+    } finally {
+      setUpgradeGateBusy(false);
+    }
+  }, [nextUpgradeTier]);
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
@@ -242,7 +282,7 @@ export default function CloudBillingScreen() {
         icon={CreditCard}
       />
 
-      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp ? (
+      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp && !upgradeGateVisible ? (
         <SettingsInfo
           title="Plan changes are not in this app yet"
           body="Your plan, invoices, and payment method are managed on agiworkforce.com. Everything you already pay for keeps working here."
@@ -323,22 +363,6 @@ export default function CloudBillingScreen() {
           </View>
         </View>
 
-        {/* Free plan feature list */}
-        {isFreeTier && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}>
-            {FREE_FEATURES.map((feat) => (
-              <View key={feat} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <Check size={14} color={colors.teal} style={{ marginTop: 2 }} />
-                <Text
-                  style={{ color: colors.textSecondary, fontSize: 13, flex: 1, lineHeight: 18 }}
-                >
-                  {feat}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Action row */}
         <View
           style={{
@@ -349,10 +373,34 @@ export default function CloudBillingScreen() {
         >
           {nextUpgradeTier && !isWorkspacePlan ? (
             <SettingsRow
-              label={isFreeTier ? 'Upgrade plan' : isEntitled ? 'Adjust plan' : 'Choose plan'}
-              icon={ExternalLink}
-              value={canChangePlanInApp ? undefined : 'Unavailable in the app'}
-              onPress={canChangePlanInApp ? handleUpgrade : undefined}
+              label={
+                upgradeGateVisible
+                  ? 'Join upgrade waitlist'
+                  : isFreeTier
+                    ? 'Upgrade plan'
+                    : isEntitled
+                      ? 'Adjust plan'
+                      : 'Choose plan'
+              }
+              icon={upgradeGateVisible ? ShoppingBag : ExternalLink}
+              value={
+                upgradeGateVisible
+                  ? upgradeGateJoined
+                    ? 'You’re on the waitlist'
+                    : 'Or enter an access code below'
+                  : canChangePlanInApp
+                    ? undefined
+                    : 'Unavailable in the app'
+              }
+              onPress={
+                upgradeGateVisible
+                  ? upgradeGateBusy || upgradeGateJoined
+                    ? undefined
+                    : () => void handleJoinUpgradeWaitlist()
+                  : canChangePlanInApp
+                    ? handleUpgrade
+                    : undefined
+              }
               isLast={isFreeTier}
             />
           ) : null}
@@ -481,54 +529,105 @@ export default function CloudBillingScreen() {
               </SettingsGroup>
             </>
           ) : null}
-
-          <SettingsGroup>
-            <SettingsRow
-              label={nativeIap.restoring ? 'Restoring purchases…' : 'Restore purchases'}
-              value="Subscriptions and unfinished purchases"
-              icon={RefreshCw}
-              onPress={
-                nativeIap.connected && !nativeIap.restoring && !nativeIap.purchasingKey
-                  ? () => void nativeIap.restore()
-                  : undefined
-              }
-              isLast
-            />
-          </SettingsGroup>
-
-          {nativeIap.error ? (
-            <SettingsInfo
-              title="Native purchase needs attention"
-              body={nativeIap.error}
-              icon={CreditCard}
-            />
-          ) : nativeIap.lastResult ? (
-            <SettingsInfo
-              title="Purchase verified"
-              body={
-                nativeIap.lastResult.kind === 'top_up'
-                  ? `${formatCredits(nativeIap.lastResult.unitsGranted ?? 0)} were added to your account.`
-                  : 'Your subscription was verified and your plan has been refreshed.'
-              }
-              icon={Check}
-            />
-          ) : null}
         </>
       ) : (
-        <SettingsInfo
-          title={
-            nativeIap.catalog?.unavailableCode === 'waitlist_access_required'
-              ? 'Paid upgrades are opening in stages'
-              : 'Native purchases are not configured'
-          }
-          body={
-            nativeIap.error ??
-            nativeIap.catalog?.unavailableReason ??
-            'Register the App Store and Google Play products for this build before purchases can be offered.'
-          }
-          icon={ShoppingBag}
-        />
+        <>
+          <SettingsInfo
+            title={
+              upgradeGateVisible
+                ? 'Paid upgrades are opening in stages'
+                : 'Native purchases are not configured'
+            }
+            body={
+              nativeIap.error ??
+              nativeIap.catalog?.unavailableReason ??
+              'Register the App Store and Google Play products for this build before purchases can be offered.'
+            }
+            icon={ShoppingBag}
+          />
+          {upgradeGateVisible ? (
+            <View
+              style={{
+                borderRadius: 16,
+                backgroundColor: colors.surfaceElevated,
+                padding: 16,
+                gap: 12,
+                marginBottom: 24,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+                Have an upgrade access code?
+              </Text>
+              <TextInput
+                accessibilityLabel="Upgrade access code"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={50}
+                value={upgradeCode}
+                onChangeText={setUpgradeCode}
+                placeholder="Enter access code"
+                placeholderTextColor={colors.textMuted}
+                style={{
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  minHeight: 44,
+                }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Unlock upgrades"
+                disabled={upgradeGateBusy || upgradeCode.trim().length === 0}
+                onPress={() => void handleRedeemUpgradeCode()}
+                style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Text style={{ color: colors.teal, fontWeight: '700' }}>
+                  {upgradeGateBusy ? 'Checking…' : 'Unlock upgrades'}
+                </Text>
+              </Pressable>
+              {upgradeGateError ? (
+                <Text accessibilityRole="alert" style={{ color: colors.textPrimary }}>
+                  {upgradeGateError}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </>
       )}
+
+      <SettingsGroup>
+        <SettingsRow
+          label={nativeIap.restoring ? 'Restoring purchases…' : 'Restore purchases'}
+          value="Subscriptions and unfinished purchases"
+          icon={RefreshCw}
+          onPress={
+            nativeIap.connected && !nativeIap.restoring && !nativeIap.purchasingKey
+              ? () => void nativeIap.restore()
+              : undefined
+          }
+          isLast
+        />
+      </SettingsGroup>
+
+      {nativeIap.error ? (
+        <SettingsInfo
+          title="Native purchase needs attention"
+          body={nativeIap.error}
+          icon={CreditCard}
+        />
+      ) : nativeIap.lastResult ? (
+        <SettingsInfo
+          title="Purchase verified"
+          body={
+            nativeIap.lastResult.kind === 'top_up'
+              ? `${formatCredits(nativeIap.lastResult.unitsGranted ?? 0)} were added to your account.`
+              : 'Your subscription was verified and your plan has been refreshed.'
+          }
+          icon={Check}
+        />
+      ) : null}
 
       {/* Invoices */}
       <SettingsGroup>

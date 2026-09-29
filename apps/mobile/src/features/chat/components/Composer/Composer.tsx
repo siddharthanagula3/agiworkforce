@@ -4,6 +4,7 @@ import type { SendPreviewInput } from '@agiworkforce/types';
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
 import {
   TaskChips,
+  TASK_CHIP_DRAFT_STARTERS,
   type TaskChipType,
   type TaskSuggestionType,
 } from '@/src/features/chat/components/TaskChips';
@@ -66,11 +67,13 @@ export function Composer({
       if (chip === 'image') {
         setActiveChip(null);
         setMediaMode('image');
+        attachRef?.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[chip]);
         attachRef?.current?.focus?.();
         return;
       }
       setMediaMode('text');
       setActiveChip((prev) => (prev === chip ? null : chip));
+      attachRef?.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[chip]);
       attachRef?.current?.focus?.();
     },
     [attachRef, setMediaMode],
@@ -96,6 +99,7 @@ export function Composer({
             activeChip={activeChip}
             onChipPress={handleChipPress}
             showCloudSuggestions={appMode === 'cloud'}
+            modelId={sendPreview?.modelId}
           />
         </View>
       ) : null}

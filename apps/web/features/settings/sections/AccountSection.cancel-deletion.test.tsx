@@ -9,7 +9,7 @@
  * surfaces an honest error while leaving the account still scheduled.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AccountSection } from './AccountSection';
@@ -215,5 +215,22 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
 
     expect(await screen.findByTestId('delete-account-trigger')).toBeInTheDocument();
     expect(screen.queryByTestId('pending-deletion-title')).not.toBeInTheDocument();
+  });
+
+  it('blocks a new deletion request when the status response is malformed', async () => {
+    stubFetch({ pending: false, canCancel: false, requestedAt: null, scheduledFor: '2026-09-28' });
+
+    renderAccountSection();
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('alert')
+          .some((alert) =>
+            alert.textContent?.includes('Could not check whether a deletion is already pending.'),
+          ),
+      ).toBe(true),
+    );
+    expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
   });
 });

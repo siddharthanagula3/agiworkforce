@@ -69,7 +69,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import { useTierStore } from '../src/features/billing/store';
 import {
   __resetCloudAccountSessionForTests,
@@ -121,7 +121,7 @@ function seedConversation(model: string) {
 }
 
 async function sendAndStrand(retryAtMs: number | null) {
-  const model = requireMobileCloudModel().id;
+  const model = requireFreeMobileCloudModel().id;
   seedConversation(model);
   mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
     callbacks.onError(new ApiFreeCapacityError(retryAtMs));
@@ -185,7 +185,7 @@ describe('a stranded free lane reaches the send banner as a retry deadline', () 
   });
 
   it('leaves an unrelated stream failure on the generic message', async () => {
-    const model = requireMobileCloudModel().id;
+    const model = requireFreeMobileCloudModel().id;
     seedConversation(model);
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onError(new Error('upstream exploded'));

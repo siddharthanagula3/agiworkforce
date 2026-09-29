@@ -1,4 +1,9 @@
 import { ApiPaywallError } from '@/services/api';
+import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import {
+  MediaGenerationAdmissionError,
+  mediaGenerationFailureMessage,
+} from './mediaGenerationError';
 import {
   generateVideo,
   type GeneratedVideo,
@@ -24,6 +29,7 @@ export interface RunVideoGenerationTurnInput {
   aspectRatio?: VideoGenRequest['aspect_ratio'];
   resolution?: VideoGenRequest['resolution'];
   ownerId: string;
+  onStarted?: () => void;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
   taskCreated?: (conversationId: string, assistantMessageId: string, taskId: string) => void;
   isCancelRequested?: (conversationId: string, assistantMessageId: string) => boolean;
@@ -76,14 +82,14 @@ export async function runVideoGenerationTurn(
 ): Promise<VideoGenerationTurnOutcome> {
   const accountEpoch = captureCloudAccountEpoch();
   if (!accountEpoch) {
-    input.onUnexpectedError?.(
-      new Error('Sign in to an active AGI Cloud account before generating video.'),
-    );
+    input.onUnexpectedError?.(new MediaGenerationAdmissionError(CLOUD_SIGN_IN_MESSAGE));
     return { status: 'failed', assistantMessageId: null };
   }
   if (accountEpoch.ownerId !== input.ownerId) {
     input.onUnexpectedError?.(
-      new Error('The active AGI Cloud account changed before video generation started.'),
+      new MediaGenerationAdmissionError(
+        'The active AGI Cloud account changed before video generation started.',
+      ),
     );
     return { status: 'failed', assistantMessageId: null };
   }
@@ -96,6 +102,7 @@ export async function runVideoGenerationTurn(
     input.prompt,
     input.model,
   );
+  input.onStarted?.();
 
   const isStopRequested = () =>
     input.isCancelRequested?.(input.conversationId, assistantMessageId) === true;
@@ -138,11 +145,7 @@ export async function runVideoGenerationTurn(
     }
 
     input.onUnexpectedError?.(error);
-    input.fail(
-      input.conversationId,
-      assistantMessageId,
-      error instanceof Error ? error.message : String(error),
-    );
+    input.fail(input.conversationId, assistantMessageId, mediaGenerationFailureMessage('video'));
     return { status: 'failed', assistantMessageId };
   }
 }

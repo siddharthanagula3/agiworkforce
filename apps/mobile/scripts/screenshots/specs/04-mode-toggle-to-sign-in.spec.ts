@@ -1,4 +1,3 @@
-
 import { device, element, by, waitFor } from 'detox';
 
 describe('Mode toggle → cloud sign-in (public alpha)', () => {
@@ -29,6 +28,19 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
 
   it('tapping the Cloud side routes to Clerk sign-in and captures the frame', async () => {
     await element(by.id('chat.mode-toggle.cloud')).tap();
+    let needsAgeReview = false;
+    try {
+      await waitFor(element(by.id('age-gate-root')))
+        .toBeVisible()
+        .withTimeout(3000);
+      needsAgeReview = true;
+    } catch {
+      needsAgeReview = false;
+    }
+    if (needsAgeReview) {
+      await element(by.id('age-gate-input')).typeText('30');
+      await element(by.id('age-gate-continue-btn')).tap();
+    }
     await waitFor(element(by.id('cloud-sign-in-dismiss')))
       .toBeVisible()
       .withTimeout(15000);

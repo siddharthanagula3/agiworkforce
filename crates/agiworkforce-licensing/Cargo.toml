@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-licensing"
-version = "0.1.0"
+version = "0.0.1"
 description = "Signed enterprise license and policy verification."
 edition = "2024"
 

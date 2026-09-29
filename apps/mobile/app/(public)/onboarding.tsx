@@ -333,10 +333,9 @@ export default function OnboardingScreen() {
             setTier2Loading(false);
             finishOnboarding(recommendedModel.id);
           })
-          .catch((err: unknown) => {
+          .catch(() => {
             setTier2Loading(false);
-            const msg = err instanceof Error ? err.message : 'Download failed. Please try again.';
-            setDownloadError(msg);
+            setDownloadError('Download failed. You can try again or continue without the model.');
           });
         return;
       }

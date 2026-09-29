@@ -255,16 +255,22 @@ describe('Mobile Skills screen', () => {
 
     fireEvent.press(screen.getByLabelText('Sign in to AGI Cloud'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-skills' },
+    });
     expect(mockFetchManagedSkills).not.toHaveBeenCalled();
   });
 
   it('shows a retryable error without leaking raw response content', async () => {
-    mockFetchManagedSkills.mockRejectedValueOnce(new Error('Skills are temporarily unavailable.'));
+    mockFetchManagedSkills.mockRejectedValueOnce(new Error('internal upstream token and URL'));
     const screen = render(<SkillsScreen />);
 
     expect(await screen.findByText('Could not load Skills')).toBeTruthy();
-    expect(screen.getByText('Skills are temporarily unavailable.')).toBeTruthy();
+    expect(
+      screen.getByText('Could not load Skills. Check your connection and try again.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('internal upstream token and URL')).toBeNull();
 
     mockFetchManagedSkills.mockResolvedValueOnce([]);
     fireEvent.press(screen.getByLabelText('Try again'));

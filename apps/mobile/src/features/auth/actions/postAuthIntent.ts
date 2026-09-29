@@ -5,8 +5,8 @@ import {
 } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
-  CLOUD_CHAT_POST_AUTH_INTENT,
   consumePostAuthIntent,
+  stagePostAuthDestination,
   type PostAuthIntent,
 } from '../services/postAuthIntent';
 
@@ -19,11 +19,6 @@ export function applyPostAuthIntentAfterSignIn(
   intent: PostAuthIntent,
   subscriptionTier: string,
 ): boolean {
-  if (intent !== CLOUD_CHAT_POST_AUTH_INTENT) {
-    resetPostAuthDestinationToLocal();
-    return false;
-  }
-
   const defaultCloudModelId = getDefaultCloudModelIdForTier(subscriptionTier);
   if (!defaultCloudModelId) {
     resetPostAuthDestinationToLocal();
@@ -44,6 +39,7 @@ interface LoadedCloudSession {
   isLoaded: boolean;
   isSignedIn: boolean;
   userId: string | null | undefined;
+  termsAccepted: boolean;
   cloudUnlocked: boolean;
   subscriptionTier: string;
 }
@@ -52,12 +48,15 @@ export function completePendingPostAuthIntentForLoadedSession({
   isLoaded,
   isSignedIn,
   userId,
+  termsAccepted,
   cloudUnlocked,
   subscriptionTier,
 }: LoadedCloudSession): boolean {
-  if (!isLoaded || !isSignedIn || !userId || !cloudUnlocked) return false;
+  if (!isLoaded || !isSignedIn || !userId || !termsAccepted || !cloudUnlocked) return false;
 
   const intent = consumePostAuthIntent();
   if (!intent) return false;
-  return applyPostAuthIntentAfterSignIn(intent, subscriptionTier);
+  const completed = applyPostAuthIntentAfterSignIn(intent, subscriptionTier);
+  if (completed) stagePostAuthDestination(intent);
+  return completed;
 }

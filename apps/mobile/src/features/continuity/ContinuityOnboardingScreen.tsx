@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock3, Globe2, ListChecks, X, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import {
@@ -62,7 +63,7 @@ export default function ContinuityOnboardingScreen() {
 
   const startTask = useCallback(() => {
     if (!isClerkSignedIn || !clerkUserId) {
-      router.push('/(auth)/login');
+      router.push(beginCloudPostAuthIntent());
       return;
     }
 

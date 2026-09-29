@@ -64,6 +64,7 @@ jest.mock('lucide-react-native', () => {
     ArrowLeft: icon,
     ChevronRight: icon,
     RefreshCw: icon,
+    ShieldCheck: icon,
     Search: icon,
     CloudOff: icon,
   };
@@ -103,6 +104,7 @@ jest.mock('@/services/connectors', () => ({
 }));
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 describe('Cloud Connectors screen, shipped-feature state', () => {
   beforeEach(() => {
@@ -145,6 +147,21 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     expect(getByText('Notion')).toBeTruthy();
     expect(queryByText('Connectors, AGI Cloud')).toBeNull();
     await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows the approval policy where connectors are managed and opens its controls', async () => {
+    const originalPolicy = useSettingsStore.getState().toolApprovalPolicy;
+    const screen = render(<CloudConnectorsScreen />);
+
+    try {
+      expect(screen.getByText('Choose when AGI asks before a connected tool acts.')).toBeTruthy();
+      act(() => useSettingsStore.getState().setToolApprovalPolicy('auto_approve_read_only'));
+      fireEvent.press(screen.getByRole('button', { name: 'Action approvals. Auto' }));
+      expect(mockPush).toHaveBeenCalledWith('/(app)/settings/auto-approve');
+      await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
+    } finally {
+      act(() => useSettingsStore.getState().setToolApprovalPolicy(originalPolicy));
+    }
   });
 
   it('shows handshake loading instead of a false denial before the first tier refresh', () => {
@@ -234,7 +251,10 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     expect(queryByText('Notion')).toBeNull();
     expect(mockFetchDirectory).not.toHaveBeenCalled();
     fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-connectors' },
+    });
   });
 
   it('refreshes the directory after returning from the GitHub install browser', async () => {

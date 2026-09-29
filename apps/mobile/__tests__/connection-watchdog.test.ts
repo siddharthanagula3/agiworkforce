@@ -159,6 +159,8 @@ describe('Connection store connect watchdog', () => {
 
     jest.advanceTimersByTime(PAST_WATCHDOG_MS);
 
-    expect(useConnectionStore.getState().error).toContain('invalid or expired');
+    expect(useConnectionStore.getState().error).toBe(
+      'Manual pairing failed. Generate a new code and try again.',
+    );
   });
 });

@@ -51,6 +51,7 @@ import type {
 } from '@agiworkforce/types';
 import {
   claimManualPairingToken,
+  ManualPairingClaimError,
   parsePairingPayload,
   PAIRING_SECRET_REQUIRED_MESSAGE,
   PAIRING_UPDATE_REQUIRED_MESSAGE,
@@ -944,7 +945,7 @@ export const useConnectionStore = create<ConnectionState>()(
               set({
                 status: 'error',
                 error:
-                  error instanceof Error
+                  error instanceof ManualPairingClaimError
                     ? error.message
                     : 'Manual pairing failed. Generate a new code and try again.',
                 pairingCode: parsed.code,

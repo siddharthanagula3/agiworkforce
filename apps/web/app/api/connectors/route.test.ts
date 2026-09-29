@@ -50,10 +50,11 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/services/connector-policy-gate', () => ({
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-gate')>()),
   evaluateConnectorPolicyForUser: (...args: unknown[]) => mocks.connectorPolicy(...args),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
@@ -235,10 +236,28 @@ function resetMocks(): void {
   mocks.deleteCustom.mockResolvedValue([]);
   mocks.clearPermissions.mockResolvedValue(undefined);
   mocks.cacheToolNames.mockResolvedValue(undefined);
+  mocks.connectorPolicy.mockResolvedValue({ allowed: true, code: 'ungoverned', reason: 'allowed' });
 }
 
 describe('/api/connectors managed-cloud capability boundary', () => {
   beforeEach(resetMocks);
+
+  it('refuses a catalog connector before starting its connection when workspace policy blocks it', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'connector_blocked',
+      reason: 'Blocked by workspace policy.',
+    });
+
+    const response = await POST(postRequest('slack'));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({ connectorId: 'slack', userId: 'user-1' }),
+    );
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
+  });
 
   it('does not advertise or restore device-local connector rows in Cloud mode', async () => {
     mocks.query.mockResolvedValue([
@@ -592,6 +611,28 @@ describe('/api/connectors directory records', () => {
       API_KEY_RECORD_ID,
       directoryTarget(API_KEY_RECORD_ID, 'api-key', 'https://mcp.fodda.ai/mcp', 'Fodda'),
     );
+  });
+
+  it('refuses a directory endpoint before discovery or probing when workspace policy blocks it', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'custom_connectors_disabled',
+      reason: 'Custom connectors are disabled.',
+    });
+
+    const response = await POST(postRequest(OPEN_RECORD_ID));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: OPEN_RECORD_ID,
+        isCustom: true,
+        url: 'https://tandem.ac/mcp',
+      }),
+    );
+    expect(mocks.directoryAuthMode).not.toHaveBeenCalled();
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
   });
 
   it('connects an open server in one click through the custom-connector path', async () => {

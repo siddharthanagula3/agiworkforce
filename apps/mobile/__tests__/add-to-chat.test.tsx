@@ -93,14 +93,6 @@ jest.mock('../src/features/waitlist', () => {
   };
 });
 
-jest.mock('../src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
-
 jest.mock('../src/features/chat/components/StyleSelector', () => {
   const React = require('react');
   const { View } = require('react-native');

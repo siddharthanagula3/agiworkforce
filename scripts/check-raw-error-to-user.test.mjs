@@ -40,7 +40,14 @@ test('flags a raw message nested in a state object', () => {
 
 test.each = undefined;
 
-for (const sink of ['setError', 'setChatError', 'toast.error', 'setListError']) {
+for (const sink of [
+  'setError',
+  'setChatError',
+  'toast.error',
+  'setListError',
+  'Alert.alert',
+  'ToastAndroid.show',
+]) {
   test(`covers the ${sink} sink`, () => {
     assert.equal(
       findRawErrorSinks(`${sink}(e instanceof Error ? e.message : 'x');`, 'a.ts').length,
@@ -69,6 +76,39 @@ test('accepts a wrapped message nested in a state object', () => {
 test('ignores a raw message that is only logged', () => {
   assert.deepEqual(
     findRawErrorSinks("logger.error(err instanceof Error ? err.message : 'x');", 'a.ts'),
+    [],
+  );
+});
+
+test('does not count a timer as a user-visible setter', () => {
+  const found = findRawErrorSinks('setTimeout(() => setError(err.message), 100);', 'a.ts');
+  assert.equal(found.length, 1);
+  assert.match(found[0].text, /^setError/);
+});
+
+test('checks alert copy without treating button callback code as visible copy', () => {
+  assert.deepEqual(
+    findRawErrorSinks(
+      "Alert.alert('Delete?', 'This cannot be undone.', [{ text: 'Delete', onPress: () => logger.error(err.message) }]);",
+      'a.ts',
+    ),
+    [],
+  );
+  assert.equal(findRawErrorSinks("Alert.alert('Failed', err.message);", 'a.ts').length, 1);
+});
+
+test('flags raw error text rendered as JSX content', () => {
+  assert.equal(findRawErrorSinks('<Text>{error.message}</Text>', 'a.tsx').length, 1);
+  assert.deepEqual(
+    findRawErrorSinks("<Text>{toUserMessage(error, 'Could not load')}</Text>", 'a.tsx'),
+    [],
+  );
+  assert.equal(
+    findRawErrorSinks('<>{failed ? <Text>{error.message}</Text> : null}</>', 'a.tsx').length,
+    1,
+  );
+  assert.deepEqual(
+    findRawErrorSinks('<Pressable onPress={() => logger.error(error.message)} />', 'a.tsx'),
     [],
   );
 });

@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { PROJECT_TEMPLATES, getProjectTemplate } from '@agiworkforce/types';
 import {
   View,
   TextInput,
@@ -8,11 +9,13 @@ import {
   Platform,
   ScrollView,
   FlatList,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -30,6 +33,8 @@ import {
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import { syncNow } from '@/services/cloudSyncEngine';
 import {
   accountScopedUiStateKey,
   captureAccountScopedUiState,
@@ -84,11 +89,13 @@ function sortDisplayProjects(
 
 export default function ProjectsTabScreen() {
   const { colors, statusBarStyle } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const router = useRouter();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const syncStatus = useCloudSyncStateStore((state) => state.status);
 
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjectsRaw = useCloudProjectStore((s) => s.projects);
@@ -110,12 +117,14 @@ export default function ProjectsTabScreen() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
   const [query, setQuery] = useState('');
+  const [manualRefresh, setManualRefresh] = useState(false);
   const [sort, setSort] = useState<ProjectSort>('recent');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProject, setEditingProject] = useState<DisplayProject | null>(null);
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formInstructions, setFormInstructions] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('blank');
   const activeScopeRef = useRef<AccountScopedUiState | null>(null);
   const activeScopeKeyRef = useRef<string | null>(null);
   const editorScopeRef = useRef<AccountScopedUiState | null>(null);
@@ -127,15 +136,37 @@ export default function ProjectsTabScreen() {
     setFormName('');
     setFormDescription('');
     setFormInstructions('');
+    setSelectedTemplateId('blank');
   }, []);
 
   useLayoutEffect(() => {
     const nextScope = captureAccountScopedUiState(isCloud ? 'cloud' : 'local');
     const nextKey = accountScopedUiStateKey(nextScope);
-    if (activeScopeKeyRef.current !== nextKey) resetEditor();
+    if (activeScopeKeyRef.current !== nextKey) {
+      resetEditor();
+      setManualRefresh(false);
+    }
     activeScopeRef.current = nextScope;
     activeScopeKeyRef.current = nextKey;
   }, [clerkUserId, isCloud, resetEditor]);
+
+  useEffect(() => {
+    if (syncStatus !== 'syncing') setManualRefresh(false);
+  }, [syncStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isCloud && clerkUserId) void syncNow();
+    }, [clerkUserId, isCloud]),
+  );
+
+  const refreshProjects = useCallback(() => {
+    if (!isCloud) return;
+    setManualRefresh(true);
+    void syncNow().finally(() => {
+      if (useCloudSyncStateStore.getState().status !== 'syncing') setManualRefresh(false);
+    });
+  }, [isCloud]);
 
   const isScopeCurrent = useCallback((captured: AccountScopedUiState | null | undefined) => {
     return isAccountScopedUiStateCurrent(
@@ -152,6 +183,7 @@ export default function ProjectsTabScreen() {
     setFormName('');
     setFormDescription('');
     setFormInstructions('');
+    setSelectedTemplateId('blank');
     setModalVisible(true);
   }, [isScopeCurrent]);
 
@@ -163,6 +195,7 @@ export default function ProjectsTabScreen() {
       setFormName(project.name);
       setFormDescription(project.description);
       setFormInstructions(project.instructions);
+      setSelectedTemplateId('blank');
       setModalVisible(true);
     },
     [isScopeCurrent],
@@ -371,35 +404,99 @@ export default function ProjectsTabScreen() {
 
       {/* Project list or empty state */}
       {projects.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <View
-            className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-            style={{ backgroundColor: colors.accentSurface }}
-          >
-            <FolderOpen size={32} color={colors.teal} />
-          </View>
-          <Text
-            className="text-[15px] text-center leading-[22px] mb-4"
-            style={{ color: colors.textSecondary }}
-          >
-            No projects yet.{'\n'}Create one to add custom instructions to your chats.
-          </Text>
-          <Pressable
-            onPress={openCreateModal}
-            className="px-5 rounded-xl items-center justify-center active:opacity-80"
-            style={{ backgroundColor: colors.textPrimary, minHeight: 44 }}
-            accessibilityRole="button"
-            accessibilityLabel="Create project"
-          >
-            <Text className="text-[14px] font-medium" style={{ color: colors.surfaceElevated }}>
-              Create Project
-            </Text>
-          </Pressable>
-        </View>
+        <ScrollView
+          testID="projects-empty-scroll"
+          contentContainerStyle={{
+            flexGrow: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 32,
+          }}
+          refreshControl={
+            isCloud ? (
+              <RefreshControl
+                refreshing={manualRefresh}
+                onRefresh={refreshProjects}
+                tintColor={colors.textMuted}
+              />
+            ) : undefined
+          }
+        >
+          {isCloud && syncStatus === 'syncing' ? (
+            <View style={{ alignItems: 'center', gap: 12 }}>
+              <ActivityIndicator color={colors.teal} accessibilityLabel="Loading projects" />
+              <Text style={{ color: colors.textSecondary }}>Loading projects</Text>
+            </View>
+          ) : isCloud && syncStatus === 'error' ? (
+            <View accessibilityRole="alert" style={{ alignItems: 'center', gap: 12 }}>
+              <Text style={{ color: colors.agentError, textAlign: 'center' }}>
+                Projects could not be refreshed. Check your connection and try again.
+              </Text>
+              <Pressable
+                onPress={refreshProjects}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading projects"
+              >
+                <Text style={{ color: colors.teal, fontWeight: '600' }}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center' }}>
+              <View
+                className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+                style={{ backgroundColor: colors.accentSurface }}
+              >
+                <FolderOpen size={32} color={colors.teal} />
+              </View>
+              <Text
+                className="text-[15px] text-center leading-[22px] mb-4"
+                style={{ color: colors.textSecondary }}
+              >
+                No projects yet.{'\n'}Create one to add custom instructions to your chats.
+              </Text>
+              <Pressable
+                onPress={openCreateModal}
+                className="px-5 rounded-xl items-center justify-center active:opacity-80"
+                style={{ backgroundColor: colors.textPrimary, minHeight: 44 }}
+                accessibilityRole="button"
+                accessibilityLabel="Create project"
+              >
+                <Text className="text-[14px] font-medium" style={{ color: colors.surfaceElevated }}>
+                  Create Project
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
       ) : (
         <FlatList
           testID="projects-list"
           data={visibleProjects}
+          refreshControl={
+            isCloud ? (
+              <RefreshControl
+                refreshing={manualRefresh}
+                onRefresh={refreshProjects}
+                tintColor={colors.textMuted}
+              />
+            ) : undefined
+          }
+          ListHeaderComponent={
+            isCloud && syncStatus === 'error' ? (
+              <View accessibilityRole="alert" style={{ padding: 12, gap: 8 }}>
+                <Text style={{ color: colors.agentError }}>
+                  Showing saved projects. The latest changes could not be refreshed.
+                </Text>
+                <Pressable
+                  onPress={refreshProjects}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading projects"
+                >
+                  <Text style={{ color: colors.teal, fontWeight: '600' }}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
           contentContainerStyle={{
             padding: 12,
             paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
@@ -489,28 +586,21 @@ export default function ProjectsTabScreen() {
             <Text variant="subheading" style={{ color: colors.textPrimary }}>
               {editingProject ? 'Edit Project' : 'New Project'}
             </Text>
-            <Pressable
-              onPress={handleSave}
-              disabled={!formName.trim()}
-              className="px-3 py-1.5 rounded-lg active:opacity-80"
-              style={{
-                backgroundColor: formName.trim() ? colors.textPrimary : colors.surfaceHover,
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={editingProject ? 'Save project' : 'Create project'}
-            >
-              <Text
-                className="text-[13px] font-medium"
-                style={{
-                  color: formName.trim() ? colors.surfaceElevated : colors.textMuted,
-                }}
-              >
-                {editingProject ? 'Save' : 'Create'}
-              </Text>
-            </Pressable>
+            <View style={{ width: 32 }} />
           </View>
 
-          <ScrollView className="flex-1 px-4 pt-5" keyboardShouldPersistTaps="handled">
+          <ScrollView
+            testID="project-editor-fields"
+            className="flex-1 px-4 pt-5"
+            keyboardShouldPersistTaps="handled"
+          >
+            {!editingProject ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 20 }}>
+                {isCloud
+                  ? 'Keep related chats, files, and instructions together in one place.'
+                  : 'Keep related chats and instructions together in one place.'}
+              </Text>
+            ) : null}
             {/* Name field */}
             <View className="mb-5">
               <Text
@@ -520,6 +610,7 @@ export default function ProjectsTabScreen() {
                 Name
               </Text>
               <TextInput
+                accessibilityLabel="Project name"
                 value={formName}
                 onChangeText={setFormName}
                 placeholder="e.g. Mobile App, API Docs..."
@@ -536,6 +627,62 @@ export default function ProjectsTabScreen() {
               />
             </View>
 
+            {!editingProject ? (
+              <View className="mb-5">
+                <Text
+                  className="text-[13px] font-medium mb-2"
+                  style={{ color: colors.textSecondary }}
+                >
+                  Start from
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {PROJECT_TEMPLATES.map((template) => {
+                      const selected = selectedTemplateId === template.id;
+                      return (
+                        <Pressable
+                          key={template.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Start from ${template.label}`}
+                          accessibilityState={{ selected }}
+                          onPress={() => {
+                            setSelectedTemplateId(template.id);
+                            if (
+                              !formName.trim() ||
+                              PROJECT_TEMPLATES.some((entry) => entry.name === formName.trim())
+                            ) {
+                              setFormName(template.name);
+                            }
+                            setFormDescription(template.description);
+                            setFormInstructions(template.instructions);
+                          }}
+                          style={{
+                            minHeight: 44,
+                            paddingHorizontal: 14,
+                            borderRadius: 22,
+                            borderWidth: 1,
+                            borderColor: selected ? colors.teal : colors.border,
+                            backgroundColor: selected
+                              ? colors.surfaceHover
+                              : colors.surfaceElevated,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>
+                            {template.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>
+                  {getProjectTemplate(selectedTemplateId)?.summary}
+                </Text>
+              </View>
+            ) : null}
+
             {/* Description field */}
             <View className="mb-5">
               <Text
@@ -545,6 +692,7 @@ export default function ProjectsTabScreen() {
                 Description
               </Text>
               <TextInput
+                accessibilityLabel="Project description"
                 value={formDescription}
                 onChangeText={setFormDescription}
                 placeholder="Brief description of this project..."
@@ -574,6 +722,7 @@ export default function ProjectsTabScreen() {
                 These instructions will be included as system context when this project is active.
               </Text>
               <TextInput
+                accessibilityLabel="Project instructions"
                 value={formInstructions}
                 onChangeText={setFormInstructions}
                 placeholder="e.g. Always use TypeScript. Follow the project's coding conventions..."
@@ -593,6 +742,40 @@ export default function ProjectsTabScreen() {
               />
             </View>
           </ScrollView>
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: Math.max(insets.bottom, 16),
+            }}
+          >
+            <Pressable
+              testID="project-editor-submit"
+              onPress={handleSave}
+              disabled={!formName.trim()}
+              style={{
+                minHeight: 48,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: formName.trim() ? colors.textPrimary : colors.surfaceHover,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={editingProject ? 'Save project' : 'Create project'}
+            >
+              <Text
+                style={{
+                  color: formName.trim() ? colors.surfaceElevated : colors.textMuted,
+                  fontSize: 16,
+                  fontWeight: '600',
+                }}
+              >
+                {editingProject ? 'Save project' : 'Create project'}
+              </Text>
+            </Pressable>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>

@@ -254,6 +254,7 @@ async function handleCreateConversation(request: NextRequest) {
           updated_at = now()
         where web_conversations.user_id = $1
           and web_conversations.organization_id is not distinct from $7
+          and web_conversations.deleted_at is null
         returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
@@ -268,7 +269,15 @@ async function handleCreateConversation(request: NextRequest) {
       ],
     );
     if (!conversation) {
-      throw createError.conflict('Conversation id already exists');
+      return NextResponse.json(
+        {
+          error: {
+            code: 'conversation_unavailable',
+            message: 'This conversation is no longer available. Start a new conversation.',
+          },
+        },
+        { status: 409 },
+      );
     }
 
     assertSessionInvariants(

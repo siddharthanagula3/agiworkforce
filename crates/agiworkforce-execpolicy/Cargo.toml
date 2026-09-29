@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-execpolicy"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "AGI Workforce exec policy: prefix-based Starlark rules for command decisions."
 

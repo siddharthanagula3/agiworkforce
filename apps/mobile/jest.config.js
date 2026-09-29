@@ -1,10 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    'scripts/screenshots/specs/',
-    '__tests__/auth-401\\.test\\.ts$',
-  ],
+  testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   setupFiles: ['./jest.setup.js'],
   setupFilesAfterEnv: ['./jest.after-setup.js'],
   transformIgnorePatterns: [

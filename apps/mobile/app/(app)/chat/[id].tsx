@@ -99,10 +99,17 @@ import {
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
-import { PictureMetadataError } from '@/src/features/media/image-metadata';
+import {
+  PictureMetadataError,
+  PICTURE_METADATA_RECOVERY_MESSAGE,
+} from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -112,6 +119,10 @@ import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import {
+  MediaGenerationAdmissionError,
+  mediaGenerationFailureMessage,
+} from '@/src/features/chat/actions/mediaGenerationError';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
@@ -381,8 +392,7 @@ export default function ChatScreen() {
         return false;
       }
       if (videoRequest.status === 'ready') {
-        quotedMessageScopeRef.current = null;
-        setQuotedMessage(null);
+        let started = false;
         const videoTurn = runVideoGenerationTurn({
           conversationId: id,
           displayText: finalText,
@@ -391,6 +401,12 @@ export default function ChatScreen() {
           aspectRatio: videoRequest.aspectRatio,
           resolution: videoRequest.resolution,
           ownerId: videoRequest.ownerId,
+          onStarted: () => {
+            started = true;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          },
           begin: beginVideoGeneration,
           taskCreated: recordVideoGenerationTask,
           isCancelRequested: isVideoGenerationCancelRequested,
@@ -403,13 +419,18 @@ export default function ChatScreen() {
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Video generation failed:', error);
+            setSendError(
+              !started && error instanceof MediaGenerationAdmissionError
+                ? error.userMessage
+                : mediaGenerationFailureMessage('video'),
+            );
           },
         });
         if (dispatchOptions?.awaitCompletion) {
-          return videoTurn.then(() => true);
+          return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
         }
         void videoTurn;
-        return true;
+        return started;
       }
 
       const imageRequest = resolveMobileImageGenerationRequest({
@@ -433,8 +454,7 @@ export default function ChatScreen() {
         return false;
       }
       if (imageRequest.status === 'ready') {
-        quotedMessageScopeRef.current = null;
-        setQuotedMessage(null);
+        let started = false;
         const imageTurn = runImageGenerationTurn({
           conversationId: id,
           displayText: finalText,
@@ -444,6 +464,12 @@ export default function ChatScreen() {
           operation: imageRequest.operation,
           sourceImage: imageRequest.sourceImage,
           ownerId: imageRequest.ownerId,
+          onStarted: () => {
+            started = true;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          },
           begin: beginImageGeneration,
           complete: completeImageGeneration,
           fail: failImageGeneration,
@@ -453,13 +479,18 @@ export default function ChatScreen() {
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Image generation failed:', error);
+            setSendError(
+              !started && error instanceof MediaGenerationAdmissionError
+                ? error.userMessage
+                : mediaGenerationFailureMessage('image'),
+            );
           },
         });
         if (dispatchOptions?.awaitCompletion) {
-          return imageTurn.then(() => true);
+          return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
         }
         void imageTurn;
-        return true;
+        return started;
       }
 
       if (!isOnline && conversationExecutionMode === 'cloud') {
@@ -538,6 +569,7 @@ export default function ChatScreen() {
       deleteMessage,
       setPaywallError,
       setSendError,
+      clearError,
       stopSpeaking,
       quotedMessage,
       isConversationActionCurrent,
@@ -819,7 +851,7 @@ export default function ChatScreen() {
       Alert.alert(
         'Camera',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open the camera. Please try again.',
       );
     }
@@ -840,7 +872,7 @@ export default function ChatScreen() {
       Alert.alert(
         'Photos',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open Photos. Please try again.',
       );
     }
@@ -1059,9 +1091,12 @@ export default function ChatScreen() {
     (messageId: string) => {
       if (!id) return;
       if (conversationExecutionMode === 'cloud') {
+        const accountEpoch = captureCloudAccountEpoch();
+        if (!isCloudAccountEpochCurrent(accountEpoch)) return;
         const previous = useChatCloudMessageStore.getState().messages[id];
         useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
-        deleteCloudMessagesRemote(id, [messageId]).catch(() => {
+        deleteCloudMessagesRemote(id, [messageId], accountEpoch).catch(() => {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           if (previous) {
             useChatCloudMessageStore.getState().setCloudMessages(id, previous);
           }
@@ -1077,7 +1112,9 @@ export default function ChatScreen() {
   const handleReaction = useCallback(
     (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => {
       if (!id) return;
-      setMessageReaction(id, messageId, reaction);
+      void setMessageReaction(id, messageId, reaction).catch(() => {
+        Alert.alert('Could not save rating', 'Check your connection or sign in, then try again.');
+      });
     },
     [id, setMessageReaction],
   );
@@ -1463,7 +1500,6 @@ export default function ChatScreen() {
           onStartFreshChat={handleNewChat}
         />
 
-        {/* Model-tier warning, shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />
 
         {/* Named-provider consent gate, specific, with an inline opt-in */}
@@ -1479,6 +1515,8 @@ export default function ChatScreen() {
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
           onRetry={
+            sendError !== CLOUD_SIGN_IN_MESSAGE &&
+            !sendError?.startsWith('The active AGI Cloud account changed') &&
             conversationMessages.some((m) => m.role === 'user')
               ? () => {
                   if (!id) return;

@@ -1,7 +1,10 @@
 import {
   LIBRARY_DEFAULT_PAGE_SIZE,
+  LIBRARY_DEFAULT_SORT,
   LibraryListResponseSchema,
+  LibraryMediaDeleteResponseSchema,
   type LibraryItem,
+  type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 
@@ -53,12 +56,13 @@ export function libraryListPath(input: {
   offset?: number;
   limit?: number;
   search?: string;
+  sort?: LibrarySort;
 }): string {
   const params = new URLSearchParams();
   if (input.search?.trim()) params.set('q', input.search.trim());
   params.set('limit', String(input.limit ?? LIBRARY_PAGE_SIZE));
   params.set('offset', String(input.offset ?? 0));
-  params.set('sort', 'modified');
+  params.set('sort', input.sort ?? LIBRARY_DEFAULT_SORT);
   return `/api/library?${params.toString()}`;
 }
 
@@ -66,10 +70,16 @@ export async function fetchLibraryPage(input: {
   offset?: number;
   limit?: number;
   search?: string;
+  sort?: LibrarySort;
 }): Promise<LibraryPage> {
   const body = await api.get<unknown>(libraryListPath(input));
   const parsed = LibraryListResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('The Library returned an unreadable response.');
+  if (
+    parsed.data.has_more &&
+    (parsed.data.next_offset === null || parsed.data.next_offset <= (input.offset ?? 0))
+  )
+    throw new Error('The Library returned an unreadable response.');
   return {
     assets: parsed.data.items.map(mapLibraryItem),
     hasMore: parsed.data.has_more,
@@ -78,5 +88,9 @@ export async function fetchLibraryPage(input: {
 }
 
 export async function deleteLibraryAsset(id: string): Promise<void> {
-  await api.delete<unknown>(`/api/media?id=${encodeURIComponent(id)}`);
+  const response = LibraryMediaDeleteResponseSchema.safeParse(
+    await api.delete<unknown>(`/api/media?id=${encodeURIComponent(id)}`),
+  );
+  if (!response.success || !response.data.success)
+    throw new Error('The file could not be deleted. Try again.');
 }

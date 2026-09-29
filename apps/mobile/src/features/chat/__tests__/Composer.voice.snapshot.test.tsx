@@ -203,6 +203,7 @@ describe('Composer, voice scaffolding snapshots', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith(
           'Voice input needs microphone and speech access. You can keep typing instead.',
+          true,
         );
       });
       expect(onRecordingStart).not.toHaveBeenCalled();

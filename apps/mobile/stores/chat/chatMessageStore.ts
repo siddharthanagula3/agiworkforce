@@ -5,7 +5,11 @@ import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
-import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -46,6 +50,19 @@ import { useCloudSyncStateStore } from './cloudSyncStateStore';
 
 const CLOUD_CONVERSATION_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 const CLOUD_MESSAGE_PAGE_SIZE = 500;
+let conversationListRequestVersion = 0;
+let cloudConversationPagination: {
+  accountEpoch: CloudAccountEpoch;
+  requestVersion: number;
+  nextOffset: number;
+  conversations: ManagedCloudConversation[];
+  historyStats?: ManagedCloudConversationHistoryStats;
+} | null = null;
+type MessageReaction = 'thumbsUp' | 'thumbsDown' | null;
+const cloudReactionWrites = new Map<
+  string,
+  { tail: Promise<void>; committedReaction: MessageReaction }
+>();
 
 function getCloudStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
@@ -67,11 +84,15 @@ interface MessageState {
   currentConversationId: string | null;
   messages: Record<string, ChatMessage[]>;
   isLoadingConversations: boolean;
+  isLoadingMoreConversations: boolean;
+  hasMoreCloudConversations: boolean;
+  conversationLoadError: string | null;
   isLoadingMessages: boolean;
 
   setCurrentConversationId: (id: string | null) => void;
   clearCloudConversationSelection: (cloudConversationIds: string[]) => void;
-  loadConversations: () => Promise<void>;
+  loadConversations: (options?: { firstPageOnly?: boolean }) => Promise<void>;
+  loadMoreConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
   forkConversation: (
     sourceConversationId: string,
@@ -89,7 +110,7 @@ interface MessageState {
     conversationId: string,
     messageId: string,
     reaction: 'thumbsUp' | 'thumbsDown' | null,
-  ) => void;
+  ) => Promise<void>;
   enqueueOfflineMessage: (
     conversationId: string,
     content: string,
@@ -168,6 +189,9 @@ export const useChatMessageStore = create<MessageState>()(
       currentConversationId: null,
       messages: {},
       isLoadingConversations: false,
+      isLoadingMoreConversations: false,
+      hasMoreCloudConversations: false,
+      conversationLoadError: null,
       isLoadingMessages: false,
 
       setCurrentConversationId: (id) => {
@@ -183,10 +207,20 @@ export const useChatMessageStore = create<MessageState>()(
         );
       },
 
-      loadConversations: async () => {
-        set({ isLoadingConversations: true });
+      loadConversations: async (options) => {
+        const requestVersion = ++conversationListRequestVersion;
+        const cloudListRequested = shouldLoadCloudConversationList();
+        const accountEpoch = cloudListRequested ? captureCloudAccountEpoch() : null;
+        cloudConversationPagination = null;
+        set({
+          isLoadingConversations: true,
+          isLoadingMoreConversations: false,
+          hasMoreCloudConversations: false,
+          conversationLoadError: null,
+        });
         try {
-          if (shouldLoadCloudConversationList()) {
+          if (cloudListRequested) {
+            if (!accountEpoch) throw new Error('Cloud account is not active');
             const conversations: ManagedCloudConversation[] = [];
             let offset = 0;
             let hasMore = true;
@@ -198,25 +232,110 @@ export const useChatMessageStore = create<MessageState>()(
                 includeHistoryStats: offset === 0,
                 archived: 'exclude',
               });
+              if (
+                requestVersion !== conversationListRequestVersion ||
+                !isCloudAccountEpochCurrent(accountEpoch)
+              ) {
+                return;
+              }
+              if (page.hasMore && page.nextOffset <= offset) {
+                throw new Error('Cloud conversation pagination did not advance.');
+              }
               conversations.push(...page.conversations);
               if (offset === 0) historyStats = page.historyStats;
               hasMore = page.hasMore;
-              if (hasMore && page.nextOffset <= offset) {
-                throw new Error('Cloud conversation pagination did not advance.');
-              }
               offset = page.nextOffset;
+              getCloudStore()
+                .getState()
+                .setCloudConversations(
+                  conversations.map(normalizeManagedCloudConversationForMobile),
+                  historyStats,
+                );
+              if (options?.firstPageOnly && hasMore) {
+                cloudConversationPagination = {
+                  accountEpoch,
+                  requestVersion,
+                  nextOffset: offset,
+                  conversations,
+                  historyStats,
+                };
+                set({ hasMoreCloudConversations: true });
+                break;
+              }
             }
-            getCloudStore()
-              .getState()
-              .setCloudConversations(
-                conversations.map(normalizeManagedCloudConversationForMobile),
-                historyStats,
-              );
           }
         } catch {
-          return;
+          if (
+            requestVersion === conversationListRequestVersion &&
+            (!cloudListRequested || !accountEpoch || isCloudAccountEpochCurrent(accountEpoch))
+          ) {
+            set({
+              conversationLoadError:
+                'Chats could not be refreshed. Check your connection and try again.',
+            });
+          }
         } finally {
-          set({ isLoadingConversations: false });
+          if (requestVersion === conversationListRequestVersion) {
+            set({ isLoadingConversations: false });
+          }
+        }
+      },
+
+      loadMoreConversations: async () => {
+        const pagination = cloudConversationPagination;
+        if (
+          !pagination ||
+          get().isLoadingMoreConversations ||
+          !shouldLoadCloudConversationList() ||
+          !isCloudAccountEpochCurrent(pagination.accountEpoch) ||
+          pagination.requestVersion !== conversationListRequestVersion
+        ) {
+          return;
+        }
+        set({ isLoadingMoreConversations: true, conversationLoadError: null });
+        try {
+          const page = await managedCloudChat.listConversations({
+            limit: CLOUD_CONVERSATION_PAGE_SIZE,
+            offset: pagination.nextOffset,
+            archived: 'exclude',
+          });
+          if (
+            pagination.requestVersion !== conversationListRequestVersion ||
+            !isCloudAccountEpochCurrent(pagination.accountEpoch)
+          ) {
+            if (pagination.requestVersion === conversationListRequestVersion) {
+              cloudConversationPagination = null;
+              set({ hasMoreCloudConversations: false });
+            }
+            return;
+          }
+          if (page.hasMore && page.nextOffset <= pagination.nextOffset) {
+            throw new Error('Cloud conversation pagination did not advance.');
+          }
+          pagination.conversations.push(...page.conversations);
+          pagination.nextOffset = page.nextOffset;
+          getCloudStore()
+            .getState()
+            .setCloudConversations(
+              pagination.conversations.map(normalizeManagedCloudConversationForMobile),
+              pagination.historyStats,
+            );
+          if (!page.hasMore) cloudConversationPagination = null;
+          set({ hasMoreCloudConversations: page.hasMore });
+        } catch {
+          if (
+            pagination.requestVersion === conversationListRequestVersion &&
+            isCloudAccountEpochCurrent(pagination.accountEpoch)
+          ) {
+            set({
+              conversationLoadError:
+                'Older chats could not be loaded. Check your connection and retry.',
+            });
+          }
+        } finally {
+          if (pagination.requestVersion === conversationListRequestVersion) {
+            set({ isLoadingMoreConversations: false });
+          }
         }
       },
 
@@ -594,28 +713,97 @@ export const useChatMessageStore = create<MessageState>()(
         });
       },
 
-      setMessageReaction: (conversationId, messageId, reaction) => {
+      setMessageReaction: async (conversationId, messageId, reaction) => {
         const ownerStore = getConversationMessageStore(conversationId);
+        const conversation = ownerStore
+          .getState()
+          .conversations.find((candidate) => candidate.id === conversationId);
+        const isCloud =
+          conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+        const accountEpoch = isCloud ? captureCloudAccountEpoch() : null;
+        if (isCloud && !isCloudAccountEpochCurrent(accountEpoch)) {
+          throw new Error('Sign in to rate this Cloud message.');
+        }
+        let previousReaction: MessageReaction = null;
+        let optimisticMessage: ChatMessage | null = null;
         ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
           return {
             messages: {
               ...state.messages,
-              [conversationId]: msgs.map((m) =>
-                m.id === messageId ? { ...m, metadata: { ...m.metadata, reaction } } : m,
-              ),
+              [conversationId]: msgs.map((message) => {
+                if (message.id !== messageId) return message;
+                const storedReaction = message.metadata?.reaction;
+                previousReaction =
+                  storedReaction === 'thumbsUp' || storedReaction === 'thumbsDown'
+                    ? storedReaction
+                    : null;
+                optimisticMessage = {
+                  ...message,
+                  metadata: { ...message.metadata, reaction },
+                };
+                return optimisticMessage;
+              }),
             },
           };
         });
-        const conversation = ownerStore
-          .getState()
-          .conversations.find((c) => c.id === conversationId);
-        if (conversation && executionModeForConversation(conversation) === 'cloud') {
-          void setCloudMessageReactionRemote(conversationId, messageId, reaction).catch(() => {
-            // Swallow: the reaction is already reflected locally; a failed remote
-            // write just means it will re-sync on the next rating change.
-          });
+        if (isCloud && optimisticMessage) {
+          if (accountEpoch === null) throw new Error('Sign in to rate this Cloud message.');
+          const key = `${accountEpoch.ownerId}:${accountEpoch.epoch}:${conversationId}:${messageId}`;
+          const pending = cloudReactionWrites.get(key) ?? {
+            tail: Promise.resolve(),
+            committedReaction: previousReaction,
+          };
+          const previousWrite = pending.tail;
+          const write = (async () => {
+            await previousWrite.catch(() => undefined);
+            if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+            const currentMessage = ownerStore
+              .getState()
+              .messages[conversationId]?.find((message) => message.id === messageId);
+            if (currentMessage !== optimisticMessage) return;
+            try {
+              await setCloudMessageReactionRemote(
+                conversationId,
+                messageId,
+                reaction,
+                accountEpoch,
+              );
+            } catch {
+              if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+              const latestMessage = ownerStore
+                .getState()
+                .messages[conversationId]?.find((message) => message.id === messageId);
+              if (latestMessage !== optimisticMessage) return;
+              ownerStore.setState((state) => ({
+                messages: {
+                  ...state.messages,
+                  [conversationId]: (state.messages[conversationId] ?? []).map((message) =>
+                    message === optimisticMessage
+                      ? {
+                          ...message,
+                          metadata: { ...message.metadata, reaction: pending.committedReaction },
+                        }
+                      : message,
+                  ),
+                },
+              }));
+              throw new Error('Could not save your rating. Check your connection and retry.');
+            }
+            if (isCloudAccountEpochCurrent(accountEpoch)) pending.committedReaction = reaction;
+          })();
+          pending.tail = write;
+          cloudReactionWrites.set(key, pending);
+          void write.then(
+            () => {
+              if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
+            },
+            () => {
+              if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
+            },
+          );
+          await write;
         }
       },
 
@@ -1171,6 +1359,17 @@ export const useChatMessageStore = create<MessageState>()(
     },
   ),
 );
+
+export function clearCloudConversationPagination(): void {
+  conversationListRequestVersion += 1;
+  cloudConversationPagination = null;
+  useChatMessageStore.setState({
+    isLoadingConversations: false,
+    isLoadingMoreConversations: false,
+    hasMoreCloudConversations: false,
+    conversationLoadError: null,
+  });
+}
 
 function isCloudChatEnabled(): boolean {
   return FEATURES.cloudChat;

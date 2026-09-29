@@ -22,23 +22,26 @@ describe('Chat, first message (on-device model)', () => {
     await element(by.id('chat.composer.input')).typeText('hello');
   });
 
-  it('send button becomes enabled after typing', async () => {
-    await waitFor(element(by.id('chat.composer.send')))
+  it('send button becomes visible after typing', async () => {
+    await waitFor(element(by.label('Send message')))
       .toBeVisible()
       .withTimeout(4000);
   });
 
   it('tapping send shows the streaming assistant bubble', async () => {
-    await element(by.id('chat.composer.send')).tap();
+    await element(by.label('Send message')).tap();
     await waitFor(element(by.id('chat.message.assistant.streaming')))
       .toBeVisible()
       .withTimeout(8000);
   });
 
-  it('streaming completes and PerformanceChip appears', async () => {
-    await waitFor(element(by.id('performance-chip')))
-      .toBeVisible()
+  it('streaming completes and the assistant answer is actionable', async () => {
+    await waitFor(element(by.id('chat.message.assistant.streaming')))
+      .not.toExist()
       .withTimeout(60000);
+    await waitFor(element(by.label('Copy')))
+      .toBeVisible()
+      .withTimeout(10000);
     await device.takeScreenshot('03-first-message');
   });
 });

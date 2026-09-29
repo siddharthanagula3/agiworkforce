@@ -22,6 +22,7 @@ import {
   parseReminderDueInputs,
   reminderDueInputsFromISO,
   ReminderCreationError,
+  reminderCreationErrorMessage,
 } from './service';
 
 export default function ReminderReviewScreen() {
@@ -57,9 +58,10 @@ export default function ReminderReviewScreen() {
       );
     } catch (cause) {
       if (cause instanceof ReminderCreationError) {
-        setError(cause.message);
+        const message = reminderCreationErrorMessage(cause.code);
+        setError(message);
         if (cause.code === 'permission-denied') {
-          Alert.alert('Reminders Access Needed', cause.message, [
+          Alert.alert('Reminders Access Needed', message, [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => void Linking.openSettings() },
           ]);

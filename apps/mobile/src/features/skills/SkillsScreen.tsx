@@ -20,6 +20,7 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
@@ -529,7 +530,7 @@ export function SkillsScreen() {
 
   const handleContinue = useCallback(() => {
     if (!isClerkSignedIn) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-skills'));
       return;
     }
     setAppMode('cloud');
@@ -563,7 +564,7 @@ export function SkillsScreen() {
         setSkills(nextSkills);
       } catch (loadError) {
         if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load Skills.');
+        setError('Could not load Skills. Check your connection and try again.');
       } finally {
         if (isCloudAccountEpochCurrent(account)) {
           setLoading(false);

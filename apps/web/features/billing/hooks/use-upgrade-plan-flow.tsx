@@ -20,7 +20,10 @@ import {
 import { billingOwnerPlanChangeMessage } from '@features/billing/lib/subscription-owner-presentation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
-import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
+import {
+  isUpgradeWaitlistRequired,
+  type UpgradeWaitlistRequest,
+} from '@features/billing/services/upgrade-waitlist';
 import {
   isBasicPlanTier,
   isProPlanTier,
@@ -106,9 +109,18 @@ export function useUpgradePlanFlow({
         setUpgradeConfirm({ plan, billingInterval: 'monthly' });
         return;
       }
-      setWaitlistRequest({ plan, billingInterval: 'monthly' });
+      const request: UpgradeWaitlistRequest = { plan, billingInterval: 'monthly' };
+      if (await isUpgradeWaitlistRequired()) {
+        setWaitlistRequest(request);
+      } else {
+        try {
+          await startCheckout(request);
+        } catch (error) {
+          toast.error(toUserMessage(error, 'Failed to start checkout.'));
+        }
+      }
     },
-    [billingPolicyReady, openSettings, subscription, user],
+    [billingPolicyReady, openSettings, startCheckout, subscription, user],
   );
 
   const upgradeDialogs = (

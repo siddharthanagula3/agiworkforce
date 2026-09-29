@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowLeft, Plus, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Plus, Calendar, ListFilter } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,8 +22,10 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { sortSchedules, type ScheduleSort } from '@/src/features/schedules/sort';
 
 const SCHEDULE_FILTERS = [
   { key: 'all', label: 'All' },
@@ -50,13 +52,18 @@ export default function SchedulesScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<ScheduleFilter>('all');
+  const [sort, setSort] = useState<ScheduleSort>('next-run');
+  const [sortOpen, setSortOpen] = useState(false);
 
   const visibleSchedules = useMemo(
     () =>
-      filter === 'all'
-        ? schedules
-        : schedules.filter((schedule) => schedule.isActive === (filter === 'active')),
-    [filter, schedules],
+      sortSchedules(
+        filter === 'all'
+          ? schedules
+          : schedules.filter((schedule) => schedule.isActive === (filter === 'active')),
+        sort,
+      ),
+    [filter, schedules, sort],
   );
 
   useEffect(() => {
@@ -112,7 +119,7 @@ export default function SchedulesScreen() {
 
   const handleActivateCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-schedules'));
       return;
     }
     setAppMode('cloud');
@@ -201,14 +208,11 @@ export default function SchedulesScreen() {
       <Header
         onBackPress={handleBack}
         onCreatePress={canCreateSchedule ? handleCreate : undefined}
+        onSortPress={schedules.length > 0 ? () => setSortOpen((open) => !open) : undefined}
+        sortOpen={sortOpen}
       />
 
-      {/* Quick schedule button */}
-      {canCreateSchedule ? (
-        <View className="px-4 mb-3">
-          <QuickSchedule onCreated={handleRefresh} />
-        </View>
-      ) : (
+      {!canCreateSchedule ? (
         <Pressable
           onPress={handleCreate}
           className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
@@ -221,7 +225,7 @@ export default function SchedulesScreen() {
             delete them.
           </Text>
         </Pressable>
-      )}
+      ) : null}
 
       {/* Error banner */}
       {error && (
@@ -279,6 +283,47 @@ export default function SchedulesScreen() {
         </ScrollView>
       ) : null}
 
+      {schedules.length > 0 && sortOpen ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+            Sort by
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(
+              [
+                ['next-run', 'Next run'],
+                ['recently-created', 'Recently created'],
+              ] as const
+            ).map(([key, label]) => (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort schedules by ${label}`}
+                accessibilityState={{ selected: sort === key }}
+                onPress={() => {
+                  setSort(key);
+                  setSortOpen(false);
+                }}
+                style={{
+                  minHeight: 44,
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  backgroundColor: sort === key ? colors.teal : colors.surfaceOverlay,
+                  borderColor: sort === key ? colors.teal : colors.border,
+                }}
+              >
+                <Text style={{ color: sort === key ? colors.white : colors.textSecondary }}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {/* Schedule list or empty state */}
       {schedules.length === 0 ? (
         <EmptyState
@@ -320,16 +365,9 @@ export default function SchedulesScreen() {
         />
       )}
 
-      {/* FAB */}
-      {schedules.length > 0 && canCreateSchedule && (
-        <Pressable
-          onPress={handleCreate}
-          className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg active:opacity-80"
-          style={{ backgroundColor: colors.teal }}
-        >
-          <Plus size={24} color={colors.accentText} />
-        </Pressable>
-      )}
+      {canCreateSchedule ? (
+        <QuickSchedule onCreated={handleRefresh} onDetailedCreate={handleCreate} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -337,9 +375,13 @@ export default function SchedulesScreen() {
 function Header({
   onBackPress,
   onCreatePress,
+  onSortPress,
+  sortOpen = false,
 }: {
   onBackPress: () => void;
   onCreatePress?: () => void;
+  onSortPress?: () => void;
+  sortOpen?: boolean;
 }) {
   const colors = useThemeColors();
   return (
@@ -355,6 +397,17 @@ function Header({
       <Text variant="subheading" className="ml-2 flex-1">
         Schedules
       </Text>
+      {onSortPress ? (
+        <Pressable
+          onPress={onSortPress}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityLabel="Sort schedules"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: sortOpen }}
+        >
+          <ListFilter size={20} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
       {onCreatePress ? (
         <Pressable
           onPress={onCreatePress}
