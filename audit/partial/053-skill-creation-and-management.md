@@ -132,14 +132,11 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/t
 
 - Done when: A skill declares the tools it needs and the product shows or enforces that requirement.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Enforced by the CLI runtime when a skill loads, but VS Code never shows a skill's requirements. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:944-962`
 
 ## S53.15: Required connections.
 
