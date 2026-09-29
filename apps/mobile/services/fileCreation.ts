@@ -23,6 +23,7 @@ import {
   EXPORT_MATH_SCRIPT,
   markdownToExportHtml,
 } from '@/services/exportMarkdownHtml';
+import { markdownToDocxBase64 } from './docxExport';
 
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
 
@@ -33,7 +34,7 @@ async function ensureExportsDir(): Promise<void> {
   }
 }
 
-export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'source';
+export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'docx' | 'source';
 
 export interface ExportResult {
   uri: string;
@@ -513,6 +514,20 @@ export async function exportToMarkdown(
     fileName,
     file: exportedFile(destUri, fileName, lineage),
   };
+}
+
+export async function exportToDocx(
+  content: string,
+  title: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  const base64 = await markdownToDocxBase64(content, title);
+  await ensureExportsDir();
+  const fileName = `${sanitizeFileName(title)}.docx`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
+  await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
+  return { uri: destUri, format: 'docx', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
 import type { ChatMessage } from '@/types/chat';

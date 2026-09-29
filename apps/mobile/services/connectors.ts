@@ -269,3 +269,30 @@ export async function fetchConnectorCalls(connectorId: string): Promise<Connecto
   const body = await api.get<unknown>(`${CONNECTOR_CALLS_PATH}?${params.toString()}`);
   return ConnectorCallLogResponseSchema.parse(body).calls;
 }
+
+const BANK_LINK_PATH = '/api/connectors/bank-accounts/link';
+const BANK_EXCHANGE_PATH = '/api/connectors/bank-accounts/exchange';
+const BANK_LINK_RETURN_URL = 'agiworkforce://connectors/bank-complete';
+
+export type BankLinkOutcome = 'connected' | 'dismissed';
+
+export async function linkBankAccountsInApp(): Promise<BankLinkOutcome> {
+  const created = (await api.post<{ linkToken?: unknown; hostedLinkUrl?: unknown }>(
+    BANK_LINK_PATH,
+    { hostedLink: true },
+  )) as { linkToken?: unknown; hostedLinkUrl?: unknown };
+  if (typeof created.linkToken !== 'string' || typeof created.hostedLinkUrl !== 'string') {
+    throw new ConnectorResponseError('The bank link could not be started.');
+  }
+  const hostedLinkUrl = new URL(created.hostedLinkUrl);
+  if (hostedLinkUrl.protocol !== 'https:' || !/(^|\.)plaid\.com$/.test(hostedLinkUrl.hostname)) {
+    throw new ConnectorResponseError('The bank link could not be started.');
+  }
+  const session = await WebBrowser.openAuthSessionAsync(
+    hostedLinkUrl.toString(),
+    BANK_LINK_RETURN_URL,
+  );
+  if (session.type !== 'success') return 'dismissed';
+  await api.post<unknown>(BANK_EXCHANGE_PATH, { linkToken: created.linkToken });
+  return 'connected';
+}

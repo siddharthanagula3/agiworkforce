@@ -20,6 +20,7 @@ import type { Artifact } from '@/types/chat';
 const FORMAT_ICONS: Readonly<Record<ArtifactExportFormat, LucideIcon>> = {
   markdown: FileText,
   pdf: FileDown,
+  docx: FileText,
   text: FileText,
   source: FileCode,
 };
