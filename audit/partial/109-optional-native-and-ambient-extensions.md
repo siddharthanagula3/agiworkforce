@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S109.03: Menu-bar quick actions.
-
-- Done when: A menu-bar (or equivalent quick menu) offers one-click AGI actions such as new chat, quick ask, screenshot and voice.
-- Wave: 3
-- Already works on: desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | home-screen widgets on iOS and Android with New chat, Camera and Dictate (ruling 4); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
-
 ## S109.05: Compact floating assistant.
 
 - Done when: A compact assistant floats over other content (other apps or pages) and can take a prompt without opening the full app.
@@ -32,14 +20,11 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 - Done when: Dictation to AGI can be started from anywhere on the device (global shortcut or system voice command) without first opening the app.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | dictation entry from the home-screen widget (ruling 4); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.08: Selected-text rewrite shortcut.
 
@@ -54,26 +39,22 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 - Done when: A hardware button or macropad (Stream Deck, iPhone Action Button, etc.) can trigger AGI actions through a supported integration.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS Control 'Open AGI Workforce' for Control Center, Lock Screen and Action Button (ruling 6); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.13: Headset/earbud invocation.
 
 - Done when: The user can start talking to AGI from a headset or earbuds (button or voice command) without touching the phone or computer.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS Ask intent that runs without opening the app and returns a speakable answer for Siri/AirPods (ruling 5); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | handler |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.16: Messaging-platform access.
 
