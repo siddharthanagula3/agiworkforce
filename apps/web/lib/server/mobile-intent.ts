@@ -128,14 +128,11 @@ export async function answerMobileIntentAsk(input: {
 
   const taskType = classifyTaskLocally(prompt, []).type;
   const routeScope = { db, userId: owner.userId };
+  const routeTo = (selection: string) =>
+    selectUnattendedRoute(routeScope, selection, taskType, entitlement.plan, false);
   const route = owner.defaultModelId
-    ? await selectUnattendedRoute(
-        routeScope,
-        owner.defaultModelId,
-        taskType,
-        entitlement.plan,
-      ).catch(() => selectUnattendedRoute(routeScope, 'auto', taskType, entitlement.plan))
-    : await selectUnattendedRoute(routeScope, 'auto', taskType, entitlement.plan);
+    ? await routeTo(owner.defaultModelId).catch(() => routeTo('auto'))
+    : await routeTo('auto');
   const messages = [
     { role: 'system' as const, content: ASK_DIRECTIVE },
     { role: 'user' as const, content: prompt },

@@ -721,7 +721,13 @@ async function selectScheduledRoute(
   subscriptionTier: string,
   googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
-  return selectUnattendedRoute(scope, task.model ?? 'auto', taskType, subscriptionTier);
+  return selectUnattendedRoute(
+    scope,
+    task.model ?? 'auto',
+    taskType,
+    subscriptionTier,
+    googleUserData,
+  );
 }
 
 export async function selectUnattendedRoute(
@@ -729,6 +735,7 @@ export async function selectUnattendedRoute(
   selection: string,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
+  googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
   const baseRouting: AutoRoutingRequest = {
     selection,
