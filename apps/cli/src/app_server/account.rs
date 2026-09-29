@@ -251,24 +251,47 @@ fn forget_managed(store: &mut AuthStore) {
 
 const RENEW_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
 
-pub async fn renew_managed_session_if_expiring() -> Option<String> {
-    let store = AuthStore::load().ok()?;
-    let refresh = match store.entries.get("agiworkforce") {
+fn expiring_refresh_token(store: &AuthStore) -> Option<String> {
+    match store.entries.get("agiworkforce") {
         Some(AuthEntry::OAuth {
             refresh, expires, ..
         }) if !refresh.is_empty()
             && *expires > 0
             && *expires - chrono::Utc::now().timestamp_millis() < RENEW_WITHIN_MS =>
         {
-            refresh.clone()
+            Some(refresh.clone())
         }
-        _ => return None,
-    };
+        _ => None,
+    }
+}
+
+async fn lock_device_session() -> Option<std::fs::File> {
+    let path = crate::config::CliConfig::config_dir()
+        .ok()?
+        .join("device-session.lock");
+    tokio::task::spawn_blocking(move || {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+            .ok()?;
+        file.lock().ok()?;
+        Some(file)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+pub async fn renew_managed_session_if_expiring() -> Option<String> {
+    expiring_refresh_token(&AuthStore::load().ok()?)?;
+    let _lock = lock_device_session().await?;
+    let refresh = expiring_refresh_token(&AuthStore::load().ok()?)?;
     match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
-        crate::oauth::DeviceSessionRenewal::Renewed(entry) => {
-            save_device_grant(entry).ok();
-            None
-        }
+        crate::oauth::DeviceSessionRenewal::Renewed(entry) => save_device_grant(entry)
+            .err()
+            .map(|error| format!("The renewed AGI Workforce session could not be saved: {error:#}. Run agi login.")),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
         crate::oauth::DeviceSessionRenewal::Unavailable => None,
     }
