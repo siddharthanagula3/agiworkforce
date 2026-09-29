@@ -4,11 +4,15 @@ const { mockRemove, mockSet } = vi.hoisted(() => ({ mockRemove: vi.fn(), mockSet
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
-vi.mock('@/lib/connectors/bank-accounts', () => ({
+vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
   removeBankItem: (...args: unknown[]) => mockRemove(...args),
   setBankItemExcludedAccounts: (...args: unknown[]) => mockSet(...args),
 }));
@@ -43,9 +47,34 @@ describe('/api/connectors/bank-accounts/items/[itemId]', () => {
   });
 
   it('saves which accounts stay out of chats', async () => {
-    mockSet.mockResolvedValueOnce(true);
+    mockSet.mockResolvedValueOnce('updated');
     const res = await PATCH(request('PATCH', { excludedAccountIds: ['acc-2'] }), context());
     expect(res.status).toBe(200);
     expect(mockSet).toHaveBeenCalledWith('user-1', ITEM_ID, ['acc-2']);
+  });
+
+  it('refuses account ids the bank did not return', async () => {
+    mockSet.mockResolvedValueOnce('unknown_account');
+    const res = await PATCH(request('PATCH', { excludedAccountIds: ['acc-9'] }), context());
+    expect(res.status).toBe(400);
+  });
+
+  it('answers not found when the bank is not the caller', async () => {
+    mockSet.mockResolvedValueOnce('not_found');
+    const res = await PATCH(request('PATCH', { excludedAccountIds: [] }), context());
+    expect(res.status).toBe(404);
+  });
+
+  it('accepts the legacy link id so an older bank can be removed', async () => {
+    mockRemove.mockResolvedValueOnce(true);
+    const res = await DELETE(request('DELETE'), context('legacy'));
+    expect(res.status).toBe(200);
+    expect(mockRemove).toHaveBeenCalledWith('user-1', 'legacy');
+  });
+
+  it('refuses any other item id before reaching the bank', async () => {
+    const res = await DELETE(request('DELETE'), context('not-a-link'));
+    expect(res.status).toBe(404);
+    expect(mockRemove).not.toHaveBeenCalled();
   });
 });

@@ -50,7 +50,8 @@ const mocks = vi.hoisted(() => {
 const MockTokenError = mocks.ConnectorOAuthTokenError;
 const MockDecryptionError = mocks.ConnectorGrantDecryptionError;
 
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
   ConnectorGrantDecryptionError: mocks.ConnectorGrantDecryptionError,
   ConnectorGrantLockTimeoutError: mocks.ConnectorGrantLockTimeoutError,
   withLockedConnectorOAuthGrant: async (

@@ -1,8 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { BankAccountsItemUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
+import type { z } from 'zod';
+import {
+  BankAccountsItemIdSchema,
+  BankAccountsItemUpdateRequestSchema,
+  type BankAccountsItemRemoveResponseSchema,
+  type BankAccountsItemUpdateResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import { removeBankItem, setBankItemExcludedAccounts } from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
@@ -16,14 +21,13 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 export const runtime = 'nodejs';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
-const ItemIdSchema = z.string().uuid();
 
 interface RouteContext {
   params: Promise<{ itemId: string }>;
 }
 
 async function readItemId(context: RouteContext): Promise<string> {
-  const parsed = ItemIdSchema.safeParse((await context.params).itemId);
+  const parsed = BankAccountsItemIdSchema.safeParse((await context.params).itemId);
   if (!parsed.success) throw createError.notFound('That bank link was not found.').asUserSafe();
   return parsed.data;
 }
@@ -39,8 +43,12 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     await request.json().catch(() => null),
   );
   if (!parsed.success) throw createError.validation('Choose which accounts to include.');
-  if (!(await setBankItemExcludedAccounts(userId, itemId, parsed.data.excludedAccountIds))) {
+  const outcome = await setBankItemExcludedAccounts(userId, itemId, parsed.data.excludedAccountIds);
+  if (outcome === 'not_found') {
     throw createError.notFound('That bank link was not found.').asUserSafe();
+  }
+  if (outcome === 'unknown_account') {
+    throw createError.validation('Choose accounts from this bank.').asUserSafe();
   }
   await recordAuditEvent({
     userId,
@@ -53,7 +61,8 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
       resourceId: itemId,
     },
   });
-  return NextResponse.json({ updated: true }, { headers: NO_STORE });
+  const body: z.infer<typeof BankAccountsItemUpdateResponseSchema> = { updated: true };
+  return NextResponse.json(body, { headers: NO_STORE });
 }
 
 async function handleDelete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -77,7 +86,8 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
       resourceId: itemId,
     },
   });
-  return NextResponse.json({ removed: true }, { headers: NO_STORE });
+  const body: z.infer<typeof BankAccountsItemRemoveResponseSchema> = { removed: true };
+  return NextResponse.json(body, { headers: NO_STORE });
 }
 
 export const PATCH = withErrorHandler(handlePatch);

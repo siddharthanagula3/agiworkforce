@@ -4,7 +4,10 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
-import { BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL } from '@agiworkforce/cloud-contracts';
+import {
+  BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
+  BANK_ACCOUNTS_LEGACY_ITEM_ID,
+} from '@agiworkforce/cloud-contracts';
 
 import {
   ConnectorGrantDecryptionError,
@@ -42,6 +45,8 @@ const PLAID_TOKEN_TYPE = 'Bearer';
 const PLAID_REQUEST_TIMEOUT_MS = 20_000;
 const PLAID_PRODUCT_NOT_READY = 'PRODUCT_NOT_READY';
 const PLAID_ITEM_LOGIN_REQUIRED = 'ITEM_LOGIN_REQUIRED';
+const PLAID_GONE_CODES: ReadonlySet<string> = new Set(['ITEM_NOT_FOUND', 'INVALID_ACCESS_TOKEN']);
+const REMOVE_FAILED = 'The bank could not be removed right now. Try again in a few minutes.';
 const TRANSACTIONS_DEFAULT_COUNT = 100;
 const TRANSACTIONS_MAX_COUNT = 500;
 const MAX_ACCOUNT_IDS = 20;
@@ -256,14 +261,20 @@ async function readBankAccountsToken(userId: string): Promise<string | null> {
   }
 }
 
+function isGoneAtPlaid(error: unknown): boolean {
+  return error instanceof PlaidApiError && PLAID_GONE_CODES.has(error.plaidCode);
+}
+
 async function removePlaidItem(accessToken: string): Promise<void> {
   try {
     await plaidRequest('/item/remove', { access_token: accessToken });
   } catch (error) {
+    if (isGoneAtPlaid(error)) return;
     logger.warn(
       { code: error instanceof PlaidApiError ? error.plaidCode : 'unknown' },
-      '[bank-accounts] the Plaid item could not be removed; the stored token is erased anyway',
+      '[bank-accounts] the Plaid item could not be removed; the link is kept',
     );
+    throw new PlaidApiError('item_remove_failed', REMOVE_FAILED);
   }
 }
 
@@ -279,6 +290,10 @@ interface BankItemRow {
   access_token_enc: string;
   institution_name: string | null;
   excluded_account_ids: string[] | null;
+}
+
+function itemIdOf(item: BankItem): string {
+  return item.id ?? BANK_ACCOUNTS_LEGACY_ITEM_ID;
 }
 
 async function readBankItems(userId: string): Promise<BankItem[]> {
@@ -315,20 +330,69 @@ async function readBankItems(userId: string): Promise<BankItem[]> {
 async function recordBankItem(
   userId: string,
   item: { plaidItemId: string; accessToken: string; institutionName: string | null },
-): Promise<void> {
-  await getNeonDb().execute(
+): Promise<string> {
+  const [recorded] = await getNeonDb().query<{ id: string }>(
     `insert into public.bank_account_items (user_id, plaid_item_id, access_token_enc, institution_name)
      values ($1, $2, $3, $4)
      on conflict (user_id, plaid_item_id) do update
        set access_token_enc = excluded.access_token_enc,
            institution_name = coalesce(excluded.institution_name, public.bank_account_items.institution_name),
-           updated_at = now()`,
+           updated_at = now()
+     returning id`,
     [
       userId,
       item.plaidItemId,
       encryptConnectorToken(item.accessToken, 'plaid-access-token'),
       item.institutionName,
     ],
+  );
+  if (!recorded) throw new PlaidApiError('item_not_saved', 'The bank link could not be saved.');
+  return recorded.id;
+}
+
+async function adoptLegacyItem(userId: string, accessToken: string): Promise<string> {
+  const existing = await plaidRequest<{ item: { item_id: string } }>('/item/get', {
+    access_token: accessToken,
+  });
+  return recordBankItem(userId, {
+    plaidItemId: existing.item.item_id,
+    accessToken,
+    institutionName: null,
+  });
+}
+
+async function carryOverLegacyItem(userId: string, newAccessToken: string): Promise<void> {
+  const [recorded] = await getNeonDb().query<{ count: number }>(
+    `select count(*)::int as count from public.bank_account_items where user_id = $1`,
+    [userId],
+  );
+  if ((recorded?.count ?? 0) > 0) return;
+  const legacy = await readBankAccountsToken(userId);
+  if (!legacy || legacy === newAccessToken) return;
+  try {
+    await adoptLegacyItem(userId, legacy);
+  } catch (error) {
+    if (!isGoneAtPlaid(error)) throw error;
+    logger.info('[bank-accounts] the earlier bank link is gone at Plaid; nothing to carry over');
+  }
+}
+
+async function pointGrantAt(
+  userId: string,
+  item: { accessToken: string; institutionName: string | null },
+): Promise<void> {
+  await upsertConnectorOAuthGrant(
+    userId,
+    BANK_ACCOUNTS_CONNECTOR_ID,
+    {
+      accessToken: item.accessToken,
+      refreshToken: null,
+      tokenType: PLAID_TOKEN_TYPE,
+      grantedScopes: PLAID_PRODUCTS,
+      accessTokenExpiresAt: null,
+      tokenEndpoint: `${plaidApiOrigin()}/item/public_token/exchange`,
+    },
+    { accountLabel: item.institutionName },
   );
 }
 
@@ -337,80 +401,90 @@ export async function connectBankAccounts(
   publicToken: string,
   institutionName: string | null,
 ): Promise<void> {
-  const origin = plaidApiOrigin();
   const exchanged = await plaidRequest<{ access_token: string; item_id: string }>(
     '/item/public_token/exchange',
     { public_token: publicToken },
   );
-  const [recorded] = await getNeonDb().query<{ count: number }>(
-    `select count(*)::int as count from public.bank_account_items where user_id = $1`,
-    [userId],
-  );
-  const legacy = (recorded?.count ?? 0) === 0 ? await readBankAccountsToken(userId) : null;
-  if (legacy && legacy !== exchanged.access_token) {
-    const existing = await plaidRequest<{ item: { item_id: string } }>('/item/get', {
-      access_token: legacy,
-    });
+  try {
+    await carryOverLegacyItem(userId, exchanged.access_token);
     await recordBankItem(userId, {
-      plaidItemId: existing.item.item_id,
-      accessToken: legacy,
-      institutionName: null,
-    });
-  }
-  await recordBankItem(userId, {
-    plaidItemId: exchanged.item_id,
-    accessToken: exchanged.access_token,
-    institutionName,
-  });
-  await upsertConnectorOAuthGrant(
-    userId,
-    BANK_ACCOUNTS_CONNECTOR_ID,
-    {
+      plaidItemId: exchanged.item_id,
       accessToken: exchanged.access_token,
-      refreshToken: null,
-      tokenType: PLAID_TOKEN_TYPE,
-      grantedScopes: PLAID_PRODUCTS,
-      accessTokenExpiresAt: null,
-      tokenEndpoint: `${origin}/item/public_token/exchange`,
-    },
-    { accountLabel: institutionName },
-  );
+      institutionName,
+    });
+  } catch (error) {
+    await removePlaidItem(exchanged.access_token).catch(() => undefined);
+    throw error;
+  }
+  await pointGrantAt(userId, { accessToken: exchanged.access_token, institutionName });
 }
 
-export async function removeBankAccountsItem(userId: string): Promise<void> {
-  for (const item of await readBankItems(userId)) await removePlaidItem(item.accessToken);
-  await getNeonDb().execute(`delete from public.bank_account_items where user_id = $1`, [userId]);
-}
-
-export async function removeBankItem(userId: string, itemId: string): Promise<boolean> {
-  const item = (await readBankItems(userId)).find((candidate) => candidate.id === itemId);
-  if (!item) return false;
-  await removePlaidItem(item.accessToken);
+async function deleteBankItemRow(userId: string, itemId: string): Promise<void> {
   await getNeonDb().execute(
     `delete from public.bank_account_items where id = $1 and user_id = $2`,
     [itemId, userId],
   );
-  const [left] = await getNeonDb().query<{ count: number }>(
-    `select count(*)::int as count from public.bank_account_items where user_id = $1`,
-    [userId],
-  );
-  if ((left?.count ?? 0) === 0) await revokeConnectorOAuthGrant(userId, BANK_ACCOUNTS_CONNECTOR_ID);
+}
+
+export async function removeBankAccountsItem(userId: string): Promise<void> {
+  const survivors: BankItem[] = [];
+  for (const item of await readBankItems(userId)) {
+    try {
+      await removePlaidItem(item.accessToken);
+    } catch {
+      survivors.push(item);
+      continue;
+    }
+    if (item.id) await deleteBankItemRow(userId, item.id);
+  }
+  const survivor = survivors.at(-1);
+  if (survivor) {
+    await pointGrantAt(userId, survivor);
+    throw new PlaidApiError('item_remove_failed', REMOVE_FAILED);
+  }
+  await getNeonDb().execute(`delete from public.bank_account_items where user_id = $1`, [userId]);
+}
+
+export async function removeBankItem(userId: string, itemId: string): Promise<boolean> {
+  const items = await readBankItems(userId);
+  const item = items.find((candidate) => itemIdOf(candidate) === itemId);
+  if (!item) return false;
+  await removePlaidItem(item.accessToken);
+  if (item.id) await deleteBankItemRow(userId, item.id);
+  const remaining = items.filter((candidate) => candidate !== item);
+  const next = remaining.at(-1);
+  if (!next) {
+    await revokeConnectorOAuthGrant(userId, BANK_ACCOUNTS_CONNECTOR_ID);
+  } else if ((await readBankAccountsToken(userId)) === item.accessToken) {
+    await pointGrantAt(userId, next);
+  }
   return true;
 }
+
+export type BankItemExclusionOutcome = 'updated' | 'not_found' | 'unknown_account';
 
 export async function setBankItemExcludedAccounts(
   userId: string,
   itemId: string,
   excludedAccountIds: readonly string[],
-): Promise<boolean> {
+): Promise<BankItemExclusionOutcome> {
+  const item = (await readBankItems(userId)).find((candidate) => itemIdOf(candidate) === itemId);
+  if (!item) return 'not_found';
+  const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
+    access_token: item.accessToken,
+  });
+  const known = new Set(listed.accounts.map((account) => account.account_id));
+  const excluded = [...new Set(excludedAccountIds)];
+  if (excluded.some((accountId) => !known.has(accountId))) return 'unknown_account';
+  const rowId = item.id ?? (await adoptLegacyItem(userId, item.accessToken));
   const rows = await getNeonDb().query<{ id: string }>(
     `update public.bank_account_items
         set excluded_account_ids = $3::text[], updated_at = now()
       where id = $1 and user_id = $2
       returning id`,
-    [itemId, userId, [...new Set(excludedAccountIds)]],
+    [rowId, userId, excluded],
   );
-  return rows.length > 0;
+  return rows.length > 0 ? 'updated' : 'not_found';
 }
 
 export interface BankItemSummary {
@@ -428,9 +502,7 @@ export interface BankItemSummary {
 }
 
 export async function listBankItems(userId: string): Promise<BankItemSummary[]> {
-  const items = (await readBankItems(userId)).filter(
-    (item): item is BankItem & { id: string } => item.id !== null,
-  );
+  const items = await readBankItems(userId);
   return Promise.all(
     items.map(async (item): Promise<BankItemSummary> => {
       try {
@@ -438,7 +510,7 @@ export async function listBankItems(userId: string): Promise<BankItemSummary[]> 
           access_token: item.accessToken,
         });
         return {
-          id: item.id,
+          id: itemIdOf(item),
           institutionName: item.institutionName,
           status: 'ready',
           accounts: listed.accounts.map((account) => ({
@@ -452,7 +524,7 @@ export async function listBankItems(userId: string): Promise<BankItemSummary[]> 
         };
       } catch (error) {
         return {
-          id: item.id,
+          id: itemIdOf(item),
           institutionName: item.institutionName,
           status:
             error instanceof PlaidApiError && error.plaidCode === PLAID_ITEM_LOGIN_REQUIRED
@@ -610,6 +682,23 @@ async function readBalances(
   };
 }
 
+async function includedAccountIds(
+  item: BankItem,
+  requested: readonly string[] | undefined,
+): Promise<string[] | undefined> {
+  if (!requested && item.excludedAccountIds.length === 0) return undefined;
+  const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
+    access_token: item.accessToken,
+  });
+  return listed.accounts
+    .map((account) => account.account_id)
+    .filter(
+      (accountId) =>
+        !item.excludedAccountIds.includes(accountId) &&
+        (!requested || requested.includes(accountId)),
+    );
+}
+
 async function readTransactions(
   items: readonly BankItem[],
   args: Record<string, unknown>,
@@ -627,6 +716,8 @@ async function readTransactions(
   const transactions: BankTransactionSummary[] = [];
   let total = 0;
   for (const item of items) {
+    const accountIds = await includedAccountIds(item, account_ids);
+    if (accountIds?.length === 0) continue;
     const answered = await plaidRequest<{
       transactions: PlaidTransaction[];
       total_transactions: number;
@@ -637,15 +728,11 @@ async function readTransactions(
       options: {
         count: Math.min(TRANSACTIONS_MAX_COUNT, skip + limit),
         offset: 0,
-        ...(account_ids ? { account_ids } : {}),
+        ...(accountIds ? { account_ids: accountIds } : {}),
       },
     });
     total += answered.total_transactions;
-    for (const transaction of answered.transactions) {
-      if (!item.excludedAccountIds.includes(transaction.account_id)) {
-        transactions.push(summarizeTransaction(transaction));
-      }
-    }
+    transactions.push(...answered.transactions.map(summarizeTransaction));
   }
   transactions.sort((left, right) => right.date.localeCompare(left.date));
   return {
@@ -752,11 +839,11 @@ export async function readBankAccountOverview(
       const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
         access_token: item.accessToken,
       });
-      accounts.push(
-        ...listed.accounts
-          .filter((account) => !excluded.has(account.account_id))
-          .map(summarizeAccount),
-      );
+      const included = listed.accounts.filter((account) => !excluded.has(account.account_id));
+      accounts.push(...included.map(summarizeAccount));
+      if (included.length === 0) continue;
+      const accountFilter =
+        excluded.size > 0 ? { account_ids: included.map((account) => account.account_id) } : {};
       let fetched = 0;
       do {
         const page = await plaidRequest<{
@@ -766,15 +853,11 @@ export async function readBankAccountOverview(
           access_token: item.accessToken,
           start_date: range.startDate,
           end_date: range.endDate,
-          options: { count: OVERVIEW_TRANSACTION_PAGE_SIZE, offset: fetched },
+          options: { count: OVERVIEW_TRANSACTION_PAGE_SIZE, offset: fetched, ...accountFilter },
         });
         if (fetched === 0) totalTransactions += page.total_transactions;
         fetched += page.transactions.length;
-        transactions.push(
-          ...page.transactions
-            .filter((transaction) => !excluded.has(transaction.account_id))
-            .map(summarizeTransaction),
-        );
+        transactions.push(...page.transactions.map(summarizeTransaction));
         if (page.transactions.length === 0 || fetched >= page.total_transactions) break;
       } while (transactions.length < OVERVIEW_MAX_TRANSACTIONS);
     }

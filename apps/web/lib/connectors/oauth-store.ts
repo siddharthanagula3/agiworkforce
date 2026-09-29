@@ -246,7 +246,7 @@ export async function listPendingConnectorIds(userId: string): Promise<string[]>
 
 export async function consumePendingAuthorization(
   state: string,
-  userId?: string,
+  userId: string,
 ): Promise<PendingAuthorization | null> {
   const db = getNeonDb();
   let rows: PendingAuthorizationRow[];
@@ -258,7 +258,7 @@ export async function consumePendingAuthorization(
           where state_hash = $1
             and consumed_at is null
             and expires_at > now()
-            and ($2::text is null or user_id = $2)
+            and user_id = $2
           returning user_id, connector_id, code_verifier_enc, redirect_uri,
                     requested_scopes, return_path, issuer, authorization_endpoint,
                     token_endpoint, resource_url, mcp_url, client_id, discovery_state,
@@ -268,7 +268,7 @@ export async function consumePendingAuthorization(
                         : `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key, ` +
                           `null as account_label, 'personal' as account_scope`
                     }`,
-        [hashOAuthState(state), userId ?? null],
+        [hashOAuthState(state), userId],
       ),
     );
   } catch (error) {

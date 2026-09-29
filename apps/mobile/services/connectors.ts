@@ -18,6 +18,9 @@ import {
   BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
   BANK_ACCOUNTS_ITEMS_PATH,
   BANK_ACCOUNTS_LINK_PATH,
+  BankAccountsExchangeResponseSchema,
+  BankAccountsItemRemoveResponseSchema,
+  BankAccountsItemUpdateResponseSchema,
   BankAccountsItemsResponseSchema,
   BankAccountsLinkResponseSchema,
   bankAccountsItemPath,
@@ -296,7 +299,9 @@ export async function linkBankAccountsInApp(): Promise<BankLinkOutcome> {
     BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
   );
   if (session.type !== 'success') return 'dismissed';
-  await api.post<unknown>(BANK_ACCOUNTS_EXCHANGE_PATH, { linkToken: created.data.linkToken });
+  BankAccountsExchangeResponseSchema.parse(
+    await api.post<unknown>(BANK_ACCOUNTS_EXCHANGE_PATH, { linkToken: created.data.linkToken }),
+  );
   return 'connected';
 }
 
@@ -309,9 +314,13 @@ export async function setBankItemExcludedAccounts(
   itemId: string,
   excludedAccountIds: readonly string[],
 ): Promise<void> {
-  await api.patch<unknown>(bankAccountsItemPath(itemId), { excludedAccountIds });
+  BankAccountsItemUpdateResponseSchema.parse(
+    await api.patch<unknown>(bankAccountsItemPath(itemId), { excludedAccountIds }),
+  );
 }
 
 export async function removeBankItem(itemId: string): Promise<void> {
-  await api.delete<unknown>(bankAccountsItemPath(itemId));
+  BankAccountsItemRemoveResponseSchema.parse(
+    await api.delete<unknown>(bankAccountsItemPath(itemId)),
+  );
 }

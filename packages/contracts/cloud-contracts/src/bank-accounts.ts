@@ -28,14 +28,29 @@ export const BankAccountsExchangeRequestSchema = z.union([
 
 export type BankAccountsLinkResponse = z.infer<typeof BankAccountsLinkResponseSchema>;
 
+export const BankAccountsExchangeResponseSchema = z.object({
+  connector: z.object({
+    connectorId: z.literal(BANK_ACCOUNTS_CONNECTOR_ID),
+    connectedAt: z.string(),
+  }),
+});
+export type BankAccountsExchangeResponse = z.infer<typeof BankAccountsExchangeResponseSchema>;
+
 export const BANK_ACCOUNTS_ITEMS_PATH = '/api/connectors/bank-accounts/items';
 
 export function bankAccountsItemPath(itemId: string): string {
   return `${BANK_ACCOUNTS_ITEMS_PATH}/${encodeURIComponent(itemId)}`;
 }
 
+export const BANK_ACCOUNTS_LEGACY_ITEM_ID = 'legacy';
+
+export const BankAccountsItemIdSchema = z.union([
+  z.string().uuid(),
+  z.literal(BANK_ACCOUNTS_LEGACY_ITEM_ID),
+]);
+
 export const BankAccountsItemSchema = z.object({
-  id: z.string().uuid(),
+  id: BankAccountsItemIdSchema,
   institutionName: z.string().nullable(),
   status: z.enum(['ready', 'reconnect', 'unavailable']),
   accounts: z.array(
@@ -56,3 +71,7 @@ export const BankAccountsItemsResponseSchema = z.object({ items: z.array(BankAcc
 export const BankAccountsItemUpdateRequestSchema = z
   .object({ excludedAccountIds: z.array(z.string().min(1).max(128)).max(100) })
   .strict();
+
+export const BankAccountsItemUpdateResponseSchema = z.object({ updated: z.literal(true) });
+
+export const BankAccountsItemRemoveResponseSchema = z.object({ removed: z.literal(true) });
