@@ -16,7 +16,7 @@ import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStor
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, PendingToolInput, PendingToolInputCall } from '@/types/chat';
 import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
@@ -134,6 +134,63 @@ function messageContentToString(content: unknown): string {
   return typeof content === 'string' ? content : JSON.stringify(content);
 }
 
+const PHONE_INPUT_TOOL_PREFIX = 'phone-input:';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function projectPendingToolInput(
+  existing: unknown,
+  pending: PendingToolInput | undefined,
+): Record<string, unknown>[] | undefined {
+  const kept = (Array.isArray(existing) ? existing : []).filter(
+    (entry): entry is Record<string, unknown> =>
+      isRecord(entry) &&
+      !(typeof entry['id'] === 'string' && entry['id'].startsWith(PHONE_INPUT_TOOL_PREFIX)) &&
+      !pending?.toolCalls.some((call) => call.toolCallId === entry['toolCallId']),
+  );
+  const paused = (pending?.toolCalls ?? []).map((call) => ({
+    id: `${PHONE_INPUT_TOOL_PREFIX}${call.toolCallId}`,
+    name: call.name,
+    status: 'awaiting_input',
+    toolCallId: call.toolCallId,
+    ...(call.connectorId ? { connectorId: call.connectorId } : {}),
+    inputRequests: call.inputRequests,
+  }));
+  const tools = [...kept, ...paused];
+  return tools.length > 0 ? tools : undefined;
+}
+
+export function pendingToolInputFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): PendingToolInput | undefined {
+  const run = ManagedCloudAgentRunReferenceSchema.safeParse(metadata?.['cloudAgentRun']);
+  const tools = metadata?.['tools'];
+  if (!run.success || !Array.isArray(tools)) return undefined;
+  const toolCalls: PendingToolInputCall[] = tools.flatMap((entry) =>
+    isRecord(entry) &&
+    entry['status'] === 'awaiting_input' &&
+    typeof entry['toolCallId'] === 'string' &&
+    entry['toolCallId'].length > 0 &&
+    typeof entry['name'] === 'string' &&
+    isRecord(entry['inputRequests'])
+      ? [
+          {
+            toolCallId: entry['toolCallId'],
+            name: entry['name'],
+            connectorId: typeof entry['connectorId'] === 'string' ? entry['connectorId'] : '',
+            round: 0,
+            inputRequests: entry['inputRequests'],
+          },
+        ]
+      : [],
+  );
+  return toolCalls.length > 0
+    ? { runId: run.data.runId, requestedAt: new Date(0).toISOString(), toolCalls }
+    : undefined;
+}
+
 function messageMetadataForSync(message: ChatMessage): Record<string, unknown> | null {
   const base = message.metadata ? { ...message.metadata } : {};
   const candidateImageUrl =
@@ -205,6 +262,10 @@ function messageMetadataForSync(message: ChatMessage): Record<string, unknown> |
   } else if (runReference.success || 'cloudApproval' in base) {
     base.cloudApproval = null;
   }
+
+  const tools = projectPendingToolInput(base['tools'], message.pendingToolInput);
+  if (tools) base['tools'] = tools;
+  else delete base['tools'];
 
   return Object.keys(base).length > 0 ? base : null;
 }
@@ -342,6 +403,7 @@ const messagePort: MessageStorePort = {
       const existing = existingById.get(record.id);
       const toolCalls = hydrateApprovalToolCalls(existing, record.metadata);
       const generatedImage = hydrateGeneratedImageFields(record.metadata);
+      const pendingToolInput = pendingToolInputFromMetadata(record.metadata);
       return {
         ...(existing ?? {}),
         id: record.id,
@@ -355,6 +417,7 @@ const messagePort: MessageStorePort = {
         serverVersion: record.serverVersion,
         ...(toolCalls ? { toolCalls } : {}),
         ...generatedImage,
+        pendingToolInput,
       } as ChatMessage;
     });
     useChatCloudMessageStore.getState().setCloudMessages(conversationId, chatMessages);
