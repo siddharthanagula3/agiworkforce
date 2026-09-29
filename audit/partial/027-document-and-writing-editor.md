@@ -82,15 +82,13 @@ nothing is left.
 
 - Done when: Selecting text in a document shows a toolbar of actions for that selection.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Selecting text in any file, including .md/.txt, shows AGI actions in the editor right-click menu (Explain, Fix, Refactor, Send Selection to a New Chat) via the code-edit flow; no document editor, floating toolbar or writing-specific actions. | ui |
-
-Code: `apps/extension-vscode/package.json:813-860`, `apps/extension-vscode/src/core/commandSetup.ts:964-975`
 
 ## S27.16: Rewrite selection.
 

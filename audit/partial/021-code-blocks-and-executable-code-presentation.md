@@ -171,6 +171,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788
 
 - Done when: A failed or finished execution can be re-run in place.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -178,7 +179,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788
 | desktop | partial | partials/chat-gates cc4f6e2462: a completed or failed code step (execute_code) offers Run again. It reruns the cell in the chat's own sandbox, so earlier variables still exist, and shows the new output, error and plots in place. Owner, deployment switch, canUseCloudExecution, the account setting and managed-compute access are all checked, and compute is billed as a turn's is. Left: switch-on AGI_E2B_EXECUTION. Until then no execute_code step exists, and provider-native code results (CodeExecutionBlock) keep no code to rerun. | switch |
 | mobile | partial | Matches web: Regenerate re-runs the whole answer; ChatGPT runs a code block in place, and a Run control needs a server sandbox execution route first. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Web and desktop are partial because Regenerate re-runs the whole answer; VS Code has the same class of control, a Retry button on a failed turn that resends lastSendPayload, and was scored missing. Same evidence, same status. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:547-547`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:113-113`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:74-74`, `packages/contracts/cloud-contracts/src/chat-code-runs.ts:6-6`

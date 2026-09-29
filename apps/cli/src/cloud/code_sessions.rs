@@ -146,7 +146,8 @@ pub fn render_list(sessions: &[CodeSession], status: &str) -> String {
     }
     lines.push(String::new());
     lines.push(
-        "Show one with `agi code show <id>`; open it in the browser with `agi code open <id>`."
+        "Show one with `agi code show <id>`, open it in the browser with `agi code open <id>`, \
+         or continue it in this checkout with `agi resume --teleport <id>`."
             .to_string(),
     );
     lines.join("\n")

@@ -132,7 +132,8 @@ Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/fea
 ## S62.14: Agent handoff.
 
 - Done when: Work can be handed from one agent to another, and the receiving agent continues it.
-- Wave: 2
+- Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -140,10 +141,7 @@ Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/fea
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code can continue a cloud task locally (goal + plan draft, branch checkout), but nothing emits the /cloud-task link and the pull command is hidden, so the handoff cannot be triggered. | ui, mount |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/context-handoff/index.ts:62-70`, `apps/extension-vscode/src/extension.ts:140-150`
 
 ## S62.15: Summary-only handoff.
 

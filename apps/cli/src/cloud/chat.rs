@@ -87,6 +87,8 @@ pub struct ConversationDelta {
     pub updated_at: String,
     #[serde(default)]
     pub deleted_at: Option<String>,
+    #[serde(default)]
+    pub archived: bool,
     pub server_version: String,
 }
 
@@ -294,6 +296,7 @@ pub struct HostedConversation {
     pub model: Option<String>,
     pub project_id: Option<String>,
     pub updated_at: String,
+    pub archived: bool,
     pub messages: Vec<TurnMessage>,
 }
 
@@ -311,6 +314,7 @@ pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
             model: conversation.model.clone(),
             project_id: conversation.project_id.clone(),
             updated_at: conversation.updated_at.clone(),
+            archived: conversation.archived,
             messages: Vec::new(),
         })
         .collect();
@@ -532,6 +536,7 @@ mod tests {
                         project_id: None,
                         updated_at: "2026-09-13T00:00:00Z".to_string(),
                         deleted_at: None,
+                        archived: false,
                         server_version: "99".to_string(),
                     }),
                 }],
@@ -573,6 +578,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-12T00:00:00Z".to_string(),
                     deleted_at: None,
+                    archived: false,
                     server_version: "1".to_string(),
                 },
                 ConversationDelta {
@@ -582,6 +588,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-13T00:00:00Z".to_string(),
                     deleted_at: None,
+                    archived: false,
                     server_version: "2".to_string(),
                 },
                 ConversationDelta {
@@ -591,6 +598,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-13T00:00:00Z".to_string(),
                     deleted_at: Some("2026-09-13T01:00:00Z".to_string()),
+                    archived: false,
                     server_version: "3".to_string(),
                 },
             ],
@@ -657,6 +665,7 @@ mod tests {
                 project_id: None,
                 updated_at: "2026-09-13T00:00:00Z".to_string(),
                 deleted_at: None,
+                archived: false,
                 server_version: "8".to_string(),
             }],
             messages: vec![MessageDelta {

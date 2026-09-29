@@ -31,6 +31,35 @@ pub struct LibraryPage {
 pub struct TextPreview {
     pub text: String,
     pub truncated: bool,
+    #[serde(default, rename = "fileName")]
+    pub file_name: Option<String>,
+}
+
+pub fn formatted_source(preview: &TextPreview) -> Option<String> {
+    let name = preview.file_name.as_deref()?;
+    let extension = std::path::Path::new(name)
+        .extension()?
+        .to_str()?
+        .to_ascii_lowercase();
+    if matches!(extension.as_str(), "md" | "markdown" | "mdx") {
+        return Some(preview.text.clone());
+    }
+    if !extension
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric())
+        || matches!(extension.as_str(), "txt" | "log" | "csv" | "tsv")
+    {
+        return None;
+    }
+    let fence = if preview.text.contains("```") {
+        "~~~~"
+    } else {
+        "```"
+    };
+    Some(format!(
+        "{fence}{extension}\n{}\n{fence}",
+        preview.text.trim_end()
+    ))
 }
 
 fn file_path(id: &str) -> String {
