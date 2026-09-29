@@ -95,7 +95,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sign-in hands needs_second_factor to Clerk native view (MobileSignIn.tsx onNativeFallback); works only once the owner enables Authenticator and Backup codes in the Clerk Dashboard, and it is unverified on a live instance. | handler |
+| mobile | partial | Owner: enable Authenticator and Backup codes in the Clerk Dashboard, then a live second-factor sign-in check; code path (MobileSignIn onNativeFallback) unchanged. | handler |
 
 Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/settings/account-security/service.ts:70-80`
 

@@ -222,7 +222,7 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The composer shows only a media-mode chip; there are no chips for web search, connector resources or page sources chosen for the next message. | codex |
+| mobile | partial | Proposed done at parity: mobile shows media, skill and research chips (ChatInput.tsx:826, 218); web shows no web-search chip either; connector prompt/resource picking is not offered on mobile. Needs lead ruling. | codex |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`

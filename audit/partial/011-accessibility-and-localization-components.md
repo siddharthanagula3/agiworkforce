@@ -15,18 +15,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S11.02: Semantic heading hierarchy.
-
-- Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Text with heading variants is a header, but SettingsScreenShell titles (common.tsx) and settings section titles carry no header role, so most settings screens have no heading to jump to. | ui |
-
-Code: `apps/mobile/components/ui/text.tsx:38-38`
-
 ## S11.06: Focus restoration after panel closure.
 
 - Done when: Closing a dialog, menu or panel returns focus to the control that opened it.
@@ -89,26 +77,11 @@ Code: `apps/mobile/components/ui/text.tsx:38-38`
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule cards and PDF export follow device locale, but cloud-usage/index.tsx and settings/plans/index.tsx still hard-code en-US date and number formats. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
-
-## S11.24: Pluralization.
-
-- Done when: Counted phrases follow each language's plural rules rather than an English "s" suffix.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | translatePlural covers 19 call sites, but hard-coded English s suffixes remain (ArtifactChangesView, scan.tsx, memory-import.tsx, reflect.tsx). | ui |
-
-Code: `apps/mobile/src/i18n/plural.ts:16-16`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:94-94`
 
 ## S11.25: Translated error messages.
 

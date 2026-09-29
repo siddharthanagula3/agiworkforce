@@ -253,7 +253,7 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/t
 | --- | --- | --- | --- |
 | web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
-| mobile | partial | Native top-up is gated off by default (MOBILE_IAP_ENABLED unset) and billing is off, so mobile cannot sell extra credits; the app points to web billing. | flag-off |
+| mobile | partial | Owner and switch-on: waitlist hold plus MOBILE_IAP_ENABLED and store products. | flag-off |
 
 Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
@@ -265,7 +265,7 @@ Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Settings > Plans compares limits and features but shows no prices and has no pick/upgrade action (billing off, native product list gated). | ui, flag-off |
+| mobile | partial | Owner: plan prices and pick action depend on FEATURES.billing and the native product list (waitlist hold). | ui, flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
@@ -277,7 +277,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No cancel dialog in the app; cancellation is sent to the store or to web billing. | surface-only |
+| mobile | partial | D-2026-09-28-27: cancellation links out to the store or web billing. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
 
@@ -289,7 +289,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows no card and has no payment-method dialog; it opens web billing. | flag-off, surface-only |
+| mobile | partial | D-2026-09-28-27: card and payment method link out to web billing. | flag-off, surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
