@@ -31,18 +31,6 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, 
 
 Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
 
-## S23.06: Project conversations.
-
-- Done when: A project lists its conversations, opens them, and starts new chats that are filed under the project.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Project conversations now open (f6f8c2f2a). VS Code turns are still not filed under the project: the CLI app-server's thread/start takes no project id (p-desktop-cli). | handler |
-
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`
-
 ## S23.07: Project files.
 
 - Done when: Users can upload files to a project, see them listed, preview/download and remove them, and project chats can use them.
