@@ -187,6 +187,29 @@ describe('host messages the phone accepts', () => {
     expect(parseRemoteCodeSessions({ ...sessions, version: 2 })).toBeNull();
   });
 
+  it('keeps the tool that started a session and drops an origin it does not know', () => {
+    const entry = {
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      title: 'Fix retry',
+      folder: 'api',
+      branch: null,
+      status: 'idle',
+      model: null,
+      updatedAt: SENT_AT,
+    };
+    const read = (origin: unknown) =>
+      parseRemoteCodeSessions({
+        action: 'code.sessions',
+        version: 1,
+        sessions: [{ ...entry, origin }],
+        unavailable: [],
+        syncedAt: SENT_AT,
+      })?.sessions[0];
+    expect(read('vscode')?.origin).toBe('vscode');
+    expect(read('somewhere')).toEqual(entry);
+  });
+
   it('reads live diff and test events and refuses an oversized diff', () => {
     const diff = {
       action: 'code.session.event',
