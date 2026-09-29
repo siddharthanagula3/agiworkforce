@@ -196,7 +196,6 @@ import {
   modelLockReason,
   type ModelLock,
 } from '../features/model-picker/modelConstants';
-import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
 import { markInUse } from './startupWork';
 import {
@@ -1262,7 +1261,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       const scope = await sidebarProvider.selectModel(picked.modelId);
 
-      telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.modelId });
       vscode.window.showInformationMessage(
         scope === 'conversation'
           ? `AGI Workforce: this chat now uses ${modelDisplayLabel(picked.modelId)}. New chats still start with ${modelDisplayLabel(normalizeConfiguredModelId(Config.model()))}.`

@@ -250,6 +250,83 @@ export function createProductAnalyticsEmitter(
   };
 }
 
+export const PRODUCT_ANALYTICS_CONSENT_PATH = '/api/consent';
+
+const ACCOUNT_CONSENT_TTL_MS = 10 * 60_000;
+const ACCOUNT_FLUSH_DELAY_MS = 5_000;
+
+export function readProductAnalyticsConsent(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  const consents = (body as { consents?: unknown }).consents;
+  if (!Array.isArray(consents)) return false;
+  return consents.some(
+    (record: unknown) =>
+      typeof record === 'object' &&
+      record !== null &&
+      (record as { purpose?: unknown }).purpose === PRODUCT_ANALYTICS_CONSENT_PURPOSE &&
+      (record as { granted?: unknown }).granted === true,
+  );
+}
+
+export interface ProductAnalyticsRequest {
+  (path: string, init?: { method: 'POST'; body: string }): Promise<unknown>;
+}
+
+export interface AccountProductAnalyticsOptions {
+  readonly surface: ProductAnalyticsSurface;
+  readonly isEnabled: () => boolean;
+  readonly request: ProductAnalyticsRequest;
+  readonly now?: () => number;
+}
+
+export function createAccountProductAnalytics(
+  options: AccountProductAnalyticsOptions,
+): ProductAnalyticsEmitter {
+  const now = options.now ?? Date.now;
+  let consent: { granted: boolean; at: number } | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function knownConsent(): boolean | null {
+    return consent && now() - consent.at < ACCOUNT_CONSENT_TTL_MS ? consent.granted : null;
+  }
+
+  async function consentGranted(): Promise<boolean> {
+    const known = knownConsent();
+    if (known !== null) return known;
+    const body = await options.request(PRODUCT_ANALYTICS_CONSENT_PATH).catch(() => null);
+    consent = { granted: readProductAnalyticsConsent(body), at: now() };
+    return consent.granted;
+  }
+
+  const emitter = createProductAnalyticsEmitter({
+    surface: options.surface,
+    now,
+    isAllowed: () => options.isEnabled() && knownConsent() !== false,
+    send: async (events) => {
+      if (!(await consentGranted())) return;
+      await options
+        .request(PRODUCT_ANALYTICS_INGEST_PATH, {
+          method: 'POST',
+          body: JSON.stringify({ events }),
+        })
+        .catch(() => null);
+    },
+  });
+
+  return {
+    track(name, input) {
+      emitter.track(name, input);
+      if (timer !== null || emitter.pending() === 0) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void emitter.flush();
+      }, ACCOUNT_FLUSH_DELAY_MS);
+    },
+    flush: emitter.flush,
+    pending: emitter.pending,
+  };
+}
+
 export const PRODUCT_METRIC_KEYS = [
   'dau',
   'wau',
