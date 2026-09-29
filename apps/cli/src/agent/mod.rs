@@ -607,9 +607,14 @@ impl AgentSession {
             crate::shell_snapshot::ShellSnapshot::cleanup_stale(&home);
         }
 
+        // Memory off on the account binds every session on this machine, local
+        // and BYOK included, as it binds the web and desktop chat.
         let memory_enabled = crate::cli_options::memory_enabled()
             && crate::config::CliConfig::config_dir()
-                .map(|home| crate::memory_pipeline::load_memory_settings(&home).0)
+                .map(|home| {
+                    crate::memory_pipeline::load_memory_settings(&home).0
+                        && !crate::cloud::account_memory_off(&home)
+                })
                 .unwrap_or(true);
         let persistent_memory = crate::config::CliConfig::config_dir()
             .ok()

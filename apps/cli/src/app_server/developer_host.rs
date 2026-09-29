@@ -114,6 +114,16 @@ const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
 
+/// Read the account's memory setting and memories before a session starts, so
+/// a user who turned memory off on the web is not remembered or read here.
+/// Only the terminal CLI refreshed this before, so a desktop session kept the
+/// last cached answer. Signed out or offline, the cached answer stands.
+async fn refresh_account_memory_setting() {
+    if let Err(error) = crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed).await {
+        tracing::debug!(%error, "account memory setting not refreshed");
+    }
+}
+
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
     AccountStatusResponse {
         signed_in: snapshot.signed_in,
@@ -576,6 +586,7 @@ impl CliDeveloperSessionHost {
             .require_routing_authority()
             .map_err(invalid_request)?;
         let system_context = context::gather_system_context();
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(
             model,
             &system_context,
@@ -1511,6 +1522,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 requested_provider,
             ),
         };
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
