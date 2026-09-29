@@ -24,7 +24,8 @@ vi.mock('@/lib/server/mobile-intent', () => {
   };
 });
 
-vi.mock('@/lib/server/mobile-intent-tokens', () => ({
+vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
   resolveMobileIntentToken: (...args: unknown[]) => mockResolve(...args),
 }));
 

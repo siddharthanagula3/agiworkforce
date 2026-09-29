@@ -30,19 +30,20 @@ export async function issueMobileIntentToken(
     installId: string;
     defaultModelId: string | null;
   },
-): Promise<string> {
+): Promise<{ token: string; tokenId: string }> {
   const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString('base64url')}`;
-  await db.transaction(async (tx) => {
+  const tokenId = await db.transaction(async (tx) => {
     await tx.execute(
       `update public.mobile_intent_tokens
           set revoked_at = now()
         where user_id = $1 and install_id = $2 and revoked_at is null`,
       [owner.userId, owner.installId],
     );
-    await tx.execute(
+    const inserted = await tx.query<{ id: string }>(
       `insert into public.mobile_intent_tokens
          (user_id, organization_id, install_id, token_hash, default_model_id, expires_at)
-       values ($1, $2, $3, $4, $5, now() + make_interval(days => $6))`,
+       values ($1, $2, $3, $4, $5, now() + make_interval(days => $6))
+       returning id`,
       [
         owner.userId,
         owner.organizationId,
@@ -52,8 +53,11 @@ export async function issueMobileIntentToken(
         TOKEN_LIFETIME_DAYS,
       ],
     );
+    const id = inserted[0]?.id;
+    if (!id) throw new Error('The Ask from Siri token was not stored');
+    return id;
   });
-  return token;
+  return { token, tokenId };
 }
 
 export async function revokeMobileIntentTokens(
@@ -68,6 +72,52 @@ export async function revokeMobileIntentTokens(
         and revoked_at is null
         and ($2::text is null or install_id = $2)`,
     [userId, installId],
+  );
+}
+
+export async function revokeMobileIntentTokenById(
+  db: DatabaseAdapter,
+  userId: string,
+  tokenId: string,
+): Promise<void> {
+  await db.execute(
+    `update public.mobile_intent_tokens
+        set revoked_at = now()
+      where user_id = $1 and id = $2 and revoked_at is null`,
+    [userId, tokenId],
+  );
+}
+
+export async function revokeOrganizationMobileIntentTokens(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+): Promise<number> {
+  const rows = await db.query<{ id: string }>(
+    `update public.mobile_intent_tokens
+        set revoked_at = now()
+      where user_id = $1 and organization_id = $2 and revoked_at is null
+      returning id`,
+    [userId, organizationId],
+  );
+  return rows.length;
+}
+
+export async function revokeSessionMobileIntentTokens(
+  db: DatabaseAdapter,
+  userId: string,
+  identitySessionId: string,
+): Promise<void> {
+  await db.execute(
+    `update public.mobile_intent_tokens
+        set revoked_at = now()
+      where user_id = $1
+        and revoked_at is null
+        and install_id in (
+          select install_id from public.device_registrations
+           where user_id = $1 and surface = 'mobile' and identity_session_id = $2
+        )`,
+    [userId, identitySessionId],
   );
 }
 
