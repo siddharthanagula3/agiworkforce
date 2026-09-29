@@ -1368,6 +1368,12 @@ enum MemorySubcommand {
         #[arg(long)]
         out: Option<std::path::PathBuf>,
     },
+    /// Turn account memory on, so details are carried across conversations on every surface.
+    On,
+    /// Turn account memory off on every surface.
+    Off,
+    /// Show whether account memory is on.
+    Status,
     /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
     Never {
         /// Term to add. Repeatable.
@@ -3165,6 +3171,18 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 }
                 Some(_) => anyhow::bail!("Your account did not store this change"),
             }
+        }
+        MemorySubcommand::On | MemorySubcommand::Off | MemorySubcommand::Status => {
+            let enabled = match action {
+                MemorySubcommand::On => Some(true),
+                MemorySubcommand::Off => Some(false),
+                _ => None,
+            };
+            let text = cloud::personalization::memory_switch(enabled)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("{text}");
+            Ok(())
         }
         MemorySubcommand::Never { add, remove } => {
             let text = cloud::personalization::never_remember(add, remove)
