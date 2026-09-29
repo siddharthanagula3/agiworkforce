@@ -1,3 +1,5 @@
+import { pushOverlayLayer } from './overlay-stack';
+
 const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
@@ -19,22 +21,26 @@ export function attachDialogKeyboard(options: DialogKeyboardOptions): () => void
 
   const focusable = (): HTMLElement[] =>
     Array.from(options.panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-      (element) => element.getAttribute('aria-hidden') !== 'true',
+      (element) =>
+        element.getAttribute('aria-hidden') !== 'true' &&
+        element.tabIndex >= 0 &&
+        element.closest('[hidden]') === null,
     );
 
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && options.closeOnEscape !== false) {
+  const onKeyDown = (event: KeyboardEvent): boolean => {
+    if (event.key === 'Escape') {
+      if (options.closeOnEscape === false) return true;
       event.stopPropagation();
       event.preventDefault();
       options.onClose();
-      return;
+      return true;
     }
-    if (event.key !== 'Tab') return;
+    if (event.key !== 'Tab') return true;
     const list = focusable();
     if (list.length === 0) {
       event.preventDefault();
       options.panel.focus();
-      return;
+      return true;
     }
     const first = list[0]!;
     const last = list[list.length - 1]!;
@@ -46,9 +52,10 @@ export function attachDialogKeyboard(options: DialogKeyboardOptions): () => void
       event.preventDefault();
       first.focus();
     }
+    return true;
   };
 
-  document.addEventListener('keydown', onKeyDown, true);
+  const popLayer = pushOverlayLayer(onKeyDown);
   if (options.autoFocus !== false && !options.panel.contains(document.activeElement)) {
     const first = focusable()[0];
     if (first) first.focus();
@@ -59,7 +66,7 @@ export function attachDialogKeyboard(options: DialogKeyboardOptions): () => void
   }
 
   return () => {
-    document.removeEventListener('keydown', onKeyDown, true);
+    popLayer();
     if (opener && document.contains(opener)) opener.focus();
   };
 }

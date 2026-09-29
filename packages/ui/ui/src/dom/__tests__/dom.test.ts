@@ -159,6 +159,68 @@ describe('dialog', () => {
   });
 });
 
+describe('overlay stack', () => {
+  it('lets Escape in a menu inside a dialog close only the menu', () => {
+    const trigger = createButton({ label: 'More' });
+    const onClose = vi.fn();
+    const dialog = openDialog({ title: 'Settings', body: trigger, onClose });
+    const menu = createMenu({
+      trigger,
+      items: () => [{ label: 'Rename', onSelect: vi.fn() }],
+    });
+    trigger.click();
+    expect(menu.isOpen()).toBe(true);
+
+    key('Escape');
+    expect(menu.isOpen()).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(dialog.element.isConnected).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+
+    key('Escape');
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(dialog.element.isConnected).toBe(false);
+  });
+
+  it('lets Escape close only the topmost of stacked dialogs', () => {
+    const closeLower = vi.fn();
+    const closeUpper = vi.fn();
+    const lower = openDialog({
+      title: 'Lower',
+      actions: [createButton({ label: 'A' })],
+      onClose: closeLower,
+    });
+    const upper = openDialog({
+      title: 'Upper',
+      actions: [createButton({ label: 'B' })],
+      onClose: closeUpper,
+    });
+
+    key('Escape');
+    expect(closeUpper).toHaveBeenCalledOnce();
+    expect(closeLower).not.toHaveBeenCalled();
+    expect(upper.element.isConnected).toBe(false);
+    expect(lower.element.isConnected).toBe(true);
+
+    key('Escape');
+    expect(closeLower).toHaveBeenCalledOnce();
+    expect(lower.element.isConnected).toBe(false);
+  });
+
+  it('still traps Tab in the dialog after Tab closes a menu inside it', () => {
+    const trigger = createButton({ label: 'More' });
+    const done = createButton({ label: 'Done' });
+    openDialog({ title: 'Settings', body: trigger, actions: [done] });
+    const menu = createMenu({ trigger, items: () => [{ label: 'Rename', onSelect: vi.fn() }] });
+    trigger.click();
+    done.focus();
+
+    key('Tab');
+    expect(menu.isOpen()).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
 describe('fields', () => {
   it('toggles a switch and reports the new state', () => {
     const onChange = vi.fn();
