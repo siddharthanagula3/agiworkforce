@@ -74,6 +74,7 @@ export function UsOnlyRoutingPanel() {
 
   return (
     <div
+      aria-busy={preferences === null && !error}
       style={{
         padding: 'var(--space-4) 0',
         borderBottom: '1px solid var(--settings-border)',
@@ -90,6 +91,11 @@ export function UsOnlyRoutingPanel() {
             ? 'Auto and the models you pick are served only by providers based in the United States. Models without one are unavailable while this is on.'
             : `Available on ${US_ONLY_PLAN_LABELS}.`}
         </span>
+        {preferences === null && !error ? (
+          <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            Loading your setting…
+          </span>
+        ) : null}
         {error ? <SaveStatusLine failed>{error}</SaveStatusLine> : null}
       </div>
       <Switch

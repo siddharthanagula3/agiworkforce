@@ -8,7 +8,6 @@ import {
   callArtifactRuntime,
 } from '@/features/chat/components/artifacts/artifactRuntimeClient';
 
-const CONSENT_STORAGE_PREFIX = 'agiworkforce-artifact-ai:';
 const CONSENT_DECLINED = 'You chose not to let this app use AI.';
 const CONNECTORS_DECLINED = 'You chose not to let this app use your connected apps.';
 
@@ -18,7 +17,7 @@ function consentKey(connectors: readonly string[]): string {
 
 function consentStored(token: string, key: string): boolean {
   try {
-    return window.sessionStorage.getItem(`${CONSENT_STORAGE_PREFIX}${token}:${key}`) === 'allowed';
+    return window.sessionStorage.getItem(`agiworkforce-artifact-ai:${token}:${key}`) === 'allowed';
   } catch {
     return false;
   }
@@ -26,7 +25,7 @@ function consentStored(token: string, key: string): boolean {
 
 function storeConsent(token: string, key: string): void {
   try {
-    window.sessionStorage.setItem(`${CONSENT_STORAGE_PREFIX}${token}:${key}`, 'allowed');
+    window.sessionStorage.setItem(`agiworkforce-artifact-ai:${token}:${key}`, 'allowed');
   } catch {
     return;
   }

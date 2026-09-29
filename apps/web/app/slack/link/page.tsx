@@ -135,7 +135,11 @@ function SlackLinkForm() {
   }
 
   return (
-    <section aria-labelledby="slack-link-title" style={cardStyle}>
+    <section
+      aria-labelledby="slack-link-title"
+      aria-busy={lookup.kind === 'loading' || connecting}
+      style={cardStyle}
+    >
       <Stack gap="loose">
         <div>
           <Eyebrow>Slack</Eyebrow>
