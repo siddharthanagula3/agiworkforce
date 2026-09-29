@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES, chatAttachmentSizeLabel } from '../chat-attachments';
 import { createManagedCloudChatAttachmentsClient } from '../managed-cloud-chat-attachments-client';
 
 describe('createManagedCloudChatAttachmentsClient', () => {
@@ -57,5 +58,29 @@ describe('createManagedCloudChatAttachmentsClient', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(getHeaders).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses files over the per-message total before any request, naming that total', async () => {
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudChatAttachmentsClient({
+      baseUrl: 'https://cloud.example',
+      fetchImpl,
+    });
+    const half = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / 2) + 1;
+    const files = ['first.pdf', 'second.pdf'].map(
+      (name) => new File([new Uint8Array(half)], name, { type: 'application/pdf' }),
+    );
+
+    await expect(client.upload(files)).rejects.toThrow(
+      `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES)} total per message.`,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe('chatAttachmentSizeLabel', () => {
+  it('names a byte count in mebibytes', () => {
+    expect(chatAttachmentSizeLabel(12 * 1024 * 1024)).toBe('12 MiB');
+    expect(chatAttachmentSizeLabel(2.5 * 1024 * 1024)).toBe('2.5 MiB');
   });
 });
