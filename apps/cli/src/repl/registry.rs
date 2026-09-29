@@ -664,7 +664,7 @@ pub fn permissions_for_display(arg: &str) -> CommandOutcome {
     match subcommand {
         "" => permissions_tab("allow"),
         "help" | "-h" | "--help" => CommandOutcome::Block(format!(
-            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset\n\nWebsites: a rule of the form domain:<host> decides which sites the agent may fetch with web_fetch or open in the browser. /permissions deny domain:example.com blocks that site, domain:*.example.com covers its subdomains, and domain:* covers every site. An allow rule that names a host on this computer or your network skips the prompt for it.",
+            "{}\n  /permissions [recent|allow|ask|deny|session|workspace]\n  /permissions allow <command-prefix>\n  /permissions ask <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|ask|deny|session> <command-prefix>\n  /permissions reset\n\nAn ask rule makes AGI ask before every command that starts with it, even one an allow rule covers.\n\nWebsites: a rule of the form domain:<host> decides which sites the agent may fetch with web_fetch or open in the browser. /permissions deny domain:example.com blocks that site, domain:*.example.com covers its subdomains, and domain:* covers every site. An allow rule that names a host on this computer or your network skips the prompt for it.",
             ts::accent_header("Permissions:")
         )),
         "reset" => match crate::permissions::PermissionStore::load() {
@@ -677,8 +677,8 @@ pub fn permissions_for_display(arg: &str) -> CommandOutcome {
             }
             Err(e) => CommandOutcome::Error(format!("Failed to load: {:#}", e)),
         },
-        scope @ ("allow" | "deny" | "session") if rest.is_empty() => permissions_tab(scope),
-        scope @ ("allow" | "deny" | "session") => mutate_permission_rule(scope, rest),
+        scope @ ("allow" | "ask" | "deny" | "session") if rest.is_empty() => permissions_tab(scope),
+        scope @ ("allow" | "ask" | "deny" | "session") => mutate_permission_rule(scope, rest),
         "remove" | "rm" | "delete" => {
             let (scope, rule) = split_first_word(rest);
             remove_permission_rule(scope, rule)
@@ -699,21 +699,33 @@ fn split_first_word(input: &str) -> (&str, &str) {
 fn is_permissions_tab(tab: &str) -> bool {
     matches!(
         tab,
-        "allow" | "deny" | "session" | "workspace" | "recently-denied" | "recent"
+        "allow" | "ask" | "deny" | "session" | "workspace" | "recently-denied" | "recent"
     )
 }
 
 fn permissions_tab(tab: &str) -> CommandOutcome {
-    match crate::permissions::PermissionStore::load() {
-        Ok(store) => {
-            CommandOutcome::Block(sanitize_terminal_text(&store.display_tab(tab)).into_owned())
-        }
-        Err(e) => CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
-    }
+    let store = match crate::permissions::PermissionStore::load() {
+        Ok(store) => store,
+        Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
+    };
+    let recent_denials: Vec<String> = crate::approval_audit::recent_approvals(200)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|entry| entry.decision != crate::approval_audit::ApprovalDecision::Approved)
+        .take(50)
+        .map(|entry| format!("{}: {}", entry.tool_name, entry.target))
+        .collect();
+    let directories: Vec<std::path::PathBuf> = std::env::current_dir()
+        .into_iter()
+        .chain(crate::path_security::registered_additional_workspace_roots())
+        .collect();
+    CommandOutcome::Block(
+        sanitize_terminal_text(&store.display_tab(tab, &recent_denials, &directories)).into_owned(),
+    )
 }
 
 fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
-    if scope != "deny" {
+    if matches!(scope, "allow" | "session") {
         if let Some(message) = crate::permissions::open_ended_allow_error(rule) {
             return CommandOutcome::Error(message);
         }
@@ -735,6 +747,10 @@ fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
             store.deny_always(rule);
             saved(&store, format!("Always deny: {}", rule.trim()))
         }
+        "ask" => {
+            store.ask_always(rule);
+            saved(&store, format!("Always ask: {}", rule.trim()))
+        }
         _ => {
             store.allow_session_for_process(rule);
             CommandOutcome::Info(format!("Allow this session: {}", rule.trim()))
@@ -743,9 +759,9 @@ fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
 }
 
 fn remove_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
-    if rule.trim().is_empty() || !matches!(scope, "allow" | "deny" | "session") {
+    if rule.trim().is_empty() || !matches!(scope, "allow" | "ask" | "deny" | "session") {
         return CommandOutcome::Warn(
-            "Usage: /permissions remove <allow|deny|session> <command-prefix>".to_string(),
+            "Usage: /permissions remove <allow|ask|deny|session> <command-prefix>".to_string(),
         );
     }
     let mut store = match crate::permissions::PermissionStore::load() {
@@ -754,6 +770,7 @@ fn remove_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
     };
     let removed = match scope {
         "allow" => store.remove_always_allow(rule),
+        "ask" => store.remove_ask(rule),
         "deny" => store.remove_always_deny(rule),
         _ => store.remove_session(rule),
     };
