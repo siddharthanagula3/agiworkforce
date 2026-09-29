@@ -80,7 +80,7 @@ export async function describeArtifactRuntimeConnectors(
 export async function callArtifactRuntime(
   token: string,
   request: ArtifactRuntimeRequest,
-  options: { disabledTools?: readonly string[] } = {},
+  options: { allowedTools?: readonly string[] } = {},
 ): Promise<unknown> {
   if (request.op === 'complete') {
     const payload = await post(
@@ -88,7 +88,7 @@ export async function callArtifactRuntime(
       {
         prompt: request.prompt,
         connectors: request.connectors,
-        disabledTools: [...(options.disabledTools ?? [])],
+        allowedTools: [...(options.allowedTools ?? [])],
       },
       {
         'Idempotency-Key': createManagedChatIdempotencyKey({

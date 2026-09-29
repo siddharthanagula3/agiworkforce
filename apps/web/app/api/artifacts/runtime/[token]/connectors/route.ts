@@ -66,6 +66,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
     organizationId: scoped.organizationId,
     planTier: entitlement.plan,
     connectors: [...new Set(parsed.data.connectors)],
+    request,
   });
   if (!connectors) {
     return refusal(

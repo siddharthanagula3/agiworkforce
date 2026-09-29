@@ -31,24 +31,26 @@ export function ArtifactConnectorConsent({
   onAnswer,
 }: ArtifactConnectorConsentProps) {
   const { t } = useTranslation('chat');
-  const [disabledTools, setDisabledTools] = useState<ReadonlySet<string>>(
-    () => new Set(request.initialDisabledTools),
-  );
+  const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(new Map());
   const asksForConnectors = request.connectorIds.length > 0;
   const loading = asksForConnectors && request.connectors === null && request.error === null;
 
   useEffect(() => {
-    setDisabledTools(new Set(request.initialDisabledTools));
-  }, [request.connectorIds, request.initialDisabledTools]);
+    setChoices(new Map());
+  }, [request.connectorIds, request.initialAllowedTools]);
+
+  const toolEnabled = (tool: ArtifactRuntimeConnectorTool): boolean =>
+    tool.available &&
+    (choices.get(tool.name) ?? request.initialAllowedTools?.includes(tool.name) ?? true);
 
   const toggleTool = (name: string, enabled: boolean) => {
-    setDisabledTools((current) => {
-      const next = new Set(current);
-      if (enabled) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+    setChoices((current) => new Map(current).set(name, enabled));
   };
+
+  const allowedTools = (): string[] =>
+    (request.connectors ?? []).flatMap((connector) =>
+      connector.tools.filter(toolEnabled).map((tool) => tool.name),
+    );
 
   return (
     <section
@@ -94,7 +96,7 @@ export function ArtifactConnectorConsent({
                   <li key={tool.name} className="flex items-start gap-2">
                     <Checkbox
                       id={inputId}
-                      checked={tool.available && !disabledTools.has(tool.name)}
+                      checked={toolEnabled(tool)}
                       disabled={!tool.available}
                       onCheckedChange={(checked) => toggleTool(tool.name, checked === true)}
                       className="mt-0.5"
@@ -126,14 +128,14 @@ export function ArtifactConnectorConsent({
         <Button
           size="sm"
           disabled={loading}
-          onClick={() => onAnswer({ allowed: true, disabledTools: [...disabledTools] })}
+          onClick={() => onAnswer({ allowed: true, allowedTools: allowedTools() })}
         >
           {t('artifactPublish.runtimeAllow', 'Allow')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => onAnswer({ allowed: false, disabledTools: [] })}
+          onClick={() => onAnswer({ allowed: false, allowedTools: [] })}
         >
           {t('artifactPublish.runtimeDecline', "Don't allow")}
         </Button>

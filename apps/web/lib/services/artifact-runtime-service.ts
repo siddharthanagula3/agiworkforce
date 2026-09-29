@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
+import type { NextRequest } from 'next/server';
+
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { randomUUID } from 'node:crypto';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -275,6 +278,7 @@ interface ArtifactConnectorScope {
   organizationId: string | null;
   planTier: string;
   connectors: readonly string[];
+  request: NextRequest;
 }
 
 interface ArtifactConnectorAccess {
@@ -292,10 +296,10 @@ async function loadArtifactConnectorAccess(
   if (
     policy.allowToolUse === false ||
     policy.allowMCP === false ||
-    !(await connectorsAllowedWithoutRequest({
-      userId: input.userId,
+    !(await connectorsAllowedForTurn(input.request, input.userId, {
       organizationId: input.organizationId,
-      planTier: input.planTier,
+      subscriptionTier: input.planTier,
+      chatSurface: resolveCloudChatSurface(input.request),
     }))
   ) {
     return null;
@@ -370,16 +374,16 @@ export async function describeArtifactConnectors(
 }
 
 export async function buildArtifactConnectorPlan(
-  input: ArtifactConnectorScope & { modelKey: string; disabledTools: readonly string[] },
+  input: ArtifactConnectorScope & { modelKey: string; allowedTools: readonly string[] },
 ): Promise<ArtifactConnectorPlan | null> {
   if (getModelMetadataById(input.modelKey)?.capabilities?.tools !== true) return null;
   const access = await loadArtifactConnectorAccess(input);
   if (!access) return null;
-  const disabled = new Set(input.disabledTools);
+  const allowed = new Set(input.allowedTools);
   const available = access.tools.filter(
     (tool) => artifactToolStanding(tool, access) === 'available',
   );
-  const mcpTools = available.filter((tool) => !disabled.has(tool.qualifiedName));
+  const mcpTools = available.filter((tool) => allowed.has(tool.qualifiedName));
   const usable = new Set(available.map((tool) => tool.serverId));
   return {
     mcpTools,
