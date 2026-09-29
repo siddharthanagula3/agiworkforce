@@ -1,17 +1,16 @@
 {
-  "unenforced": {
-    "code:allowMcpServers": {
-      "reason": "A cloud Code session declares no MCP servers to the server: the harness inside the sandbox configures its own, so there is no server call to refuse. Enforcing it needs the session to carry its MCP servers.",
-      "enforceIn": "apps/web/lib/services/cloud-code-turn-transport.ts"
-    },
-    "code:allowedMcpServers": {
-      "reason": "A cloud Code session declares no MCP servers to the server: the harness inside the sandbox configures its own, so there is no server call to refuse. Enforcing it needs the session to carry its MCP servers.",
-      "enforceIn": "apps/web/lib/services/cloud-code-turn-transport.ts"
-    }
-  },
+  "unenforced": {},
   "servedToClients": {
     "feature:hooks": {
       "reason": "Hooks run on the caller's own machine, so the server has no call to refuse; it publishes the switch and the CLI and desktop honour it.",
+      "servedBy": "apps/web/app/api/settings/organization/policy/effective/route.ts"
+    },
+    "code:allowMcpServers": {
+      "reason": "MCP servers start on the caller's own machine, and every local surface (CLI, VS Code, desktop) starts them through the agi runtime, which refuses a server the workspace turned off or whose host is not on the list and fails closed when a governed account cannot read its policy (apps/cli/src/cloud/workspace_policy.rs mcp_server_refusal). A cloud Code session configures no MCP servers, so the server has no call to refuse.",
+      "servedBy": "apps/web/app/api/settings/organization/policy/effective/route.ts"
+    },
+    "code:allowedMcpServers": {
+      "reason": "MCP servers start on the caller's own machine, and every local surface (CLI, VS Code, desktop) starts them through the agi runtime, which refuses a server the workspace turned off or whose host is not on the list and fails closed when a governed account cannot read its policy (apps/cli/src/cloud/workspace_policy.rs mcp_server_refusal). A cloud Code session configures no MCP servers, so the server has no call to refuse.",
       "servedBy": "apps/web/app/api/settings/organization/policy/effective/route.ts"
     }
   }
