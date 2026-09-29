@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0339: workspace rules for individual connector tools
+-- Migration 0340: workspace rules for individual connector tools
 --
 -- Why    : an administrator could approve or block a whole connector, but not
 --          decide what its tools may do. Claude's organization connector
