@@ -11,6 +11,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { unregisterPushTokenForSignOut } from '@/src/features/auth/services/signOutPushTokenCleanup';
+import { revokeAskIntentForSignOut } from '@/src/features/siri/askIntentToken';
 
 interface AuthState {
   session: MobileAuthSession | null;
@@ -124,6 +125,12 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (err) {
           console.warn('[auth] push-token teardown on sign-out failed:', err);
+        }
+
+        try {
+          await revokeAskIntentForSignOut((await capturedAuthTokenPromise) ?? '');
+        } catch (err) {
+          console.warn('[auth] Ask from Siri teardown on sign-out failed:', err);
         }
 
         try {
