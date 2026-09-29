@@ -3272,6 +3272,8 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
     app.scroll_offset = 0;
 }
 
+const VOICE_TRANSCRIPT_LABEL: &str = "(spoken)";
+
 fn append_session_messages_since(app: &mut TuiApp, first: usize) {
     if app.session.messages.len() < first {
         rebuild_transcript_from_session(app);
@@ -5736,7 +5738,14 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                let first_voice_row = app.chat_messages.len();
                                 append_session_messages_since(app, first_voice_message);
+                                for message in app.chat_messages.iter_mut().skip(first_voice_row) {
+                                    if message.role == ChatRole::User {
+                                        message.text =
+                                            format!("{VOICE_TRANSCRIPT_LABEL} {}", message.text);
+                                    }
+                                }
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {
