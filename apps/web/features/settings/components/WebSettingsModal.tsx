@@ -50,6 +50,8 @@ import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
 import { SlackSection } from '../sections/SlackSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
+import { CapabilityDeniedNotice } from './CapabilityDeniedNotice';
+import { useCapabilityDecision } from '@agiworkforce/unified-chat';
 import { loadOnboardingSeed } from '@/features/onboarding/lib/onboarding-preferences';
 import {
   HOSTED_SETTINGS_NAV_GROUPS,
@@ -204,10 +206,18 @@ export function WebSettingsModal({
   );
 
   const adapter: SettingsDataAdapter = connectors.adapter;
+  const skillsDecision = useCapabilityDecision('canUseSkills');
+  const pluginsDecision = useCapabilityDecision('canUsePlugins');
 
   const sectionContent: Record<WebSettingsContentSection, React.ReactNode> &
-    Partial<Record<WebSettingsHostedSection, React.ReactNode>> = {
+    Partial<Record<WebSettingsHostedSection | 'skills' | 'plugins', React.ReactNode>> = {
     ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
+    ...(skillsDecision?.allowed === false && skillsDecision.reason
+      ? { skills: <CapabilityDeniedNotice reason={skillsDecision.reason} /> }
+      : {}),
+    ...(pluginsDecision?.allowed === false && pluginsDecision.reason
+      ? { plugins: <CapabilityDeniedNotice reason={pluginsDecision.reason} /> }
+      : {}),
     general: <GeneralSection />,
     account: <AccountSection />,
     team: (
