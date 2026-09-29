@@ -56,7 +56,7 @@ pub async fn send_feedback(kind: FeedbackKind, text: &str) -> String {
         },
     });
     match client
-        .post::<_, serde_json::Value>("/feedback", &body)
+        .post::<_, serde_json::Value>("/api/feedback", &body)
         .await
     {
         Ok(_) => format!("{} sent. Thank you.", kind.subject()),
