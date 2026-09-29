@@ -30,7 +30,8 @@ import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { dialogPadding, radii, useThemeColors, typeScale } from '@/src/ui/theme';
+import { radii, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   CLOUD_CODE_CHANGES_COPY as COPY,
   CLOUD_CODE_CHANGE_STATE_LABELS,

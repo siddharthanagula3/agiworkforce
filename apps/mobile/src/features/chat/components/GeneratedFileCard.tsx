@@ -16,7 +16,8 @@ import {
 } from 'lucide-react-native';
 import type { GeneratedFilePresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;

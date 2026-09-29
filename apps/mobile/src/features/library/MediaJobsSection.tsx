@@ -5,7 +5,8 @@ import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { toUserMessage } from '@/services/userMessage';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { cancelMediaJob, listMediaJobs, retryMediaJob } from './libraryClient';
 
 const POLL_INTERVAL_MS = 5_000;

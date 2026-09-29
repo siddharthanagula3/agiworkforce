@@ -13,7 +13,8 @@ import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSou
 import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
 import { Text } from '@/components/ui/text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { loadMissingCloudProject } from '@/src/features/projects/service';

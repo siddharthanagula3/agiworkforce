@@ -9,7 +9,8 @@ import Animated, {
 import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react-native';
 import type { AgentEventSource } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useTheme, motion, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { translatePlural } from '@/src/i18n/plural';

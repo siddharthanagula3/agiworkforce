@@ -5,15 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import {
-  elevation,
-  motion,
-  radii,
-  spacing,
-  useThemeColors,
-  zIndex,
-  typeScale,
-} from '@/src/ui/theme';
+import { elevation, motion, radii, spacing, useThemeColors, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 
 const TOAST_DURATION_MS = 5_000;

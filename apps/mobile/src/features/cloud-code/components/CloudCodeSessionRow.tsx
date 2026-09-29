@@ -7,7 +7,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Text } from '@/components/ui/text';
 import { formatRelativeTime } from '@/src/lib/time';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CLOUD_CODE_STATE_BADGE_COLORS, cloudCodeWorkspaceLabel } from '../presentation';
 
 export function CloudCodeSessionRow({

@@ -8,7 +8,8 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 

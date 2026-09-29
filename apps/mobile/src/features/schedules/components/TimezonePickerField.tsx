@@ -3,7 +3,8 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, TextInput, View } from
 import { Check, Globe, X } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface TimezonePickerFieldProps {
   value: string;

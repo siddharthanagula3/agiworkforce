@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 

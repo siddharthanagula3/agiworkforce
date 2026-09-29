@@ -7,7 +7,8 @@ import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { API_URL } from '@/lib/constants';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { CloudRunProducedFile } from '../runPresentation';
 
 export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] }) {

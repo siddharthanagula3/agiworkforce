@@ -5,7 +5,8 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Plus, Mic, MicOff, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors, motion, typeScale } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VoiceOrb } from './VoiceOrb';
 

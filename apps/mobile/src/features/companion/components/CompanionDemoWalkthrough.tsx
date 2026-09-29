@@ -12,7 +12,8 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';

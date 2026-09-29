@@ -3,7 +3,8 @@ import { Bot, ChevronRight, Clock3 } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   cloudRunBlock,
   cloudRunBlockLabel,

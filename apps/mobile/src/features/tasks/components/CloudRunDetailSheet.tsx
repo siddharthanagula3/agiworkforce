@@ -6,7 +6,8 @@ import { TOOL_APPROVAL_ACTION_LABELS, creditsFromCents, formatCredits } from '@a
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   cloudRunStateColor,
   cloudRunTimeLabel,

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useTheme, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SafeArtifactPreview } from './SafeArtifactPreview';
 
 const PENDING_DIAGRAM_HEIGHT = 160;

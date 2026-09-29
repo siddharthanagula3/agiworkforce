@@ -13,7 +13,8 @@ import {
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, cardRadius, typeScale } from '@/src/ui/theme';
+import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 

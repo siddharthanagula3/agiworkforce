@@ -11,7 +11,8 @@ import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
 const LABEL = 'Only use AI providers based in the US';

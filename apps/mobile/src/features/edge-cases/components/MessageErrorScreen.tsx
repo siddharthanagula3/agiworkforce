@@ -1,7 +1,8 @@
 import { View, Pressable } from 'react-native';
 import { CloudOff, HardDrive, PackageOpen, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { spacing, radii } from '@/src/ui/theme';
 import { EDGE_COPY } from './copy';
 

@@ -3,7 +3,8 @@ import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { SettingsScreenShell } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   TICKET_STATUS_LABEL,

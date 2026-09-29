@@ -4,7 +4,8 @@ import { Image } from 'expo-image';
 import { Download, Film, Play } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { prepareLocalVideoPlayer, shareFile, type LocalVideoPlayer } from '@/services/fileCreation';
 import { VideoPlayerModal } from './VideoPlayerModal';
 

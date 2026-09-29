@@ -6,7 +6,8 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { CONNECTOR_OAUTH_APP_RETURN_URL } from '@agiworkforce/cloud-contracts';
 import { completeConnectorAuthorization } from '@/services/connectors';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ConnectorOAuthReturnRoute() {

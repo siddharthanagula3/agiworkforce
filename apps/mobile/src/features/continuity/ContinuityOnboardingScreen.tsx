@@ -8,7 +8,8 @@ import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { cardRadius, useThemeColors, typeScale } from '@/src/ui/theme';
+import { cardRadius, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   acknowledgeContinuityOnboarding,
   CONTINUITY_COMPLETION_NOTIFICATION_TYPE,

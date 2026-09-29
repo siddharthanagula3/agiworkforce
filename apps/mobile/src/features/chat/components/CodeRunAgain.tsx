@@ -6,7 +6,8 @@ import type { ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CODE_RUN_FAILED, runCodeAgain } from '../services/codeRun';
 
 const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;

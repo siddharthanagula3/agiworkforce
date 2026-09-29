@@ -32,7 +32,8 @@ import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { VoiceCaptureError, transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
-import { colors, motion, zIndex, typeScale } from '@/src/ui/theme';
+import { colors, motion, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {

@@ -50,7 +50,8 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors, cardRadius, typeScale } from '@/src/ui/theme';
+import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {

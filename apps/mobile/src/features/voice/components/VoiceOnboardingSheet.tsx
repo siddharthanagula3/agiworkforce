@@ -6,7 +6,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
-import { colors, motion, typeScale } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 

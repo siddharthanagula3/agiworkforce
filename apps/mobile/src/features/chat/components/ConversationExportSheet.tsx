@@ -12,7 +12,8 @@ import {
   X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,

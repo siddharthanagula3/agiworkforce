@@ -8,7 +8,8 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 function SkeletonRow({ align }: { align: 'left' | 'right' }) {
   const colors = useThemeColors();

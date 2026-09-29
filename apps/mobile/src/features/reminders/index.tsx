@@ -15,7 +15,8 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Bell, CalendarDays, Clock3, ShieldCheck } from 'lucide-react-native';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   createIOSReminder,
   MAX_REMINDER_TITLE_LENGTH,

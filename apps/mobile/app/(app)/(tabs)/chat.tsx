@@ -86,7 +86,8 @@ import {
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';

@@ -10,7 +10,7 @@ import Animated, {
   withDelay,
   type SharedValue,
 } from 'react-native-reanimated';
-import { motion } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 interface WaveformProps {
   color: string;

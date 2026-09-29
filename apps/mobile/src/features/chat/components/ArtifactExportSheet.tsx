@@ -13,7 +13,8 @@ import {
   type ArtifactExportFormat,
   type ArtifactExportOption,
 } from '@/src/features/chat/utils/artifactExport';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 
 const FORMAT_ICONS: Readonly<Record<ArtifactExportFormat, LucideIcon>> = {

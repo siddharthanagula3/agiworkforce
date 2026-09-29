@@ -11,7 +11,7 @@ import {
   type PieChart,
   type XyChart,
 } from '@/src/features/chat/utils/mermaidChart';
-import { typeScale } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const XY_WIDTH = 320;
 const XY_HEIGHT = 200;

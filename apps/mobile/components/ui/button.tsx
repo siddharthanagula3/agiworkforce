@@ -9,7 +9,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Text } from './text';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   title: string;

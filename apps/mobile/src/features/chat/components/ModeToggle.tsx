@@ -2,7 +2,8 @@ import type { ReactElement } from 'react';
 import { Pressable, View } from 'react-native';
 import { Cloud, Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { AppMode } from './ModeSwitchModal';
 
 export interface ModeToggleProps {

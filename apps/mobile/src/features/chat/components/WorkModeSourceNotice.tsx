@@ -3,7 +3,8 @@ import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function WorkModeSourceNotice({ onOpenConnectors }: { onOpenConnectors: () => void }) {
   const colors = useThemeColors();

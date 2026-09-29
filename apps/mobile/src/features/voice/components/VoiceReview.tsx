@@ -6,7 +6,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface VoiceReviewProps {
   visible: boolean;

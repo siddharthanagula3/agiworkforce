@@ -8,7 +8,8 @@ import {
   type ManagedUsageWarning,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { UsageSnapshot } from '@/services/usage';
 
 function inCredits(window: ManagedUsageCreditWindow | null | undefined) {

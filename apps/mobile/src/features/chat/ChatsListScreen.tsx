@@ -38,7 +38,8 @@ import {
   FLOATING_PRIMARY_ACTION_LIST_PADDING,
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';

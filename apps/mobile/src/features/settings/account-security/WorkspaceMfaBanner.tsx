@@ -7,7 +7,8 @@ import { Text } from '@/components/ui/text';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { WEB_SECURITY_URL, fetchWorkspaceMfaRequirement } from './service';
 
 export function WorkspaceMfaBanner() {

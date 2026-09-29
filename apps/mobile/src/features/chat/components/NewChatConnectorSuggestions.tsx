@@ -13,7 +13,8 @@ import {
   type ConnectorListing,
 } from '@/services/connectors';
 import { ConnectorLogo } from '@/src/features/settings/cloud-connectors/ConnectorLogo';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const SUGGESTION_LIMIT = 3;
 const CONNECTED_ENOUGH = 3;

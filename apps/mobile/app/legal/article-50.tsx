@@ -28,7 +28,8 @@ import {
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { readChineseHqConsent } from '@/services/providerConsent';
 
 export const PROVIDER_STATE_TEST_ID_PREFIX = 'article-50-provider-state-';

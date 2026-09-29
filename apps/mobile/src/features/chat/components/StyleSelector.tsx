@@ -6,7 +6,8 @@ import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;

@@ -14,7 +14,8 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { hasAcknowledgedContinuityOnboarding } from '@/src/features/continuity/continuity-onboarding';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 
 function canOfferToAccount(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
   return (

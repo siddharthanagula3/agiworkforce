@@ -41,14 +41,8 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
-import {
-  useThemeColors,
-  type ColorScheme,
-  elevation,
-  zIndex,
-  motion,
-  typeScale,
-} from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {

@@ -16,7 +16,8 @@ import {
 } from '@agiworkforce/types';
 import { getAuthHeaders } from '@/services/authSession';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageFullScreen } from './ImageFullScreen';
 import { translatePlural } from '@/src/i18n/plural';

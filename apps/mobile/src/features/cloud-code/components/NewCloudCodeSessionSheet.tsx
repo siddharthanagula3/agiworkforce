@@ -18,7 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from '../service';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';

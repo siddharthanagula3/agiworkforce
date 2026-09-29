@@ -23,7 +23,8 @@ import type {
 import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
 import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { lucideRNToolIcon } from './toolIconRN';

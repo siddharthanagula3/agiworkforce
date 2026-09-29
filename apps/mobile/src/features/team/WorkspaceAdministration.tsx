@@ -8,7 +8,8 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { API_URL } from '@/lib/constants';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   INVITABLE_ROLES,
   fetchWorkspaceInvitations,

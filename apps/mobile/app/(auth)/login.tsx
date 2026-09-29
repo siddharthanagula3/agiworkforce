@@ -17,7 +17,8 @@ import {
   FREE_PLAN_TRAINING_NOTICE_TAIL,
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@agiworkforce/compliance';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   clearPostAuthIntent,
   parsePostAuthIntent,

@@ -15,7 +15,8 @@ import {
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,

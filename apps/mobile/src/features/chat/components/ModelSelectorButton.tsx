@@ -16,7 +16,8 @@ import { DEFAULT_AUTO_MODE_ID, getShortDisplayName } from '@/src/features/model-
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;

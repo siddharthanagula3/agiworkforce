@@ -6,7 +6,8 @@ import type {
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function CloudCodeApprovalCard({
   approval,

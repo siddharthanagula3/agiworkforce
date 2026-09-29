@@ -7,7 +7,8 @@ import DateTimePicker, {
 import { CalendarDays, Clock } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 type ScheduleFieldMode = 'date' | 'time';
 
