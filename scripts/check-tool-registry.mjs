@@ -41,26 +41,7 @@ const TOOL_NAME_VALUE = /^[a-z][a-z0-9_]*$/u;
  * Tools offered today with no declaration. Each entry states why it is here;
  * the list may only shrink, and a name not on it fails the guard.
  */
-const BROWSER_COMMAND_REASON =
-  "a browser command runs in the user's own paired browser through the extension bridge, which holds its own allowlist and consent gate; declaring one here changes which policy auto-approves it";
-
 export const UNDECLARED_BASELINE = new Map([
-  [
-    'search_places',
-    'offered whenever the places backend is configured; declaring it changes which policy auto-approves it, which is a founder-frozen decision',
-  ],
-  [
-    'ask_clarifying_questions',
-    'asks the user a question and returns their answer; declaring it read-class changes which policy auto-approves it, which is a founder-frozen decision',
-  ],
-  ['browser_read_page', BROWSER_COMMAND_REASON],
-  ['browser_click', BROWSER_COMMAND_REASON],
-  ['browser_type', BROWSER_COMMAND_REASON],
-  ['browser_navigate', BROWSER_COMMAND_REASON],
-  ['browser_screenshot', BROWSER_COMMAND_REASON],
-  ['browser_console', BROWSER_COMMAND_REASON],
-  ['browser_network', BROWSER_COMMAND_REASON],
-  ['browser_download', BROWSER_COMMAND_REASON],
   [
     'run_command',
     'belongs to the Cloud Code agent loop, which has its own tool definitions and its own approval store (cloud_code_agent_approvals), not this registry; one of the two surfaces has to move before it can be declared once',

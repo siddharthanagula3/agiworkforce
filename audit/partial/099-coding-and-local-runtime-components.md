@@ -24,6 +24,6 @@ Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/service
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The app-server issues and admits handoff records (Cloud is a valid target), but no client issues a cloud handoff and the cloud side has no importer. | handler |
+| platform | partial | partials/platform-final 5df311dcb6: the cloud importer exists (POST /api/code/sessions/handoff admits a Cloud-addressed record with version, destination, trust mode, 15 min age and account-fingerprint checks, opens the session through the normal gates, replay-safe by receipt-derived requestId, returns the seed prompt). Left: the CLI app-server must POST the record when thread/handoff targets Cloud and start the first turn with seedPrompt (apps/cli, asked of c-cli). | handler |
 
-Code: `apps/cli/src/app_server/developer_host.rs:1575-1585`, `apps/extension-vscode/src/integrations/developerSessionHandoff.ts:9-12`
+Code: `apps/web/app/api/code/sessions/handoff/route.ts:75-75`, `apps/web/app/api/code/sessions/handoff/route.ts:103-103`, `packages/contracts/cloud-contracts/src/cloud-code-handoff.ts:147-147`

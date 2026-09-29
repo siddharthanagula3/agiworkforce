@@ -1,19 +1,12 @@
+import { PROVIDERS_IN_ORDER } from '@agiworkforce/types';
 import { DrawOnView } from './motion/DrawOnView';
 import { ProviderMark, hasProviderMark } from '@agiworkforce/ui';
 import { providerLabel } from './landing/landing-content';
 
-const PROVIDER_IDS = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'perplexity',
-  'qwen',
-  'ollama',
-] as const;
-
-const PROVIDERS = PROVIDER_IDS.map((id) => ({ id, name: providerLabel(id) }));
+const PROVIDERS = PROVIDERS_IN_ORDER.filter((id) => hasProviderMark(id)).map((id) => ({
+  id,
+  name: providerLabel(id),
+}));
 
 const SURFACES = ['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code'];
 

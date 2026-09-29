@@ -1,7 +1,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { LAUNCH, MARKETING, POSITIONING } from '@/lib/marketing-constants';
-import { ProviderLogo } from './ProviderLogo';
+import { PROVIDERS_IN_ORDER } from '@agiworkforce/types';
+import { CLI_LOCAL_RUNTIME_IDS, LAUNCH, MARKETING, POSITIONING } from '@/lib/marketing-constants';
+import { providerLabel } from './landing/landing-content';
+import { ProviderLogo, hasProviderLogo } from './ProviderLogo';
 
 export interface CtaLink {
   href: string;
@@ -82,26 +84,19 @@ const DEFAULT_STATS: StatItem[] = [
   { label: MARKETING.models.label, value: MARKETING.models.display },
 ];
 
-const PROVIDER_PILLS: { name: string; slug?: string }[] = [
-  { name: 'OpenAI' },
-  { name: 'Anthropic', slug: 'anthropic' },
-  { name: 'Gemini', slug: 'gemini' },
-  { name: 'Grok' },
-  { name: 'DeepSeek', slug: 'deepseek' },
-  { name: 'Qwen', slug: 'qwen' },
-  { name: 'Perplexity', slug: 'perplexity' },
-  { name: 'Moonshot AI', slug: 'moonshot' },
-  { name: 'ZhipuAI' },
-  { name: 'Ollama', slug: 'ollama' },
-  { name: 'LM Studio' },
-];
+const PROVIDER_PILLS = [
+  ...new Set<string>([
+    ...PROVIDERS_IN_ORDER.filter((id) => id !== 'managed_cloud'),
+    ...CLI_LOCAL_RUNTIME_IDS,
+  ]),
+].map((id) => ({ id, name: providerLabel(id), hasLogo: hasProviderLogo(id) }));
 
 function ProviderMarqueeRow({ hidden = false }: { hidden?: boolean }) {
   return (
     <ul className="agi-provider-marquee-row" aria-hidden={hidden || undefined}>
       {PROVIDER_PILLS.map((provider) => (
-        <li key={provider.name} className="agi-provider-pill">
-          {provider.slug ? <ProviderLogo slug={provider.slug} /> : null}
+        <li key={provider.id} className="agi-provider-pill">
+          {provider.hasLogo ? <ProviderLogo slug={provider.id} /> : null}
           <span>{provider.name}</span>
         </li>
       ))}
