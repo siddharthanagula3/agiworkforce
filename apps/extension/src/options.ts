@@ -19,7 +19,11 @@ import { createAppearanceSection } from './features/options/appearance-section';
 import { exportExtensionDiagnostics } from './features/diagnostics';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 import { loadSitePolicyInput } from './features/site-policy/store';
-import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
+import {
+  PRODUCT_ANALYTICS_CHOICES_PATH,
+  evaluateSitePolicy,
+  sitePolicyDenialMessage,
+} from '@agiworkforce/types';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
@@ -1433,10 +1437,13 @@ function buildPage(): void {
   page.appendChild(permSection);
 
   page.appendChild(
-    createDataHandlingSection({
-      get: (key) => chrome.storage.local.get(key),
-      set: (items) => chrome.storage.local.set(items),
-    }).element,
+    createDataHandlingSection(
+      {
+        get: (key) => chrome.storage.local.get(key),
+        set: (items) => chrome.storage.local.set(items),
+      },
+      `${FREE_TRIAL_GATEWAY}${PRODUCT_ANALYTICS_CHOICES_PATH}?from=chrome-extension`,
+    ).element,
   );
 
   const accountSection = el('section', { class: 'opt-section', id: 'opt-account' });
