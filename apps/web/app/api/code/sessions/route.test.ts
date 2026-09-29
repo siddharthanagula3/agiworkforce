@@ -69,6 +69,7 @@ import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { POST } from './route';
 
 const db = createDatabaseAdapterFake();
+const SESSION = { id: 'session-1', title: 'workspace', state: 'ready' };
 
 function postRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/code/sessions', {
@@ -85,11 +86,7 @@ beforeEach(() => {
   mockE2bReady.mockReturnValue(true);
   mockBetaEnabled.mockReturnValue(true);
   mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
-  mockCreateSession.mockResolvedValue({
-    id: 'session-1',
-    title: 'workspace',
-    state: 'ready',
-  });
+  mockCreateSession.mockResolvedValue({ session: SESSION, reused: false });
   mockHasServerProviderKey.mockReturnValue(true);
 });
 
@@ -265,6 +262,26 @@ describe('POST /api/code/sessions, the audit trail', () => {
       status: 'opened',
     });
     expect(JSON.stringify(event['detail'])).not.toMatch(/quarterly-close|req-audit/);
+  });
+
+  it('records the opening once when a retry with the same requestId reuses the session', async () => {
+    const body = {
+      requestId: 'req-audit-0003',
+      title: 'workspace',
+      networkAccess: 'trusted',
+      runtimeId: null,
+    };
+    mockCreateSession
+      .mockResolvedValueOnce({ session: SESSION, reused: false })
+      .mockResolvedValueOnce({ session: SESSION, reused: true });
+
+    const first = await POST(postRequest(body));
+    const retry = await POST(postRequest(body));
+
+    expect(first.status).toBe(201);
+    expect(retry.status).toBe(201);
+    expect(((await retry.json()) as { session: { id: string } }).session.id).toBe('session-1');
+    expect(auditSpy).toHaveBeenCalledTimes(1);
   });
 
   it('records nothing when the session is refused', async () => {
