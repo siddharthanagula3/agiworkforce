@@ -58,14 +58,15 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
-import type {
-  ArtifactRuntimeConnector,
-  ArtifactRuntimeConnectorTool,
+import {
+  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
+  type ArtifactRuntimeConnector,
+  type ArtifactRuntimeConnectorTool,
 } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
 export const ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES = 20 * 1024 * 1024;
-export const ARTIFACT_STORAGE_VALUE_LIMIT_BYTES = 4 * 1024 * 1024;
+export { ARTIFACT_STORAGE_VALUE_LIMIT_BYTES };
 export const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
 
 const MAX_OUTPUT_TOKENS = 4_096;
