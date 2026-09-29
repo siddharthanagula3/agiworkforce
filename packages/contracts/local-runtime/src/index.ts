@@ -138,6 +138,7 @@ export type {
   FileStat,
   FileTextContent,
   FileTextEdit,
+  FileTextWrite,
   FilesystemCommand,
 } from './filesystem';
 
