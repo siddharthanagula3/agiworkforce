@@ -57,6 +57,8 @@ export * from './triggers';
 export * from './conversation-shares';
 export * from './referrals';
 export * from './map-config';
+export * from './web-search-allowance';
+export * from './service-notices';
 export * from './slack';
 export * from './skills';
 export * from './plugin-marketplaces';
