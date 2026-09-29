@@ -438,19 +438,6 @@ const ko = {
   'savedApprovals.allowCommandDetail':
     'AGI는 이것으로 시작하는 모든 명령을 모든 세션에서 묻지 않고 실행합니다.',
   'savedApprovals.allowConfirm': '항상 허용',
-  'providerKeys.title': '공급자 API 키',
-  'providerKeys.placeholder': 'AGI CLI가 내 계정으로 공급자를 호출할 때 쓰는 키',
-  'providerKeys.empty': '이 AGI CLI에는 API 키를 받는 공급자가 없습니다',
-  'providerKeys.stored': '키 저장됨',
-  'providerKeys.fromEnvironment': '{envVar}에서',
-  'providerKeys.notSet': '설정 안 됨',
-  'providerKeys.setDetail': '선택해 키를 입력하세요. 키는 시스템 키체인에 보관됩니다',
-  'providerKeys.prompt': '{provider} API 키',
-  'providerKeys.removeTitle': '저장된 {provider} 키를 삭제할까요?',
-  'providerKeys.removeDetail':
-    '키를 다시 추가할 때까지 내 계정으로 {provider} 모델을 사용할 수 없습니다.',
-  'providerKeys.saved': 'AGI Workforce: {provider} 키를 저장했습니다.',
-  'providerKeys.noun': '공급자 API 키',
   'savedApprovals.noun': '저장된 승인',
   'webview.alwaysAllow': '항상 허용',
   'webview.alwaysAllowHint':

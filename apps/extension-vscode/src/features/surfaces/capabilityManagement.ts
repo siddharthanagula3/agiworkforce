@@ -10,7 +10,6 @@ import type {
   McpServerInspection,
   McpServerProbe,
   PluginUpdate,
-  ProviderKeyList,
   SavedPermissionList,
 } from '../../integrations/localRuntimeClient';
 import { createSkill } from './skillAuthoring';
@@ -761,73 +760,6 @@ const SAVED_PERMISSION_KINDS = {
   file: 'savedApprovals.kindFile',
   exec_policy: 'savedApprovals.kindPolicy',
 } as const;
-
-const PROVIDER_KEY_SHAPE = /^\S{1,4096}$/u;
-
-async function setProviderKey(
-  adapter: CliCapabilityAdapter,
-  provider: ProviderKeyList['providers'][number],
-): Promise<CliCapabilityResult<unknown> | undefined> {
-  const key = await vscode.window.showInputBox({
-    title: t('providerKeys.prompt', { provider: provider.label }),
-    prompt: provider.envVar,
-    password: true,
-    ignoreFocusOut: true,
-    validateInput: (value) =>
-      value.trim() === '' || PROVIDER_KEY_SHAPE.test(value.trim())
-        ? undefined
-        : t('providerKeys.prompt', { provider: provider.label }),
-  });
-  if (key === undefined || key.trim() === '') return undefined;
-  const result = await adapter.call('providerKeysSet', provider.id, key.trim());
-  if (result.status === 'ok') {
-    void vscode.window.showInformationMessage(
-      t('providerKeys.saved', { provider: provider.label }),
-    );
-  }
-  return result;
-}
-
-export async function manageProviderKeys(adapter: CliCapabilityAdapter): Promise<void> {
-  return showManagedSurface(
-    {
-      title: t('providerKeys.title'),
-      placeholder: t('providerKeys.placeholder'),
-      empty: t('providerKeys.empty'),
-      load: async () => {
-        const result = await adapter.call<ProviderKeyList>('providerKeys');
-        if (result.status !== 'ok') return result;
-        const items: ManagedItem[] = result.value.providers.map((provider) => ({
-          label: `$(${provider.source === undefined ? 'key' : 'pass'}) ${provider.label}`,
-          description:
-            provider.source === 'stored'
-              ? t('providerKeys.stored')
-              : provider.source === 'environment'
-                ? t('providerKeys.fromEnvironment', { envVar: provider.envVar })
-                : t('providerKeys.notSet'),
-          detail: t('providerKeys.setDetail'),
-          followUp: { run: () => setProviderKey(adapter, provider), reopen: true },
-          ...(provider.source === 'stored'
-            ? {
-                actions: [
-                  removeAction(async () =>
-                    (await confirmRemoval(
-                      t('providerKeys.removeTitle', { provider: provider.label }),
-                      t('providerKeys.removeDetail', { provider: provider.label }),
-                    ))
-                      ? adapter.call('providerKeysRemove', provider.id)
-                      : undefined,
-                  ),
-                ],
-              }
-            : {}),
-        }));
-        return { status: 'ok', value: items };
-      },
-    },
-    t('providerKeys.noun'),
-  );
-}
 
 async function addPermissionRule(
   adapter: CliCapabilityAdapter,

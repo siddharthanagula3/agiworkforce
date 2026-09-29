@@ -351,7 +351,6 @@ fn capabilities() -> AppServerCapabilities {
         plugin_updates: false,
         plan_decisions: false,
         permission_rules: false,
-        provider_keys: false,
     }
 }
 

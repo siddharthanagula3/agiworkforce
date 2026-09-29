@@ -452,19 +452,6 @@ const ja = {
   'savedApprovals.allowCommandDetail':
     'AGI はこれで始まるコマンドを、すべてのセッションで確認なしに実行します。',
   'savedApprovals.allowConfirm': '常に許可',
-  'providerKeys.title': 'プロバイダーの API キー',
-  'providerKeys.placeholder': 'AGI CLI がご自身のアカウントでプロバイダーを呼び出すためのキー',
-  'providerKeys.empty': 'この AGI CLI には API キーを使うプロバイダーがありません',
-  'providerKeys.stored': 'キー保存済み',
-  'providerKeys.fromEnvironment': '{envVar} から',
-  'providerKeys.notSet': '未設定',
-  'providerKeys.setDetail': '選択してキーを入力します。キーはシステムのキーチェーンに保存されます',
-  'providerKeys.prompt': '{provider} の API キー',
-  'providerKeys.removeTitle': '保存済みの {provider} キーを削除しますか？',
-  'providerKeys.removeDetail':
-    'キーを再度追加するまで、ご自身のアカウントで {provider} のモデルは使えなくなります。',
-  'providerKeys.saved': 'AGI Workforce: {provider} のキーを保存しました。',
-  'providerKeys.noun': 'プロバイダーの API キー',
   'savedApprovals.noun': '保存済みの承認',
   'webview.alwaysAllow': '常に許可',
   'webview.alwaysAllowHint':
