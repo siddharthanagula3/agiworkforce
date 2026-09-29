@@ -86,6 +86,9 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
     headers: { get: (h: string) => (h === 'content-type' ? contentType : null) },
     text: jest.fn(async () => bodyText),
     json: jest.fn(async () => (typeof body === 'string' ? JSON.parse(body) : body)),
+    clone() {
+      return this;
+    },
   } as unknown as Response;
 }
 

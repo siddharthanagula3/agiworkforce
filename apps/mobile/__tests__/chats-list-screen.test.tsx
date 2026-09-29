@@ -380,7 +380,7 @@ describe('ChatsListScreen', () => {
     dismissSheet();
 
     fireEvent.changeText(getByLabelText('Chat title'), 'Launch checklist v2');
-    fireEvent.press(getByLabelText('Submit rename'));
+    fireEvent(getByLabelText('Chat title'), 'submitEditing');
 
     expect(mockRenameConversation).toHaveBeenCalledWith('chat-1', 'Launch checklist v2');
     expect(getByText('Launch checklist')).toBeTruthy();

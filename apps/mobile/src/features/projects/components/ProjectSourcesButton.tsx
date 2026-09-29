@@ -51,6 +51,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={close}
+        accessibilityViewIsModal
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
           <View
