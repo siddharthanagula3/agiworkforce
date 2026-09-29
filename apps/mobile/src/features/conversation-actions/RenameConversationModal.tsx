@@ -1,5 +1,14 @@
 import { useCallback, useRef } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
@@ -17,6 +26,7 @@ import type {
  */
 function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
   const pendingRef = useRef<(() => void) | null>(null);
 
   const runPending = useCallback(() => {
@@ -76,31 +86,33 @@ function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
             >
               {menu.title}
             </Text>
-            {menu.actions.map((action, index) => (
-              <Pressable
-                key={action.key}
-                testID={`conversation-action-${action.key}`}
-                onPress={() => select(action)}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                style={{
-                  minHeight: 52,
-                  justifyContent: 'center',
-                  paddingHorizontal: 20,
-                  borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <Text
+            <ScrollView style={{ maxHeight: height * 0.6 }} bounces={false}>
+              {menu.actions.map((action, index) => (
+                <Pressable
+                  key={action.key}
+                  testID={`conversation-action-${action.key}`}
+                  onPress={() => select(action)}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
                   style={{
-                    fontSize: 16,
-                    color: action.destructive ? colors.agentError : colors.textPrimary,
+                    minHeight: 52,
+                    justifyContent: 'center',
+                    paddingHorizontal: 20,
+                    borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.border,
                   }}
                 >
-                  {action.label}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      color: action.destructive ? colors.agentError : colors.textPrimary,
+                    }}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
             <Pressable
               testID="conversation-action-cancel"
               onPress={menu.close}
