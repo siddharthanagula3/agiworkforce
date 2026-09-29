@@ -1,4 +1,10 @@
-import { AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
+import {
+  AppState,
+  Platform,
+  type AppStateStatus,
+  type NativeEventSubscription,
+} from 'react-native';
+import Constants from 'expo-constants';
 
 import { getDeviceId } from '@/lib/deviceId';
 import {
@@ -102,6 +108,8 @@ export async function postPushRegistration(
       {
         deviceId,
         pushToken: token,
+        ...(Platform.OS === 'ios' || Platform.OS === 'android' ? { platform: Platform.OS } : {}),
+        ...(Constants.deviceName ? { name: Constants.deviceName.slice(0, 120) } : {}),
         preferences: { ...preferences, updatedAt: new Date().toISOString() },
       },
       {
