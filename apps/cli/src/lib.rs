@@ -1823,11 +1823,13 @@ enum ApprovalsSubcommand {
     Allow { rule: String },
     /// Always deny a command prefix, or domain:<host> (*.host for subdomains) to block a site for web_fetch and the browser.
     Deny { rule: String },
+    /// Always ask before a command prefix, even when an allow rule covers it.
+    Ask { rule: String },
     /// Allow a command prefix for this process.
     Session { rule: String },
     /// Remove a saved or session rule.
     Remove {
-        /// allow, deny, or session.
+        /// allow, ask, deny, or session.
         scope: String,
         rule: String,
     },
@@ -4970,13 +4972,9 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
     let mut store = permissions::PermissionStore::load()?;
     match action {
         ApprovalsSubcommand::List => {
-            println!("{}", store.display_tab("allow"));
-            println!();
-            println!("{}", store.display_tab("deny"));
-            println!();
-            println!("{}", store.display_tab("ask"));
-            println!();
-            println!("{}", store.display_tab("workspace"));
+            for tab in ["allow", "ask", "deny"] {
+                println!("{}", store.display_tab(tab, &[], &[]));
+            }
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
@@ -4994,6 +4992,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             println!("Always deny: {}", rule.trim());
             Ok(())
         }
+        ApprovalsSubcommand::Ask { rule } => {
+            store.ask_always(rule);
+            store.save()?;
+            println!("Always ask: {}", rule.trim());
+            Ok(())
+        }
         ApprovalsSubcommand::Session { rule } => {
             store.allow_session_for_process(rule);
             println!("Allow for this process: {}", rule.trim());
@@ -5002,11 +5006,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
         ApprovalsSubcommand::Remove { scope, rule } => {
             let removed = match scope.as_str() {
                 "allow" => store.remove_always_allow(rule),
+                "ask" => store.remove_ask(rule),
                 "deny" => store.remove_always_deny(rule),
                 "session" => store.remove_session(rule),
                 other => {
                     anyhow::bail!(
-                        "unknown approval scope '{}'; use allow, deny, or session",
+                        "unknown approval scope '{}'; use allow, ask, deny, or session",
                         other
                     )
                 }

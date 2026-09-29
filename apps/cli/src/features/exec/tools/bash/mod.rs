@@ -411,6 +411,10 @@ pub(super) async fn approve_command(
     // executes. A `Forbidden` decision is a hard block that no confirmation can
     // override. Confirmation is only waived when EVERY segment matched an explicit
     // allow rule.
+    let asks = require_confirmation
+        && crate::permissions::PermissionStore::load()
+            .unwrap_or_default()
+            .asks_before(command);
     {
         use crate::features::exec::exec_policy::{evaluate_command, load_policy};
         use agiworkforce_execpolicy::Decision;
@@ -427,7 +431,7 @@ pub(super) async fn approve_command(
                 }));
             }
             Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
-            Decision::Allow if policy_waives_confirmation(&evaluation, command) => {
+            Decision::Allow if !asks && policy_waives_confirmation(&evaluation, command) => {
                 require_confirmation = false
             }
             Decision::Prompt | Decision::Allow => {}
@@ -437,7 +441,7 @@ pub(super) async fn approve_command(
     if require_confirmation {
         let safety = classify_command(command);
         let hook_bypass = bypasses_git_hooks(command);
-        if !matches!(safety, CommandSafety::Safe) {
+        if asks || !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
 
             match saved_command_decision(&perms, command, safety) {
@@ -678,7 +682,7 @@ pub(super) fn saved_command_decision(
     safety: CommandSafety,
 ) -> Option<bool> {
     match perms.check_command_allowing_hook_bypass(command) {
-        Some(true) if safety == CommandSafety::Dangerous => None,
+        Some(true) if safety == CommandSafety::Dangerous || perms.asks_before(command) => None,
         decision => decision,
     }
 }
@@ -947,6 +951,24 @@ mod tests {
         perms.deny_always("rm");
         assert_eq!(
             saved_command_decision(&perms, dangerous, CommandSafety::Dangerous),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn an_ask_rule_outranks_a_saved_allow_but_not_a_saved_deny() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("cargo publish");
+        perms.ask_always("cargo publish");
+
+        assert_eq!(
+            saved_command_decision(&perms, "cargo publish --dry-run", CommandSafety::Unknown),
+            None
+        );
+
+        perms.deny_always("cargo publish");
+        assert_eq!(
+            saved_command_decision(&perms, "cargo publish", CommandSafety::Unknown),
             Some(false)
         );
     }
