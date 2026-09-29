@@ -528,42 +528,29 @@ async function planLimitRefusal(
   return error;
 }
 
-interface ReservationLedgerContext {
-  topUpHeadroomMicrousd: number;
-  catalogVersion: number | null;
-}
-
-/** Headroom is the lesser of what is left and what was purchased, never more. */
-async function resolveReservationLedgerContext(
+/**
+ * The plan catalog the caps come from. Purchased headroom is not read here: the
+ * reservation functions read it under the per-user lock (0347), so concurrent
+ * reservations never spend the same headroom twice.
+ */
+async function resolveReservationCatalogVersion(
   db: DatabaseAdapter,
   userId: string,
-): Promise<ReservationLedgerContext> {
+): Promise<number | null> {
   try {
-    const rows = await db.query<{
-      headroom_microusd: number | string | null;
-      plan_catalog_version: number | null;
-    }>(
-      `select balances.overage_headroom_microusd as headroom_microusd,
-              (select credits.plan_catalog_version
-                 from public.token_credits credits
-                where credits.user_id = $1
-                  and credits.period_end > now()
-                order by credits.period_end desc
-                limit 1) as plan_catalog_version
-         from public.prepaid_credit_balances_microusd($1::text) balances`,
+    const rows = await db.query<{ plan_catalog_version: number | null }>(
+      `select credits.plan_catalog_version
+         from public.token_credits credits
+        where credits.user_id = $1
+          and credits.period_end > now()
+        order by credits.period_end desc
+        limit 1`,
       [userId],
     );
-    const value = Number(rows[0]?.headroom_microusd ?? 0);
-    return {
-      topUpHeadroomMicrousd: Number.isFinite(value) && value > 0 ? Math.floor(value) : 0,
-      catalogVersion: rows[0]?.plan_catalog_version ?? null,
-    };
+    return rows[0]?.plan_catalog_version ?? null;
   } catch (error) {
-    logger.warn(
-      { error, userId },
-      'Reservation ledger lookup failed; treating as no headroom on the current catalog',
-    );
-    return { topUpHeadroomMicrousd: 0, catalogVersion: null };
+    logger.warn({ error, userId }, 'Plan catalog lookup failed; using the current catalog');
+    return null;
   }
 }
 
@@ -688,10 +675,7 @@ export async function reserveManagedUsageRequest(
 
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const { topUpHeadroomMicrousd, catalogVersion } = await resolveReservationLedgerContext(
-    input.db,
-    input.userId,
-  );
+  const catalogVersion = await resolveReservationCatalogVersion(input.db, input.userId);
   const allowance = { tier: input.planTier, catalogVersion };
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
@@ -720,8 +704,7 @@ export async function reserveManagedUsageRequest(
           input.db,
           `select * from public.reserve_managed_usage_request_with_limits_microusd(
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-      $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean,
-      $13::bigint
+      $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean
     )`,
           [
             input.userId,
@@ -736,7 +719,6 @@ export async function reserveManagedUsageRequest(
             weeklyCapMicrousd,
             flagshipWeeklyCapMicrousd,
             input.isFlagship,
-            topUpHeadroomMicrousd,
           ],
         );
 
@@ -804,10 +786,7 @@ export async function reserveManagedUsageProviderStep(
   }
 
   const reservation = input.reservation;
-  const { topUpHeadroomMicrousd, catalogVersion } = await resolveReservationLedgerContext(
-    reservation.db,
-    reservation.userId,
-  );
+  const catalogVersion = await resolveReservationCatalogVersion(reservation.db, reservation.userId);
   const allowance = { tier: input.planTier, catalogVersion };
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
@@ -816,7 +795,7 @@ export async function reserveManagedUsageProviderStep(
     reservation.db,
     `select * from public.extend_managed_usage_request_provider_step_microusd(
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-      $7::bigint, $8::bigint, $9::bigint, $10::boolean, $11::bigint
+      $7::bigint, $8::bigint, $9::bigint, $10::boolean
     )`,
     [
       reservation.userId,
@@ -829,7 +808,6 @@ export async function reserveManagedUsageProviderStep(
       weeklyCapMicrousd,
       flagshipWeeklyCapMicrousd,
       input.isFlagship,
-      topUpHeadroomMicrousd,
     ],
   );
 

@@ -167,7 +167,6 @@ describe('managed usage request service', () => {
         PRO_WEEKLY_MICROUSD,
         PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
-        0,
       ],
     );
   });
@@ -420,7 +419,6 @@ describe('managed usage request service', () => {
         PRO_WEEKLY_MICROUSD,
         PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
-        0,
       ],
     );
   });
