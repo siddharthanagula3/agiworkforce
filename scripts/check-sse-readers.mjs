@@ -53,7 +53,6 @@ const FIX =
 
 export const PENDING = Object.freeze({
   'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${FIX}`,
-  'apps/desktop/src/api/cloudApi.ts': `p-electron: ${FIX}`,
 });
 
 const SOURCE_FILE = /\.(?:tsx?|mts)$/;
