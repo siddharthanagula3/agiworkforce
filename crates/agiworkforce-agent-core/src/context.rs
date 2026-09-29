@@ -141,11 +141,14 @@ pub fn format_summary_input(messages: &[Message]) -> String {
 fn estimate_block_tokens(block: &ContentBlock) -> usize {
     match block {
         ContentBlock::Text { text } => estimate_text_tokens(text),
-        ContentBlock::Image { data_b64, .. } => IMAGE_BASE_TOKENS + estimate_text_tokens(data_b64),
+        ContentBlock::Image { data_b64, .. } | ContentBlock::Document { data_b64, .. } => {
+            IMAGE_BASE_TOKENS + estimate_text_tokens(data_b64)
+        }
         ContentBlock::ToolUse { name, input, .. } => {
             estimate_text_tokens(name) + estimate_text_tokens(&input.to_string())
         }
         ContentBlock::ToolResult { content, .. } => estimate_text_tokens(content),
+        ContentBlock::Unknown => 0,
     }
 }
 
@@ -430,6 +433,8 @@ fn summary_content(message: &Message) -> String {
             .map(|block| match block {
                 ContentBlock::Text { text } => text.clone(),
                 ContentBlock::Image { mime, .. } => format!("[image: {mime}]"),
+                ContentBlock::Document { name, .. } => format!("[document: {name}]"),
+                ContentBlock::Unknown => "[unknown content]".to_string(),
                 ContentBlock::ToolUse { name, input, .. } => {
                     format!("[tool call: {name} {input}]")
                 }

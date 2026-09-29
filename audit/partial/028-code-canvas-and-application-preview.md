@@ -15,9 +15,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | files are written to disk; editing happens outside the CLI | ui |
-
-Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/platform/runtime/tool_catalog.rs:99-108`
 
 ## S28.02: Multi-file project tree.
 
@@ -40,10 +37,7 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can create files (write_file), but there is no delete tool and no user command to create or delete files in the CLI. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/platform/runtime/tool_catalog.rs:99-108`
 
 ## S28.04: File rename.
 
@@ -108,10 +102,7 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Searching files is an agent tool (grep/glob) the model calls; there is no user search command over generated files. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 
 ## S28.10: HTML preview.
 
@@ -123,9 +114,8 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 | --- | --- | --- | --- |
 | web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
-| cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
 ## S28.11: React or supported framework preview.
 
@@ -137,9 +127,8 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`,
 | web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
 ## S28.18: Preview reload.
 
@@ -203,10 +192,7 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-429`
 
 ## S28.30: Rollback.
 

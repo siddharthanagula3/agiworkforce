@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { connectorInputFieldError, type ConnectorInputField } from '@agiworkforce/client-runtime';
@@ -15,8 +15,57 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const SEND_FAILED = 'Your answer was not sent. Check the Desktop connection and try again.';
+const REPLY_REJECTED = 'The computer did not accept that answer. Check it and send it again.';
+
+const STEP_EXPIRED = 'This question is no longer waiting for an answer.';
 
 type InputStep = Extract<DispatchTaskPendingStep, { kind: 'input' }>;
+
+const FORMAT_COPY: Record<NonNullable<DispatchTaskPendingField['format']>, string> = {
+  email: 'enter an email address.',
+  uri: 'enter a full link, such as https://example.com.',
+  date: 'enter a date.',
+  'date-time': 'enter a date and time.',
+};
+
+function fieldIssueCopy(
+  field: DispatchTaskPendingField,
+  code: NonNullable<DispatchTaskReplyError['code']>,
+): string | null {
+  switch (code) {
+    case 'required':
+      return field.kind === 'choice' ? 'choose an option.' : 'this is required.';
+    case 'not_an_option':
+      return 'choose one of the options offered.';
+    case 'too_short':
+      return field.minLength === undefined
+        ? 'this is too short.'
+        : `use at least ${field.minLength} characters.`;
+    case 'too_long':
+      return field.maxLength === undefined
+        ? 'this is too long.'
+        : `use at most ${field.maxLength} characters.`;
+    case 'bad_format':
+      return field.format ? FORMAT_COPY[field.format] : 'check the format.';
+    case 'expired':
+      return null;
+  }
+}
+
+export function replyErrorCopy(
+  replyError: DispatchTaskReplyError,
+  steps: readonly DispatchTaskPendingStep[],
+): string {
+  if (replyError.code === 'expired') return STEP_EXPIRED;
+  if (!replyError.code || !replyError.fieldId) return REPLY_REJECTED;
+  const step = steps.find(
+    (candidate): candidate is InputStep =>
+      candidate.kind === 'input' && candidate.toolCallId === replyError.toolCallId,
+  );
+  const field = step?.fields.find((candidate) => candidate.key === replyError.fieldId);
+  const copy = field ? fieldIssueCopy(field, replyError.code) : null;
+  return field && copy ? `${field.title}: ${copy}` : REPLY_REJECTED;
+}
 
 function connectorField(field: DispatchTaskPendingField): ConnectorInputField {
   const base = { key: field.key, title: field.title, required: field.required };
@@ -212,6 +261,8 @@ export function DispatchTaskReply({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const open = steps.filter((step) => !sent.has(step.toolCallId));
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
 
   useEffect(() => {
     if (!replyError) return;
@@ -220,7 +271,8 @@ export function DispatchTaskReply({
       next.delete(replyError.toolCallId);
       return next;
     });
-    setError(replyError.message);
+    console.warn('[dispatch] the computer rejected a reply', replyError.message);
+    setError(replyErrorCopy(replyError, stepsRef.current));
   }, [replyError]);
 
   const send = async (reply: DispatchTaskStepReply) => {

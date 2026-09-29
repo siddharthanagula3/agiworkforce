@@ -32,6 +32,7 @@ pub mod device_registry;
 pub mod diagnostics_bundle;
 pub mod diff_model;
 pub mod doctor;
+pub mod documents;
 pub mod errors;
 pub mod hex;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
@@ -1112,6 +1113,22 @@ enum CodeSubcommand {
         #[arg(long)]
         model: Option<String>,
         /// Start without the review prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Continue a local session in a new cloud Code session: its objective,
+    /// plan, decisions and changed files travel with the pushed branch.
+    Handoff {
+        /// Local session id. Defaults to the latest session in this folder.
+        session: Option<String>,
+        /// Model for the cloud session. Defaults to `default.cloud_model`, then
+        /// to a coding model your plan includes.
+        #[arg(long)]
+        model: Option<String>,
+        /// Hand off without the review prompt.
         #[arg(long, short = 'y')]
         yes: bool,
         /// Print the result as JSON.
@@ -2661,6 +2678,23 @@ async fn handle_code_command(
             yes,
             json,
         } => handle_code_start(&client, config, task, model.as_deref(), *yes, *json, output).await,
+        CodeSubcommand::Handoff {
+            session,
+            model,
+            yes,
+            json,
+        } => {
+            handle_code_handoff(
+                &client,
+                config,
+                session.as_deref(),
+                model.as_deref(),
+                *yes,
+                *json,
+                output,
+            )
+            .await
+        }
         CodeSubcommand::List { status, json } => {
             let sessions = code_sessions::list(&client, status)
                 .await
@@ -2770,26 +2804,13 @@ async fn handle_code_command(
     }
 }
 
-async fn handle_code_start(
-    client: &cloud::CloudClient,
-    config: &config::CliConfig,
-    task: &str,
-    model: Option<&str>,
-    yes: bool,
-    json: bool,
-    output: Option<OutputFormat>,
-) -> Result<()> {
-    use cloud::code_handoff;
-    use cloud::code_sessions;
-
-    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
-    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
-    let model = match model
+async fn cloud_code_model(config: &config::CliConfig, model: Option<&str>) -> Result<String> {
+    match model
         .or(config.default.cloud_model.as_deref())
         .map(str::trim)
         .filter(|model| !model.is_empty())
     {
-        Some(model) => model_catalog::canonical_model_id(model),
+        Some(model) => Ok(model_catalog::canonical_model_id(model)),
         None => model_catalog::resolve_auto_model(
             "auto",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -2801,8 +2822,101 @@ async fn handle_code_start(
             anyhow::anyhow!(
                 "No coding model your plan includes could be chosen ({error}). Name one with --model."
             )
-        })?,
-    };
+        }),
+    }
+}
+
+async fn handle_code_handoff(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    session: Option<&str>,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::{code_handoff, code_push};
+
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    if checkout.unpushed_commits > 0 {
+        anyhow::bail!(
+            "{} has {} commit(s) that are not pushed. The cloud session clones the pushed branch, so push first, then hand off.",
+            checkout.branch,
+            checkout.unpushed_commits
+        );
+    }
+    let local =
+        code_push::local_session(session, &std::env::current_dir()?).map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
+    let access = code_handoff::repository_access(client, &checkout.full_name)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    let title = local
+        .title
+        .clone()
+        .unwrap_or_else(|| local.session_id.clone());
+    eprintln!(
+        "{}\n",
+        code_handoff::render_review(&review, &format!("Continue \"{title}\" in the cloud"))
+    );
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => {}
+        DestructiveDecision::Refuse => anyhow::bail!(
+            "Nothing was handed off: this run cannot ask for confirmation. Re-run with --yes."
+        ),
+        DestructiveDecision::Prompt => {
+            if !dialoguer::Confirm::new()
+                .with_prompt("Hand this session to the cloud?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+            {
+                println!("Nothing was handed off.");
+                return Ok(());
+            }
+        }
+    }
+    let record = code_push::record(&local);
+    let pushed = code_push::submit(client, &code_push::body(&record, &access))
+        .await
+        .map_err(|error| anyhow::anyhow!("The cloud did not take the session: {error}"))?;
+    for warning in &pushed.warnings {
+        output::print_warn(&code_push::warning_text(warning));
+    }
+    run_first_cloud_turn(
+        client,
+        &pushed.session,
+        &pushed.seed_prompt,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+            "handedOffFrom": local.session_id,
+            "warnings": pushed.warnings,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+async fn handle_code_start(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    task: &str,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+
+    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
     let access = code_handoff::repository_access(client, &checkout.full_name)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2840,8 +2954,47 @@ async fn handle_code_start(
     let session = code_handoff::create(client, &body)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
+    run_first_cloud_turn(
+        client,
+        &session,
+        &task,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_first_cloud_turn(
+    client: &cloud::CloudClient,
+    session: &cloud::code_sessions::CodeSession,
+    task: &str,
+    model: &str,
+    remote: &str,
+    details: serde_json::Value,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+    use cloud::code_sessions;
+
+    let with_details = |mut value: serde_json::Value| {
+        if let (Some(target), Some(extra)) = (value.as_object_mut(), details.as_object()) {
+            for (key, item) in extra {
+                target.insert(key.clone(), item.clone());
+            }
+        }
+        value
+    };
     let url = code_sessions::page_url(client.base(), &session.id);
-    let session_text = code_handoff::render_session(&session, &checkout.remote, &url);
+    let session_text = code_handoff::render_session(session, remote, &url);
     if session.state == "failed" {
         anyhow::bail!(
             "The cloud session could not be set up: {}\n{session_text}",
@@ -2853,10 +3006,10 @@ async fn handle_code_start(
     }
     eprintln!(
         "Working on it in the cloud with {}. Follow along at {url}\nCtrl-C stops the turn; the session stays open.",
-        model_catalog::display_name(&model)
+        model_catalog::display_name(model)
     );
     let outcome = tokio::select! {
-        outcome = code_handoff::start_turn(client, &session.id, &task, &model) => Some(outcome),
+        outcome = code_handoff::start_turn(client, &session.id, task, model) => Some(outcome),
         _ = code_interrupt() => None,
     };
     let Some(outcome) = outcome else {
@@ -2877,17 +3030,14 @@ async fn handle_code_start(
                 .collect::<Vec<_>>()
                 .join("\n\n");
             render_structured(
-                serde_json::json!({
+                with_details(serde_json::json!({
                     "ok": true,
                     "sessionId": session.id,
                     "url": url,
-                    "repository": checkout.full_name,
-                    "branch": checkout.branch,
                     "workingBranch": session.working_branch,
                     "model": model,
-                    "review": review,
                     "turn": turn,
-                }),
+                })),
                 text,
                 json,
                 output,
@@ -2897,16 +3047,15 @@ async fn handle_code_start(
             status: 409,
             message,
         }) => render_structured(
-            serde_json::json!({
+            with_details(serde_json::json!({
                 "ok": true,
                 "sessionId": session.id,
                 "url": url,
                 "workingBranch": session.working_branch,
                 "model": model,
-                "review": review,
                 "turn": null,
                 "note": message,
-            }),
+            })),
             format!("{message}\n\n{session_text}"),
             json,
             output,
@@ -7693,6 +7842,36 @@ pub fn load_image_attachment_with(
     })
 }
 
+/// Read a PDF or Office file as a document block. Whether it reaches the model
+/// natively or as extracted text is settled when the turn is sent.
+pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
+    use base64::Engine as _;
+
+    let file = std::path::Path::new(path);
+    let kind = documents::DocumentKind::for_path(file)
+        .with_context(|| format!("'{path}' is not a PDF or Office document"))?;
+    let size = std::fs::metadata(file)
+        .with_context(|| format!("Failed to read '{path}'"))?
+        .len();
+    if size > documents::max_document_bytes() {
+        anyhow::bail!(
+            "'{path}' is {}; attachments are limited to {}",
+            tools::format_size(size),
+            tools::format_size(documents::max_document_bytes())
+        );
+    }
+    let bytes = std::fs::read(file).with_context(|| format!("Failed to read '{path}'"))?;
+    Ok(models::ContentBlock::Document {
+        name: file
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string()),
+        mime: kind.mime(file),
+        data_b64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        asset_id: None,
+    })
+}
+
 /// Turn a clipboard bitmap into a prompt attachment through the same encoder.
 pub fn clipboard_image_attachment(
     width: u32,
@@ -7715,8 +7894,8 @@ pub fn clipboard_image_attachment(
 pub struct FileContextResult {
     /// Formatted text from non-image files (XML-wrapped, as before).
     pub text: String,
-    /// Image files encoded and ready for multipart message injection.
-    pub images: Vec<ImageAttachment>,
+    /// Image and document files encoded and ready for multipart message injection.
+    pub images: Vec<models::ContentBlock>,
 }
 
 /// Image file extensions recognised for vision attachment.
@@ -7739,7 +7918,15 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
     for path in files {
         if is_image_extension(path) {
             match load_image_attachment(path) {
-                Ok(attachment) => images.push(attachment),
+                Ok(attachment) => images.push(attachment.into_image_block()),
+                Err(e) => {
+                    output::print_error(&format!("{e:#}"));
+                    std::process::exit(1);
+                }
+            }
+        } else if documents::DocumentKind::for_path(std::path::Path::new(path)).is_some() {
+            match load_document_attachment(path) {
+                Ok(block) => images.push(block),
                 Err(e) => {
                     output::print_error(&format!("{e:#}"));
                     std::process::exit(1);
@@ -7809,6 +7996,10 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
+        return documents::run_extract_command(&args[1..]);
+    }
     broken_pipe::install_panic_hook();
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -8006,7 +8197,7 @@ pub async fn run_oneshot(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
-    image_attachments: Vec<ImageAttachment>,
+    image_attachments: Vec<models::ContentBlock>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
     resume_session: Option<ManagedResumeSession>,
@@ -8120,10 +8311,7 @@ pub async fn run_oneshot(
     // blocks on the session.  The next `session.send()` call will prepend them
     // to the user message so text + images arrive in a single multipart turn.
     if !image_attachments.is_empty() {
-        session.pending_image_blocks = image_attachments
-            .into_iter()
-            .map(ImageAttachment::into_image_block)
-            .collect();
+        session.pending_image_blocks = image_attachments;
     }
 
     let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {

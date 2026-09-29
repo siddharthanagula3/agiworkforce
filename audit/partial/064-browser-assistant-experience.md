@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S64.05: Page summary.
-
-- Done when: One action summarizes the page the user is viewing.
-- Wave: 3
-- Already works on: desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
-
 ## S64.07: Question about video/transcript.
 
 - Done when: The assistant answers questions about a video on the page using its transcript.
@@ -172,9 +160,6 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Interrupting the turn stops further browser calls, but there is no pause that keeps the task to resume. | ui |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 
 ## S64.26: Download review.
 

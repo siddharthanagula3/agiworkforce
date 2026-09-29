@@ -256,6 +256,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           model: session.model,
           updatedAt: session.updatedAt,
           ...(session.origin && session.origin !== 'unknown' ? { origin: session.origin } : {}),
+          ...(session.location === 'cloud' ? { location: 'cloud' as const } : {}),
         })),
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))

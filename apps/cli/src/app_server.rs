@@ -11,6 +11,7 @@
 //!    connecting client is responsible for confirming each call.
 
 pub(crate) mod account;
+mod cloud_threads;
 mod developer_host;
 mod pull_request;
 pub(crate) mod surfaces;

@@ -157,6 +157,27 @@ describe('remote control of a developer session', () => {
     });
   });
 
+  it('marks a cloud session as cloud in the phone list', async () => {
+    deps.listSessions = vi.fn(async (): Promise<DeveloperSessionList> => ({
+      groups: [
+        {
+          rootId: 'root-1',
+          name: 'api',
+          path: '/work/api',
+          branch: 'main',
+          sessions: [session({ id: 'cloud:5f1c', cwd: '', location: 'cloud' })],
+        },
+      ],
+    }));
+    const controller = createCodeRemoteController(deps);
+    expect(await controller.handleControl('code.sessions.list', request('list'))).toBe(true);
+
+    expect(sent[0]).toMatchObject({
+      action: 'code.sessions',
+      payload: { sessions: [{ threadId: 'cloud:5f1c', location: 'cloud' }] },
+    });
+  });
+
   it('attaches with the transcript, generated files and a diff for each modified file', async () => {
     const controller = createCodeRemoteController(deps);
     await controller.handleControl(

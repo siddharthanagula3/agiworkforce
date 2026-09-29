@@ -10,29 +10,43 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/services/organization-policy-code-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-code-gate')>()),
   buildWorkspaceCodeGateResponse: (...args: unknown[]) => mocks.codeGate(...args),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
   getGitHubAppInstallUrl: () => mocks.installUrl(),
 }));
-vi.mock('@/lib/github-install-app-return', () => ({
+vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
   startAppInstall: (...args: unknown[]) => mocks.startAppInstall(...args),
 }));
 
 import { POST } from './route';
 
-function startRequest(): NextRequest {
+function startRequest(body?: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/github/install/app-start', {
     method: 'POST',
-    headers: { authorization: 'Bearer token' },
+    headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -44,16 +58,14 @@ describe('POST /api/github/install/app-start', () => {
     mocks.installUrl.mockReturnValue('https://github.com/apps/agi-workforce/installations/new');
   });
 
-  it('opens a pending install for the signed-in account and returns the install URL', async () => {
+  it('opens a pending install and sends the phone to our requester page, not straight to GitHub', async () => {
     const response = await POST(startRequest());
 
     expect(response.status).toBe(200);
     expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
     const body = (await response.json()) as { url: string };
     const url = new URL(body.url);
-    expect(url.origin + url.pathname).toBe(
-      'https://github.com/apps/agi-workforce/installations/new',
-    );
+    expect(url.origin + url.pathname).toBe('http://localhost:3000/github/connect');
     expect(url.searchParams.get('state')).toBe('f'.repeat(64));
     expect(response.headers.get('cache-control')).toContain('no-store');
   });
@@ -74,5 +86,11 @@ describe('POST /api/github/install/app-start', () => {
 
     expect(response.status).toBe(503);
     expect(mocks.startAppInstall).not.toHaveBeenCalled();
+  });
+
+  it('ignores any platform the caller claims, so the starter cannot pick the return channel', async () => {
+    await POST(startRequest({ platform: 'ios' }));
+
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
   });
 });

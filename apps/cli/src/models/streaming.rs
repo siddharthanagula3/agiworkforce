@@ -53,6 +53,18 @@ fn search_turn() -> bool {
 }
 
 tokio::task_local! {
+    static SEARCH_OFFERED: ();
+}
+
+pub async fn offering_search<F: std::future::Future>(future: F) -> F::Output {
+    SEARCH_OFFERED.scope((), future).await
+}
+
+fn search_offered() -> bool {
+    SEARCH_OFFERED.try_with(|_| ()).is_ok()
+}
+
+tokio::task_local! {
     static ROUTING_PROFILE: &'static str;
 }
 
@@ -446,19 +458,15 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
             })
             .into_iter()
             .chain(
-                search_turn()
-                    .then(|| {
-                        [
-                            ("web_search".to_string(), serde_json::Value::Bool(true)),
-                            (
-                                "search_requested".to_string(),
-                                serde_json::Value::Bool(true),
-                            ),
-                        ]
-                    })
-                    .into_iter()
-                    .flatten(),
+                (search_turn() || search_offered())
+                    .then(|| ("web_search".to_string(), serde_json::Value::Bool(true))),
             )
+            .chain(search_turn().then(|| {
+                (
+                    "search_requested".to_string(),
+                    serde_json::Value::Bool(true),
+                )
+            }))
             .chain(routing_profile().map(|profile| {
                 (
                     "routing_profile".to_string(),

@@ -16,7 +16,7 @@ pub const PROJECTS_SYNC_PATH: &str = "/api/projects/sync";
 const NAME_MAX_CHARS: usize = 200;
 const DESCRIPTION_MAX_CHARS: usize = 2_000;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectPushItem {
     pub id: String,
@@ -26,7 +26,7 @@ pub struct ProjectPushItem {
     pub base_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectsPushRequest {
     pub projects: Vec<ProjectPushItem>,
 }
