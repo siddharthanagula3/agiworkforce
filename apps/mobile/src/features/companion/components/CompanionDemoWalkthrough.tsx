@@ -40,7 +40,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       stepNumber: 1,
       title: 'Pair with Desktop',
       description:
-        'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen. To send tasks from this phone, also turn on Dispatch in Settings > Cowork.',
+        'Sign in on Desktop, open Settings > Capabilities > Remote Control, and choose Pair a phone. Scan the short-lived QR code from this screen, or enter the pairing code shown under it.',
       hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online, they do not need the same Wi-Fi.',
     },
     {

@@ -156,8 +156,8 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         </View>
 
         <Text className="text-sm" style={{ color: colors.textSecondary }}>
-          Open AGI Workforce on Desktop, go to Settings → Connections, and enter the 12-character
-          code shown below the QR code.
+          Open AGI Workforce on Desktop, go to Settings → Capabilities → Remote Control, choose Pair
+          a phone, and enter the 12-character code shown below the QR code.
         </Text>
 
         {/* Code input */}

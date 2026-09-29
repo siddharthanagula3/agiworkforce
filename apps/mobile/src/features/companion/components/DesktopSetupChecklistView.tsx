@@ -49,7 +49,7 @@ export function buildDesktopLinkMailto(accountEmail: string | null): string {
       'Download AGI Workforce for desktop here:',
       DESKTOP_DOWNLOAD_URL,
       '',
-      'Then open it, sign in, turn on Dispatch in Settings → Cowork, and generate a pairing code for your phone in Settings → Connections.',
+      'Then open it, sign in, go to Settings → Capabilities → Remote Control, and choose Pair a phone.',
     ].join('\n'),
   );
   return `mailto:${accountEmail ?? ''}?subject=${subject}&body=${body}`;
@@ -114,9 +114,9 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
         <PairingChecklist
           className="mb-8"
           steps={[
-            'Install AGI Workforce on your computer, then open it in Managed Cloud',
+            'Install AGI Workforce on your computer and open it',
             'Sign in on Desktop; the short-lived pairing code authorizes this phone',
-            'Turn on Dispatch in Settings → Cowork, then generate a pairing code in Settings → Connections',
+            'Open Settings → Capabilities → Remote Control and choose Pair a phone',
           ]}
         />
 

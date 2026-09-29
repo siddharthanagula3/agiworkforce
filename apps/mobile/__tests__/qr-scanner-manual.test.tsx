@@ -144,7 +144,9 @@ describe('QRScanner manual pairing', () => {
     fireEvent.press(screen.getByLabelText('Connect'));
 
     expect(onScan).toHaveBeenCalledWith('WXYZ 1234 ABCD');
-    expect(screen.getByText(/Settings → Connections/)).toBeTruthy();
+    expect(
+      screen.getByText(/Settings → Capabilities → Remote Control, choose Pair\s+a phone/),
+    ).toBeTruthy();
   });
 
   it('hands the scanned pairing link to the store instead of silently ignoring it', () => {

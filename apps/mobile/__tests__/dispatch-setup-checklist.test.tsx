@@ -138,7 +138,10 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
     const texts = textsInOrder(screen.toJSON());
 
     const firstStep = indexOfMatch(texts, /Install AGI Workforce on your computer/);
-    const lastStep = indexOfMatch(texts, /Turn on Dispatch in Settings/);
+    const lastStep = indexOfMatch(
+      texts,
+      /Settings → Capabilities → Remote Control and choose Pair a phone/,
+    );
     const cta = indexOfMatch(texts, /continue to pairing/);
 
     expect(firstStep).toBeGreaterThanOrEqual(0);
@@ -192,6 +195,16 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
     const url = buildDesktopLinkMailto(null);
     expect(url.startsWith('mailto:?')).toBe(true);
     expect(decodeURIComponent(url)).toContain(DESKTOP_DOWNLOAD_URL);
+  });
+
+  it('sends the desktop to the Remote Control pairing it actually has', () => {
+    const screen = render(<DesktopSetupChecklistView />);
+    const mailto = decodeURIComponent(buildDesktopLinkMailto(null));
+
+    expect(mailto).toContain('Settings → Capabilities → Remote Control, and choose Pair a phone');
+    for (const text of [mailto, ...textsInOrder(screen.toJSON())]) {
+      expect(text).not.toMatch(/Cowork|Settings → Connections|Managed Cloud/);
+    }
   });
 });
 
