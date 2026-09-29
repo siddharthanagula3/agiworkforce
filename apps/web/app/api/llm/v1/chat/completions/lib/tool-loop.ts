@@ -2877,6 +2877,20 @@ function recordProviderStepFailure(input: {
   }
 }
 
+function isBrowserDeviceStep(tool: string): boolean {
+  return tool.startsWith('device_browser_');
+}
+
+/** The address a device browser step would open or download, if it has one. */
+function deviceStepAddress(input: Record<string, unknown>): string | null {
+  const tool = input['tool'];
+  const url = input['url'];
+  return (tool === 'device_browser_navigate' || tool === 'device_browser_download') &&
+    typeof url === 'string'
+    ? url
+    : null;
+}
+
 /**
  * Private data is a sensitive source in its own right: memory facts,
  * attachments and earlier turns are all in the model's hands when an injected
@@ -2893,20 +2907,6 @@ function recordProviderStepFailure(input: {
  * Named rather than inlined so the gate has a seam a test can reach; it had
  * none.
  */
-function isBrowserDeviceStep(tool: string): boolean {
-  return tool.startsWith('device_browser_');
-}
-
-/** The address a device browser step would open or download, if it has one. */
-function deviceStepAddress(input: Record<string, unknown>): string | null {
-  const tool = input['tool'];
-  const url = input['url'];
-  return (tool === 'device_browser_navigate' || tool === 'device_browser_download') &&
-    typeof url === 'string'
-    ? url
-    : null;
-}
-
 export function hasPrivateContext(
   processed: Pick<ProcessedRequest, 'autoMemoryFacts' | 'sensitiveContextPresent'>,
   messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
