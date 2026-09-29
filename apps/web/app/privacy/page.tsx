@@ -921,7 +921,7 @@ const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Memory',
     value:
-      'We do not save memories from a chat that holds Google data, and we leave those chats and the memories drawn from them out of what AGI recalls in your other chats.',
+      'We do not save memories from a chat that holds Google data. That chat, the memories drawn from it and files imported from Google reach your other chats only when those chats are also kept to AI providers that do not train on them.',
   },
   {
     label: 'Transfer',
