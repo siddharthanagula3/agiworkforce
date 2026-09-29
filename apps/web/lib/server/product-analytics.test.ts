@@ -4,6 +4,8 @@ vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   hasConsent: vi.fn(),
+  noticeVersion: vi.fn(),
+  workspacesPermit: vi.fn(),
   query: vi.fn(),
   execute: vi.fn(),
 }));
@@ -15,12 +17,16 @@ vi.mock('@/lib/server/consent-records', () => ({
   readLatestConsent: async (userId: string, purpose: string) => {
     const { PRODUCT_ANALYTICS_NOTICE_VERSION } = await import('@agiworkforce/types');
     return (await mocks.hasConsent(userId, purpose))
-      ? { purpose, granted: true, noticeVersion: PRODUCT_ANALYTICS_NOTICE_VERSION }
+      ? {
+          purpose,
+          granted: true,
+          noticeVersion: mocks.noticeVersion() ?? PRODUCT_ANALYTICS_NOTICE_VERSION,
+        }
       : null;
   },
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
-  workspacesPermitProductAnalytics: async () => true,
+  workspacesPermitProductAnalytics: mocks.workspacesPermit,
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
@@ -54,6 +60,11 @@ function insertedEvents(): string[] {
     .map((params) => String(params[2]));
 }
 
+beforeEach(() => {
+  mocks.noticeVersion.mockReturnValue(undefined);
+  mocks.workspacesPermit.mockResolvedValue(true);
+});
+
 describe('the consent gate on the product event stream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,6 +75,26 @@ describe('the consent gate on the product event stream', () => {
   it('writes nothing when the consent ledger has no grant', async () => {
     mocks.hasConsent.mockResolvedValue(false);
 
+    await expect(recordProductAnalyticsEvents(SUBJECT, [event('signup')])).resolves.toBe(0);
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a grant recorded under an earlier notice, including the privacy revision of the same date', async () => {
+    mocks.hasConsent.mockResolvedValue(true);
+
+    for (const notice of ['2026-09-29', '2026-09-01', 'product-analytics-v0']) {
+      mocks.noticeVersion.mockReturnValue(notice);
+      await expect(isProductAnalyticsAllowed('user_1')).resolves.toBe(false);
+      await expect(recordProductAnalyticsEvents(SUBJECT, [event('signup')])).resolves.toBe(0);
+    }
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when a workspace policy has product analytics switched off', async () => {
+    mocks.hasConsent.mockResolvedValue(true);
+    mocks.workspacesPermit.mockResolvedValue(false);
+
+    await expect(isProductAnalyticsAllowed('user_1')).resolves.toBe(false);
     await expect(recordProductAnalyticsEvents(SUBJECT, [event('signup')])).resolves.toBe(0);
     expect(mocks.execute).not.toHaveBeenCalled();
   });
