@@ -1,4 +1,5 @@
 import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
+import { OFFICE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
 
 export type SupportedDocType = 'pdf' | 'txt' | 'md' | 'csv' | 'code';
 
@@ -18,11 +19,7 @@ export class DocParseError extends Error {
   constructor(
     message: string,
     public readonly code:
-      | 'UNSUPPORTED_FORMAT'
-      | 'CORRUPT_FILE'
-      | 'ENCRYPTED_PDF'
-      | 'EMPTY_DOCUMENT'
-      | 'READ_ERROR',
+      'UNSUPPORTED_FORMAT' | 'CORRUPT_FILE' | 'ENCRYPTED_PDF' | 'EMPTY_DOCUMENT' | 'READ_ERROR',
   ) {
     super(message);
     this.name = 'DocParseError';
@@ -106,8 +103,15 @@ export function isParseableDocument(uri: string, mimeType?: string): boolean {
 export const PICKABLE_DOCUMENT_MIME_TYPES: readonly string[] = [
   'application/pdf',
   'text/plain',
+  'text/markdown',
   'text/csv',
 ];
+
+export function pickableDocumentMimeTypes(mode: 'local' | 'cloud'): string[] {
+  return mode === 'cloud'
+    ? [...PICKABLE_DOCUMENT_MIME_TYPES, ...OFFICE_ATTACHMENT_MIME_TYPES]
+    : [...PICKABLE_DOCUMENT_MIME_TYPES];
+}
 
 async function readFileText(uri: string): Promise<string> {
   try {
