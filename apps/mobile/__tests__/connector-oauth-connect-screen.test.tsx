@@ -86,6 +86,7 @@ const mockFetchCredentialStatus = jest.fn();
 jest.mock('@/services/connectors', () => ({
   connectConnector: (...args: unknown[]) => mockConnect(...args),
   connectorListingIconUrl: jest.fn(() => null),
+  fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: jest.fn(),
   disconnectConnector: jest.fn(),
   fetchConnectorCapabilities: (...args: unknown[]) => mockFetchCapabilities(...args),
