@@ -122,13 +122,16 @@ Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/sett
 
 - Done when: Before first use the user reviews and accepts the current Terms (versioned), acceptance is recorded, and a terms change re-prompts.
 - Wave: 3
-- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Record Terms acceptance for mobile Cloud sign-ups: onboarding records only the AI-provider disclosure, Clerk AuthView sign-up never calls /api/terms/accept, and the gateway does not check terms, so a mobile-only user never accepts the versioned Terms. | handler |
+| web | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
+| desktop | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
+| mobile | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision | handler |
+| chrome | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
+| api | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 
-Code: `apps/mobile/app/(public)/onboarding.tsx:270-285`, `apps/mobile/app/(auth)/login.tsx:207-209`
+Code: `apps/web/app/login/complete/page.tsx:54-71`, `apps/web/app/signup/complete/RecordTermsAcceptance.tsx:37-56`, `apps/web/lib/server/require-current-terms.ts:7-12`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:270-272`
 
 ## S3.20: Age or eligibility verification where applicable.
 
@@ -152,7 +155,7 @@ Code: `apps/mobile/app/(public)/onboarding.tsx:270-285`, `apps/mobile/app/(auth)
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Ask for a name during mobile first run: onboarding goes hero, AI disclosure, device model and download, and the name/occupation fields exist only in Settings > Personalization. | ui |
+| mobile | partial | apply after w-chat-s6.23-s6.28-s6.29-s6.30-mobile-tokens once Codex commits onboarding.tsx | ui |
 
 Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`, `apps/mobile/app/(public)/onboarding.tsx:232-240`
 
@@ -164,33 +167,9 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Ask role or use case during mobile first run: an occupation field exists only in Settings > Personalization. | ui |
+| mobile | partial | apply after Codex commits onboarding.tsx | ui |
 
 Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
-
-## S3.24: Personalization setup.
-
-- Done when: Onboarding lets the user set personalization (name to use, what they do, preferred style) that then shapes replies.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Offer personalization in mobile first run: name, occupation, style and instructions exist only in Settings > Personalization. | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
-
-## S3.25: Memory setup.
-
-- Done when: During setup the user is told about memory and chooses whether and how it is used, with the choice changeable later.
-- Wave: 3
-- Already works on: cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add memory to mobile first run: memory screens exist only under Settings. | ui |
-
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`
 
 ## S3.27: Recommended-app connection flow.
 

@@ -50,18 +50,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S84.11: Default effort.
-
-- Done when: The user can set a default reasoning effort used for new turns.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Effort is picked per turn from the composer model chip; there is no saved default. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`
-
 ## S84.12: Default mode.
 
 - Done when: The user can choose the default mode new conversations start in (e.g. chat vs agent/work, ask vs auto).
