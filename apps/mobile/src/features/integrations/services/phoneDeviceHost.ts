@@ -15,13 +15,25 @@ function phoneName(): string {
   return Platform.OS === 'ios' ? 'iPhone' : 'Android phone';
 }
 
+/**
+ * A header value is a byte string, and phone names usually carry a curly
+ * apostrophe ("Mei’s iPhone"). Every character outside printable ASCII is
+ * written as a JSON escape, which the server reads back unchanged.
+ */
+export function headerSafeJson(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[\u007f-\uffff]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
 export async function phoneDeviceHostHeaders(): Promise<Record<string, string>> {
   const capabilities = phoneCapabilities();
   if (capabilities.length === 0) return {};
   const deviceId = await getDeviceId().catch(() => null);
   if (!deviceId) return {};
   return {
-    [DEVICE_HOST_HEADER]: JSON.stringify({
+    [DEVICE_HOST_HEADER]: headerSafeJson({
       deviceId,
       deviceName: phoneName(),
       platform: Platform.OS,
