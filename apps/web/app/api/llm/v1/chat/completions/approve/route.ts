@@ -14,6 +14,7 @@ import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
+  resolveWorkspaceControlsForRequest,
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from '../lib/request-surface';
 import { logger } from '@/lib/logger';
@@ -48,6 +49,7 @@ import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
+  scopeConnectorPermissionsToTurn,
 } from '../lib/connector-tool-permissions';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
@@ -208,9 +210,22 @@ async function handleToolApproval(
     throw error;
   }
 
+  // The resumed step runs under the same workspace controls as the turn it
+  // continues: without them, a feature the administrator switched off, such as
+  // computer use, came back on every resume.
+  const workspaceControls = await resolveWorkspaceControlsForRequest(
+    userId,
+    request,
+    getSecurityHeaders(),
+  );
+  if (!workspaceControls.ok) {
+    await releaseClaim(db, userId, claim);
+    return workspaceControls.response;
+  }
   const processResult = await processRequest(
     buildSyntheticRequest(request, claim, isFreeTierRequest),
     authResult,
+    { workspaceControls: workspaceControls.controls },
   );
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
@@ -224,12 +239,16 @@ async function handleToolApproval(
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
-        const permissions = await loadConnectorToolPermissions(
-          db,
-          userId,
-          processed.organizationId ?? null,
+        const permissions = scopeConnectorPermissionsToTurn(
+          await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+          {
+            temporary: processed.conversationIsTemporary === true,
+            disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+          },
         );
-        const connectorsAllowed = await connectorsAllowedForTurn(request, userId, processed);
+        const connectorsAllowed =
+          processed.chatRequest.connector_tools_enabled !== false &&
+          (await connectorsAllowedForTurn(request, userId, processed));
         const [operatorTools, connectorTools] = await Promise.all([
           loadMcpToolDefs(),
           connectorsAllowed
