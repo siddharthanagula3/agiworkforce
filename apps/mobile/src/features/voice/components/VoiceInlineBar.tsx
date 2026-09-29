@@ -5,7 +5,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Plus, Mic, MicOff, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VoiceOrb } from './VoiceOrb';
 
@@ -74,8 +74,8 @@ export function VoiceInlineBar({
   return (
     <Animated.View
       testID="voice-inline-bar"
-      entering={FadeIn.duration(180)}
-      exiting={FadeOut.duration(140)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >

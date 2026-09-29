@@ -282,7 +282,7 @@ export async function handleLiveVoiceToolCall(
 
   const [toolApprovalPolicy, permissions] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
-    loadConnectorToolPermissions(input.db, input.userId),
+    loadConnectorToolPermissions(input.db, input.userId, input.organizationId),
   ]);
   const approvalMode = input.offeredTools.some(
     (name) =>

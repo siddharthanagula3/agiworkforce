@@ -36,7 +36,7 @@ import {
 import { useAgentStore } from '@/stores/agentStore';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -197,7 +197,7 @@ export default function AgentDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Status card */}
-        <Animated.View entering={FadeIn.duration(200)}>
+        <Animated.View entering={FadeIn.duration(motion.quick)}>
           <Card variant="elevated" className="mb-4">
             {/* Agent name + status */}
             <View className="flex-row items-center gap-3 mb-3">
@@ -264,7 +264,7 @@ export default function AgentDetailScreen() {
 
         {/* Controls */}
         {isControllable && (
-          <Animated.View entering={FadeIn.duration(200).delay(60)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(60)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">Controls</Text>
             <View className="flex-row gap-3">
               {agent.status === 'running' ? (
@@ -308,7 +308,7 @@ export default function AgentDetailScreen() {
 
         {/* Run Artifacts */}
         {agent.artifacts && agent.artifacts.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(80)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(80)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Run Artifacts ({agent.artifacts.length})
             </Text>
@@ -343,7 +343,7 @@ export default function AgentDetailScreen() {
 
         {/* Tool Call Log */}
         {agent.toolCalls && agent.toolCalls.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(100)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(100)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Tool Calls ({agent.toolCalls.length})
             </Text>
@@ -355,7 +355,7 @@ export default function AgentDetailScreen() {
 
         {/* Steps */}
         {agent.steps && agent.steps.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(120)}>
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(120)}>
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Steps ({agent.steps.length})
             </Text>

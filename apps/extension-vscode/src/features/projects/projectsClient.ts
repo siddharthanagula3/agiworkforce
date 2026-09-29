@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export interface ProjectKnowledgeReader {
   listKnowledgeFiles(projectId: string): Promise<ManagedCloudProjectKnowledgeFile[]>;
@@ -36,6 +37,7 @@ export class ProjectKnowledgeHttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ProjectKnowledgeHttpError';
@@ -50,7 +52,12 @@ function createKnowledgeReader(token: string): ProjectKnowledgeReader {
         headers: hostedHeaders(token),
       });
       if (!response.ok) {
-        throw new ProjectKnowledgeHttpError(`HTTP ${response.status}`, response.status);
+        const refusal = await readAccountRefusal(response);
+        throw new ProjectKnowledgeHttpError(
+          refusal?.message ?? `HTTP ${response.status}`,
+          response.status,
+          refusal?.code,
+        );
       }
       const parsed = ManagedCloudProjectKnowledgeListResponseSchema.safeParse(
         await response.json().catch(() => undefined),

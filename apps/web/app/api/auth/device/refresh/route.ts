@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
+import { accountAccessDecision } from '@/lib/auth/account-status';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
@@ -41,6 +42,7 @@ interface RefreshTokenRow {
   organization_id: string | null;
   owner_missing: boolean;
   owner_deletion_scheduled_for: string | null;
+  owner_account_status: string | null;
   owner_terms_version: string | null;
   owner_terms_accepted_at: string | null;
 }
@@ -66,6 +68,7 @@ type RotationResult =
       revoked: number;
       compromiseRecorded: boolean;
     }
+  | { kind: 'account_unavailable'; message: string; recoveryPath: string | null }
   | { kind: 'invalid' | 'expired' | 'erased' | 'terms_required' };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
@@ -90,6 +93,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
               t.device_id, t.device_name, t.organization_id,
               p.id IS NULL AS owner_missing,
               p.deletion_scheduled_for AS owner_deletion_scheduled_for,
+              p.account_status AS owner_account_status,
               p.terms_version AS owner_terms_version,
               p.terms_accepted_at AS owner_terms_accepted_at
          FROM device_refresh_tokens t
@@ -134,6 +138,15 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         nowIso,
       ]);
       return { kind: 'expired' };
+    }
+
+    const access = accountAccessDecision(current.owner_account_status);
+    if (!access.allowed) {
+      return {
+        kind: 'account_unavailable',
+        message: access.message,
+        recoveryPath: access.recoveryPath,
+      };
     }
 
     // A terms revision is a consent gate, not a compromise signal: withhold the token but leave
@@ -195,6 +208,23 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         error: 'terms_acceptance_required',
         terms_version: CURRENT_TERMS_VERSION,
         acceptance_url: termsAcceptanceUrl(request),
+      },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  if (result.kind === 'account_unavailable') {
+    logger.warn(
+      { reason: result.kind },
+      'Device refresh withheld while the account is unavailable',
+    );
+    return NextResponse.json(
+      {
+        error: 'account_unavailable',
+        error_description: result.message,
+        ...(result.recoveryPath
+          ? { recovery_url: new URL(result.recoveryPath, new URL(request.url).origin).toString() }
+          : {}),
       },
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );

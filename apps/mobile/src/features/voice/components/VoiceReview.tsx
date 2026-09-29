@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 interface VoiceReviewProps {
   visible: boolean;
@@ -57,8 +57,8 @@ export function VoiceReview({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={[styles.container, { backgroundColor: colors.surfaceElevated }]}
       accessible
       accessibilityLabel="Review your transcription before sending"

@@ -12,7 +12,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -172,8 +172,8 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
       accessibilityViewIsModal
     >
       <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(150)}
+        entering={FadeIn.duration(motion.quick)}
+        exiting={FadeOut.duration(motion.quick)}
         style={{
           flex: 1,
           backgroundColor: colors.scrim,
@@ -190,8 +190,8 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
         {/* Bottom sheet tooltip card */}
         <Animated.View
-          entering={SlideInDown.duration(350).springify()}
-          exiting={SlideOutDown.duration(250)}
+          entering={SlideInDown.duration(motion.moved).springify()}
+          exiting={SlideOutDown.duration(motion.moved)}
           style={{
             backgroundColor: '#1a1a1a',
             borderTopLeftRadius: 24,

@@ -29,6 +29,7 @@ import {
   type StreamSequenceState,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { accountSecurityVerifyPageHref } from '@agiworkforce/cloud-contracts/account-security';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
@@ -420,6 +421,14 @@ function readServerQuotaRecoveries(value: unknown): readonly ServerQuotaRecovery
 function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof ChatApiError) return error.status === 401;
   return false;
+}
+
+function isPasskeyRequiredChatError(error: unknown): boolean {
+  return (
+    error instanceof ChatApiError &&
+    error.status === 403 &&
+    error.code?.toUpperCase() === 'PASSKEY_REQUIRED'
+  );
 }
 
 function readChatApiErrorPayload(
@@ -4193,8 +4202,13 @@ export function useChatStream(
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
         // back in and you retype it.
-        if (isSessionExpiredError(error)) {
+        if (isSessionExpiredError(error) || isPasskeyRequiredChatError(error)) {
           parkUnsentDraft(conversationId, content);
+        }
+        if (isPasskeyRequiredChatError(error)) {
+          window.location.assign(
+            accountSecurityVerifyPageHref(`${window.location.pathname}${window.location.search}`),
+          );
         }
         await handleStreamError(error, {
           assistantMessageId,

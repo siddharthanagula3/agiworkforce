@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useScheduleStore, type Schedule } from '../store';
 import { triggerScheduleNow } from '../service';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
@@ -55,7 +55,7 @@ function formatRecurrence(schedule: Schedule): string {
       if (schedule.scheduledAt) {
         const date = parseValidDate(schedule.scheduledAt);
         if (!date) return `Once at ${time}`;
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const month = date.toLocaleDateString(undefined, { month: 'short' });
         const day = date.getDate();
         return `Once on ${month} ${day} at ${time}`;
       }
@@ -215,7 +215,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300)
+      entering={FadeInDown.duration(motion.moved)
         .delay(index * 60)
         .springify()}
     >
