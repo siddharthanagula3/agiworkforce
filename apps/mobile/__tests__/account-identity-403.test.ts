@@ -40,6 +40,9 @@ function makeResponse(status: number, body: unknown): Response {
     headers: { get: () => null },
     text: jest.fn(async () => JSON.stringify(body)),
     json: jest.fn(async () => body),
+    clone() {
+      return this;
+    },
   } as unknown as Response;
 }
 

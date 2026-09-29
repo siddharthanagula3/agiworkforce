@@ -86,9 +86,10 @@ describe('connectConnector', () => {
       kind: 'oauth-required',
       connectorId: 'linear',
       authorizeUrl: 'https://linear.app/oauth/authorize?client_id=abc&state=xyz',
+      appReturn: false,
     });
     expect(mockGet).toHaveBeenCalledWith(
-      '/api/connectors/oauth/start?connectorId=linear&mode=json',
+      '/api/connectors/oauth/start?connectorId=linear&mode=json&appReturn=1',
     );
   });
 
