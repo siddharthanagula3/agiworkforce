@@ -56,12 +56,14 @@ describe('mobile privacy declarations match what the cloud path actually uploads
     }
   });
 
-  it('marks every collected type as linked, non-tracking, app-functionality only', () => {
+  it('marks every collected type as linked and non-tracking, with product interaction the only analytics type', () => {
     for (const entry of configuredCollected) {
       expect(entry.NSPrivacyCollectedDataTypeLinked).toBe(true);
       expect(entry.NSPrivacyCollectedDataTypeTracking).toBe(false);
       expect(entry.NSPrivacyCollectedDataTypePurposes).toEqual([
-        'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+        entry.NSPrivacyCollectedDataType === 'NSPrivacyCollectedDataTypeProductInteraction'
+          ? 'NSPrivacyCollectedDataTypePurposeAnalytics'
+          : 'NSPrivacyCollectedDataTypePurposeAppFunctionality',
       ]);
     }
   });

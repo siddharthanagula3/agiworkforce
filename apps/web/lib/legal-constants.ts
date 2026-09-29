@@ -76,7 +76,7 @@ export const POLICY_LAST_UPDATED = {
   referralTerms: '2026-09-27',
   accessibility: '2026-09-27',
   euRepresentative: '2026-08-05',
-  mobile: '2026-09-21',
+  mobile: '2026-09-29',
   copyright: '2026-09-27',
   indiaPrivacy: '2026-08-13',
   dataRights: '2026-08-13',

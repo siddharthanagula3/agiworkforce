@@ -9,6 +9,7 @@ import subprocessors_2026_09_21 from './subprocessors/2026-09-21.json';
 import subprocessors_2026_09_22 from './subprocessors/2026-09-22.json';
 import refunds_2026_08_13 from './refunds/2026-08-13.json';
 import accessibility_2026_08_05 from './accessibility/2026-08-05.json';
+import mobile_2026_09_21 from './mobile/2026-09-21.json';
 import copyright_2026_08_06 from './copyright/2026-08-06.json';
 import agentPermissions_2026_09_02 from './agentPermissions/2026-09-02.json';
 import agentPermissions_2026_09_22 from './agentPermissions/2026-09-22.json';
@@ -38,6 +39,9 @@ export const ARCHIVED_POLICY_TEXT = {
   },
   accessibility: {
     '2026-08-05': accessibility_2026_08_05,
+  },
+  mobile: {
+    '2026-09-21': mobile_2026_09_21,
   },
   copyright: {
     '2026-08-06': copyright_2026_08_06,
