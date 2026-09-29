@@ -355,13 +355,44 @@ fn render_triggers_at(
     lines.join("\n")
 }
 
-pub fn render_created_trigger(created: &CreatedTrigger, endpoint: &str) -> String {
+pub fn created_has_secrets(created: &CreatedTrigger) -> bool {
+    created.signing_secret.is_some() || created.verification_code.is_some()
+}
+
+pub fn withhold_secrets(created: &CreatedTrigger) -> CreatedTrigger {
+    CreatedTrigger {
+        signing_secret: None,
+        verification_code: None,
+        ..created.clone()
+    }
+}
+
+pub fn withheld_secrets_notice(trigger_id: &str) -> String {
+    format!(
+        "The signing secret and verification code are shown only once, and only in an interactive terminal, so they were not printed here. \
+To get them, run `agi schedules triggers remove {trigger_id}` in your own terminal and add the trigger again there, \
+or add it from the schedule's triggers on agiworkforce.com, which shows them once."
+    )
+}
+
+pub fn render_created_trigger(
+    created: &CreatedTrigger,
+    endpoint: &str,
+    show_secrets: bool,
+) -> String {
     let mut lines = vec![render_triggers(
         &created.trigger.task_id,
         std::slice::from_ref(&created.trigger),
     )];
-    lines.push("Shown once. Copy what you need now.".to_string());
     lines.push(format!("  Endpoint: {endpoint}"));
+    if !created_has_secrets(created) {
+        return lines.join("\n");
+    }
+    if !show_secrets {
+        lines.push(withheld_secrets_notice(&created.trigger.id));
+        return lines.join("\n");
+    }
+    lines.push("Shown once. Copy what you need now.".to_string());
     if let Some(secret) = created.signing_secret.as_deref() {
         lines.push(format!("  Signing secret: {secret}"));
     }
@@ -371,6 +402,15 @@ pub fn render_created_trigger(created: &CreatedTrigger, endpoint: &str) -> Strin
         ));
     }
     lines.join("\n")
+}
+
+pub fn removal_refusal(trigger_id: &str, interactive: bool) -> Option<String> {
+    (!interactive).then(|| {
+        format!(
+            "Removing a trigger needs a confirmation in an interactive terminal, and --yes does not replace it here. \
+Ask the user to run `agi schedules triggers remove {trigger_id}` in their own terminal."
+        )
+    })
 }
 
 #[cfg(test)]
@@ -574,17 +614,21 @@ mod tests {
         assert!(!rendered.contains("nothing fires"), "{rendered}");
     }
 
-    #[test]
-    fn the_one_time_secrets_are_printed_with_the_full_endpoint() {
-        let created = CreatedTrigger {
+    fn created_with_secrets() -> CreatedTrigger {
+        CreatedTrigger {
             trigger: sample_trigger(),
             verification_code: Some("a1b2c3d4e5f6".to_string()),
             signing_secret: Some("whsec_example".to_string()),
             webhook_path: "/api/webhooks/connectors/0b9f".to_string(),
-        };
+        }
+    }
+
+    #[test]
+    fn a_terminal_sees_the_one_time_secrets_with_the_full_endpoint() {
         let rendered = render_created_trigger(
-            &created,
+            &created_with_secrets(),
             "https://agiworkforce.com/api/webhooks/connectors/0b9f",
+            true,
         );
         assert!(rendered.contains("Shown once"), "{rendered}");
         assert!(
@@ -596,6 +640,51 @@ mod tests {
             "{rendered}"
         );
         assert!(rendered.contains("verify it: a1b2c3d4e5f6"), "{rendered}");
+    }
+
+    #[test]
+    fn output_that_is_not_a_terminal_never_carries_the_secrets() {
+        let created = created_with_secrets();
+        let rendered = render_created_trigger(&created, "https://agiworkforce.com/x", false);
+        assert!(!rendered.contains("whsec_example"), "{rendered}");
+        assert!(!rendered.contains("a1b2c3d4e5f6"), "{rendered}");
+        assert!(
+            rendered.contains("only in an interactive terminal"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("agi schedules triggers remove"),
+            "{rendered}"
+        );
+
+        let wire = serde_json::to_value(withhold_secrets(&created)).expect("serializes");
+        let text = wire.to_string();
+        assert!(!text.contains("whsec_example"), "{text}");
+        assert!(!text.contains("a1b2c3d4e5f6"), "{text}");
+        assert!(wire["signingSecret"].is_null(), "{text}");
+    }
+
+    #[test]
+    fn a_trigger_without_secrets_prints_no_secret_notice() {
+        let created = CreatedTrigger {
+            verification_code: None,
+            signing_secret: None,
+            ..created_with_secrets()
+        };
+        let rendered = render_created_trigger(&created, "https://agiworkforce.com/x", false);
+        assert!(!rendered.contains("interactive terminal"), "{rendered}");
+        assert!(!rendered.contains("Shown once"), "{rendered}");
+    }
+
+    #[test]
+    fn removal_outside_a_terminal_is_refused_even_with_yes() {
+        let refusal = removal_refusal("trig-1", false).expect("refused");
+        assert!(refusal.contains("interactive terminal"), "{refusal}");
+        assert!(
+            refusal.contains("agi schedules triggers remove trig-1"),
+            "{refusal}"
+        );
+        assert!(removal_refusal("trig-1", true).is_none());
     }
 
     #[test]

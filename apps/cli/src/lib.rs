@@ -3702,6 +3702,9 @@ async fn handle_schedule_triggers_command(
         }
     };
     let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
+    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
+        return Err(failed(schedules::ScheduleError::LocalPrivacy));
+    }
 
     match action {
         ScheduleTriggersSubcommand::List {
@@ -3748,9 +3751,20 @@ async fn handle_schedule_triggers_command(
             );
             let created = client.create_trigger(&request).await.map_err(failed)?;
             let endpoint = client.api_url(&created.webhook_path);
+            let show_secrets = io::stdout().is_terminal();
+            let mut value = if show_secrets {
+                serde_json::to_value(&created)?
+            } else {
+                serde_json::to_value(triggers::withhold_secrets(&created))?
+            };
+            if !show_secrets && triggers::created_has_secrets(&created) {
+                value["secretsWithheld"] = serde_json::Value::String(
+                    triggers::withheld_secrets_notice(&created.trigger.id),
+                );
+            }
             render(
-                serde_json::to_value(&created)?,
-                triggers::render_created_trigger(&created, &endpoint),
+                value,
+                triggers::render_created_trigger(&created, &endpoint, show_secrets),
                 *json,
             )
         }
@@ -3779,6 +3793,9 @@ async fn handle_schedule_triggers_command(
             )
         }
         ScheduleTriggersSubcommand::Remove { trigger, yes, json } => {
+            if let Some(refusal) = triggers::removal_refusal(trigger, interactive::can_prompt()) {
+                anyhow::bail!(refusal);
+            }
             if !confirm_destructive(
                 &format!(
                     "Delete trigger {trigger}? Its events stop starting runs of the schedule. \
