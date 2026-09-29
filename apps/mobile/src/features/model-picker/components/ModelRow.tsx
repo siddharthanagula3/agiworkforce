@@ -17,7 +17,8 @@ import {
   useModelInstallStore,
   type ModelInstallJob,
 } from '@/src/features/model-picker/installStore';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
 

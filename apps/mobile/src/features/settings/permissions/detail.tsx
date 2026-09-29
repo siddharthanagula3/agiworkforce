@@ -7,7 +7,8 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import { PERMISSION_REGISTRY, isPermissionGranted } from './registry';
 import {

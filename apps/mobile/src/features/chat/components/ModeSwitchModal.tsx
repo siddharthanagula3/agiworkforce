@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export type AppMode = 'chat' | 'agent' | 'voice' | 'cloud' | 'local';
 

@@ -16,7 +16,8 @@ import {
 
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';

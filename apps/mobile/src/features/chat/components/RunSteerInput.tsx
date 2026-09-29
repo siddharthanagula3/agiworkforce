@@ -4,7 +4,8 @@ import { MAX_CLOUD_AGENT_RUN_STEER_LENGTH } from '@agiworkforce/cloud-contracts'
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { describeCloudRunSteerError, steerCloudRun } from '@/src/features/tasks/cloudRunSteer';
 
 export function RunSteerInput({ runId }: { runId: string }) {

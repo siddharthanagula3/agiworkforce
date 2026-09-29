@@ -3,7 +3,8 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { ListChecks } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const PROMPT_SLOTS = ['p1', 'p2', 'p3', 'p4'] as const;
 

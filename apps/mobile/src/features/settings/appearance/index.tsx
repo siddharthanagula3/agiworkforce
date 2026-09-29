@@ -5,7 +5,8 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { ThemeMode } from '@/stores/settingsStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
 const OPTIONS: Array<{ mode: ThemeMode; label: string; description: string; icon: typeof Sun }> = [

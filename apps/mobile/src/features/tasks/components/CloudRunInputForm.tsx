@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 type PendingInput = NonNullable<CloudAgentRun['pendingInput']>;
 

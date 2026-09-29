@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { translatePlural } from '@/src/i18n/plural';
 import {
   publishFailureMessage,

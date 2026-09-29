@@ -21,7 +21,8 @@ import {
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';

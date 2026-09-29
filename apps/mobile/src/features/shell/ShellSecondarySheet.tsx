@@ -2,7 +2,8 @@ import { Pressable, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface ShellSecondaryControl {
   key: string;

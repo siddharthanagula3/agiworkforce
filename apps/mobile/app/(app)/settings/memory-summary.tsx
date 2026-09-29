@@ -8,7 +8,8 @@ import { summarizeMemoryFacts } from '@/src/features/memory/services/consolidati
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 function formatGeneratedOn(date: Date): string {
   return date.toLocaleDateString(undefined, {

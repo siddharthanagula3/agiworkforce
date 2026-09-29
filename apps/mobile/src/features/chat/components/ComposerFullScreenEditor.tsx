@@ -2,7 +2,8 @@ import { View, TextInput, Modal, Pressable, KeyboardAvoidingView } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SendButton } from './SendButton';

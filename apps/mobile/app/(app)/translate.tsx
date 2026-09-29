@@ -15,7 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   translate,
   translateBackendLabel,

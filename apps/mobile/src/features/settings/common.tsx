@@ -6,7 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useTheme, useThemeColors, cardRadius, typeScale } from '@/src/ui/theme';
+import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export function SettingsScreenShell({

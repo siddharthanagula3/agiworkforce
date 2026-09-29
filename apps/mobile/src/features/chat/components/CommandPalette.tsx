@@ -4,7 +4,8 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export type ChatCommand = '/image' | '/voice' | '/compare' | '/export';
 

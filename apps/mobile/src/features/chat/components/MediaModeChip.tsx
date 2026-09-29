@@ -2,7 +2,8 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Film, Paintbrush, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { MediaMode } from '@/stores/chat/chatViewStore';
 
 export interface MediaModeChipProps {

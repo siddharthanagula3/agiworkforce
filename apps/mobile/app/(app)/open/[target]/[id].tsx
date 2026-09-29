@@ -10,7 +10,8 @@ import {
   productLinkWebFallbackUrl,
 } from '@/src/features/notifications/productLinks';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ProductLinkRoute() {

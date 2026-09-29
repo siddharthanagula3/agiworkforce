@@ -2,7 +2,8 @@ import { StyleSheet, View } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme, zIndex, typeScale } from '@/src/ui/theme';
+import { useTheme, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 // Renders ABOVE the mounted app instead of replacing it. Swapping the tree for
 // a lock screen unmounted the navigator, so every resume through the gate threw

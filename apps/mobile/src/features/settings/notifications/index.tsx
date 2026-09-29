@@ -39,7 +39,8 @@ import {
   type PushPermissionStatus,
 } from '@/services/notifications';
 import { androidChannelVibrates } from '@/services/notificationChannels';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categories';

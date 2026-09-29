@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProvenanceFooterProps {
   provider?: string;

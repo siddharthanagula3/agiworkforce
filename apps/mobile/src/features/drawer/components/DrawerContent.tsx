@@ -34,7 +34,8 @@ import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   executionModeForConversation,

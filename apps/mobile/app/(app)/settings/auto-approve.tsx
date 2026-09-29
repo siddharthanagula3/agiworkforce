@@ -16,7 +16,8 @@ import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { ApprovalHistory } from '@/src/features/settings/tool-approvals/ApprovalHistory';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const POLICY_ICONS: Record<ToolApprovalPolicy, LucideIcon> = {
   ask_every_time: Shield,

@@ -8,7 +8,8 @@ import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, type ColorScheme, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProjectOption {
   id: string;

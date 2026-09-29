@@ -13,7 +13,8 @@ import { useTierStore } from '@/src/features/billing/store';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {

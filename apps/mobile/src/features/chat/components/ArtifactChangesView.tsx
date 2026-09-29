@@ -7,7 +7,8 @@ import {
   type ArtifactChangeUnit,
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { translatePlural } from '@/src/i18n/plural';
 
 interface ArtifactChangesViewProps {

@@ -28,7 +28,8 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 import { useModelStore } from '@/src/features/model-picker/store';

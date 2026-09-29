@@ -3,7 +3,8 @@ import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } f
 import { useSession } from '@clerk/expo';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { requestStepUpGrant, type StepUpChallenge, type StepUpLevel } from '../services/stepUp';

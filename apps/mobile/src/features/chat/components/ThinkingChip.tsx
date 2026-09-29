@@ -3,7 +3,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronRight, Clock, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 
 interface ThinkingChipProps {

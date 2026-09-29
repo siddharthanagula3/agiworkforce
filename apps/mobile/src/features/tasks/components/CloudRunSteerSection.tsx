@@ -10,7 +10,8 @@ import {
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { handOffConversationSend } from '@/src/features/chat/conversationSendHandoff';
 import { describeCloudRunSteerError, steerCloudRun, withdrawCloudRunSteer } from '../cloudRunSteer';
 

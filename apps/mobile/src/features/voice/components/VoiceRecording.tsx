@@ -14,7 +14,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors, motion, typeScale } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {

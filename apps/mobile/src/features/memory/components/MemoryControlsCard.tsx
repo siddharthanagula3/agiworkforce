@@ -2,7 +2,8 @@ import { View } from 'react-native';
 import { Brain, MessageSquareText, Sparkles } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface MemoryControlsCardProps {
   isCloud: boolean;

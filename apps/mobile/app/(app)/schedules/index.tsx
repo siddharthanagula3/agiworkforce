@@ -17,7 +17,8 @@ import {
   type ScheduleTemplate,
 } from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

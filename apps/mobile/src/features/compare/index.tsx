@@ -26,7 +26,8 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getCloudModelsForTier, getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getPlanMaxConcurrentTurns, requireProviderDefaultModel } from '@agiworkforce/types';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';

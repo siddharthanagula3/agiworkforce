@@ -13,7 +13,8 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { buildLocalDataExportSnapshot } from './localDataSnapshot';
 import { syncLocalConversationsToCloud } from './localCloudSyncService';
 import {

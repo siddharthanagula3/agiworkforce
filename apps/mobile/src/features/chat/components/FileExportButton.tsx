@@ -6,7 +6,8 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 
 import { Text } from '@/components/ui/text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
 interface FileExportButtonProps {

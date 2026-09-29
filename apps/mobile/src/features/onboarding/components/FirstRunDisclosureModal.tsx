@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors, elevation, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors, elevation } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 

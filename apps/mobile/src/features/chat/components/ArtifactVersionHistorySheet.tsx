@@ -3,7 +3,8 @@ import { FlatList, Modal, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   summarizeArtifactVersions,
   type VersionedContent,

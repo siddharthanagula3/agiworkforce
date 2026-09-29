@@ -85,6 +85,8 @@ export function useConversationActions(): ConversationActions {
   const markConversationUnread = useChatStore((s) => s.markConversationUnread);
   const moveConversationToProject = useChatStore((s) => s.moveConversationToProject);
   const loadMessages = useChatStore((s) => s.loadMessages);
+  const localProjects = useProjectStore((s) => s.projects);
+  const cloudProjects = useCloudProjectStore((s) => s.projects);
 
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -181,11 +183,10 @@ export function useConversationActions(): ConversationActions {
         });
 
       const projects = isCloudConversation
-        ? useCloudProjectStore
-            .getState()
-            .projects.filter((p) => p.deletedAt === null && !p.isArchived)
+        ? cloudProjects
+            .filter((p) => p.deletedAt === null && !p.isArchived)
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        : useProjectStore.getState().projects;
+        : localProjects;
 
       const move = guard(() => {
         const current = conversation.projectId ?? null;
@@ -257,7 +258,9 @@ export function useConversationActions(): ConversationActions {
     },
     [
       cloudConversations,
+      cloudProjects,
       conversations,
+      localProjects,
       deleteConversation,
       loadMessages,
       markConversationRead,

@@ -4,7 +4,8 @@ import { EyeOff, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export const TEMPORARY_CHAT_CLOUD_EXPLAINER =
   "This chat won't appear in your history or search, and it won't use or update memory. Anything kept to run it, including files you attach, is deleted after 30 days.";

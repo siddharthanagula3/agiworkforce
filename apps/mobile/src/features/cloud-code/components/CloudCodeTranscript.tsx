@@ -13,7 +13,8 @@ import {
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
-import { radii, useThemeColors, typeScale } from '@/src/ui/theme';
+import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const EXIT_CODE_OK = 0;
 const CHEVRON_SIZE = 14;

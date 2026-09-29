@@ -13,7 +13,8 @@ import {
   restoreReplacedMemory,
   type MemoryConflict,
 } from '@/src/features/memory/services/memoryConflicts';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const LOAD_FAILED_MESSAGE = 'Could not load replaced memories. Try again later.';
 const RESTORE_FAILED_MESSAGE = 'Could not switch back to that memory. Try again.';

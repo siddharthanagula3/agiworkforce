@@ -154,7 +154,8 @@ import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
-import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';

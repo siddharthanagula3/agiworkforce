@@ -21,7 +21,8 @@ import {
 import { validateEmail } from '@agiworkforce/utils';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
 import {
   POST_AUTH_INTENT_PARAM,

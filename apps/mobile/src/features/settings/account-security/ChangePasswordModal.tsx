@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const MINIMUM_PASSWORD_LENGTH = 8;

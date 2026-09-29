@@ -3,7 +3,8 @@ import { View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function StorageScopeNotice() {
   const colors = useThemeColors();

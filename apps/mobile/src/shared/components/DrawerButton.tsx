@@ -2,7 +2,8 @@ import { View } from 'react-native';
 import { Menu } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useNotificationCenter } from '@/services/notifications';
 
 const BUTTON_SIZE = 36;

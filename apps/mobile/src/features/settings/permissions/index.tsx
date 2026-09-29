@@ -7,7 +7,8 @@ import { ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { SettingsScreenShell } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import {
   PERMISSION_REGISTRY,

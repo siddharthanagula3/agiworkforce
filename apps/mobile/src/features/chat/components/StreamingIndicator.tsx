@@ -1,7 +1,8 @@
 import { View } from 'react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function StreamingIndicator({ label }: { label?: string }) {
   const colors = useThemeColors();

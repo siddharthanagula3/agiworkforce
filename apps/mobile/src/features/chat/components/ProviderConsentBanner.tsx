@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react';
 import { Alert, View, Pressable } from 'react-native';
 import { Globe, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { setChineseHqProviderConsent } from '@/services/providerConsent';
 import { NamedProviderConsentModal } from '@/src/features/settings/cloud-privacy/NamedProviderConsentModal';
 import {

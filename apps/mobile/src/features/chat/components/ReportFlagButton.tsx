@@ -27,7 +27,8 @@ import {
 } from 'react-native';
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   openSupportEmail,
   saveContentReport,

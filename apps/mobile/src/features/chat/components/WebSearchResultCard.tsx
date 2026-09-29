@@ -1,7 +1,8 @@
 import { Alert, View, Pressable } from 'react-native';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';

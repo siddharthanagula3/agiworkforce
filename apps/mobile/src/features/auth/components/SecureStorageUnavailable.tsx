@@ -2,7 +2,8 @@ import { StyleSheet, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { ShieldAlert } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 // Shown when the encrypted store cannot be opened. Running on the unavailable
 // store instead reads every key as empty and drops every write, which reads to

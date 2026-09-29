@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { radii, useThemeColors, typeScale } from '@/src/ui/theme';
+import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   clarifyCardAcceptsResponse,
   clarifyResponseDeadlineMs,

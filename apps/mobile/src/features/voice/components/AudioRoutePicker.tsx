@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Bluetooth, Check, Headphones, Volume2, Waves } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   AUDIO_ROUTES,

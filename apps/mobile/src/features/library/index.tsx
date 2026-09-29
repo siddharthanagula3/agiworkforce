@@ -25,7 +25,8 @@ import {
 import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors, zIndex, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';

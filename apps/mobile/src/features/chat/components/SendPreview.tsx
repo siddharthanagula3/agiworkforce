@@ -4,7 +4,8 @@ import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-nat
 import type { ReactElement } from 'react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;

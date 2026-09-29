@@ -82,7 +82,8 @@ import { ReportFlagButton } from './ReportFlagButton';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, radii, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,

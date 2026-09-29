@@ -25,7 +25,8 @@ import {
   FlashlightOff,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';

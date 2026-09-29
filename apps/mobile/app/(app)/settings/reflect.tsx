@@ -8,7 +8,8 @@ import { ArrowLeft, AlertCircle, Brain } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

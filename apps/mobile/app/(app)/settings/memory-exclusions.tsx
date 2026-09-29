@@ -10,7 +10,8 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
 
 const PREFERENCE_NAMESPACE = 'memory';

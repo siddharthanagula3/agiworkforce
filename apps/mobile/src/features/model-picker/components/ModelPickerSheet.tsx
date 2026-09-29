@@ -39,7 +39,8 @@ import {
   type AutoModeDef,
   type ModelDef,
 } from '@/src/features/model-picker/service';
-import { useThemeColors, sheetRadius, typeScale } from '@/src/ui/theme';
+import { useThemeColors, sheetRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',

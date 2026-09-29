@@ -14,7 +14,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   isResumable,

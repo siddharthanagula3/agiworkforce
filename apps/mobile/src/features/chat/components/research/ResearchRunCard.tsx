@@ -19,7 +19,8 @@ import {
 } from 'lucide-react-native';
 import type { ResearchStep } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { radii, useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { radii, useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   formatResearchElapsed,
   isResearchRunActive,

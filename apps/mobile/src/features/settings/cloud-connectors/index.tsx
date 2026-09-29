@@ -13,7 +13,8 @@ import { toolApprovalPolicyOption } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
 import {
   CloudAccountRequired,

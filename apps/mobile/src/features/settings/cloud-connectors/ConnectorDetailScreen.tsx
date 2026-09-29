@@ -66,7 +66,8 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { cardRadius, useThemeColors, typeScale } from '@/src/ui/theme';
+import { cardRadius, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { ConnectorApiKeySheet } from './ConnectorApiKeySheet';
 import { connectorFailureMessage } from './connectorFailureMessage';
 import { ConnectorLogo } from './ConnectorLogo';

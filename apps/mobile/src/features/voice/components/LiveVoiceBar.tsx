@@ -11,7 +11,8 @@ import type {
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';

@@ -13,7 +13,8 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { memoryFactOrigin } from '@/src/features/memory/services/consolidation';
 

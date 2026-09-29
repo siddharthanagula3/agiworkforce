@@ -7,7 +7,8 @@ import { MathBlock } from './MathBlock';
 import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
-import { colors as defaultColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,

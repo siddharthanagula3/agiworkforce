@@ -7,7 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
-import { useTheme, typeScale } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type FeedbackType = 'bug' | 'feature' | 'general';

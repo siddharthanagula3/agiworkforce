@@ -12,7 +12,8 @@ import {
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 
 interface InlineArtifactCardProps {

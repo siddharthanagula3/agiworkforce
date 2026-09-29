@@ -3,7 +3,8 @@ import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } f
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';

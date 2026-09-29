@@ -27,7 +27,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { useThemeColors, motion, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {

@@ -11,7 +11,8 @@ import {
   type ToolApprovalStake,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { RiskLevel } from '@/types/chat';
 import { translatePlural } from '@/src/i18n/plural';
 

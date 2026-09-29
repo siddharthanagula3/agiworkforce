@@ -4,7 +4,8 @@ import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const PRIVACY_NAMESPACE = 'privacy';
 const OPT_OUT_KEY = 'keepOutOfProviderTraining';

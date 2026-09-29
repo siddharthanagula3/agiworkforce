@@ -12,7 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useTheme, type ColorScheme, motion, typeScale } from '@/src/ui/theme';
+import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   assertDownloadAllowed,
   downloadModel,

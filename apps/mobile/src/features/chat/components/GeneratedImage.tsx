@@ -5,7 +5,8 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useThemeColors, zIndex, typeScale } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 

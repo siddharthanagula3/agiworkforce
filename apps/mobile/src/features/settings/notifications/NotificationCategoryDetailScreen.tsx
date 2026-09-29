@@ -8,7 +8,8 @@ import {
   SettingsScreenShell,
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { isNotificationCategory, NOTIFICATION_CATEGORY_COPY } from './categories';
 import { View } from 'react-native';
 

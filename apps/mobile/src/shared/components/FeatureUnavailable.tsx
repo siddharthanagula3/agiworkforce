@@ -3,7 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Sparkles, ArrowLeft, Lock, CreditCard, ShieldOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, typeScale } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export type UnavailableReason = 'unsupported' | 'permission' | 'entitlement' | 'policy';
 

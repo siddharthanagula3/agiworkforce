@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronDown, ChevronRight, List } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { radii, useThemeColors, typeScale } from '@/src/ui/theme';
+import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { extractReportSections } from '@/src/features/research/reportSections';
 
 const MIN_SECTIONS = 3;
