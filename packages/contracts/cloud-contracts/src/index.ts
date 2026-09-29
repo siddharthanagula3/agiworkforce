@@ -69,4 +69,5 @@ export * from './free-quota';
 export * from './account-deletion';
 export * from './terms-acceptance';
 export * from './device-authorization';
+export * from './notifications';
 export * from './mobile-push';

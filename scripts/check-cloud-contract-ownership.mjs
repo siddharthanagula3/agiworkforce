@@ -74,6 +74,7 @@ const cloudModules = [
   'account-deletion',
   'terms-acceptance',
   'device-authorization',
+  'notifications',
   'mobile-push',
 ];
 
