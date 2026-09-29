@@ -247,6 +247,33 @@ describe('project sync, cursor', () => {
     expect(ids).toContain('p1');
     expect(ids).toContain('p2');
   });
+
+  it('does not replace a newer fetched project with an older in-flight pull', async () => {
+    seedCloudProject('p-fetched', 'Fetched version');
+    useCloudProjectStore.getState().upsertCloudProject({
+      ...useCloudProjectStore.getState().projects[0]!,
+      serverVersion: '42',
+    });
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/projects/sync')) {
+        return {
+          projects: [projectPullItem('p-fetched', '41', { name: 'Older pull version' })],
+          cursor: '41',
+          hasMore: false,
+        } as never;
+      }
+      if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudProjectStore.getState().projects[0]).toMatchObject({
+      name: 'Fetched version',
+      serverVersion: '42',
+    });
+    expect(useProjectSyncStateStore.getState().projectCursor).toBe('41');
+  });
 });
 
 describe('project sync, tombstone application', () => {
@@ -285,9 +312,74 @@ describe('project sync, tombstone application', () => {
 
     expect(useCloudProjectStore.getState().projects.find((p) => p.id === 'p-keep')).toBeDefined();
   });
+
+  it('ignores an older tombstone for a newer fetched project', async () => {
+    seedCloudProject('p-live', 'Live project');
+    useCloudProjectStore.getState().upsertCloudProject({
+      ...useCloudProjectStore.getState().projects[0]!,
+      serverVersion: '42',
+    });
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/projects/sync')) {
+        return {
+          projects: [projectPullItem('p-live', '41', { deletedAt: T })],
+          cursor: '41',
+          hasMore: false,
+        } as never;
+      }
+      if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudProjectStore.getState().projects[0]).toMatchObject({
+      name: 'Live project',
+      serverVersion: '42',
+      deletedAt: null,
+    });
+  });
 });
 
 describe('project sync, push', () => {
+  it('keeps the newer base version of a dirty project after a stale pull', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'Local edit');
+    useCloudProjectStore.getState().upsertCloudProject({
+      ...useCloudProjectStore.getState().projects[0]!,
+      serverVersion: '42',
+    });
+    markProjectForSync(PUSH_PROJECT_ID);
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/projects/sync')) {
+        return {
+          projects: [projectPullItem(PUSH_PROJECT_ID, '41', { name: 'Older server copy' })],
+          cursor: '41',
+          hasMore: false,
+        } as never;
+      }
+      if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      return emptyChatPull() as never;
+    });
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        return { applied: [], conflicts: [], cursor: '0' } as never;
+      }
+      if ((path as string) === '/api/memory/sync') return { applied: [], cursor: '0' } as never;
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudProjectStore.getState().projects[0]).toMatchObject({
+      name: 'Local edit',
+      serverVersion: '42',
+    });
+    const projectPush = mockPost.mock.calls.find((call) => call[0] === PROJECTS_SYNC_PATH);
+    expect(projectPush?.[1]).toMatchObject({
+      projects: [expect.objectContaining({ baseVersion: '42' })],
+    });
+  });
+
   it('pushes dirty cloud projects and clears the dirty queue on ack', async () => {
     seedCloudProject(PUSH_PROJECT_ID, 'push me');
     markProjectForSync(PUSH_PROJECT_ID);

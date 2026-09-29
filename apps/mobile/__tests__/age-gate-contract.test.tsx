@@ -8,6 +8,10 @@ import {
   type AgeGateRecord,
 } from '@/src/features/auth/services/ageGate';
 import AgeGateScreen, { resolveReturnPath } from '@/app/(public)/age-gate';
+import {
+  beginCloudPostAuthIntent,
+  clearPostAuthIntent,
+} from '@/src/features/auth/services/postAuthIntent';
 import ParentalControlsScreen from '@/src/features/settings/parental-controls';
 
 const mockStore = new Map<string, string>();
@@ -99,6 +103,7 @@ const FILES = sourceFiles();
 describe('what the age gate keeps about a person', () => {
   beforeEach(() => {
     clearAgeGate();
+    clearPostAuthIntent();
   });
 
   it('keeps the answer to the only question it asked and nothing finer', () => {
@@ -145,6 +150,20 @@ describe('the age screen when the answer does not work', () => {
     fireEvent.press(screen.getByLabelText('Go back'));
 
     expect(mockReplace).toHaveBeenCalledWith('/(app)');
+  });
+
+  it('returns to the requested Cloud sign-in after an adult confirms age', () => {
+    beginCloudPostAuthIntent('cloud-schedules');
+    mockSearchParams = { returnTo: '/(auth)/login' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '21');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-schedules' },
+    });
   });
 
   it('returns to parental controls when reviewing device age settings', () => {

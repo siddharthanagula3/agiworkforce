@@ -35,8 +35,10 @@ jest.mock('@/stores/chat/chatMessageStore', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: mockAppMode }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: mockAppMode }),
+    { getState: () => ({ appMode: mockAppMode }) },
+  ),
 }));
 
 jest.mock('@/src/features/waitlist/store', () => ({
@@ -101,6 +103,11 @@ jest.mock('@/src/ui/theme', () => ({
 }));
 
 import DataControlsScreen from '@/src/features/settings/data-controls';
+import { syncLocalConversationsToCloud } from '@/src/features/settings/data-controls/localCloudSyncService';
+import {
+  activateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '@/src/features/auth/services/cloudAccountSession';
 import {
   archiveAllConversations,
   deleteAllArchivedConversations,
@@ -130,6 +137,8 @@ function pressAlertButton(text: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('account-a');
   alertCalls.length = 0;
   mockAppMode = 'cloud';
   mockCloudUnlocked = true;
@@ -146,6 +155,43 @@ afterEach(() => {
 });
 
 describe('Data controls, Chat history bulk actions', () => {
+  it('keeps Cloud export and deletion discoverable without bypassing the account flow', () => {
+    const screen = render(<DataControlsScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Export Cloud data' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Delete account' }));
+
+    expect(mockPush).toHaveBeenNthCalledWith(1, '/(app)/settings/cloud-account');
+    expect(mockPush).toHaveBeenNthCalledWith(2, '/(app)/settings/cloud-account');
+    expect(alertCalls).toHaveLength(0);
+  });
+
+  it('does not show the previous account’s sync result after an account switch', async () => {
+    activateCloudAccount('account-a');
+    let resolveSync!: (result: {
+      conversationsSynced: number;
+      messagesSynced: number;
+      errors: string[];
+    }) => void;
+    (syncLocalConversationsToCloud as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+    );
+    const { getByTestId } = render(<DataControlsScreen />);
+
+    fireEvent.press(getByTestId('sync-to-cloud-button'));
+    pressAlertButton('Sync to Cloud');
+    activateCloudAccount('account-b');
+    await act(async () => {
+      resolveSync({ conversationsSynced: 1, messagesSynced: 2, errors: [] });
+    });
+
+    expect(alertCalls.some((call) => call.title === 'Sync complete')).toBe(false);
+    expect(alertCalls.some((call) => call.title === 'Sync completed with errors')).toBe(false);
+  });
+
   it('posts action "archive_all" only after both confirmation steps', async () => {
     mockPost.mockResolvedValue({ success: true, action: 'archive_all', affectedCount: 3 });
     const { getByTestId } = render(<DataControlsScreen />);
@@ -249,6 +295,50 @@ describe('Data controls, Chat history bulk actions', () => {
 
     expect(mockPost).not.toHaveBeenCalled();
     expect(alertCalls.at(-1)?.title).toBe('Chat is set to Local Mode');
+  });
+
+  it('does not run a confirmed action after the cloud account changes', () => {
+    const { getByTestId } = render(<DataControlsScreen />);
+
+    fireEvent.press(getByTestId('delete-all-chats-button'));
+    pressAlertButton('Delete all');
+    activateCloudAccount('account-b');
+    pressAlertButton('Yes, delete all chats');
+
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('does not run a confirmed action after switching to Local Mode', () => {
+    const { getByTestId } = render(<DataControlsScreen />);
+
+    fireEvent.press(getByTestId('archive-all-chats-button'));
+    pressAlertButton('Archive all');
+    mockAppMode = 'local';
+    pressAlertButton('Yes, archive all');
+
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('does not refresh or report an old account action after an account switch', async () => {
+    let resolveAction!: (result: unknown) => void;
+    mockPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAction = resolve;
+        }),
+    );
+    const { getByTestId } = render(<DataControlsScreen />);
+
+    fireEvent.press(getByTestId('archive-all-chats-button'));
+    pressAlertButton('Archive all');
+    pressAlertButton('Yes, archive all');
+    activateCloudAccount('account-b');
+    await act(async () => {
+      resolveAction({ success: true, action: 'archive_all', affectedCount: 3 });
+    });
+
+    expect(mockLoadConversations).not.toHaveBeenCalled();
+    expect(alertCalls.some((call) => call.title === 'Chats archived')).toBe(false);
   });
 
   it('links to the archived chats screen', () => {

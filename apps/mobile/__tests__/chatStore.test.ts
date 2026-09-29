@@ -127,11 +127,11 @@ import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getModelMetadataById, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import {
   SYNTHETIC_IMAGE_MODEL_ID,
   requireAutoMode,
   requireLocalModel,
+  requireFreeMobileCloudModel,
   requireMobileCloudModel,
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
@@ -242,7 +242,11 @@ function resetStore() {
 const CONV_ID = 'test-conv-123';
 const MODEL = 'fixture-model';
 const LOCAL_MODEL = requireLocalModel().id;
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
+const SEARCH_MODEL = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.search === true,
+  'search-capable Mobile Cloud model',
+).id;
 const SEARCH_UNSUPPORTED_MODEL = requireMobileCloudModel(
   (model) => getModelMetadataById(model.id)?.capabilities.search !== true,
   'Mobile Cloud model without search support',
@@ -353,7 +357,8 @@ describe('chatStore, streaming state', () => {
 
     it('automatically sends web_search:true when the Cloud route supports search', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useChatStore.setState({
         features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
       });
@@ -371,7 +376,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'what is the weather today', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'what is the weather today', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);
@@ -380,7 +385,8 @@ describe('chatStore, streaming state', () => {
 
     it('keeps ambient web search optional for an ordinary Cloud turn', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useChatStore.setState({
         features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
       });
@@ -398,7 +404,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'help me outline a short note', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'help me outline a short note', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);
@@ -513,7 +519,8 @@ describe('chatStore, streaming state', () => {
 
     it('still requests web search when no capability handshake has been received', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useTierStore.setState({
         grantedCapabilities: [],
         capabilityHandshakeReceived: false,
@@ -529,7 +536,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'current news', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'current news', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);

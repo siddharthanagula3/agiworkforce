@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockInsetBottom = 34;
+let mockOwnerId = 'user_library_qa';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -104,14 +106,16 @@ jest.mock('../src/features/artifacts/store', () => ({
 
 jest.mock('../src/features/auth/store', () => ({
   useAuthStore: (selector: (state: { clerkUserId: string }) => unknown) =>
-    selector({ clerkUserId: 'user_library_qa' }),
+    selector({ clerkUserId: mockOwnerId }),
 }));
 
 jest.mock('@/services/api', () => ({ api: { get: jest.fn(), delete: jest.fn() } }));
 
 jest.mock('../src/features/auth/services/accountScopedUiState', () => ({
-  captureAccountScopedUiState: () => ({ scope: 'local' }),
-  isAccountScopedUiStateOwned: () => true,
+  captureAccountScopedUiState: (scope: 'local' | 'cloud') =>
+    scope === 'local' ? { scope } : { scope, account: { ownerId: mockOwnerId } },
+  isAccountScopedUiStateOwned: (state: { scope: string; account?: { ownerId: string } } | null) =>
+    Boolean(state && (state.scope === 'local' || state.account?.ownerId === mockOwnerId)),
 }));
 
 jest.mock('../src/features/image/hooks/useGeneratedImageSource', () => ({
@@ -125,7 +129,7 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 import { api } from '@/services/api';
 import { LibraryScreen } from '../src/features/library';
 
-const mockApi = api as unknown as { get: jest.Mock };
+const mockApi = api as unknown as { get: jest.Mock; delete: jest.Mock };
 
 const HOSTED_DOCUMENT = {
   id: '22222222-2222-4222-8222-222222222222',
@@ -160,6 +164,8 @@ function testIDsInOrder(root: ReactTestInstance): string[] {
 describe('Library bottom-anchored search', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOwnerId = 'user_library_qa';
+    mockApi.delete.mockResolvedValue({ success: true });
     mockApi.get.mockImplementation(async (path: string) => {
       const query = new URL(`http://localhost${path}`).searchParams.get('q');
       return {
@@ -204,5 +210,121 @@ describe('Library bottom-anchored search', () => {
     await waitFor(() => {
       expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
     });
+  });
+
+  it('requests the selected sort order from hosted Library', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<LibraryScreen />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy(),
+    );
+
+    for (const [label, sort] of [
+      ['Oldest first', 'oldest'],
+      ['Type', 'type'],
+    ]) {
+      fireEvent.press(screen.getByLabelText('Library options'));
+      const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
+      act(() => menu.find((option) => option.text === 'Sort saved files')?.onPress?.());
+      const sortOptions = alert.mock.calls.at(-1)?.[2] as Array<{
+        text: string;
+        onPress?: () => void;
+      }>;
+      act(() => sortOptions.find((option) => option.text === label)?.onPress?.());
+      await waitFor(() =>
+        expect(mockApi.get).toHaveBeenCalledWith(expect.stringContaining(`sort=${sort}`)),
+      );
+    }
+
+    alert.mockRestore();
+  });
+
+  it('selects loaded saved files and deletes only after server confirmation', async () => {
+    const secondDocument = {
+      ...HOSTED_DOCUMENT,
+      id: '33333333-3333-4333-8333-333333333333',
+      file_name: 'second-plan.pdf',
+    };
+    mockApi.get.mockResolvedValue({
+      items: [HOSTED_DOCUMENT, secondDocument],
+      has_more: false,
+      next_offset: null,
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<LibraryScreen />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('Library options'));
+    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
+    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    fireEvent.press(screen.getByTestId('library-select-all-shown'));
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    expect(screen.getByTestId('library-share-selected').props.accessibilityState.disabled).toBe(
+      true,
+    );
+    fireEvent.press(screen.getByTestId('library-delete-selected'));
+    expect(mockApi.delete).not.toHaveBeenCalled();
+    const confirmation = alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => confirmation.find((option) => option.text === 'Delete')?.onPress?.());
+
+    await waitFor(() => expect(mockApi.delete).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('library-selection-actions')).toBeNull());
+    expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    expect(screen.queryByText('second-plan.pdf')).toBeNull();
+    alert.mockRestore();
+  });
+
+  it('leaves a failed deletion selected for retry', async () => {
+    mockApi.delete.mockResolvedValue({ success: false });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<LibraryScreen />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('Library options'));
+    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
+    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    fireEvent.press(screen.getByLabelText('Select launch-plan.pdf'));
+    expect(screen.getByTestId('library-share-selected').props.accessibilityState.disabled).toBe(
+      false,
+    );
+    fireEvent.press(screen.getByTestId('library-delete-selected'));
+    const confirmation = alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => confirmation.find((option) => option.text === 'Delete')?.onPress?.());
+
+    await waitFor(() => expect(mockApi.delete).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeTruthy());
+    expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy();
+    expect(alert).toHaveBeenCalledWith('Some files could not be deleted', 'Try again.');
+    alert.mockRestore();
+  });
+
+  it('closes selection when the signed-in account changes', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<LibraryScreen />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('Library options'));
+    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
+    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    fireEvent.press(screen.getByLabelText('Select launch-plan.pdf'));
+    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    mockOwnerId = 'another-account';
+    screen.rerender(<LibraryScreen />);
+    expect(screen.queryByTestId('library-selection-actions')).toBeNull();
+    expect(mockApi.delete).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 });

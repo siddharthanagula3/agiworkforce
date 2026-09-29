@@ -423,7 +423,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
         </View>
         <View
           accessibilityHint="Opens the model picker"
-          accessibilityLabel="Model: Fixture Model, reasoning effort Medium"
+          accessibilityLabel="Model: Fixture Model, reasoning effort Balanced"
           accessibilityRole="button"
           accessibilityState={
             {
@@ -497,7 +497,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
               }
             }
           >
-            Medium
+            Balanced
           </Text>
         </View>
         <View
