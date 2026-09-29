@@ -34,10 +34,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Speech language setting reaches the voice companion, but composer dictation starts capture without it and always uses the device locale. | handler |
+| mobile | partial | codex: apply post-codex/w-connect-S53.01-S49.03-skills-speech-held.patch together with w-connect-S49.03-speech-language-free.patch (integration base); both must land together | handler |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:183-183`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1134-1134`, `apps/mobile/src/features/voice/services/voice.ts:45-45`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S49.05: Final transcript.
 
@@ -84,12 +84,9 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, 
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Audio files can be transcribed only through the iOS Shortcuts/Siri "Transcribe with AGI" intent; there is no in-app audio picker and nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/TranscribeIntent.swift:5-5`, `apps/mobile/app/(app)/voice.tsx:192-192`, `apps/mobile/src/features/voice/services/voiceInput.ts:431-431`
 
 ## S49.09: Batch transcription.
 
@@ -132,18 +129,15 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, 
 ## S49.19: Recording-duration display.
 
 - Done when: While recording, the elapsed duration is shown.
-- Wave: 2
+- Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | A RecordingOverlay with a duration readout exists but is not mounted anywhere; the composer shows only a waveform while recording. | mount |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`
 
 ## S49.25: Transcript export.
 

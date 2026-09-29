@@ -28,18 +28,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S48.11: Pause/resume.
-
-- Done when: The user can pause the whole voice conversation (mic and assistant) and resume it later without ending it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mute (live bar and companion) only stops listening; there is no pause that holds a spoken reply and resumes it. | ui |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
-
 ## S48.12: Push-to-talk.
 
 - Done when: A push-to-talk mode records only while a key or button is held and sends on release.
@@ -83,22 +71,7 @@ Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, 
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS-only route choice (Automatic, Speaker, Bluetooth, Headset) steers input and output classes; no per-device microphone list, nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:48-48`, `apps/mobile/src/features/voice/services/audioRoute.ts:66-66`
-
-## S48.19: Output-device selection.
-
-- Done when: The user can choose which speaker (output device) voice plays through.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Route picker (Speaker, Bluetooth, Headset) is iOS only; Android has no output choice. | ui |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:221-221`, `apps/mobile/src/features/voice/services/audioRoute.ts:60-60`
 
 ## S48.20: Speaker/Bluetooth routing.
 
@@ -107,21 +80,6 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:221-221`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Speaker, Bluetooth and headset routing works on iOS only; add Android audio routing. | ui |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:48-48`, `apps/mobile/src/features/voice/services/audioRoute.ts:29-29`
-
-## S48.26: View tool results during Voice.
-
-- Done when: Tool activity and results from a voice turn are viewable during the conversation.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only "Working on your request" is shown while a delegated tool runs; no tool name or result. | ui |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`
 
 ## S48.28: Open a generated document from Voice.
 
@@ -142,9 +100,6 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | The turn-based inline voice bar has an attach button, but it closes voice before opening the attach sheet; nothing can be attached while voice continues. | handler |
-
-Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `apps/mobile/app/(app)/chat/[id].tsx:1028-1028`
 
 ## S48.40: Remote coding-session voice control.
 
