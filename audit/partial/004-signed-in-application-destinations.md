@@ -206,7 +206,7 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No image studio screen exists on mobile (only inline image generation in chat and the Library). | ui |
+| mobile | partial | On mobile, opening a generated or library image offers Edit with a brush selection (size slider, undo/redo) plus copy, save, share and delete (deletes the source conversation); no separate image studio screen required. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
