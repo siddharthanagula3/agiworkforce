@@ -21,6 +21,7 @@ export interface ConversationMenuAction {
   key: string;
   label: string;
   destructive?: boolean;
+  selected?: boolean;
   run: () => void;
 }
 
