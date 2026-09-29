@@ -15,7 +15,7 @@ import {
 
 export type { PreviewableKind } from './sandboxedArtifactHtml';
 
-import { MERMAID_CDN_ORIGIN, isAllowedPreviewNavigation } from './previewNavigationPolicy';
+import { isAllowedPreviewNavigation } from './previewNavigationPolicy';
 
 export interface SafeArtifactPreviewProps {
   content: string;
@@ -106,7 +106,7 @@ export function SafeArtifactPreview({
       key={attempt}
       source={{ html }}
       style={style}
-      originWhitelist={isMermaid ? [`${MERMAID_CDN_ORIGIN}/*`] : []}
+      originWhitelist={['*']}
       javaScriptEnabled={isMermaid || runsScripts}
       domStorageEnabled={false}
       incognito={!isMermaid}
