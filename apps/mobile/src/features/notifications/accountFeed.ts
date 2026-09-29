@@ -1,32 +1,25 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 import {
-  isNotificationCategory,
-  isNotificationSeverity,
   isProductLinkId,
   parseProductLinkPath,
   type NotificationFeedItem,
   type NotificationFeedResponse,
 } from '@agiworkforce/types';
+import {
+  NOTIFICATIONS_PATH,
+  NotificationFeedItemSchema,
+  type NotificationMarkReadRequest,
+} from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { API_URL } from '@/lib/constants';
 import { nativeRouteForProductLink } from './productLinks';
 
-export const ACCOUNT_NOTIFICATIONS_PATH = '/api/notifications';
+export const ACCOUNT_NOTIFICATIONS_PATH = NOTIFICATIONS_PATH;
 const PAGE_SIZE = 30;
 
 function isFeedItem(value: unknown): value is NotificationFeedItem {
-  const item = value as NotificationFeedItem | null;
-  return (
-    typeof item?.id === 'string' &&
-    isNotificationCategory(item.category) &&
-    isNotificationSeverity(item.severity) &&
-    typeof item.title === 'string' &&
-    typeof item.message === 'string' &&
-    (item.href === null || typeof item.href === 'string') &&
-    typeof item.read === 'boolean' &&
-    typeof item.createdAt === 'string'
-  );
+  return NotificationFeedItemSchema.safeParse(value).success;
 }
 
 export async function fetchAccountNotifications(
@@ -48,7 +41,7 @@ export async function fetchAccountNotifications(
 }
 
 export async function markAccountNotificationsRead(
-  selection: { ids: string[] } | { all: true },
+  selection: NotificationMarkReadRequest,
 ): Promise<void> {
   await api.patch(ACCOUNT_NOTIFICATIONS_PATH, selection);
 }
