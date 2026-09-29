@@ -213,7 +213,7 @@ export const PROVIDER_BRANCH_ALLOWLIST = new Map([
     'the transcription route refuses a non-OpenAI default model instead of asking whether the adapter transcribes',
   ],
   [
-    'apps/web/app/api/media/image/generate/route.ts',
+    'apps/web/app/api/media/image/lib/managed-image-generation.ts',
     'narrows the request to two vendors by name rather than by declared image capability',
   ],
   [
