@@ -2109,6 +2109,13 @@ enum MarketplaceSubcommand {
     Sources,
     /// Remove a marketplace from your account by the id `agi marketplace sources` prints.
     Remove { id: String },
+    /// List the plugins a marketplace on your account offers.
+    Browse {
+        /// Marketplace id or name from `agi marketplace sources`. Omit for every marketplace.
+        source: Option<String>,
+    },
+    /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
+    Get { reference: String },
     /// Search the remote plugin marketplace.
     Search {
         /// Search query.
@@ -6408,6 +6415,99 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
                         println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Browse { source } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let chosen: Vec<&cloud::marketplaces::MarketplaceSource> = sources
+                            .iter()
+                            .filter(|candidate| {
+                                source.as_deref().is_none_or(|reference| {
+                                    cloud::marketplaces::source_matches(candidate, reference)
+                                })
+                            })
+                            .collect();
+                        if chosen.is_empty() {
+                            println!("{}", cloud::marketplaces::render(&sources));
+                            if source.is_some() {
+                                anyhow::bail!("No marketplace on your account matches that name.");
+                            }
+                            return Ok(());
+                        }
+                        let blocks: Vec<String> = chosen
+                            .into_iter()
+                            .map(|candidate| {
+                                let own: Vec<cloud::marketplaces::MarketplaceEntry> = entries
+                                    .iter()
+                                    .filter(|entry| entry.source_id == candidate.id)
+                                    .cloned()
+                                    .collect();
+                                cloud::marketplaces::render_entries(candidate, &own)
+                            })
+                            .collect();
+                        println!("{}", blocks.join("\n\n"));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Get { reference } => {
+                        let (plugin, marketplace_name) =
+                            reference.rsplit_once('@').ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
+                                )
+                            })?;
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = sources
+                            .iter()
+                            .find(|candidate| {
+                                cloud::marketplaces::source_matches(candidate, marketplace_name)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                                    terminal_text::sanitize_terminal_text(marketplace_name)
+                                )
+                            })?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entry = entries
+                            .iter()
+                            .find(|entry| {
+                                entry.source_id == source.id
+                                    && entry.name.eq_ignore_ascii_case(plugin)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
+                                    terminal_text::sanitize_terminal_text(&source.name),
+                                    terminal_text::sanitize_terminal_text(plugin),
+                                    terminal_text::sanitize_terminal_text(&source.name)
+                                )
+                            })?;
+                        let installation = cloud::marketplaces::install(&client, &entry.id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Installed {} {} on your account from {}, as the web marketplace does; it is listed with your plugins on the web and desktop apps.",
+                            terminal_text::sanitize_terminal_text(&entry.name),
+                            installation
+                                .installed_version
+                                .as_deref()
+                                .map(terminal_text::sanitize_terminal_text)
+                                .unwrap_or_default(),
+                            terminal_text::sanitize_terminal_text(&source.name)
+                        );
                         Ok(())
                     }
                     MarketplaceSubcommand::Search { query } => {
