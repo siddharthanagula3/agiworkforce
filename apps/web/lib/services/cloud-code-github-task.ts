@@ -275,7 +275,7 @@ export async function runGitHubCodeTask(request: GitHubCodeTaskRequest): Promise
       });
     }
 
-    const session = await createCloudCodeSession(
+    const { session } = await createCloudCodeSession(
       db,
       owner,
       {

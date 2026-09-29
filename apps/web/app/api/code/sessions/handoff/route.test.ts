@@ -29,6 +29,7 @@ import { POST } from './route';
 
 const USER_ID = 'user-1';
 const FINGERPRINT = createHash('sha256').update(USER_ID).digest('hex').slice(0, 32);
+const SESSION = { id: 'session-1', title: 'Fix the login redirect' };
 
 function handoff(overrides: Record<string, unknown> = {}) {
   return {
@@ -67,7 +68,7 @@ beforeEach(() => {
   mockCsrf.mockResolvedValue(null);
   mockRateLimit.mockResolvedValue(null);
   mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: USER_ID, organizationId: null });
-  mockOpen.mockResolvedValue({ id: 'session-1', title: 'Fix the login redirect' });
+  mockOpen.mockResolvedValue({ session: SESSION, reused: false });
 });
 
 describe('POST /api/code/sessions/handoff', () => {
@@ -128,6 +129,21 @@ describe('POST /api/code/sessions/handoff', () => {
     await POST(postRequest({ handoff: record }));
     await POST(postRequest({ handoff: record }));
     expect(mockOpen.mock.calls[0]![3].requestId).toBe(mockOpen.mock.calls[1]![3].requestId);
+  });
+
+  it('records the opening once when a retried handoff reuses the session', async () => {
+    mockOpen
+      .mockResolvedValueOnce({ session: SESSION, reused: false })
+      .mockResolvedValueOnce({ session: SESSION, reused: true });
+    const record = handoff();
+
+    const first = await POST(postRequest({ handoff: record }));
+    const retry = await POST(postRequest({ handoff: record }));
+
+    expect(first.status).toBe(201);
+    expect(retry.status).toBe(201);
+    expect(((await retry.json()) as { session: { id: string } }).session.id).toBe('session-1');
+    expect(auditSpy).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a handoff issued for another account', async () => {
