@@ -211,10 +211,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignSelf: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0,
-    shadowRadius: 4,
-    elevation: 0,
   },
   fabButton: {
     width: 36,

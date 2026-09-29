@@ -8,7 +8,7 @@ import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 
 interface ProjectOption {
   id: string;
@@ -145,7 +145,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
     <>
       <View className="px-4 pb-1" style={{ display: isSheetDriven ? 'none' : 'flex' }}>
         {activeProject ? (
-          <Animated.View entering={FadeIn.duration(200)}>
+          <Animated.View entering={FadeIn.duration(motion.quick)}>
             <Pressable
               onPress={handleOpenDropdown}
               className="flex-row items-center gap-2 self-start rounded-full px-3 py-1.5 active:opacity-70"

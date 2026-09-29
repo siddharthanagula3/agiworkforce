@@ -14,7 +14,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   isResumable,
@@ -164,8 +164,8 @@ function AttachmentThumbnail({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       layout={Layout.springify()}
       className="relative mr-2"
       accessibilityLabel={
@@ -387,8 +387,8 @@ export function AttachmentPreview({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       className="px-4 pt-2"
     >
       <View className="flex-row items-center">

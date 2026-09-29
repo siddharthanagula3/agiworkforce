@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 interface ProjectCardProject {
   id: string;
@@ -27,7 +27,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
       entering={
         reducedMotion
           ? undefined
-          : FadeInDown.duration(300)
+          : FadeInDown.duration(motion.moved)
               .delay(index * 60)
               .springify()
       }
