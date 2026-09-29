@@ -41,6 +41,9 @@ const OPEN_DOWNLOADS_LABEL = 'Open Downloads folder';
 const SUB_HEADING_CLASS = 'text-xs font-medium text-muted-foreground';
 const TAB_LABEL = 'Tab';
 const ACTIVE_TAB_LABEL = 'The tab open now';
+const CHOOSE_TAB_LABEL = 'Choose a tab';
+const CHOOSE_TAB_HINT =
+  'Reads the tab open now. To pick another, list the open tabs; the desktop asks first, and their titles and addresses are shown only here.';
 const ACTIVITY_TIME = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const BUTTON_CLASS =
@@ -195,6 +198,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
   const [activity, setActivity] = useState<BrowserActivityEntry[]>([]);
   const [tabs, setTabs] = useState<BrowserTabSummary[]>([]);
   const [tabsError, setTabsError] = useState<string | null>(null);
+  const [listingTabs, setListingTabs] = useState(false);
   const [tabId, setTabId] = useState<number | null>(null);
 
   const refreshActivity = useCallback(() => {
@@ -213,29 +217,29 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
     refreshActivity();
   }, [open, refreshActivity]);
 
-  const pairedAndConnected = pairing?.paired === true && pairing.connected;
   useEffect(() => {
-    if (!open || action !== 'browser_read_page' || !pairedAndConnected) return;
-    let cancelled = false;
+    if (open) return;
+    setTabs([]);
+    setTabId(null);
     setTabsError(null);
-    listPairedTabs()
-      .then((listed) => {
-        if (cancelled) return;
-        setTabs(listed);
-        setTabId((current) =>
-          current !== null && listed.some((tab) => tab.tabId === current) ? current : null,
-        );
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return;
-        setTabs([]);
-        setTabId(null);
-        setTabsError(messageFor(cause));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, action, pairedAndConnected]);
+  }, [open]);
+
+  const onListTabs = useCallback(async () => {
+    setListingTabs(true);
+    setTabsError(null);
+    try {
+      const listed = await listPairedTabs();
+      setTabs(listed);
+      setTabId((current) =>
+        current !== null && listed.some((tab) => tab.tabId === current) ? current : null,
+      );
+    } catch (cause) {
+      setTabsError(messageFor(cause));
+    } finally {
+      setListingTabs(false);
+      refreshActivity();
+    }
+  }, [refreshActivity]);
 
   useDialogKeyboard({ open, onClose, panelRef });
 
@@ -315,6 +319,22 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
           ))}
         </div>
 
+        {action === 'browser_read_page' && tabs.length === 0 ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground">{CHOOSE_TAB_HINT}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={BUTTON_CLASS}
+                disabled={listingTabs || pairing?.paired === false}
+                onClick={() => void onListTabs()}
+              >
+                {CHOOSE_TAB_LABEL}
+              </button>
+              {listingTabs ? <Spinner aria-label="Listing tabs" /> : null}
+            </div>
+          </div>
+        ) : null}
         {action === 'browser_read_page' && tabs.length > 0 ? (
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {TAB_LABEL}
