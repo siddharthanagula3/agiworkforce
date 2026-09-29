@@ -14,6 +14,7 @@ export interface MobileArtifact {
   accentColor: string;
   previewLines: string[];
   provenance?: MobileArtifactProvenance;
+  savedAt?: string;
 }
 
 export type ScopedMobileArtifact = MobileArtifact & {
