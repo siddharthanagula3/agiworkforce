@@ -144,7 +144,7 @@ import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import {
@@ -1049,7 +1049,7 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(conversationExecutionMode),
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -1067,7 +1067,7 @@ export default function ChatScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(
     (messageId: string) => {
