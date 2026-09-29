@@ -22,9 +22,7 @@ export {
 } from './subsystemHealth';
 export {
   activate as activateTelemetry,
-  logEvent,
   logError,
   redactTelemetryText,
-  TelemetryEvents,
   __resetTelemetryForTests,
 } from './telemetry';

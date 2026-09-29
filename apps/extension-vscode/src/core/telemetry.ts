@@ -1,17 +1,7 @@
 import * as vscode from 'vscode';
 import { redactWithPolicy } from '@agiworkforce/utils/secret-redaction';
-import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
-
-export const TelemetryEvents = {
-  EXTENSION_ACTIVATED: 'extension/activated',
-  INLINE_COMMAND_EXECUTED: 'inlineCommand/executed',
-  MODEL_SELECTED: 'model/selected',
-  ERROR_OCCURRED: 'error/occurred',
-} as const;
-
-type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
 
 /**
  * Returns a copy of the input with any matched secret replaced by `[REDACTED]`,
@@ -190,27 +180,7 @@ export function activate(context: vscode.ExtensionContext): vscode.Disposable {
     },
   };
 
-  logEvent(TelemetryEvents.EXTENSION_ACTIVATED, {
-    model: normalizeConfiguredModelId(Config.model()),
-  });
-
   return composite;
-}
-
-export function logEvent(eventName: TelemetryEventName, properties?: Record<string, string>): void {
-  try {
-    if (logger === undefined) return;
-    if (!isExtensionTelemetryEnabled()) return;
-
-    const merged = {
-      ...getCommonProperties(),
-      ...redactProperties(properties ?? {}),
-    };
-
-    logger.logUsage(eventName, merged);
-  } catch {
-    // Telemetry must never throw or block the caller
-  }
 }
 
 export function logError(error: Error | string, properties?: Record<string, string>): void {

@@ -181,6 +181,7 @@ import {
   type ExtensionUsageMeter,
 } from '../../data/usageMeter';
 import { developerAccessPlanLabel, planDisplayLabel } from '../account-auth/planLabel';
+import { trackProductEvent } from '../analytics/productAnalytics';
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
@@ -1081,6 +1082,7 @@ export class ChatStateManager {
       case 'cancel': {
         this._resumeAttemptSeq++;
         this._dropSteeringSends('Steer cancelled by Stop.');
+        trackProductEvent('generation_stopped');
         await this._interruptActiveTurn();
         break;
       }
@@ -1291,6 +1293,7 @@ export class ChatStateManager {
       }
 
       case 'regenerate': {
+        trackProductEvent('response_regenerated');
         await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
         break;
       }

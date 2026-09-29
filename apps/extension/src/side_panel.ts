@@ -373,6 +373,7 @@ import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
 import { withTimeout } from './utils';
 import { platformRequestHeaders } from './platformHeaders';
 import { installSidePanelErrorReporting } from './features/observability/errorReporting';
+import { flushProductEvents, trackProductEvent } from './features/observability/productAnalytics';
 
 installSidePanelErrorReporting();
 
@@ -6601,8 +6602,10 @@ function renderMessages(): void {
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
           ...(regenerable
             ? {
-                onRegenerate: (messageId: string, modelSelection?: string) =>
-                  regenerateTurn(messageId, modelSelection),
+                onRegenerate: (messageId: string, modelSelection?: string) => {
+                  trackProductEvent('response_regenerated');
+                  regenerateTurn(messageId, modelSelection);
+                },
                 regenerateModels,
               }
             : {}),
@@ -14854,6 +14857,7 @@ function buildUI(): void {
   sendBtn.appendChild(renderIcon(ArrowUp, 16));
   sendBtn.addEventListener('click', () => {
     if (sendBtn.getAttribute('data-mode') === 'stop') {
+      trackProductEvent('generation_stopped');
       cancelCurrentManagedStream(true);
       return;
     }
@@ -16393,6 +16397,7 @@ function refreshAccountOnReturn(): void {
   void refreshCloudAccountUI();
 }
 document.addEventListener('visibilitychange', refreshAccountOnReturn);
+window.addEventListener('pagehide', () => void flushProductEvents());
 window.addEventListener('focus', refreshAccountOnReturn);
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   if (changeInfo.url !== undefined || changeInfo.status === 'complete') {

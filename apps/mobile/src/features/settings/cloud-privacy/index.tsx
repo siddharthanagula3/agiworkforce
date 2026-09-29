@@ -24,7 +24,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'telemetry',
     label: 'Telemetry off by default',
-    body: 'Analytics are disabled by default. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; any diagnostics stay on your device.',
+    body: 'Product analytics stay off until you allow them in your account privacy choices, and even then carry only event names such as a stopped response, never your messages. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; diagnostics leave the device only when you share them.',
   },
   {
     key: 'retention',
