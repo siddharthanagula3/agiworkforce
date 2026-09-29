@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0348: per-device tokens that let "Ask from Siri" answer unattended
+-- Migration 0349: per-device tokens that let "Ask from Siri" answer unattended
 --
 -- Why    : the iOS Ask intent runs without the app open, so it has no identity
 --          session. The signed-in app requests one token per install after the
