@@ -179,7 +179,7 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
             <WebView
               source={{ uri: player.playerUri }}
               style={{ flex: 1, backgroundColor: colors.black }}
-              originWhitelist={['file://*']}
+              originWhitelist={['*']}
               allowingReadAccessToURL={player.directoryUri}
               allowFileAccess
               allowFileAccessFromFileURLs
@@ -188,6 +188,7 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
               allowsFullscreenVideo
               mediaPlaybackRequiresUserAction={false}
               setSupportMultipleWindows={false}
+              javaScriptCanOpenWindowsAutomatically={false}
               onShouldStartLoadWithRequest={(request) => request.url === player.playerUri}
               onError={() => {
                 closePlayer();

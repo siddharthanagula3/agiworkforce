@@ -67,30 +67,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S11.15: Captions.
-
-- Done when: Spoken audio (voice conversations) can be shown as live captions.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Prints "You said:" and the streamed reply text. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:213-213`
-
-## S11.16: Transcripts.
-
-- Done when: A voice conversation leaves a readable text transcript kept with the chat.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
-
-Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
-
 ## S11.19: Right-to-left layouts.
 
 - Done when: In a right-to-left language the whole layout mirrors correctly (direction set and spacing uses logical start/end).

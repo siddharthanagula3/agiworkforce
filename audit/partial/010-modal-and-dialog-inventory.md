@@ -404,14 +404,11 @@ Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 - Done when: A feedback dialog, reachable product-wide, sends the user's message to the team's feedback store.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S10.46: Diagnostic-sharing consent.
 

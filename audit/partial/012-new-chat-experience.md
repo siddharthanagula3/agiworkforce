@@ -143,15 +143,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531
 ## S12.14: Voice entry.
 
 - Done when: From the new-chat screen the user can start a spoken (voice-mode) conversation.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:354-354`
 
 ## S12.15: Agentic-work entry.
 
