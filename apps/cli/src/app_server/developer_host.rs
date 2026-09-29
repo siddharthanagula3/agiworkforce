@@ -21,21 +21,20 @@ use agiworkforce_protocol::developer_session::{
     LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
     McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
     McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
+    PlanDecideParams, PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginSetEnabledParams, PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
+    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
+    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -443,7 +442,6 @@ impl CliDeveloperSessionHost {
             mcp_inspect: self.load_integrations,
             plugin_updates: true,
             plan_decisions: true,
-            permission_rules: true,
         }
     }
 
@@ -3541,16 +3539,6 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
-            .await
-            .map_err(internal_error)?
-    }
-
-    async fn add_permission(
-        &self,
-        params: PermissionsAddParams,
-    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
-        let _admission = self.admit_request().await?;
-        tokio::task::spawn_blocking(move || surfaces::add_saved_permission(&params))
             .await
             .map_err(internal_error)?
     }

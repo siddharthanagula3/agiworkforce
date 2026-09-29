@@ -260,8 +260,6 @@ export * from './PatchApplyStatus';
 export * from './PatchApplyUpdatedEvent';
 export * from './PendingApprovalSnapshot';
 export * from './PermissionProfile';
-export * from './PermissionRuleTarget';
-export * from './PermissionsAddParams';
 export * from './PermissionsListResponse';
 export * from './PermissionsRemoveParams';
 export * from './PlanDecideParams';
