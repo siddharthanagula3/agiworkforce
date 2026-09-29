@@ -14,7 +14,11 @@ import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects
 import { useThemeColors } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
-import { loadMissingCloudProject } from '@/src/features/projects/service';
+import {
+  loadMissingCloudProject,
+  refreshCloudProjectDetails,
+} from '@/src/features/projects/service';
+import { CloudProjectOverview } from '@/src/features/projects/components/CloudProjectOverview';
 
 type TabId = 'chats' | 'work' | 'sources';
 
@@ -45,34 +49,6 @@ function LocalOnlyFallback({
       </Text>
       <Text style={{ fontSize: 13, color: colors.textSecondary }}>
         Local project. Details, chats, and sources stay on this device.
-      </Text>
-    </View>
-  );
-}
-
-function CloudProjectHeader({
-  name,
-  colors,
-}: {
-  name: string;
-  colors: ReturnType<typeof useThemeColors>;
-}) {
-  return (
-    <View
-      style={{
-        margin: 16,
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        backgroundColor: colors.surfaceElevated,
-        borderColor: colors.border,
-        gap: 12,
-      }}
-      testID="project-detail-cloud-header"
-    >
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{name}</Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-        Cloud project · synced across your devices.
       </Text>
     </View>
   );
@@ -206,6 +182,14 @@ export default function ProjectDetailScreen() {
     s.projects.find((p) => p.id === id && p.deletedAt === null),
   );
   const isCloudProject = target === 'cloud' && !!cloudProject;
+  const cloudDetails = useCloudProjectStore((s) => (id ? s.details[id] : undefined));
+
+  useEffect(() => {
+    if (!isCloudProject || appMode !== 'cloud' || !isClerkSignedIn) return;
+    const controller = new AbortController();
+    void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [appMode, isClerkSignedIn, isCloudProject]);
 
   useEffect(() => {
     if (!id || target !== 'unknown' || appMode !== 'cloud' || !isClerkSignedIn) return;
@@ -252,7 +236,14 @@ export default function ProjectDetailScreen() {
 
   const renderHeader = () => {
     if (isCloudProject) {
-      return <CloudProjectHeader name={cloudProject?.name ?? 'Project'} colors={colors} />;
+      return (
+        <CloudProjectOverview
+          projectId={id}
+          name={cloudProject?.name ?? 'Project'}
+          description={cloudProject?.description ?? null}
+          details={cloudDetails}
+        />
+      );
     }
     return target === 'local' ? (
       <LocalOnlyFallback projectId={id} localProject={localProject} colors={colors} />

@@ -68,7 +68,10 @@ import {
   getDefaultCloudModelIdForTier,
   getSelectableModelById,
   getShortDisplayName,
+  isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import {
@@ -187,6 +190,39 @@ export default function ChatTabScreen() {
     (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
   );
   const activeMode = appMode;
+  const activeCloudProjectId = useCloudProjectStore((s) => s.activeProjectId);
+  const projectDefaultModelId = useCloudProjectStore((s) =>
+    s.activeProjectId ? (s.details[s.activeProjectId]?.defaultModelId ?? null) : null,
+  );
+  const hasActiveProjectDetails = useCloudProjectStore((s) =>
+    s.activeProjectId ? s.details[s.activeProjectId] !== undefined : true,
+  );
+  const appliedProjectDefaultRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !isClerkSignedIn || hasActiveProjectDetails) return;
+    const controller = new AbortController();
+    void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [activeMode, hasActiveProjectDetails, isClerkSignedIn]);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !activeCloudProjectId || !projectDefaultModelId) return;
+    const key = `${activeCloudProjectId}:${projectDefaultModelId}`;
+    if (appliedProjectDefaultRef.current === key) return;
+    if (!isSelectableModelIdForAccess(projectDefaultModelId, cloudUnlocked, subscriptionTier)) {
+      return;
+    }
+    appliedProjectDefaultRef.current = key;
+    setModel(projectDefaultModelId);
+  }, [
+    activeCloudProjectId,
+    activeMode,
+    cloudUnlocked,
+    projectDefaultModelId,
+    setModel,
+    subscriptionTier,
+  ]);
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
       ? skillSelection.name
