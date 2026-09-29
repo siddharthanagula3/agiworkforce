@@ -65,10 +65,8 @@ pub struct McpOAuthStore {
 }
 
 impl McpOAuthStore {
-    /// `~/.agiworkforce/mcp-oauth.json`.
     pub fn store_path() -> Result<PathBuf> {
-        let home = dirs::home_dir().context("could not resolve home dir")?;
-        Ok(home.join(".agiworkforce").join("mcp-oauth.json"))
+        Ok(crate::config::CliConfig::config_dir()?.join("mcp-oauth.json"))
     }
 
     /// Load the store. Missing file → empty store.
@@ -118,12 +116,14 @@ pub type McpServerToken = agiworkforce_mcp::OAuthToken;
 /// server URL, so tenant/path details never appear in credential metadata.
 ///
 /// Strategy, following `crate::secure_store`:
-/// 1. macOS and Windows: the OS keychain (`keyring` crate).
+/// 1. macOS and Windows: the OS keychain (`keyring` crate), under the config
+///    root's own service.
 /// 2. Linux, or anywhere `AGIWORKFORCE_NO_KEYRING` is set: a file at
-///    `~/.agiworkforce/secrets/<server-hash>.token`, created 0o600.
+///    `<config root>/secrets/<server-hash>.token`, created 0o600.
 #[allow(dead_code)]
 pub struct McpServerOAuthStore {
     base_dir: PathBuf,
+    service: String,
     /// When false, all save/load/delete go through the file fallback only
     /// (no OS keychain interaction). Tests + headless environments use this
     /// path to avoid auth prompts.
@@ -133,8 +133,7 @@ pub struct McpServerOAuthStore {
 #[allow(dead_code)]
 impl McpServerOAuthStore {
     pub fn new() -> Result<Self> {
-        let home = dirs::home_dir().context("no home dir")?;
-        let base = home.join(".agiworkforce").join("secrets");
+        let base = crate::config::CliConfig::config_dir()?.join("secrets");
         fs::create_dir_all(&base).ok();
         #[cfg(unix)]
         {
@@ -143,6 +142,7 @@ impl McpServerOAuthStore {
         }
         Ok(Self {
             base_dir: base,
+            service: crate::secure_store::keychain_service(KEYRING_SERVICE)?,
             use_keyring: crate::secure_store::uses_keychain(),
         })
     }
@@ -155,6 +155,7 @@ impl McpServerOAuthStore {
         fs::create_dir_all(&base).ok();
         Ok(Self {
             base_dir: base,
+            service: KEYRING_SERVICE.to_string(),
             use_keyring: false,
         })
     }
@@ -230,7 +231,7 @@ impl McpServerOAuthStore {
     fn write_entry(&self, credential_id: &str, json: &str) -> Result<()> {
         let path = self.fallback_path(credential_id);
         if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+            let entry = keyring::Entry::new(&self.service, credential_id)
                 .context("open the OS credential store for MCP OAuth")?;
             entry
                 .set_password(json)
@@ -246,7 +247,7 @@ impl McpServerOAuthStore {
 
     fn read_entry(&self, credential_id: &str) -> Result<Option<String>> {
         if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+            let entry = keyring::Entry::new(&self.service, credential_id)
                 .context("open the OS credential store for MCP OAuth")?;
             return match entry.get_password() {
                 Ok(json) => Ok(Some(json)),
@@ -261,7 +262,7 @@ impl McpServerOAuthStore {
 
     fn delete_entry(&self, credential_id: &str) -> Result<()> {
         if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+            let entry = keyring::Entry::new(&self.service, credential_id)
                 .context("open the OS credential store for MCP OAuth")?;
             match entry.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => {}

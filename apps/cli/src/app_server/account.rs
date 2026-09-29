@@ -52,11 +52,10 @@ struct MePlan {
     tier: Option<String>,
 }
 
-fn account_cache_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
-        .join(ACCOUNT_CACHE_FILE)
+fn account_cache_path() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join(ACCOUNT_CACHE_FILE))
 }
 
 fn now_secs() -> u64 {
@@ -67,14 +66,16 @@ fn now_secs() -> u64 {
 }
 
 fn read_account_cache() -> Option<AccountCacheEnvelope> {
-    let content = std::fs::read_to_string(account_cache_path()).ok()?;
+    let content = std::fs::read_to_string(account_cache_path()?).ok()?;
     let envelope: AccountCacheEnvelope = toml::from_str(&content).ok()?;
     let age = now_secs().saturating_sub(envelope.cached_at);
     (age <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
 }
 
 fn write_account_cache(envelope: &AccountCacheEnvelope) {
-    let path = account_cache_path();
+    let Some(path) = account_cache_path() else {
+        return;
+    };
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -88,7 +89,9 @@ fn write_account_cache(envelope: &AccountCacheEnvelope) {
 }
 
 fn clear_account_cache() {
-    let _ = std::fs::remove_file(account_cache_path());
+    if let Some(path) = account_cache_path() {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// The managed credential this machine holds, with its expiry in epoch
@@ -500,6 +503,21 @@ mod tests {
             vec!["anthropic"],
             "sign-out left a managed credential behind, or took a key the user set themselves"
         );
+    }
+
+    #[test]
+    fn account_state_follows_the_config_root_agiworkforce_home_selects() {
+        let home_dir = concat!("dirs::", "home_dir()");
+        for (file, source) in [
+            ("app_server/account.rs", include_str!("account.rs")),
+            ("tier_cache.rs", include_str!("../tier_cache.rs")),
+            ("mcp/oauth_store.rs", include_str!("../mcp/oauth_store.rs")),
+        ] {
+            assert!(
+                !source.contains(home_dir),
+                "{file} keeps account state under the home directory, where a second AGIWORKFORCE_HOME reads the first account's"
+            );
+        }
     }
 
     /// The key a device grant is saved under is the key sign-out removes.

@@ -375,6 +375,10 @@ impl CliConfig {
         Ok(dir)
     }
 
+    pub fn default_config_dir() -> Result<PathBuf> {
+        resolve_config_dir(None, dirs::home_dir())
+    }
+
     /// Returns `config.toml` inside the resolved config root.
     pub fn config_path() -> Result<PathBuf> {
         Ok(Self::config_dir()?.join("config.toml"))
