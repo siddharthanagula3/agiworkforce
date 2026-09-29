@@ -22,9 +22,6 @@ describe('relayed control payloads', () => {
       'code.session.history',
       'code.session.started',
       'code.session.transcript',
-      'dispatch.task.create',
-      'dispatch.task.cancel',
-      'dispatch.task.status',
       'control.receipt',
     ]) {
       expect(controlPayloadSchema.safeParse({ action, data: envelope(10) }).success).toBe(true);

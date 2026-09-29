@@ -28,9 +28,6 @@ export const CODE_SESSION_CONTROL_ACTIONS = [
   'code.session.event',
   'code.session.started',
   'code.session.transcript',
-  'dispatch.task.create',
-  'dispatch.task.cancel',
-  'dispatch.task.status',
 ] as const;
 
 /**
