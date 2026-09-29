@@ -1004,6 +1004,66 @@ impl TuiApp {
                     );
                 }
             }
+            OverlayResult::DiffReviewed(outcome) => {
+                let staged_files = outcome
+                    .approved
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .arg("add")
+                            .arg("--")
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                let apply = |patch: &str, args: &[&str]| -> bool {
+                    use std::io::Write;
+                    let Ok(mut child) = std::process::Command::new("git")
+                        .arg("apply")
+                        .args(args)
+                        .arg("--recount")
+                        .arg("-")
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                    else {
+                        return false;
+                    };
+                    let written = child
+                        .stdin
+                        .take()
+                        .map(|mut stdin| stdin.write_all(patch.as_bytes()).is_ok())
+                        .unwrap_or(false);
+                    child.wait().map(|s| s.success()).unwrap_or(false) && written
+                };
+                let staged_hunks = outcome
+                    .stage_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["--cached"]))
+                    .count();
+                let discarded_hunks = outcome
+                    .discard_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["-R"]))
+                    .count();
+                let failed = outcome.stage_hunks.len() - staged_hunks + outcome.discard_hunks.len()
+                    - discarded_hunks;
+                let mut text = format!(
+                    "Staged {staged_files} file(s) and {staged_hunks} hunk(s); discarded {discarded_hunks} hunk(s) from the working tree."
+                );
+                if failed > 0 {
+                    text.push_str(&format!(
+                        " {failed} hunk(s) no longer matched the file and were left as they are; run /diff-review again."
+                    ));
+                }
+                self.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text,
+                });
+            }
             OverlayResult::DiffApproved(paths) => {
                 // Stage the approved files (reversible via `git reset`). Rejected /
                 // skipped files are deliberately left untouched, never auto-discard
@@ -5038,8 +5098,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                 .unwrap_or_default();
             let parsed = crate::diff_model::Diff::parse(&tracked_diff);
-            let mut files: Vec<FileDiff> =
-                parsed.files.iter().map(FileDiff::from_model).collect();
+            let mut patches = crate::diff_model::file_hunk_patches(&tracked_diff);
+            if patches.len() != parsed.files.len() {
+                patches = vec![Vec::new(); parsed.files.len()];
+            }
+            let mut files: Vec<FileDiff> = parsed
+                .files
+                .iter()
+                .zip(patches)
+                .map(|(file, patches)| FileDiff::from_model(file).with_hunk_patches(patches))
+                .collect();
             files.extend(untracked.iter().map(|path| {
                 let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
                 file.kind = crate::diff_model::FileChangeKind::Added;
@@ -5051,7 +5119,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(
-                    "Diff review (\u{2191}\u{2193} navigate \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close)".into(),
+                    "Diff review (\u{2191}\u{2193} file \u{00b7} \u{2190}\u{2192} hunk \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close). An approved file or hunk is staged; a rejected hunk is discarded from the working tree, a rejected file is left as it is.".into(),
                 )
             }
         }
