@@ -12,7 +12,8 @@ import {
   createEventTriggeredScheduleRun,
   processClaimedScheduleRun,
 } from '@/lib/services/schedule-service';
-import { executeScheduledAgent } from '@/lib/services/scheduled-agent-executor';
+import { GOOGLE_USER_DATA_TRIGGER_SOURCES } from '@/lib/connectors/google-user-data';
+import { scheduledAgentExecutor } from '@/lib/services/scheduled-agent-executor';
 
 import { settleTriggerDelivery } from './trigger-ingest';
 import { mapTrigger, type TriggerRow } from './trigger-service';
@@ -132,7 +133,10 @@ export async function fireEventTriggerJob(
     },
   };
 
-  const run = await processClaimedScheduleRun(scopedDb, claim, executeScheduledAgent, {
+  const execute = scheduledAgentExecutor({
+    googleUserDataEvent: GOOGLE_USER_DATA_TRIGGER_SOURCES.has(payload.event.source),
+  });
+  const run = await processClaimedScheduleRun(scopedDb, claim, execute, {
     timeoutMs: RUN_TIMEOUT_MS,
     signal,
   });

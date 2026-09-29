@@ -216,6 +216,7 @@ import {
   getDefaultAutoRoutingProfile,
   autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICES,
+  getTierPolicy,
 } from '@agiworkforce/types';
 import type {
   ChatResponseFormat,
@@ -331,6 +332,13 @@ import {
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
 import { conversationHealthSpaceId } from '@/lib/services/health-space-service';
+import {
+  GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE,
+  GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
+  GOOGLE_USER_DATA_NO_MODEL_MESSAGE,
+  resolveGoogleUserDataTurn,
+  type GoogleUserDataTurnReason,
+} from '@/lib/connectors/google-user-data';
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
@@ -1202,6 +1210,7 @@ export type ProcessedRequest = {
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
   healthSpaceProjectId?: string | null;
+  googleUserData?: boolean;
   /**
    * The project passages this turn was given, with the page or heading each
    * came from. Built once by the context load and carried so the response
@@ -2618,13 +2627,17 @@ function unsupportedParameterResponse(param: string, message: string): ProcessFa
   };
 }
 
-function noTrainingModelUnavailable(): ProcessFailure {
+function noTrainingModelUnavailable(
+  googleUserData: GoogleUserDataTurnReason = null,
+): ProcessFailure {
   return {
     ok: false,
     response: NextResponse.json(
       {
         error: {
-          message: 'No model on your plan keeps your chats out of training right now.',
+          message: googleUserData
+            ? GOOGLE_USER_DATA_NO_MODEL_MESSAGE
+            : 'No model on your plan keeps your chats out of training right now.',
           type: 'invalid_request_error',
           code: 'no_training_model_available',
         },
@@ -2632,6 +2645,19 @@ function noTrainingModelUnavailable(): ProcessFailure {
       { status: 403 },
     ),
   };
+}
+
+async function modelMayTrainMessage(
+  healthSpace: Promise<string | null>,
+  googleUserData: Promise<GoogleUserDataTurnReason>,
+): Promise<string> {
+  if ((await healthSpace) !== null) {
+    return "This model's provider may train on what you send, and Health only uses models that keep your chats out of training. Choose another model.";
+  }
+  const google = await googleUserData;
+  if (google === 'conversation') return GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE;
+  if (google === 'connectors') return GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE;
+  return "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.";
 }
 
 // The free plan has no Auto. A client that still sends it is served the plan's
@@ -2822,6 +2848,31 @@ export async function processRequest(
     : Promise.resolve(null);
   healthSpacePromise.catch(() => {});
 
+  const explicitModelCallsTools =
+    isAutoModeModelId(chatRequest.model) ||
+    getModelMetadataById(chatRequest.model)?.capabilities?.tools !== false;
+  const googleUserDataPromise: Promise<GoogleUserDataTurnReason> = scopedDbPromise
+    .then((scoped) =>
+      resolveGoogleUserDataTurn(scoped.db, userId, {
+        conversationId: chatRequest.conversation_id,
+        messages: chatRequest.messages,
+        connectorToolsEnabled:
+          chatRequest.connector_tools_enabled !== false &&
+          explicitModelCallsTools &&
+          Boolean(getTierPolicy(subscription.plan_tier).allowMCP),
+        disabledConnectorIds: chatRequest.disabled_connector_ids,
+        researchConnectorIds: chatRequest.research_sources?.connectors,
+      }),
+    )
+    .catch((error: unknown): GoogleUserDataTurnReason => {
+      logger.warn(
+        { error, userId },
+        'Google user data state unreadable; routing only to models that keep inputs out of training',
+      );
+      return 'conversation';
+    });
+  googleUserDataPromise.catch(() => {});
+
   const trainingOptOutPromise = Promise.all([
     scopedDbPromise
       .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
@@ -2833,7 +2884,11 @@ export async function processRequest(
         return true;
       }),
     healthSpacePromise,
-  ]).then(([optedOut, healthSpaceProjectId]) => optedOut || healthSpaceProjectId !== null);
+    googleUserDataPromise,
+  ]).then(
+    ([optedOut, healthSpaceProjectId, googleUserData]) =>
+      optedOut || healthSpaceProjectId !== null || googleUserData !== null,
+  );
   trainingOptOutPromise.catch(() => {});
 
   const routingProfileAlias =
@@ -2850,7 +2905,7 @@ export async function processRequest(
     (await trainingOptOutPromise)
   ) {
     const noTrainingModel = noTrainingChatModelFor(subscription.plan_tier);
-    if (!noTrainingModel) return noTrainingModelUnavailable();
+    if (!noTrainingModel) return noTrainingModelUnavailable(await googleUserDataPromise);
     chatRequest.model = noTrainingModel;
   }
   const requestedModel = chatRequest.model;
@@ -3731,7 +3786,9 @@ export async function processRequest(
   const availableProviderIds = trainingOptOut
     ? new Set([...managedProviderIds].filter(providerKeepsInputsOutOfTraining))
     : managedProviderIds;
-  if (trainingOptOut && availableProviderIds.size === 0) return noTrainingModelUnavailable();
+  if (trainingOptOut && availableProviderIds.size === 0) {
+    return noTrainingModelUnavailable(await googleUserDataPromise);
+  }
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
   // Only a workspace pinned AWAY from the region this deployment processes in
@@ -4344,10 +4401,7 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message:
-              (await healthSpacePromise) !== null
-                ? "This model's provider may train on what you send, and Health only uses models that keep your chats out of training. Choose another model."
-                : "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
+            message: await modelMayTrainMessage(healthSpacePromise, googleUserDataPromise),
             type: 'invalid_request_error',
             code: 'model_may_train',
           },
@@ -5559,6 +5613,7 @@ export async function processRequest(
     conversationId: chatRequest.conversation_id,
     conversationIsTemporary,
     healthSpaceProjectId: await healthSpacePromise,
+    googleUserData: (await googleUserDataPromise) !== null,
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),
