@@ -380,7 +380,11 @@ export async function resolveLiveVoiceFunctionTools(input: {
   if (input.backendModel.capabilities?.tools === false || tierPolicy.allowToolUse === false) {
     return { tools: [], names: [] };
   }
-  const permissions = await loadConnectorToolPermissions(input.db, input.userId);
+  const permissions = await loadConnectorToolPermissions(
+    input.db,
+    input.userId,
+    input.organizationId,
+  );
   const [operatorTools, connectorCatalog] = !input.connectorsAllowed
     ? [[], { tools: [] }]
     : await Promise.all([

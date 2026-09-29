@@ -279,6 +279,10 @@ pub(super) async fn handle_slash_command(
             eprintln!("{}", ts::accent_header("Status:"));
             eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
             eprintln!(
+                "  {}",
+                crate::cloud::client::connectivity_line(session.privacy_mode).await
+            );
+            eprintln!(
                 "  Model:      {}",
                 crate::terminal_text::sanitize_terminal_text(&session.model)
             );

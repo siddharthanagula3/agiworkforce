@@ -1372,10 +1372,12 @@ enum MemorySubcommand {
         #[arg(long)]
         out: Option<std::path::PathBuf>,
     },
-    /// Turn memory on for the account: chats on every surface use and save memories.
+    /// Turn account memory on, so details are carried across conversations on every surface.
     On,
-    /// Turn memory off for the account: no chat uses or saves memories until it is on again.
+    /// Turn account memory off on every surface.
     Off,
+    /// Show whether account memory is on.
+    Status,
     /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
     Never {
         /// Term to add. Repeatable.
@@ -3230,21 +3232,6 @@ async fn handle_history_command(
 async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
     let privacy = account_privacy_mode();
     match action {
-        MemorySubcommand::On | MemorySubcommand::Off => {
-            let enabled = matches!(action, MemorySubcommand::On);
-            cloud::set_account_memory(privacy, enabled)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-            println!(
-                "{}",
-                if enabled {
-                    "Memory is on for your account. Chats on every surface use and save memories."
-                } else {
-                    "Memory is off for your account. No chat on any surface uses or saves memories until you turn it on again."
-                }
-            );
-            Ok(())
-        }
         MemorySubcommand::List => {
             let (cache, workspace) = tokio::join!(
                 cloud::refresh_memory(privacy),
@@ -3351,6 +3338,18 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 }
                 Some(_) => anyhow::bail!("Your account did not store this change"),
             }
+        }
+        MemorySubcommand::On | MemorySubcommand::Off | MemorySubcommand::Status => {
+            let enabled = match action {
+                MemorySubcommand::On => Some(true),
+                MemorySubcommand::Off => Some(false),
+                _ => None,
+            };
+            let text = cloud::personalization::memory_switch(enabled)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("{text}");
+            Ok(())
         }
         MemorySubcommand::Never { add, remove } => {
             let text = cloud::personalization::never_remember(add, remove)
@@ -4712,6 +4711,10 @@ pub async fn run_main() -> Result<()> {
     // rather than resolved per call site.
     output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
 
+    if let Some(reason) = crate::app_server::account::renew_managed_session_if_expiring().await {
+        output::print_info(&reason);
+    }
+
     // Before anything reads the working directory.
     if let Some(repo) = cli.repo.as_deref() {
         enter_repo_directory(repo)?;
@@ -5835,10 +5838,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 if store.entries.is_empty() {
                     println!("No active sessions to logout from.");
                 } else {
+                    let revoked = crate::app_server::account::revoke_managed_sessions().await;
                     let count = store.entries.len();
                     store.entries.clear();
                     store.save()?;
                     println!("Logged out from {} provider(s).", count);
+                    if !revoked {
+                        println!(
+                            "AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices."
+                        );
+                    }
                 }
                 Ok(())
             }

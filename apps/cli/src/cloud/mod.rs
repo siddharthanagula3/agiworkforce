@@ -470,15 +470,6 @@ pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, Clou
         .unwrap_or_else(|| "your active workspace".to_string()))
 }
 
-pub async fn set_account_memory(privacy: PrivacyMode, enabled: bool) -> Result<(), CloudError> {
-    let client = CloudClient::connect(privacy)?;
-    let body = serde_json::json!({ "namespace": "capabilities", "patch": { "memory": enabled } });
-    let _: serde_json::Value = client
-        .call(&personalization::save_route(), &[], Some(&body))
-        .await?;
-    Ok(())
-}
-
 /// Refresh the local memory cache from the account and return it.
 pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
@@ -486,7 +477,9 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
     cache.apply(&response.memories);
-    cache.account_memory_off = response.memory_enabled == Some(false);
+    if let Some(enabled) = response.memory_enabled {
+        cache.account_memory_off = !enabled;
+    }
     memory::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the account memory: {error}"));

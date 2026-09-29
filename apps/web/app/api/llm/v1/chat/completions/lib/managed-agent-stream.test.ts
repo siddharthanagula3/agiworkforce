@@ -708,10 +708,10 @@ describe('managed agent stream', () => {
     expect(metadata['interactiveCards']).toHaveLength(INTERACTIVE_CARDS_MAX_PER_MESSAGE);
   });
 
-  it('persists the whole run, not only this leg, when an inline turn continues a run', async () => {
+  it('persists the text of the earlier legs before this leg when an inline turn continues a run', async () => {
     persistenceMocks.execute.mockClear();
     readCloudAgentRunAssistantText.mockResolvedValueOnce({
-      text: 'Before the approval. hello',
+      text: 'Before the approval. ',
       lastSequence: 4,
       interactiveCards: [],
     });

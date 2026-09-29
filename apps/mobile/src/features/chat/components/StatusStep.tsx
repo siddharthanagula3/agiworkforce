@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import type { StatusStep as StatusStepType, StepIcon } from '@/types/chat';
 
 interface StatusStepProps {
@@ -96,7 +96,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
   }, [hasDetail]);
 
   return (
-    <Animated.View entering={FadeInDown.duration(250).springify()}>
+    <Animated.View entering={FadeInDown.duration(motion.moved).springify()}>
       <Pressable
         onPress={toggleExpanded}
         disabled={!hasDetail}

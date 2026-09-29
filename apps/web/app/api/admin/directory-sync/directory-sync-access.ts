@@ -4,9 +4,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
@@ -50,7 +48,7 @@ export async function requireDirectorySyncAdmin(
   try {
     ({ db, userId } = await getUserScopedDb(request, { resolveOrganization: false }));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return { response: unauthorizedResponseFor(authError) };
     }
     return failure(401, 'Unauthorized');

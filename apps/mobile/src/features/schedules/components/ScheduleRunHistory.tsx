@@ -14,7 +14,7 @@ import {
 import { runStatusLabel, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
 
 function formatRunTime(isoDate: string): string {
@@ -239,7 +239,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
   }, [scheduleId, fetchRuns]);
 
   return (
-    <Animated.View entering={FadeIn.duration(200)}>
+    <Animated.View entering={FadeIn.duration(motion.quick)}>
       {/* Section header */}
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-[11px] text-white/40 uppercase tracking-wider">Run History</Text>

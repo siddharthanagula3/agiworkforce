@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { View, RefreshControl, StyleSheet } from 'react-native';
+import { AccessibilityInfo, View, RefreshControl, StyleSheet } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
@@ -45,6 +45,17 @@ interface MessageListProps {
   resumingResearchMessageId?: string | null;
 }
 
+function turnOutcomeAnnouncement(message: ChatMessage): string {
+  if (message.role !== 'assistant') return 'No response was generated';
+  if (message.status === 'error') return 'Response failed';
+  if (message.metadata?.['finishReason'] === 'stopped') {
+    return message.content.trim()
+      ? 'Response cancelled. Partial response saved.'
+      : 'Response cancelled';
+  }
+  return 'Response complete';
+}
+
 export function MessageList({
   messages,
   onApprove,
@@ -68,6 +79,21 @@ export function MessageList({
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
   const [showScrollButton, setShowScrollButton] = useState(false);
+
+  const lastMessage = messages[messages.length - 1];
+  const lastWasStreaming = useRef<{ id: string; streaming: boolean } | null>(null);
+  useEffect(() => {
+    const previous = lastWasStreaming.current;
+    if (!lastMessage) {
+      lastWasStreaming.current = null;
+      return;
+    }
+    const streaming = lastMessage.isStreaming === true;
+    if (previous?.id === lastMessage.id && previous.streaming && !streaming) {
+      AccessibilityInfo.announceForAccessibility(turnOutcomeAnnouncement(lastMessage));
+    }
+    lastWasStreaming.current = { id: lastMessage.id, streaming };
+  }, [lastMessage]);
 
   const fabOpacity = useSharedValue(0);
   const fabStyle = useAnimatedStyle(() => ({ opacity: fabOpacity.value }));
@@ -211,10 +237,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignSelf: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0,
-    shadowRadius: 4,
-    elevation: 0,
   },
   fabButton: {
     width: 36,

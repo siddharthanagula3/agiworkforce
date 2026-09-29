@@ -106,15 +106,14 @@ nothing is left.
 
 - Done when: A panel lets the user run Python analysis on data and see code, output and charts.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Code execution output appears only as a tool row in the transcript timeline; no analysis panel. | ui |
 | cli | partial | The agent can run Python only through its general shell tool (text output in the transcript) and can edit .ipynb cells without running them; no analysis panel, no chart display. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:389-408`, `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`
+Code: `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`
 
 ## S29.28: Query-result table.
 

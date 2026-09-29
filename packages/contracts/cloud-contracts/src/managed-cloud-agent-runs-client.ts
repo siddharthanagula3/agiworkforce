@@ -28,6 +28,7 @@ import {
 import {
   PausedRunResumeRequestSchema,
   ToolApprovalResumeRequestSchema,
+  ToolInputResumeRequestSchema,
 } from './tool-approval-resume';
 import { stripTrailingSlashes } from '@agiworkforce/types';
 
@@ -92,6 +93,11 @@ export interface ManagedCloudAgentRunApproval {
   decision: ManagedCloudAgentRunApprovalDecision;
 }
 
+export interface ManagedCloudAgentRunInputAnswer {
+  toolCallId: string;
+  responses: Record<string, unknown>;
+}
+
 export interface ManagedCloudAgentRunClient {
   listRuns(options?: ManagedCloudAgentRunListOptions): Promise<CloudAgentRunListPage>;
   getRun(
@@ -103,6 +109,11 @@ export interface ManagedCloudAgentRunClient {
     runId: string,
     approvals: ManagedCloudAgentRunApproval[],
     options?: { signal?: AbortSignal; guidance?: string },
+  ): Promise<void>;
+  answerRunInput(
+    runId: string,
+    inputs: ManagedCloudAgentRunInputAnswer[],
+    options?: { signal?: AbortSignal },
   ): Promise<void>;
   pauseRun(runId: string, options?: { signal?: AbortSignal }): Promise<CloudAgentRun>;
   resumePausedRun(
@@ -380,6 +391,38 @@ export function createManagedCloudAgentRunClient(
       let response: Response;
       try {
         response = await request(TOOL_APPROVAL_RESUME_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
+          body: JSON.stringify(body),
+          signal: options.signal,
+        });
+      } catch (error) {
+        if (error instanceof ManagedCloudAgentRunHttpError) {
+          if (error.status === 409) {
+            throw new ManagedCloudAgentRunAlreadyResumingError(error.message);
+          }
+          if (error.status === 410) {
+            throw new ManagedCloudAgentRunApprovalExpiredError(error.message);
+          }
+        }
+        throw error;
+      }
+
+      await response.body?.cancel().catch(() => undefined);
+    },
+
+    async answerRunInput(runId, inputs, options = {}) {
+      const body = ToolInputResumeRequestSchema.parse({
+        run_id: runId,
+        tool_inputs: inputs.map((input) => ({
+          tool_call_id: input.toolCallId,
+          input_responses: input.responses,
+        })),
+        detached: true,
+      });
+      let response: Response;
+      try {
+        response = await request(TOOL_INPUT_RESUME_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(body),

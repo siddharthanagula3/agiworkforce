@@ -25,6 +25,7 @@ import { withManagedTurnSlot } from '../../../lib/turn-slot';
 import { processRequest } from '../../../lib/request-processor';
 import { loadMcpToolDefs } from '../../../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -202,14 +203,21 @@ async function handlePausedRunResume(
 
   let discovery;
   try {
-    const permissions = await loadConnectorToolPermissions(db, userId);
+    const permissions = await loadConnectorToolPermissions(
+      db,
+      userId,
+      processed.organizationId ?? null,
+    );
+    const connectorsAllowed = await connectorsAllowedForTurn(request, userId, processed);
     const [operatorTools, connectorTools] = await Promise.all([
       loadMcpToolDefs(),
-      loadUserConnectorToolDefs(userId, {
-        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-        planTier: processed.subscriptionTier,
-        isToolDenied: permissions.isConnectorToolDenied,
-      }),
+      connectorsAllowed
+        ? loadUserConnectorToolDefs(userId, {
+            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            planTier: processed.subscriptionTier,
+            isToolDenied: permissions.isConnectorToolDenied,
+          })
+        : Promise.resolve([]),
     ]);
     discovery = { mcpTools: [...operatorTools, ...connectorTools], permissions };
   } catch (error) {

@@ -169,7 +169,6 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Blind re-search with the repo's own vocabulary (activeProject, projectContextStrip): VS Code can scope turns to a hosted project via 'Use in chat' (applyProjectToChat -> setActiveCloudProject), shows it as an 'Active project' chip in the composer strip, and prepends its instructions through customInstructions.ts. Not a typed mention and no knowledge files, so partial, not missing. |  |
 
 ## S13.26: File mention.
 

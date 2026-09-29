@@ -34,7 +34,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No duration picker and duration_secs is never sent; the quality list only hints "Ns only". | ui, handler |
+| mobile | partial | Same patch: a Length picker from the model's durations (as on web), sent as duration_secs; without it mobile sent none and the server defaulted to 4 s even for models that do not offer 4 s. Held: chatViewStore.ts, chat/[id].tsx, runVideoGenerationTurn.ts. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
@@ -97,7 +97,7 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Retry on a failed video calls the generic retryMessage, which resends the prompt as an ordinary text-chat turn (sendMessage), not a new video job. | handler |
+| mobile | partial | post-codex/w-work-s46.29-mobile-retry-video-as-video.patch: Retry on a failed, timed-out or cancelled video resends it as /video <prompt>, a new video job. Held: app/(app)/chat/[id].tsx. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `apps/mobile/app/(app)/chat/[id].tsx:1090-1102`, `apps/mobile/stores/chat/chatExecutionStore.ts:3028-3030`
