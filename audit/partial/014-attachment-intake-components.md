@@ -121,16 +121,11 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 - Done when: Each attachment shows its file name and size before sending.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
-| desktop | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
-| mobile | partial | As on web: documents show name and size as text; a photo thumbnail stays bare like ChatGPT's and Claude's and carries its name and size as its accessibility label. A visible caption on photos departs from both leaders (observed, undocumented), owner call. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
 
 ## S14.21: Indexing progress.
 

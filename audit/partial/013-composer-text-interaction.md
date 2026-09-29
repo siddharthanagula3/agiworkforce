@@ -198,14 +198,13 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 
 - Done when: The user can reference an open browser tab (choosing which one) as context for the message.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Let the user pick which tab; the desktop "Use the browser" dialog can read the paired browser's current page and attach it, but not choose or mention other tabs. | ui |
 | cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:44-60`, `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
+Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
 
 ## S13.30: Connected-app mention.
 

@@ -2601,7 +2601,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
             cancelScope: turn.conversationId,
-            ...(!turn.temporary ? { conversationId: turn.conversationId } : {}),
+            conversationId: turn.conversationId,
           });
           return generatedImage.imageUrl;
         },
@@ -2910,7 +2910,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
               cancelScope: ownerConversationId,
-              ...(!ownerConversationIsTemporary ? { conversationId: ownerConversationId } : {}),
+              conversationId: ownerConversationId,
             });
             return generatedImage.imageUrl;
           },
@@ -3407,9 +3407,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   ...(videoOptions?.durationSecs !== undefined
                     ? { durationSecs: videoOptions.durationSecs }
                     : {}),
-                  ...(!isTemporaryConversation
-                    ? { conversationId: convId, assistantMessageId }
-                    : {}),
+                  conversationId: convId,
+                  ...(!isTemporaryConversation ? { assistantMessageId } : {}),
                 }),
             });
             if (!startResult.ok) {

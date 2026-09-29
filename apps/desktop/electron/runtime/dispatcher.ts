@@ -35,6 +35,7 @@ import {
   DEVICE_REGISTRY_PROFILE_COMMAND,
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
+  MAX_DEVICE_REVIEW_LENGTH,
   deviceStepCapability,
   deviceStepCommand,
   deviceStepScope,
@@ -659,6 +660,11 @@ function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
   window.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
 }
 
+function serverReview(args: Record<string, unknown>): { review?: string } {
+  const review = typeof args['review'] === 'string' ? args['review'].trim() : '';
+  return review === '' ? {} : { review: review.slice(0, MAX_DEVICE_REVIEW_LENGTH) };
+}
+
 let detectedShellSandbox: Promise<ShellSandbox> | null = null;
 
 function shellSandbox(): Promise<ShellSandbox> {
@@ -985,6 +991,7 @@ async function execute(
         network: 'deny',
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+        ...serverReview(args),
       });
     }
     case 'shell_cancel':
@@ -1001,6 +1008,7 @@ async function execute(
         network: 'deny',
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+        ...serverReview(args),
       });
     }
     case 'shell_read': {

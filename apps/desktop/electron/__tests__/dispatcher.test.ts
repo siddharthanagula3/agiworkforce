@@ -306,6 +306,22 @@ describe('dispatch, local command gating', () => {
     });
   });
 
+  it('hands a server-set review to the shell service even under an always grant', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    await dispatch(window, 'shell_run', {
+      rootId: root.id,
+      runId: 'run-1',
+      command: 'curl https://collector.example',
+      review: 'Run curl https://collector.example in Documents',
+    });
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(runShellCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ review: 'Run curl https://collector.example in Documents' }),
+    );
+  });
+
   it('rejects a command argument that is not a string', async () => {
     const response = await dispatch(window, 'shell_run', {
       rootId: root.id,

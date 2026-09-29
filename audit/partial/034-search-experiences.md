@@ -77,18 +77,6 @@ Code: `apps/extension-vscode/package.json:638-639`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S34.19: User-selected source collections.
-
-- Done when: The user can put chosen sources into a named collection (e.g. a project's knowledge) and have chats search only/also that collection.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome can reopen a project's chats (which stay grounded in its sources) but cannot start a chat in a project or add/choose sources. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
-
 ## S34.20: Search suggestions.
 
 - Done when: Before or while typing a search, the user is offered suggested queries (recent, popular or completions) and can pick one.

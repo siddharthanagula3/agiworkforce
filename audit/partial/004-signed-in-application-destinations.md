@@ -26,10 +26,10 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
+| vscode | partial | partials/chat-gates af8d8f52c1: the sidebar session list now leaves archived chats out, as the tree already did. Still nothing lists or restores archived sessions in VS Code (VS Code phase). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1959-1959`
 
 ## S4.05: Pinned conversations.
 
@@ -190,18 +190,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.23: Library.
-
-- Done when: A Library destination lists everything the account produced or uploaded (files, images, videos, documents, artifacts) with filters and open/download actions.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The Artifacts drawer lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
-
-Code: `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
-
 ## S4.24: Shared-with-me resources.
 
 - Done when: A destination lists resources (projects, conversations, artifacts, connectors) that other people shared with the user, and opens them.
@@ -358,18 +346,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S4.38: Model catalog.
-
-- Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
-
 ## S4.40: Billing settings.
 
 - Done when: A billing settings destination shows the current plan, renewal, payment method and invoices, and lets the user change or cancel the plan.
@@ -380,7 +356,6 @@ Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features
 | web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
-| chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |
 
 Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
 

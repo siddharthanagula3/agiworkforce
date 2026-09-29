@@ -367,8 +367,21 @@ export async function createVideoGenerationJob(input: {
 
     const conversationId = input.conversationId ?? null;
     const assistantMessageId = input.assistantMessageId ?? null;
-    if ((conversationId === null) !== (assistantMessageId === null)) {
+    if (assistantMessageId !== null && conversationId === null) {
       throw new Error('Video chat generation requires both conversation and assistant message.');
+    }
+    if (conversationId && !assistantMessageId) {
+      const conversationRows = await tx.query<{ id: string }>(
+        `select id
+           from public.web_conversations
+          where id = $1
+            and user_id = $2
+            and deleted_at is null`,
+        [conversationId, input.userId],
+      );
+      if (!conversationRows[0]) {
+        throw new Error('Video chat conversation is missing or belongs to another account.');
+      }
     }
     if (conversationId && assistantMessageId) {
       const transcriptRows = await tx.query<{ id: string }>(
@@ -397,10 +410,15 @@ export async function createVideoGenerationJob(input: {
          id, user_id, organization_id, conversation_id, assistant_message_id,
          idempotency_key, request_hash, billing_lease_token, provider, model,
          workflow_run_id, prompt, duration_secs, resolution, aspect_ratio,
-         generate_audio, source_surface, estimated_cost_cents, estimated_duration_secs
+         generate_audio, source_surface, estimated_cost_cents, estimated_duration_secs,
+         temporary_chat
        ) values (
          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-         $15, $16, $17, $18, $19
+         $15, $16, $17, $18, $19,
+         exists (
+           select 1 from public.web_conversations c
+            where c.id = $4::uuid and coalesce(c.is_temporary, false)
+         )
        )
        returning ${JOB_COLUMNS}`,
       [

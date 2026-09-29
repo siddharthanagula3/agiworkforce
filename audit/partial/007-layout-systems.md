@@ -27,9 +27,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts open as a full-screen modal over the conversation; even on tablets there is no side-by-side artifact pane. | ui |
-| chrome | partial | The side panel lists artifacts in its drawer and can show their source, but not beside the transcript; preview hands off to the web conversation. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:5-5`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:19-19`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`
 
 ## S7.05: Conversation plus source-inspector split view.
 
@@ -42,9 +41,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`,
 | mobile | partial | Sources appear as a collapsible list under each answer and inside a full-screen report view; there is no inspector beside the conversation, even on tablets. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Sources render inline as an activity list inside the assistant bubble; there is no inspector pane beside the transcript. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:34-34`, `apps/extension/src/features/side-panel/bubbles.ts:406-410`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:34-34`
 
 ## S7.06: Conversation plus browser split view.
 

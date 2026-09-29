@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
@@ -252,6 +253,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     connectorId,
     isCustom: Boolean(!provider && discovered),
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policyDecision.allowed) {
     return fail(OAUTH_START_STATUS_POLICY_BLOCKED, 403, policyDecision.reason);
