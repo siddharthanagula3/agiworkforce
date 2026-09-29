@@ -17,6 +17,7 @@ export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const MIGRATIONS_DIR = 'apps/web/db/neon';
 export const STORE_PATH = 'apps/web/lib/server/image-generation-jobs.ts';
 export const EXECUTOR_PATH = 'apps/web/app/api/media/image/lib/image-job-executor.ts';
+export const CONTRACT_PATH = 'packages/contracts/types/src/image-jobs.ts';
 
 const JOB_TABLE = 'image_generation_jobs';
 const TERMINAL_CONSTRAINT = `${JOB_TABLE}_terminal_shape`;
@@ -112,6 +113,12 @@ export function readTerminalShape(repoRoot = REPO_ROOT) {
   return { classified, terminal };
 }
 
+export function readConstArray(source, name) {
+  const match = new RegExp(`export const ${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(source);
+  if (!match) return null;
+  return unique(quoted(match[1]));
+}
+
 export function readUnion(source, name) {
   const match = new RegExp(`export type ${name}\\s*=([^;]+);`).exec(source);
   if (!match) return null;
@@ -127,8 +134,9 @@ export function checkImageJobStates(repoRoot = REPO_ROOT) {
   const failures = [];
   const store = read(repoRoot, STORE_PATH);
   const executor = read(repoRoot, EXECUTOR_PATH);
-  if (store === null || executor === null) {
-    failures.push('the durable image job store or its executor is missing');
+  const contract = read(repoRoot, CONTRACT_PATH);
+  if (store === null || executor === null || contract === null) {
+    failures.push('the durable image job store, its executor or the shared contract is missing');
     return failures;
   }
 
@@ -143,6 +151,7 @@ export function checkImageJobStates(repoRoot = REPO_ROOT) {
   for (const [label, declared] of [
     ['the store type', storeStatuses],
     ['the public snapshot type', publicStatuses],
+    ['the shared client contract', readConstArray(contract, 'IMAGE_JOB_STATUSES')],
   ]) {
     if (declared === null) {
       failures.push(`${label} does not declare a status union`);
@@ -183,7 +192,9 @@ function main() {
     for (const failure of failures) console.error(`  - ${failure}`);
     process.exit(1);
   }
-  console.log('Durable image job states: SQL, store and snapshot agree.');
+  console.log(
+    'Durable image job states: SQL, store, snapshot and the shared client contract agree.',
+  );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

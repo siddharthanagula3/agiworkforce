@@ -229,6 +229,31 @@ test('a route declared as a navigator Screen counts as reachable', () => {
   assert.deepEqual(violations, []);
 });
 
+test('a nested dynamic route declared by its full screen name counts as reachable', () => {
+  const route = {
+    surface: 'mobile',
+    file: 'app/(app)/open/[target]/[id].tsx',
+    routeRelative: '(app)/open/[target]/[id].tsx',
+    route: '/open/[target]/[id]',
+  };
+  assert.deepEqual(
+    analyzeRouteNavigation({
+      routes: [route],
+      literalsByFile: new Map(),
+      declaredScreens: new Set(['open/[target]/[id]']),
+    }),
+    [],
+  );
+  assert.equal(
+    analyzeRouteNavigation({
+      routes: [route],
+      literalsByFile: new Map(),
+      declaredScreens: new Set(['open/[slug]/[id]']),
+    }).length,
+    1,
+  );
+});
+
 test('a route file cannot vouch for itself', () => {
   const violations = analyzeRouteNavigation({
     routes: [

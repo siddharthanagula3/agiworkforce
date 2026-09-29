@@ -6,6 +6,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaImageGenerationRequest } from '@agiworkforce/cloud-contracts';
+import { IN_FLIGHT_IMAGE_JOB_STATUSES, type ImageJobStatus } from '@agiworkforce/types';
 
 export type ImageGenRequest = ManagedMediaImageGenerationRequest;
 
@@ -13,7 +14,7 @@ export interface ImageGenResponse {
   success?: boolean;
   id?: string;
   job_id?: string;
-  status?: 'pending' | 'generating' | 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
+  status?: ImageJobStatus;
   images?: GeneratedImage[];
   provider?: string;
   model?: string;
@@ -31,7 +32,7 @@ export interface GeneratedImage {
 
 const IMAGE_JOB_POLL_MS = 2_000;
 const IMAGE_JOB_MAX_WAIT_MS = 170_000;
-const PENDING_JOB_STATUSES = new Set(['queued', 'processing', 'pending', 'generating']);
+const PENDING_JOB_STATUSES: ReadonlySet<ImageJobStatus> = new Set(IN_FLIGHT_IMAGE_JOB_STATUSES);
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
