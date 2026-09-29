@@ -335,6 +335,10 @@ pub struct Cli {
     #[arg(long)]
     dangerously_skip_permissions: bool,
 
+    /// Add Bypass and FullAuto to the Shift+Tab mode cycle without starting in them (DANGEROUS)
+    #[arg(long)]
+    allow_dangerously_skip_permissions: bool,
+
     /// Auto-approve safe tool calls (reads, searches, listings).
     /// Unknown tools still prompt; dangerous tools always prompt.
     #[arg(short = 'y', long)]
@@ -7771,6 +7775,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
+            cli.allow_dangerously_skip_permissions,
             model_fallback_chain.clone(),
             cli.name,
             team_mode,
