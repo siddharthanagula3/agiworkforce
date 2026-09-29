@@ -22,6 +22,7 @@ import {
   SessionExpiredView,
 } from '@/src/features/companion/components/ConnectionStateViews';
 import { DesktopInfoCard } from '@/src/features/companion/components/DesktopInfoCard';
+import { AccountComputersCard } from '@/src/features/companion/components/AccountComputersCard';
 import {
   DesktopSetupChecklistView,
   useDispatchSetupStore,
@@ -247,6 +248,8 @@ export default function CompanionScreen() {
           <ReconnectingBanner countdown={reconnectCountdown} onReconnect={manualReconnect} />
         </View>
       )}
+
+      <AccountComputersCard connectedName={isConnectedOrActive ? (desktopName ?? null) : null} />
 
       {status === 'disconnected' &&
         (hasSeenDispatchSetup && !showSetupAgain ? (
