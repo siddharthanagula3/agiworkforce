@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0349: every bank a person links, each removable on its own
+-- Migration 0350: every bank a person links, each removable on its own
 --
 -- Why    : bank linking kept one Plaid item per account and replaced it on the
 --          next link, so a second bank dropped the first and there was no way
