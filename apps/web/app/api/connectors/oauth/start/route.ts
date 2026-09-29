@@ -53,12 +53,15 @@ import {
 } from '@/lib/custom-connector-crypto';
 import {
   ConnectorOAuthStoreUnavailableError,
+  markAppReturn,
   createPendingAuthorization,
   listConnectorAccounts,
 } from '@/lib/connectors/oauth-store';
 import { scopeEscalation } from '@/lib/connectors/scopes-escalation';
 import { resolveRegistryAuthorization } from '@/lib/connectors/registry-authorization';
 import { McpPkceUnsupportedError } from '@/lib/connectors/mcp-oauth-provider';
+import { CONNECTOR_OAUTH_APP_RETURN_PARAM } from '@agiworkforce/cloud-contracts';
+import { stateOfAuthorizeUrl } from '@/lib/connectors/app-handoff';
 
 export const OAUTH_START_STATUS_NOT_CONFIGURED: ConnectorOAuthStartStatus = 'not_configured';
 export const OAUTH_START_STATUS_REGISTRATION_REJECTED: ConnectorOAuthStartStatus =
@@ -144,6 +147,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const connectorId = url.searchParams.get('connectorId')?.trim() ?? '';
   const returnPath = sanitizeConnectorReturnPath(url.searchParams.get('returnPath'));
   const wantsJson = url.searchParams.get('mode') === 'json';
+  const wantsAppReturn =
+    wantsJson && url.searchParams.get(CONNECTOR_OAUTH_APP_RETURN_PARAM) === '1';
+  const appHandoff = async (authorizeUrl: string): Promise<{ appReturn?: true }> => {
+    if (!wantsAppReturn) return {};
+    const state = stateOfAuthorizeUrl(authorizeUrl);
+    return state && (await markAppReturn(userId, state)) ? { appReturn: true } : {};
+  };
 
   let userId: string;
   let db: DatabaseAdapter;
@@ -270,6 +280,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({
           connectorId,
           authorizeUrl: started.authorizationUrl,
+          ...(await appHandoff(started.authorizationUrl)),
         } satisfies ConnectorOAuthStartResponse);
       }
       return NextResponse.redirect(started.authorizationUrl);
@@ -373,6 +384,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       connectorId,
       authorizeUrl,
+      ...(await appHandoff(authorizeUrl)),
       ...(needsReconsent
         ? { status: OAUTH_START_STATUS_SCOPE_RECONSENT, addedScopes: escalation.added }
         : {}),

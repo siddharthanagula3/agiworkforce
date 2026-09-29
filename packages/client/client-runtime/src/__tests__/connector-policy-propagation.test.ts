@@ -298,6 +298,7 @@ describe('an org block reaches every surface', () => {
       kind: 'oauth-required',
       connectorId: PERMITTED,
       authorizeUrl,
+      appReturn: false,
     });
   });
 
@@ -375,5 +376,43 @@ describe('the connector contract every surface compiles against', () => {
     expect(contract.policyPrecedence.every((code) => contract.accessCodes.includes(code))).toBe(
       true,
     );
+  });
+});
+
+describe('a connector sign-in started on the phone', () => {
+  it('asks the server to hand the sign-in back to the app', async () => {
+    const requested: string[] = [];
+    const runtime = createConnectorRuntime({
+      surface: 'mobile',
+      endpoints: ENDPOINTS,
+      http: {
+        async get(path: string) {
+          requested.push(path);
+          return path.startsWith(OAUTH_START_PATH)
+            ? {
+                connectorId: PERMITTED,
+                authorizeUrl: 'https://provider.example/authorize?state=abc',
+                appReturn: true,
+              }
+            : {};
+        },
+        async post() {
+          throw Object.assign(new ConnectorHttpError(409, 'oauth required'), {
+            body: { oauthStartPath: `${OAUTH_START_PATH}?connectorId=${PERMITTED}` },
+          });
+        },
+        async put() {
+          return {};
+        },
+        async delete() {
+          return {};
+        },
+      },
+    });
+
+    const result = await runtime.connect(PERMITTED);
+
+    expect(requested.find((path) => path.startsWith(OAUTH_START_PATH))).toContain('appReturn=1');
+    expect(result).toMatchObject({ kind: 'oauth-required', appReturn: true });
   });
 });

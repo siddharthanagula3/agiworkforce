@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     }
   }
   return {
+    markAppReturn: vi.fn(async () => true),
     authUser: vi.fn(),
     createPending: vi.fn(),
     listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
@@ -32,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  markAppReturn: (...a: unknown[]) => mocks.markAppReturn(...a),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
@@ -129,6 +131,27 @@ describe('GET /api/connectors/oauth/start', () => {
 
     expect(response.status).toBe(502);
     expect(mocks.createPending).not.toHaveBeenCalled();
+  });
+
+  it('marks a sign-in the app starts so the callback returns it to the app', async () => {
+    configureLinear();
+
+    const response = await GET(request('?connectorId=linear&mode=json&appReturn=1'));
+    const body = (await response.json()) as { authorizeUrl: string; appReturn?: boolean };
+
+    const state = new URL(body.authorizeUrl).searchParams.get('state');
+    expect(mocks.markAppReturn).toHaveBeenCalledWith('user-1', state);
+    expect(body.appReturn).toBe(true);
+  });
+
+  it('leaves a web sign-in to finish on the web', async () => {
+    configureLinear();
+
+    const response = await GET(request('?connectorId=linear&mode=json'));
+    const body = (await response.json()) as { appReturn?: boolean };
+
+    expect(mocks.markAppReturn).not.toHaveBeenCalled();
+    expect(body.appReturn).toBeUndefined();
   });
 
   it('sends the user to the provider with PKCE, state, and the configured redirect', async () => {
