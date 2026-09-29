@@ -1546,6 +1546,84 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Start a schedule when an event arrives instead of, or as well as, on its clock.
+    Triggers {
+        #[command(subcommand)]
+        action: ScheduleTriggersSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ScheduleTriggersSubcommand {
+    /// List the event triggers on a schedule.
+    List {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Maximum number of triggers to return.
+        #[arg(long, default_value_t = schedules::triggers::DEFAULT_TRIGGER_LIMIT)]
+        limit: u32,
+        /// Number of triggers to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule's task whenever an event arrives from GitHub, Slack, Gmail, Google Calendar or a connector.
+    Add {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Where the event comes from: github, slack, gmail, google_calendar or connector.
+        #[arg(long)]
+        source: String,
+        /// Event type to listen to, such as pull_request.opened. Repeatable or comma-separated. Defaults to every event the source sends.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// What to listen to: a GitHub repository as owner/name, a Slack workspace id or a Gmail address.
+        #[arg(long)]
+        account: Option<String>,
+        /// Name shown for the trigger.
+        #[arg(long)]
+        name: Option<String>,
+        /// Only fire when this holds, written FIELD OPERATOR VALUE, such as "data.baseRef equals main". Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+        /// Ignore repeats of the event for this many seconds.
+        #[arg(long, default_value_t = 0)]
+        debounce: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a trigger from starting runs until it is resumed.
+    Pause {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused trigger start runs again.
+    Resume {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register a Gmail trigger's mailbox watch again after it lapsed or failed.
+    Watch {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a trigger. The schedule and its other triggers stay.
+    Remove {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
@@ -3973,11 +4051,148 @@ async fn handle_schedules_command(
                 *json,
             )
         }),
+        SchedulesSubcommand::Triggers { action } => {
+            handle_schedule_triggers_command(&client, action, output).await
+        }
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+async fn handle_schedule_triggers_command(
+    client: &schedules::SchedulesClient,
+    action: &ScheduleTriggersSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use schedules::triggers;
+
+    let render = |value: serde_json::Value, text: String, json_flag: bool| -> Result<()> {
+        match structured_output(json_flag, output) {
+            StructuredOutput::Text => {
+                println!("{text}");
+                Ok(())
+            }
+            mode => print_structured(&value, mode),
+        }
+    };
+    let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
+    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
+        return Err(failed(schedules::ScheduleError::LocalPrivacy));
+    }
+
+    match action {
+        ScheduleTriggersSubcommand::List {
+            schedule,
+            limit,
+            offset,
+            json,
+        } => {
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let rows = client
+                .triggers(&schedule_id, *limit, *offset)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&rows)?,
+                triggers::render_triggers(&schedule_id, &rows),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Add {
+            schedule,
+            source,
+            events,
+            account,
+            name,
+            conditions,
+            debounce,
+            json,
+        } => {
+            let parsed = conditions
+                .iter()
+                .map(|spec| triggers::parse_condition(spec))
+                .collect::<std::result::Result<Vec<_>, String>>()
+                .map_err(|message| anyhow::anyhow!(message))?;
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let request = triggers::trigger_create_request(
+                &schedule_id,
+                source,
+                events,
+                account.as_deref(),
+                name.as_deref(),
+                parsed,
+                *debounce,
+            );
+            let created = client.create_trigger(&request).await.map_err(failed)?;
+            let endpoint = client.api_url(&created.webhook_path);
+            let show_secrets = interactive::person_at_terminal(io::stdout().is_terminal());
+            let mut value = if show_secrets {
+                serde_json::to_value(&created)?
+            } else {
+                serde_json::to_value(triggers::withhold_secrets(&created))?
+            };
+            if !show_secrets && triggers::created_has_secrets(&created) {
+                value["secretsWithheld"] = serde_json::Value::String(
+                    triggers::withheld_secrets_notice(&created.trigger.id),
+                );
+            }
+            render(
+                value,
+                triggers::render_created_trigger(&created, &endpoint, show_secrets),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Pause { trigger, json }
+        | ScheduleTriggersSubcommand::Resume { trigger, json } => {
+            let enabled = matches!(action, ScheduleTriggersSubcommand::Resume { .. });
+            let updated = client
+                .set_trigger_enabled(trigger, enabled)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Watch { trigger, json } => {
+            let updated = client
+                .register_trigger_watch(trigger)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Remove { trigger, yes, json } => {
+            if let Some(refusal) = triggers::removal_refusal(
+                trigger,
+                interactive::can_prompt() && !interactive::spawned_by_agent(),
+            ) {
+                anyhow::bail!(refusal);
+            }
+            if !confirm_destructive(
+                &format!(
+                    "Delete trigger {trigger}? Its events stop starting runs of the schedule. \
+                     This cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the trigger in place.");
+                return Ok(());
+            }
+            client.delete_trigger(trigger).await.map_err(failed)?;
+            render(
+                serde_json::json!({ "deleted": trigger }),
+                format!("Deleted trigger {trigger}."),
+                *json,
+            )
+        }
     }
 }
 

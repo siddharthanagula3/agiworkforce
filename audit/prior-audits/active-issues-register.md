@@ -695,7 +695,7 @@ catalogue now exposes those access controls while native purchases are disabled
 for store setup; redeeming a code never enables an unconfigured purchase.
 Mobile Billing's plan row now offers the waitlist directly during that gate,
 while the panel below handles access-code entry without a duplicate join action.
-server setting `BILLING_UPGRADE_WAITLIST_ENABLED=false` can later remove the
+server setting `AGI_BILLING_WAITLIST_OPEN=1` can later remove the
 gate for web checkout and native IAP without a client release; the web upgrade
 flow reads that setting through the authenticated waitlist endpoint. The gate
 defaults on. Focused IAP and waitlist tests pass, but real StoreKit sandbox

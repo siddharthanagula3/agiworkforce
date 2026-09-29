@@ -25,6 +25,7 @@ import {
   type BackgroundShellOutput,
   type ShellRunResult,
 } from '@agiworkforce/local-runtime-contract';
+import { isPhoneStepTool, type PhoneStepTool } from '@agiworkforce/types';
 import { noteComputerUseConversation } from './computer-use-conversation';
 import { DesktopHostUnavailable } from './runtime-client';
 
@@ -156,7 +157,7 @@ type BrowserStepTool = Extract<DeviceStepTool, `device_browser_${string}`>;
 
 type ActionStepTool = Exclude<
   DeviceStepTool,
-  'device_screenshot' | 'device_zoom' | BrowserStepTool
+  'device_screenshot' | 'device_zoom' | BrowserStepTool | PhoneStepTool
 >;
 
 function isBrowserStepTool(tool: DeviceStepTool): tool is BrowserStepTool {
@@ -408,7 +409,7 @@ export async function executeDeviceStep(
   tool: string,
   input: Record<string, unknown>,
 ): Promise<DeviceStepOutcome> {
-  if (!isDeviceStepTool(tool)) {
+  if (!isDeviceStepTool(tool) || isPhoneStepTool(tool)) {
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
   if (isScreenDeviceStep(tool)) noteComputerUseConversation();

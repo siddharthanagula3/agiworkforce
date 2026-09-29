@@ -84,6 +84,13 @@ fn value_patterns() -> &'static Vec<(Regex, &'static str)> {
                 .expect("named secret regex"),
                 "$1=[REDACTED]",
             ),
+            (
+                Regex::new(
+                    r#"(["']?)\b([a-z][A-Za-z0-9]*(?:Secret|Token|Password)|verificationCode)\b(["']?\s*[=:]\s*)(["']?)[^\s,'"}]{8,}(["']?)"#,
+                )
+                .expect("camelCase secret key regex"),
+                "$1$2$3$4[REDACTED]$5",
+            ),
             // `-p` only counts as a flag when it is a whole argument: an
             // unanchored match mangles every hyphenated word (`raw-parallel`).
             (
@@ -262,6 +269,43 @@ mod tests {
             redact_tool_output("curl --password hunter2"),
             "curl --password [REDACTED]"
         );
+    }
+
+    #[test]
+    fn tool_output_redacts_camel_case_secret_keys_in_json_and_assignments() {
+        let json = r#"{"trigger":{"id":"t-1"},"signingSecret":"whsec_0a1b2c3d4e5f6a7b","verificationCode":"a1b2c3d4e5f6","clientSecret":"cs_live_1234567890","refreshToken":"rt-abcdefgh12345678"}"#;
+        let redacted = redact_tool_output(json);
+        for secret in [
+            "whsec_0a1b2c3d4e5f6a7b",
+            "a1b2c3d4e5f6",
+            "cs_live_1234567890",
+            "rt-abcdefgh12345678",
+        ] {
+            assert!(
+                !redacted.contains(secret),
+                "secret survived: {secret} in {redacted}"
+            );
+        }
+        assert!(
+            redacted.contains(r#""signingSecret":"[REDACTED]""#),
+            "{redacted}"
+        );
+        assert!(redacted.contains(r#""trigger":{"id":"t-1"}"#), "{redacted}");
+        assert_eq!(
+            redact_tool_output("accessToken = abcdef0123456789"),
+            "accessToken=[REDACTED]"
+        );
+    }
+
+    #[test]
+    fn camel_case_type_declarations_are_not_secrets() {
+        for line in [
+            "  signingSecret: string | null;",
+            "interface Session { accessToken: string }",
+            "const verificationCode = code;",
+        ] {
+            assert_eq!(redact_tool_output(line), line, "mangled: {line}");
+        }
     }
 
     #[test]
