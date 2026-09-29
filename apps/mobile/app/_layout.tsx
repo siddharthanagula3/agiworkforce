@@ -40,6 +40,7 @@ import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { AppLockOverlay } from '@/src/features/auth/components/AppLockOverlay';
+import { AccountSecurityVerificationPrompt } from '@/src/features/auth/components/AccountSecurityVerificationPrompt';
 import { SecureStorageUnavailable } from '@/src/features/auth/components/SecureStorageUnavailable';
 import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
@@ -85,6 +86,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
+import { ToastHost } from '@/src/shared/components/Toast';
 import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
@@ -765,6 +767,8 @@ export default function RootLayout() {
             {/* Global offline banner, renders above all content when NetInfo is offline */}
             <OfflineBanner />
             <CloudSyncErrorBanner />
+            <ToastHost />
+            <AccountSecurityVerificationPrompt />
             {/* The lock covers the app, it does not replace it: unmounting the
                 navigator on every resume discarded the open conversation. */}
             {isUnlocked && !isCovered ? null : (

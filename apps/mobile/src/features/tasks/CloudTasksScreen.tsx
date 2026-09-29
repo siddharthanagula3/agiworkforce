@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -315,7 +315,7 @@ export function CloudTasksScreen() {
   const stopRun = useCloudTaskStore((state) => state.stopRun);
   const reset = useCloudTaskStore((state) => state.reset);
 
-  const tier = useTierStore((state) => state.tier);
+  const grantedCapabilities = useTierStore((state) => state.grantedCapabilities);
   const [startWorkVisible, setStartWorkVisible] = useState(false);
   const [startWorkSubmitting, setStartWorkSubmitting] = useState(false);
   const [startWorkError, setStartWorkError] = useState<string | null>(null);
@@ -433,7 +433,7 @@ export function CloudTasksScreen() {
     );
   }
 
-  const canStartWork = canUseBillingPlanCapability(tier, 'agi_work');
+  const canStartWork = grantedCapabilities.includes('canUseAgiWork');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>

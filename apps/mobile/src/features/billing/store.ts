@@ -6,7 +6,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   effectivePlanTier,
   normalizeBillingPlanTier,
-  resolveCapabilityDecision,
+  resolveCapabilityDocumentDecision,
 } from '@agiworkforce/types';
 import type { BillingPlanTier, CapabilityDecision, PlatformCapability } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
@@ -84,9 +84,8 @@ export const useTierStore = create<TierState>()(
             billingCancelsAtPeriodEnd: data.plan.cancel_at_period_end ?? false,
             lastRefreshedAt: new Date().toISOString(),
             codeExecutionAvailable:
-              (data.feature_flags.code_execution ?? false) &&
-              (data.capability_handshake === undefined ||
-                grantedCapabilities.includes('canUseCloudExecution')),
+              resolveCapabilityDocumentDecision(data.capability_handshake, 'canUseCloudExecution')
+                ?.allowed === true,
             genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
             grantedCapabilities,
             capabilityDocument: data.capability_handshake ?? null,
@@ -162,20 +161,7 @@ rehydrateWhenMmkvReady(useTierStore, 'tier-store');
 export function resolveMobileCapabilityDecision(
   capability: PlatformCapability,
 ): CapabilityDecision | null {
-  const { capabilityDocument } = useTierStore.getState();
-  if (!capabilityDocument) return null;
-  return resolveCapabilityDecision(
-    {
-      granted: capabilityDocument.granted as PlatformCapability[],
-      deniedBy: capabilityDocument.deniedBy,
-      sources: capabilityDocument.sources,
-      limits: capabilityDocument.limits.map((limit) => ({
-        ...limit,
-        capabilityId: limit.capabilityId as PlatformCapability | null,
-      })),
-    },
-    capability,
-  );
+  return resolveCapabilityDocumentDecision(useTierStore.getState().capabilityDocument, capability);
 }
 
 export function isCapabilityRequestable(capability: string): boolean {

@@ -5,7 +5,10 @@ import {
   deleteLibraryAsset,
   fetchLibraryPage,
   LIBRARY_PAGE_SIZE,
+  permanentlyDeleteLibraryAsset,
+  restoreLibraryAsset,
   type LibraryAsset,
+  type LibraryScope,
 } from './libraryClient';
 import { useLibraryCacheStore } from './libraryCacheStore';
 
@@ -18,9 +21,13 @@ export interface LibraryAssetsState {
   error: string | null;
   showingCachedPage: boolean;
   signedOut: boolean;
+  storageUsedBytes: number | null;
+  storageLimitBytes: number | null;
   refresh: () => void;
   loadMore: () => void;
   removeAsset: (id: string) => Promise<void>;
+  restoreAsset: (id: string) => Promise<void>;
+  permanentlyDeleteAsset: (id: string) => Promise<void>;
 }
 
 const LIBRARY_LOAD_ERROR = 'The Library could not be reached. Pull to try again.';
@@ -28,7 +35,11 @@ const LIBRARY_LOAD_ERROR = 'The Library could not be reached. Pull to try again.
 export function useLibraryAssets(
   search: string,
   sort: LibrarySort = LIBRARY_DEFAULT_SORT,
+  scope: LibraryScope = {},
 ): LibraryAssetsState {
+  const { origin, kind, deleted } = scope;
+  const scopeKey = `${origin ?? ''}|${kind ?? ''}|${deleted ? 'deleted' : ''}`;
+  const defaultScope = scopeKey === '||';
   const ownerId = useAuthStore((state) => state.clerkUserId);
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
@@ -47,8 +58,13 @@ export function useLibraryAssets(
     ownerId: string;
     search: string;
     sort: LibrarySort;
+    scopeKey: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [storage, setStorage] = useState<{ used: number | null; limit: number | null }>({
+    used: null,
+    limit: null,
+  });
   const [showingCachedPage, setShowingCachedPage] = useState(false);
   const requestRef = useRef(0);
 
@@ -77,22 +93,30 @@ export function useLibraryAssets(
       setShowingCachedPage(false);
 
       try {
-        const page = await fetchLibraryPage({ offset: 0, search, sort });
+        const page = await fetchLibraryPage({ offset: 0, search, sort, origin, kind, deleted });
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
         setAssets(page.assets);
         setNextOffset(page.nextOffset);
         setHasMore(page.hasMore);
-        setLoadedScope({ ownerId, search, sort });
+        setLoadedScope({ ownerId, search, sort, scopeKey });
         setShowingCachedPage(false);
         setError(null);
-        if (!search.trim() && sort === LIBRARY_DEFAULT_SORT)
+        if (!deleted) {
+          setStorage({
+            used: page.storageUsedBytes ?? null,
+            limit: page.storageLimitBytes ?? null,
+          });
+        }
+        if (!search.trim() && sort === LIBRARY_DEFAULT_SORT && defaultScope)
           rememberLibraryPage(ownerId, page.assets);
       } catch {
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
         const cached =
-          search.trim() || sort !== LIBRARY_DEFAULT_SORT ? null : readLibraryPage(ownerId);
+          search.trim() || sort !== LIBRARY_DEFAULT_SORT || !defaultScope
+            ? null
+            : readLibraryPage(ownerId);
         setAssets(cached ?? []);
-        setLoadedScope({ ownerId, search, sort });
+        setLoadedScope({ ownerId, search, sort, scopeKey });
         setHasMore(false);
         setNextOffset(null);
         setShowingCachedPage(Boolean(cached));
@@ -104,7 +128,19 @@ export function useLibraryAssets(
         }
       }
     },
-    [clearLibraryCache, ownerId, readLibraryPage, rememberLibraryPage, search, sort],
+    [
+      clearLibraryCache,
+      defaultScope,
+      deleted,
+      kind,
+      origin,
+      ownerId,
+      readLibraryPage,
+      rememberLibraryPage,
+      scopeKey,
+      search,
+      sort,
+    ],
   );
 
   useEffect(() => {
@@ -121,6 +157,7 @@ export function useLibraryAssets(
       loadedScope?.ownerId !== ownerId ||
       loadedScope.search !== search ||
       loadedScope.sort !== sort ||
+      loadedScope.scopeKey !== scopeKey ||
       !hasMore ||
       nextOffset === null ||
       loadingMore ||
@@ -132,7 +169,15 @@ export function useLibraryAssets(
     const request = requestRef.current;
     const offset = nextOffset;
     setLoadingMore(true);
-    void fetchLibraryPage({ offset, limit: LIBRARY_PAGE_SIZE, search, sort })
+    void fetchLibraryPage({
+      offset,
+      limit: LIBRARY_PAGE_SIZE,
+      search,
+      sort,
+      origin,
+      kind,
+      deleted,
+    })
       .then((page) => {
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
         setAssets((current) => {
@@ -151,7 +196,11 @@ export function useLibraryAssets(
         if (requestRef.current === request && ownerIdRef.current === ownerId) setLoadingMore(false);
       });
   }, [
+    deleted,
     hasMore,
+    kind,
+    origin,
+    scopeKey,
     loadedScope,
     loading,
     loadingMore,
@@ -174,9 +223,33 @@ export function useLibraryAssets(
     [ownerId, removeLibraryAsset],
   );
 
+  const restoreAsset = useCallback(
+    async (id: string) => {
+      if (!ownerId) return;
+      await restoreLibraryAsset(id);
+      if (ownerIdRef.current !== ownerId) return;
+      setAssets((current) => current.filter((asset) => asset.id !== id));
+    },
+    [ownerId],
+  );
+
+  const permanentlyDeleteAsset = useCallback(
+    async (id: string) => {
+      if (!ownerId) return;
+      await permanentlyDeleteLibraryAsset(id);
+      if (ownerIdRef.current !== ownerId) return;
+      setAssets((current) => current.filter((asset) => asset.id !== id));
+      removeLibraryAsset(ownerId, id);
+    },
+    [ownerId, removeLibraryAsset],
+  );
+
   return {
     assets:
-      loadedScope?.ownerId === ownerId && loadedScope.search === search && loadedScope.sort === sort
+      loadedScope?.ownerId === ownerId &&
+      loadedScope.search === search &&
+      loadedScope.sort === sort &&
+      loadedScope.scopeKey === scopeKey
         ? assets
         : [],
     loading,
@@ -186,8 +259,12 @@ export function useLibraryAssets(
     error,
     showingCachedPage,
     signedOut: !ownerId,
+    storageUsedBytes: storage.used,
+    storageLimitBytes: storage.limit,
     refresh,
     loadMore,
     removeAsset,
+    restoreAsset,
+    permanentlyDeleteAsset,
   };
 }

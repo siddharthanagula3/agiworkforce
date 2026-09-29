@@ -1,6 +1,11 @@
 import { api } from './api';
 import {
+  parseAccountUsageAllowances,
+  parseAccountUsageHistory,
   parseManagedUsageSummaryResponse,
+  type AccountUsageAllowances,
+  type AccountUsageHistoryGranularity,
+  type AccountUsageHistorySummary,
   type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
@@ -44,4 +49,20 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
 export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
   const data = await api.get<unknown>('/api/usage');
   return project(parseManagedUsageSummaryResponse(data));
+}
+
+export async function fetchUsageHistory(
+  granularity: AccountUsageHistoryGranularity,
+): Promise<AccountUsageHistorySummary> {
+  const history = parseAccountUsageHistory(
+    await api.get<unknown>(`/api/usage/history?granularity=${granularity}`),
+  );
+  if (!history) throw new Error('The usage history could not be read.');
+  return history;
+}
+
+export async function fetchUsageAllowances(): Promise<AccountUsageAllowances> {
+  const allowances = parseAccountUsageAllowances(await api.get<unknown>('/api/usage/limits'));
+  if (!allowances) throw new Error('The monthly allowances could not be read.');
+  return allowances;
 }

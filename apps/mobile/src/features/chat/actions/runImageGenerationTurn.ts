@@ -27,6 +27,7 @@ interface ImageTurnCompletion {
   persistenceWarning?: string;
   revisedPrompt?: string;
   model?: string;
+  aspectRatio?: string;
 }
 
 export interface RunImageGenerationTurnInput {
@@ -35,8 +36,10 @@ export interface RunImageGenerationTurnInput {
   prompt: string;
   model: string;
   aspectRatio?: ImageGenRequest['aspect_ratio'];
+  transparentBackground?: boolean;
   operation?: ManagedMediaImageOperation;
   sourceImage?: MobileImageReferenceAttachment;
+  referenceImages?: MobileImageReferenceAttachment[];
   ownerId: string;
   onStarted?: () => void;
   begin: (
@@ -58,7 +61,10 @@ export interface RunImageGenerationTurnInput {
 }
 
 export interface ImageGenerationTurnDependencies {
-  generate: (request: ImageGenRequest) => Promise<ImageGenResponse>;
+  generate: (
+    request: ImageGenRequest,
+    options?: { operationId?: string },
+  ) => Promise<ImageGenResponse>;
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
   readReferenceImage?: (uri: string) => Promise<string>;
@@ -146,10 +152,13 @@ export async function runImageGenerationTurn(
         ? input.operation
         : null;
     let referenceBase64: string | null = null;
+    let guideImagesBase64: string[] = [];
     if (referenceOperation && input.sourceImage) {
       try {
-        referenceBase64 = await (dependencies.readReferenceImage ?? readReferenceImageBase64)(
-          input.sourceImage.uri,
+        const readImage = dependencies.readReferenceImage ?? readReferenceImageBase64;
+        referenceBase64 = await readImage(input.sourceImage.uri);
+        guideImagesBase64 = await Promise.all(
+          (input.referenceImages ?? []).map((image) => readImage(image.uri)),
         );
       } catch (error) {
         if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
@@ -164,14 +173,21 @@ export async function runImageGenerationTurn(
     }
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const result = await withTimeout(
-      dependencies.generate({
-        prompt: input.prompt,
-        model: input.model,
-        ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
-        ...(referenceOperation && referenceBase64
-          ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
-          : {}),
-      }),
+      dependencies.generate(
+        {
+          prompt: input.prompt,
+          model: input.model,
+          ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+          ...(input.transparentBackground ? { transparent_background: true } : {}),
+          ...(referenceOperation && referenceBase64
+            ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
+            : {}),
+          ...(referenceOperation && referenceBase64 && guideImagesBase64.length > 0
+            ? { reference_images: guideImagesBase64.map((b64_json) => ({ b64_json })) }
+            : {}),
+        },
+        { operationId: assistantMessageId },
+      ),
       dependencies.timeoutMs ?? IMAGE_GENERATION_TIMEOUT_MS,
     );
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
@@ -199,6 +215,7 @@ export async function runImageGenerationTurn(
         : {}),
       revisedPrompt: image?.revisedPrompt,
       model: result.model,
+      aspectRatio: input.aspectRatio,
     });
     return { status: 'completed', assistantMessageId };
   } catch (error) {

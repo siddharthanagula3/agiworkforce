@@ -7,7 +7,7 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
 
@@ -24,7 +24,18 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
-import { fetchManagedSkills, type ManagedSkillSource, type ManagedSkillSummary } from './service';
+import {
+  fetchInstalledSkillNames,
+  fetchSkillCatalog,
+  installSkill,
+  isAuthoredSkill,
+  isPluginOwnedSkill,
+  isSkillInstalled,
+  skillActionFailureMessage,
+  uninstallSkill,
+  type ManagedSkillSource,
+  type ManagedSkillSummary,
+} from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
@@ -36,8 +47,15 @@ const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   extra: 'Added',
 };
 
+const PLUGIN_OWNED_NOTE = 'Controlled by its plugin installation.';
+
 export function skillRequirementNote(tools: readonly string[] | undefined): string {
   return tools?.length ? `Needs ${tools.join(', ')}` : '';
+}
+
+function skillStatusLabel(skill: ManagedSkillSummary, installed: boolean): string {
+  if (skill.lifecycle !== 'included') return 'Coming later';
+  return installed ? 'Installed' : 'Not installed';
 }
 
 function SkillsHeader({ onBack }: { onBack: () => void }) {
@@ -140,8 +158,8 @@ function SkillsGate({
             textAlign: 'center',
           }}
         >
-          Browse the Skills installed on your Managed Cloud deployment. Switching here does not send
-          Local chats or files to the cloud.
+          Browse and install Skills for AGI Cloud. Switching here does not send Local chats or files
+          to the cloud.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}
@@ -201,14 +219,25 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
 
 function SkillRow({
   skill,
+  installed,
+  pending,
+  actionError,
   onUse,
+  onToggleInstall,
 }: {
   skill: ManagedSkillSummary;
+  installed: boolean;
+  pending: boolean;
+  actionError: string | null;
   onUse: (skill: ManagedSkillSummary) => void;
+  onToggleInstall: (skill: ManagedSkillSummary, install: boolean) => void;
 }) {
   const colors = useThemeColors();
   const included = skill.lifecycle === 'included';
+  const pluginOwned = isPluginOwnedSkill(skill);
+  const canToggle = included && !isAuthoredSkill(skill) && !pluginOwned;
   const requirementNote = skillRequirementNote(skill.requiredTools);
+  const statusLabel = skillStatusLabel(skill, installed);
 
   return (
     <View
@@ -271,6 +300,11 @@ function SkillRow({
               {requirementNote}
             </Text>
           ) : null}
+          {included && pluginOwned ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+              {PLUGIN_OWNED_NOTE}
+            </Text>
+          ) : null}
           <View
             style={{
               marginTop: 3,
@@ -281,24 +315,45 @@ function SkillRow({
             }}
           >
             <Text
-              accessibilityLabel={`${skill.name} status: ${included ? 'Included' : 'Coming later'}`}
+              accessibilityLabel={`${skill.name} status: ${statusLabel}`}
               style={{
-                color: included ? colors.textSecondary : colors.textMuted,
+                flex: 1,
+                color: installed ? colors.textSecondary : colors.textMuted,
                 fontSize: 11,
                 fontWeight: '600',
               }}
             >
-              {included ? 'Included' : 'Coming later'}
+              {statusLabel}
             </Text>
-            {included ? (
+            {canToggle ? (
+              <Button
+                title={installed ? 'Uninstall' : 'Install'}
+                accessibilityLabel={`${installed ? 'Uninstall' : 'Install'} ${skill.name}`}
+                variant={installed ? 'outline' : 'primary'}
+                size="sm"
+                loading={pending}
+                onPress={() => onToggleInstall(skill, !installed)}
+              />
+            ) : null}
+            {installed ? (
               <Button
                 title="Use in chat"
                 accessibilityLabel={`Use ${skill.name} in chat`}
                 size="sm"
+                disabled={pending}
                 onPress={() => onUse(skill)}
               />
             ) : null}
           </View>
+          {actionError ? (
+            <Text
+              selectable
+              accessibilityRole="alert"
+              style={{ color: colors.agentError, fontSize: 12, lineHeight: 17 }}
+            >
+              {actionError}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -325,15 +380,15 @@ function CatalogIntro({ count }: { count: number }) {
           Managed Cloud catalog
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          Choose an included Skill for your next AGI Cloud message. Draft entries are marked Coming
-          later; installing or changing Skills remains a host or admin action.
+          Install a Skill to use it in your AGI Cloud messages, and uninstall it when you no longer
+          need it. Draft entries are marked Coming later.
         </Text>
       </View>
       <Text
-        accessibilityLabel={count === 1 ? '1 skill available' : `${count} skills available`}
+        accessibilityLabel={count === 1 ? '1 skill installed' : `${count} skills installed`}
         style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}
       >
-        {count === 1 ? '1 SKILL AVAILABLE' : `${count} SKILLS AVAILABLE`}
+        {count === 1 ? '1 SKILL INSTALLED' : `${count} SKILLS INSTALLED`}
       </Text>
     </View>
   );
@@ -505,6 +560,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
 
 export function SkillsScreen() {
   const router = useRouter();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const colors = useThemeColors();
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
@@ -512,8 +568,13 @@ export function SkillsScreen() {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const selectSkill = useMobileSkillSelectionStore((state) => state.selectSkill);
+  const selectedSkill = useMobileSkillSelectionStore((state) => state.selection);
+  const clearSkill = useMobileSkillSelectionStore((state) => state.clearSkill);
 
   const [skills, setSkills] = useState<ManagedSkillSummary[]>([]);
+  const [installed, setInstalled] = useState<ReadonlySet<string>>(() => new Set());
+  const [pendingSkill, setPendingSkill] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ name: string; message: string } | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -538,11 +599,41 @@ export function SkillsScreen() {
 
   const handleUseSkill = useCallback(
     (skill: ManagedSkillSummary) => {
-      if (!clerkUserId || skill.lifecycle !== 'included') return;
+      if (!clerkUserId || !isSkillInstalled(skill, installed)) return;
       selectSkill({ ownerId: clerkUserId, name: skill.name });
+      if (returnTo === 'composer' && router.canGoBack()) {
+        router.back();
+        return;
+      }
       router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
     },
-    [clerkUserId, router, selectSkill],
+    [clerkUserId, installed, returnTo, router, selectSkill],
+  );
+
+  const handleToggleInstall = useCallback(
+    async (skill: ManagedSkillSummary, install: boolean) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId || pendingSkill) return;
+      setPendingSkill(skill.name);
+      setActionError(null);
+      try {
+        const nextInstalled = install
+          ? await installSkill(skill.name)
+          : await uninstallSkill(skill.name);
+        if (!isCloudAccountEpochCurrent(account)) return;
+        setInstalled(nextInstalled);
+        if (!install && selectedSkill?.name === skill.name) clearSkill();
+      } catch (toggleError) {
+        if (!isCloudAccountEpochCurrent(account)) return;
+        setActionError({
+          name: skill.name,
+          message: skillActionFailureMessage(toggleError, install),
+        });
+      } finally {
+        if (isCloudAccountEpochCurrent(account)) setPendingSkill(null);
+      }
+    },
+    [clearSkill, clerkUserId, pendingSkill, selectedSkill],
   );
 
   const load = useCallback(
@@ -550,6 +641,7 @@ export function SkillsScreen() {
       const account = captureCloudAccountEpoch();
       if (!account || account.ownerId !== clerkUserId) {
         setSkills([]);
+        setInstalled(new Set());
         setError(null);
         return;
       }
@@ -559,9 +651,13 @@ export function SkillsScreen() {
       setError(null);
 
       try {
-        const nextSkills = await fetchManagedSkills(signal);
+        const [nextSkills, nextInstalled] = await Promise.all([
+          fetchSkillCatalog(signal),
+          fetchInstalledSkillNames(signal),
+        ]);
         if (!isCloudAccountEpochCurrent(account)) return;
         setSkills(nextSkills);
+        setInstalled(nextInstalled);
       } catch (loadError) {
         if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
         setError('Could not load Skills. Check your connection and try again.');
@@ -578,6 +674,8 @@ export function SkillsScreen() {
   useEffect(() => {
     if (!canLoad) {
       setSkills([]);
+      setInstalled(new Set());
+      setActionError(null);
       setError(null);
       setLoading(false);
       setRefreshing(false);
@@ -600,16 +698,23 @@ export function SkillsScreen() {
     );
   }, [query, skills]);
 
-  const availableSkillCount = useMemo(
-    () => skills.filter((skill) => skill.lifecycle === 'included').length,
-    [skills],
+  const installedSkillCount = useMemo(
+    () => skills.filter((skill) => isSkillInstalled(skill, installed)).length,
+    [installed, skills],
   );
 
   const renderSkill = useCallback(
     ({ item }: ListRenderItemInfo<ManagedSkillSummary>) => (
-      <SkillRow skill={item} onUse={handleUseSkill} />
+      <SkillRow
+        skill={item}
+        installed={isSkillInstalled(item, installed)}
+        pending={pendingSkill === item.name}
+        actionError={actionError?.name === item.name ? actionError.message : null}
+        onUse={handleUseSkill}
+        onToggleInstall={(skill, install) => void handleToggleInstall(skill, install)}
+      />
     ),
-    [handleUseSkill],
+    [actionError, handleToggleInstall, handleUseSkill, installed, pendingSkill],
   );
 
   if (!FEATURES.skills) return <FeatureUnavailable feature="Skills" />;
@@ -646,7 +751,7 @@ export function SkillsScreen() {
           }}
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
-              <CatalogIntro count={availableSkillCount} />
+              <CatalogIntro count={installedSkillCount} />
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />
               ) : null}

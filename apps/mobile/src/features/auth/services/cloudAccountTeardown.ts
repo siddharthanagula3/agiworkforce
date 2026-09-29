@@ -1,11 +1,12 @@
 import { whenMmkvReady } from '@/lib/mmkv';
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 
 const DEFAULT_CLOUD_SETTINGS = {
   themeMode: 'system',
   accentColor: 'neutral',
   fontPreference: 'default',
   notificationsEnabled: true,
-  speechLanguage: 'en',
+  speechLanguage: SPEECH_LANGUAGE_AUTO,
   autoListenEnabled: true,
   referencePastChats: false,
   generateMemoryFromHistory: true,

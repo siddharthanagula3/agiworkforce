@@ -71,7 +71,8 @@ export interface ConnectorOAuthStart {
 export type ConnectResult =
   | { kind: 'connected' }
   | { kind: 'oauth-required'; connectorId: string; authorizeUrl: string }
-  | { kind: 'install-required'; connectorId: string; installUrl: string };
+  | { kind: 'install-required'; connectorId: string; installUrl: string }
+  | { kind: 'credentials-required'; connectorId: string; credentialsPath: string };
 
 export type AddCustomConnectorInput = Pick<
   CreateCustomConnectorRequest,

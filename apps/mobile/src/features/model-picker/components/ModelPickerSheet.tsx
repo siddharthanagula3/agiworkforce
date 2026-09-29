@@ -21,13 +21,18 @@ import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlSt
 import {
   EFFORT_DESCRIPTION,
   EFFORT_LABEL,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfileTiers,
+  getModelFamilySlotForModel,
   getModelReasoning,
+  listPickerRecommendedModelIds,
+  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
+  DEFAULT_AUTO_MODE_ID,
   getModelByIdForCloudAccess,
   getModelListForCloudAccess,
   isAutoMode,
@@ -46,10 +51,33 @@ const EFFORT_LADDER_ORDER: readonly string[] = [
   'max',
 ];
 
+const ROUTING_PROFILE_OPTIONS_UNDER_AUTO = ROUTING_PROFILE_CHOICE_OPTIONS.filter(
+  (option) => option.choice !== 'auto',
+);
+
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
   return [...efforts]
     .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
     .map((effort) => effort as PickerEffort);
+}
+
+function byModelFamily(models: ModelDef[]): ModelDef[] {
+  const firstIndex = new Map<string, number>();
+  models.forEach((model, index) => {
+    const family = getModelFamilySlotForModel(model.id) ?? model.id;
+    if (!firstIndex.has(family)) firstIndex.set(family, index);
+  });
+  return models
+    .map((model, index) => ({ model, index }))
+    .sort((left, right) => {
+      const leftFamily = getModelFamilySlotForModel(left.model.id) ?? left.model.id;
+      const rightFamily = getModelFamilySlotForModel(right.model.id) ?? right.model.id;
+      return (
+        (firstIndex.get(leftFamily) ?? 0) - (firstIndex.get(rightFamily) ?? 0) ||
+        left.index - right.index
+      );
+    })
+    .map(({ model }) => model);
 }
 
 function groupBySurface(
@@ -77,7 +105,7 @@ function groupBySurface(
     sections.push({
       sectionId: `cloud-${tierId}`,
       sectionLabel: label,
-      models: [...available, ...locked],
+      models: [...byModelFamily(available), ...byModelFamily(locked)],
     });
   };
   for (const tier of getAutoRoutingProfileTiers()) pushTier(tier.profile, tier.label);
@@ -142,6 +170,54 @@ function AutoModeRow({
   );
 }
 
+function RoutingProfileRow({
+  label,
+  description,
+  selected,
+  onPress,
+}: {
+  label: string;
+  description: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Auto, ${label}: ${description}`}
+      accessibilityState={{ selected }}
+      style={{
+        minHeight: 52,
+        paddingLeft: 58,
+        paddingRight: 16,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: selected ? colors.accentSurface : colors.transparent,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            color: selected ? colors.teal : colors.textPrimary,
+            fontSize: 14,
+            fontWeight: '600',
+          }}
+        >
+          {label}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>
+          {description}
+        </Text>
+      </View>
+      {selected ? <Check size={17} color={colors.teal} /> : null}
+    </Pressable>
+  );
+}
+
 interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   openSignal?: number;
@@ -149,6 +225,7 @@ interface ModelPickerSheetProps {
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
+  offerRoutingProfiles?: boolean;
 }
 
 export function ModelPickerSheet({
@@ -158,12 +235,15 @@ export function ModelPickerSheet({
   onOpenCloudAccess,
   modelScope = 'local',
   conversationId,
+  offerRoutingProfiles = false,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const routingProfile = useModelStore((s) => s.routingProfile);
+  const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
@@ -216,6 +296,12 @@ export function ModelPickerSheet({
           ),
     [modelScope, subscriptionTier],
   );
+  const showRoutingProfiles =
+    offerRoutingProfiles &&
+    modelScope === 'cloud' &&
+    selectableAutoModes.some((mode) => mode.id === DEFAULT_AUTO_MODE_ID);
+  const activeRoutingProfile: RoutingProfileChoice =
+    showRoutingProfiles && selectedModel === DEFAULT_AUTO_MODE_ID ? routingProfile : 'auto';
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
   const effortOptions = useMemo(
@@ -297,11 +383,27 @@ export function ModelPickerSheet({
     [favorites, filteredModels],
   );
 
-  const nonFavoriteModels = useMemo(() => {
+  const recommendedModels = useMemo(() => {
+    if (query) return [];
     const pinnedIds = new Set([...favorites, ...recentModelDefs.map((model) => model.id)]);
+    const byId = new Map(filteredModels.map((model) => [model.id, model]));
+    return listPickerRecommendedModelIds()
+      .map((id) => byId.get(id))
+      .filter(
+        (model): model is ModelDef =>
+          model !== undefined && model.availability !== 'locked' && !pinnedIds.has(model.id),
+      );
+  }, [favorites, filteredModels, query, recentModelDefs]);
+
+  const nonFavoriteModels = useMemo(() => {
+    const pinnedIds = new Set([
+      ...favorites,
+      ...recentModelDefs.map((model) => model.id),
+      ...recommendedModels.map((model) => model.id),
+    ]);
     if (pinnedIds.size === 0) return filteredModels;
     return filteredModels.filter((model) => !pinnedIds.has(model.id));
-  }, [favorites, filteredModels, recentModelDefs]);
+  }, [favorites, filteredModels, recentModelDefs, recommendedModels]);
 
   const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
 
@@ -381,13 +483,14 @@ export function ModelPickerSheet({
   );
 
   const handleSelectAutoMode = useCallback(
-    (id: string) => {
+    (id: string, profile: RoutingProfileChoice = 'auto') => {
       setExpandedModelId(null);
+      if (showRoutingProfiles || !onSelect) setRoutingProfile(profile);
       if (onSelect) onSelect(id);
       else setModel(id);
       sheetRef.current?.close();
     },
-    [onSelect, setModel, sheetRef],
+    [onSelect, setModel, setRoutingProfile, sheetRef, showRoutingProfiles],
   );
 
   const clearSearch = useCallback(() => {
@@ -701,10 +804,21 @@ export function ModelPickerSheet({
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}
-                  selected={selectedModel === mode.id}
+                  selected={selectedModel === mode.id && activeRoutingProfile === 'auto'}
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
+              {showRoutingProfiles
+                ? ROUTING_PROFILE_OPTIONS_UNDER_AUTO.map((option) => (
+                    <RoutingProfileRow
+                      key={option.choice}
+                      label={option.label}
+                      description={option.description}
+                      selected={activeRoutingProfile === option.choice}
+                      onPress={() => handleSelectAutoMode(DEFAULT_AUTO_MODE_ID, option.choice)}
+                    />
+                  ))
+                : null}
             </View>
           ) : null}
 
@@ -722,6 +836,24 @@ export function ModelPickerSheet({
                 Recent
               </Text>
               {recentModelDefs.map((model) => renderModelRow(model, 'recent'))}
+            </View>
+          ) : null}
+
+          {recommendedModels.length > 0 ? (
+            <View style={{ marginBottom: 6 }}>
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 12,
+                  fontWeight: '700',
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                }}
+              >
+                Recommended
+              </Text>
+              {recommendedModels.map((model) => renderModelRow(model, 'recommended'))}
             </View>
           ) : null}
 

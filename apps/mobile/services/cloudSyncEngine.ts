@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { api } from './api';
 import { managedCloudProjects } from './managedCloudProjects';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
@@ -99,6 +100,7 @@ const conversationPort: ConversationStorePort = {
     };
   },
   insert: (record) => {
+    if (record.archived === true) return;
     useChatCloudMessageStore.getState().addCloudConversation({
       id: record.id,
       title: record.title,
@@ -115,6 +117,10 @@ const conversationPort: ConversationStorePort = {
     });
   },
   patch: (id, patch) => {
+    if (patch.archived === true) {
+      useChatCloudMessageStore.getState().removeCloudConversation(id);
+      return;
+    }
     useChatCloudMessageStore.getState().patchCloudConversation(id, patch);
   },
   remove: (id) => {
@@ -536,6 +542,9 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     const raw = await api.get<unknown>(`${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
     assertCloudAccountEpochCurrent(account);
     const res = MemorySyncPullResponseSchema.parse(raw);
+    if (res.memoryEnabled !== undefined) {
+      useMemorySyncStateStore.getState().setAccountMemoryEnabled(res.memoryEnabled);
+    }
     const memories = res.memories;
     if (memories.length > 0) {
       const current: CloudMemoryEntry[] = useCloudMemoryStore.getState().entries;
@@ -548,6 +557,9 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     if (!res.hasMore) break;
   }
 }
+
+const MEMORY_REFUSED_MESSAGE =
+  'Your account memory settings refused this memory, so it was not saved.';
 
 async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const { dirtyMemoryIds } = useMemorySyncStateStore.getState();
@@ -615,6 +627,17 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
         resolvedIds.add(conflict.id);
       }
     }
+    const refusals = new Set<string>();
+    for (const rejected of res.rejected ?? []) {
+      if (entryById.get(rejected.id)?.serverVersion === undefined) {
+        useCloudMemoryStore.getState().hardDeleteCloudMemory(rejected.id);
+      } else {
+        useMemorySyncStateStore.getState().setMemoryCursor('0');
+      }
+      resolvedIds.add(rejected.id);
+      refusals.add(rejected.message ?? MEMORY_REFUSED_MESSAGE);
+    }
+    if (refusals.size > 0) Alert.alert('Memory not saved', [...refusals].join('\n\n'));
   }
 
   for (const id of liveIds) {

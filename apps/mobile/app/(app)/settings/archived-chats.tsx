@@ -26,6 +26,7 @@ import {
   restoreArchivedConversation,
   type ArchivedConversation,
 } from '@/src/features/archived-chats';
+import { translatePlural } from '@/src/i18n/plural';
 
 type LoadState =
   | { kind: 'loading'; account: CloudAccountEpoch | null }
@@ -194,7 +195,7 @@ export default function ArchivedChatsScreen() {
       if (!isCurrentCloudScope(account)) return;
       Alert.alert(
         'Delete this chat?',
-        `"${conversation.title}" and its messages will be permanently deleted.`,
+        `"${conversation.title}" and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -228,7 +229,7 @@ export default function ArchivedChatsScreen() {
     if (!isCurrentCloudScope(account)) return;
     Alert.alert(
       'Delete all archived chats?',
-      'Every archived chat and its messages will be permanently deleted. This cannot be undone.',
+      'Every archived chat and its messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -249,7 +250,10 @@ export default function ArchivedChatsScreen() {
                 });
                 Alert.alert(
                   'Archived chats deleted',
-                  `${deleted} chat${deleted === 1 ? '' : 's'} deleted.`,
+                  translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
+                    one: 'Deleted {{count}} archived chat.',
+                    other: 'Deleted {{count}} archived chats.',
+                  }),
                 );
               } catch {
                 if (isCurrentCloudScope(account)) {

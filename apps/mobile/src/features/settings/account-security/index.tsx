@@ -46,6 +46,7 @@ import {
   fetchAuditLog,
   fetchLockdownMode,
   fetchSessionTimeout,
+  fetchSignInMethods,
   groupAuditEntries,
   revokeAccountSession,
   revokeAllAccountSessions,
@@ -57,7 +58,20 @@ import {
   type AuditLogEntry,
   type PasswordChange,
   type SessionTimeoutMinutes,
+  type SignInMethods,
 } from './service';
+
+const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  google: 'Google',
+  github: 'GitHub',
+  apple: 'Apple',
+  microsoft: 'Microsoft',
+  email: 'Email and password',
+};
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
+}
 
 function formatTimeout(minutes: SessionTimeoutMinutes): string {
   return minutes < 60 ? `${minutes} min` : `${minutes / 60} hr`;
@@ -345,11 +359,23 @@ export default function AccountSecurityScreen() {
     setRevokingSessionId(null);
   }, [clerkUserId]);
 
+  const [signInMethods, setSignInMethods] = useState<SignInMethods | null>(null);
+  const [signInMethodsError, setSignInMethodsError] = useState(false);
+
   useEffect(() => {
     if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
     void loadStatus(controller.signal);
     void loadSessions(controller.signal);
+    setSignInMethods(null);
+    setSignInMethodsError(false);
+    fetchSignInMethods(controller.signal)
+      .then((methods) => {
+        if (!controller.signal.aborted) setSignInMethods(methods);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSignInMethodsError(true);
+      });
     return () => controller.abort();
   }, [appMode, isClerkSignedIn, loadSessions, loadStatus]);
 
@@ -411,7 +437,58 @@ export default function AccountSecurityScreen() {
           />
         ) : null}
         <SettingsRow
+          label="Advanced Account Security"
+          icon={ShieldCheck}
+          value="Set up on web"
+          onPress={() => openOwnedWebPage(WEB_SECURITY_URL)}
+        />
+        <SettingsRow
           label="Open Web security"
+          icon={ExternalLink}
+          value="Web"
+          onPress={() => openOwnedWebPage(WEB_SECURITY_URL)}
+          isLast
+        />
+      </SettingsGroup>
+
+      <SettingsInfo
+        title="Sign-in methods"
+        body="Every way you can sign in to your AGI account. Add or remove one in Security settings on the web."
+        icon={Fingerprint}
+      />
+      <SettingsGroup>
+        {appMode !== 'cloud' ? (
+          <SettingsRow label="Sign-in methods" icon={Fingerprint} value="Cloud mode required" />
+        ) : signInMethodsError ? (
+          <SettingsRow label="Sign-in methods" icon={Fingerprint} value="Unavailable" />
+        ) : !signInMethods ? (
+          <SettingsRow label="Sign-in methods" icon={Fingerprint} value="Checking…" />
+        ) : (
+          <>
+            {signInMethods.identities.map((identity) => (
+              <SettingsRow
+                key={identity.id}
+                label={providerLabel(identity.provider)}
+                icon={KeyRound}
+                value={
+                  identity.lastAuthenticatedAt
+                    ? `Last used ${new Date(identity.lastAuthenticatedAt).toLocaleDateString()}`
+                    : 'Linked'
+                }
+              />
+            ))}
+            {signInMethods.keys.map((key) => (
+              <SettingsRow
+                key={key.id}
+                label={key.name}
+                icon={Fingerprint}
+                value={key.kind === 'passkey' ? 'Passkey' : 'Security key'}
+              />
+            ))}
+          </>
+        )}
+        <SettingsRow
+          label="Add or remove a sign-in method"
           icon={ExternalLink}
           value="Web"
           onPress={() => openOwnedWebPage(WEB_SECURITY_URL)}
@@ -567,8 +644,8 @@ export default function AccountSecurityScreen() {
       ) : null}
 
       <SettingsInfo
-        title="Unavailable account controls"
-        body="Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them."
+        title="Managed on the web"
+        body="Passkeys and security keys are added and removed in Security settings on the web. SMS MFA is not offered on mobile."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

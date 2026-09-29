@@ -61,6 +61,7 @@ export class ApiFreeCapacityError extends Error {
 export interface ApiHttpErrorContext {
   retryAfterSeconds?: number;
   requestId?: string;
+  body?: Record<string, unknown>;
 }
 
 export class ApiHttpError extends Error {
@@ -68,6 +69,7 @@ export class ApiHttpError extends Error {
   readonly code: string | null;
   readonly retryAfterSeconds: number | undefined;
   readonly requestId: string | undefined;
+  readonly body: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
@@ -81,6 +83,7 @@ export class ApiHttpError extends Error {
     this.code = code;
     this.retryAfterSeconds = context.retryAfterSeconds;
     this.requestId = context.requestId;
+    this.body = context.body;
   }
 }
 
@@ -131,6 +134,7 @@ export function httpErrorFrom(status: number, body: string): ApiHttpError {
   return new ApiHttpError(message ?? fallbackHttpMessage(status, retryAfterSeconds), status, code, {
     ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+    ...(parsed ? { body: parsed } : {}),
   });
 }
 

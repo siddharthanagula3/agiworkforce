@@ -192,7 +192,7 @@ export default function DataControlsScreen() {
     if (!account) return;
     Alert.alert(
       'Delete all chats?',
-      'Every chat in AGI Cloud, including archived ones, and all of their messages will be permanently deleted. This cannot be undone.',
+      'Every chat in AGI Cloud, including archived ones, and all of their messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web for 30 days.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -222,8 +222,8 @@ export default function DataControlsScreen() {
   return (
     <SettingsScreenShell title="Data Controls">
       <SettingsInfo
-        title="Model training is always off"
-        body="AGI does not use customer prompts, responses, or files to train AGI-owned models. This is a product policy, not an optional setting."
+        title="Model training"
+        body="AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings."
         icon={ShieldCheck}
       />
       <SettingsInfo

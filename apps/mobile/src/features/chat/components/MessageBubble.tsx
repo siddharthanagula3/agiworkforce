@@ -17,6 +17,11 @@ import {
   Volume2,
   Share2,
   Square,
+  ShieldAlert,
+  Quote,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
@@ -30,12 +35,21 @@ import { InlineArtifactCard } from './InlineArtifactCard';
 import * as voiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  useChatToolAllowanceStore,
+  useToolsAllowedForChat,
+} from '@/src/features/chat/store/chatToolAllowanceStore';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallDetailsSheet, ToolCallTimeline } from './ToolCallTimeline';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { API_URL } from '@/lib/constants';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
-import { getToolDisplayLabel, summarizeToolTimeline } from '@agiworkforce/types';
+import {
+  explainAutoRouteReason,
+  getToolDisplayLabel,
+  isTerminalToolStatus,
+  summarizeToolTimeline,
+} from '@agiworkforce/types';
 import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
@@ -45,12 +59,20 @@ import { VideoGenProgress } from './VideoGenProgress';
 import { ImageFullScreen } from './ImageFullScreen';
 import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
+import { StreamingArtifactCard } from './StreamingArtifactCard';
 import { CollapsibleSources } from './CollapsibleSources';
 import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
+import { AgiWorkPlanReview } from './AgiWorkPlanReview';
+import {
+  readAgiWorkPlanReview,
+  readAgiWorkPlanSteps,
+  type AgiWorkPlanDecision,
+} from '@/src/features/chat/utils/agiWorkPlan';
 import { ResearchSourcesAppendix } from './research/ResearchSourcesAppendix';
 import { ResearchReportSections } from './research/ResearchReportSections';
 import { readResearchRunState } from '@/src/features/chat/utils/researchRunState';
 import { MessageEditModal } from './MessageEditModal';
+import { SelectTextSheet } from './SelectTextSheet';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { parseAssistantThinking } from '@/stores/chat/chatExecutionStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
@@ -68,10 +90,17 @@ import {
   streamFailureNoticeText,
 } from '@/src/features/chat/utils/messageStreamError';
 import { offersModelSwitch } from '@/services/apiErrors';
-import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
+import { isApprovalTurnLive, useChatExecutionStore } from '@/stores/chat/chatExecutionStore';
 import type { ChatMessage, Artifact, ToolCall, ToolSearchResult } from '@/types/chat';
+import { useConversationArtifacts } from '@/src/features/chat/hooks/useConversationArtifacts';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
-import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedCloudAgentRunReferenceSchema,
+  describeAttachmentTruncation,
+  readPersistedInteractiveCards,
+  type VariantInfo,
+} from '@agiworkforce/cloud-contracts';
+import type { InteractiveCardResponsePayload } from '@agiworkforce/types';
 import {
   generatedFileArtifactsFromMetadata,
   mergeDerivedAndGeneratedFileArtifacts,
@@ -178,7 +207,174 @@ function MessageActionSheet({
   );
 }
 
+function TurnNotice({
+  icon: Icon,
+  message,
+  actionLabel,
+  actionAccessibilityLabel,
+  onAction,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  message: string;
+  actionLabel?: string;
+  actionAccessibilityLabel: string;
+  onAction?: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 6,
+        paddingLeft: 10,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.neutralSurface,
+      }}
+    >
+      <Icon size={14} color={colors.textSecondary} />
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 13,
+          lineHeight: 18,
+          color: colors.textSecondary,
+          paddingVertical: 8,
+        }}
+        accessibilityLiveRegion="polite"
+      >
+        {message}
+      </Text>
+      {actionLabel && onAction ? (
+        <Pressable
+          onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionAccessibilityLabel}
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+            {actionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
+const REFUSAL_FINISH_REASONS = new Set(['refusal', 'content_filter']);
+
+function splitQuotedReply(content: string): { quote: string; body: string } | null {
+  if (!content.startsWith('> ')) return null;
+  const end = content.indexOf('\n\n');
+  if (end < 0) return null;
+  const quote = content.slice(2, end).trim();
+  const body = content.slice(end + 2);
+  return quote && body.trim() ? { quote, body } : null;
+}
+
+function sentSkillName(metadata: ChatMessage['metadata']): string | null {
+  const replay = metadata?.sendReplay;
+  if (!replay || typeof replay !== 'object') return null;
+  const name = (replay as { skillName?: unknown }).skillName;
+  return typeof name === 'string' && name ? name : null;
+}
+
+function VariantPager({
+  variant,
+  noun,
+  onSelect,
+}: {
+  variant: VariantInfo;
+  noun: 'response' | 'version';
+  onSelect: (messageId: string) => void;
+}) {
+  const colors = useThemeColors();
+  const previousId = variant.previousId;
+  const nextId = variant.nextId;
+  return (
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center' }}
+      accessibilityLabel={`${noun === 'response' ? 'Response' : 'Version'} ${variant.index + 1} of ${variant.total}`}
+    >
+      <Pressable
+        onPress={previousId ? () => onSelect(previousId) : undefined}
+        disabled={!previousId}
+        accessibilityRole="button"
+        accessibilityLabel={`Previous ${noun}`}
+        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <ChevronLeft size={16} color={previousId ? colors.textSecondary : colors.textMuted} />
+      </Pressable>
+      <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+        {variant.index + 1} / {variant.total}
+      </Text>
+      <Pressable
+        onPress={nextId ? () => onSelect(nextId) : undefined}
+        disabled={!nextId}
+        accessibilityRole="button"
+        accessibilityLabel={`Next ${noun}`}
+        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <ChevronRight size={16} color={nextId ? colors.textSecondary : colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
+const USAGE_NUMBER = new Intl.NumberFormat();
+
+function answerUsageLine(metadata: ChatMessage['metadata']): string | null {
+  const read = (key: string) => {
+    const value = metadata?.[key];
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  };
+  const input = read('inputTokens');
+  const output = read('outputTokens');
+  const tokens =
+    read('tokensUsed') ??
+    (input !== undefined && output !== undefined ? input + output : undefined);
+  const durationMs = read('totalDurationMs');
+  const parts = [
+    tokens !== undefined ? `${USAGE_NUMBER.format(tokens)} tokens` : null,
+    durationMs !== undefined ? `${(durationMs / 1000).toFixed(1)}s` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function SentContextChip({
+  icon: Icon,
+  label,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  label: string;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        maxWidth: '85%',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: 4,
+      }}
+    >
+      <Icon size={12} color={colors.textMuted} />
+      <Text numberOfLines={2} style={{ flexShrink: 1, fontSize: 12, color: colors.textSecondary }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 function modelSupportsThinking(modelId?: string): boolean {
   if (!modelId || isAutoMode(modelId)) return true;
@@ -202,12 +398,29 @@ function getProvenance(model?: string): { provider?: string; model?: string } | 
   return { provider: 'AGI Cloud' };
 }
 
+function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
+  const requestedModel = metadata?.requestedModel;
+  const resolvedModel = metadata?.resolvedModel;
+  if (typeof requestedModel !== 'string' || typeof resolvedModel !== 'string') return null;
+  if (resolvedModel === requestedModel || isAutoMode(resolvedModel)) return null;
+  const routingReason = metadata?.routingReason;
+  const explanation = explainAutoRouteReason(
+    typeof routingReason === 'string' ? routingReason : null,
+  );
+  if (!isAutoMode(requestedModel) && !explanation) return null;
+  const choice = `Auto chose ${getDisplayName(resolvedModel)}`;
+  return explanation ? `${choice}: ${explanation}` : choice;
+}
+
 interface MessageBubbleProps {
   message: ChatMessage;
   onApprove?: (approvalId: string) => void;
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
+  onRetryWithModel?: (messageId: string) => void;
+  variant?: VariantInfo;
+  onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
@@ -215,11 +428,14 @@ interface MessageBubbleProps {
     messageId: string,
     toolCallId: string,
     decision: 'approved' | 'rejected',
+    guidance?: string,
   ) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
   onRetryResearch?: (messageId: string) => void;
   onStopResearch?: () => void;
+  onPauseResearch?: (messageId: string) => Promise<boolean>;
   isResumingResearch?: boolean;
+  onQuoteSelection?: (message: ChatMessage, text: string) => void;
 }
 
 function MessageActionButton({
@@ -252,6 +468,9 @@ export const MessageBubble = memo(function MessageBubble({
   onReject,
   onDeleteMessage,
   onRetryMessage,
+  onRetryWithModel,
+  variant,
+  onSelectVariant,
   onSwitchModel,
   onEditMessage,
   onReaction,
@@ -259,7 +478,9 @@ export const MessageBubble = memo(function MessageBubble({
   onResearchPlanDecision,
   onRetryResearch,
   onStopResearch,
+  onPauseResearch,
   isResumingResearch = false,
+  onQuoteSelection,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -285,8 +506,23 @@ export const MessageBubble = memo(function MessageBubble({
   const canonicalActivity = isAssistant
     ? readAgentActivityState(message.metadata?.agentActivity)
     : undefined;
+  const attachmentTruncationNotice = isUser
+    ? describeAttachmentTruncation(
+        Array.isArray(message.metadata?.truncatedAttachments)
+          ? (message.metadata.truncatedAttachments as string[])
+          : undefined,
+      )
+    : null;
+  const steerRunId = useMemo(() => {
+    const reference = ManagedCloudAgentRunReferenceSchema.safeParse(
+      message.metadata?.cloudAgentRun,
+    );
+    return reference.success ? reference.data.runId : undefined;
+  }, [message.metadata?.cloudAgentRun]);
   const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
+  const routeReceipt =
+    isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const parsedThinking = useMemo(
     () => (isAssistant ? parseAssistantThinking(message.content) : null),
@@ -310,6 +546,7 @@ export const MessageBubble = memo(function MessageBubble({
     message.id,
   ]);
   const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
+  const [selectTextVisible, setSelectTextVisible] = useRecyclingState(false, [message.id]);
   const [editText, setEditText] = useRecyclingState('', [message.id]);
   const [reaction, setReaction] = useRecyclingState<ReactionType>(
     (message.metadata?.reaction as ReactionType) ?? null,
@@ -337,6 +574,7 @@ export const MessageBubble = memo(function MessageBubble({
     void useChatMessageStore.getState().stopVideoGeneration(message.conversationId, message.id);
   }, [message.conversationId, message.id]);
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
+  const conversationArtifacts = useConversationArtifacts(message.conversationId, appMode);
   const inlineArtifacts = useMemo<Artifact[]>(() => {
     const scopedStoreArtifacts: Artifact[] = storedArtifacts
       .filter(
@@ -385,6 +623,39 @@ export const MessageBubble = memo(function MessageBubble({
     [appMode, message.interactiveCards, message.metadata],
   );
 
+  const conversationStreaming = useChatExecutionStore((s) =>
+    s.streamingConversationIds.includes(message.conversationId),
+  );
+
+  const handleRespondToCard = useCallback(
+    (cardId: string, payload: InteractiveCardResponsePayload) =>
+      useChatExecutionStore
+        .getState()
+        .respondToInteractiveCard(message.conversationId, message.id, cardId, payload),
+    [message.conversationId, message.id],
+  );
+
+  const agiWorkPlan = useMemo(
+    () => (isAssistant ? readAgiWorkPlanSteps(message.metadata?.agiWorkPlan) : null),
+    [isAssistant, message.metadata?.agiWorkPlan],
+  );
+  const agiWorkPlanReview = useMemo(
+    () => (isAssistant ? readAgiWorkPlanReview(message.metadata?.agiWorkPlanReview) : null),
+    [isAssistant, message.metadata?.agiWorkPlanReview],
+  );
+  const [agiWorkPlanBusy, setAgiWorkPlanBusy] = useRecyclingState(false, [message.id]);
+
+  const handleAgiWorkPlanDecision = useCallback(
+    (decision: AgiWorkPlanDecision) => {
+      if (decision.kind !== 'cancel') setAgiWorkPlanBusy(true);
+      void useChatExecutionStore
+        .getState()
+        .resolveAgiWorkPlan(message.conversationId, message.id, decision)
+        .finally(() => setAgiWorkPlanBusy(false));
+    },
+    [message.conversationId, message.id, setAgiWorkPlanBusy],
+  );
+
   const handleExpandArtifact = useCallback(
     (artifact: Artifact) => {
       setExpandedArtifact(artifact);
@@ -404,12 +675,64 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const handleResolveToolApproval = useCallback(
-    (toolCallId: string, decision: 'approved' | 'rejected') =>
-      onResolveToolApproval?.(message.id, toolCallId, decision),
+    (toolCallId: string, decision: 'approved' | 'rejected', guidance?: string) =>
+      onResolveToolApproval?.(message.id, toolCallId, decision, guidance),
     [onResolveToolApproval, message.id],
   );
 
   const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
+
+  const toolsAllowedForChat = useToolsAllowedForChat(message.conversationId);
+  const allowForChat = useChatToolAllowanceStore((state) => state.allowForChat);
+
+  const handleAllowToolForChat = useCallback(
+    (toolCallId: string, toolName: string, guidance?: string) => {
+      allowForChat(message.conversationId, toolName);
+      onResolveToolApproval?.(message.id, toolCallId, 'approved', guidance);
+    },
+    [allowForChat, message.conversationId, message.id, onResolveToolApproval],
+  );
+
+  const approvedForChatRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (
+      !onResolveToolApproval ||
+      message.isStreaming ||
+      approvalTurnExpired ||
+      toolsAllowedForChat.length === 0
+    ) {
+      return;
+    }
+    const highRiskToolCallIds = new Set(
+      (canonicalActivity?.entries ?? []).flatMap((entry) =>
+        entry.kind === 'tool' && entry.approval?.riskLevel === 'high' ? [entry.toolCallId] : [],
+      ),
+    );
+    for (const tool of message.toolCalls ?? []) {
+      if (
+        !tool.requiresApproval ||
+        !tool.toolCallId ||
+        tool.approvalDecision ||
+        tool.approvalRiskLevel === 'high' ||
+        highRiskToolCallIds.has(tool.toolCallId) ||
+        isTerminalToolStatus(tool.status) ||
+        !toolsAllowedForChat.includes(tool.name) ||
+        approvedForChatRef.current.has(tool.toolCallId)
+      ) {
+        continue;
+      }
+      approvedForChatRef.current.add(tool.toolCallId);
+      onResolveToolApproval(message.id, tool.toolCallId, 'approved');
+    }
+  }, [
+    approvalTurnExpired,
+    canonicalActivity,
+    message.id,
+    message.isStreaming,
+    message.toolCalls,
+    onResolveToolApproval,
+    toolsAllowedForChat,
+  ]);
 
   const handleImagePress = useCallback(
     (url: string) => {
@@ -437,11 +760,13 @@ export const MessageBubble = memo(function MessageBubble({
     setIsSpeaking(true);
     void voiceOutput
       .speak(message.content, {
+        ...voiceOutput.speechOptionsFromSettings(),
+        serverVoice: appMode === 'cloud',
         onDone: () => setIsSpeaking(false),
         onStopped: () => setIsSpeaking(false),
       })
       .catch(() => setIsSpeaking(false));
-  }, [isSpeaking, message.content, setIsSpeaking]);
+  }, [appMode, isSpeaking, message.content, setIsSpeaking]);
 
   useEffect(() => {
     return () => {
@@ -518,14 +843,31 @@ export const MessageBubble = memo(function MessageBubble({
     if (isUser && onEditMessage) {
       actions.push({ key: 'edit', label: 'Edit Message', run: handleOpenEditModal });
     }
+    if (isUser && onRetryMessage) {
+      actions.push({ key: 'resend', label: 'Resend', run: () => onRetryMessage(message.id) });
+    }
     if (!isUser && onRetryMessage) {
       actions.push({ key: 'retry', label: 'Retry', run: () => onRetryMessage(message.id) });
+    }
+    if (isAssistant && onRetryWithModel) {
+      actions.push({
+        key: 'retry-model',
+        label: 'Retry with Another Model',
+        run: () => onRetryWithModel(message.id),
+      });
     }
     actions.push({
       key: 'copy',
       label: 'Copy Message',
       run: () => void copy(message.content),
     });
+    if (displayContent.trim()) {
+      actions.push({
+        key: 'select-text',
+        label: 'Select Text',
+        run: () => setSelectTextVisible(true),
+      });
+    }
     if (isAssistant && message.content.trim()) {
       actions.push({ key: 'export', label: 'Export Message\u2026', run: handleShowExport });
     }
@@ -543,13 +885,16 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant,
     message.id,
     message.content,
+    displayContent,
     copy,
     onEditMessage,
     onRetryMessage,
+    onRetryWithModel,
     onDeleteMessage,
     handleOpenEditModal,
     handleShowExport,
     confirmDeleteMessage,
+    setSelectTextVisible,
   ]);
 
   const handleLongPress = useCallback(() => {
@@ -582,8 +927,13 @@ export const MessageBubble = memo(function MessageBubble({
   const accessibilityActionsList = useMemo<AccessibilityActionInfo[]>(() => {
     const actions: AccessibilityActionInfo[] = [];
     if (isUser && onEditMessage) actions.push({ name: 'edit', label: 'Edit message' });
+    if (isUser && onRetryMessage) actions.push({ name: 'resend', label: 'Resend message' });
     if (isAssistant && onRetryMessage) actions.push({ name: 'retry', label: 'Retry' });
+    if (isAssistant && onRetryWithModel) {
+      actions.push({ name: 'retry-model', label: 'Retry with another model' });
+    }
     actions.push({ name: 'copy', label: 'Copy message' });
+    if (displayContent.trim()) actions.push({ name: 'select-text', label: 'Select text' });
     if (isAssistant && message.content.trim()) {
       actions.push({ name: 'export', label: 'Export message' });
     }
@@ -602,10 +952,12 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant,
     onEditMessage,
     onRetryMessage,
+    onRetryWithModel,
     onDeleteMessage,
     message.content,
     message.toolCalls,
     canonicalActivity,
+    displayContent,
   ]);
 
   const handleAccessibilityAction = useCallback(
@@ -624,7 +976,14 @@ export const MessageBubble = memo(function MessageBubble({
           void copy(message.content);
           break;
         case 'retry':
+        case 'resend':
           onRetryMessage?.(message.id);
+          break;
+        case 'select-text':
+          setSelectTextVisible(true);
+          break;
+        case 'retry-model':
+          onRetryWithModel?.(message.id);
           break;
         case 'edit':
           handleOpenEditModal();
@@ -646,16 +1005,36 @@ export const MessageBubble = memo(function MessageBubble({
       copy,
       setAccessibilityTool,
       onRetryMessage,
+      onRetryWithModel,
       confirmDeleteMessage,
       handleOpenEditModal,
       handleShowExport,
+      setSelectTextVisible,
     ],
   );
 
   const isStreamingRow = message.isStreaming === true;
+  const reconnecting = useChatExecutionStore((state) =>
+    state.reconnectingMessageIds.includes(message.id),
+  );
+  const stopping = useChatExecutionStore((state) => state.stoppingMessageIds.includes(message.id));
+  const streamingLabel = stopping ? 'Stopping…' : reconnecting ? 'Reconnecting…' : undefined;
+  const finishReason = isAssistant ? message.metadata?.finishReason : undefined;
+  const stoppedByUser = !isStreamingRow && finishReason === 'stopped';
+  const usageLine = isAssistant && !isStreamingRow ? answerUsageLine(message.metadata) : null;
+  const refusedAnswer =
+    !isStreamingRow && typeof finishReason === 'string' && REFUSAL_FINISH_REASONS.has(finishReason);
+  const quotedReply = isUser ? splitQuotedReply(displayContent) : null;
+  const skillUsed = isUser ? sentSkillName(message.metadata) : null;
+  const bodyContent = quotedReply ? quotedReply.body : displayContent;
+  const inlineCitations = research ? researchSources : message.citations;
   const contentElements = useMemo(
-    () => renderMarkdownContent(displayContent, themeColors, { highlightCode: !isStreamingRow }),
-    [displayContent, themeColors, isStreamingRow],
+    () =>
+      renderMarkdownContent(bodyContent, themeColors, {
+        highlightCode: !isStreamingRow,
+        ...(inlineCitations ? { citations: inlineCitations } : {}),
+      }),
+    [bodyContent, themeColors, isStreamingRow, inlineCitations],
   );
 
   const imageWidth = Math.min(width - 80, 320);
@@ -696,6 +1075,9 @@ export const MessageBubble = memo(function MessageBubble({
               <Text style={{ fontSize: 10, color: themeColors.agentWarning }}>queued</Text>
             </View>
           )}
+
+          {quotedReply ? <SentContextChip icon={Quote} label={quotedReply.quote} /> : null}
+          {skillUsed ? <SentContextChip icon={Sparkles} label={`Skill: ${skillUsed}`} /> : null}
 
           {/* Content column: user messages render as a right-aligned rounded
               bubble (ChatGPT-style pill); assistant messages render as plain
@@ -772,6 +1154,15 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             )}
 
+            {attachmentTruncationNotice ? (
+              <Text
+                accessibilityRole="text"
+                style={{ marginTop: 4, fontSize: 12, color: themeColors.textMuted }}
+              >
+                {attachmentTruncationNotice}
+              </Text>
+            ) : null}
+
             {research ? (
               <ResearchRunCard
                 research={research}
@@ -784,7 +1175,18 @@ export const MessageBubble = memo(function MessageBubble({
                     }
                   : {})}
                 {...(onStopResearch ? { onStop: onStopResearch } : {})}
+                {...(onPauseResearch ? { onPause: () => onPauseResearch(message.id) } : {})}
                 {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}
+              />
+            ) : null}
+
+            {agiWorkPlan && agiWorkPlanReview && appMode === 'cloud' ? (
+              <AgiWorkPlanReview
+                steps={agiWorkPlan}
+                awaitingApproval={agiWorkPlanReview.awaitingApproval}
+                runFinished={!message.isStreaming}
+                busy={agiWorkPlanBusy || message.isStreaming === true || conversationStreaming}
+                onDecision={handleAgiWorkPlanDecision}
               />
             ) : null}
 
@@ -794,8 +1196,11 @@ export const MessageBubble = memo(function MessageBubble({
                 messageId={message.id}
                 activity={canonicalActivity}
                 onResolveApproval={handleResolveToolApproval}
+                onAllowApprovalForChat={onResolveToolApproval ? handleAllowToolForChat : undefined}
                 approvalExpired={approvalTurnExpired}
                 onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                steerRunId={message.isStreaming ? steerRunId : undefined}
+                codeRunConversationId={message.conversationId}
               />
             ) : null}
 
@@ -832,6 +1237,7 @@ export const MessageBubble = memo(function MessageBubble({
                 toolCalls={message.toolCalls}
                 summary={summarizeToolTimeline(message.toolCalls)}
                 onResolveApproval={handleResolveToolApproval}
+                onAllowApprovalForChat={onResolveToolApproval ? handleAllowToolForChat : undefined}
                 approvalExpired={approvalTurnExpired}
                 onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
               />
@@ -855,10 +1261,17 @@ export const MessageBubble = memo(function MessageBubble({
             {contentElements.length > 0 ? (
               <View>
                 {contentElements}
-                {message.isStreaming && <StreamingIndicator />}
+                {message.isStreaming && <StreamingIndicator label={streamingLabel} />}
               </View>
             ) : message.isStreaming && !message.isGeneratingImage && !message.isGeneratingVideo ? (
-              <StreamingIndicator />
+              <StreamingIndicator
+                label={
+                  streamingLabel ??
+                  (canonicalActivity || hasReasoning || research || message.toolCalls?.length
+                    ? undefined
+                    : 'Preparing')
+                }
+              />
             ) : null}
 
             {/* Image generation progress indicator */}
@@ -986,6 +1399,10 @@ export const MessageBubble = memo(function MessageBubble({
                 cards={interactiveCards}
                 tileBaseUrl={API_URL}
                 canLoadManagedCloudTiles={appMode === 'cloud'}
+                canRespond={
+                  appMode === 'cloud' && message.isStreaming !== true && !conversationStreaming
+                }
+                onRespond={handleRespondToCard}
               />
             ) : null}
 
@@ -1007,6 +1424,7 @@ export const MessageBubble = memo(function MessageBubble({
                       index={i + 1}
                       title={cit.title ?? cit.url}
                       url={cit.url}
+                      snippet={cit.snippet}
                     />
                   ))}
                 </View>
@@ -1026,6 +1444,15 @@ export const MessageBubble = memo(function MessageBubble({
                   />
                 ))}
               </View>
+            ) : null}
+            {isAssistant ? (
+              <StreamingArtifactCard
+                conversationId={message.conversationId}
+                messageId={message.id}
+                content={message.content}
+                isStreaming={Boolean(message.isStreaming)}
+                finalArtifacts={inlineArtifacts}
+              />
             ) : null}
 
             {/* Mid-stream provider failure notice: metadata.streamError (additive
@@ -1095,10 +1522,56 @@ export const MessageBubble = memo(function MessageBubble({
               </Pressable>
             )}
 
+            {stoppedByUser ? (
+              <TurnNotice
+                icon={Square}
+                message="Response stopped."
+                actionLabel={onRetryMessage ? 'Try again' : undefined}
+                actionAccessibilityLabel="Regenerate this response"
+                onAction={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+              />
+            ) : null}
+
+            {refusedAnswer ? (
+              <TurnNotice
+                icon={ShieldAlert}
+                message="The model declined to finish this response for safety reasons. Rephrase your message, or try a different model."
+                actionLabel={onSwitchModel ? 'Switch model' : undefined}
+                actionAccessibilityLabel="Switch model"
+                onAction={onSwitchModel}
+              />
+            ) : null}
+
             {/* Provenance badge: local or cloud provider context */}
             {provenance && (
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}
+
+            {usageLine ? (
+              <Text
+                style={{
+                  marginTop: 2,
+                  paddingHorizontal: 2,
+                  fontSize: 11,
+                  color: themeColors.textMuted,
+                }}
+              >
+                {usageLine}
+              </Text>
+            ) : null}
+
+            {routeReceipt ? (
+              <Text
+                style={{
+                  marginTop: 2,
+                  paddingHorizontal: 2,
+                  fontSize: 11,
+                  color: themeColors.textMuted,
+                }}
+              >
+                {routeReceipt}
+              </Text>
+            ) : null}
 
             {/* Performance chip, on-device inference metadata.
                 Regression: this previously also required message.runtimeTier,
@@ -1143,6 +1616,9 @@ export const MessageBubble = memo(function MessageBubble({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 }}
           accessibilityLabel="Message actions"
         >
+          {variant && onSelectVariant ? (
+            <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
+          ) : null}
           <MessageActionButton
             label={copyControlLabel(copyStatus, 'Copy')}
             icon={copyStatus === 'copied' ? Check : copyStatus === 'failed' ? TriangleAlert : Copy}
@@ -1199,18 +1675,29 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       ) : null}
 
+      {isUser && variant && onSelectVariant ? (
+        <View style={{ alignItems: 'flex-end', paddingRight: 10 }}>
+          <VariantPager variant={variant} noun="version" onSelect={onSelectVariant} />
+        </View>
+      ) : null}
+
       {/* Artifact full-screen modal */}
       <ArtifactFullScreen
         artifact={expandedArtifact}
+        switchable={conversationArtifacts}
+        onSwitch={setExpandedArtifact}
         visible={expandedArtifact !== null}
         onClose={handleCloseArtifact}
         onRegenerate={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+        conversationId={message.conversationId}
       />
 
       {/* Full-screen image viewer */}
       <ImageFullScreen
         imageUrl={fullScreenImageUrl}
         prompt={message.imageGenPrompt ?? message.revisedPrompt}
+        model={message.model}
+        aspectRatio={message.imageAspectRatio}
         visible={fullScreenImageUrl !== null}
         allowEphemeral={message.imageGenPersisted === false}
         onClose={handleCloseFullScreenImage}
@@ -1238,6 +1725,13 @@ export const MessageBubble = memo(function MessageBubble({
         onSelect={handleSelectAction}
         onClose={handleCloseActions}
         onDismissed={handleActionsDismissed}
+      />
+
+      <SelectTextSheet
+        visible={selectTextVisible}
+        text={displayContent}
+        onClose={() => setSelectTextVisible(false)}
+        onQuoteSelection={onQuoteSelection ? (text) => onQuoteSelection(message, text) : undefined}
       />
 
       {/* Edit message modal */}

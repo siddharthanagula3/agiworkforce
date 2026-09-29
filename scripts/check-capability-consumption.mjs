@@ -99,20 +99,10 @@ export const MATRIX_SYMBOLS = Object.freeze([
 
 export const MATRIX_PROVIDERS = Object.freeze([
   'packages/ui/unified-chat/src/lib/capabilities.tsx',
+  'apps/mobile/src/lib/capabilities.tsx',
 ]);
 
-export const RECORDED_EXCEPTIONS = Object.freeze({
-  'apps/mobile/src/lib/capabilities.tsx': {
-    rule: 'matrix',
-    why: 'useCapability reads the static matrix narrowed by capability.* flags instead of the document the tier store already holds.',
-    fix: 'Resolve useCapability and useCapabilities through resolveCapabilityDocumentDecision over useTierStore().capabilityDocument (post-codex patch).',
-  },
-  'apps/mobile/src/features/billing/store.ts': {
-    rule: 'deployment-flag',
-    why: 'codeExecutionAvailable ANDs feature_flags.code_execution with the document, which already denies canUseCloudExecution when the deployment is off.',
-    fix: 'Derive codeExecutionAvailable from the canUseCloudExecution decision alone (post-codex patch).',
-  },
-});
+export const RECORDED_EXCEPTIONS = Object.freeze({});
 
 export const CLIENT_ROOTS = Object.freeze([
   'apps/web/app',

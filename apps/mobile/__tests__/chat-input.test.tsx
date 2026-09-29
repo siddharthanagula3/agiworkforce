@@ -777,6 +777,8 @@ describe('ChatInput', () => {
     it('bumps voiceResetSignal even when the recording session already ended', async () => {
       const VoiceService = require('../src/features/voice/services/voice');
       VoiceService.isRecording.mockReturnValue(false);
+      VoiceService.stopRecording.mockClear();
+      VoiceService.transcribe.mockClear();
 
       const { getByLabelText } = renderInput();
       act(() => {

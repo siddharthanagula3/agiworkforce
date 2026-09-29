@@ -24,7 +24,7 @@ import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecover
 import type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
 import type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { CloudWorkMode, ResearchStep } from '@agiworkforce/types';
 
 export interface CombinedChatState {
   conversations: ConversationSummary[];
@@ -146,11 +146,12 @@ export interface CombinedChatState {
     options?: SendMessageOptions,
   ) => Promise<boolean>;
   stopStreaming: () => void;
-  retryMessage: (conversationId: string, messageId: string) => void;
+  retryMessage: (conversationId: string, messageId: string, modelOverride?: string) => void;
   resumeResearch: (
     conversationId: string,
     assistantMessageId: string,
     decision: 'start' | 'cancel' | 'retry',
+    steps?: ResearchStep[],
   ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   resolveToolApproval: (
@@ -158,6 +159,7 @@ export interface CombinedChatState {
     assistantMessageId: string,
     toolCallId: string,
     decision: 'approved' | 'rejected',
+    guidance?: string,
   ) => Promise<void>;
   clearError: () => void;
   setSendError: (message: string) => void;

@@ -20,6 +20,7 @@ export interface MobileCloudDispatchRequest {
   history?: ReadonlyArray<RoutingMessage>;
   attachments?: ReadonlyArray<RoutingAttachment>;
   currentModelKey?: string | null;
+  preferSlots?: readonly string[];
 }
 
 export type MobileCloudDispatchDecision =
@@ -89,6 +90,9 @@ export function resolveMobileCloudDispatch(
     runtimeProfileId: 'mobile/cloud-chat',
     currentModelKey: request.currentModelKey,
     fallbackToAutoForCapabilityMismatch: true,
+    ...(request.preferSlots && request.preferSlots.length > 0
+      ? { preferSlots: request.preferSlots }
+      : {}),
   });
 
   if (route.status === 'unavailable') return route;

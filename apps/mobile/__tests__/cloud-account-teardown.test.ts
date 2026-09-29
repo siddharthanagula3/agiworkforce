@@ -288,7 +288,7 @@ describe('clearLocalCloudAccountState', () => {
       accentColor: 'neutral',
       fontPreference: 'default',
       notificationsEnabled: true,
-      speechLanguage: 'en',
+      speechLanguage: 'auto',
       autoListenEnabled: true,
       referencePastChats: false,
       generateMemoryFromHistory: true,

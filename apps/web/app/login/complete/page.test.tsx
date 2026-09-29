@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   accepted: vi.fn(),
+  acceptedAny: vi.fn(),
   must: vi.fn(),
   redirect: vi.fn(),
   recorder: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mocks.accepted(userId),
   mustAcceptTerms: (userId: string) => mocks.must(userId),
+  hasAcceptedAnyTerms: (userId: string) => mocks.acceptedAny(userId),
 }));
 vi.mock('../../signup/TermsGate', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -84,6 +86,7 @@ describe('/login/complete', () => {
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.accepted.mockResolvedValue(false);
     mocks.must.mockImplementation(async (userId: string) => !(await mocks.accepted(userId)));
+    mocks.acceptedAny.mockResolvedValue(true);
     mocks.access.mockResolvedValue({ allowed: true });
   });
 
@@ -126,10 +129,27 @@ describe('/login/complete', () => {
     expect(screen.getByRole('heading', { name: 'Finish signing in' })).toBeInTheDocument();
     expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
-    expect(mocks.recorder).toHaveBeenCalledWith({ redirectTo: '/chat', surface: 'web-login' });
+    expect(mocks.recorder).toHaveBeenCalledWith({
+      redirectTo: '/chat',
+      surface: 'web-login',
+      confirmAge: false,
+    });
     expect(mocks.gate).toHaveBeenCalledWith(
       expect.objectContaining({ restorePreAuthMarker: false, confirmationLabel: 'Continue' }),
     );
+  });
+
+  it('asks an account that never accepted the terms to confirm 18 or older first', async () => {
+    mocks.acceptedAny.mockResolvedValue(false);
+
+    render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(mocks.acceptedAny).toHaveBeenCalledWith('user-1');
+    expect(mocks.recorder).toHaveBeenCalledWith({
+      redirectTo: '/chat',
+      surface: 'web-login',
+      confirmAge: true,
+    });
   });
 
   // Redirecting straight back to /login is what produced an infinite loop:

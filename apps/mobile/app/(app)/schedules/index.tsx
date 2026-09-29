@@ -17,7 +17,7 @@ import {
   type ScheduleTemplate,
 } from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -362,6 +362,9 @@ export default function SchedulesScreen() {
             />
           )}
           keyExtractor={(item) => item.id}
+          ListFooterComponent={
+            canCreateSchedule ? <TemplateGallery onUseTemplate={handleUseTemplate} /> : null
+          }
         />
       )}
 
@@ -437,7 +440,7 @@ function EmptyState({
       contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
-      <Animated.View entering={FadeIn.duration(300)} className="items-center pt-6">
+      <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
         <View
           className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
           style={{ backgroundColor: `${colors.teal}15` }}
@@ -463,20 +466,28 @@ function EmptyState({
         />
       </Animated.View>
 
-      {canCreateSchedule ? (
-        <Animated.View entering={FadeIn.delay(80).duration(300)} className="mt-8">
-          <Text variant="subheading">Try a template</Text>
-          <Text className="mb-3 mt-1 text-sm leading-5 text-white/45">
-            Pick a starting point, then confirm the prompt, time, and model.
-          </Text>
-          <View className="gap-3">
-            {SCHEDULE_TEMPLATES.map((template) => (
-              <TemplateCard key={template.id} template={template} onPress={onUseTemplate} />
-            ))}
-          </View>
-        </Animated.View>
-      ) : null}
+      {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}
     </ScrollView>
+  );
+}
+
+function TemplateGallery({
+  onUseTemplate,
+}: {
+  onUseTemplate: (templateId: ScheduleTemplate['id']) => void;
+}) {
+  return (
+    <Animated.View entering={FadeIn.delay(80).duration(motion.moved)} className="mt-8">
+      <Text variant="subheading">Try a template</Text>
+      <Text className="mb-3 mt-1 text-sm leading-5 text-white/45">
+        Pick a starting point, then confirm the prompt, time, and model.
+      </Text>
+      <View className="gap-3">
+        {SCHEDULE_TEMPLATES.map((template) => (
+          <TemplateCard key={template.id} template={template} onPress={onUseTemplate} />
+        ))}
+      </View>
+    </Animated.View>
   );
 }
 

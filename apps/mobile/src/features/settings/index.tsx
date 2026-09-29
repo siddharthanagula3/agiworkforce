@@ -53,7 +53,10 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { shareMobileDiagnostics } from '@/src/features/settings/diagnostics';
+import {
+  confirmMobileDiagnosticsShare,
+  shareMobileDiagnostics,
+} from '@/src/features/settings/diagnostics';
 import { useCloudProfilePhoto } from '@/src/features/settings/cloud-account/useCloudProfilePhoto';
 import { useCloudProfileStore } from '@/src/features/settings/cloud-account/cloudProfileStore';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
@@ -115,6 +118,7 @@ function SectionCard({ section }: { section: SettingsSection }) {
     <View style={{ marginBottom: 24 }}>
       {section.title ? (
         <Text
+          accessibilityRole="header"
           style={{
             color: colors.textMuted,
             fontSize: 13,
@@ -184,7 +188,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       {row.value ? (
         <Text
           numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
+          maxFontSizeMultiplier={2}
           style={{ color: colors.textMuted, fontSize: 13, flexShrink: 1, textAlign: 'right' }}
         >
           {row.value}
@@ -402,8 +406,12 @@ export default function SettingsTabScreen() {
   }, [signOut]);
 
   const handleExportDiagnostics = useCallback(() => {
-    void shareMobileDiagnostics()
-      .then((summary) => Alert.alert('Diagnostics exported', summary))
+    void confirmMobileDiagnosticsShare()
+      .then((confirmed) =>
+        confirmed
+          ? shareMobileDiagnostics().then((summary) => Alert.alert('Diagnostics exported', summary))
+          : undefined,
+      )
       .catch(() =>
         Alert.alert(
           'Diagnostics export failed',

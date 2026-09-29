@@ -36,6 +36,8 @@ interface ComposerProps {
   draftProvenance?: DraftProvenance;
   sendPreview?: SendPreviewInput;
   attachmentPrivacyShortLabel?: string;
+  selectedSkillName?: string;
+  onClearSelectedSkill?: () => void;
 }
 
 export function Composer({
@@ -57,6 +59,8 @@ export function Composer({
   draftProvenance,
   sendPreview,
   attachmentPrivacyShortLabel,
+  selectedSkillName,
+  onClearSelectedSkill,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
   const appMode = useChatAppModeStore((state) => state.appMode);
@@ -121,6 +125,8 @@ export function Composer({
         draftProvenance={draftProvenance}
         sendPreview={sendPreview}
         attachmentPrivacyShortLabel={attachmentPrivacyShortLabel}
+        selectedSkillName={selectedSkillName}
+        onClearSelectedSkill={onClearSelectedSkill}
       />
     </View>
   );

@@ -16,6 +16,7 @@ import {
   Maximize2,
   Square,
   X,
+  Pencil,
   Telescope,
   Terminal,
   Paintbrush,
@@ -25,6 +26,7 @@ import {
 import {
   canUseBillingPlanCapability,
   getModelMetadataById,
+  isAutoModeModelId,
   summarizeSendPreview,
   type SendPreviewInput,
 } from '@agiworkforce/types';
@@ -90,6 +92,12 @@ function mergeTranscript(previous: string, transcript: string): string {
   return previous ? `${previous} ${cleanedTranscript}` : cleanedTranscript;
 }
 
+function attachmentIdentity(attachment: Attachment): string {
+  return attachment.pastedText !== undefined
+    ? `text:${attachment.id}`
+    : `${attachment.mimeType}:${attachment.fileName}:${attachment.fileSize ?? attachment.uri}`;
+}
+
 interface QueuedFollowUp {
   id: string;
   text: string;
@@ -150,11 +158,14 @@ export function ChatInput({
     draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const attachmentsRef = useRef<Attachment[]>(attachments);
+  attachmentsRef.current = attachments;
   const keyboardVisible = useKeyboardVisible();
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
+  const [voiceStartSignal, setVoiceStartSignal] = useState(0);
   const [isMultiline, setIsMultiline] = useState(false);
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
@@ -190,6 +201,10 @@ export function ChatInput({
 
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
+  const unreadableImages =
+    !isAutoModeModelId(selectedModel) &&
+    selectedModelMetadata?.capabilities.vision === false &&
+    attachments.some((attachment) => attachment.mimeType.startsWith('image/'));
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const workMode = useChatViewStore((s) => s.workMode);
   const mediaModelId = mediaModelIdForMode(mediaMode);
@@ -256,7 +271,25 @@ export function ChatInput({
       },
       addAttachments: (items: Attachment[]) => {
         const { accepted, rejected } = validateAttachments(items, appMode);
-        if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
+        const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
+        const fresh: Attachment[] = [];
+        const duplicates: string[] = [];
+        for (const item of accepted) {
+          const identity = attachmentIdentity(item);
+          if (seen.has(identity)) {
+            duplicates.push(item.fileName);
+            continue;
+          }
+          seen.add(identity);
+          fresh.push(item);
+        }
+        if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
+        if (duplicates.length > 0) {
+          Alert.alert(
+            duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
+            `${duplicates.join('\n')}\n\nEach file is attached once.`,
+          );
+        }
         if (rejected.length > 0) {
           Alert.alert(
             rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
@@ -421,6 +454,24 @@ export function ChatInput({
     setQueuedFollowUps(queuedFollowUpsRef.current);
   }, []);
 
+  const editQueuedFollowUp = useCallback((item: QueuedFollowUp) => {
+    queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter(
+      (queued) => queued.id !== item.id,
+    );
+    setQueuedFollowUps(queuedFollowUpsRef.current);
+    setText((current) =>
+      current
+        ? `${item.text}
+
+${current}`
+        : item.text,
+    );
+    if (item.attachments.length > 0) {
+      setAttachments((current) => [...item.attachments, ...current]);
+    }
+    inputRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const streaming = isStreaming === true;
     if (wasStreamingRef.current && !streaming) {
@@ -538,13 +589,24 @@ export function ChatInput({
     [attachments],
   );
 
+  const handleDictationFailure = useCallback(() => {
+    Alert.alert("Didn't catch that", "Audio isn't saved, so say it again.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Try again', onPress: () => setVoiceStartSignal((value) => value + 1) },
+    ]);
+  }, []);
+
   const handleTranscription = useCallback(
     (transcribedText: string) => {
       setIsRecording(false);
       setAudioLevel(0);
+      if (!cleanupVoiceDictation(transcribedText)) {
+        handleDictationFailure();
+        return;
+      }
       applyTranscript(transcribedText);
     },
-    [applyTranscript],
+    [applyTranscript, handleDictationFailure],
   );
 
   const resetRecordingUi = useCallback(() => {
@@ -585,31 +647,31 @@ export function ChatInput({
       const run = transcriptionRunRef.current + 1;
       transcriptionRunRef.current = run;
       setIsTranscribing(true);
+      let transcript: string;
       try {
         const uri = await VoiceService.stopRecording();
         if (transcriptionRunRef.current !== run) return;
         const result = await VoiceService.transcribe(uri);
-        if (transcriptionRunRef.current !== run) return;
-        const transcript = result.text.trim();
-        if (transcript) {
-          if (send) {
-            const merged = mergeTranscript(text, transcript);
-            setText(merged);
-            sendComposerMessage(merged);
-          } else {
-            applyTranscript(transcript);
-          }
-        }
+        transcript = result.text.trim();
       } catch {
+        transcript = '';
+      }
+      if (transcriptionRunRef.current !== run) return;
+      setIsTranscribing(false);
+      setVoiceResetSignal((value) => value + 1);
+      if (!cleanupVoiceDictation(transcript)) {
+        handleDictationFailure();
         return;
-      } finally {
-        if (transcriptionRunRef.current === run) {
-          setIsTranscribing(false);
-          setVoiceResetSignal((value) => value + 1);
-        }
+      }
+      if (send) {
+        const merged = mergeTranscript(text, transcript);
+        setText(merged);
+        sendComposerMessage(merged);
+      } else {
+        applyTranscript(transcript);
       }
     },
-    [applyTranscript, resetRecordingUi, sendComposerMessage, text],
+    [applyTranscript, handleDictationFailure, resetRecordingUi, sendComposerMessage, text],
   );
 
   const handleDictationStop = useCallback(() => {
@@ -805,6 +867,20 @@ export function ChatInput({
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
 
+      {unreadableImages ? (
+        <Text
+          accessibilityRole="alert"
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 6,
+            fontSize: 12,
+            color: themeColors.agentWarning,
+          }}
+        >
+          {`${selectedModelMetadata?.name ?? modelName} cannot read images. Choose a model that can, or remove the images before sending.`}
+        </Text>
+      ) : null}
+
       {/* Command palette -- shown when input starts with "/" */}
       <CommandPalette
         visible={showCommandPalette}
@@ -893,6 +969,23 @@ export function ChatInput({
               >
                 {item.text}
               </Text>
+              <Pressable
+                onPress={() => editQueuedFollowUp(item)}
+                testID={`chat.composer.queued-followup-edit.${item.id}`}
+                accessibilityLabel="Edit queued message"
+                accessibilityHint="Takes this message out of the queue and puts it back in the message box"
+                accessibilityRole="button"
+                hitSlop={8}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Pencil size={13} color={themeColors.textMuted} />
+              </Pressable>
               <Pressable
                 onPress={() => cancelQueuedFollowUp(item.id)}
                 testID={`chat.composer.queued-followup-cancel.${item.id}`}
@@ -1163,7 +1256,9 @@ export function ChatInput({
                 onMetering={handleMetering}
                 onLongPress={onOpenVoiceMode}
                 onError={handleVoiceError}
+                onFailure={handleDictationFailure}
                 resetSignal={voiceResetSignal}
+                startSignal={voiceStartSignal}
                 disabled={isStreaming}
               />
             ) : null}

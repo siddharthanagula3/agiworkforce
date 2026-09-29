@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
@@ -22,9 +22,12 @@ import {
   ManagedCloudChatAttachmentPresignResponseSchema,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
+import { readPasskeyRequired } from '@agiworkforce/cloud-contracts/account-security';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
+import { announcePasskeyRequired } from '@/src/features/auth/services/accountSecurityEvents';
 
 import {
+  ApiHttpError,
   ApiPaywallError,
   CloudCredentialUnavailableError,
   httpErrorFrom,
@@ -46,6 +49,9 @@ const MAX_REFRESH_FAILURES = 3;
 // account itself (deleted, suspended, locked), not one action being denied.
 const ACCOUNT_IDENTITY_PATH = '/api/me';
 const REFRESH_TIMEOUT_MS = 10_000;
+const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
+const PASSKEY_REQUIRED_MESSAGE =
+  "Verify it's you with one of your passkeys or security keys to keep using this account.";
 
 class StaleApiAccountOperationError extends Error {
   constructor() {
@@ -118,8 +124,65 @@ async function tryRefreshToken(): Promise<boolean> {
   return operation;
 }
 
+async function refusedForPasskey(response: Response): Promise<boolean> {
+  try {
+    return readPasskeyRequired(await response.clone().json());
+  } catch {
+    return false;
+  }
+}
+
 function isAccountIdentityPath(path: string): boolean {
   return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
+}
+
+interface AccountUnavailableRefusal {
+  message: string;
+  recoveryPath: string | null;
+}
+
+async function readAccountUnavailable(
+  response: Response,
+): Promise<AccountUnavailableRefusal | null> {
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as {
+    error?: { code?: unknown; message?: unknown; details?: unknown };
+  } | null;
+  const error = body?.error;
+  if (error?.code !== 'ACCOUNT_UNAVAILABLE' || typeof error.message !== 'string') return null;
+  const recoveryPath = (error.details as { recoveryPath?: unknown } | undefined)?.recoveryPath;
+  return {
+    message: error.message,
+    recoveryPath:
+      typeof recoveryPath === 'string' && recoveryPath.startsWith('/') ? recoveryPath : null,
+  };
+}
+
+function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
+  invalidateCloudAccount();
+  clearLocalCloudAccountState();
+  clearAuthSession().catch((err) => {
+    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
+  });
+  const { recoveryPath } = refusal;
+  Alert.alert('Account unavailable', refusal.message, [
+    { text: 'Close', style: 'cancel' },
+    ...(recoveryPath
+      ? [
+          {
+            text: 'Open on the web',
+            style: 'default' as const,
+            onPress: () => {
+              Linking.openURL(`${new URL(API_URL).origin}${recoveryPath}`).catch((err: unknown) => {
+                if (__DEV__) console.warn('[API] recovery link failed (non-blocking):', err);
+              });
+            },
+          },
+        ]
+      : []),
+  ]);
 }
 
 function handleUnrecoverableAuth(): void {
@@ -257,6 +320,21 @@ async function sendRequest(
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
 
+    if (response.status === 403 && (await refusedForPasskey(response))) {
+      release();
+      announcePasskeyRequired();
+      throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+    }
+
+    if (response.status === 403) {
+      const refusal = await readAccountUnavailable(response);
+      if (refusal) {
+        release();
+        handleAccountUnavailable(refusal);
+        throw new Error(`HTTP 403: ${refusal.message}`);
+      }
+    }
+
     if (response.status === 403 && isAccountIdentityPath(path)) {
       release();
       handleUnrecoverableAuth();
@@ -285,6 +363,34 @@ export async function apiFetch(
       statusText: response.statusText,
       headers: response.headers,
     });
+  } finally {
+    release();
+  }
+}
+
+export interface ApiBinaryResponse {
+  ok: boolean;
+  status: number;
+  contentType: string | null;
+  bytes: ArrayBuffer;
+}
+
+export async function apiFetchBinary(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<ApiBinaryResponse> {
+  const { response, release } = await sendRequest(path, init, options);
+  try {
+    const bytes = BODYLESS_STATUSES.has(response.status)
+      ? new ArrayBuffer(0)
+      : await response.arrayBuffer();
+    return {
+      ok: response.ok,
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      bytes,
+    };
   } finally {
     release();
   }

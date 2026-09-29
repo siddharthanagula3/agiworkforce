@@ -5,7 +5,7 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -128,7 +128,7 @@ export function GeneratedImage({
               borderRadius: 12,
               overflow: 'hidden',
               position: 'absolute',
-              zIndex: 1,
+              zIndex: zIndex.content,
             }}
           >
             <Skeleton width={imageWidth} height={imageHeight} borderRadius={12} />

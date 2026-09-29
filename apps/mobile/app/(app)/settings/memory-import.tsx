@@ -9,7 +9,7 @@ import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-re
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
@@ -204,7 +204,7 @@ export default function MemoryImportScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Privacy notice */}
-        <Animated.View entering={FadeIn.duration(300)} className="mb-5 mt-2">
+        <Animated.View entering={FadeIn.duration(motion.moved)} className="mb-5 mt-2">
           <View
             className="rounded-xl px-4 py-3"
             style={{
@@ -254,7 +254,7 @@ export default function MemoryImportScreen() {
 
         {/* Result display */}
         {state.status === 'done' && (
-          <Animated.View entering={FadeIn.duration(300)} className="mt-5">
+          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
             <View
               className="rounded-xl px-4 py-4 items-center"
               style={{
@@ -297,7 +297,7 @@ export default function MemoryImportScreen() {
         )}
 
         {state.status === 'error' && state.errorMessage && (
-          <Animated.View entering={FadeIn.duration(300)} className="mt-5">
+          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
             <View
               className="rounded-xl px-4 py-4 items-center"
               style={{

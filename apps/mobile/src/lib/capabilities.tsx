@@ -5,9 +5,11 @@ import {
   ALL_PLATFORM_CAPABILITIES,
   getPlatformCapabilities,
   isCapabilityEnabled as matrixIsCapabilityEnabled,
+  resolveCapabilityDocumentDecision,
   type PlatformCapability,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
+import { useTierStore } from '@/src/features/billing/store';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { Text } from '@/components/ui/text';
@@ -118,8 +120,12 @@ export function CapabilityProvider({
 
 export function useCapability(capability: PlatformCapability): boolean {
   const platform = useContext(CapabilityContext);
+  const document = useTierStore((state) => state.capabilityDocument);
   const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff[capability] === true);
-  return matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
+  const decision = resolveCapabilityDocumentDecision(document, capability);
+  return decision
+    ? decision.allowed
+    : matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
 }
 
 export const CAPABILITY_SWITCHED_OFF_BODY =
@@ -194,12 +200,16 @@ function createUnavailableStyles(colors: ColorScheme) {
 
 export function useCapabilities() {
   const platform = useContext(CapabilityContext);
+  const document = useTierStore((state) => state.capabilityDocument);
   const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff);
   return useMemo(() => {
     const effective: Record<PlatformCapability, boolean> = { ...getPlatformCapabilities(platform) };
     for (const capability of ALL_PLATFORM_CAPABILITIES) {
-      if (switchedOff[capability]) effective[capability] = false;
+      const decision = resolveCapabilityDocumentDecision(document, capability);
+      effective[capability] = decision
+        ? decision.allowed
+        : effective[capability] && !switchedOff[capability];
     }
     return effective;
-  }, [platform, switchedOff]);
+  }, [document, platform, switchedOff]);
 }

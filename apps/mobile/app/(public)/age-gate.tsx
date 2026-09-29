@@ -11,8 +11,10 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
+import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 import { APP_PATH, CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
 import {
@@ -36,8 +38,9 @@ export default function AgeGateScreen() {
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [minorNotice, setMinorNotice] = useState(false);
-  const [minorLocked] = useState(isMinorMode);
+  const [refused, setRefused] = useState(isMinorMode);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const signOut = useAuthStore((s) => s.signOut);
   const inputRef = useRef<TextInput>(null);
 
   const threshold = getAgeThreshold();
@@ -76,15 +79,17 @@ export default function AgeGateScreen() {
     setError(null);
     const record = confirmAgeGate(parsed);
     if (record.isMinor) {
-      setMinorNotice(true);
+      setRefused(true);
     } else {
       handleComplete();
     }
   }, [ageText, handleComplete]);
 
-  const handleMinorContinue = useCallback(() => {
-    handleComplete();
-  }, [handleComplete]);
+  const handleSignOut = useCallback(async () => {
+    await signOut().catch(() => {});
+    clearPostAuthIntent();
+    router.replace(APP_PATH);
+  }, [router, signOut]);
 
   const header = returnTo ? (
     <View style={styles.header}>
@@ -104,12 +109,14 @@ export default function AgeGateScreen() {
     </View>
   ) : null;
 
-  if (minorLocked) {
+  if (refused) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView
+        testID="age-gate-refused"
+        style={{ flex: 1, backgroundColor: colors.background }}
+      >
         {header}
         <ScrollView
-          testID="age-gate-minor-locked"
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -122,76 +129,30 @@ export default function AgeGateScreen() {
           </View>
 
           <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-            Minor-safe mode is locked on
+            Age requirement
+          </Text>
+
+          <Text testID="age-gate-refusal" style={[styles.body, { color: colors.textSecondary }]}>
+            {ACCOUNT_AGE_REQUIREMENT_NOTICE}
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This device recorded an age under {threshold}. AGI cannot verify a new age, so it will
-            not turn minor-safe filtering off from inside the app.
+            This device recorded an age under {threshold}. AGI cannot verify a new age, so the
+            answer stands. An adult can reset it by reinstalling AGI on this device, which clears
+            the stored age record and everything saved with it.
           </Text>
 
-          <Text style={[styles.body, { color: colors.textSecondary }]}>
-            An adult can lift it by reinstalling AGI on this device, which clears the stored age
-            record and everything saved with it.
-          </Text>
-
-          <Pressable
-            testID="age-gate-minor-locked-continue-btn"
-            onPress={handleComplete}
-            accessibilityRole="button"
-            accessibilityLabel="Continue to app"
-            style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
-          >
-            <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  if (minorNotice) {
-    return (
-      <SafeAreaView
-        testID="age-gate-minor-notice"
-        style={{ flex: 1, backgroundColor: colors.background }}
-      >
-        {header}
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { backgroundColor: colors.background, justifyContent: 'center' },
-          ]}
-        >
-          <View style={[styles.iconWrap, { backgroundColor: colors.accentSurface }]}>
-            <Shield size={40} color={colors.teal} />
-          </View>
-
-          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-            Minor-safe mode enabled
-          </Text>
-
-          <Text style={[styles.body, { color: colors.textSecondary }]}>
-            Since you are under {threshold} years old in your region, AGI will apply age-appropriate
-            content filtering for your protection.
-          </Text>
-
-          <Text style={[styles.body, { color: colors.textSecondary }]}>
-            Age settings can be reviewed on this device in{' '}
-            <Text style={{ color: colors.teal }}>Settings &gt; Parental Controls</Text>.
-          </Text>
-
-          <Pressable
-            testID="age-gate-minor-continue-btn"
-            onPress={handleMinorContinue}
-            accessibilityRole="button"
-            accessibilityLabel="Continue to app"
-            style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
-          >
-            <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
-          </Pressable>
+          {isClerkSignedIn ? (
+            <Pressable
+              testID="age-gate-refused-sign-out-btn"
+              onPress={() => void handleSignOut()}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
+            >
+              <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Sign out</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     );
@@ -226,8 +187,7 @@ export default function AgeGateScreen() {
             testID="age-gate-subtitle"
             style={[styles.subtitle, { color: colors.textSecondary }]}
           >
-            AGI is designed for users {threshold} and older in your region. Please enter your age to
-            continue.
+            AGI accounts are for people {threshold} and older. Please enter your age to continue.
           </Text>
 
           <TextInput

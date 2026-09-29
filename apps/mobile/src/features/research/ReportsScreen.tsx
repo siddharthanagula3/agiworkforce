@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -129,14 +129,39 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
         url: citation.url,
         title: citation.title || citation.url,
         ...(citation.snippet ? { snippet: citation.snippet } : {}),
+        ...(citation.publishedDate ? { publishedDate: citation.publishedDate } : {}),
       })),
     [report.citations],
   );
+  const retrievedOn = useMemo(() => {
+    const times = report.citations
+      .map((citation) => Date.parse(citation.accessedAt))
+      .filter((time) => Number.isFinite(time));
+    return times.length > 0
+      ? new Date(Math.max(...times)).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : null;
+  }, [report.citations]);
+  const scrollRef = useRef<ScrollView>(null);
+  const contentTop = useRef(0);
+  const headingTops = useRef(new Map<string, number>());
+  const handleHeadingLayout = useCallback((sectionId: string, y: number) => {
+    headingTops.current.set(sectionId, y);
+  }, []);
+  const jumpToSection = useCallback((sectionId: string) => {
+    const top = headingTops.current.get(sectionId);
+    if (top === undefined) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, contentTop.current + top - 8), animated: true });
+  }, []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <ScreenHeader title={researchReportLabel(report)} onBack={onBack} />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}
         testID="research-report-detail"
       >
@@ -196,24 +221,46 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
               {`Sections · ${sections.length}`}
             </Text>
             {sections.map((section) => (
-              <Text
+              <Pressable
                 key={section.id}
+                onPress={() => jumpToSection(section.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to ${section.text}`}
+                hitSlop={4}
                 style={{
-                  fontSize: 12,
-                  lineHeight: 19,
-                  color: colors.textSecondary,
+                  minHeight: 32,
+                  justifyContent: 'center',
                   paddingLeft: Math.max(0, section.level - (sections[0]?.level ?? 1)) * 12,
                 }}
               >
-                {section.text}
-              </Text>
+                <Text style={{ fontSize: 12, lineHeight: 19, color: colors.textSecondary }}>
+                  {section.text}
+                </Text>
+              </Pressable>
             ))}
           </View>
         ) : null}
 
-        <View>{renderMarkdownContent(report.content, colors)}</View>
+        <View
+          onLayout={(event) => {
+            contentTop.current = event.nativeEvent.layout.y;
+          }}
+        >
+          {renderMarkdownContent(report.content, colors, {
+            citations: sources,
+            onHeadingLayout: handleHeadingLayout,
+          })}
+        </View>
 
         <ResearchSourcesAppendix sources={sources} />
+        {retrievedOn ? (
+          <Text
+            style={{ fontSize: 11, color: colors.textMuted }}
+            testID="research-report-sources-retrieved"
+          >
+            {`Sources retrieved ${retrievedOn}`}
+          </Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

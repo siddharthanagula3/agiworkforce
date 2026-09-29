@@ -8,6 +8,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
 import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSourcesTab';
+import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
 import { Text } from '@/components/ui/text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
@@ -15,7 +16,7 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { loadMissingCloudProject } from '@/src/features/projects/service';
 
-type TabId = 'chats' | 'sources';
+type TabId = 'chats' | 'work' | 'sources';
 
 function LocalOnlyFallback({
   projectId,
@@ -121,14 +122,17 @@ function ProjectNotice({
 function TabBar({
   activeTab,
   onTabChange,
+  showWork,
   colors,
 }: {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  showWork: boolean;
   colors: ReturnType<typeof useThemeColors>;
 }) {
   const tabs: { id: TabId; label: string }[] = [
     { id: 'chats', label: 'Chats' },
+    ...(showWork ? [{ id: 'work' as const, label: 'Work' }] : []),
     { id: 'sources', label: 'Sources' },
   ];
 
@@ -343,9 +347,16 @@ export default function ProjectDetailScreen() {
           />
         ) : (
           <>
-            <TabBar activeTab={activeTab} onTabChange={setActiveTab} colors={colors} />
+            <TabBar
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              showWork={isCloudProject}
+              colors={colors}
+            />
             {activeTab === 'chats' ? (
               <ProjectChatsTab projectId={id} />
+            ) : activeTab === 'work' && isCloudProject ? (
+              <ProjectWorkTab projectId={id} projectName={screenTitle} />
             ) : (
               <ProjectSourcesTab projectId={id} />
             )}
