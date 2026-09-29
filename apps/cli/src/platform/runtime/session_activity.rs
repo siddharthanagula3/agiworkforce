@@ -203,27 +203,6 @@ impl SessionActivity {
         let mut recorded = Vec::new();
         for (path, existed) in pending.targets {
             if !path.exists() {
-                if !existed {
-                    continue;
-                }
-                if let Some(before) = pending.before.get(&path) {
-                    self.turn_diff
-                        .push((path.clone(), crate::tools::generate_simple_diff(before, "")));
-                }
-                let change = ManagedSessionFileChange {
-                    path,
-                    kind: ManagedSessionFileChangeKind::Deleted,
-                    tool: pending.tool.clone(),
-                    tool_call_id: activity_text(call_id),
-                    changed_at,
-                    reason: None,
-                };
-                recorded.push(change.clone());
-                push_bounded(
-                    &mut self.file_changes,
-                    change,
-                    MANAGED_SESSION_MAX_FILE_CHANGES,
-                );
                 continue;
             }
             let mut reason = None;
@@ -414,26 +393,15 @@ fn write_targets(tool: &str, args: &serde_json::Value) -> Vec<PathBuf> {
             return Vec::new();
         };
         let mut targets = Vec::new();
-        let mut old_side = None;
         for line in patch.lines() {
-            if let Some(source) = line.strip_prefix("--- ") {
-                let source = source.split('\t').next().unwrap_or(source).trim();
-                old_side = (source != "/dev/null" && !source.is_empty())
-                    .then(|| PathBuf::from(source.strip_prefix("a/").unwrap_or(source)));
-                continue;
-            }
             let Some(target) = line.strip_prefix("+++ ") else {
                 continue;
             };
             let target = target.split('\t').next().unwrap_or(target).trim();
-            let target = if target == "/dev/null" || target.is_empty() {
-                match old_side.take() {
-                    Some(deleted) => deleted,
-                    None => continue,
-                }
-            } else {
-                PathBuf::from(target.strip_prefix("b/").unwrap_or(target))
-            };
+            if target == "/dev/null" || target.is_empty() {
+                continue;
+            }
+            let target = PathBuf::from(target.strip_prefix("b/").unwrap_or(target));
             if !targets.contains(&target) {
                 targets.push(target);
             }
@@ -611,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_targets_are_the_new_side_of_each_file_header_or_the_deleted_old_side() {
+    fn patch_targets_are_the_new_side_of_each_file_header() {
         let targets = write_targets(
             "apply_patch",
             &serde_json::json!({
@@ -620,11 +588,7 @@ mod tests {
         );
         assert_eq!(
             targets,
-            vec![
-                PathBuf::from("src/new.rs"),
-                PathBuf::from("src/old.rs"),
-                PathBuf::from("gone.rs")
-            ]
+            vec![PathBuf::from("src/new.rs"), PathBuf::from("src/old.rs")]
         );
     }
 
