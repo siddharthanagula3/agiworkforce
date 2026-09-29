@@ -321,10 +321,17 @@ pub fn handle_shared_command(
         ),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
-        "/pr-comments" | "/autofix-pr" => match crate::pr_feedback::autofix_prompt(arg) {
-            Ok(prompt) => ParityCommandResult::Prompt(prompt),
-            Err(message) => ParityCommandResult::SystemMessage(message),
-        },
+        "/pr-comments" | "/autofix-pr" => {
+            let mode = if command == "/autofix-pr" {
+                crate::pr_feedback::FeedbackMode::Fix
+            } else {
+                crate::pr_feedback::FeedbackMode::Inspect
+            };
+            match crate::pr_feedback::feedback_prompt(arg, mode) {
+                Ok(prompt) => ParityCommandResult::Prompt(prompt),
+                Err(message) => ParityCommandResult::SystemMessage(message),
+            }
+        }
         "/ultrareview" => ParityCommandResult::Prompt(ultrareview_prompt(arg)),
         "/think-back" => ParityCommandResult::Prompt(think_back_prompt(arg)),
         "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
