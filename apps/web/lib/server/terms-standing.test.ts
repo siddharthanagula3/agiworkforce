@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn() }));
+const mocks = vi.hoisted(() => ({ query: vi.fn(), recordFailure: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/observability/metrics', () => ({ recordFailure: mocks.recordFailure }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
@@ -14,6 +18,7 @@ import {
   MIN_REQUIRED_TERMS_EFFECTIVE_AT,
   MIN_REQUIRED_TERMS_VERSION,
   forgetTermsStanding,
+  mustAcceptTerms,
   readTermsStanding,
   termsNoticeHeaders,
   termsStandingFor,
@@ -152,5 +157,37 @@ describe('readTermsStanding', () => {
     mocks.query.mockRejectedValue(new Error('connection reset'));
 
     await expect(readTermsStanding('user-1')).rejects.toThrow('connection reset');
+  });
+});
+
+describe('mustAcceptTerms', () => {
+  beforeEach(() => {
+    mocks.query.mockReset();
+    mocks.recordFailure.mockReset();
+    forgetTermsStanding();
+  });
+
+  it('stops an account with no acceptance on record', async () => {
+    mocks.query.mockResolvedValue([
+      { terms_version: null, terms_accepted_at: null, terms_accepted_surface: null },
+    ]);
+    await expect(mustAcceptTerms('user-1', 'page')).resolves.toBe(true);
+  });
+
+  it('lets an account on an older valid version continue', async () => {
+    mocks.query.mockResolvedValue([
+      {
+        terms_version: '2026-01-01',
+        terms_accepted_at: '2026-01-02T00:00:00Z',
+        terms_accepted_surface: 'web-login',
+      },
+    ]);
+    await expect(mustAcceptTerms('user-1', 'page')).resolves.toBe(false);
+  });
+
+  it('lets the account through, and counts it, when acceptance cannot be read', async () => {
+    mocks.query.mockRejectedValue(new Error('connection reset'));
+    await expect(mustAcceptTerms('user-1', 'page')).resolves.toBe(false);
+    expect(mocks.recordFailure).toHaveBeenCalledWith('database', 'terms_acceptance_unreadable');
   });
 });

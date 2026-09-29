@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { mustAcceptTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
@@ -151,7 +151,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    if (!(await hasAcceptedCurrentTerms(userId))) {
+    if (await mustAcceptTerms(userId, 'device-verify')) {
       const returnTo = `/verify?${new URLSearchParams({ code }).toString()}`;
       return NextResponse.json(
         {
