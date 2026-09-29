@@ -251,6 +251,41 @@ describe('agi-workforce.openChatInEditor', () => {
     expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
 
+  it('lets chat webviews read only the codicon and render script folders', () => {
+    handlers.get('agi-workforce.openChatInEditor')!();
+    const [, provider] = vi
+      .mocked(vscode.window.registerWebviewViewProvider)
+      .mock.calls.find(([id]) => id === 'agi-workforce.sidebar')!;
+    const view = {
+      webview: {
+        options: {} as vscode.WebviewOptions,
+        html: '',
+        cspSource: 'vscode-resource:',
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: vi.fn().mockResolvedValue(true),
+        onDidReceiveMessage: vi.fn(() => new vscode.Disposable(() => undefined)),
+      },
+      onDidChangeVisibility: vi.fn(() => new vscode.Disposable(() => undefined)),
+      onDidDispose: vi.fn(() => new vscode.Disposable(() => undefined)),
+      visible: true,
+      show: vi.fn(),
+    };
+    provider.resolveWebviewView(
+      view as unknown as vscode.WebviewView,
+      {} as vscode.WebviewViewResolveContext,
+      {} as vscode.CancellationToken,
+    );
+    const roots = (options: vscode.WebviewOptions | undefined): string[] | undefined =>
+      options?.localResourceRoots?.map((uri) => uri.fsPath);
+    const allowed = ['/mock/extension/out/codicons', '/mock/extension/out/webview'];
+
+    expect(roots(vi.mocked(vscode.window.createWebviewPanel).mock.calls.at(-1)?.[3])).toEqual(
+      allowed,
+    );
+    expect(roots(panels[0]!.panel.webview.options)).toEqual(allowed);
+    expect(roots(view.webview.options)).toEqual(allowed);
+  });
+
   it('does not interfere with sidebar webview registration', () => {
     expect(handlers.has('agi-workforce.openChatInEditor')).toBe(true);
     expect(handlers.has('agi-workforce.chat')).toBe(true);
