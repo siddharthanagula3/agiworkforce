@@ -420,6 +420,23 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_draws_only_on_account_wide_and_its_own_project_memories() {
+        let mut cache = MemoryCache::default();
+        let mut own = delta("m1", "project a fact", "1", false);
+        own.project_id = Some("project-a".to_string());
+        let mut other = delta("m2", "project b fact", "2", false);
+        other.project_id = Some("project-b".to_string());
+        cache.apply(&[own, other, delta("m3", "account fact", "3", false)]);
+        let linked = cache.context_prompt_for(Some("project-a"));
+        assert!(linked.contains("project a fact"));
+        assert!(linked.contains("account fact"));
+        assert!(!linked.contains("project b fact"));
+        let unlinked = cache.context_prompt_for(None);
+        assert!(unlinked.contains("account fact"));
+        assert!(!unlinked.contains("project a fact"));
+    }
+
+    #[test]
     fn the_context_prompt_is_empty_when_the_account_holds_nothing() {
         assert_eq!(MemoryCache::default().context_prompt(), "");
     }
