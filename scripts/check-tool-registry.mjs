@@ -41,12 +41,7 @@ const TOOL_NAME_VALUE = /^[a-z][a-z0-9_]*$/u;
  * Tools offered today with no declaration. Each entry states why it is here;
  * the list may only shrink, and a name not on it fails the guard.
  */
-export const UNDECLARED_BASELINE = new Map([
-  [
-    'run_command',
-    'belongs to the Cloud Code agent loop, which has its own tool definitions and its own approval store (cloud_code_agent_approvals), not this registry; one of the two surfaces has to move before it can be declared once',
-  ],
-]);
+export const UNDECLARED_BASELINE = new Map();
 
 export function walkSources(dir) {
   if (!fs.existsSync(dir)) return [];
