@@ -1,6 +1,10 @@
 import 'server-only';
 
 import crypto from 'node:crypto';
+import type {
+  DeviceAuthorizationLookupResponse,
+  DeviceAuthorizationStartResponseWire,
+} from '@agiworkforce/cloud-contracts';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -91,7 +95,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
       verification_uri_complete: `${verificationUri}?${verificationParams.toString()}`,
       interval: DEVICE_POLL_INTERVAL_SECONDS,
       expires_in: DEVICE_CODE_EXPIRES_SECONDS,
-    },
+    } satisfies DeviceAuthorizationStartResponseWire,
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
@@ -155,9 +159,9 @@ async function handleDeviceCodeLookup(request: NextRequest): Promise<NextRespons
     {
       user_code: userCode,
       client,
-      scopes: DEVICE_AUTHORIZATION_SCOPES,
+      scopes: [...DEVICE_AUTHORIZATION_SCOPES],
       expires_at: record.expires_at,
-    },
+    } satisfies DeviceAuthorizationLookupResponse,
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

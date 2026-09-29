@@ -59,6 +59,11 @@ const cloudModules = [
   'schedules',
   'live-voice-tools',
   'triggers',
+  'conversation-shares',
+  'referrals',
+  'map-config',
+  'web-search-allowance',
+  'service-notices',
   'slack',
   'skills',
   'plugin-marketplaces',
@@ -68,6 +73,7 @@ const cloudModules = [
   'free-quota',
   'account-deletion',
   'terms-acceptance',
+  'device-authorization',
   'mobile-push',
 ];
 

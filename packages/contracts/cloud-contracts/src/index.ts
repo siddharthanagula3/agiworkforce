@@ -68,4 +68,5 @@ export * from './header-names';
 export * from './free-quota';
 export * from './account-deletion';
 export * from './terms-acceptance';
+export * from './device-authorization';
 export * from './mobile-push';
