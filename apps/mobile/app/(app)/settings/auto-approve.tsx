@@ -30,9 +30,11 @@ function trimSentence(value: string): string {
   return value.replace(/[.。]+$/, '');
 }
 
+const WORKSPACE_BLOCKS_AUTONOMY = 'Your workspace does not allow skipping approvals.';
+
 export default function AutoApproveScreen() {
   const colors = useThemeColors();
-  const { policy, status, error, select } = useToolApprovalPolicySync();
+  const { policy, autonomyForbidden, status, error, select } = useToolApprovalPolicySync();
   const selectedLabel = toolApprovalPolicyOption(policy).label;
 
   return (
@@ -49,10 +51,18 @@ export default function AutoApproveScreen() {
             key={option.policy}
             icon={POLICY_ICONS[option.policy]}
             label={option.label}
-            description={option.description}
+            description={
+              option.policy === 'autonomous' && autonomyForbidden
+                ? `${option.description} ${WORKSPACE_BLOCKS_AUTONOMY}`
+                : option.description
+            }
             tag={option.policy === RECOMMENDED_POLICY ? 'Recommended' : undefined}
             selected={policy === option.policy}
-            disabled={status === 'loading' || status === 'saving'}
+            disabled={
+              status === 'loading' ||
+              status === 'saving' ||
+              (option.policy === 'autonomous' && autonomyForbidden)
+            }
             onPress={() => select(option.policy)}
             isLast={index === TOOL_APPROVAL_POLICY_OPTIONS.length - 1}
           />
