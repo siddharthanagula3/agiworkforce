@@ -74,6 +74,8 @@ jest.mock('@/src/features/settings/common', () => {
 const mockFetchUsageSnapshot = jest.fn();
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
+  fetchUsageAllowances: () => new Promise(() => undefined),
+  fetchUsageHistory: () => new Promise(() => undefined),
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
@@ -194,13 +196,13 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     expect(queryByText(/\$\d/)).toBeNull();
   });
 
-  it('uses the canonical Max 15x plan label instead of collapsing Max tiers', async () => {
+  it('labels the max_15x tier with its canonical Max 20x name instead of collapsing Max tiers', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'max_15x', usagePercentage: 40 }));
 
     const { getByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Max 15x plan')).toBeTruthy();
+      expect(getByText('Max 20x plan')).toBeTruthy();
     });
   });
 

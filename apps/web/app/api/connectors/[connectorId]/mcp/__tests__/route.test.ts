@@ -76,6 +76,7 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions', () => ({
+  scopeConnectorPermissionsToTurn: vi.fn(),
   EMPTY_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
   connectorToolPermissionsFromEntries: vi.fn(),

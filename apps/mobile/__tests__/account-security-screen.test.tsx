@@ -83,6 +83,10 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   fetchLockdownMode: jest.fn(async () => false),
   saveLockdownMode: jest.fn(async () => undefined),
   revokeAllAccountSessions: jest.fn(async () => undefined),
+  fetchSignInMethods: jest.fn(async () => ({
+    identities: [],
+    keys: [{ id: 'key-1', name: 'Work laptop', kind: 'passkey' }],
+  })),
 }));
 
 jest.mock('../src/features/settings/common', () => {
@@ -188,11 +192,8 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them.',
-      ),
-    ).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Work laptop. Passkey')).toBeTruthy());
+    expect(screen.getByLabelText('Add or remove a sign-in method. Web')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Open Web security. Web'));
     fireEvent.press(screen.getByLabelText('Open Web account. Web'));

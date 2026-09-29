@@ -208,6 +208,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           status: statusFor(threads.get(threadKey(session.rootId, session.id)), session.status),
           model: session.model,
           updatedAt: session.updatedAt,
+          ...(session.origin && session.origin !== 'unknown' ? { origin: session.origin } : {}),
         })),
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))

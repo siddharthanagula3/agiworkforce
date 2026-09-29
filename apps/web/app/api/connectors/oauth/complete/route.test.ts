@@ -8,13 +8,64 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
+  ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
+  ConnectorOAuthStoreUnavailableError: class ConnectorOAuthStoreUnavailableError extends Error {},
+  PENDING_AUTHORIZATION_TTL_SECONDS: 600,
+  __resetConnectorAccountColumnProbeForTests: vi.fn(),
+  consumePendingAuthorization: vi.fn(),
+  createPendingAuthorization: vi.fn(),
+  getConnectorOAuthGrant: vi.fn(),
+  getUserConnectorOAuthGrantSummaries: vi.fn(),
+  listConnectorAccounts: vi.fn(),
+  listPendingConnectorIds: vi.fn(),
+  listRevocableConnectorTokens: vi.fn(),
+  markAppReturn: vi.fn(),
+  revokeConnectorOAuthGrant: vi.fn(),
+  updateConnectorOAuthGrantTokens: vi.fn(),
+  upsertConnectorOAuthGrant: vi.fn(),
+  withLockedConnectorOAuthGrant: vi.fn(),
   appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
 }));
 vi.mock('@/lib/connectors/finish-authorization', () => ({
