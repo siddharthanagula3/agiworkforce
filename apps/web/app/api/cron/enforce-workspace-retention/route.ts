@@ -78,6 +78,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             status: result.outcome,
             deleted: result.conversationsDeleted,
             held: result.conversationsHeld,
+            routineRunsDeleted: result.routineRunsDeleted,
             dryRun: result.dryRun,
           },
         }).catch((error) => {
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         cutoff: new Date().toISOString(),
         conversationsDeleted: 0,
         conversationsHeld: 0,
+        routineRunsDeleted: 0,
         activeHolds: 0,
         dryRun,
         error: error instanceof Error ? error.message : String(error),
