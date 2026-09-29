@@ -1901,6 +1901,22 @@ enum SyncSubcommand {
 
 #[derive(Subcommand, Debug)]
 enum MarketplaceSubcommand {
+    /// Add a publisher's marketplace (a public GitHub repository with a marketplace manifest)
+    /// to your account, so its plugins show up on every surface.
+    Add {
+        /// GitHub repository URL of the marketplace.
+        repository_url: String,
+        /// Branch or tag to read the manifest from.
+        #[arg(long = "ref")]
+        git_ref: Option<String>,
+        /// Name to show for it.
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// List the marketplaces added to your account.
+    Sources,
+    /// Remove a marketplace from your account by the id `agi marketplace sources` prints.
+    Remove { id: String },
     /// Search the remote plugin marketplace.
     Search {
         /// Search query.
@@ -6054,6 +6070,46 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let home = config::CliConfig::config_dir()?;
                 let mp = marketplace::Marketplace::new_production();
                 match action {
+                    MarketplaceSubcommand::Add {
+                        repository_url,
+                        git_ref,
+                        name,
+                    } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = cloud::marketplaces::add(
+                            &client,
+                            repository_url,
+                            git_ref.as_deref(),
+                            name.as_deref(),
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Added {} to your account ({} plugins).",
+                            terminal_text::sanitize_terminal_text(&source.name),
+                            source.entry_count
+                        );
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Sources => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::marketplaces::render(&sources));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Remove { id } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        cloud::marketplaces::remove(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;
                         println!(
