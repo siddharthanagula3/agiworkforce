@@ -58,6 +58,7 @@ import {
 } from '@/src/shared/hooks/useResponsiveLayout';
 import type { LibraryAsset, LibraryScope } from './libraryClient';
 import { useLibraryAssets } from './useLibraryAssets';
+import { MediaJobsSection } from './MediaJobsSection';
 
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
@@ -72,6 +73,8 @@ const SORT_LABELS: Record<LibrarySort, string> = {
 
 type LibraryFilter =
   'all' | 'images' | 'videos' | 'documents' | 'uploads' | 'generated' | 'artifacts';
+
+const GENERATION_FILTERS: ReadonlySet<LibraryFilter> = new Set(['all', 'images', 'videos']);
 
 function scopeForFilter(filter: LibraryFilter, showDeleted: boolean): LibraryScope {
   if (showDeleted) return { deleted: true };
@@ -667,6 +670,16 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
                   ? `${formatBytes(library.storageUsedBytes, 1)} of ${formatBytes(library.storageLimitBytes, 0)} file storage used`
                   : `${formatBytes(library.storageUsedBytes, 1)} of file storage used`}
               </Text>
+            ) : null}
+            {appMode === 'cloud' &&
+            !showDeleted &&
+            !library.signedOut &&
+            GENERATION_FILTERS.has(filter) ? (
+              <MediaJobsSection
+                onOpenConversation={(conversationId) =>
+                  router.push({ pathname: '/(app)/chat/[id]', params: { id: conversationId } })
+                }
+              />
             ) : null}
           </>
         }
