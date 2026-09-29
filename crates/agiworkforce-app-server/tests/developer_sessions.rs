@@ -593,6 +593,7 @@ async fn every_websocket_reader_of_a_host_receives_its_live_events() {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
                 allow_query_token: false,
+                allow_public_listen: false,
             },
             server_host,
             capabilities(),
@@ -928,6 +929,7 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
                 allow_query_token: false,
+                allow_public_listen: false,
             },
             server_host,
             capabilities(),
@@ -1639,6 +1641,7 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
             auth_token: Some("secret-token".to_string()),
             allowed_origins: Vec::new(),
             allow_query_token: false,
+            allow_public_listen: false,
         },
         host,
         capabilities(),
@@ -1681,6 +1684,51 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
         response["result"]["token"],
         serde_json::json!("fixture-token")
     );
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_websocket_upgrade_that_names_another_host_is_refused() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind loopback listener");
+    let addr = listener.local_addr().expect("listener address");
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_websocket(
+        listener,
+        agiworkforce_app_server::WebSocketSecurity {
+            auth_token: Some("secret-token".to_string()),
+            ..Default::default()
+        },
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+    ));
+
+    let upgrade = |host: String| {
+        let mut request = format!("ws://{addr}/ws")
+            .into_client_request()
+            .expect("client request");
+        request
+            .headers_mut()
+            .insert("host", HeaderValue::from_str(&host).expect("host header"));
+        request.headers_mut().insert(
+            "x-agi-app-server-token",
+            HeaderValue::from_static("secret-token"),
+        );
+        request
+    };
+
+    assert!(
+        tokio_tungstenite::connect_async(upgrade(format!("attacker.example:{}", addr.port())))
+            .await
+            .is_err(),
+        "a DNS-rebound page carries its own host name and must not upgrade"
+    );
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(upgrade(format!("localhost:{}", addr.port())))
+            .await
+            .expect("a loopback host name for the bound port upgrades");
+    socket.close(None).await.expect("close");
 
     server.abort();
 }
