@@ -918,7 +918,7 @@ describe('SCIM listing reads memberships in one statement per page', () => {
     );
   }
 
-  function membershipStatements(query: ReturnType<typeof vi.spyOn>): number {
+  function membershipStatements(query: { mock: { calls: readonly unknown[][] } }): number {
     return query.mock.calls.filter(([sql]) => String(sql).includes('from scim_group_members'))
       .length;
   }
