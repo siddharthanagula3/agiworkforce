@@ -31,6 +31,7 @@ import {
 } from '@/services/notifications';
 import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { translatePlural } from '@/src/i18n/plural';
 
 function getPriorityTone(
   priority: NotificationPriority,
@@ -304,7 +305,10 @@ export default function NotificationCenterScreen() {
               <View className="py-3">
                 <Text className="text-xs" style={{ color: colors.textMuted }}>
                   {unreadCount > 0
-                    ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
+                    ? translatePlural('common', 'counts.unreadNotifications', unreadCount, {
+                        one: '{{count}} unread notification',
+                        other: '{{count}} unread notifications',
+                      })
                     : 'All caught up'}
                 </Text>
               </View>

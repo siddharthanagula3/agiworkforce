@@ -62,31 +62,25 @@ Code: `apps/web/lib/web-search/web-search-providers.json:4-4`
 
 - Done when: Charts in answers render interactively (hover/tap values, legend).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Charts drawn from an answer are now interactive (tap a category or slice for its values, legend). Chart artifacts still open as text in the full-screen viewer: the web chart spec parser lives in packages/ui/unified-chat and would have to move to a shared package before the Codex-held ArtifactFullScreen can draw them. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:269-269`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.09: Inspectable chart data.
 
 - Done when: The data behind a chart can be inspected (values on hover, source table/JSON view or download).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | An answer's chart shows its values on tap and its data as a selectable table (Show data). Chart artifacts in the full-screen viewer are still text, as in S22.08. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:82-82`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.10: Geographic maps.
 
