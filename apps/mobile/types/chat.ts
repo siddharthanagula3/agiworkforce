@@ -80,6 +80,20 @@ export interface StatusStep {
   status: 'running' | 'completed' | 'failed';
 }
 
+export interface PendingToolInputCall {
+  toolCallId: string;
+  name: string;
+  connectorId: string;
+  round: number;
+  inputRequests: Record<string, unknown>;
+}
+
+export interface PendingToolInput {
+  runId: string;
+  requestedAt: string;
+  toolCalls: PendingToolInputCall[];
+}
+
 export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   serverVersion?: string;
   /**
@@ -91,6 +105,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   attachments?: MessageAttachment[];
   artifacts?: Artifact[];
   toolCalls?: ToolCall[];
+  pendingToolInput?: PendingToolInput;
   approvalRequests?: ApprovalRequest[];
   steps?: StatusStep[];
   type?: MessageType;

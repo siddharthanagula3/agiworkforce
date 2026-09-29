@@ -14,8 +14,6 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockDispatch = jest.fn();
-const mockMarkWaitlistJoined = jest.fn();
-
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -86,10 +84,8 @@ jest.mock('@/src/ui/theme', () => ({
 
 jest.mock('@/src/features/waitlist', () => {
   return {
-    joinWaitlist: jest.fn().mockResolvedValue({ rank: 0 }),
-    useWaitlistStore: (
-      selector: (state: { markJoined: typeof mockMarkWaitlistJoined }) => unknown,
-    ) => selector({ markJoined: mockMarkWaitlistJoined }),
+    useWaitlistStore: (selector: (state: { cloudUnlocked: boolean }) => unknown) =>
+      selector({ cloudUnlocked: false }),
   };
 });
 

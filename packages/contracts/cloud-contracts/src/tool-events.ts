@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const ToolStatusPayloadSchema = z.object({
@@ -24,6 +23,20 @@ export type ToolApprovalRequestPayload = z.infer<typeof ToolApprovalRequestPaylo
 
 export function parseToolApprovalRequestDelta(payload: unknown): ToolApprovalRequestPayload | null {
   const parsed = ToolApprovalRequestPayloadSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
+export const ToolInputRequestPayloadSchema = z.object({
+  tool_call_id: z.string().min(1).max(256),
+  name: z.string().min(1).max(512),
+  connector_id: z.string().max(256).optional(),
+  input_requests: z.record(z.string(), z.unknown()),
+  round: z.number().int().nonnegative().optional(),
+});
+export type ToolInputRequestPayload = z.infer<typeof ToolInputRequestPayloadSchema>;
+
+export function parseToolInputRequestDelta(payload: unknown): ToolInputRequestPayload | null {
+  const parsed = ToolInputRequestPayloadSchema.safeParse(payload);
   return parsed.success ? parsed.data : null;
 }
 

@@ -36,6 +36,7 @@ import {
   cancelMobileCloudAgentRun,
   streamChat,
   streamDeviceStepResume,
+  streamToolInputResume,
   streamToolApprovalResume,
   type StreamCallbacks,
   type StreamDelta,
@@ -51,6 +52,7 @@ import {
   ManagedCloudAgentRunReferenceSchema,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
+  type ManagedCloudAgentRunInputAnswer,
   type FreeQuotaMessageContent,
   normalizePromotionalChatHistory,
 } from '@agiworkforce/cloud-contracts';
@@ -140,6 +142,8 @@ import type {
   ChatMessage,
   MessageAttachment,
   ConversationSummary,
+  PendingToolInput,
+  PendingToolInputCall,
   StatusStep,
   ToolCall,
   ToolSearchResult,
@@ -310,6 +314,11 @@ interface ExecutionState {
     guidance?: string,
   ) => Promise<void>;
   continuePausedCloudTurn: (conversationId: string, assistantMessageId: string) => Promise<void>;
+  answerToolInput: (
+    conversationId: string,
+    assistantMessageId: string,
+    answers: ManagedCloudAgentRunInputAnswer[],
+  ) => Promise<void>;
   respondToInteractiveCard: (
     conversationId: string,
     assistantMessageId: string,
@@ -354,6 +363,8 @@ interface PendingApprovalTurn {
   resolving: boolean;
   deviceResults?: Map<string, PhoneStepOutcome>;
   deviceStarted?: Set<string>;
+  inputAnswers?: ManagedCloudAgentRunInputAnswer[];
+  pausedInput?: PendingToolInput;
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
@@ -361,6 +372,38 @@ const TERMINAL_RESUME_STATUSES = new Set([404, 409, 410]);
 
 function isTerminalResumeError(error: unknown): boolean {
   return error instanceof ApiHttpError && TERMINAL_RESUME_STATUSES.has(error.status);
+}
+
+const INACTIVE_INPUT_STATUSES = new Set([404, 410]);
+
+function inactiveInputReason(error: unknown): string | null {
+  return error instanceof ApiHttpError && INACTIVE_INPUT_STATUSES.has(error.status)
+    ? error.message
+    : null;
+}
+
+function recordToolInputRequest(calls: PendingToolInputCall[], delta: StreamDelta): void {
+  const request = delta.x_tool_input_request;
+  if (!request) return;
+  const call: PendingToolInputCall = {
+    toolCallId: request.tool_call_id,
+    name: request.name,
+    connectorId: request.connector_id ?? '',
+    round: request.round ?? 0,
+    inputRequests: request.input_requests,
+  };
+  const known = calls.findIndex((entry) => entry.toolCallId === call.toolCallId);
+  if (known >= 0) calls[known] = call;
+  else calls.push(call);
+}
+
+function pendingToolInputPatch(
+  runId: string | undefined,
+  calls: PendingToolInputCall[],
+): { pendingToolInput?: PendingToolInput } {
+  return runId && calls.length > 0
+    ? { pendingToolInput: { runId, requestedAt: new Date().toISOString(), toolCalls: [...calls] } }
+    : {};
 }
 
 function pendingPhoneSteps(calls: PendingApprovalCall[]): PhoneDeviceStep[] {
@@ -478,6 +521,20 @@ function resumePausedTurn(
     },
   };
   const operationId = uuidv7();
+  if (turn.inputAnswers) {
+    return streamToolInputResume(
+      {
+        run_id: turn.runId,
+        operationId,
+        tool_inputs: turn.inputAnswers.map((answer) => ({
+          tool_call_id: answer.toolCallId,
+          input_responses: answer.responses,
+        })),
+      },
+      callbacks,
+      signal,
+    );
+  }
   const deviceResults = turn.deviceResults;
   if (deviceResults) {
     return streamDeviceStepResume(
@@ -2198,6 +2255,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const toolAcc = createToolCallAccumulator();
       const turnPendingApprovals: PendingApprovalCall[] = [];
+      const turnPendingInputs: PendingToolInputCall[] = [];
 
       const executionModelMetadata = getModelMetadataById(executionModel);
       const entitlementState = useTierStore.getState();
@@ -2447,6 +2505,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               });
             }
             trackPhoneDeviceStep(turnPendingApprovals, delta);
+            recordToolInputRequest(turnPendingInputs, delta);
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
@@ -2578,6 +2637,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(turnInteractiveCards.length > 0
                       ? { interactiveCards: turnInteractiveCards }
                       : {}),
+                    ...pendingToolInputPatch(cloudAgentRun?.runId, turnPendingInputs),
                     metadata: {
                       ...m.metadata,
                       ...(generatedFilesMetadata.length > 0
@@ -3076,12 +3136,63 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     await get().continuePausedCloudTurn(conversationId, assistantMessageId);
   },
 
+  answerToolInput: async (conversationId, assistantMessageId, answers) => {
+    const existing = pendingApprovalTurns.get(assistantMessageId);
+    if (existing?.resolving) return;
+    const msgStore = getConversationMessageStore(conversationId);
+    const message = (msgStore.getState().messages[conversationId] ?? []).find(
+      (candidate) => candidate.id === assistantMessageId,
+    );
+    const pausedInput = message?.pendingToolInput;
+    if (!pausedInput || answers.length === 0) return;
+    const pausedIds = new Set(pausedInput.toolCalls.map((call) => call.toolCallId));
+    if (!answers.every((answer) => pausedIds.has(answer.toolCallId))) return;
+
+    pendingApprovalTurns.set(assistantMessageId, {
+      runId: pausedInput.runId,
+      conversationId,
+      calls: pausedInput.toolCalls.map((call) => ({
+        toolCallId: call.toolCallId,
+        name: call.name,
+      })),
+      decisions: new Map(),
+      guidance: new Map(),
+      resolving: true,
+      inputAnswers: answers,
+      pausedInput,
+    });
+    msgStore.setState((s) => ({
+      messages: {
+        ...s.messages,
+        [conversationId]: (s.messages[conversationId] ?? []).map((m) => {
+          if (m.id !== assistantMessageId) return m;
+          const { pendingToolInput: _answered, ...rest } = m;
+          return rest;
+        }),
+      },
+    }));
+
+    await get().continuePausedCloudTurn(conversationId, assistantMessageId);
+  },
+
   continuePausedCloudTurn: async (conversationId, assistantMessageId) => {
     const turn = pendingApprovalTurns.get(assistantMessageId);
     if (!turn || turn.conversationId !== conversationId) return;
     const approvalAccountEpoch = captureCloudAccountEpoch();
     if (approvalAccountEpoch === null) {
       turn.resolving = false;
+      const pausedInput = turn.pausedInput;
+      if (pausedInput) {
+        pendingApprovalTurns.delete(assistantMessageId);
+        getConversationMessageStore(conversationId).setState((s) => ({
+          messages: {
+            ...s.messages,
+            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+              m.id === assistantMessageId ? { ...m, pendingToolInput: pausedInput } : m,
+            ),
+          },
+        }));
+      }
       set({
         error: 'Sign in to resume this AGI Cloud task.',
         paywallError: null,
@@ -3141,6 +3252,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         readPersistedInteractiveCards(currentMessage?.metadata)),
     ];
     const turnPendingApprovals: PendingApprovalCall[] = [];
+    const turnPendingInputs: PendingToolInputCall[] = [];
     let turnFinishReason: string | undefined;
     let turnStreamError: StreamFailure | undefined;
     let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
@@ -3180,6 +3292,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               });
             }
             trackPhoneDeviceStep(turnPendingApprovals, delta);
+            recordToolInputRequest(turnPendingInputs, delta);
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
@@ -3271,6 +3384,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(turnInteractiveCards.length > 0
                       ? { interactiveCards: turnInteractiveCards }
                       : {}),
+                    ...pendingToolInputPatch(turn.runId, turnPendingInputs),
                     ...(hasTurnMetadata
                       ? {
                           metadata: {
@@ -3341,10 +3455,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent || cloudContentRaw;
-            const terminal = isTerminalResumeError(error);
-            if (turn.deviceResults || terminal) pendingApprovalTurns.delete(assistantMessageId);
+            const inputTurn = turn.inputAnswers !== undefined;
+            const terminal = !inputTurn && isTerminalResumeError(error);
+            const inactiveReason = inputTurn ? inactiveInputReason(error) : null;
+            if (turn.deviceResults || terminal || inputTurn) {
+              pendingApprovalTurns.delete(assistantMessageId);
+            }
             const checkpointIds = new Set(
-              turn.deviceResults && !terminal ? [] : turn.calls.map((c) => c.toolCallId),
+              inputTurn || (turn.deviceResults && !terminal)
+                ? []
+                : turn.calls.map((c) => c.toolCallId),
             );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
@@ -3352,6 +3472,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...m,
                     content: currentContent || m.content,
                     isStreaming: false,
+                    ...(inputTurn && inactiveReason === null && turn.pausedInput
+                      ? { pendingToolInput: turn.pausedInput }
+                      : {}),
                     toolCalls: (m.toolCalls ?? []).map((t) =>
                       t.toolCallId && checkpointIds.has(t.toolCallId)
                         ? {
@@ -3394,8 +3517,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isApprovalAccountCurrent()) return;
       turn.resolving = false;
       turn.decisions.clear();
-      const terminal = isTerminalResumeError(caughtErr);
-      if (turn.deviceResults || terminal) pendingApprovalTurns.delete(assistantMessageId);
+      const inputTurn = turn.inputAnswers !== undefined;
+      const terminal = !inputTurn && isTerminalResumeError(caughtErr);
+      const inactiveReason = inputTurn ? inactiveInputReason(caughtErr) : null;
+      if (turn.deviceResults || terminal || inputTurn) {
+        pendingApprovalTurns.delete(assistantMessageId);
+      }
       if (!controller.signal.aborted) {
         const innerMsgStore = getConversationMessageStore(conversationId);
         const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -3405,7 +3532,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ...m,
                 content: cloudContentRaw || m.content,
                 isStreaming: false,
+                ...(inputTurn && inactiveReason === null && turn.pausedInput
+                  ? { pendingToolInput: turn.pausedInput }
+                  : {}),
                 toolCalls: (m.toolCalls ?? []).map((tool) =>
+                  !inputTurn &&
                   tool.toolCallId &&
                   (!turn.deviceResults || terminal) &&
                   turn.calls.some((call) => call.toolCallId === tool.toolCallId)

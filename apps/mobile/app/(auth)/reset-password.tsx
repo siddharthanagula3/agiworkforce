@@ -21,13 +21,13 @@ export default function ResetPasswordScreen() {
 
   const handleOpenWebRecovery = useCallback(async () => {
     void params;
-    const opened = await openExternalUrl('https://agiworkforce.com/auth/reset-password');
+    const opened = await openExternalUrl('https://agiworkforce.com/login');
     if (opened) {
       return;
     }
     Alert.alert(
       'Could not open account recovery',
-      'Visit agiworkforce.com/auth/reset-password in your browser.',
+      'Visit agiworkforce.com/login in your browser and choose Forgot password.',
     );
   }, [params]);
 
