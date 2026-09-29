@@ -24,6 +24,3 @@ Code: `apps/cli/src/agents.rs:331-335`, `apps/web/app/api/agents/execute/route.t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Subagents run only in the CLI runtime (task tool, subagent_v2); the hosted loop has depth/fan-out budget constants but no subagent spawning. | handler |
-
-Code: `apps/cli/src/agent/chat.rs:1710-1718`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`
