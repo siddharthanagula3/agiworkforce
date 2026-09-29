@@ -56,6 +56,7 @@ export * from './live-voice-tools';
 export * from './triggers';
 export * from './conversation-shares';
 export * from './referrals';
+export * from './map-config';
 export * from './slack';
 export * from './skills';
 export * from './plugin-marketplaces';
