@@ -25,6 +25,13 @@ import {
 } from '@/lib/services/schedule-notification-service';
 import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
+import {
+  DEVICE_REVOCATION_REASONS,
+  revocationIsStale,
+  sendRelayRevocation,
+  type DeviceRevocationReason,
+  type RegistrationSinceRevocation,
+} from '@/lib/device-steps/device-registry';
 
 import type { JobHandlerContext, JobHandlerRegistry } from './job-drain';
 import { PermanentJobError, enqueueJob } from './job-service';
@@ -215,7 +222,44 @@ async function settleResearchReportCost(
   return { requestId, settledCostMicrousd };
 }
 
+/**
+ * A device unlinked while the relay was down still holds a live socket; this
+ * retries the relay's revoke until it answers.
+ */
+async function retryRelayRevocation(context: JobHandlerContext): Promise<Record<string, unknown>> {
+  const deviceId = readString(context.job.payload, 'deviceId');
+  const reason = readString(context.job.payload, 'reason');
+  if (!(DEVICE_REVOCATION_REASONS as readonly string[]).includes(reason)) {
+    throw new PermanentJobError('Device revocation job names no known reason');
+  }
+  const userId = requireAccount(context);
+  const revokedAt =
+    typeof context.job.payload['revokedAt'] === 'string'
+      ? context.job.payload['revokedAt']
+      : context.job.createdAt;
+  // A retry can run hours later. A device re-paired since then must not be
+  // revoked by the stale job, so the registry is read again first.
+  const [registration] = await createClaimedUserScopedDb(context.db, {
+    userId,
+    organizationId: context.job.organizationId,
+  }).query<RegistrationSinceRevocation>(
+    `select remote_enabled, last_seen_at::text as last_seen_at
+       from device_registrations
+      where id = $1 and user_id = $2
+      limit 1`,
+    [deviceId, userId],
+  );
+  if (revocationIsStale(reason as DeviceRevocationReason, revokedAt, registration ?? null)) {
+    return { deviceId, skipped: 'device re-paired since the revocation' };
+  }
+  const relay = await sendRelayRevocation(deviceId, reason as DeviceRevocationReason);
+  if (!relay.configured) throw new PermanentJobError('The signaling relay is not configured');
+  if (!relay.reachable) throw new Error('The signaling relay did not take the revoke');
+  return { deviceId, closed: relay.closed };
+}
+
 export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
+  'webhooks.signaling-device-revoke': retryRelayRevocation,
   'notifications.schedule-completed': announceScheduleCompletion,
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,

@@ -1,5 +1,5 @@
 import {
-  DEVICE_HEARTBEAT_INTERVAL_MS,
+  DESKTOP_HEARTBEAT_INTERVAL_MS,
   DEVICE_HEARTBEAT_PATH,
   DeviceHeartbeatRequestSchema,
   deviceOperatingSystem,
@@ -88,6 +88,6 @@ export async function sendTauriHeartbeat(): Promise<boolean> {
 export function initializeDeviceRegistryHeartbeat(): () => void {
   const beat = () => void sendTauriHeartbeat().catch(() => false);
   beat();
-  const timer = setInterval(beat, DEVICE_HEARTBEAT_INTERVAL_MS);
+  const timer = setInterval(beat, DESKTOP_HEARTBEAT_INTERVAL_MS);
   return () => clearInterval(timer);
 }

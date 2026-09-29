@@ -18,6 +18,7 @@ import {
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { CURRENT_TERMS_VERSION, mustAcceptTerms } from '@/lib/server/terms';
+import { accountAccessDecision } from '@/lib/auth/account-status';
 import { devicePairingFlow } from '@/lib/validations/device';
 import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 
@@ -121,6 +122,26 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   // approval produced: refusing ends the wait instead of polling for ever.
   if (record.status !== 'approved' || !record.user_id) {
     return NextResponse.json({ error: 'access_denied' }, { status: 400, ...noStore });
+  }
+
+  // Approval can precede the poll by up to the code's lifetime, so the account's status is read
+  // again here, as the refresh route reads it: a suspension in between issues no credential.
+  const [owner] = await db.query<{ account_status: string | null }>(
+    `SELECT account_status FROM profiles WHERE id = $1`,
+    [record.user_id],
+  );
+  const access = accountAccessDecision(owner?.account_status ?? null);
+  if (!access.allowed) {
+    return NextResponse.json(
+      {
+        error: 'account_unavailable',
+        error_description: access.message,
+        ...(access.recoveryPath
+          ? { recovery_url: new URL(access.recoveryPath, new URL(request.url).origin).toString() }
+          : {}),
+      },
+      { status: 403, ...noStore },
+    );
   }
 
   // The code stays approved and unconsumed so the client can keep polling while the account

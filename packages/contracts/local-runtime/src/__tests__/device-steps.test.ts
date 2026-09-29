@@ -7,7 +7,10 @@ import {
   declarationForHost,
   describeDeviceDisplays,
   describeDeviceStep,
+  encodeDesktopHostDeclaration,
+  MAX_DEVICE_HOST_HEADER_LENGTH,
   offeredDeviceStepTools,
+  parseDesktopHostDeclaration,
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '../device-steps';
@@ -238,5 +241,49 @@ describe('phone steps', () => {
     expect(describeDeviceStep(step, [])).toBe(
       'Add the reminder "Call the bank" due 2026-10-02 09:30',
     );
+  });
+});
+
+describe('the device host header', () => {
+  it('stays a valid header value for names outside Latin-1 and reads back unchanged', () => {
+    const declared: DesktopHostDeclaration = {
+      deviceId: 'device-1',
+      deviceName: 'Mei 的 MacBook ✨',
+      platform: 'darwin',
+      appVersion: '1.0.0',
+      capabilities: ['filesystem.read'],
+      roots: [{ id: 'root-1', name: '文档', path: '/Users/mei/文档' }],
+    };
+
+    const encoded = encodeDesktopHostDeclaration(declared);
+
+    expect(/^[\x20-\x7e]*$/.test(encoded)).toBe(true);
+    expect(() => new Headers({ 'x-test': encoded })).not.toThrow();
+    expect(parseDesktopHostDeclaration(encoded)).toEqual(declared);
+  });
+
+  it('drops the last granted folders, not the whole declaration, to fit the length', () => {
+    const roots = Array.from({ length: 12 }, (_, index) => ({
+      id: `root-${index}`,
+      name: `Folder ${index}`,
+      path: `/Users/qa/${'deep/'.repeat(90)}${index}`,
+    }));
+    const declared: DesktopHostDeclaration = {
+      deviceId: 'device-1',
+      deviceName: 'QA Mac',
+      platform: 'darwin',
+      appVersion: '1.0.0',
+      capabilities: ['filesystem.read'],
+      roots,
+    };
+
+    const encoded = encodeDesktopHostDeclaration(declared);
+    const parsed = parseDesktopHostDeclaration(encoded);
+
+    expect(encoded.length).toBeLessThanOrEqual(MAX_DEVICE_HOST_HEADER_LENGTH);
+    expect(parsed?.deviceId).toBe('device-1');
+    expect(parsed?.roots.length).toBeGreaterThan(0);
+    expect(parsed?.roots.length).toBeLessThan(roots.length);
+    expect(parsed?.roots[0]?.id).toBe('root-0');
   });
 });

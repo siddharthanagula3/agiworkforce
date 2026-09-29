@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   customInstructions: vi.fn(),
   scopedQuery: vi.fn(),
   reserveManagedUsage: vi.fn(),
+  webDomains: vi.fn(),
+}));
+
+vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  readWorkspaceWebDomainPolicy: mocks.webDomains,
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -127,6 +133,7 @@ beforeEach(() => {
   mocks.loadPolicy.mockResolvedValue(DISABLED_POLICY);
   mocks.customInstructions.mockResolvedValue(null);
   mocks.scopedQuery.mockResolvedValue([]);
+  mocks.webDomains.mockResolvedValue(null);
   mocks.reserveManagedUsage.mockImplementation(
     async ({ estimatedCostCents }: { estimatedCostCents: number }) => ({
       db: {},
@@ -320,6 +327,32 @@ describe('workspace feature controls reach the turn', () => {
           name !== 'device_search_text',
       ),
     ).toBe(false);
+  });
+
+  it('carries the workspace website rules to a desktop that may drive its browser', async () => {
+    const rules = { allow: [], deny: ['blocked.example'] };
+    mocks.webDomains.mockResolvedValue(rules);
+    const declared = { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] };
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'device-browser-rules-1',
+        'x-agi-surface': 'desktop',
+        [DEVICE_HOST_HEADER]: encodeDesktopHostDeclaration(declared as DesktopHostDeclaration),
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'open the report in my browser' }],
+        stream: true,
+      }),
+    });
+
+    const result = await processRequest(request, auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceWebDomainPolicy).toEqual(rules);
   });
 
   it('refuses a Work turn before reserving anything when the workspace turned Work off', async () => {

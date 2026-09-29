@@ -122,6 +122,17 @@ describe('/login/complete', () => {
     expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
   });
 
+  it('keeps the desktop window layout on the terms step', async () => {
+    const { container } = render(
+      await LoginCompletePage({
+        searchParams: Promise.resolve({ redirectTo: '/chat', surface: 'desktop' }),
+      }),
+    );
+
+    expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
+    expect(container.querySelector('[data-embedded="true"]')).not.toBeNull();
+  });
+
   it('requires missing or outdated acceptance on the login surface', async () => {
     render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 

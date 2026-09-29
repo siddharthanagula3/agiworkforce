@@ -60,6 +60,9 @@ impl EffectiveWorkspacePolicy {
 static CURRENT: RwLock<Option<EffectiveWorkspacePolicy>> = RwLock::new(None);
 static LAST_REFRESH: Mutex<Option<Instant>> = Mutex::new(None);
 static HOOKS_REFUSAL_REPORTED: AtomicBool = AtomicBool::new(false);
+/// Set when a signed-in account on a workspace plan has no readable policy:
+/// its administrator's switches are unknown, so they are treated as off.
+static UNREADABLE_FOR_WORKSPACE: AtomicBool = AtomicBool::new(false);
 
 fn cache_path(config_dir: &Path) -> PathBuf {
     cloud_dir(config_dir).join("workspace-policy.json")
@@ -112,7 +115,17 @@ fn on_workspace_plan() -> bool {
 }
 
 pub fn feature_enabled(feature: &str) -> bool {
+    if UNREADABLE_FOR_WORKSPACE.load(Ordering::Relaxed) && !policy_known() {
+        return false;
+    }
     with_current(|policy| policy.feature_enabled(feature))
+}
+
+/// Whether a failed read leaves this account's controls unknown: only an
+/// account on a workspace plan has an administrator to answer to. A personal
+/// account, or one whose policy was read before, keeps what it has.
+fn closes_on_failed_read(signed_in: bool, known: bool, workspace_plan: bool) -> bool {
+    signed_in && !known && workspace_plan
 }
 
 pub fn governed() -> bool {
@@ -169,6 +182,19 @@ fn code_controls_refusal(
         None => Some(format!(
             "MCP server '{name}' was not started: your workspace allows only listed MCP hosts, and this server has no host on that list"
         )),
+    }
+}
+
+#[cfg(test)]
+mod failed_read_tests {
+    use super::closes_on_failed_read;
+
+    #[test]
+    fn only_a_signed_in_workspace_account_with_no_known_policy_closes() {
+        assert!(closes_on_failed_read(true, false, true));
+        assert!(!closes_on_failed_read(true, false, false));
+        assert!(!closes_on_failed_read(true, true, true));
+        assert!(!closes_on_failed_read(false, false, true));
     }
 }
 
@@ -264,13 +290,34 @@ fn claim_refresh() -> Option<bool> {
     Some(first)
 }
 
+/// Read at most hourly for any signed-in account, in every privacy mode: the
+/// read sends only the bearer token, nothing of the session, and the
+/// administrator's switches bind Local and BYOK sessions as they bind Managed.
 pub async fn refresh_when_due() {
     let Some(first) = claim_refresh() else {
         return;
     };
+    // Until the first read lands, a workspace-plan account's switches are
+    // unknown, so they count as off rather than defaulting open while the
+    // read is still in flight.
+    if closes_on_failed_read(
+        signed_in_owner().is_some(),
+        policy_known(),
+        on_workspace_plan(),
+    ) {
+        UNREADABLE_FOR_WORKSPACE.store(true, Ordering::Relaxed);
+    }
     let fetching = tokio::spawn(async {
-        if let Err(error) = fetch(PrivacyMode::Managed).await {
-            tracing::debug!("[workspace_policy] refresh failed: {error}");
+        match fetch(PrivacyMode::Managed).await {
+            Ok(()) => UNREADABLE_FOR_WORKSPACE.store(false, Ordering::Relaxed),
+            Err(error) => {
+                tracing::debug!("[workspace_policy] refresh failed: {error}");
+                let signed_in = !matches!(error, CloudError::SignedOut);
+                UNREADABLE_FOR_WORKSPACE.store(
+                    closes_on_failed_read(signed_in, policy_known(), on_workspace_plan()),
+                    Ordering::Relaxed,
+                );
+            }
         }
     });
     if first && load_cached().is_none() {

@@ -18,6 +18,7 @@ const gateMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
+  resolveWorkspaceControlsForRequest: async () => ({ ok: true, controls: null }),
   buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: gateMocks.managedCompute,
   buildOrganizationPolicyGateResponse: gateMocks.orgPolicy,

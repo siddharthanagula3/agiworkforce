@@ -264,12 +264,51 @@ impl CloudClient {
         serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
+    /// Send, and on a 401 renew the session once and send again. A token the
+    /// server refuses before it was due to expire (a passkey enrolled, the
+    /// device unlinked) would otherwise fail every call while the account still
+    /// looked signed in. A refresh that is refused too, or a second 401, forgets
+    /// the credential, so the next status reads signed out and the user, or the
+    /// desktop's account sync, signs in again.
+    async fn send_renewing<T: DeserializeOwned>(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+    ) -> Result<T, CloudError> {
+        match Self::send(build(self)).await {
+            Err(CloudError::SessionExpired) => {}
+            other => return other,
+        }
+        use crate::app_server::account::{
+            forget_refused_session, recover_rejected_session, RejectedSessionRecovery,
+        };
+        match recover_rejected_session(&self.jwt).await {
+            RejectedSessionRecovery::Renewed => {
+                let renewed = CloudClient::connect_managed()?;
+                match Self::send(build(&renewed)).await {
+                    Err(CloudError::SessionExpired) => {
+                        forget_refused_session();
+                        Err(CloudError::SessionExpired)
+                    }
+                    other => other,
+                }
+            }
+            RejectedSessionRecovery::Refused(message) => Err(CloudError::Api {
+                status: 403,
+                message,
+            }),
+            RejectedSessionRecovery::Ended(_) | RejectedSessionRecovery::Unavailable => {
+                Err(CloudError::SessionExpired)
+            }
+        }
+    }
+
     pub async fn get<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::GET, path).query(query)).await
+        self.send_renewing(|client| client.request(reqwest::Method::GET, path).query(query))
+            .await
     }
 
     pub async fn post<B: Serialize, T: DeserializeOwned>(
@@ -277,7 +316,8 @@ impl CloudClient {
         path: &str,
         body: &B,
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::POST, path).json(body)).await
+        self.send_renewing(|client| client.request(reqwest::Method::POST, path).json(body))
+            .await
     }
 
     /// Send one declared [`Route`]. Commands that name their route go through
@@ -288,13 +328,16 @@ impl CloudClient {
         query: &[(&str, String)],
         body: Option<&serde_json::Value>,
     ) -> Result<T, CloudError> {
-        let mut builder = self
-            .request(route.method.reqwest(), &route.path)
-            .query(query);
-        if let Some(body) = body {
-            builder = builder.json(body);
-        }
-        Self::send(builder).await
+        self.send_renewing(|client| {
+            let builder = client
+                .request(route.method.reqwest(), &route.path)
+                .query(query);
+            match body {
+                Some(body) => builder.json(body),
+                None => builder,
+            }
+        })
+        .await
     }
 
     /// POST one billable Managed Cloud operation. The key identifies the
@@ -476,6 +519,46 @@ impl Reply {
     }
 }
 
+pub async fn connectivity_line(privacy: PrivacyMode) -> String {
+    if privacy != PrivacyMode::Managed {
+        return format!("AGI Cloud: not used by this {} session", privacy.label());
+    }
+    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
+    let Some(base) = tier_cache::resolve_agi_api_base(&raw_base) else {
+        return format!("AGI Cloud: {raw_base} is not an AGI Workforce address");
+    };
+    let started = std::time::Instant::now();
+    let probe = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map(|client| client.get(format!("{base}/api/health")).send());
+    let outcome = match probe {
+        Ok(request) => request.await,
+        Err(_) => {
+            return "AGI Cloud: unreachable. Check your connection, then run /status to try again."
+                .to_string()
+        }
+    };
+    match outcome {
+        Ok(response) if response.status().is_success() => format!(
+            "AGI Cloud: reachable ({} ms)",
+            started.elapsed().as_millis()
+        ),
+        Ok(response) => format!(
+            "AGI Cloud: answered HTTP {}. Run /status to try again.",
+            response.status().as_u16()
+        ),
+        Err(error) if error.is_timeout() => {
+            "AGI Cloud: no answer within 5 seconds. Check your connection, then run /status to try again."
+                .to_string()
+        }
+        Err(_) => {
+            "AGI Cloud: unreachable. Check your connection, then run /status to try again.".to_string()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -557,45 +640,5 @@ mod tests {
             message: "boom".to_string()
         }
         .is_boundary());
-    }
-}
-
-pub async fn connectivity_line(privacy: PrivacyMode) -> String {
-    if privacy != PrivacyMode::Managed {
-        return format!("AGI Cloud: not used by this {} session", privacy.label());
-    }
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
-    let Some(base) = tier_cache::resolve_agi_api_base(&raw_base) else {
-        return format!("AGI Cloud: {raw_base} is not an AGI Workforce address");
-    };
-    let started = std::time::Instant::now();
-    let probe = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map(|client| client.get(format!("{base}/api/health")).send());
-    let outcome = match probe {
-        Ok(request) => request.await,
-        Err(_) => {
-            return "AGI Cloud: unreachable. Check your connection, then run /status to try again."
-                .to_string()
-        }
-    };
-    match outcome {
-        Ok(response) if response.status().is_success() => format!(
-            "AGI Cloud: reachable ({} ms)",
-            started.elapsed().as_millis()
-        ),
-        Ok(response) => format!(
-            "AGI Cloud: answered HTTP {}. Run /status to try again.",
-            response.status().as_u16()
-        ),
-        Err(error) if error.is_timeout() => {
-            "AGI Cloud: no answer within 5 seconds. Check your connection, then run /status to try again."
-                .to_string()
-        }
-        Err(_) => {
-            "AGI Cloud: unreachable. Check your connection, then run /status to try again.".to_string()
-        }
     }
 }

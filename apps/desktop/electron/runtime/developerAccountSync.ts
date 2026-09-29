@@ -39,9 +39,15 @@ function sameAccount(host: string | null, shell: string | null): boolean {
   return host.trim().toLowerCase() === shell.trim().toLowerCase();
 }
 
+/**
+ * `shellOwnsCli` says whether this app is what signed the machine's CLI in. A
+ * credential the user set up themselves is theirs: signing out of the app does
+ * not sign the terminal out with it.
+ */
 export async function reconcileDeveloperAccount(
   call: DeveloperAccountCall,
   bridge: DeveloperAccountBridge,
+  shellOwnsCli = true,
 ): Promise<DeveloperAccountOutcome> {
   const identity = await bridge.readShellIdentity();
   if (identity === null) return 'unknown';
@@ -50,7 +56,7 @@ export async function reconcileDeveloperAccount(
   const hostSignedIn = isRecord(status) && status['signedIn'] === true;
 
   if (!identity.signedIn) {
-    if (!hostSignedIn) return 'unchanged';
+    if (!hostSignedIn || !shellOwnsCli) return 'unchanged';
     await call('account/logout', {});
     await call('model/list', { refresh: true });
     return 'signed-out';

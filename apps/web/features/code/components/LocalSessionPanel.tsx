@@ -159,6 +159,45 @@ function LocalModeControl({
   );
 }
 
+/**
+ * A choice the agent asked for. Allow and Deny cannot carry an answer, so the
+ * options are the buttons, and declining lets the agent go on without one.
+ */
+function QuestionPrompt({
+  question,
+  onAnswer,
+  onSkip,
+}: {
+  question: { question: string; options: string[] };
+  onAnswer: (option: string) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div
+      className={`${styles['notice']} ${styles['questionPrompt']}`}
+      role="group"
+      aria-label={question.question}
+    >
+      <p className={styles['hintText']}>{question.question}</p>
+      <div className={styles['questionOptions']}>
+        {question.options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={styles['secondaryButton']}
+            onClick={() => onAnswer(option)}
+          >
+            {option}
+          </button>
+        ))}
+        <button type="button" className={styles['secondaryButton']} onClick={onSkip}>
+          {LOCAL_CODE_COPY.skipQuestion}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function FailureAction({
   action,
   onRetry,
@@ -369,7 +408,7 @@ export function LocalSessionPanel({
               {!state.loading && (
                 <CodeTranscriptBody
                   items={items}
-                  approvals={localApprovalPrompts(state.approval)}
+                  approvals={state.approval?.question ? [] : localApprovalPrompts(state.approval)}
                   busy={busy}
                   busySince={running ? session.updatedAt : null}
                   verbose={verbose}
@@ -377,6 +416,14 @@ export function LocalSessionPanel({
                     void state.decideApproval(decision === 'approve')
                   }
                   onRetryTask={(goal) => void state.send(goal)}
+                />
+              )}
+
+              {state.approval?.question && (
+                <QuestionPrompt
+                  question={state.approval.question}
+                  onAnswer={(option) => void state.decideApproval(true, option)}
+                  onSkip={() => void state.decideApproval(false)}
                 />
               )}
 

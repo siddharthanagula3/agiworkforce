@@ -262,6 +262,8 @@ export type DeveloperSessionEvent =
       requestId: string;
       summary: string;
       detail: string;
+      /** Present when the agent asks the user to choose, not to allow a step. */
+      question?: DeveloperApprovalQuestion;
     }
   | {
       type: 'approval-answered';
@@ -378,10 +380,17 @@ export function parseWorkingTreeStatus(output: string): WorkingTreeChange[] {
   return changes;
 }
 
+export interface DeveloperApprovalQuestion {
+  question: string;
+  options: string[];
+}
+
 export interface DeveloperApprovalAnswer {
   rootId: string;
   threadId: string;
   turnId: string;
   requestId: string;
   approved: boolean;
+  /** The option the user chose, for a question. */
+  note?: string;
 }

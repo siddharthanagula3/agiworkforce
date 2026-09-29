@@ -407,3 +407,64 @@ describe('stopping remote work on one device', () => {
     });
   });
 });
+
+describe('carrying an unlink to the signaling relay', () => {
+  it('queues the relay revoke for retry when the relay cannot be reached', async () => {
+    vi.resetModules();
+    const enqueueJob = vi.fn(async () => ({ id: 'job-1', status: 'queued', created: true }));
+    vi.doMock('@/lib/jobs/job-service', () => ({ enqueueJob }));
+    vi.stubEnv('SIGNALING_HTTP_URL', 'https://relay.test');
+    vi.stubEnv('SIGNALING_INTERNAL_SECRET', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('relay down');
+      }),
+    );
+    const { propagateDeviceRevocation } = await import('../device-registry');
+    const db = { query: vi.fn(async () => []), execute: vi.fn(async () => 1) };
+
+    const delivery = await propagateDeviceRevocation(db as unknown as DatabaseAdapter, {
+      userId: 'user-1',
+      deviceId: DEVICE_ID,
+      reason: 'unlinked',
+    });
+
+    expect(delivery.signalingReachable).toBe(false);
+    expect(enqueueJob).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        kind: 'webhooks.signaling-device-revoke',
+        userId: 'user-1',
+        payload: expect.objectContaining({ deviceId: DEVICE_ID, reason: 'unlinked' }),
+        idempotencyKey: expect.stringMatching(/^device-revoke:.+:unlinked:\d{4}-/),
+      }),
+    );
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.doUnmock('@/lib/jobs/job-service');
+  });
+});
+
+describe('a queued relay revoke that outlived its device', () => {
+  it('is stale once remote work is back on, or an unlinked device reports in again', async () => {
+    const { revocationIsStale } = await import('../device-registry');
+    const at = '2026-09-29T10:00:00.000Z';
+    expect(revocationIsStale('unlinked', at, null)).toBe(false);
+    expect(revocationIsStale('unlinked', at, { remote_enabled: true, last_seen_at: null })).toBe(
+      true,
+    );
+    expect(
+      revocationIsStale('unlinked', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(true);
+    expect(
+      revocationIsStale('remote_work_stopped', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(false);
+  });
+});

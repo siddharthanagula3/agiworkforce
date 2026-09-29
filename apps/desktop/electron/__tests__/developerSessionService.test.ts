@@ -251,7 +251,8 @@ describe('developer session runtime', () => {
     expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toBeNull();
   });
 
-  it('signs every running app-server out when the shell signs out', async () => {
+  it('signs every running app-server out when the shell that signed them in signs out', async () => {
+    shellSignedCliIn.mockReturnValue(true);
     const asked: string[] = [];
     const { service } = await loadService(
       (method, params) => {
@@ -771,6 +772,45 @@ describe('developer session runtime', () => {
       params: { threadId: thread.id, turnId: 'turn-1', requestId: 'ask-1', decision: 'approved' },
     });
     expect(events[1]?.event).toMatchObject({ type: 'approval-answered', approved: true });
+  });
+
+  it('carries a question and the chosen option between the agent and the page', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'test it' });
+    children[0]?.notify('approval/requested', {
+      threadId: thread.id,
+      turnId: 'turn-1',
+      requestId: 'ask-2',
+      kind: 'Question',
+      summary: 'The agent has a question',
+      detail: '',
+      question: { question: 'Which suite?', options: ['unit', 'e2e'] },
+    });
+
+    await service.answerDeveloperApproval({
+      rootId: root.id,
+      threadId: thread.id,
+      turnId: 'turn-1',
+      requestId: 'ask-2',
+      approved: true,
+      note: 'e2e',
+    });
+
+    expect(events[0]?.event).toMatchObject({
+      type: 'approval-requested',
+      question: { question: 'Which suite?', options: ['unit', 'e2e'] },
+    });
+    expect(children[0]?.written).toContainEqual({
+      method: 'approval/respond',
+      params: {
+        threadId: thread.id,
+        turnId: 'turn-1',
+        requestId: 'ask-2',
+        decision: 'approved',
+        note: 'e2e',
+      },
+    });
   });
 
   it('stops every runtime on quit and says so', async () => {

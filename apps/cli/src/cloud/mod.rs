@@ -734,6 +734,11 @@ pub async fn forget_memory(privacy: PrivacyMode, id_or_content: &str) -> Result<
 /// What the hosted store records as the origin of a memory this CLI wrote.
 pub const MEMORY_SOURCE: &str = "cli";
 
+/// Whether the account has memory turned off, as last read from the account.
+pub fn account_memory_off(config_dir: &Path) -> bool {
+    load_memory_cache(config_dir).account_memory_off
+}
+
 /// The account memory block for the system prompt, read from the cache so a
 /// turn never blocks on the network. `refresh_memory` is what makes it current.
 pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String {
@@ -830,6 +835,18 @@ pub fn project_instructions_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_off_on_the_account_is_read_from_the_cache_in_any_mode() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        assert!(!account_memory_off(dir.path()));
+        let cache = memory::MemoryCache {
+            account_memory_off: true,
+            ..memory::MemoryCache::default()
+        };
+        save_memory_cache(dir.path(), &cache).expect("cache written");
+        assert!(account_memory_off(dir.path()));
+    }
 
     #[test]
     fn a_local_session_injects_no_account_memory() {

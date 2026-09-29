@@ -297,3 +297,19 @@ async function workspaceToolRules(
   const policy = organizationId ? await readConnectorPolicy(db, organizationId) : null;
   return policy?.toolRules ?? [];
 }
+
+/**
+ * The verdicts one turn runs under: the saved ones, every allow turned into an
+ * ask in a temporary chat, and the connectors this chat switched off denied.
+ * The turn start and every route that resumes a paused turn build the same
+ * view, so a resume never offers a connector its turn had withheld.
+ */
+export function scopeConnectorPermissionsToTurn(
+  permissions: ConnectorToolPermissions,
+  turn: { temporary: boolean; disabledConnectorIds: readonly string[] | undefined },
+): ConnectorToolPermissions {
+  return withDisabledConnectorIds(
+    turn.temporary ? withoutStandingApprovals(permissions) : permissions,
+    new Set(turn.disabledConnectorIds),
+  );
+}
