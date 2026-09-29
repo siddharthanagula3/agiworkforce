@@ -1,12 +1,13 @@
 import {
   exportSourceFile,
+  exportToDocx,
   exportToMarkdown,
   exportToPDF,
   exportToText,
 } from '@/services/fileCreation';
 import type { Artifact } from '@/types/chat';
 
-export type ArtifactExportFormat = 'markdown' | 'pdf' | 'text' | 'source';
+export type ArtifactExportFormat = 'markdown' | 'pdf' | 'docx' | 'text' | 'source';
 
 export interface ArtifactExportOption {
   format: ArtifactExportFormat;
@@ -94,6 +95,7 @@ export function artifactExportOptions(
         extension: 'md',
       },
       { format: 'pdf', label: 'PDF', detail: 'A styled document', extension: 'pdf' },
+      { format: 'docx', label: 'Word', detail: 'A .docx document you can edit', extension: 'docx' },
       { format: 'text', label: 'Plain text', detail: 'A .txt file', extension: 'txt' },
     ];
   }
@@ -118,6 +120,8 @@ export async function exportArtifact(
       return (await exportToMarkdown(content, title)).uri;
     case 'pdf':
       return (await exportToPDF(content, title)).uri;
+    case 'docx':
+      return (await exportToDocx(content, title)).uri;
     case 'text':
       return (await exportToText(content, title)).uri;
     case 'source':
