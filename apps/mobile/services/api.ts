@@ -192,11 +192,6 @@ function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
   ]);
 }
 
-/**
- * The chat stream reaches the gateway with its own fetch, so it cannot go
- * through sendRequest. It hands a refused response here for the same account,
- * passkey and session handling every other request gets.
- */
 export function streamAuthRefusal(status: number, text: string): Error | null {
   if (status !== 403) return null;
   const body = parseJsonBody(text);
