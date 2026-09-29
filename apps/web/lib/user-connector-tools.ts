@@ -22,8 +22,12 @@ import { inspectOutboundContent } from '@/lib/security/outbound-content-inspecti
 import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
 import { recordConnectorCallOutcome } from '@/lib/services/connector-call-log-service';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  resolveActiveOrganizationId,
+  resolveOrganizationMembershipId,
+} from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
+import { createError } from '@/lib/errors';
 import {
   evaluateMcpHostAccess,
   type ConnectorAccessPolicy,
@@ -1510,23 +1514,11 @@ async function resolveConnectorOrganizationId(
   admittedOrganizationId?: string | null,
 ): Promise<string | null> {
   const db = connectorOwnerDb(userId);
-  try {
-    if (admittedOrganizationId === undefined) {
-      return await resolveActiveOrganizationId(db, userId);
-    }
-    if (admittedOrganizationId === null) return null;
-    const [membership] = await db.query<{ organization_id: string }>(
-      `select organization_id
-         from public.organization_members
-        where organization_id = $1 and user_id = $2
-        limit 1`,
-      [admittedOrganizationId, userId],
-    );
-    return membership?.organization_id ?? null;
-  } catch (error) {
-    if (isUndefinedTable(error)) return null;
-    throw error;
-  }
+  if (admittedOrganizationId === undefined) return resolveActiveOrganizationId(db, userId);
+  if (admittedOrganizationId === null) return null;
+  const membershipId = await resolveOrganizationMembershipId(db, userId, admittedOrganizationId);
+  if (!membershipId) throw createError.forbidden('You are not an active member of this workspace.');
+  return membershipId;
 }
 
 async function getOrgSharedConnectorRows(
@@ -1667,7 +1659,17 @@ async function executeOrgSharedConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
+  let organizationId: string | null;
+  try {
+    organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
+  } catch (error) {
+    logger.warn({ userId, error }, '[user-connector] shared workspace membership unavailable');
+    return {
+      handled: true,
+      content: 'This shared connector is not available for this account.',
+      isError: true,
+    };
+  }
   if (!organizationId) {
     return {
       handled: true,
@@ -1773,11 +1775,8 @@ export interface LoadUserConnectorToolOptions {
  * model is never told about cannot be called, and every caller, chat,
  * scheduled tasks, cloud agent runs, loads its catalog through here.
  *
- * Ungoverned on a read failure, deliberately. Connector governance decides
- * which approved integrations staff use; it is not the barrier that stops
- * cross-workspace access, which is the tenancy layer and fails closed. Denying
- * every connector because the policy table blipped would break every member's
- * tools for a reason no administrator chose.
+ * A policy read failure removes the offered tools so an unavailable policy
+ * cannot override an administrator's connector restrictions.
  */
 async function applyConnectorPolicy(
   defs: WebMcpToolDef[],
@@ -1787,16 +1786,16 @@ async function applyConnectorPolicy(
 ): Promise<WebMcpToolDef[]> {
   if (!organizationId || defs.length === 0) return defs;
 
-  const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+  const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
   const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
   const { getNeonDb } = await import('@/lib/server/neon-db');
 
   let policy;
   try {
-    policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+    policy = await readConnectorPolicy(getNeonDb(), organizationId);
   } catch (error) {
-    logger.error({ error, organizationId }, '[connector-policy] unavailable; catalog ungoverned');
-    return defs;
+    logger.error({ error, organizationId }, '[connector-policy] unavailable; catalog withheld');
+    return [];
   }
   if (!policy) return defs;
 
@@ -1817,20 +1816,23 @@ async function applyConnectorPolicy(
   return kept;
 }
 
-async function readCustomHostPolicy(organizationId: string): Promise<ConnectorAccessPolicy | null> {
+async function readCustomHostPolicy(
+  organizationId: string,
+): Promise<ConnectorAccessPolicy | null | false> {
   try {
-    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
-    return await readConnectorPolicySafely(getNeonDb(), organizationId);
+    const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
+    return await readConnectorPolicy(getNeonDb(), organizationId);
   } catch (error) {
     logger.error(
       { error, organizationId },
       '[connector-policy] unavailable while dialling custom connectors',
     );
-    return null;
+    return false;
   }
 }
 
-function mcpHostPermitted(policy: ConnectorAccessPolicy | null, url: string): boolean {
+function mcpHostPermitted(policy: ConnectorAccessPolicy | null | false, url: string): boolean {
+  if (policy === false) return false;
   return evaluateMcpHostAccess(policy, url).allowed;
 }
 
@@ -1842,9 +1844,9 @@ async function connectorPolicyAllows(
 ): Promise<boolean> {
   if (!organizationId) return true;
   try {
-    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+    const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
     const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
-    const policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+    const policy = await readConnectorPolicy(getNeonDb(), organizationId);
     return policy
       ? evaluateConnectorAccess(policy, { connectorId, isCustom, ...(url ? { url } : {}) }).allowed
       : true;
@@ -1853,7 +1855,7 @@ async function connectorPolicyAllows(
       { error, organizationId, connectorId },
       '[connector-policy] unavailable while loading connector capabilities',
     );
-    return true;
+    return false;
   }
 }
 

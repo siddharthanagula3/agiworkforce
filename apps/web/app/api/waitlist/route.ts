@@ -11,6 +11,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { isSelfServePaidPlanTier, type SelfServePaidPlanTier } from '@agiworkforce/types';
 
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
+import { isBillingUpgradeWaitlistEnabled } from '@/lib/server/billing-waitlist-access';
 
 type WaitlistPlan = SelfServePaidPlanTier;
 type BillingInterval = 'monthly' | 'yearly';
@@ -39,7 +40,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const joinedPlans = rows.map((row) => row.plan).filter(isWaitlistPlan);
 
-  return NextResponse.json({ joinedPlans });
+  return NextResponse.json({ joinedPlans, upgradeGateEnabled: isBillingUpgradeWaitlistEnabled() });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

@@ -10,6 +10,10 @@ export const WAITLIST_ACCESS_REQUIRED_CODE = 'waitlist_access_required';
 export const WAITLIST_ACCESS_REQUIRED_MESSAGE =
   'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.';
 
+export function isBillingUpgradeWaitlistEnabled(): boolean {
+  return process.env['BILLING_UPGRADE_WAITLIST_ENABLED'] !== 'false';
+}
+
 interface BillingHistoryRow {
   plan_tier: string;
   status: string;
@@ -24,6 +28,7 @@ export async function hasBillingWaitlistAccess(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<boolean> {
+  if (!isBillingUpgradeWaitlistEnabled()) return true;
   const [row] = await db.query<{ granted: boolean }>(
     `select exists(
        select 1 from beta_redemptions where user_id = $1

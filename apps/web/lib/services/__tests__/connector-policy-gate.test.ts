@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveActiveOrganizationId, readConnectorPolicySafely, loggerInfo, loggerError } =
-  vi.hoisted(() => ({
+const { resolveActiveOrganizationId, readConnectorPolicy, loggerInfo, loggerError } = vi.hoisted(
+  () => ({
     resolveActiveOrganizationId: vi.fn(),
-    readConnectorPolicySafely: vi.fn(),
+    readConnectorPolicy: vi.fn(),
     loggerInfo: vi.fn(),
     loggerError: vi.fn(),
-  }));
+  }),
+);
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: loggerInfo, warn: vi.fn(), error: loggerError, debug: vi.fn() },
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({ resolveActiveOrganizationId }));
-vi.mock('@/lib/services/connector-policy-service', () => ({ readConnectorPolicySafely }));
+vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  readConnectorPolicy,
+}));
 
 import {
   evaluateConnectorPolicyForUser,
@@ -39,7 +43,7 @@ function policy(overrides: Partial<Record<string, unknown>> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   resolveActiveOrganizationId.mockResolvedValue(ORG);
-  readConnectorPolicySafely.mockResolvedValue(policy());
+  readConnectorPolicy.mockResolvedValue(policy());
 });
 
 /**
@@ -51,7 +55,7 @@ beforeEach(() => {
  */
 describe('evaluateConnectorPolicyForUser', () => {
   it('refuses a blocked connector before anything is exchanged', async () => {
-    readConnectorPolicySafely.mockResolvedValue(policy({ blockedConnectors: ['github'] }));
+    readConnectorPolicy.mockResolvedValue(policy({ blockedConnectors: ['github'] }));
 
     const decision = await evaluateConnectorPolicyForUser({
       db,
@@ -65,7 +69,7 @@ describe('evaluateConnectorPolicyForUser', () => {
   });
 
   it('refuses a connector absent from a non-empty allowlist', async () => {
-    readConnectorPolicySafely.mockResolvedValue(policy({ allowedConnectors: ['notion'] }));
+    readConnectorPolicy.mockResolvedValue(policy({ allowedConnectors: ['notion'] }));
 
     const decision = await evaluateConnectorPolicyForUser({
       db,
@@ -78,7 +82,7 @@ describe('evaluateConnectorPolicyForUser', () => {
   });
 
   it('refuses a custom endpoint when the workspace has switched them off', async () => {
-    readConnectorPolicySafely.mockResolvedValue(policy({ allowCustomConnectors: false }));
+    readConnectorPolicy.mockResolvedValue(policy({ allowCustomConnectors: false }));
 
     const decision = await evaluateConnectorPolicyForUser({
       db,
@@ -92,7 +96,7 @@ describe('evaluateConnectorPolicyForUser', () => {
   });
 
   it('says so in the log, so a refusal is diagnosable', async () => {
-    readConnectorPolicySafely.mockResolvedValue(policy({ blockedConnectors: ['github'] }));
+    readConnectorPolicy.mockResolvedValue(policy({ blockedConnectors: ['github'] }));
 
     await evaluateConnectorPolicyForUser({ db, userId: USER, connectorId: 'github' });
 
@@ -123,48 +127,37 @@ describe('evaluateConnectorPolicyForUser', () => {
     });
 
     expect(decision).toMatchObject({ allowed: true, code: 'ungoverned', organizationId: null });
-    expect(readConnectorPolicySafely).not.toHaveBeenCalled();
+    expect(readConnectorPolicy).not.toHaveBeenCalled();
   });
 
-  it('fails open when the policy cannot be read', async () => {
-    // Deliberate, and the same reasoning readConnectorPolicySafely carries:
-    // connector governance is a deployment control over which approved
-    // integrations staff use, not a containment barrier. Tenancy is what stops
-    // cross-workspace access and that fails closed. Denying every connection
-    // over a table blip would break every member for an outage that granted
-    // nobody anything.
-    readConnectorPolicySafely.mockRejectedValue(new Error('database unreachable'));
+  it('refuses a connection when the policy cannot be read', async () => {
+    readConnectorPolicy.mockRejectedValue(new Error('database unreachable'));
 
-    const decision = await evaluateConnectorPolicyForUser({
-      db,
-      userId: USER,
-      connectorId: 'github',
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(decision.organizationId).toBe(ORG);
+    await expect(
+      evaluateConnectorPolicyForUser({ db, userId: USER, connectorId: 'github' }),
+    ).rejects.toThrow('Workspace connector policy is unavailable');
     expect(loggerError).toHaveBeenCalled();
   });
 
-  it('fails open when the workspace cannot be resolved', async () => {
+  it('refuses a connection when the workspace cannot be resolved', async () => {
     resolveActiveOrganizationId.mockRejectedValue(new Error('no workspace'));
 
     await expect(
       evaluateConnectorPolicyForUser({ db, userId: USER, connectorId: 'github' }),
-    ).resolves.toMatchObject({ allowed: true, code: 'ungoverned' });
+    ).rejects.toThrow('Workspace connector policy is unavailable');
   });
 
   it('does not resolve a workspace without a user', async () => {
-    const decision = await evaluateConnectorPolicyForUser({ db, userId: '', connectorId: 'x' });
-
-    expect(decision.allowed).toBe(true);
+    await expect(
+      evaluateConnectorPolicyForUser({ db, userId: '', connectorId: 'x' }),
+    ).rejects.toThrow('Sign in to use connectors');
     expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
   });
 });
 
 describe('evaluateConnectorPolicyForUser with an MCP host allowlist', () => {
   it('refuses a custom endpoint on a host the workspace has not approved', async () => {
-    readConnectorPolicySafely.mockResolvedValue(policy({ allowedMcpHosts: ['*.corp.example'] }));
+    readConnectorPolicy.mockResolvedValue(policy({ allowedMcpHosts: ['*.corp.example'] }));
 
     const refused = await evaluateConnectorPolicyForUser({
       db,
@@ -188,7 +181,7 @@ describe('evaluateConnectorPolicyForUser with an MCP host allowlist', () => {
 
 describe('evaluatePluginPolicyForUser', () => {
   it('refuses a blocked plugin and one missing from a non-empty allowlist', async () => {
-    readConnectorPolicySafely.mockResolvedValue(
+    readConnectorPolicy.mockResolvedValue(
       policy({ allowedPlugins: ['acme-review'], blockedPlugins: ['shadow-sync'] }),
     );
 
@@ -211,6 +204,6 @@ describe('evaluatePluginPolicyForUser', () => {
       organizationId: null,
     });
     expect(decision).toMatchObject({ allowed: true, code: 'ungoverned' });
-    expect(readConnectorPolicySafely).not.toHaveBeenCalled();
+    expect(readConnectorPolicy).not.toHaveBeenCalled();
   });
 });

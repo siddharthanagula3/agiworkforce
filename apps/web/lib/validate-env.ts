@@ -1082,6 +1082,14 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: isBooleanish,
     description: 'whether the server accepts a checkout or top-up request at all',
   }),
+  published('BILLING_UPGRADE_WAITLIST_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/server/billing-waitlist-access.ts',
+    defaultValue: 'true',
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether billing upgrades require a waitlist code',
+  }),
   published('NEXT_PUBLIC_CHECKOUT_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/lib/billing',
