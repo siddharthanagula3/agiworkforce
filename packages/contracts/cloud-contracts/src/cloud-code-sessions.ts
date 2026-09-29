@@ -281,3 +281,5 @@ export interface DecideCloudCodeApprovalRequest {
   stepIndex: number;
   decision: CloudCodeApprovalDecision;
 }
+
+export const CLOUD_CODE_TURN_STILL_RUNNING_CODE = 'turn_still_running';

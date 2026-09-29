@@ -81,7 +81,7 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
 
 async function handleList(request: NextRequest) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  const limited = await withRateLimit(request, 'chat-conversation-read', `user:${userId}`);
   if (limited) return limited;
 
   const planTier = await resolveEntitledPlanTier(db, userId);
