@@ -425,4 +425,63 @@ describe('cloud sync payload persistence', () => {
       true,
     );
   });
+
+  it('caps a rename at the title length the server accepts', async () => {
+    seedCloud('c1', 'Old');
+    mockPut.mockResolvedValueOnce(undefined as never);
+
+    await useChatMessageStore.getState().renameConversation('c1', 'x'.repeat(900));
+
+    expect(convTitle('c1')).toHaveLength(500);
+    expect(mockPut).toHaveBeenCalledWith('c1', { title: 'x'.repeat(500) });
+  });
+
+  it('keeps an open temporary chat when the list refresh omits it', () => {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: 'temp',
+      title: 'Temporary',
+      createdAt: T,
+      updatedAt: T,
+      messageCount: 0,
+      pinned: false,
+      temporary: true,
+    });
+
+    useChatCloudMessageStore.getState().setCloudConversations([]);
+
+    expect(convExists('temp')).toBe(true);
+  });
+
+  it('saves a temporary chat through the keep route and marks it permanent', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { api } = require('../services/api') as { api: { post: jest.Mock } };
+    api.post.mockResolvedValueOnce({ conversation: { id: 'temp' } });
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: 'temp',
+      title: 'Plans',
+      createdAt: T,
+      updatedAt: T,
+      messageCount: 2,
+      pinned: false,
+      temporary: true,
+    });
+    useChatCloudMessageStore.getState().setCloudMessages('temp', [
+      { id: '0190a000-0000-7000-8000-000000000001', role: 'user', content: 'Hi', createdAt: T },
+      { id: 'local-2', role: 'assistant', content: 'Hello', createdAt: T, model: 'm' },
+      { id: 'local-3', role: 'assistant', content: '', createdAt: T, isStreaming: true },
+    ] as never);
+
+    await useChatMessageStore.getState().keepTemporaryConversation('temp');
+
+    expect(api.post).toHaveBeenCalledWith('/api/chat/conversations/temp/keep', {
+      title: 'Plans',
+      messages: [
+        { id: '0190a000-0000-7000-8000-000000000001', role: 'user', content: 'Hi' },
+        { role: 'assistant', content: 'Hello', model: 'm' },
+      ],
+    });
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'temp')?.temporary,
+    ).toBe(false);
+  });
 });

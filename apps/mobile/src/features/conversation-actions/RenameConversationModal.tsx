@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type {
@@ -195,6 +196,7 @@ export function RenameConversationModal({
                 placeholder="Enter a new title"
                 placeholderTextColor={colors.textMuted}
                 selectTextOnFocus
+                maxLength={CONVERSATION_TITLE_MAX_LENGTH}
                 accessibilityLabel="Chat title"
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>

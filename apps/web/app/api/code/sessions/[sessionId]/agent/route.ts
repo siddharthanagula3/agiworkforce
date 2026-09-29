@@ -13,10 +13,11 @@ import {
   isCloudCodeTurnMode,
   isCloudCodeTurnStepBound,
 } from '@agiworkforce/types';
+import { CLOUD_CODE_TURN_STILL_RUNNING_CODE } from '@agiworkforce/cloud-contracts';
 import { canAccessModel } from '@/lib/model-tiers';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
+import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -69,7 +70,11 @@ type RouteContext = { params: Promise<{ sessionId: string }> };
 function rethrowCloudCodeError(error: unknown): never {
   // A durable turn outlives this request. Saying so is the honest answer, and a
   // conflict is the status whose message reaches the reader intact.
-  if (error instanceof CloudCodeTurnStillRunningError) throw createError.conflict(error.message);
+  if (error instanceof CloudCodeTurnStillRunningError) {
+    throw new AppError(ErrorCode.CONFLICT, error.message, 409, {
+      reason: CLOUD_CODE_TURN_STILL_RUNNING_CODE,
+    });
+  }
   if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
   if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
   if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);

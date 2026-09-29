@@ -414,9 +414,33 @@ function patchPausedToolCall(
 
 function resumePausedTurn(
   turn: PendingApprovalTurn,
-  callbacks: StreamCallbacks,
+  resumeCallbacks: StreamCallbacks,
   signal: AbortSignal,
 ): Promise<void> {
+  let trackedRunId: string | null = null;
+  const release = () => {
+    if (trackedRunId && activeCloudRuns.get(turn.conversationId)?.runId === trackedRunId) {
+      activeCloudRuns.delete(turn.conversationId);
+    }
+  };
+  const callbacks: StreamCallbacks = {
+    ...resumeCallbacks,
+    onRunReference: (reference) => {
+      if (!signal.aborted) {
+        trackedRunId = reference.runId;
+        activeCloudRuns.set(turn.conversationId, reference);
+      }
+      resumeCallbacks.onRunReference?.(reference);
+    },
+    onDone: () => {
+      release();
+      resumeCallbacks.onDone();
+    },
+    onError: (error) => {
+      release();
+      resumeCallbacks.onError(error);
+    },
+  };
   const operationId = uuidv7();
   const deviceResults = turn.deviceResults;
   if (deviceResults) {
@@ -1223,7 +1247,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
-    const temporaryConversation = conversation?.temporary === true;
+    const temporaryConversation = conversation
+      ? conversation.temporary === true
+      : useSettingsStore.getState().isTemporaryChat;
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
@@ -1453,8 +1479,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         try {
           const uploadContext = {
             conversationId,
-            temporary:
-              useSettingsStore.getState().isTemporaryChat || conversation?.temporary === true,
+            temporary: temporaryConversation,
           };
           const uploadResults = await Promise.all(
             attachmentsNeedingUpload.map((a) =>
@@ -1627,14 +1652,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
               : null;
           const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
-          const imageAttachments = m.attachments?.filter((a) => a.mimeType.startsWith('image/'));
-          if (imageAttachments && imageAttachments.length > 0) {
+          const replayedAttachments = m.attachments?.filter((a) =>
+            executionMode === 'cloud'
+              ? Boolean(a.assetId) ||
+                (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
+              : a.mimeType.startsWith('image/'),
+          );
+          if (replayedAttachments && replayedAttachments.length > 0) {
             return [
               {
                 role: m.role,
                 content: [
                   ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
-                  ...imageAttachments.map((a) =>
+                  ...replayedAttachments.map((a) =>
                     a.assetId
                       ? { type: 'file' as const, file: { asset_id: a.assetId } }
                       : { type: 'image_url' as const, image_url: { url: a.url } },
@@ -1730,22 +1760,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       executionMode === 'cloud'
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
-    const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
+    const isTemporaryChat = temporaryConversation;
     const accountMemoryAllowed =
       executionMode !== 'cloud' ||
       useMemorySyncStateStore.getState().accountMemoryEnabled !== false;
     const memoryReadsEnabled =
       accountMemoryAllowed && memorySettings.memoryEnabled && !isTemporaryChat;
 
+    const serverAssemblesContext = executionMode === 'cloud';
     try {
       const [memFacts, pastChatContext] = await Promise.all([
-        memoryReadsEnabled ? retrieveMemoryContext(content, 5) : [],
-        retrievePastChatContext({
-          executionMode,
-          query: content,
-          currentConversationId: conversationId,
-          enabled: accountMemoryAllowed && memorySettings.referencePastChats && !isTemporaryChat,
-        }),
+        memoryReadsEnabled && !serverAssemblesContext ? retrieveMemoryContext(content, 5) : [],
+        serverAssemblesContext
+          ? null
+          : retrievePastChatContext({
+              executionMode,
+              query: content,
+              currentConversationId: conversationId,
+              enabled:
+                accountMemoryAllowed && memorySettings.referencePastChats && !isTemporaryChat,
+            }),
       ]);
       if (!isTurnAccountCurrent()) return false;
       const blocks = buildPersonalContextBlocks({

@@ -83,6 +83,8 @@ function cloudMemoryFact(entry: CloudMemoryEntry): MemoryFact {
     fact: entry.content,
     source_conversation_id: entry.sourceConversationId ?? null,
     source_conversation_title: entry.sourceConversationTitle ?? null,
+    project_id: entry.projectId ?? null,
+    project_name: entry.projectName ?? null,
     pinned: entry.pinned,
     created_at: new Date(entry.createdAt).getTime(),
     updated_at: new Date(entry.updatedAt).getTime(),

@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
@@ -11,7 +12,8 @@ export type ImageGenRequest = ManagedMediaImageGenerationRequest;
 export interface ImageGenResponse {
   success?: boolean;
   id?: string;
-  status?: 'pending' | 'generating' | 'completed' | 'failed';
+  job_id?: string;
+  status?: 'pending' | 'generating' | 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
   images?: GeneratedImage[];
   provider?: string;
   model?: string;
@@ -27,10 +29,18 @@ export interface GeneratedImage {
   revisedPrompt?: string;
 }
 
+const IMAGE_JOB_POLL_MS = 2_000;
+const IMAGE_JOB_MAX_WAIT_MS = 170_000;
+const PENDING_JOB_STATUSES = new Set(['queued', 'processing', 'pending', 'generating']);
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Submit an image generation request.
- * The current managed-media endpoint returns its completed image response
- * inline; this client does not invent a polling route.
+ * Submit an image generation request as a durable job and follow it to the
+ * end. A slow provider then outlives the submitting request instead of failing
+ * it, and a retry of the same turn reuses the job its key already names.
  * @throws {Error} On network or server errors
  */
 export async function generateImage(
@@ -42,11 +52,38 @@ export async function generateImage(
     throw new Error('Image generation requires a non-empty prompt');
   }
 
-  const idempotencyKey = imageIdempotencyKey(options.operationId ?? Crypto.randomUUID());
+  const operationId = options.operationId ?? Crypto.randomUUID();
+  let submitted: ImageGenResponse;
+  try {
+    submitted = await api.post<ImageGenResponse>(
+      '/api/media/image/generate',
+      { ...request, async: true },
+      { headers: { 'Idempotency-Key': imageIdempotencyKey(operationId) } },
+    );
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.code === 'image_job_store_unavailable') {
+      return api.post<ImageGenResponse>('/api/media/image/generate', request, {
+        headers: { 'Idempotency-Key': imageIdempotencyKey(Crypto.randomUUID()) },
+      });
+    }
+    throw error;
+  }
+  return followImageJob(submitted);
+}
 
-  return api.post<ImageGenResponse>('/api/media/image/generate', request, {
-    headers: { 'Idempotency-Key': idempotencyKey },
-  });
+async function followImageJob(submitted: ImageGenResponse): Promise<ImageGenResponse> {
+  let current = submitted;
+  const deadline = Date.now() + IMAGE_JOB_MAX_WAIT_MS;
+  while (current.job_id && current.status && PENDING_JOB_STATUSES.has(current.status)) {
+    if (Date.now() > deadline) {
+      throw new Error('The image is still being made. It will appear in your Library when ready.');
+    }
+    await wait(IMAGE_JOB_POLL_MS);
+    current = await api.get<ImageGenResponse>(
+      `/api/media/image/status?job_id=${encodeURIComponent(current.job_id)}`,
+    );
+  }
+  return current;
 }
 
 function imageIdempotencyKey(operationId: string): string {

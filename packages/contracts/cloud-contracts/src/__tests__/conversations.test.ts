@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE,
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
@@ -136,6 +137,12 @@ describe('managed-cloud conversation wire contract', () => {
       ManagedCloudMessageWireSchema.safeParse({
         ...message,
         content: 'x'.repeat(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH + 1),
+      }).success,
+    ).toBe(true);
+    expect(
+      ManagedCloudMessageWireSchema.safeParse({
+        ...message,
+        content: 'x'.repeat(MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH + 1),
       }).success,
     ).toBe(false);
     expect(
