@@ -1,4 +1,8 @@
-import { isPhoneStepTool, isPhoneWriteStep, normalizeToolStatus } from '@agiworkforce/types';
+import {
+  isPhoneStepTool,
+  normalizeToolStatus,
+  phoneStepNeedsConfirmation,
+} from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 import type { StreamDelta } from '@/services/streaming';
 
@@ -193,7 +197,7 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     t.toolCallId = agentEvent.toolCallId;
     if (!t.input) t.input = safeStringify(agentEvent.input);
     if (t.status === 'pending' && !t.approvalDecision) {
-      t.requiresApproval = isPhoneWriteStep(agentEvent.toolName);
+      t.requiresApproval = phoneStepNeedsConfirmation(agentEvent.toolName, agentEvent.input);
     }
     changed = true;
   }
