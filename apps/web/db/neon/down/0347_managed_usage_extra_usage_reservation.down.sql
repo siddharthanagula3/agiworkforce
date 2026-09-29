@@ -6,7 +6,7 @@
 begin;
 
 drop function if exists public.reserve_managed_usage_request_on_extra_usage_microusd(
-  text, text, text, text, text, bigint, text, integer, boolean, bigint
+  text, text, text, text, text, bigint, text, integer, boolean
 );
 
 delete from public.schema_migrations

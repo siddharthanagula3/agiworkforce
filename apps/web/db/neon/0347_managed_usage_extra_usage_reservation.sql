@@ -7,12 +7,16 @@
 --          fast request would draw on the plan first.
 --
 -- Shape  : reserve_managed_usage_request_on_extra_usage_microusd admits a
---          request only when purchased headroom covers its estimate, reserves
---          it through the same lifecycle function 0281 delegates to, and marks
---          it is_overage from its first ledger row, so it never counts against
---          the rolling plan windows. A request past the headroom is declined
---          with extra_usage_required. Provider-step extensions already admit an
---          is_overage request against the headroom alone (0305).
+--          request only when usage credits are turned on and their headroom
+--          covers its estimate, reserves it through the same lifecycle
+--          function 0281 delegates to, and marks it is_overage from its first
+--          ledger row, so it never counts against the rolling plan windows.
+--          Bonus credits alone never admit it. The switch and the headroom are
+--          read under the per-user advisory lock, so concurrent requests see
+--          each other's is_overage reservations in flight. A request refused
+--          either way is declined with extra_usage_required. Provider-step
+--          extensions already admit an is_overage request against the
+--          headroom alone (0305).
 -- =============================================================================
 
 begin;
@@ -26,8 +30,7 @@ create or replace function public.reserve_managed_usage_request_on_extra_usage_m
   p_estimated_cost_microusd bigint,
   p_lease_token text,
   p_lease_seconds integer,
-  p_is_flagship boolean,
-  p_top_up_headroom_microusd bigint
+  p_is_flagship boolean
 )
 returns table(
   reservation_decision text,
@@ -40,7 +43,8 @@ returns table(
 language plpgsql
 as $$
 declare
-  v_headroom bigint := greatest(coalesce(p_top_up_headroom_microusd, 0), 0);
+  v_usage_credits_on boolean;
+  v_headroom bigint;
   v_request_id uuid;
   v_reservation record;
 begin
@@ -78,7 +82,17 @@ begin
     return;
   end if;
 
-  if p_estimated_cost_microusd > v_headroom then
+  select coalesce(bool_or(subscription_row.overage_enabled), false)
+    into v_usage_credits_on
+  from public.subscriptions subscription_row
+  where subscription_row.user_id = p_user_id;
+
+  v_headroom := greatest(coalesce((
+    select balances.overage_headroom_microusd
+    from public.prepaid_credit_balances_microusd(p_user_id) balances
+  ), 0), 0);
+
+  if not v_usage_credits_on or p_estimated_cost_microusd > v_headroom then
     return query select
       'extra_usage_required'::text,
       'declined'::text,
@@ -134,15 +148,15 @@ end;
 $$;
 
 revoke all on function public.reserve_managed_usage_request_on_extra_usage_microusd(
-  text, text, text, text, text, bigint, text, integer, boolean, bigint
+  text, text, text, text, text, bigint, text, integer, boolean
 ) from public;
 grant execute on function public.reserve_managed_usage_request_on_extra_usage_microusd(
-  text, text, text, text, text, bigint, text, integer, boolean, bigint
+  text, text, text, text, text, bigint, text, integer, boolean
 ) to app_rls;
 
 comment on function public.reserve_managed_usage_request_on_extra_usage_microusd(
-  text, text, text, text, text, bigint, text, integer, boolean, bigint
+  text, text, text, text, text, bigint, text, integer, boolean
 ) is
-  'Reserves a managed usage request on purchased headroom alone, marked is_overage from its first ledger row, for usage billed as extra usage whatever the plan windows hold.';
+  'Reserves a managed usage request on usage credits alone, only while they are turned on, marked is_overage from its first ledger row, for usage billed as extra usage whatever the plan windows hold.';
 
 commit;

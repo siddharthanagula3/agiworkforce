@@ -310,6 +310,7 @@ import {
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
   resolveManagedQuotaRecovery,
+  usageCreditsEnabled,
   type ManagedQuotaRecovery,
   type ManagedUsageLimitContext,
   type ManagedUsageRequestReservation,
@@ -4847,6 +4848,25 @@ export async function processRequest(
           },
         },
         { status: fastRefusal.status },
+      ),
+    };
+  }
+  if (
+    chatRequest.speed === 'fast' &&
+    !(await usageCreditsEnabled((await scopedDbPromise).db, userId))
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Fast mode is billed to usage credits. Turn them on in Settings > Billing.',
+            type: 'invalid_request_error',
+            code: 'extra_usage_required',
+            param: 'speed',
+          },
+        },
+        { status: 402 },
       ),
     };
   }
