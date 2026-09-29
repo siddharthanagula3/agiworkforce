@@ -1,4 +1,8 @@
-import type { DispatchTaskPendingStep, DispatchTaskStepReply } from '@agiworkforce/types';
+import type {
+  DispatchTaskPendingStep,
+  DispatchTaskReplyError,
+  DispatchTaskStepReply,
+} from '@agiworkforce/types';
 import type { BrowserPairingState } from './browser-bridge';
 import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
@@ -104,6 +108,7 @@ export interface DispatchTaskReport {
   result?: string;
   error?: string;
   pending?: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
 }
 
 export type DesktopRuntimeEvent =

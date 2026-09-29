@@ -8,7 +8,11 @@ import {
   type DispatchTaskReportStatus,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { REMOTE_CODE_LIMITS, parseDispatchTaskPendingSteps } from '@agiworkforce/types';
+import {
+  REMOTE_CODE_LIMITS,
+  parseDispatchTaskPendingSteps,
+  parseDispatchTaskReplyError,
+} from '@agiworkforce/types';
 import { CLOUD_APP_ORIGIN } from '../config';
 import { deviceIdentity } from '../runtime/deviceIdentity';
 import {
@@ -174,6 +178,11 @@ export function reportDispatchTask(
   if (pending === null) {
     throw new RemoteControlRefused('"pending" must list the steps waiting for an answer.');
   }
+  const replyError =
+    args['replyError'] === undefined ? undefined : parseDispatchTaskReplyError(args['replyError']);
+  if (replyError === null) {
+    throw new RemoteControlRefused('"replyError" must name the step and the reason.');
+  }
   const report: DispatchTaskReport = {
     requestId,
     status,
@@ -182,6 +191,7 @@ export function reportDispatchTask(
     ...(result === undefined ? {} : { result }),
     ...(error === undefined ? {} : { error }),
     ...(pending === undefined ? {} : { pending }),
+    ...(replyError === undefined ? {} : { replyError }),
   };
   return { accepted: host?.reportDispatchTask(contents.id, report) ?? false };
 }

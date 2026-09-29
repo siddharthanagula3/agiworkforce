@@ -135,12 +135,23 @@ export const DISPATCH_TASK_REPLY_LIMITS = {
   valueLength: 4_000,
 } as const;
 
+export const DISPATCH_TASK_FIELD_FORMATS = ['email', 'uri', 'date', 'date-time'] as const;
+export type DispatchTaskFieldFormat = (typeof DISPATCH_TASK_FIELD_FORMATS)[number];
+
 export interface DispatchTaskPendingField {
   key: string;
   title: string;
   kind: 'text' | 'choice';
   required: boolean;
+  format?: DispatchTaskFieldFormat;
+  minLength?: number;
+  maxLength?: number;
   options?: Array<{ value: string; label: string }>;
+}
+
+export interface DispatchTaskReplyError {
+  toolCallId: string;
+  message: string;
 }
 
 export type DispatchTaskPendingStep =
@@ -199,7 +210,34 @@ function parsePendingField(value: unknown): DispatchTaskPendingField | null {
   const kind = field['kind'];
   if (!key || !title || (kind !== 'text' && kind !== 'choice')) return null;
   if (typeof field['required'] !== 'boolean') return null;
-  if (kind === 'text') return { key, title, kind, required: field['required'] };
+  if (kind === 'text') {
+    const format = field['format'];
+    const minLength = field['minLength'];
+    const maxLength = field['maxLength'];
+    const length = (value: unknown) =>
+      value === undefined ||
+      (typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value <= DISPATCH_TASK_REPLY_LIMITS.valueLength);
+    if (
+      (format !== undefined &&
+        !(DISPATCH_TASK_FIELD_FORMATS as readonly unknown[]).includes(format)) ||
+      !length(minLength) ||
+      !length(maxLength)
+    ) {
+      return null;
+    }
+    return {
+      key,
+      title,
+      kind,
+      required: field['required'],
+      ...(format === undefined ? {} : { format: format as DispatchTaskFieldFormat }),
+      ...(minLength === undefined ? {} : { minLength: minLength as number }),
+      ...(maxLength === undefined ? {} : { maxLength: maxLength as number }),
+    };
+  }
   const options = replyList(field['options'], DISPATCH_TASK_REPLY_LIMITS.options, (entry) => {
     const option = replyRecord(entry);
     const optionValue = option && replyText(option['value'], DISPATCH_TASK_REPLY_LIMITS.idLength);
@@ -229,6 +267,13 @@ export function parseDispatchTaskPendingSteps(value: unknown): DispatchTaskPendi
       ? { toolCallId, kind: 'input', inputKey, message, fields }
       : null;
   });
+}
+
+export function parseDispatchTaskReplyError(value: unknown): DispatchTaskReplyError | null {
+  const record = replyRecord(value);
+  const toolCallId = record && replyText(record['toolCallId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+  const message = record && replyText(record['message'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+  return toolCallId && message ? { toolCallId, message } : null;
 }
 
 export function parseDispatchTaskReplies(value: unknown): DispatchTaskStepReply[] | null {
@@ -509,6 +554,7 @@ export interface DispatchTaskStatusEvent {
   result?: string;
   error?: string;
   pending?: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
   updatedAt: string;
 }
 
