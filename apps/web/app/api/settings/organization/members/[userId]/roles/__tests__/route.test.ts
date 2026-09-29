@@ -70,7 +70,7 @@ describe('PUT /api/settings/organization/members/[userId]/roles', () => {
     expect(mocks.requireWorkspaceConsolePermission).not.toHaveBeenCalled();
   });
 
-  it.each(['%20%20', 'x'.repeat(256)])('rejects a blank or oversized target id', async (userId) => {
+  it.each(['  ', 'x'.repeat(256)])('rejects a blank or oversized target id', async (userId) => {
     const response = await put({ roleIds: [ROLE] }, userId);
 
     expect(response.status).toBe(400);
@@ -99,7 +99,7 @@ describe('PUT /api/settings/organization/members/[userId]/roles', () => {
   });
 
   it('assigns the roles, drops the target cached org context and records it', async () => {
-    const response = await put({ roleIds: [ROLE] }, 'user%5Ftarget');
+    const response = await put({ roleIds: [ROLE] }, 'user_target');
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -133,5 +133,15 @@ describe('PUT /api/settings/organization/members/[userId]/roles', () => {
 
     expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user_target');
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('takes the already-decoded segment as is, so an id with % is not decoded twice', async () => {
+    const response = await put({ roleIds: [ROLE] }, 'user%target');
+
+    expect(response.status).toBe(200);
+    expect(mocks.setMemberRoles).toHaveBeenCalledWith(
+      mocks.neonDb,
+      expect.objectContaining({ userId: 'user%target' }),
+    );
   });
 });
