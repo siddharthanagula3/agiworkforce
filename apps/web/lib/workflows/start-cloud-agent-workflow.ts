@@ -82,6 +82,7 @@ export interface StartCloudAgentWorkflowExecutionInput {
   connectorPermissions?: ConnectorToolPermissions;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
+  research?: CloudAgentWorkflowInput['research'];
 }
 
 /**

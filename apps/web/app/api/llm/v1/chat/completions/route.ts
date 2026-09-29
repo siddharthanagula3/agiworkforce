@@ -50,13 +50,9 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { extractUserQuery, runResearchLoop } from './lib/research-loop';
-import { readResearchConnectorSources } from '@/lib/services/research-connector-source-service';
 import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
-import {
-  saveResearchReport,
-  type PersistedResearchReport,
-} from '@/lib/services/research-report-service';
-import { notifyResearchReportSettled } from '@/lib/services/agent-notification-service';
+import { buildResearchRunOptions } from './lib/research-run-options';
+import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
@@ -128,7 +124,6 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
-  isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
@@ -588,7 +583,6 @@ async function dispatchChatCompletions(
       // within the workspace's site rules; the loop applies it at ingestion. The
       // file search runs before the loop so a failing index degrades to a
       // web-only run rather than failing the turn.
-      const researchDomainPolicy = processed.webSearchDomainPolicy ?? null;
       const requestedResearchConnectorIds = processed.researchSources?.connectors ?? [];
       const researchConnectorIds =
         requestedResearchConnectorIds.length > 0 &&
@@ -603,6 +597,74 @@ async function dispatchChatCompletions(
           })
         : [];
 
+      const approvedResearchRun = (processed.researchResume?.approvedSteps.length ?? 0) > 0;
+      if (
+        approvedResearchRun &&
+        areDurableInitialTurnsEnabled() &&
+        !(await isDurableTransportCoolingDown())
+      ) {
+        try {
+          const workflow = await timePhase(CHAT_TURN_PHASE.durableStart, () =>
+            startCloudAgentWorkflowExecution({
+              db: runDb,
+              runId: run.id,
+              userId,
+              processed,
+              mcpTools: [],
+              approvalMode: 'auto',
+              toolApprovalPolicy: researchToolApprovalPolicy,
+              connectorPermissions: researchConnectorPermissions,
+              research: {
+                connectorIds: researchConnectorIds,
+                fileSources: researchFileSources,
+              },
+            }),
+          );
+          const live = await timePhase(CHAT_TURN_PHASE.durableFirstEvent, () =>
+            claimLiveDurableStream(workflow.readable),
+          );
+          if (!live) {
+            await workflow.cancel().catch(() => undefined);
+            throw new DurableStreamStalledError(false);
+          }
+          const durableResearchHeaders: Record<string, string> = {
+            ...SSE_RESPONSE_HEADERS,
+            'X-AGI-Research-Loop': 'active',
+            'X-AGI-Tool-Loop': 'durable',
+            'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          };
+          addAgentRunHeaders(durableResearchHeaders, run);
+          if (processed.chatRequest.model) {
+            durableResearchHeaders['X-AGI-Resolved-Model'] = processed.chatRequest.model;
+          }
+          if (processed.quotaWarningHeader) {
+            durableResearchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
+          }
+          const bounded = boundDurableTurnStream({
+            readable: live,
+            db: runDb,
+            userId,
+            runId: run.id,
+            workflowRunId: workflow.workflowRunId,
+            requestId: processed.requestId,
+          });
+          return new NextResponse(withSseHeartbeat(bounded), { headers: durableResearchHeaders });
+        } catch (error) {
+          const unreserved = error instanceof CloudAgentWorkflowBillingUnavailableError;
+          const details = { error, userId, requestId: processed.requestId, runId: run.id };
+          if (unreserved) {
+            logger.debug(details, 'Research run carries no reservation; running request-scoped');
+          } else {
+            logger.error(
+              details,
+              'Durable research run could not start; falling back to the request-scoped stream',
+            );
+          }
+        }
+      }
+
       // The report is the turn's durable half; holding the row the loop just
       // stored lets the assistant message carry the same activity rather than
       // depending on a client save that a research turn's metadata can fail.
@@ -612,101 +674,29 @@ async function dispatchChatCompletions(
         { userId, token },
         {
           usage: researchUsage,
-          // CAP-045 slice 1: durable report persistence. `runDb` is the same
-          // RLS-scoped adapter the run journal uses, so the row is tenant-
-          // isolated in the database. Persistence failures are swallowed by the
-          // loop (logged, never fatal) -- a storage outage must not destroy a
-          // report the user is already reading.
-          persistReport: async (report) => {
-            storedResearchReport = {
-              ...(await saveResearchReport(runDb, {
-                userId,
-                requestId: processed.requestId,
-                conversationId: processed.conversationId ?? null,
-                model: processed.chatRequest.model,
-                provider: processed.provider,
-                ...report,
-              })),
-              deliverable: report.deliverable,
-              sourceSelection: report.sourceSelection,
-            };
-            await notifyResearchReportSettled(runDb, {
-              userId,
-              reportId: storedResearchReport.id,
-              requestId: processed.requestId,
-              title: storedResearchReport.title || storedResearchReport.query,
-              status: storedResearchReport.status,
-              sourcesConsulted: storedResearchReport.sourcesConsulted,
-            });
-            return storedResearchReport;
-          },
-          // CAP-045 slice 4: retry carries the previous attempt's material.
-          // It arrives on the NORMAL request path, so this run reserved and
-          // metered exactly like a first attempt -- there is no bypass here.
-          ...(processed.researchResume
-            ? {
-                priorSources: processed.researchResume.sources.map((source) => ({
-                  url: source.url,
-                  title: source.title ?? source.url,
-                  ...(source.snippet ? { snippet: source.snippet } : {}),
-                  ...(source.retrieved_at ? { retrievedAt: source.retrieved_at } : {}),
-                })),
-                priorSteps: processed.researchResume.steps,
-                approvedPlan: processed.researchResume.approvedSteps,
-                deliverable: processed.researchResume.deliverable,
-                ...(processed.researchResume.guidance
-                  ? { guidance: processed.researchResume.guidance }
-                  : {}),
-              }
-            : {}),
-          // A first attempt shows its plan and waits for Start; the approved
-          // plan the client sends back IS that decision, so it searches at once.
-          requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
-          domainPolicy: researchDomainPolicy,
-          sources: {
-            files: processed.researchSources?.files ?? false,
-            allowDomains: processed.researchSources?.allowDomains ?? [],
-            denyDomains: processed.researchSources?.denyDomains ?? [],
-            connectors: researchConnectorIds,
-          },
-          ...(researchConnectorIds.length > 0
-            ? {
-                readConnectorSources: (queries: readonly string[]) =>
-                  readResearchConnectorSources({
-                    userId,
-                    organizationId: processed.organizationId ?? null,
-                    planTier: processed.subscriptionTier ?? null,
-                    connectorIds: researchConnectorIds,
-                    queries,
-                    isToolDenied: researchConnectorPermissions.isConnectorToolDenied,
-                    signal: request.signal,
-                  }),
-              }
-            : {}),
-          fileSources: researchFileSources,
-          toolApprovalPolicy: researchToolApprovalPolicy,
-          connectorPermissions: processed.conversationIsTemporary
-            ? withoutStandingApprovals(researchConnectorPermissions)
-            : researchConnectorPermissions,
-          isCancellationRequested: () =>
-            isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
-          isPauseRequested: () => isCloudAgentRunPauseRequested(runDb, { userId, runId: run.id }),
-          takeSteerMessages: () =>
-            takeCloudAgentRunSteers(runDb, {
-              userId,
-              organizationId: processed.organizationId ?? null,
-              runId: run.id,
-            }),
-          // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
-          // request instead of billing a full research run nobody sees.
-          signal: request.signal,
-          failover: {
-            next: (error) => {
-              const attempt = researchFailover.next(error);
-              if (attempt) researchServing = attempt.processed;
-              return attempt;
+          ...buildResearchRunOptions({
+            processed,
+            userId,
+            runId: run.id,
+            db: runDb,
+            connectorIds: researchConnectorIds,
+            fileSources: researchFileSources,
+            connectorPermissions: researchConnectorPermissions,
+            toolApprovalPolicy: researchToolApprovalPolicy,
+            // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
+            // request instead of billing a full research run nobody sees.
+            signal: request.signal,
+            failover: {
+              next: (error) => {
+                const attempt = researchFailover.next(error);
+                if (attempt) researchServing = attempt.processed;
+                return attempt;
+              },
             },
-          },
+            onReportStored: (report) => {
+              storedResearchReport = report;
+            },
+          }),
         },
       );
       const researchStream = buildManagedAgentStream({

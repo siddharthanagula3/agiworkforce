@@ -17,6 +17,10 @@ export const CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS = 800_000;
 
 export const CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS = 210_000;
 
+export const CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS = CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS / 2;
+
+export const CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS = 30_000;
+
 export const DURABLE_STREAM_WRITE_DEADLINE_MS = 10_000;
 
 // A tool call is the longest legitimate gap between durable frames; the margin
