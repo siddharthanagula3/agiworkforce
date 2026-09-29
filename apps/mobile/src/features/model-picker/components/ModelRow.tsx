@@ -17,7 +17,7 @@ import {
   useModelInstallStore,
   type ModelInstallJob,
 } from '@/src/features/model-picker/installStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
 
@@ -310,8 +310,8 @@ export function ModelRow({
 
       {isExpanded && (canToggleThinking || requiresThinking) ? (
         <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(150)}
-          exiting={reducedMotion ? undefined : FadeOut.duration(100)}
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(motion.instant)}
           style={{
             paddingLeft: 58,
             paddingRight: 16,

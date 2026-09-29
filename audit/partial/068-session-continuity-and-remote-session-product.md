@@ -169,9 +169,8 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the code-sessions capability gates the AGI Code card. | surface-only |
-| vscode | partial | The extension heartbeats its device profile only. | ui |
 
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts:35-37`
+Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
 
 ## S68.22: Device pairing.
 
@@ -213,14 +212,13 @@ Code: `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-h
 
 - Done when: After a dropped connection, the client reconnects and resumes the same session state.
 - Wave: 3
-- Already works on: desktop, mobile
+- Already works on: desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The app-server advertises reconnect support for its clients; a restarted CLI resumes via agi resume. | surface-only |
-| vscode | partial | Restart Local Runtime reconnects to the runtime and the thread can be reopened from history. | surface-only |
 
-Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`
+Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`
 
 ## S68.27: Session export.
 

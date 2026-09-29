@@ -29,7 +29,7 @@ import {
   type NotificationCenterItem,
   type NotificationPriority,
 } from '@/services/notifications';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 function getPriorityTone(
@@ -86,11 +86,11 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
   const timeLabel = formatNotificationTime(item.receivedAt);
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
+    <Animated.View entering={FadeIn.duration(motion.quick)} layout={LinearTransition.springify()}>
       <Pressable
         onPress={() => onPress(item)}
-        className={`rounded-xl overflow-hidden active:opacity-80 ${item.read ? '' : ''}`}
-        accessibilityLabel={`Notification: ${item.title}`}
+        className="rounded-xl overflow-hidden active:opacity-80"
+        accessibilityLabel={`${item.read ? '' : 'Unread, '}${item.title}, ${timeLabel}`}
         accessibilityRole="button"
       >
         <View

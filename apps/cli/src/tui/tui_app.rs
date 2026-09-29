@@ -3908,6 +3908,7 @@ enum SlashResult {
     RunCompact(String),
     RunLogin,
     RunLogout,
+    StatusReport(String),
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
     RunDictate(String),
@@ -4218,7 +4219,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.total_output_tokens,
                 app.context_percent(),
             );
-            SlashResult::SystemMessage(format!(
+            SlashResult::StatusReport(format!(
                 "{msg}\n{}",
                 app.session.session_status_lines().join("\n")
             ))
@@ -5134,6 +5135,7 @@ pub async fn run(
         effective_provider_override,
     )?;
     session.apply_ui_config(config);
+    crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
@@ -5861,6 +5863,16 @@ async fn run_event_loop(
                                     ),
                                 });
                             }
+                            SlashResult::StatusReport(report) => {
+                                let connectivity = crate::cloud::client::connectivity_line(
+                                    app.session.privacy_mode,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: format!("{report}\n{connectivity}"),
+                                });
+                            }
                             SlashResult::RunFeedback(kind, message) => {
                                 let text = crate::cloud::send_feedback(kind, &message).await;
                                 app.chat_messages.push(ChatMessage {
@@ -5869,12 +5881,18 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunLogout => {
+                                let revoked =
+                                    crate::app_server::account::revoke_managed_sessions().await;
                                 let mut store = crate::auth::load_auth().unwrap_or_default();
                                 store.entries.clear();
                                 let _ = crate::auth::save_auth(&store);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: "Logged out from all providers.".to_string(),
+                                    text: if revoked {
+                                        "Logged out from all providers.".to_string()
+                                    } else {
+                                        "Logged out from all providers. AGI Cloud did not confirm the sign-out; the device session ends when it expires, or unlink it in Settings, Account, Linked devices.".to_string()
+                                    },
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
@@ -8408,7 +8426,7 @@ mod tests {
         }
 
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Provider: DeepSeek"), "{message}");
                 assert!(!message.contains("api_key_env"), "{message}");
             }
@@ -8425,7 +8443,7 @@ mod tests {
 
         app.sandbox_type = Some(crate::sandbox::SandboxType::MacosSeatbelt);
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: seatbelt"), "{message}");
             }
             _ => panic!("/status must report in place"),
@@ -8433,7 +8451,7 @@ mod tests {
 
         app.sandbox_type = None;
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: no sandbox"), "{message}");
             }
             _ => panic!("/status must report in place"),

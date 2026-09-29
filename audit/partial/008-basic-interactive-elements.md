@@ -37,18 +37,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mob
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S8.14: Checkboxes.
-
-- Done when: Checkboxes (independent on/off choices in a list, with checked state exposed) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The only checkbox inputs are drawn as switch tracks in settings; there is no plain checkbox for multi-choice lists. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1164-1172`
-
 ## S8.15: Radio groups.
 
 - Done when: A radio group (mutually exclusive options, all visible, with checked state exposed) is used in shipped UI.

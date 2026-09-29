@@ -15,6 +15,7 @@
 
 import { modelDisplayLabel, providerDisplayLabel } from '../model-picker/modelConstants';
 import { t, tPlural, type MessageKey } from '../../l10n';
+import { accountRefusalMessage } from '../../utils/accountRefusal';
 
 export type ChatErrorCategory =
   | 'network'
@@ -143,6 +144,15 @@ function fromApiStatus(providerId: string, status: number): Classification {
   };
 }
 
+function accountRefusalIn(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body.replace(/^:\s*/u, '')) as { error?: unknown } | null;
+    return accountRefusalMessage(parsed?.error);
+  } catch {
+    return undefined;
+  }
+}
+
 function classify(raw: string, activeProvider: string | undefined): Classification | null {
   if (UPDATE_EXTENSION.test(raw)) {
     return {
@@ -155,6 +165,8 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
 
   const api = API_ERROR.exec(raw);
   if (api?.[1] !== undefined && api[2] !== undefined) {
+    const refusal = api[2] === '403' ? accountRefusalIn(raw.slice(api[0].length)) : undefined;
+    if (refusal) return { category: 'sign-in', headline: refusal, retryable: false };
     return fromApiStatus(api[1], Number(api[2]));
   }
 

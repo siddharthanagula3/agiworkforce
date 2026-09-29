@@ -126,10 +126,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Command output is shown as one body; stderr is not separated or styled differently. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788-5788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5787-5787`
 
 ## S21.17: Execution-duration display.
 

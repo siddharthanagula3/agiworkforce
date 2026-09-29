@@ -132,7 +132,7 @@ async function handleCatalog(
     enabled: true,
     platform: parsed.data.platform,
     appAccountToken: account.app_account_token,
-    products: catalog.products,
+    products: catalog.products.filter((product) => product.kind === 'subscription'),
     unavailableReason: null,
     unavailableCode: null,
   });

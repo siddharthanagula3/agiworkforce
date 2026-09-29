@@ -249,6 +249,80 @@ fn forget_managed(store: &mut AuthStore) {
     }
 }
 
+const RENEW_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
+
+fn expiring_refresh_token(store: &AuthStore) -> Option<String> {
+    match store.entries.get("agiworkforce") {
+        Some(AuthEntry::OAuth {
+            refresh, expires, ..
+        }) if !refresh.is_empty()
+            && *expires > 0
+            && *expires - chrono::Utc::now().timestamp_millis() < RENEW_WITHIN_MS =>
+        {
+            Some(refresh.clone())
+        }
+        _ => None,
+    }
+}
+
+async fn lock_device_session() -> Option<std::fs::File> {
+    let path = crate::config::CliConfig::config_dir()
+        .ok()?
+        .join("device-session.lock");
+    tokio::task::spawn_blocking(move || {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+            .ok()?;
+        file.lock().ok()?;
+        Some(file)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+pub async fn renew_managed_session_if_expiring() -> Option<String> {
+    expiring_refresh_token(&AuthStore::load().ok()?)?;
+    let _lock = lock_device_session().await?;
+    let refresh = expiring_refresh_token(&AuthStore::load().ok()?)?;
+    match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
+        crate::oauth::DeviceSessionRenewal::Renewed(entry) => save_device_grant(entry)
+            .err()
+            .map(|error| format!("The renewed AGI Workforce session could not be saved: {error:#}. Run agi login.")),
+        crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
+        crate::oauth::DeviceSessionRenewal::Unavailable => None,
+    }
+}
+
+pub async fn revoke_managed_sessions() -> bool {
+    let Ok(store) = AuthStore::load() else {
+        return true;
+    };
+    let base = device_auth_base();
+    let mut confirmed = true;
+    for key in MANAGED_AUTH_KEYS {
+        if let Some(AuthEntry::OAuth {
+            access, refresh, ..
+        }) = store.entries.get(key)
+        {
+            if access.is_empty() && refresh.is_empty() {
+                continue;
+            }
+            confirmed &= crate::oauth::revoke_device_session(&base, access, refresh).await;
+        }
+    }
+    confirmed
+}
+
+pub async fn sign_out() -> Result<bool> {
+    let confirmed = revoke_managed_sessions().await;
+    logout()?;
+    Ok(confirmed)
+}
+
 /// Forget the managed credential on this machine.
 pub fn logout() -> Result<()> {
     let mut store = AuthStore::load().context("Failed to read the credential store")?;

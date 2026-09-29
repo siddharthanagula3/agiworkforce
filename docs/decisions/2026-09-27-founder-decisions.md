@@ -387,3 +387,24 @@ S67.21, S67.23, S74.20, S76.28, S76.29, S78.06, S78.11, S78.15, S78.16, S78.20,
 S79.05, S79.06, S79.08, S79.21, S79.28, S81.19, S84.01, S84.18, S85.23, S86.06,
 S106.01, S106.02, S106.03, S106.04, S106.05, S106.06, S106.07, S106.08,
 S106.12, S106.15, S109.03, S109.08, S110.27 (chrome).
+
+## D-2026-09-28-25 The VS Code extension stays at Claude Code in VS Code's scope
+
+Claude Code in VS Code is the reference for the VS Code extension. Its pages
+(code.claude.com/docs/en/vs-code, code.claude.com/docs/en/checkpointing,
+code.claude.com/docs/en/claude-code-on-the-web), checked 2026-09-28, either
+leave out or rule out the following, so the extension does not add them: type
+icons in mixed lists, plain multi-choice checkboxes, a branch picker, a setup
+wizard that collects choices, an approve-this-transfer prompt, task-category
+chips, typed project mentions, artifact-building rows, a separate stderr panel,
+in-place prose rewrite of a selection, a no-results state for web search,
+notebook sources, a proactive-feature history, connector detail pages and
+provider labels on tool rows, a page-summary command, goal-bounded loops, host
+capability reporting beyond the heartbeat, regional-restriction and
+unavailable-model notices, an overage toggle and a pre-run cost estimate. A
+local session sent to the cloud starts a new cloud session from the pushed
+branch with a new task, as `claude --cloud` does; history comes back only when
+a cloud session is pulled local. Cells (vscode): S5.16, S8.14, S9.08, S9.23,
+S10.39, S12.05, S13.25, S19.12, S21.16, S27.16, S34.32, S37.38, S42.25, S55.04,
+S55.29, S64.05, S67.36, S68.21, S78.11, S78.16, S81.21, S82.22; S110.22 is met
+at parity once cloud sessions are switched on.

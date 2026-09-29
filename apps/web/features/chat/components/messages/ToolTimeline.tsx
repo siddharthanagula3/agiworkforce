@@ -39,9 +39,8 @@ import {
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
 import { PluginDraftCard } from '../PluginDraftCard';
-import { readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
+import { CHAT_CODE_RUN_TOOL_NAME, readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
-import { EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
 import { CodeRunAgain } from './CodeRunAgain';
 
 function getFileName(args?: string): string | null {
@@ -455,7 +454,7 @@ function TimelineStepRow({
   const rerunLanguage = toolCall.parameters?.['language'];
   const canRunAgain =
     codeRunConversationId !== undefined &&
-    tool.name === EXECUTE_CODE_TOOL &&
+    tool.name === CHAT_CODE_RUN_TOOL_NAME &&
     (tool.status === 'completed' || tool.status === 'failed') &&
     typeof rerunCode === 'string' &&
     rerunCode.trim() !== '';

@@ -4,6 +4,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
+import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 
 interface AddMemorySheetProps {
   editingMemory: MemoryEntry | null;
@@ -36,9 +37,16 @@ export function AddMemorySheet({
   const canSave = content.trim().length > 0;
 
   const handleClose = useCallback(() => {
-    setContent('');
-    onClose();
-  }, [onClose]);
+    const discard = () => {
+      setContent('');
+      onClose();
+    };
+    if (content.trim() !== (editingMemory?.fact ?? '').trim()) {
+      confirmDiscardChanges(discard);
+    } else {
+      discard();
+    }
+  }, [content, editingMemory, onClose]);
 
   const handleSave = useCallback(() => {
     const trimmed = content.trim();

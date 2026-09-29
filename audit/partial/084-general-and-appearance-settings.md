@@ -104,8 +104,5 @@ Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi features only lists feature flags; there is no opt-in command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:853-854`

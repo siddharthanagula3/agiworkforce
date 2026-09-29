@@ -3,6 +3,10 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 
 /**
  * Who a conversation share is for (migration 0186). `public` is the 0051 rule,
@@ -242,8 +246,9 @@ export async function getPublicSharedSessionByToken(
          from public.shared_sessions
         where token = $1
           and visibility = 'public'
+          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
         limit 1`,
-      [token],
+      [token, UNATTENDED_RUN_DENIED_STATUSES],
     );
   } catch (error) {
     if (!isConversationSharingSchemaUnavailable(error)) throw error;
@@ -252,8 +257,9 @@ export async function getPublicSharedSessionByToken(
               total_messages, expires_at, created_at
          from public.shared_sessions
         where token = $1
+          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
         limit 1`,
-      [token],
+      [token, UNATTENDED_RUN_DENIED_STATUSES],
     );
   }
   return rows[0] ? rowToSession(rows[0]) : null;

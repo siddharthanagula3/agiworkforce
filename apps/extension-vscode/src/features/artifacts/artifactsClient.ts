@@ -13,11 +13,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export class ArtifactsHttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ArtifactsHttpError';
@@ -47,7 +49,14 @@ function hostedHeaders(token: string): Record<string, string> {
 
 async function readJson(url: string, token: string): Promise<unknown> {
   const response = await fetch(url, { headers: hostedHeaders(token) });
-  if (!response.ok) throw new ArtifactsHttpError(`HTTP ${response.status}`, response.status);
+  if (!response.ok) {
+    const refusal = await readAccountRefusal(response);
+    throw new ArtifactsHttpError(
+      refusal?.message ?? `HTTP ${response.status}`,
+      response.status,
+      refusal?.code,
+    );
+  }
   return response.json().catch(() => undefined);
 }
 

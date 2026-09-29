@@ -53,16 +53,17 @@ const HOLD_HOURS = ACCOUNT_SECURITY_POLICY.recoveryHoldHours;
 const MINIMUM_METHODS = ACCOUNT_SECURITY_POLICY.minimumSignInMethods;
 const CODE_LENGTH = ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH;
 const UNDO_HOURS = ACCOUNT_SECURITY_POLICY.undoHours;
+const VERIFY_DAYS = ACCOUNT_SECURITY_POLICY.verificationLifetimeHours / 24;
 
 const WHAT_CHANGES = [
   'Signing in needs one of your passkeys or security keys. A password or an email code alone no longer gets in.',
   `Email account recovery no longer restores access. A recovery key starts recovery, and the account unlocks ${HOLD_HOURS} hours later.`,
-  'Every new sign-in is emailed to you, and sessions end sooner, so you confirm with your passkey or security key more often.',
+  `Every new sign-in is emailed to you, and each session has to be confirmed with your passkey or security key again every ${VERIFY_DAYS} days.`,
   'Every other device is signed out when you turn it on. The CLI, VS Code, the Chrome extension and the desktop app have to be linked again.',
 ] as const;
 
 const LOSS_WARNING =
-  'If you lose every passkey, security key and recovery key, you can lose access to your account for good. AGI support cannot turn this off or add a sign-in method for you.';
+  'If you lose every passkey, security key and recovery key, you can lose access to your account for good. AGI support cannot turn this off, add a sign-in method or restore access for you.';
 
 function formatWhen(value: string): string {
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });

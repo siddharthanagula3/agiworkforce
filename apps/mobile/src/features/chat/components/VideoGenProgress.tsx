@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 export interface VideoGenProgressProps {
   prompt: string;
@@ -58,7 +58,7 @@ export function VideoGenProgress({
   return (
     <Animated.View
       testID="video-gen-progress"
-      entering={reducedMotion ? undefined : FadeInDown.duration(200)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(motion.quick)}
       style={{
         marginTop: 8,
         padding: 14,

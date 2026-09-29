@@ -3,6 +3,7 @@ import 'server-only';
 import { accountAccessDecision } from '@/lib/auth/account-status';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { readEnrolledAt } from '@/lib/server/account-security/store';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
@@ -46,6 +47,16 @@ export async function submitAccountRecoveryRequest(input: {
   if (!profile) return;
   const decision = accountAccessDecision(profile.account_status);
   if (!decision.allowed && decision.reason === 'deleted') return;
+
+  if ((await readEnrolledAt(getNeonDb(), profile.id)) !== null) {
+    const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
+    await emitIdentitySecurityEvent(getNeonDb(), {
+      userId: profile.id,
+      event: 'recovery_requested',
+      request: input.request,
+    });
+    return;
+  }
 
   const message = [
     `Lost: ${LOSS_COPY[input.lost]}`,
@@ -107,6 +118,11 @@ export async function completeAccountRecovery(input: {
   }
   if (!OPEN_TICKET_STATUSES.includes(ticket.status)) {
     throw new RecoveryTicketError('This recovery request is closed.');
+  }
+  if ((await readEnrolledAt(getNeonDb(), ticket.userId)) !== null) {
+    throw new RecoveryTicketError(
+      'This account has Advanced Account Security on. Support cannot restore access to it; the owner recovers with a recovery key.',
+    );
   }
 
   const identity = getIdentityProvider();

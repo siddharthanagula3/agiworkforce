@@ -4,7 +4,7 @@ import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, motion } from '@/src/ui/theme';
 import {
   TEMPORARY_CHAT_CLOUD_EXPLAINER,
   TEMPORARY_CHAT_LOCAL_EXPLAINER,
@@ -51,7 +51,10 @@ export function TemporaryChatToggle() {
     >
       <EyeOff size={16} color={isTemporaryChat ? colors.purple : colors.textMuted} />
       {isTemporaryChat ? (
-        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+        <Animated.View
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
+        >
           <View>
             <Text
               style={{
