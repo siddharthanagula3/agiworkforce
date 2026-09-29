@@ -206,6 +206,7 @@ export type BillingPlanCapability =
   | 'managed_api'
   | 'developer_surfaces'
   | 'slack_app'
+  | 'artifact_connectors'
   | 'team_admin'
   | 'enterprise_controls';
 
@@ -228,6 +229,7 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   managed_api: PRO_TIERS,
   developer_surfaces: PRO_TIERS,
   slack_app: PRO_TIERS,
+  artifact_connectors: PRO_TIERS,
   team_admin: ['team', 'enterprise'],
   enterprise_controls: ['enterprise'],
 });
@@ -263,6 +265,7 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     managed_api: 'Managed API access',
     developer_surfaces: 'Managed Cloud in the CLI and VS Code',
     slack_app: 'AGI Workforce in Slack',
+    artifact_connectors: 'Connected apps in published apps',
     team_admin: 'Team administration',
     enterprise_controls: 'SSO, SCIM and admin controls',
   });

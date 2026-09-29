@@ -39,7 +39,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows the plan with Approve and Cancel only; steps cannot be added, removed or reworded. | ui |
+| mobile | partial | post-codex/w-work-s35-mobile-research-plan-edit-run-again.patch: the plan card becomes editable (reword, remove, add up to 6 steps of 300 chars) and Approve sends the edited steps as approvedSteps, as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -278,7 +278,7 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-1
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile can retry only a failed or stopped run; a completed report cannot be rerun. | ui |
+| mobile | partial | Same patch: Run again on a completed research card sends a fresh research turn for the same question, as web's Run again. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

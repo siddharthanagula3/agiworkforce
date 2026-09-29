@@ -63,7 +63,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
-import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -240,7 +240,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     const conversations = localConversations.filter(
       (conversation) => executionModeForConversation(conversation) === 'local',
     );
-    return collectSearchableMobileFiles(conversations, localMessages)
+    return recentMobileFiles(conversations, localMessages)
       .filter((file) => !file.mimeType.startsWith('image/'))
       .map((file) => ({
         id: file.id,
