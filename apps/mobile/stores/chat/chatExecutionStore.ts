@@ -356,6 +356,13 @@ interface PendingApprovalTurn {
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
+const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
+
+function answeredApprovalReason(error: unknown): string | null {
+  return error instanceof ApiHttpError && ANSWERED_APPROVAL_STATUSES.has(error.status)
+    ? error.message
+    : null;
+}
 const interactiveCardResponsesInFlight = new Set<string>();
 const agiWorkPlanDecisionsInFlight = new Set<string>();
 
@@ -3262,7 +3269,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent || cloudContentRaw;
-            if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
+            const answeredReason = turn.deviceResults ? null : answeredApprovalReason(error);
+            if (turn.deviceResults || answeredReason !== null) {
+              pendingApprovalTurns.delete(assistantMessageId);
+            }
             const checkpointIds = new Set(
               turn.deviceResults ? [] : turn.calls.map((c) => c.toolCallId),
             );
@@ -3274,13 +3284,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     isStreaming: false,
                     toolCalls: (m.toolCalls ?? []).map((t) =>
                       t.toolCallId && checkpointIds.has(t.toolCallId)
-                        ? {
-                            ...t,
-                            status: 'awaiting-approval' as const,
-                            requiresApproval: true,
-                            approvalDecision: undefined,
-                            output: undefined,
-                          }
+                        ? answeredReason !== null
+                          ? {
+                              ...t,
+                              status: 'failed' as const,
+                              requiresApproval: false,
+                              output: answeredReason,
+                            }
+                          : {
+                              ...t,
+                              status: 'awaiting-approval' as const,
+                              requiresApproval: true,
+                              approvalDecision: undefined,
+                              output: undefined,
+                            }
                         : t,
                     ),
                   }
@@ -3296,9 +3313,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               streamingContent: '',
               streamingReasoning: '',
               error:
-                error instanceof ApiHttpError
-                  ? withFailureReference(error.message, error.requestId)
-                  : 'Something went wrong. Please try again.',
+                answeredReason !== null
+                  ? null
+                  : error instanceof ApiHttpError
+                    ? withFailureReference(error.message, error.requestId)
+                    : 'Something went wrong. Please try again.',
             });
           },
         },
@@ -3311,7 +3330,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isApprovalAccountCurrent()) return;
       turn.resolving = false;
       turn.decisions.clear();
-      if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
+      const answeredReason = turn.deviceResults ? null : answeredApprovalReason(caughtErr);
+      if (turn.deviceResults || answeredReason !== null) {
+        pendingApprovalTurns.delete(assistantMessageId);
+      }
       if (!controller.signal.aborted) {
         const innerMsgStore = getConversationMessageStore(conversationId);
         const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -3325,13 +3347,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   tool.toolCallId &&
                   !turn.deviceResults &&
                   turn.calls.some((call) => call.toolCallId === tool.toolCallId)
-                    ? {
-                        ...tool,
-                        status: 'awaiting-approval' as const,
-                        requiresApproval: true,
-                        approvalDecision: undefined,
-                        output: undefined,
-                      }
+                    ? answeredReason !== null
+                      ? {
+                          ...tool,
+                          status: 'failed' as const,
+                          requiresApproval: false,
+                          output: answeredReason,
+                        }
+                      : {
+                          ...tool,
+                          status: 'awaiting-approval' as const,
+                          requiresApproval: true,
+                          approvalDecision: undefined,
+                          output: undefined,
+                        }
                     : tool,
                 ),
               }
