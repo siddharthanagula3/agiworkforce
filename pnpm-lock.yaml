@@ -611,6 +611,9 @@ importers:
       '@agiworkforce/design-tokens':
         specifier: workspace:*
         version: link:../../packages/ui/design-tokens
+      '@agiworkforce/i18n':
+        specifier: workspace:*
+        version: link:../../packages/ui/i18n
       '@agiworkforce/ide-runtime':
         specifier: workspace:*
         version: link:../../packages/client/ide-runtime
