@@ -1,3 +1,10 @@
+import {
+  ServerSentEventDecoder,
+  ServerSentEventFrameLimitError,
+  splitJoinedServerSentEventData,
+  SSE_DONE_DATA,
+  type ServerSentEvent,
+} from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
@@ -546,44 +553,38 @@ function httpsPostStream(
         return;
       }
 
-      let buffer = '';
-      const MAX_SSE_BUFFER = 1_000_000;
+      const text = new TextDecoder();
+      const frames = new ServerSentEventDecoder();
+      const deliver = (events: readonly ServerSentEvent[]) => {
+        for (const event of events) {
+          for (const data of splitJoinedServerSentEventData(event.data)) {
+            if (data === SSE_DONE_DATA) continue;
+            try {
+              onChunk(JSON.parse(data) as ChatCompletionChunk);
+            } catch {
+              continue;
+            }
+          }
+        }
+      };
 
       res.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString('utf8');
-
-        if (buffer.length > MAX_SSE_BUFFER) {
+        try {
+          deliver(frames.push(text.decode(chunk, { stream: true })));
+        } catch (error) {
+          if (!(error instanceof ServerSentEventFrameLimitError)) throw error;
           cancelListener.dispose();
           req.destroy();
           reject(
             new AgiWorkforceApiError('SSE buffer overflow (malformed stream)', 400, 'HTTP_ERROR'),
           );
-          return;
-        }
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) {
-            continue;
-          }
-          const data = trimmed.slice('data:'.length).trim();
-          if (data === '[DONE]') {
-            continue;
-          }
-          try {
-            const parsed = JSON.parse(data) as ChatCompletionChunk;
-            onChunk(parsed);
-          } catch {
-            continue;
-          }
         }
       });
 
       res.on('end', () => {
         cancelListener.dispose();
+        deliver(frames.push(text.decode()));
+        deliver(frames.finish({ acceptUnterminatedFrame: true }).events);
         resolve();
       });
       res.on('error', (err) => {
