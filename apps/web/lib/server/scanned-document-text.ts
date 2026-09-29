@@ -3,7 +3,12 @@ import 'server-only';
 import { estimateTokens } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { logger } from '@/lib/logger';
+import {
+  noTrainingProviderIds,
+  sideCallTrainingOptOut,
+} from '@/lib/server/side-call-training-policy';
 import {
   buildServerProviderAdapter,
   listAvailableManagedProviderIds,
@@ -56,6 +61,36 @@ export interface TranscribeScannedPagesInput {
   planTier: string;
   documentId: string;
   pageImages: readonly ScannedPageImage[];
+  /**
+   * The document came from a Google connector, so Google API Limited Use lets
+   * only a provider that keeps inputs out of training read its pages.
+   */
+  forceNoTraining?: boolean;
+}
+
+/**
+ * Why a scan's pages may only reach a provider that keeps inputs out of
+ * training: the file came from Google, or its owner turned on Only use models
+ * that do not train on your chats (or that setting could not be read).
+ */
+export type ScanWithheldReason = 'google_user_data' | 'training_opt_out';
+
+export const SCAN_WITHHELD_TRAINING_OPT_OUT_MESSAGE =
+  'This file has scanned pages. Your privacy settings keep your files away from models whose provider may train on them, and none that can read scanned pages is available right now, so their text was not extracted. The file is still in the project.';
+
+/**
+ * No route that keeps inputs out of training can read a scan that must stay on
+ * one. Thrown rather than returned as null so the caller can tell the user why
+ * the file has no text, instead of reporting it as unreadable.
+ */
+export class ScannedTextWithheldError extends Error {
+  constructor(
+    readonly documentId: string,
+    readonly reason: ScanWithheldReason,
+  ) {
+    super('No vision route that keeps inputs out of training can read this scan.');
+    this.name = 'ScannedTextWithheldError';
+  }
 }
 
 /**
@@ -71,6 +106,20 @@ export async function transcribeScannedPages(
 ): Promise<string | null> {
   if (input.pageImages.length === 0) return null;
 
+  // Read server-side for every file, as a chat turn does; an unreadable
+  // setting counts as on.
+  const reason: ScanWithheldReason | null =
+    input.forceNoTraining === true
+      ? 'google_user_data'
+      : (await sideCallTrainingOptOut(input.db, input.userId))
+        ? 'training_opt_out'
+        : null;
+  const forceNoTraining = reason !== null;
+  const managedProviders = listAvailableManagedProviderIds();
+  const providers = forceNoTraining ? noTrainingProviderIds(managedProviders) : managedProviders;
+  if (reason !== null && providers.size === 0) {
+    throw new ScannedTextWithheldError(input.documentId, reason);
+  }
   const route = resolveWebCloudModelRoute(
     'auto',
     input.planTier,
@@ -78,8 +127,20 @@ export async function transcribeScannedPages(
     undefined,
     undefined,
     undefined,
-    listAvailableManagedProviderIds(),
+    providers,
   );
+  if (
+    reason !== null &&
+    (route.status !== 'selected' ||
+      !providerKeepsInputsOutOfTraining(route.provider) ||
+      !providerKeepsInputsOutOfTraining(dispatchProviderForSelectedRoute(route)))
+  ) {
+    logger.warn(
+      { documentId: input.documentId, reason },
+      '[ocr] no vision route keeps inputs out of training; the scan is stored without text',
+    );
+    throw new ScannedTextWithheldError(input.documentId, reason);
+  }
   if (route.status !== 'selected') {
     logger.warn(
       { documentId: input.documentId, routeCode: route.code },

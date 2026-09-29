@@ -593,6 +593,8 @@ async function dispatchChatCompletions(
             userId,
             organizationId: processed.organizationId ?? null,
             query: extractUserQuery(processed.llmRequest.messages),
+            conversationId: processed.conversationId ?? null,
+            googleUserDataRouted: processed.googleUserData === true,
           })
         : [];
 
@@ -829,6 +831,7 @@ async function dispatchChatCompletions(
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
               ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
+              googleUserDataRouted: processed.googleUserData === true,
             }),
           )
         : { tools: [], dropped: [], limit: null };

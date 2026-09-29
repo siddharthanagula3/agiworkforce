@@ -132,6 +132,7 @@ const SECTIONS = [
   '02 · What we do not collect',
   '03 · How we use it, and on what basis',
   '04 · Sharing',
+  { label: 'Google user data', id: 's-google' },
   '05 · Retention',
   { label: 'Security incidents', id: 's-incidents' },
   '06 · What you can change yourself',
@@ -693,7 +694,9 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Retention:</strong> kept until you delete them or delete your account, unless your
-        organisation has switched on a retention window, in which case that window also applies.
+        organisation has switched on a retention window, in which case that window also applies. A
+        deleted conversation can be restored for 30 days, then a daily job permanently deletes it
+        with its messages and search index.
         <br />
         <strong>Enforced by:</strong> nothing expires a personal conversation automatically. A
         conversation that belongs to an organisation workspace is different:{' '}
@@ -717,6 +720,18 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         <strong>Enforced by:</strong> a daily scheduled job hard-deletes temporary conversations
         past the window; messages go with them. A workspace legal hold that covers a conversation
         keeps it until the hold is released.
+      </>
+    ),
+  },
+  {
+    label: 'Background jobs (Managed Cloud)',
+    value: (
+      <>
+        <strong>Retention:</strong> up to 30 days.
+        <br />
+        <strong>Enforced by:</strong> the job runner, every few minutes. Jobs that finished are
+        deleted within 30 days. Jobs that failed for good, including Gmail and Google Calendar
+        trigger events, are deleted 30 days after they fail.
       </>
     ),
   },
@@ -884,6 +899,58 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
     label: 'Choose where a request goes',
     value:
       'In the released CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes straight to your provider on your key. VS Code BYOK is coming soon. Web and Desktop are cloud-only.',
+  },
+];
+
+const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
+  {
+    label: 'Access',
+    value:
+      'Only after you connect a Google account, and only when you ask for it in a chat or in a routine you set up. A routine that starts on new mail receives the sender, recipients, subject, labels and a snippet of up to 500 characters of each new inbox message. Nothing syncs or indexes your Google account in the background.',
+  },
+  {
+    label: 'Use',
+    value:
+      'Only to provide the feature you asked for, such as reading and drafting mail, sending a message you approve, reading and creating calendar events, searching and reading your Drive files and looking up contacts.',
+  },
+  {
+    label: 'AI training',
+    value:
+      'We do not use Google user data to develop, improve or train generalized AI or machine learning models. Once a chat or routine can reach Google data, we send it only to AI providers whose terms bar training on it. If the model you picked cannot run that way, we tell you and send nothing.',
+  },
+  {
+    label: 'Memory',
+    value:
+      'We do not save memories from a chat that holds Google data. That chat, the memories drawn from it and files imported from Google reach your other chats only when those chats are also kept to AI providers that do not train on them.',
+  },
+  {
+    label: 'Transfer',
+    value:
+      'We do not sell it, and we do not transfer it to advertisers, data brokers or information resellers or use it for advertising or credit decisions. It goes only to the subprocessors that run your request, such as the AI provider serving it, and otherwise only for security, to comply with law, or in a merger or sale of assets with your prior consent.',
+  },
+  {
+    label: 'People',
+    value:
+      'No one at AGI reads it unless you ask us to, for example by escalating a chat to human support, which sends us that chat; unless it is necessary for security, such as investigating abuse or a bug; or unless the law requires it.',
+  },
+  {
+    label: 'Tokens',
+    value: (
+      <>
+        The tokens that connect your account are encrypted at rest with AES-256-GCM. When you
+        disconnect or delete your account, we ask Google to revoke them and erase our copy. You can
+        also remove AGI at{' '}
+        <a href="https://myaccount.google.com/permissions" className="agi-ds-link">
+          myaccount.google.com/permissions
+        </a>
+        .
+      </>
+    ),
+  },
+  {
+    label: 'Retention',
+    value:
+      "We keep no separate copy of what a connector retrieves. It persists only where it lands: in a chat reply and that chat's search index, in a routine's run history, or as a Drive file you import into a project. A deleted chat or project can be restored for 30 days and is then permanently deleted. Deleting a routine deletes its run history at once. Workspace retention settings also apply, and deleting your account erases all of it.",
   },
 ];
 
@@ -1090,6 +1157,36 @@ export default function PrivacyPage() {
                     data may transfer as part of it, and this policy continues to apply until the
                     acquirer publishes its own.
                   </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-google" labelledBy="agi-privacy-google-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-privacy-google-title">
+                      Google user data
+                    </h2>
+                    <Prose>
+                      This covers every Google connector, including Gmail, Google Calendar, Google
+                      Drive and Google Contacts. AGI&rsquo;s use and transfer to any other app of
+                      information received from Google APIs will adhere to the{' '}
+                      <a
+                        href="https://developers.google.com/terms/api-services-user-data-policy"
+                        className="agi-ds-link"
+                      >
+                        Google API Services User Data Policy
+                      </a>
+                      , including the Limited Use requirements, and to the{' '}
+                      <a
+                        href="https://developers.google.com/workspace/workspace-api-user-data-developer-policy"
+                        className="agi-ds-link"
+                      >
+                        Google Workspace API User Data and Developer Policy
+                      </a>
+                      .
+                    </Prose>
+                  </div>
+                  <Ledger caption="How we handle Google user data" rows={GOOGLE_DATA_LEDGER} />
                 </Stack>
               </Section>
 

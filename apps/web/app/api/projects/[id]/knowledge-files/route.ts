@@ -152,7 +152,13 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
       { status: 503 },
     );
   }
-  return NextResponse.json({ file: registration.file }, { status: 201 });
+  return NextResponse.json(
+    {
+      file: registration.file,
+      ...(registration.notice ? { notice: registration.notice } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleListKnowledgeFiles));

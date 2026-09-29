@@ -78,6 +78,27 @@
           "date": "2026-09-27",
           "digest": "8729f7b20746c65f",
           "note": "The erasure table count is now read from the erasure list when the page is built instead of being typed, so it cannot fall behind the list; the published figure and every commitment are unchanged, so the date stays."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "85f1c06b4c989919",
+          "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "e301293a3ab8f014",
+          "note": "Same-day revision before release: account deletion now revokes connector tokens at Google, Google data routes only to no-training providers, workspace retention covers routine runs, and deleted chats state the 30-day purge. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "25028c9a8392c809",
+          "note": "Same-day revision before release: covers every Google connector including whole-Drive read-only search, adds the memory commitment and the background job retention row. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "4cbe9937d3461d21",
+          "note": "Same-day revision before release: the memory row now also covers search and research results from chats holding Google data and files imported from Google. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },

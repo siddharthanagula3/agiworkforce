@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
+  sourceHoldsGoogleUserData: vi.fn(),
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
@@ -25,6 +26,14 @@ const mocks = vi.hoisted(() => ({
   db: { query: vi.fn() },
 }));
 
+vi.mock('@/lib/connectors/google-user-data-runs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  publishedArtifactSourceHoldsGoogleUserData: mocks.sourceHoldsGoogleUserData,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getNeonDb: () => ({ service: true }),
+}));
 vi.mock('@/lib/logger', () => ({
   PINO_LEVELS: vi.fn(),
   loggerOptions: vi.fn(),
@@ -81,6 +90,7 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   readArtifactStorageValue: vi.fn(),
   writeArtifactStorageValue: vi.fn(),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
+  ArtifactRuntimeGoogleUserDataRouteError: class ArtifactRuntimeGoogleUserDataRouteError extends Error {},
   readRunnableArtifact: mocks.readRunnableArtifact,
   selectArtifactRuntimeRoute: mocks.selectArtifactRuntimeRoute,
   buildArtifactConnectorPlan: mocks.buildArtifactConnectorPlan,
@@ -212,7 +222,7 @@ import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-s
 import { POST } from '../route';
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
-const ARTIFACT = { token: TOKEN, ownerId: 'owner-9' };
+const ARTIFACT = { token: TOKEN, ownerId: 'owner-9', publishedArtifactId: 'published-1' };
 const ROUTE = { provider: 'anthropic', modelKey: 'claude-fast' };
 
 function call(body: unknown, token = TOKEN) {
@@ -241,6 +251,7 @@ beforeEach(() => {
   });
   mocks.assertAccountActive.mockResolvedValue(undefined);
   mocks.readRunnableArtifact.mockResolvedValue(ARTIFACT);
+  mocks.sourceHoldsGoogleUserData.mockResolvedValue(false);
   mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({ allowed: true });
   mocks.resolveEntitlementBundle.mockResolvedValue({ plan: 'pro', subscription: { tier: 'pro' } });
   mocks.evaluateManagedComputeAccess.mockResolvedValue({ allowed: true });
@@ -381,6 +392,56 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
 
     expect(response.status).toBe(503);
     expect(await errorCode(response)).toBe('model_unavailable');
+  });
+
+  it.each([
+    ['a Google connector', ['linear', 'gmail'], true],
+    ['no Google connector', ['linear'], false],
+  ])('routes a run that names %s accordingly', async (_label, connectors, googleUserData) => {
+    const response = await call({ prompt: 'Summarize', connectors });
+
+    expect(response.status).toBe(200);
+    expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
+      mocks.db,
+      'user-1',
+      'Summarize',
+      'pro',
+      { needsTools: true, googleUserData },
+    );
+  });
+
+  it('forces no-training for a run whose app was made in a chat holding Google data', async () => {
+    mocks.sourceHoldsGoogleUserData.mockResolvedValue(true);
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sourceHoldsGoogleUserData).toHaveBeenCalledWith(
+      { service: true },
+      ARTIFACT.publishedArtifactId,
+    );
+    expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
+      mocks.db,
+      'user-1',
+      'Summarize',
+      'pro',
+      { needsTools: false, googleUserData: true },
+    );
+  });
+
+  it('answers 503 when the run refuses a model that may train on Google data', async () => {
+    mocks.completeArtifactPrompt.mockRejectedValue(
+      new ArtifactRuntimeRouteUnavailableError('This app reads data from your Google account.'),
+    );
+
+    const response = await call({ prompt: 'Summarize', connectors: ['gmail'] });
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error).toEqual({
+      code: 'model_unavailable',
+      message: 'This app reads data from your Google account.',
+    });
   });
 
   it('refuses connectors the plan cannot use', async () => {

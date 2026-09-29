@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { memoryFreeOfGoogleUserDataSql } from '@/lib/connectors/google-user-data';
 import {
   classifyMemoryCategory,
   memoryConflictTopic,
@@ -1075,6 +1076,10 @@ export async function loadManagedMemoryContext(
        from user_memories
       where user_id = $1 and ${activeMemoryPredicate()} ${sourceFilter} ${projectFilter}
         and ${workspaceFilter}
+        and ${memoryFreeOfGoogleUserDataSql(
+          "to_jsonb(user_memories)->>'source_conversation_id'",
+          'user_memories.user_id',
+        )}
       order by pinned desc, updated_at desc
       limit ${MAX_MEMORY_CANDIDATES}`,
         values,
