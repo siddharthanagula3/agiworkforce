@@ -14,6 +14,7 @@ import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
+import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
@@ -58,6 +59,21 @@ export function ScheduleForm({
   const [timezone, setTimezone] = useState(initialTimezone);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const draft = JSON.stringify([
+    name,
+    prompt,
+    model,
+    recurrence,
+    daysOfWeek,
+    dayOfMonth,
+    timeOfDay,
+    scheduledDate,
+    timezone,
+  ]);
+  const [initialDraft] = useState(draft);
+  const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
+  useUnsavedChangesGuard(draft !== initialDraft && draft !== submittedDraft);
 
   const validate = useCallback((): {
     valid: boolean;
@@ -128,6 +144,7 @@ export function ScheduleForm({
     const validation = validate();
     if (!validation.valid) return;
 
+    setSubmittedDraft(draft);
     onSubmit({
       name: name.trim(),
       prompt: prompt.trim(),
@@ -145,6 +162,7 @@ export function ScheduleForm({
   }, [
     validate,
     onSubmit,
+    draft,
     name,
     prompt,
     model,

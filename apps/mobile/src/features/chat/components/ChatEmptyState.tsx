@@ -8,8 +8,9 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useUser } from '@clerk/expo';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
@@ -48,7 +49,8 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
     setBannerVisible(false);
   }, []);
 
-  const headline = displayName ? `Hi, ${displayName}` : 'Ask anything';
+  const [greetingTime] = useState(() => new Date());
+  const headline = resolveGreetingHeadline(greetingTime, displayName);
 
   return (
     <View
@@ -57,7 +59,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
       {/* Desktop pairing banner (first launch only) */}
       {bannerVisible && (
         <Animated.View
-          entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(400)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(motion.moved).delay(400)}
           style={{
             position: 'absolute',
             top: 16,
@@ -100,7 +102,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
       )}
 
       {/* Display headline */}
-      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500)}>
+      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal)}>
         <Text
           style={{
             fontSize: 28,
@@ -118,7 +120,9 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
 
       {/* Subtitle, only shown when no display name, otherwise headline is already personal */}
       {!displayName && (
-        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500).delay(150)}>
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal).delay(150)}
+        >
           <Text
             style={{
               fontSize: 15,

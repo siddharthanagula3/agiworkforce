@@ -13,7 +13,7 @@ import { X, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { formatClock } from '@/src/lib/time';
 
@@ -83,8 +83,8 @@ export function RecordingOverlay({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       className="px-4 pt-3"
       style={{
         backgroundColor: colors.voiceOverlaySurface,
