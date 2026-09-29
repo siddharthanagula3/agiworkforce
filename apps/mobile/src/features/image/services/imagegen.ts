@@ -63,7 +63,7 @@ export async function generateImage(
   } catch (error) {
     if (error instanceof ApiHttpError && error.code === 'image_job_store_unavailable') {
       return api.post<ImageGenResponse>('/api/media/image/generate', request, {
-        headers: { 'Idempotency-Key': imageIdempotencyKey(Crypto.randomUUID()) },
+        headers: { 'Idempotency-Key': imageIdempotencyKey(`${operationId}-direct`) },
       });
     }
     throw error;
