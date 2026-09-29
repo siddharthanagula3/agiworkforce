@@ -10,6 +10,10 @@ fn additional_roots() -> &'static RwLock<Vec<PathBuf>> {
 pub fn register_additional_workspace_root(path_str: &str) -> std::result::Result<PathBuf, String> {
     let expanded = expand_home(path_str);
     let path = PathBuf::from(expanded);
+    let launch_dir = std::env::current_dir().ok();
+    if let Some(refusal) = network_root_refusal(&path, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
     let absolute = if path.is_absolute() {
         path
     } else {
@@ -23,6 +27,10 @@ pub fn register_additional_workspace_root(path_str: &str) -> std::result::Result
 pub fn register_additional_workspace_root_path(
     path: &Path,
 ) -> std::result::Result<PathBuf, String> {
+    let launch_dir = std::env::current_dir().ok();
+    if let Some(refusal) = network_root_refusal(path, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
     if !path.exists() {
         return Err(format!(
             "Additional directory does not exist: {}",
@@ -50,6 +58,72 @@ pub fn register_additional_workspace_root_path(
     #[cfg(test)]
     record_test_root_owner(&canonical);
     Ok(canonical)
+}
+
+fn network_root_refusal(path: &Path, launch_dir: Option<&Path>) -> Option<String> {
+    let host = reached_network_host(path, MAX_DENYLIST_LINK_HOPS)?;
+    let launched_there = launch_dir.is_some_and(|dir| {
+        network_host(dir)
+            .or_else(|| {
+                dir.canonicalize()
+                    .ok()
+                    .and_then(|canonical| network_host(&canonical))
+            })
+            .is_some_and(|launch_host| launch_host == host)
+    });
+    (!launched_there).then(|| {
+        format!(
+            "{} is a network path on {host}, which cannot be added as a working directory. \
+             Map the share to a drive letter on Windows, or mount it at a local path on macOS \
+             and Linux, and add that path instead.",
+            path.display()
+        )
+    })
+}
+
+fn network_host(path: &Path) -> Option<String> {
+    let text = path.to_string_lossy();
+    let unc = text
+        .strip_prefix(r"\\?\UNC\")
+        .or_else(|| text.strip_prefix(r"\\"))
+        .or_else(|| cfg!(windows).then(|| text.strip_prefix("//")).flatten());
+    let host = match unc {
+        Some(rest) => rest.split(['\\', '/']).next()?,
+        None => text.strip_prefix("/net/")?.split('/').next()?,
+    }
+    .to_ascii_lowercase();
+    let local = matches!(host.as_str(), "" | "?" | "." | "wsl$" | "wsl.localhost");
+    (!local).then_some(host)
+}
+
+fn reached_network_host(path: &Path, hops: usize) -> Option<String> {
+    if let Some(host) = network_host(path) {
+        return Some(host);
+    }
+    if hops == 0 {
+        return None;
+    }
+    let mut prefix = PathBuf::new();
+    for component in path.components() {
+        prefix.push(component);
+        let is_link =
+            std::fs::symlink_metadata(&prefix).is_ok_and(|meta| meta.file_type().is_symlink());
+        let Some(target) = is_link.then(|| std::fs::read_link(&prefix).ok()).flatten() else {
+            continue;
+        };
+        let target = if target.is_absolute() {
+            target
+        } else {
+            prefix
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .join(target)
+        };
+        if let Some(host) = reached_network_host(&target, hops - 1) {
+            return Some(host);
+        }
+    }
+    None
 }
 
 pub fn registered_additional_workspace_roots() -> Vec<PathBuf> {
@@ -539,6 +613,57 @@ mod tests {
 
         assert_eq!(result, file.canonicalize().expect("canonical extra file"));
         clear_additional_workspace_roots_for_tests();
+    }
+
+    #[test]
+    fn network_paths_are_named_by_their_host() {
+        for (path, host) in [
+            (r"\\server\share", Some("server")),
+            (r"\\FileServer\share\project", Some("fileserver")),
+            (r"\\?\UNC\server\share\project", Some("server")),
+            ("/net/nas/projects", Some("nas")),
+            (r"\\wsl$\Ubuntu\home\me", None),
+            (r"\\wsl.localhost\Ubuntu\home\me", None),
+            (r"\\?\C:\work", None),
+            (r"\\.\pipe\agent", None),
+            ("/home/me/net/projects", None),
+            ("/net", None),
+            ("/network/share", None),
+        ] {
+            assert_eq!(network_host(Path::new(path)).as_deref(), host, "{path}");
+        }
+    }
+
+    #[test]
+    fn a_unc_share_is_refused_before_anything_looks_it_up() {
+        let error = register_additional_workspace_root(r"\\server\share").unwrap_err();
+
+        assert!(error.contains("network path on server"), "{error}");
+    }
+
+    #[test]
+    fn an_automount_path_is_refused_unless_the_session_started_on_that_host() {
+        let local = tempfile::tempdir().expect("launch dir");
+        let share = Path::new("/net/nas/projects");
+
+        assert!(register_additional_workspace_root_path(share)
+            .unwrap_err()
+            .contains("network path on nas"));
+        assert!(network_root_refusal(share, Some(local.path())).is_some());
+        assert!(network_root_refusal(share, Some(Path::new("/net/other/home"))).is_some());
+        assert!(network_root_refusal(share, Some(Path::new("/net/NAS/home"))).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_local_link_to_a_network_location_is_refused() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let link = workspace.path().join("share");
+        std::os::unix::fs::symlink("/net/nas/projects", &link).expect("create link");
+
+        let error = register_additional_workspace_root_path(&link).unwrap_err();
+
+        assert!(error.contains("network path on nas"), "{error}");
     }
 
     /// `ROOTS_GUARD` only serializes this module. `claude_parity` and `agent`
