@@ -16,6 +16,12 @@ pub fn is_setup_complete() -> bool {
         .unwrap_or(false)
 }
 
+pub fn forget_setup() {
+    if let Ok(dir) = crate::config::CliConfig::config_dir() {
+        let _ = std::fs::remove_file(dir.join(".setup_complete"));
+    }
+}
+
 /// Write the .setup_complete marker after onboarding finishes.
 fn mark_setup_complete() -> Result<()> {
     let dir = crate::config::CliConfig::config_dir()?;

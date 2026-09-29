@@ -635,7 +635,7 @@
           "ordinal": 4,
           "heading": "More than one account",
           "headingPath": "Configure the CLI › More than one account",
-          "text": "Each `AGIWORKFORCE_HOME` folder keeps its own sign-in, saved API keys, MCP\nserver sign-ins and settings, so a second folder holds a second account. On\nmacOS and Windows each folder's credentials sit in their own entry in the\nsystem credential store. For example, add this alias to `~/.zshrc` or\n`~/.bashrc` so that `agi-work` uses your work account while `agi` keeps your\nown:\n\n```bash\nalias agi-work='AGIWORKFORCE_HOME=\"$HOME/.agiworkforce-work\" agi'\n```\n\nThe first `agi-work` run walks you through signing in and setup for the new\nfolder."
+          "text": "Each `AGIWORKFORCE_HOME` folder keeps its own sign-in, saved API keys, MCP\nserver sign-ins and settings, so a second folder holds a second account. On\nmacOS and Windows each folder's credentials sit in their own entry in the\nsystem credential store. For example, add this alias to `~/.zshrc` or\n`~/.bashrc` so that `agi-work` uses your work account while `agi` keeps your\nown:\n\n```bash\nalias agi-work='AGIWORKFORCE_HOME=\"$HOME/.agiworkforce-work\" agi'\n```\n\nThe first `agi-work` run walks you through signing in and setup for the new\nfolder. `agi logout` signs out of the folder it runs in and resets its setup,\nso the next run asks again."
         },
         {
           "id": "configuration#5",

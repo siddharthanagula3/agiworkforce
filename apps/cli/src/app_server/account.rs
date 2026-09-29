@@ -94,6 +94,12 @@ fn clear_account_cache() {
     }
 }
 
+fn forget_account_caches() {
+    tier_cache::invalidate_tier_cache();
+    clear_account_cache();
+    crate::claude_parity::connectors::forget_local_tool_policy();
+}
+
 /// The managed credential this machine holds, with its expiry in epoch
 /// milliseconds when the stored entry states one.
 pub fn managed_credential() -> Option<(String, Option<i64>)> {
@@ -445,9 +451,53 @@ pub fn logout() -> Result<()> {
     store
         .save()
         .context("Failed to update the credential store")?;
-    tier_cache::invalidate_tier_cache();
-    clear_account_cache();
+    forget_account_caches();
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CliSignOut {
+    pub providers: usize,
+    pub revoked: bool,
+}
+
+impl CliSignOut {
+    pub fn message(&self) -> String {
+        let mut message = match self.providers {
+            0 => "No active sessions to log out from.".to_string(),
+            1 => "Logged out from 1 provider.".to_string(),
+            count => format!("Logged out from {count} providers."),
+        };
+        if !self.revoked {
+            message.push_str(
+                " AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices.",
+            );
+        }
+        message
+    }
+}
+
+fn forget_every_provider(store: &mut AuthStore) -> usize {
+    let providers = store.entries.len();
+    store.entries.clear();
+    providers
+}
+
+/// `agi logout`, and /logout in the TUI and the REPL: the AGI Cloud sessions
+/// are revoked, then every stored credential, the caches that answered for the
+/// account and, as Claude Code's /logout does, the first-run setup are dropped.
+pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
+    let revoked = revoke_managed_sessions().await;
+    let mut store = AuthStore::load().context("Failed to read the credential store")?;
+    let providers = forget_every_provider(&mut store);
+    if providers > 0 {
+        store
+            .save()
+            .context("Failed to update the credential store")?;
+        crate::onboarding::forget_setup();
+    }
+    forget_account_caches();
+    Ok(CliSignOut { providers, revoked })
 }
 
 #[cfg(test)]
@@ -503,6 +553,28 @@ mod tests {
             vec!["anthropic"],
             "sign-out left a managed credential behind, or took a key the user set themselves"
         );
+    }
+
+    #[test]
+    fn signing_out_of_the_cli_drops_every_provider_and_says_so() {
+        let mut store = AuthStore::default();
+        for key in ["agiworkforce", "anthropic", "copilot"] {
+            store.entries.insert(
+                key.to_string(),
+                AuthEntry::ApiKey {
+                    key: "held".to_string(),
+                },
+            );
+        }
+        assert_eq!(forget_every_provider(&mut store), 3);
+        assert!(store.entries.is_empty());
+        assert_eq!(forget_every_provider(&mut store), 0);
+
+        let report = |providers, revoked| CliSignOut { providers, revoked }.message();
+        assert_eq!(report(0, true), "No active sessions to log out from.");
+        assert_eq!(report(1, true), "Logged out from 1 provider.");
+        assert_eq!(report(3, true), "Logged out from 3 providers.");
+        assert!(report(1, false).contains("did not confirm the sign-out"));
     }
 
     #[test]

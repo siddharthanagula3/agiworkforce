@@ -80,7 +80,8 @@ alias agi-work='AGIWORKFORCE_HOME="$HOME/.agiworkforce-work" agi'
 ```
 
 The first `agi-work` run walks you through signing in and setup for the new
-folder.
+folder. `agi logout` signs out of the folder it runs in and resets its setup,
+so the next run asks again.
 
 ## MCP servers and hooks
 
