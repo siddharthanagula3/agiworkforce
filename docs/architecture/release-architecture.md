@@ -20,7 +20,7 @@ workflows use. Where a surface has no path for something, the row says so.
 | Web application    | `.github/workflows/deploy-production.yml`        | Green CI on `main` | A Vercel deployment of one commit          |
 | Artifact sandbox   | The same workflow, as a separate surface         | Green CI on `main` | A second Vercel deployment                 |
 | Staging web        | `.github/workflows/deploy-staging.yml`           | Green CI on `main` | The same artifact, promoted first          |
-| CLI                | `.github/workflows/release-cli.yml`              | Tag `v-cli-*`      | Published package and binaries             |
+| CLI                | `.github/workflows/release-cli.yml`              | Tag `v-cli-*`      | Signed release archives                    |
 | Desktop            | `.github/workflows/release-desktop.yml`          | Tag `v-desktop-*`  | Signed Tauri bundles                       |
 | Mobile             | `.github/workflows/release-mobile.yml`           | Tag `v-mobile-*`   | Store builds through Expo                  |
 | VS Code extension  | `.github/workflows/release-vscode-extension.yml` | Tag `v-vscode-*`   | A vsix                                     |
@@ -140,7 +140,7 @@ the workflow that needs it:
 | --------------- | ------------------------------------------------------------------------------------------------------- |
 | Web and sandbox | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET`                 |
 | Migrations      | `AGI_DATABASE_URL`, `NEON_DATABASE_URL`                                                                 |
-| CLI             | `NPM_TOKEN`, `SENTRY_DSN_CLI`                                                                           |
+| CLI             | `AGI_CLI_RELEASE_SIGNING_KEY`, `SENTRY_DSN_CLI`                                                         |
 | Desktop         | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `APPLE_CERTIFICATE`, `APPLE_API_KEY` |
 | Mobile          | `EXPO_TOKEN`, `ASC_API_KEY_ID`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE`                                 |
 | Incident paging | `PAGER_WEBHOOK_URL`                                                                                     |
