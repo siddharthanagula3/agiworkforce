@@ -16,8 +16,10 @@ import { useModelStore } from '@/src/features/model-picker/store';
 export const ASK_INTENT_KEYCHAIN_SERVICE = 'com.agiworkforce.app.ask-intent';
 export const ASK_INTENT_KEYCHAIN_KEY = 'ask_intent_token';
 const ENABLED_KEY = 'ask-from-siri-enabled-v1';
-const PENDING_REVOKE_KEY = 'ask-from-siri-pending-revoke-v1';
+const TOKEN_ID_KEY = 'ask-from-siri-token-id-v1';
+const PENDING_REVOKE_KEY = 'ask-from-siri-pending-revoke-token-v1';
 const SIGN_OUT_REVOKE_ATTEMPTS = 3;
+const REVOKE_WHOLE_INSTALL = 'install';
 
 const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainService: ASK_INTENT_KEYCHAIN_SERVICE,
@@ -30,16 +32,20 @@ export function askFromSiriSupported(): boolean {
   return Platform.OS === 'ios';
 }
 
-function readFlag(key: string): boolean {
+export function isAskFromSiriEnabled(): boolean {
   try {
-    return storage.getBoolean(key) === true;
+    return storage.getBoolean(ENABLED_KEY) === true;
   } catch {
     return false;
   }
 }
 
-export function isAskFromSiriEnabled(): boolean {
-  return readFlag(ENABLED_KEY);
+function readString(key: string): string | undefined {
+  try {
+    return storage.getString(key) || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function defaultModelId(): string | undefined {
@@ -62,15 +68,20 @@ async function storeFreshToken(): Promise<void> {
     }),
   );
   await SecureStore.setItemAsync(ASK_INTENT_KEYCHAIN_KEY, response.token, KEYCHAIN_OPTIONS);
+  storage.set(TOKEN_ID_KEY, response.tokenId);
+  storage.delete(PENDING_REVOKE_KEY);
 }
 
 async function forgetLocalToken(): Promise<void> {
   storage.set(ENABLED_KEY, false);
+  storage.delete(TOKEN_ID_KEY);
   await SecureStore.deleteItemAsync(ASK_INTENT_KEYCHAIN_KEY, KEYCHAIN_OPTIONS);
 }
 
-async function revokePath(): Promise<string> {
-  return `${MOBILE_INTENT_TOKEN_PATH}?installId=${encodeURIComponent(await getDeviceId())}`;
+async function revokePath(tokenId: string | undefined): Promise<string> {
+  return tokenId && tokenId !== REVOKE_WHOLE_INSTALL
+    ? `${MOBILE_INTENT_TOKEN_PATH}?tokenId=${encodeURIComponent(tokenId)}`
+    : `${MOBILE_INTENT_TOKEN_PATH}?installId=${encodeURIComponent(await getDeviceId())}`;
 }
 
 export async function enableAskFromSiri(): Promise<void> {
@@ -80,11 +91,11 @@ export async function enableAskFromSiri(): Promise<void> {
 }
 
 export async function disableAskFromSiri(): Promise<void> {
+  const tokenId = readString(TOKEN_ID_KEY);
   try {
-    await api.delete<unknown>(await revokePath());
-    storage.set(PENDING_REVOKE_KEY, false);
+    await api.delete<unknown>(await revokePath(tokenId));
   } catch (error) {
-    storage.set(PENDING_REVOKE_KEY, true);
+    storage.set(PENDING_REVOKE_KEY, tokenId ?? REVOKE_WHOLE_INSTALL);
     throw error;
   } finally {
     await forgetLocalToken();
@@ -93,9 +104,10 @@ export async function disableAskFromSiri(): Promise<void> {
 
 export async function settleAskIntentOnLaunch(): Promise<void> {
   if (!askFromSiriSupported()) return;
-  if (readFlag(PENDING_REVOKE_KEY)) {
-    await api.delete<unknown>(await revokePath());
-    storage.set(PENDING_REVOKE_KEY, false);
+  const pendingTokenId = readString(PENDING_REVOKE_KEY);
+  if (pendingTokenId) {
+    await api.delete<unknown>(await revokePath(pendingTokenId));
+    storage.delete(PENDING_REVOKE_KEY);
   }
   if (rotatedThisLaunch || !isAskFromSiriEnabled()) return;
   rotatedThisLaunch = true;
@@ -126,13 +138,13 @@ async function revokeWithCapturedSession(token: string): Promise<boolean> {
 
 export async function revokeAskIntentForSignOut(capturedClerkToken: string): Promise<void> {
   rotatedThisLaunch = false;
-  const hadToken = isAskFromSiriEnabled() || readFlag(PENDING_REVOKE_KEY);
+  const hadToken = isAskFromSiriEnabled() || readString(PENDING_REVOKE_KEY) !== undefined;
   const token = capturedClerkToken.trim();
   try {
     if (hadToken && token && !(await revokeWithCapturedSession(token))) {
       throw new Error('The Ask from Siri token could not be revoked on sign-out');
     }
-    storage.set(PENDING_REVOKE_KEY, false);
+    storage.delete(PENDING_REVOKE_KEY);
   } finally {
     await forgetLocalToken();
   }

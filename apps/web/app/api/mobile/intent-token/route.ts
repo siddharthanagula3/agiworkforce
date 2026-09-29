@@ -10,6 +10,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   issueMobileIntentToken,
+  revokeMobileIntentTokenById,
   revokeMobileIntentTokens,
 } from '@/lib/server/mobile-intent-tokens';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -41,7 +42,7 @@ async function handleIssue(request: NextRequest) {
       .asUserSafe();
   }
 
-  const token = await issueMobileIntentToken(db, {
+  const { token, tokenId } = await issueMobileIntentToken(db, {
     userId,
     organizationId: organizationId ?? null,
     installId,
@@ -54,7 +55,7 @@ async function handleIssue(request: NextRequest) {
     request,
     detail: { resourceType: 'device', resourceId: registered[0].id, source: 'ask_intent' },
   });
-  return NextResponse.json({ token }, { status: 201, headers: NO_STORE });
+  return NextResponse.json({ token, tokenId }, { status: 201, headers: NO_STORE });
 }
 
 async function handleRevoke(request: NextRequest) {
@@ -64,10 +65,19 @@ async function handleRevoke(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse;
 
-  const installId = new URL(request.url).searchParams.get('installId');
-  const parsed = MobileIntentTokenRevokeRequestSchema.safeParse(installId ? { installId } : {});
+  const params = new URL(request.url).searchParams;
+  const parsed = MobileIntentTokenRevokeRequestSchema.safeParse(
+    Object.fromEntries(
+      ['installId', 'tokenId'].flatMap((key) => {
+        const value = params.get(key);
+        return value ? [[key, value]] : [];
+      }),
+    ),
+  );
   if (!parsed.success) throw createError.badRequest('Invalid Ask from Siri request');
-  await revokeMobileIntentTokens(db, userId, parsed.data.installId ?? null);
+  const { installId, tokenId } = parsed.data;
+  if (tokenId) await revokeMobileIntentTokenById(db, userId, tokenId);
+  else await revokeMobileIntentTokens(db, userId, installId ?? null);
   await recordAuditEvent({
     userId,
     organizationId,

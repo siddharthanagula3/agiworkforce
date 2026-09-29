@@ -15,11 +15,15 @@ export const MobileIntentTokenIssueRequestSchema = z
 
 export const MobileIntentTokenIssueResponseSchema = z.object({
   token: z.string().regex(/^agi_it_[A-Za-z0-9_-]{43}$/),
+  tokenId: z.string().uuid(),
 });
 
 export const MobileIntentTokenRevokeRequestSchema = z
-  .object({ installId: InstallIdSchema.optional() })
-  .strict();
+  .object({ installId: InstallIdSchema.optional(), tokenId: z.string().uuid().optional() })
+  .strict()
+  .refine((request) => !(request.installId && request.tokenId), {
+    message: 'Revoke by install or by token, not both',
+  });
 
 export const MobileIntentAskRequestSchema = z
   .object({ prompt: z.string().trim().min(1).max(MOBILE_INTENT_PROMPT_MAX_CHARS) })

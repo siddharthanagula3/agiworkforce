@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { IdentityProvider, IdentitySession } from '@agiworkforce/identity';
 
+import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
 import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
@@ -135,7 +137,38 @@ export async function revokeInBatches(
   return { ended, alreadyGone, failed };
 }
 
+async function revokeIntentTokensAfterSweep(userId: string): Promise<boolean> {
+  try {
+    await revokeEveryMobileIntentToken(userId);
+    return true;
+  } catch (error) {
+    logger.error({ error, userId }, 'Ask from Siri tokens were not revoked with the sessions');
+    await recordAuditEvent({
+      userId,
+      eventType: 'session_revoked',
+      outcome: 'failure',
+      detail: { resourceType: 'device', source: 'ask_intent', status: 'incomplete' },
+    });
+    return false;
+  }
+}
+
 export async function revokeEveryOtherSession(
+  identity: IdentitySessionOperations,
+  userId: string,
+  currentSessionId: string | null,
+): Promise<RevokeSweep> {
+  let sweep: RevokeSweep;
+  try {
+    sweep = await sweepOtherSessions(identity, userId, currentSessionId);
+  } catch (error) {
+    await revokeIntentTokensAfterSweep(userId);
+    throw error;
+  }
+  return (await revokeIntentTokensAfterSweep(userId)) ? sweep : { ...sweep, incomplete: true };
+}
+
+async function sweepOtherSessions(
   identity: IdentitySessionOperations,
   userId: string,
   currentSessionId: string | null,
@@ -146,7 +179,6 @@ export async function revokeEveryOtherSession(
   const attempted = new Set<string>();
   let currentSession: IdentitySession | undefined;
   let targetCount = 0;
-  await revokeEveryMobileIntentToken(userId);
 
   // A revoked session leaves the active list, so the first page always holds
   // the next batch of work and the whole account never has to be in memory.
