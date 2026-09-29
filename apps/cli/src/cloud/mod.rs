@@ -424,7 +424,9 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
     cache.apply(&response.memories);
-    cache.account_memory_off = response.memory_enabled == Some(false);
+    if let Some(enabled) = response.memory_enabled {
+        cache.account_memory_off = !enabled;
+    }
     memory::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the account memory: {error}"));
