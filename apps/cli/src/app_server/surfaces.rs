@@ -1108,7 +1108,7 @@ pub fn remove_saved_permission(
         .into_iter()
         .find(|(target, _)| saved_permission_id(MCP_RULE_SCOPE, target) == id);
     if let Some((target, _)) = mcp_rule {
-        crate::platform::policy::set_user_mcp_rule(&target, None).map_err(internal)?;
+        crate::platform::policy::remove_user_mcp_rule(&target).map_err(internal)?;
         return list_saved_permissions();
     }
     let removed = if let Some((deny, rule)) = stored {
@@ -1235,11 +1235,8 @@ pub fn add_permission(
                 PermissionRuleDecision::Ask => crate::platform::policy::PolicyDecision::Ask,
                 PermissionRuleDecision::Deny => crate::platform::policy::PolicyDecision::Deny,
             };
-            crate::platform::policy::set_user_mcp_rule(
-                &crate::platform::policy::mcp_rule_target(server, tool),
-                Some(decision),
-            )
-            .map_err(internal)?;
+            crate::platform::policy::set_user_mcp_rule(server, tool, Some(decision))
+                .map_err(internal)?;
         }
         PermissionRuleKind::Command | PermissionRuleKind::Domain => {
             let rule = if params.kind == PermissionRuleKind::Domain {

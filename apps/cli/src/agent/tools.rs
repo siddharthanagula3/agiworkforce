@@ -74,13 +74,11 @@ pub(super) async fn execute_mcp_tool(
                     });
                 }
             };
-            let rule_target =
-                crate::platform::policy::mcp_rule_target(&server_name, Some(&tool_name));
             let decision = match workspace_root {
                 Some(root) => {
                     let policy = crate::platform::policy::PolicyEngine::load_layered(root)?;
                     crate::features::exec::tools::effective_workspace_policy_decision(
-                        policy.resolve(&rule_target, ""),
+                        policy.resolve_mcp(&server_name, &tool_name),
                         crate::features::exec::tools::workspace_policy_is_trusted(root),
                     )
                 }
