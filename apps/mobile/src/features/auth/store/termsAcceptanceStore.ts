@@ -45,9 +45,11 @@ export const useTermsAcceptanceStore = create<TermsAcceptanceState>()((set, get)
           error:
             error instanceof CloudCredentialUnavailableError
               ? 'AGI Cloud could not verify this device session. Retry, or continue in Local Mode.'
-              : error instanceof ApiHttpError && error.status === 405
-                ? 'AGI Cloud needs a service update before sign-in can finish. Continue in Local Mode and try again after the update.'
-                : 'Could not check your Terms status. Retry to use AGI Cloud.',
+              : error instanceof ApiHttpError && error.code === 'PASSKEY_REQUIRED'
+                ? 'Advanced Account Security is on for this account. Verify with one of your passkeys, then this check runs again.'
+                : error instanceof ApiHttpError && error.status === 405
+                  ? 'AGI Cloud needs a service update before sign-in can finish. Continue in Local Mode and try again after the update.'
+                  : 'Could not check your Terms status. Retry to use AGI Cloud.',
         });
       }
     }

@@ -7,6 +7,7 @@ import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function CloudCodeApprovalCard({
   approval,
@@ -31,16 +32,16 @@ export function CloudCodeApprovalCard({
         borderColor: colors.warningBorder,
       }}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}>
         {CLOUD_CODE_SESSION_COPY.approvalHeading}
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         {approval.reason}
       </Text>
       <Text
         variant="mono"
         selectable
-        style={{ color: colors.textPrimary, fontSize: 12, lineHeight: 18 }}
+        style={{ color: colors.textPrimary, fontSize: typeScale.caption, lineHeight: 18 }}
       >
         {approval.command}
       </Text>

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 type PendingInput = NonNullable<CloudAgentRun['pendingInput']>;
 
@@ -73,7 +74,9 @@ function FieldInput({
   if (field.kind === 'boolean') {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>{label}</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, flex: 1 }}>
+          {label}
+        </Text>
         <Switch
           value={value === true}
           onValueChange={onChange}
@@ -100,7 +103,7 @@ function FieldInput({
     };
     return (
       <View style={{ gap: 6 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>{label}</Text>
         {field.options.map((option) => {
           const checked = selected.includes(option.value);
           return (
@@ -120,11 +123,15 @@ function FieldInput({
                 backgroundColor: colors.surfaceElevated,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{option.label}</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
+                {option.label}
+              </Text>
             </PressableBox>
           );
         })}
-        {error ? <Text style={{ color: colors.agentError, fontSize: 12 }}>{error}</Text> : null}
+        {error ? (
+          <Text style={{ color: colors.agentError, fontSize: typeScale.caption }}>{error}</Text>
+        ) : null}
       </View>
     );
   }
@@ -161,7 +168,9 @@ function FieldInput({
           : {})}
       />
       {field.description ? (
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{field.description}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+          {field.description}
+        </Text>
       ) : null}
     </View>
   );
@@ -251,7 +260,10 @@ export function CloudRunInputForm({
     <View style={{ gap: 14 }}>
       {calls.map((call) => (
         <View key={call.toolCallId} style={{ gap: 10 }}>
-          <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: 13 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}
+          >
             {call.name}
           </Text>
           {call.prompts.map((prompt) => {
@@ -259,7 +271,11 @@ export function CloudRunInputForm({
               return (
                 <Text
                   key={prompt.key}
-                  style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.caption,
+                    lineHeight: 18,
+                  }}
                 >
                   {UNSUPPORTED_NOTE}
                 </Text>
@@ -268,10 +284,16 @@ export function CloudRunInputForm({
             if (prompt.mode === 'url') {
               return (
                 <View key={prompt.key} style={{ gap: 8 }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: typeScale.footnote,
+                      lineHeight: 19,
+                    }}
+                  >
                     {prompt.message}
                   </Text>
-                  <Text selectable style={{ color: colors.textMuted, fontSize: 12 }}>
+                  <Text selectable style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                     {prompt.link ? (
                       <>
                         {prompt.link.prefix}
@@ -285,12 +307,18 @@ export function CloudRunInputForm({
                     )}
                   </Text>
                   {prompt.link?.punycode ? (
-                    <Text style={{ color: colors.agentWarning, fontSize: 12, lineHeight: 17 }}>
+                    <Text
+                      style={{
+                        color: colors.agentWarning,
+                        fontSize: typeScale.caption,
+                        lineHeight: 17,
+                      }}
+                    >
                       {PUNYCODE_WARNING}
                     </Text>
                   ) : null}
                   {prompt.link && !prompt.link.openable ? (
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                       {UNOPENABLE_LINK_NOTE}
                     </Text>
                   ) : null}
@@ -310,7 +338,13 @@ export function CloudRunInputForm({
             }
             return (
               <View key={prompt.key} style={{ gap: 10 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                  }}
+                >
                   {prompt.message}
                 </Text>
                 {prompt.fields.map((field) => (

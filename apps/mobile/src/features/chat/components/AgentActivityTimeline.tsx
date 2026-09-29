@@ -24,6 +24,7 @@ import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/typ
 import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { lucideRNToolIcon } from './toolIconRN';
@@ -221,10 +222,13 @@ function ToolRow({
           >
             <ToolIcon size={16} color={statusColor} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }} numberOfLines={2}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}
+                numberOfLines={2}
+              >
                 {entry.summary}
               </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 10.5 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                 {statusLabel}
                 {entry.elapsedMs !== undefined ? ` · ${formatDuration(entry.elapsedMs)}` : ''}
               </Text>
@@ -244,7 +248,9 @@ function ToolRow({
         <View style={{ marginLeft: 25, marginTop: 7, gap: 7 }}>
           {approvalExpired ? (
             <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.agentWarning, fontSize: 12 }}>Approval expired</Text>
+              <Text style={{ color: colors.agentWarning, fontSize: typeScale.caption }}>
+                Approval expired
+              </Text>
               {onResendApproval ? (
                 <Pressable
                   onPress={onResendApproval}
@@ -261,7 +267,13 @@ function ToolRow({
                       borderColor: colors.warningBorder,
                     }}
                   >
-                    <Text style={{ color: colors.agentWarning, fontSize: 12, fontWeight: '600' }}>
+                    <Text
+                      style={{
+                        color: colors.agentWarning,
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                      }}
+                    >
                       Resend
                     </Text>
                   </View>
@@ -295,30 +307,44 @@ function ToolRow({
       {expanded ? (
         <View style={{ marginLeft: 25, marginTop: 6, gap: 8 }}>
           {entry.query ? (
-            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>{entry.query}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+              {entry.query}
+            </Text>
           ) : null}
           {input ? (
             <View style={{ backgroundColor: colors.surfaceBase, borderRadius: 8, padding: 9 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 10, marginBottom: 4 }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, marginBottom: 4 }}
+              >
                 Request
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>{input}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                {input}
+              </Text>
             </View>
           ) : null}
           {output ? (
             <View style={{ backgroundColor: colors.surfaceBase, borderRadius: 8, padding: 9 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 10, marginBottom: 4 }}>Result</Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>{output}</Text>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, marginBottom: 4 }}
+              >
+                Result
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                {output}
+              </Text>
             </View>
           ) : null}
           {entry.error ? (
-            <Text style={{ color: colors.agentError, fontSize: 11 }}>{entry.error}</Text>
+            <Text style={{ color: colors.agentError, fontSize: typeScale.caption }}>
+              {entry.error}
+            </Text>
           ) : null}
           {entry.sources?.slice(0, 5).map((source, index) => (
             <WebSearchResultCard key={`${source.url}:${index}`} result={source} />
           ))}
           {(entry.sources?.length ?? 0) > 5 ? (
-            <Text selectable style={{ color: colors.textMuted, fontSize: 11 }}>
+            <Text selectable style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               +{entry.sources!.length - 5} more sources
             </Text>
           ) : null}
@@ -349,9 +375,11 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
     >
       <Icon size={16} color={statusColor} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{entry.summary}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+          {entry.summary}
+        </Text>
         {entry.detail ? (
-          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, marginTop: 2 }}>
             {entry.detail}
           </Text>
         ) : null}
@@ -371,7 +399,7 @@ function StaticRow({
       <View style={{ paddingVertical: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 4 }}>
           <Globe size={16} color={colors.textMuted} />
-          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
             {translatePlural('chat', 'counts.foundSources', entry.sources.length, {
               one: 'Found {{count}} source',
               other: 'Found {{count}} sources',
@@ -380,7 +408,9 @@ function StaticRow({
         </View>
         <View style={{ marginLeft: 25 }}>
           {entry.query ? (
-            <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 4 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.caption, marginBottom: 4 }}
+            >
               {entry.query}
             </Text>
           ) : null}
@@ -388,7 +418,10 @@ function StaticRow({
             <WebSearchResultCard key={`${source.url}:${index}`} result={source} />
           ))}
           {entry.sources.length > 5 ? (
-            <Text selectable style={{ color: colors.textMuted, fontSize: 11, paddingTop: 4 }}>
+            <Text
+              selectable
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, paddingTop: 4 }}
+            >
               +{entry.sources.length - 5} more sources
             </Text>
           ) : null}
@@ -402,8 +435,12 @@ function StaticRow({
       <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}>
         <FileText size={16} color={colors.agentSuccess} />
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>Created a file</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 11 }}>{entry.name}</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+            Created a file
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+            {entry.name}
+          </Text>
         </View>
       </View>
     );
@@ -414,9 +451,11 @@ function StaticRow({
       <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}>
         <Database size={16} color={colors.textMuted} />
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{entry.summary}</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+            {entry.summary}
+          </Text>
           {entry.beforeTokens !== undefined && entry.afterTokens !== undefined ? (
-            <Text style={{ color: colors.textMuted, fontSize: 10.5 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               {entry.beforeTokens.toLocaleString()} → {entry.afterTokens.toLocaleString()} tokens
             </Text>
           ) : null}
@@ -429,9 +468,13 @@ function StaticRow({
     <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}>
       <AlertCircle size={16} color={colors.agentError} />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.agentError, fontSize: 13 }}>{entry.message}</Text>
+        <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+          {entry.message}
+        </Text>
         {entry.retryable ? (
-          <Text style={{ color: colors.textMuted, fontSize: 10.5 }}>Retry available</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            Retry available
+          </Text>
         ) : null}
       </View>
     </View>
@@ -528,7 +571,12 @@ export function AgentActivityTimeline({
             <RunStatusIcon status={activity.status} />
             <Text
               numberOfLines={1}
-              style={{ flex: 1, minWidth: 0, color: colors.textSecondary, fontSize: 13 }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                color: colors.textSecondary,
+                fontSize: typeScale.footnote,
+              }}
             >
               {summary}
             </Text>
@@ -557,7 +605,7 @@ export function AgentActivityTimeline({
               accessibilityLabel={`Show ${Math.min(ACTIVITY_PAGE_SIZE, hiddenCount)} earlier steps`}
             >
               <View style={{ paddingVertical: 7, paddingLeft: 25 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 11.5 }}>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                   Show {Math.min(ACTIVITY_PAGE_SIZE, hiddenCount)} earlier steps
                 </Text>
               </View>
@@ -593,7 +641,7 @@ export function AgentActivityTimeline({
           {activity.status === 'completed' ? (
             <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 7 }}>
               <CheckCircle2 size={16} color={colors.agentSuccess} />
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>Done</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>Done</Text>
             </View>
           ) : null}
         </View>

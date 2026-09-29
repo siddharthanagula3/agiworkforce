@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -30,7 +31,14 @@ function FeatureRow({ icon, children }: { icon: React.ReactNode; children: React
   return (
     <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
       <View style={{ width: 28, alignItems: 'center', paddingTop: 2 }}>{icon}</View>
-      <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 16, lineHeight: 23 }}>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textSecondary,
+          fontSize: typeScale.callout,
+          lineHeight: 23,
+        }}
+      >
         {children}
       </Text>
     </View>
@@ -45,7 +53,7 @@ const PILL = {
 };
 const PILL_LABEL = {
   color: colors.black,
-  fontSize: 17,
+  fontSize: typeScale.headline,
   fontWeight: '600' as const,
   textAlign: 'center' as const,
 };
@@ -154,7 +162,7 @@ export function VoiceOnboardingSheet({
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 34,
+              fontSize: typeScale.largeTitle,
               fontWeight: '700',
               textAlign: 'center',
               marginBottom: 28,

@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import {
@@ -502,7 +503,7 @@ export function ArtifactFullScreen({
             <Text
               style={{
                 flex: 1,
-                fontSize: 15,
+                fontSize: typeScale.body,
                 fontWeight: '600',
                 color: colors.textPrimary,
               }}
@@ -686,7 +687,7 @@ export function ArtifactFullScreen({
               >
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     color: colors.textSecondary,
                     minWidth: 42,
                     textAlign: 'center',
@@ -727,7 +728,13 @@ export function ArtifactFullScreen({
                   accessibilityState={{ selected: showChanges }}
                   testID="artifact-show-changes"
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '500',
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Show changes
                   </Text>
                 </Pressable>
@@ -740,7 +747,13 @@ export function ArtifactFullScreen({
                   accessibilityRole="button"
                   testID="artifact-restore-version"
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '500',
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Restore
                   </Text>
                 </Pressable>
@@ -753,7 +766,7 @@ export function ArtifactFullScreen({
 
           {artifact && appMode === 'cloud' && publicationKnown && !publishedUrl ? (
             <Text
-              style={{ marginTop: 10, fontSize: 12, color: colors.textSecondary }}
+              style={{ marginTop: 10, fontSize: typeScale.caption, color: colors.textSecondary }}
               testID="artifact-private-state"
             >
               Private. Only you can open it until you publish it.
@@ -774,7 +787,7 @@ export function ArtifactFullScreen({
               }}
             >
               <Text
-                style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}
+                style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
                 numberOfLines={1}
                 selectable
                 testID="artifact-published-url"
@@ -851,7 +864,7 @@ export function ArtifactFullScreen({
             <Eye size={32} color={colors.textMuted} />
             <Text
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 fontWeight: '600',
                 color: colors.textPrimary,
                 textAlign: 'center',
@@ -861,7 +874,7 @@ export function ArtifactFullScreen({
             </Text>
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 color: colors.textMuted,
                 textAlign: 'center',
                 lineHeight: 20,
@@ -882,7 +895,13 @@ export function ArtifactFullScreen({
               accessibilityLabel="Switch to source view"
               accessibilityRole="button"
             >
-              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '500',
+                  color: colors.textSecondary,
+                }}
+              >
                 View Source
               </Text>
             </Pressable>
@@ -916,19 +935,19 @@ export function ArtifactFullScreen({
                 }}
               >
                 {artifact.metadata.from != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>{'From: '}</Text>
                     {String(artifact.metadata.from)}
                   </Text>
                 )}
                 {artifact.metadata.to != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>{'To: '}</Text>
                     {String(artifact.metadata.to)}
                   </Text>
                 )}
                 {artifact.metadata.subject != null && (
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                     <Text style={{ fontWeight: '600', color: colors.textPrimary }}>
                       {'Subject: '}
                     </Text>
@@ -963,7 +982,7 @@ export function ArtifactFullScreen({
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 20,
                     color: colors.textPrimary,
                     fontFamily: Platform.select({
@@ -1003,7 +1022,7 @@ export function ArtifactFullScreen({
               <View style={{ marginTop: 16 }}>
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     fontWeight: '600',
                     color: colors.textMuted,
                     marginBottom: 8,
@@ -1013,7 +1032,13 @@ export function ArtifactFullScreen({
                 >
                   Citations
                 </Text>
-                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: colors.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
                   {String(artifact.metadata.citations)}
                 </Text>
               </View>
@@ -1054,10 +1079,17 @@ export function ArtifactFullScreen({
                 accessibilityLabel="Cancel editing"
                 style={{ padding: 8 }}
               >
-                <Text style={{ fontSize: 15, color: colors.textSecondary }}>Cancel</Text>
+                <Text style={{ fontSize: typeScale.body, color: colors.textSecondary }}>
+                  Cancel
+                </Text>
               </Pressable>
               <Text
-                style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+                style={{
+                  flex: 1,
+                  fontSize: typeScale.body,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
                 numberOfLines={1}
               >
                 {artifact.title}
@@ -1068,7 +1100,9 @@ export function ArtifactFullScreen({
                 accessibilityLabel="Save as a new version"
                 style={{ padding: 8 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.teal }}>Save</Text>
+                <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.teal }}>
+                  Save
+                </Text>
               </Pressable>
             </View>
             <TextInput
@@ -1083,7 +1117,7 @@ export function ArtifactFullScreen({
                 flex: 1,
                 margin: 12,
                 padding: 12,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 20,
                 color: colors.textPrimary,
                 borderWidth: 1,

@@ -86,6 +86,7 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
@@ -178,7 +179,7 @@ function MessageActionSheet({
               >
                 <Text
                   style={{
-                    fontSize: 16,
+                    fontSize: typeScale.callout,
                     color: action.destructive ? colors.agentError : colors.textPrimary,
                   }}
                 >
@@ -199,7 +200,13 @@ function MessageActionSheet({
                 borderTopColor: colors.border,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                }}
+              >
                 Cancel
               </Text>
             </Pressable>
@@ -248,7 +255,7 @@ function TurnNotice({
       <Text
         style={{
           flex: 1,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           lineHeight: 18,
           color: colors.textSecondary,
           paddingVertical: 8,
@@ -264,7 +271,9 @@ function TurnNotice({
           accessibilityLabel={actionAccessibilityLabel}
           style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
+          >
             {actionLabel}
           </Text>
         </Pressable>
@@ -276,7 +285,9 @@ function TurnNotice({
           accessibilityLabel={secondaryAccessibilityLabel ?? secondaryLabel}
           style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
+          >
             {secondaryLabel}
           </Text>
         </Pressable>
@@ -330,7 +341,7 @@ function VariantPager({
       >
         <ChevronLeft size={16} color={previousId ? colors.textSecondary : colors.textMuted} />
       </Pressable>
-      <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
         {variant.index + 1} / {variant.total}
       </Text>
       <Pressable
@@ -390,7 +401,10 @@ function SentContextChip({
       }}
     >
       <Icon size={12} color={colors.textMuted} />
-      <Text numberOfLines={2} style={{ flexShrink: 1, fontSize: 12, color: colors.textSecondary }}>
+      <Text
+        numberOfLines={2}
+        style={{ flexShrink: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
+      >
         {label}
       </Text>
     </View>
@@ -1081,7 +1095,7 @@ export const MessageBubble = memo(function MessageBubble({
   const messageContent = (
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
-      entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
+      entering={reducedMotion ? undefined : FadeInDown.duration(motion.quick).springify()}
       className="px-4 py-4"
     >
       <Pressable
@@ -1111,7 +1125,9 @@ export const MessageBubble = memo(function MessageBubble({
               accessibilityLabel="Message queued offline"
             >
               <Clock size={10} color={themeColors.agentWarning} />
-              <Text style={{ fontSize: 10, color: themeColors.agentWarning }}>queued</Text>
+              <Text style={{ fontSize: typeScale.caption, color: themeColors.agentWarning }}>
+                queued
+              </Text>
             </View>
           )}
 
@@ -1196,7 +1212,7 @@ export const MessageBubble = memo(function MessageBubble({
             {attachmentTruncationNotice ? (
               <Text
                 accessibilityRole="text"
-                style={{ marginTop: 4, fontSize: 12, color: themeColors.textMuted }}
+                style={{ marginTop: 4, fontSize: typeScale.caption, color: themeColors.textMuted }}
               >
                 {attachmentTruncationNotice}
               </Text>
@@ -1379,7 +1395,13 @@ export const MessageBubble = memo(function MessageBubble({
                   borderColor: themeColors.border,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '600', color: themeColors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                    color: themeColors.textSecondary,
+                  }}
+                >
                   Retry
                 </Text>
               </Pressable>
@@ -1421,14 +1443,20 @@ export const MessageBubble = memo(function MessageBubble({
                 }}
               >
                 <AlertCircle size={13} color={themeColors.agentError} />
-                <Text style={{ flex: 1, fontSize: 12, color: themeColors.textSecondary }}>
+                <Text
+                  style={{ flex: 1, fontSize: typeScale.caption, color: themeColors.textSecondary }}
+                >
                   Image shown for this session only. It was not saved to your library.
                 </Text>
                 {onRetryMessage ? (
                   <>
                     <RefreshCw size={12} color={themeColors.agentError} />
                     <Text
-                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.agentError,
+                      }}
                     >
                       Retry
                     </Text>
@@ -1538,14 +1566,18 @@ export const MessageBubble = memo(function MessageBubble({
                 }}
               >
                 <AlertCircle size={13} color={themeColors.agentError} />
-                <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
+                <Text style={{ fontSize: typeScale.caption, color: themeColors.textSecondary }}>
                   {streamFailureNoticeText(message)}
                 </Text>
                 {onRetryMessage && (
                   <>
                     <RefreshCw size={12} color={themeColors.agentError} />
                     <Text
-                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.agentError,
+                      }}
                     >
                       Retry
                     </Text>
@@ -1560,7 +1592,11 @@ export const MessageBubble = memo(function MessageBubble({
                     testID="stream-error-switch-model"
                   >
                     <Text
-                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.agentError,
+                      }}
                     >
                       Switch model
                     </Text>
@@ -1612,7 +1648,7 @@ export const MessageBubble = memo(function MessageBubble({
                 style={{
                   marginTop: 2,
                   paddingHorizontal: 2,
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   color: themeColors.textMuted,
                 }}
               >
@@ -1625,7 +1661,7 @@ export const MessageBubble = memo(function MessageBubble({
                 style={{
                   marginTop: 2,
                   paddingHorizontal: 2,
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   color: themeColors.textMuted,
                 }}
               >

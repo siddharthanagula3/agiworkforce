@@ -377,7 +377,7 @@ export default function StorageManagerScreen() {
         {/* Privacy actions */}
         <Card>
           <Text
-            className="text-[11px] uppercase font-semibold mb-3"
+            className="text-xs uppercase font-semibold mb-3"
             style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Privacy

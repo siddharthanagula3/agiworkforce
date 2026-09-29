@@ -2,6 +2,7 @@ import { View, Pressable } from 'react-native';
 import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import type { ChatMessage } from '@/types/chat';
@@ -43,7 +44,7 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontSize: 11,
+            fontSize: typeScale.caption,
             fontWeight: '600',
             color: colors.teal,
             marginBottom: 2,
@@ -53,7 +54,7 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
         </Text>
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             color: colors.textMuted,
           }}
           numberOfLines={2}

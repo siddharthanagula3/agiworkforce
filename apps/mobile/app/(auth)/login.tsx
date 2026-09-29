@@ -18,6 +18,7 @@ import {
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@agiworkforce/compliance';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   clearPostAuthIntent,
   parsePostAuthIntent,
@@ -120,10 +121,14 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ padding: 24, gap: 18, flexGrow: 1 }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}
+            >
               Review the Terms for AGI Cloud
             </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 21 }}
+            >
               {termsStatus === 'required'
                 ? `Version dated ${termsVersion}. Your agreement will be recorded with your account.`
                 : termsError}
@@ -140,7 +145,7 @@ export default function LoginScreen() {
                   }}
                   style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: typeScale.headline }}>
                     {termsConfirmed ? '☑' : '☐'}
                   </Text>
                   <Text style={{ color: colors.textPrimary, flex: 1, lineHeight: 21 }}>
@@ -242,7 +247,11 @@ export default function LoginScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <AgiMark size={20} mono />
-          <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>AGI</Text>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '700' }}
+          >
+            AGI
+          </Text>
         </View>
         <Pressable
           testID="cloud-sign-in-dismiss"
@@ -289,13 +298,15 @@ export default function LoginScreen() {
           testID="cloud-sign-up-data-use"
           style={{ paddingHorizontal: 24, paddingTop: 6, alignItems: 'center', gap: 4 }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+          >
             {FREE_PLAN_TRAINING_NOTICE_TITLE}
           </Text>
           <Text
             style={{
               color: colors.textSecondary,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 18,
               textAlign: 'center',
             }}
@@ -309,7 +320,7 @@ export default function LoginScreen() {
             onPress={() => void openExternalUrl(new URL('/data-use', API_URL).toString())}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <Text style={{ color: colors.teal, fontSize: 12, fontWeight: '600' }}>
+            <Text style={{ color: colors.teal, fontSize: typeScale.caption, fontWeight: '600' }}>
               How Free model data is used
             </Text>
           </Pressable>
@@ -317,7 +328,7 @@ export default function LoginScreen() {
       ) : null}
       {(authMode === 'signIn' && nativeSignInFallback) || nativeSignUpFallback ? (
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
             {authMode === 'signIn' ? 'New to AGI?' : 'Already have an account?'}
           </Text>
           <Pressable
@@ -330,7 +341,7 @@ export default function LoginScreen() {
             }}
             style={{ minHeight: 44, paddingHorizontal: 8, justifyContent: 'center' }}
           >
-            <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+            <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
               {authMode === 'signIn' ? 'Create an account' : 'Sign in'}
             </Text>
           </Pressable>
@@ -361,7 +372,9 @@ export default function LoginScreen() {
               accessibilityRole="link"
               onPress={() => void openExternalUrl(new URL(path, API_URL).toString())}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{label}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                {label}
+              </Text>
             </Pressable>
           ))}
         </View>

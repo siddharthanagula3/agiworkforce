@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
 import {
   CloudAccountRequired,
@@ -152,20 +153,23 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
-                style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
               >
                 {row.name}
               </Text>
               {row.publisher ? (
                 <Text
                   numberOfLines={1}
-                  style={{ color: colors.textSecondary, fontSize: 12, marginTop: 1 }}
+                  style={{ color: colors.textSecondary, fontSize: typeScale.caption, marginTop: 1 }}
                 >
                   {row.publisher}
                 </Text>
               ) : null}
               {detail ? (
-                <Text numberOfLines={1} style={{ color: statusColor, fontSize: 12, marginTop: 2 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: statusColor, fontSize: typeScale.caption, marginTop: 2 }}
+                >
                   {detail}
                 </Text>
               ) : null}
@@ -231,11 +235,23 @@ function WaitlistPlaceholder() {
     >
       <Link size={32} color={colors.textMuted} />
       <Text
-        style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', textAlign: 'center' }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.body,
+          fontWeight: '600',
+          textAlign: 'center',
+        }}
       >
         Connectors, AGI Cloud
       </Text>
-      <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: typeScale.footnote,
+          lineHeight: 18,
+          textAlign: 'center',
+        }}
+      >
         Connect Gmail, GitHub, Notion, Slack, and 80+ services to AGI Cloud. Available with cloud
         access.
       </Text>
@@ -536,7 +552,7 @@ export default function CloudConnectorsScreen({
               isLast
             />
             <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 Choose when AGI asks before a connected tool acts.
               </Text>
             </View>
@@ -555,7 +571,7 @@ export default function CloudConnectorsScreen({
             style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
           >
             <ActivityIndicator size="large" color={colors.teal} />
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
               Checking connector access…
             </Text>
           </View>
@@ -575,7 +591,7 @@ export default function CloudConnectorsScreen({
                 marginBottom: 18,
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 Connectors are not available for this account.
               </Text>
             </View>
@@ -607,7 +623,9 @@ export default function CloudConnectorsScreen({
                 marginBottom: 18,
               }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {error}
+              </Text>
               <Pressable
                 onPress={() => void load()}
                 disabled={loading}
@@ -622,7 +640,13 @@ export default function CloudConnectorsScreen({
                 }}
               >
                 <RefreshCw size={14} color={colors.agentError} />
-                <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.agentError,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   {loading ? 'Retrying…' : 'Retry'}
                 </Text>
               </Pressable>
@@ -649,7 +673,9 @@ export default function CloudConnectorsScreen({
               }}
             >
               <Link size={16} color={colors.teal} />
-              <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
+              <Text
+                style={{ color: colors.textPrimary, fontWeight: '600', fontSize: typeScale.body }}
+              >
                 Add custom MCP
               </Text>
             </Pressable>
@@ -670,10 +696,18 @@ export default function CloudConnectorsScreen({
                   gap: 4,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontWeight: '600', fontSize: typeScale.body }}
+                >
                   {BANK_LINK_LABEL}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 18,
+                  }}
+                >
                   {BANK_LINK_HINT}
                 </Text>
               </Pressable>
@@ -706,7 +740,7 @@ export default function CloudConnectorsScreen({
                     <Text
                       style={{
                         color: active ? colors.background : colors.textSecondary,
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         fontWeight: '600',
                       }}
                     >
@@ -720,7 +754,9 @@ export default function CloudConnectorsScreen({
             {visibleRows.length === 0 && !listingsPending ? (
               <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
                 <Link size={28} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: 14 }}>No connectors found</Text>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                  No connectors found
+                </Text>
               </View>
             ) : visibleRows.length > 0 ? (
               <View
@@ -760,7 +796,9 @@ export default function CloudConnectorsScreen({
                   marginTop: 14,
                 }}
               >
-                <Text style={{ color: colors.agentError, fontSize: 13 }}>{listingsError}</Text>
+                <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                  {listingsError}
+                </Text>
                 <Pressable
                   onPress={() => void loadListings(listings.length > 0 ? nextCursor : null)}
                   accessibilityRole="button"
@@ -774,7 +812,13 @@ export default function CloudConnectorsScreen({
                   }}
                 >
                   <RefreshCw size={14} color={colors.agentError} />
-                  <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.agentError,
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                    }}
+                  >
                     Retry
                   </Text>
                 </Pressable>
@@ -802,7 +846,13 @@ export default function CloudConnectorsScreen({
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
                   Show more
                 </Text>
               </Pressable>

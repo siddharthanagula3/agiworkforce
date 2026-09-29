@@ -126,9 +126,11 @@ interface MessageState {
   setConversationModel: (id: string, model: string) => Promise<boolean>;
   setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
+  moveConversationToProject: (id: string, projectId: string | null) => Promise<boolean>;
   makeConversationPermanent: (id: string) => void;
   keepTemporaryConversation: (id: string) => Promise<void>;
   markConversationRead: (id: string) => void;
+  markConversationUnread: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   setMessageReaction: (
     conversationId: string,
@@ -205,6 +207,17 @@ interface MessageState {
     conversationId: string,
     turn: { id: string; role: 'user' | 'assistant'; content: string; model: string },
   ) => void;
+}
+
+function setConversationUnread(id: string, unread: boolean): void {
+  const store = useChatMessageStore;
+  if (store.getState().conversations.some((c) => c.id === id)) {
+    store.setState((state) => ({
+      conversations: state.conversations.map((c) => (c.id === id ? { ...c, unread } : c)),
+    }));
+  } else {
+    getCloudStore().getState().patchCloudConversation(id, { unread });
+  }
 }
 
 export const useChatMessageStore = create<MessageState>()(
@@ -739,6 +752,31 @@ export const useChatMessageStore = create<MessageState>()(
         }));
       },
 
+      moveConversationToProject: async (id, projectId) => {
+        const localConv = get().conversations.find((c) => c.id === id);
+        if (localConv) {
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === id ? { ...c, projectId: projectId ?? undefined } : c,
+            ),
+          }));
+          return true;
+        }
+        const cloudStore = getCloudStore();
+        const cloudConv = cloudStore.getState().conversations.find((c) => c.id === id);
+        if (!cloudConv) return false;
+        const previous = cloudConv.projectId;
+        cloudStore.getState().patchCloudConversation(id, { projectId: projectId ?? undefined });
+        if (!shouldSyncConversationRemote(cloudConv)) return true;
+        try {
+          await managedCloudChat.updateConversation(id, { projectId });
+          return true;
+        } catch {
+          cloudStore.getState().patchCloudConversation(id, { projectId: previous });
+          return false;
+        }
+      },
+
       makeConversationPermanent: (id) => {
         if (get().conversations.find((c) => c.id === id)) {
           set((state) => ({
@@ -773,17 +811,9 @@ export const useChatMessageStore = create<MessageState>()(
         get().makeConversationPermanent(id);
       },
 
-      markConversationRead: (id) => {
-        if (get().conversations.find((c) => c.id === id)) {
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c.id === id ? { ...c, unread: false } : c,
-            ),
-          }));
-        } else {
-          getCloudStore().getState().patchCloudConversation(id, { unread: false });
-        }
-      },
+      markConversationRead: (id) => setConversationUnread(id, false),
+
+      markConversationUnread: (id) => setConversationUnread(id, true),
 
       deleteMessage: (conversationId, messageId) => {
         const ownerStore = getConversationMessageStore(conversationId);

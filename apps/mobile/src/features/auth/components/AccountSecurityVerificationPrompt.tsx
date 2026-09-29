@@ -4,6 +4,17 @@ import { Alert } from 'react-native';
 import { onPasskeyRequired } from '@/src/features/auth/services/accountSecurityEvents';
 import { verifyAccountSecurityInBrowser } from '@/src/features/auth/services/accountSecurityVerification';
 import { toUserMessage } from '@/services/userMessage';
+import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
+
+/**
+ * A passkey step-up can interrupt the Terms check at sign-in, which then sits
+ * on its error until someone retries it. Once the step-up succeeds, the check
+ * runs again so sign-in carries on by itself.
+ */
+function resumeTermsCheck(): void {
+  const terms = useTermsAcceptanceStore.getState();
+  if (terms.userId && terms.status === 'error') void terms.verify(terms.userId);
+}
 
 export function AccountSecurityVerificationPrompt() {
   const open = useRef(false);
@@ -28,6 +39,9 @@ export function AccountSecurityVerificationPrompt() {
               text: 'Continue',
               onPress: () => {
                 verifyAccountSecurityInBrowser()
+                  .then((outcome) => {
+                    if (outcome === 'verified') resumeTermsCheck();
+                  })
                   .catch((error: unknown) => {
                     Alert.alert(
                       'Verification did not finish',

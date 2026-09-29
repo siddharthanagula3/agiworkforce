@@ -103,13 +103,10 @@ nothing is left.
 
 - Done when: A reader can drag-select text continuously across paragraphs, lists and code in one answer.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A Select Text action opens the whole message as one selectable text, as ChatGPT's iOS app does (help.openai.com 6825453, iOS text selection), in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:528-528`
 
 ## S20.27: Find-in-answer highlighting.
 

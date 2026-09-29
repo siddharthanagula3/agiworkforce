@@ -70,4 +70,34 @@ describe('a detached resume from the phone', () => {
 
     expect(guardedFetchMock.mock.calls[0]).toHaveLength(2);
   });
+
+  it('acts on a passkey refusal from a run call as it does for a chat turn', async () => {
+    const announce = jest.fn();
+    jest.doMock('@/src/features/auth/services/accountSecurityEvents', () => ({
+      announcePasskeyRequired: announce,
+      onPasskeyRequired: jest.fn(() => () => undefined),
+    }));
+    const { createMobileCloudAgentRunClient } = loadStreaming();
+    guardedFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'passkey_required',
+            message: 'Verify with a passkey.',
+            details: { reason: 'passkey_required' },
+          },
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await createMobileCloudAgentRunClient()
+      .resumeRun('0190a000-0000-7000-8000-000000000001', [
+        { toolCallId: 'call-1', decision: 'approved' },
+      ])
+      .catch(() => undefined);
+
+    expect(announce).toHaveBeenCalled();
+    jest.dontMock('@/src/features/auth/services/accountSecurityEvents');
+  });
 });

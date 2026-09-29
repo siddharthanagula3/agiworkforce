@@ -13,7 +13,10 @@ import {
   projectIcon,
   type ProjectAccentId,
 } from '@/src/features/projects/projectAppearance';
-import type { CloudProjectDetails } from '@/stores/projects/cloudProjectStore';
+import type { CloudProject, CloudProjectDetails } from '@/stores/projects/cloudProjectStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { formatRelativeTime } from '@/src/lib/time';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 function countLabel(value: number | null | undefined, one: string, many: string): string | null {
   if (value === null || value === undefined) return null;
@@ -21,16 +24,23 @@ function countLabel(value: number | null | undefined, one: string, many: string)
 }
 
 export function CloudProjectOverview({
-  projectId,
-  name,
-  description,
+  project,
   details,
 }: {
-  projectId: string;
-  name: string;
-  description: string | null;
+  project: CloudProject;
   details: CloudProjectDetails | undefined;
 }) {
+  const projectId = project.id;
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+  const lastChatAt = useChatCloudMessageStore((s) =>
+    s.conversations.reduce<string | null>(
+      (latest, c) =>
+        c.projectId === projectId && (!latest || c.updatedAt > latest) ? c.updatedAt : latest,
+      null,
+    ),
+  );
+  const lastUsedAt = lastChatAt && lastChatAt > project.updatedAt ? lastChatAt : project.updatedAt;
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -42,6 +52,7 @@ export function CloudProjectOverview({
     details?.defaultModelId
       ? `Default model: ${getManagedDisplayName(details.defaultModelId)}`
       : null,
+    `Last used ${formatRelativeTime(lastUsedAt)}`,
   ].filter((item): item is string => Boolean(item));
 
   const applyAppearance = useCallback(
@@ -86,19 +97,39 @@ export function CloudProjectOverview({
           <Icon size={22} color={accent} />
         </Pressable>
         <Text
-          style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+          accessibilityRole="header"
+          style={{
+            flex: 1,
+            fontSize: typeScale.body,
+            fontWeight: '600',
+            color: colors.textPrimary,
+          }}
           numberOfLines={2}
         >
-          {name}
+          {project.name}
         </Text>
       </View>
       {description ? (
-        <Text style={{ fontSize: 13, lineHeight: 18, color: colors.textSecondary }}>
+        <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
           {description}
         </Text>
       ) : null}
-      <Text style={{ fontSize: 12, color: colors.textMuted }}>
-        {meta.length > 0 ? meta.join(' · ') : 'Cloud project · synced across your devices.'}
+      {instructions ? (
+        <Text
+          testID="project-detail-instructions"
+          numberOfLines={2}
+          style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}
+        >
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
+          >
+            Instructions:{' '}
+          </Text>
+          {instructions}
+        </Text>
+      ) : null}
+      <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
+        {`${meta.join(' · ')}. Synced across your devices.`}
       </Text>
 
       <Modal
@@ -125,10 +156,14 @@ export function CloudProjectOverview({
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
+          >
             Project appearance
           </Text>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}
+          >
             Colour
           </Text>
           <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
@@ -157,7 +192,11 @@ export function CloudProjectOverview({
               );
             })}
           </View>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>Icon</Text>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}
+          >
+            Icon
+          </Text>
           <ScrollView style={{ maxHeight: 260 }}>
             <View
               style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}

@@ -460,7 +460,11 @@
     "foundSources_one": "{{count}} Quelle gefunden",
     "foundSources_other": "{{count}} Quellen gefunden",
     "mapPreviewPlaces_one": "Kartenvorschau mit {{count}} Ort",
-    "mapPreviewPlaces_other": "Kartenvorschau mit {{count}} Orten"
+    "mapPreviewPlaces_other": "Kartenvorschau mit {{count}} Orten",
+    "lines_one": "{{count}} Zeile",
+    "lines_other": "{{count}} Zeilen",
+    "words_one": "{{count}} Wort",
+    "words_other": "{{count}} Wörter"
   },
   "markdownTable": {
     "label": "Tabelle",

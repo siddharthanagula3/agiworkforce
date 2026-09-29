@@ -724,7 +724,19 @@
     "mapPreviewPlaces_two": "معاينة خريطة بمكانين",
     "mapPreviewPlaces_few": "معاينة خريطة بـ {{count}} أماكن",
     "mapPreviewPlaces_many": "معاينة خريطة بـ {{count}} مكاناً",
-    "mapPreviewPlaces_other": "معاينة خريطة بـ {{count}} مكان"
+    "mapPreviewPlaces_other": "معاينة خريطة بـ {{count}} مكان",
+    "lines_zero": "لا أسطر",
+    "lines_one": "سطر واحد",
+    "lines_two": "سطران",
+    "lines_few": "{{count}} أسطر",
+    "lines_many": "{{count}} سطرًا",
+    "lines_other": "{{count}} سطر",
+    "words_zero": "لا كلمات",
+    "words_one": "كلمة واحدة",
+    "words_two": "كلمتان",
+    "words_few": "{{count}} كلمات",
+    "words_many": "{{count}} كلمة",
+    "words_other": "{{count}} كلمة"
   },
   "markdownTable": {
     "label": "جدول",

@@ -234,7 +234,7 @@ Code: `apps/extension/src/features/computer-use/agentLoop.ts:565-565`, `apps/ext
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Offline state covers Remote Control of desktop code sessions only; there is no computer use to wait for. | surface-only |
+| mobile | partial | Offline banner covers remote code and dispatch; computer use from the phone is not offered by Claude or ChatGPT mobile, recommend done at parity (lead decision). | surface-only |
 
 Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
@@ -256,6 +256,6 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone steers desktop code sessions, but Dispatch tasks go unanswered by the Electron app and it cannot use the screen. | handler |
+| mobile | partial | Relay now forwards dispatch.task.* (388c907af4, other lane) and code sessions start from the phone; needs a live phone-to-Electron dispatch check after the signaling server is redeployed. | handler |
 
 Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`

@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Cloud, Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { AppMode } from './ModeSwitchModal';
 
 export interface ModeToggleProps {
@@ -103,7 +104,7 @@ export function ModeToggle({
             numberOfLines={1}
             maxFontSizeMultiplier={2}
             style={{
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 14,
               fontWeight: '600',
               color: mode === 'local' ? selectedTextColor : inactiveTextColor,
@@ -140,7 +141,7 @@ export function ModeToggle({
             numberOfLines={1}
             maxFontSizeMultiplier={2}
             style={{
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 14,
               fontWeight: cloudActive ? '600' : '500',
               color: cloudActive ? selectedTextColor : inactiveTextColor,

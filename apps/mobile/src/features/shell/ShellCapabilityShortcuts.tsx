@@ -11,6 +11,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   useShellShortcuts,
   type ShellShortcutKey,
@@ -81,7 +82,7 @@ export function ShellCapabilityShortcuts({
               numberOfLines={1}
               style={{
                 color: active ? colors.textPrimary : colors.textSecondary,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: active ? '600' : '400',
               }}
             >

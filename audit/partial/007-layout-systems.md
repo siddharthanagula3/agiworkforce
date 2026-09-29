@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts, including tables, open in a full-screen modal on the phone, but there is no wide data layout for tablets or for tables inside answers. | ui |
+| mobile | partial | No wide data layout: tables open in a full-screen modal and there is no tablet/full-width layout for tables inside answers. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
 
@@ -26,7 +26,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts open as a full-screen modal over the conversation; even on tablets there is no side-by-side artifact pane. | ui |
+| mobile | partial | Artifacts open as a full-screen modal; there is no side-by-side artifact pane even on tablets (useTabletLayout only drives the persistent drawer). | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`
 
@@ -38,7 +38,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources appear as a collapsible list under each answer and inside a full-screen report view; there is no inspector beside the conversation, even on tablets. | ui |
+| mobile | partial | Sources are a collapsible list and full-screen report; there is no inspector pane beside the conversation. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -65,7 +65,7 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Remote code sessions show a follow-up input, file changes and diffs stacked in one column and require a paired desktop running a local session; there is no side-by-side workspace. | ui |
+| mobile | partial | Cloud code and remote sessions show conversation, changes and diffs stacked in one column; no side-by-side workspace. | ui |
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`
 
@@ -112,15 +112,3 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S7.32: Print-specific layouts.
-
-- Done when: Printing a conversation or report produces a print-specific layout: no app chrome, the whole content, paper-friendly colours and sensible page breaks.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Conversations export to a paper-styled PDF (dark text on white) that can be printed from the share sheet, but there is no Print action and no page-break rules. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:35-36`, `apps/mobile/services/fileCreation.ts:197-198`

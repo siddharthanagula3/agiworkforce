@@ -8,6 +8,7 @@ import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
@@ -185,7 +186,7 @@ export function renderInlineMarkdown(
           key={`code-${keyBase}-${inlineKey++}`}
           style={{
             fontFamily: 'Menlo',
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             backgroundColor: renderColors.surfaceHover,
             color: renderColors.textPrimary,
           }}
@@ -335,7 +336,7 @@ function MarkdownTable({
             const content = (
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: renderColors.textPrimary,
                   fontWeight: '500',
                   lineHeight: 19,
@@ -369,7 +370,7 @@ function MarkdownTable({
               <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     color: renderColors.textSecondary,
                     fontWeight: '400',
                     lineHeight: 19,
@@ -408,7 +409,7 @@ function MarkdownTable({
         }}
       >
         <Download size={14} color={renderColors.textSecondary} />
-        <Text style={{ fontSize: 12, color: renderColors.textSecondary }}>CSV</Text>
+        <Text style={{ fontSize: typeScale.caption, color: renderColors.textSecondary }}>CSV</Text>
       </Pressable>
     </View>
   );
@@ -530,7 +531,7 @@ function renderTextSegment(
         >
           <Text
             style={{
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               fontStyle: 'italic',
               color: renderColors.textSecondary,
               lineHeight: 21,
@@ -561,7 +562,7 @@ function renderTextSegment(
             >
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.teal,
                   lineHeight: 22,
                   ...(item.ordered
@@ -573,7 +574,7 @@ function renderTextSegment(
               </Text>
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.textPrimary,
                   lineHeight: 22,
                   flex: 1,
@@ -681,7 +682,7 @@ function renderTextSegment(
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          style={{ color: renderColors.textPrimary, fontSize: 15, lineHeight: 23 }}
+          style={{ color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }}
           selectable
         >
           {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
@@ -731,7 +732,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 11,
+            fontSize: typeScale.caption,
             fontWeight: '500',
             color: renderColors.textMuted,
             flexShrink: 1,
@@ -754,7 +755,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 19,
             fontFamily: 'Menlo',
             color: renderColors.textPrimary,

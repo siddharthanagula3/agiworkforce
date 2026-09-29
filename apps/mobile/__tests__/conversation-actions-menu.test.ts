@@ -96,8 +96,10 @@ describe('conversation row actions reach every action on both platforms', () => 
     const menu = result.current.rename.menu;
     expect(menu.visible).toBe(true);
     expect(menu.actions.map((action) => action.key)).toEqual([
+      'share',
       'rename',
       'pin',
+      'unread',
       'archive',
       'delete',
     ]);
@@ -115,6 +117,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     expect(result.current.rename.menu.actions.map((action) => action.key)).toEqual([
       'rename',
       'pin',
+      'unread',
       'delete',
     ]);
   });

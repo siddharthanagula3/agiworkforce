@@ -8,6 +8,7 @@ import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
@@ -144,7 +145,7 @@ export default function FeedbackScreen() {
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   textTransform: 'uppercase',
                   letterSpacing: 0,
@@ -182,7 +183,7 @@ export default function FeedbackScreen() {
                         numberOfLines={2}
                         style={{
                           color: selected ? colors.teal : colors.textSecondary,
-                          fontSize: 12,
+                          fontSize: typeScale.caption,
                           lineHeight: 15,
                           fontWeight: '600',
                           textAlign: 'center',
@@ -201,7 +202,7 @@ export default function FeedbackScreen() {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 textTransform: 'uppercase',
                 letterSpacing: 0,
@@ -236,12 +237,14 @@ export default function FeedbackScreen() {
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 color: colors.textPrimary,
-                fontSize: 15,
+                fontSize: typeScale.body,
                 lineHeight: 22,
               }}
               accessibilityLabel={type === 'bug' ? 'Bug description' : 'Feedback message'}
             />
-            <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'right' }}>
+            <Text
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, textAlign: 'right' }}
+            >
               {message.length}/2000
             </Text>
           </View>
@@ -275,7 +278,7 @@ export default function FeedbackScreen() {
                 <Text
                   style={{
                     color: canSubmit ? colors.accentText : colors.textMuted,
-                    fontSize: 14,
+                    fontSize: typeScale.subhead,
                     fontWeight: '600',
                   }}
                 >

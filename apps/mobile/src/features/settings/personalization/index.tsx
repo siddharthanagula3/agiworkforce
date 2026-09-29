@@ -157,13 +157,13 @@ function StyleSlider({
         style={{ height: 36 }}
       />
       <View className="flex-row justify-between px-0.5">
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           {config.leftLabel}
         </Text>
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           Default
         </Text>
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           {config.rightLabel}
         </Text>
       </View>
@@ -514,7 +514,7 @@ export default function PersonalizationScreen() {
         {/* Response Style dials */}
         <View>
           <Text
-            className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"
+            className="text-xs uppercase tracking-wider font-semibold mb-3 px-1"
             style={{ color: c.textMuted }}
           >
             Response Style
@@ -553,7 +553,7 @@ export default function PersonalizationScreen() {
             borderColor: c.border,
           }}
         >
-          <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
+          <Text className="text-xs leading-4" style={{ color: c.textMuted }}>
             Preferences apply to all conversations. Your name and instructions are included as
             context when chatting with AGI.
           </Text>

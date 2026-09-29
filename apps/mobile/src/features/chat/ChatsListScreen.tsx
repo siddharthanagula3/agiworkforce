@@ -13,6 +13,11 @@ import { useFocusEffect, useNavigation } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  Code2,
+  Compass,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
   MessageSquare,
   Pin,
   ChevronRight,
@@ -21,6 +26,7 @@ import {
   SlidersHorizontal,
   SquarePen,
   X,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
@@ -33,6 +39,7 @@ import {
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
@@ -68,6 +75,15 @@ import { TIME_GROUPS } from '@/lib/constants';
 
 type ChatListFilter = 'all' | 'pinned' | 'unread';
 type SearchKind = 'chat' | 'destination' | 'project' | 'file' | 'library' | 'artifact';
+
+const SEARCH_KIND_ICONS: Record<SearchKind, LucideIcon> = {
+  chat: MessageSquare,
+  destination: Compass,
+  project: FolderOpen,
+  file: FileText,
+  library: ImageIcon,
+  artifact: Code2,
+};
 
 interface ChatsListItem extends MobileGlobalSearchResult {
   kind: SearchKind;
@@ -133,6 +149,11 @@ function searchSection(
     title,
     data: results.map((result) => ({ ...result, kind })),
   };
+}
+
+function SearchKindIcon({ kind, color }: { kind: SearchKind; color: string }) {
+  const Icon = SEARCH_KIND_ICONS[kind];
+  return <Icon size={18} color={color} />;
 }
 
 export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }) {
@@ -366,7 +387,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         }
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
-        accessibilityHint={item.kind === 'chat' ? 'Long press to rename, pin or delete' : undefined}
+        accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
         style={({ pressed }) => ({
           minHeight: 66,
           borderRadius: 14,
@@ -388,35 +409,27 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           />
         ) : null}
         {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
+        {isSearching ? <SearchKindIcon kind={item.kind} color={colors.textMuted} /> : null}
         {item.kind === 'chat' && rename.conversationId === item.id ? (
           <InlineRenameField rename={rename} />
         ) : (
           <View style={{ flex: 1, gap: 3 }}>
             <Text
               numberOfLines={1}
-              style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
             >
               {item.title}
             </Text>
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+            >
               {item.subtitle}
             </Text>
           </View>
         )}
         {isSearching ? (
-          <View
-            style={{
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ color: colors.textMuted, fontSize: 10, textTransform: 'capitalize' }}>
-              {item.kind}
-            </Text>
-          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
         ) : item.kind === 'chat' ? (
           <PressableBox
             onPress={() => openActions(item.id, item.title, item.pinned === true)}
@@ -474,11 +487,14 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         <View style={{ flex: 1 }}>
           <Text
             maxFontSizeMultiplier={2}
-            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
           >
             {searchOnly ? 'Search' : 'Chats'}
           </Text>
-          <Text maxFontSizeMultiplier={2} style={{ color: colors.textMuted, fontSize: 11 }}>
+          <Text
+            maxFontSizeMultiplier={2}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+          >
             {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
           </Text>
         </View>
@@ -544,7 +560,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 letterSpacing: 0.7,
                 textTransform: 'uppercase',
@@ -567,7 +583,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               accessibilityRole="alert"
               style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
                 {conversationLoadError}
               </Text>
               <Pressable
@@ -575,7 +591,11 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                 accessibilityLabel="Retry loading chats"
                 onPress={() => void loadConversations({ firstPageOnly: true })}
               >
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Retry
+                </Text>
               </Pressable>
             </View>
           ) : null
@@ -590,14 +610,19 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}
             >
               {conversationLoadError ? (
-                <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                <Text
+                  accessibilityRole="alert"
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+                >
                   {conversationLoadError}
                 </Text>
               ) : null}
               {isLoadingMoreConversations ? (
                 <ActivityIndicator color={colors.teal} accessibilityLabel="Loading older chats" />
               ) : (
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
                   Load older chats
                 </Text>
               )}
@@ -623,7 +648,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               ) : (
                 <MessageSquare size={34} color={colors.textMuted} />
               )}
-              <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '600',
+                }}
+              >
                 {searchOnly && !isSearching
                   ? 'Search your workspace'
                   : appMode === 'cloud' && isLoadingConversations
@@ -635,7 +666,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                         : 'No chats here'}
               </Text>
               {appMode === 'cloud' && isLoadingConversations ? null : (
-                <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: typeScale.footnote,
+                    textAlign: 'center',
+                  }}
+                >
                   {searchOnly && !isSearching
                     ? 'Find chats, projects, files, library images, and artifacts in this mode.'
                     : isSearching

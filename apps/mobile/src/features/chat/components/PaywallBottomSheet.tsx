@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
@@ -204,7 +205,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               </View>
               <Text
                 style={{
-                  fontSize: 17,
+                  fontSize: typeScale.headline,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   flex: 1,
@@ -230,7 +231,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           {/* Body copy */}
           <Text
             style={{
-              fontSize: 15,
+              fontSize: typeScale.body,
               color: colors.textSecondary,
               lineHeight: 22,
               marginBottom: reason || resetLabel ? 8 : 20,
@@ -242,12 +243,20 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           {reason || resetLabel ? (
             <View style={{ gap: 4, marginBottom: 20 }}>
               {reason ? (
-                <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 20 }}>
+                <Text
+                  style={{ fontSize: typeScale.footnote, color: colors.textMuted, lineHeight: 20 }}
+                >
                   {reason}
                 </Text>
               ) : null}
               {resetLabel ? (
-                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: colors.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
                   {resetLabel}
                 </Text>
               ) : null}
@@ -266,7 +275,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           ) : (
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 color: colors.textMuted,
                 lineHeight: 20,
                 marginBottom: 4,
@@ -287,7 +296,13 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               accessibilityLabel="Choose a standard model"
               accessibilityRole="button"
             >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 Choose a standard model
               </Text>
             </Pressable>
@@ -304,7 +319,13 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               accessibilityLabel="Compare plans"
               accessibilityRole="button"
             >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 Compare plans
               </Text>
             </Pressable>
@@ -320,7 +341,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             accessibilityLabel="Try later"
             accessibilityRole="button"
           >
-            <Text style={{ fontSize: 14, color: colors.textMuted }}>Try later</Text>
+            <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>Try later</Text>
           </Pressable>
         </BottomSheetView>
       </BottomSheet>

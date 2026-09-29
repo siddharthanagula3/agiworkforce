@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors, motion } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -82,7 +83,7 @@ function VoiceSampleButton({ voiceId, voiceName }: { voiceId: string; voiceName:
       }}
     >
       <Icon size={16} color={colors.textPrimary} />
-      <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
         {playing ? 'Stop sample' : 'Play sample'}
       </Text>
     </Pressable>
@@ -113,7 +114,7 @@ const PILL = {
 };
 const PILL_LABEL = {
   color: colors.black,
-  fontSize: 17,
+  fontSize: typeScale.headline,
   fontWeight: '600' as const,
   textAlign: 'center' as const,
 };
@@ -208,13 +209,13 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 20,
+              paddingHorizontal: dialogPadding,
               paddingTop: 16,
             }}
           >
             <View style={{ width: 36 }} />
             <Text
-              style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
               accessibilityRole="header"
             >
               Choose your voice
@@ -254,14 +255,16 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 28,
+                      fontSize: typeScale.title1,
                       fontWeight: '700',
                       marginTop: 48,
                     }}
                   >
                     {item.name}
                   </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 17, marginTop: 6 }}>
+                  <Text
+                    style={{ color: colors.textMuted, fontSize: typeScale.headline, marginTop: 6 }}
+                  >
                     {item.description}
                   </Text>
                   {live ? <VoiceSampleButton voiceId={item.id} voiceName={item.name} /> : null}

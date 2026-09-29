@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { fetchConnectorCalls } from '@/services/connectors';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const OUTCOME_LABEL: Record<ConnectorCallOutcome, string> = {
   succeeded: 'Worked',
@@ -53,16 +54,16 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
 
   return (
     <View style={{ marginBottom: 18, gap: 8 }}>
-      <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}>
         Recent calls
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 18 }}>
         What this connector was asked to do and whether it answered. Arguments and results are never
         recorded.
       </Text>
       {failed ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ color: colors.agentError, fontSize: 13 }}>
+          <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
             The call log could not be read.
           </Text>
           <Pressable
@@ -71,7 +72,9 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
             accessibilityLabel="Retry loading recent calls"
             style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
           >
-            <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+            <Text style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+              Retry
+            </Text>
           </Pressable>
         </View>
       ) : calls === null ? (
@@ -80,10 +83,12 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
         >
           <ActivityIndicator size="small" color={colors.teal} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Reading the call log</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+            Reading the call log
+          </Text>
         </View>
       ) : calls.length === 0 ? (
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
           This connector has not been called yet, so there is nothing to show.
         </Text>
       ) : (
@@ -104,17 +109,21 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
                 <Text
                   numberOfLines={1}
-                  style={{ flex: 1, color: colors.textPrimary, fontSize: 13 }}
+                  style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.footnote }}
                 >
                   {call.toolName}
                 </Text>
                 <Text
-                  style={{ color: outcomeColor[call.outcome], fontSize: 12, fontWeight: '600' }}
+                  style={{
+                    color: outcomeColor[call.outcome],
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                  }}
                 >
                   {OUTCOME_LABEL[call.outcome]}
                 </Text>
               </View>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                 {duration ? `${duration} · ` : ''}
                 {formatOccurredAt(call.occurredAt)}
               </Text>

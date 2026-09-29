@@ -60,6 +60,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -842,7 +843,7 @@ ${current}`
           <Sparkles size={13} color={themeColors.teal} />
           <Text
             numberOfLines={1}
-            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: 12 }}
+            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: typeScale.caption }}
           >
             {selectedSkillName}
           </Text>
@@ -873,7 +874,7 @@ ${current}`
           style={{
             marginHorizontal: 16,
             marginBottom: 6,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             color: themeColors.agentWarning,
           }}
         >
@@ -924,8 +925,8 @@ ${current}`
               <Text
                 style={{
                   color: themeColors.textSecondary,
-                  fontSize: 11,
-                  lineHeight: 14,
+                  fontSize: typeScale.caption,
+                  lineHeight: 16,
                   fontWeight: '500',
                   includeFontPadding: false,
                 }}
@@ -963,7 +964,7 @@ ${current}`
                 style={{
                   flex: 1,
                   color: themeColors.textSecondary,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   includeFontPadding: false,
                 }}
               >
@@ -1151,7 +1152,10 @@ ${current}`
                 />
               </View>
               {isTranscribing ? (
-                <Text numberOfLines={1} style={{ color: themeColors.textMuted, fontSize: 13 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: themeColors.textMuted, fontSize: typeScale.footnote }}
+                >
                   Transcribing
                 </Text>
               ) : null}
@@ -1164,7 +1168,7 @@ ${current}`
             style={{
               ...(stacked ? { alignSelf: 'stretch', paddingRight: 28 } : { flex: 1 }),
               color: themeColors.textPrimary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               paddingVertical: 0,
               minHeight: 24,
               maxHeight: 160,

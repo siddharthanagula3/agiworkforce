@@ -226,6 +226,9 @@ async function handleListModels(request: NextRequest) {
             message: error.message,
             type: 'invalid_request_error',
             code: 'passkey_required',
+            // The step-up and recovery link read these, as they do from the
+            // chat gateway's refusal.
+            ...(error.details ? { details: error.details } : {}),
           },
         },
         { status: 403, headers: getCorsHeaders(request) },
@@ -238,6 +241,9 @@ async function handleListModels(request: NextRequest) {
             message: error.message,
             type: 'invalid_request_error',
             code: 'account_unavailable',
+            // The step-up and recovery link read these, as they do from the
+            // chat gateway's refusal.
+            ...(error.details ? { details: error.details } : {}),
           },
         },
         { status: 403, headers: getCorsHeaders(request) },

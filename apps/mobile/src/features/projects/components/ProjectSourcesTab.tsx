@@ -25,6 +25,7 @@ import {
 } from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProjectSourcesTabProps {
   projectId: string;
@@ -93,7 +94,7 @@ function SourceRow({
         >
           {source.name}
         </Text>
-        <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
           {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
         </Text>
       </View>
@@ -379,7 +380,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
               gap: 12,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+            <Text
+              style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
+            >
               Add text
             </Text>
             <TextInput

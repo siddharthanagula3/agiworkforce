@@ -3,6 +3,7 @@ import { Globe, Users } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { usePublishedArtifactAudience } from '../services/artifactPublishing';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function ArtifactAudienceChip({ artifactId }: { artifactId: string }) {
   const colors = useThemeColors();
@@ -28,7 +29,9 @@ export function ArtifactAudienceChip({ artifactId }: { artifactId: string }) {
       }}
     >
       <Icon size={10} color={colors.textSecondary} />
-      <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}>
+        {label}
+      </Text>
     </View>
   );
 }

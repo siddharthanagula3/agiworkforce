@@ -167,7 +167,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
                 {title}
               </Text>
               {timeLabel ? (
-                <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+                <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                   {timeLabel}
                 </Text>
               ) : null}

@@ -174,7 +174,9 @@
     "packages_other": "{{count}} 個のパッケージ",
     "unreadNotifications_other": "未読の通知 {{count}} 件",
     "packages_one": "{{count}} 個のパッケージ",
-    "unreadNotifications_one": "未読の通知 {{count}} 件"
+    "unreadNotifications_one": "未読の通知 {{count}} 件",
+    "textBlocks_one": "{{count}} 個のテキストブロック",
+    "textBlocks_other": "{{count}} 個のテキストブロック"
   },
   "relative": {
     "minutesAgo_one": "{{count}} 分前",

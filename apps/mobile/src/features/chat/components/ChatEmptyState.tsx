@@ -9,8 +9,12 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useUser } from '@clerk/expo';
 import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useTierStore } from '@/src/features/billing/store';
+import { NewChatConnectorSuggestions } from './NewChatConnectorSuggestions';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
@@ -36,6 +40,11 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
   const displayName = nameOptedOut
     ? ''
     : nickname || fullName?.split(' ')[0] || (isCloud ? clerkFirstName : '');
+
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
+  const showConnectorSuggestions =
+    isCloud && isClerkSignedIn && FEATURES.connectors && canUseConnectors;
 
   const reducedMotion = useReducedMotion();
   const [bannerVisible, setBannerVisible] = useState(false);
@@ -88,10 +97,10 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
             accessibilityLabel="Pair your desktop"
             accessibilityRole="button"
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.teal }}>
+            <Text style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.teal }}>
               Pair your desktop?
             </Text>
-            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 1 }}>
               Scan QR to connect
             </Text>
           </Pressable>
@@ -110,7 +119,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
       <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal)}>
         <Text
           style={{
-            fontSize: 28,
+            fontSize: typeScale.title1,
             lineHeight: 36,
             fontWeight: '500',
             color: colors.textPrimary,
@@ -130,7 +139,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         >
           <Text
             style={{
-              fontSize: 15,
+              fontSize: typeScale.body,
               lineHeight: 22,
               color: colors.textMuted,
               textAlign: 'center',
@@ -142,6 +151,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
           </Text>
         </Animated.View>
       )}
+      {showConnectorSuggestions ? <NewChatConnectorSuggestions /> : null}
     </View>
   );
 }
