@@ -132,6 +132,23 @@ test('fails when the tool-call signal stops following the run signal', () => {
   );
 });
 
+test('fails when the signal helper is renamed out from under the tool calls', () => {
+  withRepo(
+    (loop, contract) => [
+      loop
+        .replace(
+          'function toolCallSignal(): AbortSignal | undefined {',
+          'function callSignal(): AbortSignal | undefined {',
+        )
+        .replaceAll('const signal = toolCallSignal();', 'const signal = callSignal();'),
+      contract,
+    ],
+    (root) => {
+      assert.equal(unsignalledNetworkCalls(root).length, NETWORK_TOOL_CALLS.length);
+    },
+  );
+});
+
 test('fails when a network tool call disappears from the loop', () => {
   withRepo(
     (loop, contract) => [loop.replaceAll('await executeUrlFetch(', 'await fetchPage('), contract],

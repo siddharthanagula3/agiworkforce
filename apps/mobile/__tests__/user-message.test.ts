@@ -4,9 +4,32 @@ import { NETWORK_UNREACHABLE_MESSAGE, toUserMessage } from '../services/userMess
 describe('toUserMessage', () => {
   const fallback = 'Please try again.';
 
-  it('keeps a sentence the server wrote for a reader', () => {
-    const error = new ApiHttpError('That email already has an invitation.', 409);
+  it('keeps a sentence from the service error envelope, which carries a code', () => {
+    const error = new ApiHttpError('That email already has an invitation.', 409, 'CONFLICT');
     expect(toUserMessage(error, fallback)).toBe('That email already has an invitation.');
+  });
+
+  it('does not trust a message that arrived without an envelope code', () => {
+    const error = new ApiHttpError('That email already has an invitation.', 409);
+    expect(toUserMessage(error, fallback)).toBe(fallback);
+  });
+
+  it('never shows a coded message the service sent with a server failure', () => {
+    const error = new ApiHttpError('relation "users" does not exist', 500, 'INTERNAL_ERROR');
+    expect(toUserMessage(error, fallback)).toBe(
+      'Something went wrong on our side. Try again shortly.',
+    );
+  });
+
+  it.each([
+    'duplicate key value violates unique constraint "users_email_key"',
+    'relation "web_conversations" does not exist',
+    'invalid input syntax for type uuid: "abc"',
+    'Request failed with status code 500',
+    'JWT expired',
+  ])('replaces the diagnostic %j with app copy', (diagnostic) => {
+    expect(toUserMessage(new Error(diagnostic), fallback)).toBe(fallback);
+    expect(toUserMessage(new ApiHttpError(diagnostic, 400), fallback)).toBe(fallback);
   });
 
   it('says the server was unreachable when the request never landed', () => {
