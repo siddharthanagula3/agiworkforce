@@ -96,6 +96,7 @@ describe('DrawerContent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPathname = '/chat';
+    useTierStore.setState({ grantedCapabilities: [] });
 
     useChatCloudMessageStore.setState({
       conversations: [
@@ -217,6 +218,11 @@ describe('DrawerContent', () => {
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'max' });
+    const ungranted = renderDrawer();
+    expect(ungranted.queryByText('AGI Work')).toBeNull();
+    ungranted.unmount();
+
+    useTierStore.setState({ grantedCapabilities: ['canUseAgiWork'] });
     const cloud = renderDrawer();
 
     expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
@@ -286,7 +292,7 @@ describe('DrawerContent', () => {
 
   it('opens the durable agent-run list from AGI Work', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    useTierStore.setState({ tier: 'max' });
+    useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
     const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('AGI Work. Cloud'));
