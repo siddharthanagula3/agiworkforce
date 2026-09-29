@@ -834,9 +834,8 @@ pub fn load_jwt() -> Option<String> {
 
     // The legacy plaintext auth.toml moves into the credential store on first
     // read and is then deleted, so the token stops living in the clear.
-    let auth_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
+    let auth_path = crate::config::CliConfig::config_dir()
+        .ok()?
         .join("auth.toml");
     let content = std::fs::read_to_string(&auth_path).ok()?;
     let token = jwt_from_legacy_auth_toml(&content)?;

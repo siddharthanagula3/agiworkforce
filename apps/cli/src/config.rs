@@ -1265,9 +1265,14 @@ fn ensure_config_dir(dir: &std::path::Path) -> Result<()> {
     if !dir.exists() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("Failed to create config directory {}", dir.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let open_to_others = std::fs::metadata(dir)
+            .map(|meta| meta.permissions().mode() & 0o077 != 0)
+            .unwrap_or(false);
+        if open_to_others {
             let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
         }
     }
