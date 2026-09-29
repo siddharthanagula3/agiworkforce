@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 43,
-  "chunkCount": 238,
+  "chunkCount": 239,
   "documents": [
     {
       "id": "account-security",
@@ -586,6 +586,7 @@
         "permission mode",
         "agi init",
         "agiworkforce_home",
+        "multiple accounts",
         "update check",
         "project config",
         "mcp.json",
@@ -606,7 +607,7 @@
           "ordinal": 0,
           "heading": "Where the settings live",
           "headingPath": "Configure the CLI › Where the settings live",
-          "text": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an existing absolute path.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
+          "text": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an absolute path; `agi` creates the\nfolder if it is missing.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
         },
         {
           "id": "configuration#1",
@@ -632,6 +633,13 @@
         {
           "id": "configuration#4",
           "ordinal": 4,
+          "heading": "More than one account",
+          "headingPath": "Configure the CLI › More than one account",
+          "text": "Each `AGIWORKFORCE_HOME` folder keeps its own sign-in, saved API keys, MCP\nserver sign-ins and settings, so a second folder holds a second account. On\nmacOS and Windows each folder's credentials sit in their own entry in the\nsystem credential store. For example, add this alias to `~/.zshrc` or\n`~/.bashrc` so that `agi-work` uses your work account while `agi` keeps your\nown:\n\n```bash\nalias agi-work='AGIWORKFORCE_HOME=\"$HOME/.agiworkforce-work\" agi'\n```\n\nThe first `agi-work` run walks you through signing in and setup for the new\nfolder."
+        },
+        {
+          "id": "configuration#5",
+          "ordinal": 5,
           "heading": "MCP servers and hooks",
           "headingPath": "Configure the CLI › MCP servers and hooks",
           "text": "MCP servers are listed in JSON, not in `config.toml`: `.mcp.json` or\n`mcp.json` in the repository, and `~/.agiworkforce/mcp.json` for your own.\nA repository's servers start only in a trusted workspace. `agi mcp` manages your list. Hooks live in\n`~/.agiworkforce/hooks.json` and `agi hooks` manages them."
