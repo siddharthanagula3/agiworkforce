@@ -60,6 +60,12 @@ import {
 import type { LibraryAsset, LibraryScope } from './libraryClient';
 import { useLibraryAssets } from './useLibraryAssets';
 import { MediaJobsSection } from './MediaJobsSection';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import { generateImage } from '@/src/features/image/services/imagegen';
+import { showToast } from '@/src/shared/components/Toast';
+import { toUserMessage } from '@/services/userMessage';
+import { useChatStore } from '@/stores/chatStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
@@ -258,6 +264,48 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, []);
+
+  const handleEditPreviewArea = useCallback(
+    (edit: ImageAreaEdit) => {
+      const asset = previewImage;
+      if (!asset) return;
+      handleCloseImage();
+      showToast('Editing the image. The new version appears in your Library.');
+      void generateImage({
+        prompt: edit.prompt,
+        ...(asset.model ? { model: asset.model } : {}),
+        ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
+        operation: 'inpaint',
+        source_image: { b64_json: edit.sourceBase64 },
+        mask_image: { b64_json: edit.maskBase64 },
+        size: '1024x1024',
+        n: 1,
+        quality: 'standard',
+        transparent_background: false,
+      })
+        .then(() => library.refresh())
+        .catch((error: unknown) => {
+          Alert.alert('Could not edit the image', toUserMessage(error, 'Try again in a moment.'));
+        });
+    },
+    [handleCloseImage, library, previewImage],
+  );
+
+  const handleDeletePreview = useCallback(() => {
+    const asset = previewImage;
+    if (!asset) return;
+    handleCloseImage();
+    void (async () => {
+      try {
+        if (asset.conversationId) {
+          await useChatStore.getState().deleteConversation(asset.conversationId);
+        }
+        await library.removeAsset(asset.id);
+      } catch {
+        Alert.alert('Delete failed', 'The image could not be deleted. Try again.');
+      }
+    })();
+  }, [handleCloseImage, library, previewImage]);
 
   const handleShareAsset = useCallback(async (asset: LibraryAsset) => {
     try {
@@ -790,6 +838,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         prompt={previewImage?.prompt ?? undefined}
         visible={previewImage !== null}
         onClose={handleCloseImage}
+        onEditArea={appMode === 'cloud' && FEATURES.imageGen ? handleEditPreviewArea : undefined}
+        onDelete={appMode === 'cloud' ? handleDeletePreview : undefined}
+        deleteMessage={
+          previewImage?.conversationId
+            ? 'Deleting this image also deletes the chat it was made in, with all of its messages.'
+            : 'The image moves to deleted items in your Library.'
+        }
       />
 
       <VideoPlayerModal
