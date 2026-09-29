@@ -140,11 +140,8 @@ export function ImageFullScreen({
       await copyGeneratedImage(imageUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      Alert.alert(
-        'Could not copy image',
-        error instanceof Error ? error.message : 'Try again in a moment.',
-      );
+    } catch {
+      Alert.alert('Could not copy image', 'Try again in a moment.');
     }
   }, [imageUrl]);
 

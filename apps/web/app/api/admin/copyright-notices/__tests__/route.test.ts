@@ -15,21 +15,76 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
   getClerkAuthUser: mocks.getClerkAuthUser,
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityUser: vi.fn() }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityProvider: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
+  getIdentityUser: vi.fn(),
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  recordAuditEvent: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
   getClientIp: vi.fn(() => '203.0.113.9'),
   logSecurityEvent: mocks.logSecurityEvent,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.db,
+}));
 vi.mock('@/lib/server/copyright-notices', () => ({
+  CONTENT_NOTICE_TYPES: vi.fn(),
+  recordCopyrightNotice: vi.fn(),
   listCopyrightNotices: mocks.listCopyrightNotices,
   setCopyrightNoticeDisposition: mocks.setCopyrightNoticeDisposition,
 }));

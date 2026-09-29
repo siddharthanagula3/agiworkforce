@@ -1,4 +1,5 @@
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
@@ -56,12 +57,12 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
             images, and files you send with those models will be sent from AGI Cloud to this
             provider for inference. You can turn it off again in Settings, Privacy.
           </Text>
-          <Pressable
+          <PressableBox
             onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
             accessibilityRole="link"
           >
             <Text style={{ color: colors.teal, fontSize: 14 }}>Read Privacy Policy</Text>
-          </Pressable>
+          </PressableBox>
           <View
             style={{
               flexDirection: 'row',
@@ -70,14 +71,14 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
               alignItems: 'center',
             }}
           >
-            <Pressable
+            <PressableBox
               testID={PROVIDER_CONSENT_CANCEL_TEST_ID}
               onPress={onCancel}
               accessibilityRole="button"
             >
               <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               testID={PROVIDER_CONSENT_CONFIRM_TEST_ID}
               onPress={() => providerId && onConfirm(providerId)}
               accessibilityRole="button"
@@ -92,7 +93,7 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
               <Text style={{ color: colors.surfaceBase, fontWeight: '700' }}>
                 Enable {displayName}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </View>

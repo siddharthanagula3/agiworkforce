@@ -27,16 +27,50 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
   getClerkAuthUser: mocks.getClerkAuthUser,
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
   getIdentityUser: vi.fn(async () => null),
   getIdentityProvider: () => ({
     removeSecondFactor: mocks.removeSecondFactor,
@@ -45,18 +79,97 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/support/tickets/service', () => ({
+  EmptyEscalationSummaryError: class EmptyEscalationSummaryError extends Error {},
+  InvalidTicketTransitionError: class InvalidTicketTransitionError extends Error {},
+  MAX_ESCALATION_SUMMARY_CHARS: vi.fn(),
+  MAX_TICKETS_LISTED: vi.fn(),
+  MAX_TICKET_MESSAGE_CHARS: vi.fn(),
+  MAX_TICKET_SUBJECT_CHARS: vi.fn(),
+  TicketClosedError: class TicketClosedError extends Error {},
+  escalateTicket: vi.fn(),
+  listStaffTickets: vi.fn(),
+  listTickets: vi.fn(),
+  moveTicket: vi.fn(),
+  readEscalations: vi.fn(),
+  readTicket: vi.fn(),
+  replyToTicket: vi.fn(),
+  replyToTicketAsStaff: vi.fn(),
   TicketNotFoundError: mocks.TicketNotFoundError,
   readTicketForStaff: mocks.readTicketForStaff,
   openTicket: vi.fn(),
 }));
-vi.mock('@/lib/server/account-security/store', () => ({ readEnrolledAt: mocks.readEnrolledAt }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mocks.query }) }));
+vi.mock('@/lib/server/account-security/store', () => ({
+  armEnrollmentUndo: vi.fn(),
+  cancelRecovery: vi.fn(),
+  clearEnrollment: vi.fn(),
+  completeHandoffAssertion: vi.fn(),
+  createHandoff: vi.fn(),
+  deleteCredential: vi.fn(),
+  finishRecovery: vi.fn(),
+  insertCredential: vi.fn(),
+  listCredentials: vi.fn(),
+  promotePendingRecoveryKeys: vi.fn(),
+  readEnrollment: vi.fn(),
+  readEnrollmentUndo: vi.fn(),
+  readOpenHandoff: vi.fn(),
+  readOrganizationControl: vi.fn(),
+  readSessionVerification: vi.fn(),
+  recordCredentialUse: vi.fn(),
+  recordSessionVerification: vi.fn(),
+  replaceChallenge: vi.fn(),
+  replaceEnrollmentCode: vi.fn(),
+  setHandoffChallenge: vi.fn(),
+  signInAddressChangedSince: vi.fn(),
+  startRecoveryWithKey: vi.fn(),
+  storePendingRecoveryKeys: vi.fn(),
+  takeChallenge: vi.fn(),
+  takeCompletedHandoff: vi.fn(),
+  takeEnrollmentCode: vi.fn(),
+  undoEnrollment: vi.fn(),
+  readEnrolledAt: mocks.readEnrolledAt,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => ({ query: mocks.query }),
+}));
 vi.mock('@/lib/server/session-revocation', () => ({
+  listActiveIdentitySessions: vi.fn(),
+  revokeInBatches: vi.fn(),
   revokeEveryOtherSession: mocks.revokeEveryOtherSession,
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
-vi.mock('@/lib/support/handoff/escalation-email', () => ({ sendCustomerTicketEmail: vi.fn() }));
-vi.mock('@/lib/auth/account-status', () => ({ accountAccessDecision: vi.fn() }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
+vi.mock('@/lib/support/handoff/escalation-email', () => ({
+  buildEscalationEmail: vi.fn(),
+  buildTicketOpenedEmail: vi.fn(),
+  sendEscalationEmail: vi.fn(),
+  sendTicketOpenedEmail: vi.fn(),
+  sendCustomerTicketEmail: vi.fn(),
+}));
+vi.mock('@/lib/auth/account-status', () => ({
+  ACCOUNT_DENIAL_NOTICE: vi.fn(),
+  ACCOUNT_STATUSES: vi.fn(),
+  LOCKOUT_RECOVERY_PATH: '/auth/reset-password',
+  SUSPENSION_APPEAL_PATH: '/appeal',
+  effectiveAccountStatus: vi.fn(),
+  isAccountStatus: vi.fn(),
+  accountAccessDecision: vi.fn(),
+}));
 
 import { POST } from '../route';
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { MANAGED_CLOUD_AGENT_RUNS_BASE_PATH } from '@agiworkforce/cloud-contracts';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { apiFetch } from '@/services/api';
 import type { ChatMessage } from '@/types/chat';
 
@@ -9,7 +10,7 @@ export const IN_FLIGHT_TURN_STALL_DEADLINE_MS = 150_000;
 export const IN_FLIGHT_TURN_STALLED_MESSAGE =
   'This turn stopped running on the server and will not finish. Send it again to retry.';
 
-export type InFlightTurnVerdict = 'running' | 'stalled' | 'idle';
+export type InFlightTurnVerdict = Extract<LifecycleStatus, 'running' | 'idle'> | 'stalled';
 
 export interface InFlightRunLiveness {
   state: string;

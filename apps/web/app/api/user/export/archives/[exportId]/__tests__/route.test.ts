@@ -10,12 +10,38 @@ const mocks = vi.hoisted(() => ({
   getPresignedPrivateDownloadUrl: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityUser: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
   getIdentityProvider: () => ({
     middleware: {
       signInRoute: () => ({ path: '/sign-in', redirectParam: 'redirect_url' }),
@@ -23,9 +49,37 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
+  copyPrivateObjectIfUnchanged: vi.fn(),
+  deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
+  getObject: vi.fn(),
+  getObjectStream: vi.fn(),
+  getPresignedPrivateUploadUrl: vi.fn(),
+  getPresignedUploadUrl: vi.fn(),
+  getPrivateObject: vi.fn(),
+  getPrivateObjectStream: vi.fn(),
+  headPrivateObject: vi.fn(),
+  isObjectStorageConfigured: vi.fn(),
+  isPrivateObjectStorageConfigured: vi.fn(),
+  objectKeyFromPublicUrl: vi.fn(),
+  objectKeyFromStorageUri: vi.fn(),
+  publicUrlForKey: vi.fn(),
+  putObject: vi.fn(),
+  putPrivateObject: vi.fn(),
   getPresignedPrivateDownloadUrl: mocks.getPresignedPrivateDownloadUrl,
 }));
 vi.mock('@/lib/server/data-export-archive', () => ({
+  buildDataExportArchiveVolume: vi.fn(),
+  eraseUserDataExportArchives: vi.fn(),
+  expireDataExportArchive: vi.fn(),
+  listDataExportWorkspaces: vi.fn(),
+  readDataExportArchive: vi.fn(),
+  requestDataExportArchive: vi.fn(),
+  sendDataExportReadyEmailJob: vi.fn(),
   DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS: 300,
   resolveDataExportDownload: mocks.resolveDataExportDownload,
 }));

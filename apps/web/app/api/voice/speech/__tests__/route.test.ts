@@ -23,40 +23,112 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/cors', () => ({
+  appendVary: vi.fn(),
+  isOriginAllowed: vi.fn(),
+  jsonResponseWithCors: vi.fn(),
+  requireValidOrigin: vi.fn(),
+  withCorsAndSecurityHeaders: vi.fn(),
+  withCorsRoute: vi.fn(),
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@shared/utils/env', () => ({
+  getEnv: vi.fn(),
   requireEnv: vi.fn(() => 'sk-test'),
   getOptionalEnv: vi.fn(() => undefined),
 }));
 vi.mock('@/lib/managed-compute-gate', () => ({
+  MANAGED_COMPUTE_BETA_HEADER: 'x-agi-managed-compute-beta',
+  MANAGED_COMPUTE_ORG_HEADER: vi.fn(),
+  MANAGED_COMPUTE_PRIVATE_BETA_ENV: 'AGI_MANAGED_COMPUTE_PRIVATE_BETA',
+  buildExternalSharingGateResponse: vi.fn(),
+  buildOrganizationPolicyGateResponse: vi.fn(),
+  buildProviderEgressGateResponse: vi.fn(),
+  buildSpendLimitGateResponse: vi.fn(),
+  buildWorkspaceFeatureGateResponse: vi.fn(),
+  isManagedComputePrivateBetaEnabled: vi.fn(),
+  resolveWorkspaceControlsForRequest: vi.fn(),
   buildManagedComputeGateResponse: mocks.managedGate,
   buildModelPolicyGateResponse: mocks.modelPolicyGate,
 }));
 vi.mock('@/lib/free-chat-surface-policy', () => ({
+  bindSurfaceFromClaims: vi.fn(),
+  canUseManagedCloudChatSurface: vi.fn(),
+  getCloudChatSurfaceCapability: vi.fn(),
+  readSurfaceHint: vi.fn(),
   resolveCloudChatSurface: vi.fn(() => 'web'),
 }));
 vi.mock('@/lib/server/provider-endpoints', () => ({
+  googleVideoOutputHostDisposition: vi.fn(),
+  isManagedProviderId: vi.fn(),
+  resolveProviderApiRoot: vi.fn(),
   providerApiUrl: vi.fn(() => 'https://provider.test/v1/audio/speech'),
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  resolveEffectiveSubscription: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(),
   resolveEntitlementBundle: mocks.resolveEntitlementBundle,
 }));
 vi.mock('@/lib/services/managed-compute-access', () => ({
+  evaluateManagedComputeSubscriptionAccess: vi.fn(),
+  evaluateManagedComputeWorkspaceAccess: vi.fn(),
   evaluateManagedComputeAccess: mocks.evaluateManagedComputeAccess,
   buildManagedComputeAccessGateResponse: mocks.buildManagedComputeAccessGateResponse,
 }));
 vi.mock('@/lib/server/side-call-training-policy', () => ({
+  noTrainingProviderIds: vi.fn(),
+  sideCallRoutingRequest: vi.fn(),
+  sideCallTrainingOptOut: vi.fn(),
   sideCallProviderAllowed: mocks.sideCallProviderAllowed,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({

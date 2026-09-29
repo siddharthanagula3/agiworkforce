@@ -9,11 +9,45 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ getClientIpForRateLimit: vi.fn(() => '203.0.113.7') }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.db,
+}));
 vi.mock('@/lib/services/organization-invitation-service', () => ({
+  INVITATION_TERMINAL_STATUSES: vi.fn(),
+  INVITATION_TTL_MS: vi.fn(),
+  MAX_INVITATION_RESENDS: 10,
+  acceptInvitation: vi.fn(),
+  createInvitation: vi.fn(),
+  createInvitationCredential: vi.fn(),
+  declineInvitation: vi.fn(),
+  formatInvitation: vi.fn(),
+  hashInvitationToken: vi.fn(),
+  listInvitationPage: vi.fn(),
+  listInvitations: vi.fn(),
+  normalizeInvitationEmail: vi.fn(),
+  resendInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
   expirePendingInvitations: mocks.expirePendingInvitations,
 }));
 

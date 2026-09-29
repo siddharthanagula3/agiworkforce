@@ -11,6 +11,7 @@ import {
 } from '@/src/features/settings/common';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
 import { useThemeColors } from '@/src/ui/theme';
+import { toUserMessage } from '@/services/userMessage';
 
 const PREFERENCE_NAMESPACE = 'memory';
 const MAX_TERMS = 50;
@@ -79,9 +80,7 @@ export default function MemoryExclusionsScreen() {
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setError(
-            cause instanceof Error ? cause.message : 'Could not load what memory leaves out.',
-          );
+          setError(toUserMessage(cause, 'Could not load what memory leaves out.'));
         }
       })
       .finally(() => {
@@ -99,7 +98,7 @@ export default function MemoryExclusionsScreen() {
       setExclusions(next);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save that change.');
+      setError(toUserMessage(cause, 'Could not save that change.'));
     } finally {
       setSaving(false);
     }

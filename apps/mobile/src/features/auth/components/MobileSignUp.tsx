@@ -4,7 +4,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -27,6 +26,7 @@ import {
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@agiworkforce/compliance';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/text';
 import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useTheme } from '@/src/ui/theme';
@@ -607,7 +607,12 @@ export function MobileSignUp({
                 <Text
                   accessibilityRole="link"
                   onPress={() => void openExternalUrl(new URL('/terms', API_URL).toString())}
-                  style={{ textDecorationLine: 'underline' }}
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    lineHeight: 20,
+                    textDecorationLine: 'underline',
+                  }}
                 >
                   Terms of Use
                 </Text>{' '}
@@ -615,7 +620,12 @@ export function MobileSignUp({
                 <Text
                   accessibilityRole="link"
                   onPress={() => void openExternalUrl(new URL('/privacy', API_URL).toString())}
-                  style={{ textDecorationLine: 'underline' }}
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    lineHeight: 20,
+                    textDecorationLine: 'underline',
+                  }}
                 >
                   Privacy Policy
                 </Text>

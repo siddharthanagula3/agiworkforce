@@ -21,19 +21,92 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions', () => ({
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
+  connectorToolPermissionsFromEntries: vi.fn(),
+  isLockedDown: vi.fn(),
+  withDisabledConnectorIds: vi.fn(),
+  withWorkspaceToolRules: vi.fn(),
+  withoutStandingApprovals: vi.fn(),
   loadConnectorToolPermissions: mocks.loadConnectorToolPermissions,
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
+  ConnectorCredentialError: class ConnectorCredentialError extends Error {},
+  MAX_CONNECTOR_TOOLS_PER_USER: 32,
+  __resetConnectorMcpMapCacheForTests: vi.fn(),
+  evictConnectorOAuthCaches: vi.fn(),
+  evictCustomConnectorCaches: vi.fn(),
+  evictOrgSharedConnectorCaches: vi.fn(),
+  findUserCustomConnectorByServerId: vi.fn(),
+  findUserCustomConnectorByUrl: vi.fn(),
+  getOperatorMappedConnectorIds: vi.fn(),
+  getUserCustomConnectorSummaries: vi.fn(),
+  getUserGithubInstallations: vi.fn(),
+  loadUserConnectorCapabilityCatalog: vi.fn(),
+  loadUserConnectorToolCatalog: vi.fn(),
+  loadUserConnectorToolDefs: vi.fn(),
+  makeUserConnectorExecutor: vi.fn(),
+  researchConnectorSources: vi.fn(),
   withUserConnectorMcpHandle: mocks.withUserConnectorMcpHandle,
 }));
 vi.mock('@/lib/connectors/mcp-state-store', () => ({
+  loadMcpAppPayload: vi.fn(),
+  saveMcpAppPayload: vi.fn(),
   bindMcpTask: mocks.bindMcpTask,
   isMcpTaskBound: mocks.isMcpTaskBound,
 }));

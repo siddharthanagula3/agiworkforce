@@ -10,15 +10,70 @@ const mocks = vi.hoisted(() => ({
   getDownload: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/workspace-plugin-access', () => ({
+  workspaceAllowsPlugins: vi.fn(),
   listPermittedPluginIds: mocks.listPermittedPluginIds,
 }));
 vi.mock('@/lib/services/skill-catalog-service', () => ({
+  SKILL_REQUIREMENTS_UNMET_CODE: 'skill_requirements_unmet',
+  SkillCatalogUnavailableError: class SkillCatalogUnavailableError extends Error {},
+  dedupeByFirstClaimedName: vi.fn(),
+  executeManagedSkillTool: vi.fn(),
+  executeManagedSkillToolForPlugins: vi.fn(),
+  filterSkillsByInstallOverrides: vi.fn(),
+  findManagedDirectorySkillByName: vi.fn(),
+  findManagedSkillByName: vi.fn(),
+  findManagedSkillWithFiles: vi.fn(),
+  findSelectableSkillByName: vi.fn(),
+  findSelectableSkillWithFiles: vi.fn(),
+  getBundledSkillDownload: vi.fn(),
+  getManagedSkillCatalog: vi.fn(),
+  getManagedSkillCatalogForPlugins: vi.fn(),
+  getManagedSkillDirectory: vi.fn(),
+  getManagedSkillDirectoryForPlugins: vi.fn(),
+  getManagedSkillLayers: vi.fn(),
+  getManagedSkillPluginOwners: vi.fn(),
+  invalidateManagedSkillCatalogCache: vi.fn(),
+  isDraftSkill: vi.fn(),
+  isPluginOwnedSkill: vi.fn(),
+  listManagedPluginSkillsWithFiles: vi.fn(),
+  listManagedSkillFiles: vi.fn(),
+  loadSelectableSkillCatalog: vi.fn(),
+  memoizeAsync: vi.fn(),
+  parseSkillLayersConfig: vi.fn(),
+  readManagedSkillFile: vi.fn(),
+  readManagedSkillFileBytes: vi.fn(),
+  resetManagedSkillCatalogCacheForTests: vi.fn(),
+  selectedSkillRequirementFailure: vi.fn(),
+  skillRequiredTools: vi.fn(),
+  withoutDraftSkills: vi.fn(),
   getBundledSkillDownloadForPlugins: mocks.getDownload,
 }));
 

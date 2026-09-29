@@ -26,27 +26,108 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => mocks.serviceDb) }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: vi.fn(() => mocks.serviceDb),
+}));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 vi.mock('@/lib/slack/slack-api', () => ({
+  SlackApiError: class SlackApiError extends Error {},
+  exchangeSlackOAuthCode: vi.fn(),
+  isSlackTokenRevoked: vi.fn(),
+  postSlackEphemeral: vi.fn(),
+  readSlackHistory: vi.fn(),
+  readSlackThread: vi.fn(),
+  revokeSlackToken: vi.fn(),
+  setSlackReaction: vi.fn(),
   postSlackMessage: mocks.postSlackMessage,
   readSlackUser: mocks.readSlackUser,
 }));
 vi.mock('@/lib/slack/slack-config', () => ({
+  SLACK_APPROVAL_TTL_HOURS: 24,
+  SLACK_AUTHORIZE_URL: 'https://slack.com/oauth/v2/authorize',
+  SLACK_BOT_SCOPES: vi.fn(),
+  SLACK_CONTEXT_LIMITS: vi.fn(),
+  SLACK_INSTALL_STATE_COOKIE: 'slack_install_state',
+  SLACK_INSTALL_STATE_TTL_SECONDS: vi.fn(),
+  SLACK_LINK_PATH: '/slack/link',
+  SLACK_LINK_TTL_SECONDS: vi.fn(),
+  SLACK_OAUTH_CALLBACK_PATH: '/api/slack/oauth/callback',
+  SLACK_WORKING_REACTION: 'eyes',
+  slackAppCredentials: vi.fn(),
+  slackLinkUrl: vi.fn(),
+  slackOAuthRedirectUri: vi.fn(),
   isSlackAppConfigured: mocks.isSlackAppConfigured,
   slackAppOrigin: mocks.slackAppOrigin,
   slackSettingsUrl: (origin: string) => `${origin}/chat?settings=slack`,
 }));
 vi.mock('@/lib/slack/slack-installations', () => ({
+  deleteSlackInstallationForTeam: vi.fn(),
+  findSlackInstallation: vi.fn(),
+  listSlackWorkspacesInstalledBy: vi.fn(),
+  saveSlackInstallation: vi.fn(),
+  uninstallSlackWorkspace: vi.fn(),
   findSlackInstallationById: mocks.findSlackInstallationById,
 }));
 vi.mock('@/lib/slack/slack-links', () => ({
+  issueSlackLinkRequest: vi.fn(),
+  listSlackAccountLinks: vi.fn(),
+  resolveSlackAccountLink: vi.fn(),
+  unlinkSlackAccount: vi.fn(),
   SlackLinkConflictError: mocks.SlackLinkConflictError,
   consumeSlackLinkRequest: mocks.consumeSlackLinkRequest,
   isSlackLinkToken: (value: unknown) =>
@@ -55,12 +136,27 @@ vi.mock('@/lib/slack/slack-links', () => ({
   previewSlackLinkRequest: mocks.previewSlackLinkRequest,
 }));
 vi.mock('@/lib/slack/slack-messages', () => ({
+  answerMessages: vi.fn(),
+  approvalMessage: vi.fn(),
+  escapeMrkdwn: vi.fn(),
+  linkPromptMessage: vi.fn(),
+  noticeMessage: vi.fn(),
   linkedMessage: vi.fn(() => ({ text: 'Linked', blocks: [] })),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
+  PERSONAL_WORKSPACE_KEY: vi.fn(),
+  WORKSPACE_SETTINGS_NAMESPACE: 'workspace',
+  listWorkspaceMemberships: vi.fn(),
+  persistActiveWorkspaceSelection: vi.fn(),
+  persistProvenActiveWorkspaceSelection: vi.fn(),
+  readRecordedActiveWorkspaceId: vi.fn(),
+  resolveActiveOrganizationId: vi.fn(),
+  touchesActiveOrganizationNamespace: vi.fn(),
   resolveOrganizationMembershipId: mocks.resolveOrganizationMembershipId,
 }));
 vi.mock('@/lib/slack/slack-settings', () => ({
+  PERSONAL_WORKSPACE_NAME: 'Personal',
+  loadSlackOverview: vi.fn(),
   listSlackLinkWorkspaces: mocks.listSlackLinkWorkspaces,
   slackPlanAllowed: mocks.slackPlanAllowed,
   slackRequiredPlans: vi.fn(() => 'Pro, Max'),

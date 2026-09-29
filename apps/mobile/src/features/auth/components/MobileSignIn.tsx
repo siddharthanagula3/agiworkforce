@@ -4,7 +4,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -21,6 +20,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { validateEmail } from '@agiworkforce/utils';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
 import {

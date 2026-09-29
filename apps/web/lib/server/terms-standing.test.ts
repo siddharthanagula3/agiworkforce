@@ -3,11 +3,42 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ query: vi.fn(), recordFailure: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => ({}),
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/observability/metrics', () => ({ recordFailure: mocks.recordFailure }));
+vi.mock('@/lib/observability/metrics', () => ({
+  METRIC_NAME: vi.fn(),
+  configurationStates: vi.fn(),
+  recordBrowserTask: vi.fn(),
+  recordClientFailure: vi.fn(),
+  recordCompletion: vi.fn(),
+  recordConfigurationState: vi.fn(),
+  recordDatabaseOperation: vi.fn(),
+  recordDenial: vi.fn(),
+  recordHttpRequest: vi.fn(),
+  recordNotificationDelivery: vi.fn(),
+  recordQueueAge: vi.fn(),
+  recordQueueDepth: vi.fn(),
+  recordQueueWait: vi.fn(),
+  recordRejection: vi.fn(),
+  recordRoutingDecision: vi.fn(),
+  recordSemanticDecision: vi.fn(),
+  recordSemanticDecisionComparison: vi.fn(),
+  recordSpanMetrics: vi.fn(),
+  recordToolOutcome: vi.fn(),
+  recordTurnOutcome: vi.fn(),
+  recordWorkPlanSize: vi.fn(),
+  resolveCompletion: vi.fn(),
+  recordFailure: mocks.recordFailure,
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));

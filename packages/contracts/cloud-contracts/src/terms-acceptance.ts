@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 export const TERMS_ACCEPTANCE_PATH = '/api/terms/accept';
 
+export const TERMS_ACCEPTANCE_SURFACES = ['web-signup', 'web-login', 'mobile-auth'] as const;
+
+export const TermsAcceptanceRequestSchema = z.object({
+  surface: z.enum(TERMS_ACCEPTANCE_SURFACES),
+  version: z.string().min(1).max(32),
+});
+
+export type TermsAcceptanceRequest = z.infer<typeof TermsAcceptanceRequestSchema>;
+
 export const TermsStatusSchema = z.object({
   currentVersion: z.string().min(1),
   accepted: z.boolean(),

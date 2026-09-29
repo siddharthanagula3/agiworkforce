@@ -5,9 +5,9 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   View,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -188,7 +188,7 @@ export function ConnectorApiKeySheet({
                 </Text>
               ) : null}
               {documentationUrl ? (
-                <Pressable
+                <PressableBox
                   onPress={() => void openDocumentation(documentationUrl)}
                   accessibilityRole="link"
                   accessibilityLabel={`Where to find the ${spec.name} API key`}
@@ -197,7 +197,7 @@ export function ConnectorApiKeySheet({
                   <Text style={{ fontSize: 13, fontWeight: '600', color: colors.teal }}>
                     Where to find this key
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </>
           )}
