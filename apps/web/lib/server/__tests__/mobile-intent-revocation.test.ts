@@ -18,7 +18,7 @@ vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
   revokeMobileIntentTokens: (...args: unknown[]) => mockRevokeTokens(...args),
 }));
 
-import { revokeEveryOtherSession } from '../session-revocation';
+import { finishIntentRevocation, revokeEveryOtherSession } from '../session-revocation';
 import { revokeEveryDeviceRefreshCredential } from '../refresh-token-family';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
@@ -54,6 +54,8 @@ function calledNames(path: string): Set<string> {
       const callee = node.expression;
       if (ts.isIdentifier(callee)) names.add(callee.text);
       else if (ts.isPropertyAccessExpression(callee)) names.add(callee.name.text);
+    } else if (ts.isPropertyAccessExpression(node) && node.name.text === 'incomplete') {
+      names.add('.incomplete');
     }
     ts.forEachChild(node, visit);
   };
@@ -132,5 +134,38 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
       .filter(({ calls }) => ![...INTENT_REVOKING_CALLS].some((name) => calls.has(name)))
       .map(({ path }) => path);
     expect(missing).toEqual([]);
+  });
+
+  it('an incomplete sweep retries the intent revoke and reports whether it held', async () => {
+    const sweep = {
+      ended: [],
+      alreadyGone: [],
+      failed: [],
+      currentSession: undefined,
+      targetCount: 0,
+    };
+    await expect(finishIntentRevocation({ ...sweep, incomplete: false }, 'user-1')).resolves.toBe(
+      true,
+    );
+    expect(mockRevokeEvery).not.toHaveBeenCalled();
+
+    mockRevokeEvery.mockResolvedValueOnce(undefined);
+    await expect(finishIntentRevocation({ ...sweep, incomplete: true }, 'user-1')).resolves.toBe(
+      true,
+    );
+    mockRevokeEvery.mockRejectedValueOnce(new Error('db down'));
+    await expect(finishIntentRevocation({ ...sweep, incomplete: true }, 'user-1')).resolves.toBe(
+      false,
+    );
+  });
+
+  it('every caller of the session sweep acts on an incomplete result', () => {
+    const ignoring = [...sourceFiles(join(WEB_ROOT, 'lib')), ...sourceFiles(join(WEB_ROOT, 'app'))]
+      .map((path) => ({ path: relative(WEB_ROOT, path), calls: calledNames(path) }))
+      .filter(({ path }) => !CHOKEPOINT_MODULES.has(path))
+      .filter(({ calls }) => calls.has('revokeEveryOtherSession'))
+      .filter(({ calls }) => !calls.has('finishIntentRevocation') && !calls.has('.incomplete'))
+      .map(({ path }) => path);
+    expect(ignoring).toEqual([]);
   });
 });

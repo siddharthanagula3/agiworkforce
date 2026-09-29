@@ -19,8 +19,10 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/lib/server/risk-signals', () => ({
   recordIdentityObservation: (...args: unknown[]) => mocks.observe(...args),
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
   revokeEveryOtherSession: (...args: unknown[]) => mocks.revoke(...args),
+  finishIntentRevocation: async () => true,
 }));
 vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyIdentitySecurityEvent: (...args: unknown[]) => mocks.notify(...args),
