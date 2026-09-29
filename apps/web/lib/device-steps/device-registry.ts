@@ -302,6 +302,11 @@ function capabilitySourceFor(
     : 'inferred';
 }
 
+function stepsStayOnThePhone(declaration: DesktopHostDeclaration): boolean {
+  const offered = offeredDeviceStepTools(declaration);
+  return offered.length > 0 && offered.every((tool) => deviceStepScope(tool) === 'phone');
+}
+
 /**
  * Whether a durable run may hand work to this device right now.
  *
@@ -309,11 +314,6 @@ function capabilitySourceFor(
  * has switched remote work off; `wait` is for one that is merely asleep, which
  * is a pause, never a failure.
  */
-function stepsStayOnThePhone(declaration: DesktopHostDeclaration): boolean {
-  const offered = offeredDeviceStepTools(declaration);
-  return offered.length > 0 && offered.every((tool) => deviceStepScope(tool) === 'phone');
-}
-
 export function clearDeviceForRemoteSteps(
   declaration: DesktopHostDeclaration,
   device: RegisteredDevice | null,

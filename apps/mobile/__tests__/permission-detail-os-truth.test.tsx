@@ -92,7 +92,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),
 }));
 
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   getCalendarPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),
   requestCalendarPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),
   getRemindersPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),

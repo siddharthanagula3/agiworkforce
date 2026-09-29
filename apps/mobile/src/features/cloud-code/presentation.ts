@@ -6,10 +6,10 @@ import {
 
 export const CLOUD_CODE_SCREEN_TITLE = 'AGI Code';
 
-type CloudCodeBadgeColor = 'gray' | 'blue' | 'red';
+type CloudCodeBadgeTone = 'gray' | 'blue' | 'red';
 
 export const CLOUD_CODE_STATE_BADGE_COLORS: Readonly<
-  Record<CloudCodeSessionState, CloudCodeBadgeColor>
+  Record<CloudCodeSessionState, CloudCodeBadgeTone>
 > = {
   provisioning: 'blue',
   ready: 'gray',

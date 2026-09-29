@@ -262,6 +262,8 @@ export * from './PendingApprovalSnapshot';
 export * from './PermissionProfile';
 export * from './PermissionsListResponse';
 export * from './PermissionsRemoveParams';
+export * from './PlanDecideParams';
+export * from './PlanDecision';
 export * from './PlanDeltaEvent';
 export * from './PlanItem';
 export * from './PlanItemArg';

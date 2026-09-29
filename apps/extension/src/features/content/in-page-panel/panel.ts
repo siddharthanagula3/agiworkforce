@@ -243,6 +243,7 @@ const IN_PAGE_OUTCOME_TITLES: Record<InPagePromptOutcome, string> = {
   plan_required: 'Managed Cloud is unavailable',
   quota_exceeded: 'Usage limit reached',
   account_unavailable: 'Account status unavailable',
+  terms_required: 'Accept the updated terms',
   rate_limited: 'Too many requests',
   cancelled: 'Request cancelled',
   request_rejected: 'Request not sent',
@@ -277,7 +278,8 @@ function showPromptOutcome(
   } else if (
     response.outcome === 'signed_out' ||
     response.outcome === 'plan_required' ||
-    response.outcome === 'quota_exceeded'
+    response.outcome === 'quota_exceeded' ||
+    response.outcome === 'terms_required'
   ) {
     const accountBtn = document.createElement('button');
     accountBtn.type = 'button';

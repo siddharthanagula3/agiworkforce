@@ -4,7 +4,7 @@ import { Dimensions, Platform } from 'react-native';
 import { apiFetch } from '../../../../services/api';
 
 /**
- * Shape of apps/web/lib/support/diagnostics/types.ts. There is no DOM here, so
+ * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. There is no DOM here, so
  * every field is read from the native runtime instead. The server validates
  * and redacts it, so nothing is exported that the server has not cleaned.
  */

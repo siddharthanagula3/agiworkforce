@@ -431,6 +431,24 @@ function isPasskeyRequiredChatError(error: unknown): boolean {
   );
 }
 
+/**
+ * The gateway refuses a turn when the account has no terms acceptance on
+ * record or is past a material revision's deadline. The acceptance page is the
+ * only way forward, so the draft is parked and the page opened, as for a
+ * passkey step-up.
+ */
+function isTermsAcceptanceRequiredChatError(error: unknown): boolean {
+  return (
+    error instanceof ChatApiError &&
+    error.status === 403 &&
+    error.code?.toLowerCase() === 'terms_acceptance_required'
+  );
+}
+
+function termsAcceptancePageHref(returnTo: string): string {
+  return `/login/complete?redirectTo=${encodeURIComponent(returnTo)}`;
+}
+
 function readChatApiErrorPayload(
   payload: unknown,
   fallbackMessage: string,
@@ -4202,12 +4220,21 @@ export function useChatStream(
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
         // back in and you retype it.
-        if (isSessionExpiredError(error) || isPasskeyRequiredChatError(error)) {
+        if (
+          isSessionExpiredError(error) ||
+          isPasskeyRequiredChatError(error) ||
+          isTermsAcceptanceRequiredChatError(error)
+        ) {
           parkUnsentDraft(conversationId, content);
         }
         if (isPasskeyRequiredChatError(error)) {
           window.location.assign(
             accountSecurityVerifyPageHref(`${window.location.pathname}${window.location.search}`),
+          );
+        }
+        if (isTermsAcceptanceRequiredChatError(error)) {
+          window.location.assign(
+            termsAcceptancePageHref(`${window.location.pathname}${window.location.search}`),
           );
         }
         await handleStreamError(error, {

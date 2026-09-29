@@ -160,6 +160,7 @@ const capabilitiesSchema = z.object({
   savedPermissions: z.boolean().optional(),
   mcpInspect: z.boolean().optional(),
   pluginUpdates: z.boolean().optional(),
+  planDecisions: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -1311,6 +1312,18 @@ export class LocalRuntimeClient {
     const connection = await this.readyConnection();
     return mcpServerInspectionSchema.parse(
       await connection.request('mcp/inspect', { name }, MCP_PROBE_TIMEOUT_MS),
+    );
+  }
+
+  async decidePlan(
+    threadId: string,
+    decision: 'approve' | 'reject',
+    feedback?: string,
+  ): Promise<void> {
+    const connection = await this.readyConnection();
+    await connection.request(
+      'plan/decide',
+      feedback === undefined ? { threadId, decision } : { threadId, decision, feedback },
     );
   }
 
