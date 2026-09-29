@@ -408,3 +408,28 @@ a cloud session is pulled local. Cells (vscode): S5.16, S8.14, S9.08, S9.23,
 S10.39, S12.05, S13.25, S19.12, S21.16, S27.16, S34.32, S37.38, S42.25, S55.04,
 S55.29, S64.05, S67.36, S68.21, S78.11, S78.16, S81.21, S82.22; S110.22 is met
 at parity once cloud sessions are switched on.
+
+## D-2026-09-28-28 The mobile app matches the leaders' phone apps in voice, connectors, tasks and routines
+
+Checked 2026-09-28 against Claude's help pages (support.claude.com/en/articles/10065434,
+11101966, 11869619, 13854387, 13947068, 14328846 and claude.com/blog/cowork-web-mobile) and
+ChatGPT's (help.openai.com pages refused the fetch; its September 2026 voice update is
+reported at techcrunch.com/2026/09/23). Where a leader offers the feature on its phone app, the
+mobile app builds it: a speech input language setting that defaults to automatic detection,
+reading and creating iOS calendar events and reminders behind the system permission prompt,
+opening the files a task produced, tool results and approvals on screen during voice, and a
+task's questions reaching the phone. Where the leaders are silent, the mobile app does what our
+web app does: a skill directory with install, bank linking, the clarify card and the AGI Work
+plan review are built because the web has them; attaching an image during voice, audio-file
+upload and a per-task model picker are not, because the web has none. Neither leader documents
+the rest on its phone app, or both document the opposite, so they are not built: pausing a
+spoken reply, choosing the microphone or speaker and Android audio routing, a skill permission
+summary, a connector read-only switch or provider badge, an in-chat missing-scope request, a
+warehouse preset, reading or sending native messages (the app drafts and hands off to the
+system composer, as Claude does), tool schemas and a receipt log, a connection test button, a
+read-only agent mode, choosing sources or effort for a task, the desktop agent roster with its
+presence, pause and history, per-agent usage in Compare, a routine description or cron and
+interval recurrence, and reading a host app's live selection or handing a session back to it.
+Cells (mobile): declined S48.11, S48.18, S48.19, S48.20, S48.29, S49.08, S49.19, S53.36,
+S55.26, S55.29, S55.30, S56.37, S56.44, S57.30, S57.37, S58.07, S59.09, S60.05, S60.08,
+S60.09, S61.01, S61.11, S61.19, S61.22, S62.08, S63.04, S63.14, S106.08, S106.25.
