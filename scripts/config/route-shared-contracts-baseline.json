@@ -93,7 +93,6 @@
     "mobile/feedback",
     "models/experiential-free",
     "models/experiential-free/completions",
-    "models/free-quota",
     "notifications",
     "pair/initiate",
     "portal",
