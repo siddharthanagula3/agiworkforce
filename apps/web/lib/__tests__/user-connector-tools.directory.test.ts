@@ -59,7 +59,8 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
 }));
 
 const mockGrantSummaries = vi.fn();
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
   upsertConnectorOAuthGrant: vi.fn(async () => undefined),
   getUserConnectorOAuthGrantSummaries: (...a: unknown[]) => mockGrantSummaries(...a),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
