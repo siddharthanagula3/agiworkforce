@@ -7,6 +7,9 @@ vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
 }));
 
+vi.mock('../../components/ProductAnalyticsConsentRow', () => ({
+  ProductAnalyticsConsentRow: () => null,
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
