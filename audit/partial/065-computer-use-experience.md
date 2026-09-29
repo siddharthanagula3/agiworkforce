@@ -226,18 +226,6 @@ Code: `apps/extension/src/features/computer-use/agentLoop.ts:565-565`, `apps/ext
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 
-## S65.27: Device-offline state.
-
-- Done when: When the target computer is offline the product says so and waits or stops clearly.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Offline banner covers remote code and dispatch; computer use from the phone is not offered by Claude or ChatGPT mobile, recommend done at parity (lead decision). | surface-only |
-
-Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
-
 ## S65.28: Permission-revoked state.
 
 - Done when: When a permission is revoked the agent stops and the user is told how to restore it.
@@ -256,6 +244,6 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Relay now forwards dispatch.task.* (388c907af4, other lane) and code sessions start from the phone; needs a live phone-to-Electron dispatch check after the signaling server is redeployed. | handler |
+| mobile | partial | live check: phone Dispatch to Electron after the signaling server redeploy (dispatch.task.* and dispatch.task.reply in the relay allowlist). | handler |
 
-Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`
+Code: `services/signaling-server/src/control-payload.ts:1-1`
