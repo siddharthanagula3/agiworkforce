@@ -2844,14 +2844,6 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
-  if (lease.windowId !== undefined) {
-    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
-    computerUseRuns.assertCurrent(lease);
-    if (activeTabs[0]?.id !== lease.tabId) {
-      rejectComputerUseOwnership(lease, 'tab_intent_changed');
-    }
-  }
-
   return context.token;
 }
 
@@ -4998,20 +4990,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   invalidateWebMCPToolsForNavigation(tabId);
 });
 
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  const lease = computerUseRuns.getActive();
-  if (!lease || lease.takeover) return;
-  if (
-    lease.windowId === undefined ||
-    activeInfo.windowId !== lease.windowId ||
-    activeInfo.tabId === lease.tabId
-  ) {
-    return;
-  }
-  computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
-});
-
 chrome.commands.onCommand.addListener((command) => {
   logger.debug('Command received', { command });
 
@@ -5691,6 +5669,8 @@ function mapInPagePromptFailure(
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
       return inPagePromptFailure('account_unavailable', result.message, true);
+    case 'account_suspended':
+      return inPagePromptFailure('account_unavailable', result.message);
     case 'rate_limited':
       return inPagePromptFailure('rate_limited', result.message, true);
     case 'cancelled':

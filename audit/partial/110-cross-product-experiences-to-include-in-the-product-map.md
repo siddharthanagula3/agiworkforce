@@ -259,7 +259,6 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `
 | desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
-| chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
 
