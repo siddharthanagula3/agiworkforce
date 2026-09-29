@@ -405,6 +405,7 @@ struct TuiApp {
     stream_start: Option<Instant>,
     // Git branch
     git_branch: Option<String>,
+    workspace_pane: Option<Vec<String>>,
     command_registry: CommandRegistry,
     // Fallback rotation banner, shared with the agent send loop. The banner
     // self-clears after FALLBACK_BANNER_TTL seconds.
@@ -610,6 +611,7 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
+            workspace_pane: None,
             command_registry,
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
             active_overlay: None,
@@ -815,6 +817,12 @@ impl TuiApp {
             *slot = None;
         }
         None
+    }
+
+    fn refresh_workspace_pane(&mut self) {
+        if self.workspace_pane.is_some() {
+            self.workspace_pane = Some(workspace_pane_lines());
+        }
     }
 
     fn sync_stats(&mut self) {
@@ -1667,11 +1675,13 @@ struct FrameCtx<'a> {
     notice: Option<&'a str>,
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
+    workspace_pane: Option<&'a [String]>,
 }
 
 impl<'a> FrameCtx<'a> {
     fn from_app(app: &'a TuiApp) -> Self {
         FrameCtx {
+            workspace_pane: app.workspace_pane.as_deref(),
             model_name: &app.model_name,
             statusline: &app.statusline_config,
             provider_name: &app.provider_name,
@@ -1777,7 +1787,67 @@ fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(Paragraph::new(line), row);
 }
 
+const WORKSPACE_PANE_MIN_WIDTH: u16 = 90;
+const WORKSPACE_PANE_MAX_LINES: usize = 2000;
+
+fn workspace_pane_lines() -> Vec<String> {
+    match crate::runtime::git::diff_for_command("head") {
+        Ok(read) => {
+            let mut lines: Vec<String> = read.summary().lines().map(str::to_string).collect();
+            if !read.diff.is_empty() {
+                lines.push(String::new());
+                lines.extend(read.text.lines().map(str::to_string));
+            }
+            lines.truncate(WORKSPACE_PANE_MAX_LINES);
+            lines
+        }
+        Err(message) => vec![message],
+    }
+}
+
+fn render_workspace_pane(frame: &mut ratatui::Frame, area: Rect, pane: &[String]) {
+    use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success};
+    let lines: Vec<Line> = pane
+        .iter()
+        .map(|line| {
+            let text = crate::terminal_text::sanitize_terminal_text(line);
+            let style = if line.starts_with("+++") || line.starts_with("---") {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else if line.starts_with('+') {
+                Style::default().fg(ui_success())
+            } else if line.starts_with('-') {
+                Style::default().fg(ui_danger())
+            } else if line.starts_with("@@") {
+                Style::default().fg(ui_accent())
+            } else if line.starts_with("diff --git") || line.starts_with("index ") {
+                Style::default().fg(ui_muted())
+            } else {
+                Style::default()
+            };
+            Line::from(Span::styled(text, style))
+        })
+        .collect();
+    let pane = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ui_muted()))
+            .title(" Workspace · changes since the last commit "),
+    );
+    frame.render_widget(pane, area);
+}
+
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    let area = match ctx.workspace_pane {
+        Some(pane) if area.width >= WORKSPACE_PANE_MIN_WIDTH => {
+            let columns = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+                .split(area);
+            render_workspace_pane(frame, columns[1], pane);
+            columns[0]
+        }
+        _ => area,
+    };
     use crate::tui::terminal_palette::{
         ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
     };
@@ -4313,6 +4383,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/worktree" | "/wt" => SlashResult::RunWorktree(arg.to_string()),
 
+        "/diff" if arg.trim() == "panel" => {
+            if app.workspace_pane.take().is_some() {
+                SlashResult::SystemMessage("Closed the workspace pane.".to_string())
+            } else {
+                app.workspace_pane = Some(workspace_pane_lines());
+                SlashResult::SystemMessage(format!(
+                    "The workspace pane now shows the changes since the last commit beside the chat, refreshed after each turn. It needs a window at least {WORKSPACE_PANE_MIN_WIDTH} columns wide. /diff panel again closes it."
+                ))
+            }
+        }
+
         "/diff" => SlashResult::SystemMessage(crate::runtime::git::diff_summary_for_command(arg)),
 
         "/copy" => {
@@ -6351,6 +6432,7 @@ async fn send_message_with_prompt(
                         // mutably borrowed by `send_fut`, so this must stay
                         // field-by-field rather than `FrameCtx::from_app(app)`.
                         let approval_ctx = FrameCtx {
+                            workspace_pane: app.workspace_pane.as_deref(),
                             model_name: &app.model_name,
                             statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
@@ -6507,6 +6589,7 @@ async fn send_message_with_prompt(
                     }
                     app.spinner_tick = app.spinner_tick.wrapping_add(1);
                     let ctx = FrameCtx {
+                        workspace_pane: app.workspace_pane.as_deref(),
                         model_name: &app.model_name,
                         statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
@@ -6687,6 +6770,7 @@ async fn send_message_with_prompt(
         }
     }
 
+    app.refresh_workspace_pane();
     app.scroll_offset = 0;
     render(terminal, app)?;
 
@@ -8516,6 +8600,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8595,6 +8680,7 @@ mod tests {
         notice: Option<&'a str>,
     ) -> FrameCtx<'a> {
         FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-flagship",
             statusline,
             provider_name: "anthropic",
@@ -8933,6 +9019,7 @@ mod tests {
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8985,6 +9072,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -9102,6 +9190,7 @@ mod tests {
             show_mode: true,
         };
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: &model_name,
             statusline: &statusline_cfg,
             provider_name: "ollama",
