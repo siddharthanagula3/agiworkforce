@@ -31,6 +31,7 @@ import {
 
 const MAX_TOKEN_LENGTH = 16_384;
 const MAX_ID_LENGTH = 128;
+const MAX_REMEMBERED_TASKS = 10_000;
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
@@ -128,7 +129,15 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const receipts = createControlReceiptLedger();
   const pageTasks = new Map<string, PageTask>();
+  const createdTasks = new Set<string>();
   let queue: Promise<void> = Promise.resolve();
+
+  function rememberCreatedTask(requestId: string): void {
+    createdTasks.add(requestId);
+    if (createdTasks.size <= MAX_REMEMBERED_TASKS) return;
+    const oldest = createdTasks.values().next().value;
+    if (oldest !== undefined) createdTasks.delete(oldest);
+  }
 
   function enqueue(work: () => Promise<void>): void {
     queue = queue.then(work).catch((error: unknown) => {
@@ -302,9 +311,14 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       requestId.length > 0 &&
       requestId.length <= MAX_ID_LENGTH
     ) {
+      const repeatedTask = action === 'dispatch.task.create' && createdTasks.has(requestId);
       const receipt = receipts.record(action, requestId);
-      await send(receipt.action, { ...receipt });
-      if (receipt.outcome === 'duplicate') return;
+      await send(receipt.action, {
+        ...receipt,
+        ...(repeatedTask ? { outcome: 'duplicate' as const } : {}),
+      });
+      if (receipt.outcome === 'duplicate' || repeatedTask) return;
+      if (action === 'dispatch.task.create') rememberCreatedTask(requestId);
     }
 
     if (await routeDispatchToPage(action, inner)) return;
@@ -477,6 +491,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     pairingSecret = null;
     receipts.clear();
     pageTasks.clear();
+    createdTasks.clear();
     controller.reset();
     if (state.status !== 'idle') publish({ ...IDLE_REMOTE_CONTROL_STATE });
     return state;

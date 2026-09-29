@@ -172,7 +172,6 @@ import {
   type CloudCodeExecutionPolicy,
 } from '@/lib/server/code-execution-policy';
 import {
-  DEVICE_REVIEWED_STEP_TOOLS,
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
   describeDeviceStep,
@@ -315,6 +314,7 @@ import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
+  toolCreatesEgressPath,
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
@@ -2915,11 +2915,6 @@ function hasNonTextPart(message: ProcessedRequest['llmRequest']['messages'][numb
     : (message.multimodal_content ?? []);
   return parts.some((part) => (part as { type?: string })?.type !== 'text');
 }
-
-const DEVICE_STEPS_REVIEWED_AFTER_UNTRUSTED: ReadonlySet<string> = new Set([
-  ...DEVICE_REVIEWED_STEP_TOOLS,
-  'device_browser_navigate',
-]);
 
 export function hasUntrustedContext(
   processed: Pick<ProcessedRequest, 'untrustedContextPresent'>,
@@ -6350,7 +6345,8 @@ export async function* runToolLoop(
               input: {
                 ...step,
                 ...(untrustedContentInContext &&
-                DEVICE_STEPS_REVIEWED_AFTER_UNTRUSTED.has(step.tool)
+                sensitiveSourceAvailable &&
+                toolCreatesEgressPath(step.tool)
                   ? { review: summary }
                   : {}),
               } as Record<string, unknown>,
