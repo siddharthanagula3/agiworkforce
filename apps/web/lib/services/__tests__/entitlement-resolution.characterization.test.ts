@@ -224,13 +224,24 @@ describe('entitlement resolution characterization', () => {
     });
   });
 
-  it('a caller that reports the plan to a client can have a failed seat lookup throw', async () => {
+  it("a caller that reports the plan to a client can have a member's failed seat lookup throw", async () => {
     mocks.getSubscription.mockResolvedValue(null);
     mocks.privilegedQuery.mockRejectedValue(new Error('rls'));
+    vi.mocked(scopedDb.query).mockResolvedValueOnce([{ member: 1 }]);
 
     await expect(
       resolveEntitlementBundle(scopedDb, 'member-1', { throwOnSeatLookupError: true }),
     ).rejects.toThrow('rls');
+  });
+
+  it('keeps a personal account on its own plan when the seat lookup fails', async () => {
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.privilegedQuery.mockRejectedValue(new Error('rls'));
+    vi.mocked(scopedDb.query).mockResolvedValueOnce([]);
+
+    await expect(
+      resolveEntitlementBundle(scopedDb, 'member-1', { throwOnSeatLookupError: true }),
+    ).resolves.toMatchObject({ plan: 'free', source: 'none' });
   });
 
   it('an unreadable own subscription fails the resolution rather than guessing a plan', async () => {
