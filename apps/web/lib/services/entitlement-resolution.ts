@@ -222,6 +222,11 @@ export interface EntitlementResolutionOptions {
    */
   includeSeats?: boolean;
   workspaceOrganizationId?: string | null;
+  /**
+   * A reply that tells a client its plan throws when the seat lookup fails,
+   * rather than reporting the member's own free row as their plan.
+   */
+  throwOnSeatLookupError?: boolean;
 }
 
 function bundleFrom(
@@ -337,6 +342,7 @@ export async function resolveEntitlementBundle(
     seat = await resolveSeatSubscription(userId, options.workspaceOrganizationId ?? null);
   } catch (error) {
     logger.error({ error, userId }, 'Seat entitlement lookup failed; falling back to no seat');
+    if (options.throwOnSeatLookupError) throw error;
     return settleOnOwn();
   }
 
