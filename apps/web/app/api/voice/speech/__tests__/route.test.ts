@@ -117,7 +117,7 @@ describe('POST /api/voice/speech', () => {
   it('refuses a request without a session', async () => {
     mocks.getClerkAuthUser.mockRejectedValue(createError.unauthorized());
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(401);
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('POST /api/voice/speech', () => {
   it('refuses a request that fails the CSRF check', async () => {
     mocks.requireCsrfToken.mockResolvedValue(NextResponse.json({ error: 'csrf' }, { status: 403 }));
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(403);
     expect(mocks.getClerkAuthUser).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe('POST /api/voice/speech', () => {
   it('returns the rate limit response', async () => {
     mocks.withRateLimit.mockResolvedValue(NextResponse.json({}, { status: 429 }));
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(429);
     expect(mocks.withRateLimit).toHaveBeenCalledWith(expect.anything(), 'voice-speech');
@@ -144,30 +144,27 @@ describe('POST /api/voice/speech', () => {
   it('returns the managed compute gate response when the feature is off', async () => {
     mocks.managedGate.mockReturnValue(NextResponse.json({}, { status: 503 }));
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(503);
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it('rejects empty text', async () => {
-    const response = await POST(request({ text: '   ' }), undefined as never);
+    const response = await POST(request({ text: '   ' }));
 
     expect(response.status).toBe(400);
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it('rejects text over the 4,000 character ceiling', async () => {
-    const response = await POST(request({ text: 'a'.repeat(4_001) }), undefined as never);
+    const response = await POST(request({ text: 'a'.repeat(4_001) }));
 
     expect(response.status).toBe(400);
   });
 
   it('rejects an unknown voice', async () => {
-    const response = await POST(
-      request({ text: 'Hello', voice: 'not-a-voice' }),
-      undefined as never,
-    );
+    const response = await POST(request({ text: 'Hello', voice: 'not-a-voice' }));
 
     expect(response.status).toBe(400);
   });
@@ -175,7 +172,7 @@ describe('POST /api/voice/speech', () => {
   it('refuses when the privacy setting excludes the speech provider', async () => {
     mocks.sideCallProviderAllowed.mockResolvedValue(false);
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(403);
     expect((await response.json()).error.code).toBe('model_may_train');
@@ -186,7 +183,7 @@ describe('POST /api/voice/speech', () => {
   it('returns the organization model policy refusal', async () => {
     mocks.modelPolicyGate.mockResolvedValue(NextResponse.json({}, { status: 403 }));
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(403);
     expect(mocks.modelPolicyGate).toHaveBeenCalledWith(
@@ -200,21 +197,21 @@ describe('POST /api/voice/speech', () => {
   it('refuses when the scoped database belongs to another user', async () => {
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-2' });
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(403);
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it('requires an Idempotency-Key header', async () => {
-    const response = await POST(request({ text: 'Hello' }, null), undefined as never);
+    const response = await POST(request({ text: 'Hello' }, null));
 
     expect(response.status).toBe(400);
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed Idempotency-Key', async () => {
-    const response = await POST(request({ text: 'Hello' }, 'bad key!'), undefined as never);
+    const response = await POST(request({ text: 'Hello' }, 'bad key!'));
 
     expect(response.status).toBe(400);
     expect((await response.json()).error.code).toBe('invalid_idempotency_key');
@@ -226,7 +223,7 @@ describe('POST /api/voice/speech', () => {
       NextResponse.json({ error: 'upgrade' }, { status: 402 }),
     );
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(402);
     expect(mocks.reserve).not.toHaveBeenCalled();
@@ -237,7 +234,7 @@ describe('POST /api/voice/speech', () => {
       new ManagedUsageRequestError('Out of credits', 402, 'quota_exhausted'),
     );
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(402);
     const body = await response.json();
@@ -248,7 +245,7 @@ describe('POST /api/voice/speech', () => {
   it('releases the reservation and returns 502 when the provider fails', async () => {
     mocks.fetch.mockResolvedValue(new Response('boom', { status: 500 }));
 
-    const response = await POST(request({ text: 'Hello' }), undefined as never);
+    const response = await POST(request({ text: 'Hello' }));
 
     expect(response.status).toBe(502);
     expect(mocks.finalize).toHaveBeenCalledWith(
@@ -258,10 +255,7 @@ describe('POST /api/voice/speech', () => {
   });
 
   it('reserves usage for the caller, proxies the provider and returns audio', async () => {
-    const response = await POST(
-      request({ text: 'Hello there', voice: 'marin', speed: 1.25 }),
-      undefined as never,
-    );
+    const response = await POST(request({ text: 'Hello there', voice: 'marin', speed: 1.25 }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('audio/mpeg');
