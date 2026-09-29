@@ -136,6 +136,7 @@ import {
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
@@ -319,7 +320,8 @@ describe('chatStore, streaming state', () => {
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ chatMode: 'create', chatStyle: 'explanatory' });
+      useChatStore.setState({ chatMode: 'create' });
+      useChatViewStore.setState({ chatStyle: 'explanatory', styleConversationId: CONV_ID });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -624,7 +626,11 @@ describe('chatStore, streaming state', () => {
     it('sends work_mode:agiwork only for the explicit Cloud work mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useTierStore.setState({ tier: 'max' });
+      useTierStore.setState({
+        tier: 'max',
+        capabilityHandshakeReceived: true,
+        grantedCapabilities: ['canUseAgiWork'],
+      });
       useChatStore.setState({ workMode: 'agiwork' });
 
       mockStreamChat.mockImplementation(
@@ -1438,7 +1444,8 @@ describe('chatStore, streaming state', () => {
     });
 
     it('sends selected chat mode and style context to local generation', async () => {
-      useChatStore.setState({ chatMode: 'research', chatStyle: 'concise' });
+      useChatStore.setState({ chatMode: 'research' });
+      useChatViewStore.setState({ chatStyle: 'concise', styleConversationId: CONV_ID });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([
         {

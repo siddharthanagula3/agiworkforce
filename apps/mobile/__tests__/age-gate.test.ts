@@ -219,6 +219,8 @@ describe('isAgeGateConfirmed', () => {
 });
 
 describe('clearAgeGate', () => {
+  beforeEach(() => mockStorage.clear());
+
   it('removes the stored record', () => {
     confirmAgeGate(25);
     expect(isAgeGateConfirmed()).toBe(true);

@@ -71,7 +71,9 @@ describe('Companion pairing requirements', () => {
     expect(screen.getByText('Desktop setup required')).toBeTruthy();
     expect(screen.getByText(/Sign in on Desktop and switch to Managed Cloud/)).toBeTruthy();
     expect(screen.getByText(/apps do not compare account identities/)).toBeTruthy();
-    expect(screen.getByText('Go to Settings and select "Connections"')).toBeTruthy();
+    expect(
+      screen.getByText('Go to Settings, select Capabilities and choose "Pair a phone"'),
+    ).toBeTruthy();
     expect(screen.queryByText(/same AGI account/i)).toBeNull();
   });
 
