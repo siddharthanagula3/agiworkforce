@@ -541,6 +541,79 @@ describe('streamFromProvider, idle watchdog (opt-in)', () => {
     expect(aborted).toBe(true);
   });
 
+  function trackAbortListeners(signal: AbortSignal): Set<EventListenerOrEventListenerObject> {
+    const live = new Set<EventListenerOrEventListenerObject>();
+    const add = signal.addEventListener.bind(signal);
+    const remove = signal.removeEventListener.bind(signal);
+    vi.spyOn(signal, 'addEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'abort' && listener) live.add(listener);
+      add(type, listener, options);
+    });
+    vi.spyOn(signal, 'removeEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'abort' && listener) live.delete(listener);
+      remove(type, listener, options);
+    });
+    return live;
+  }
+
+  it('removes its listeners from a caller signal reused across streams once each stream ends', async () => {
+    const caller = new AbortController();
+    const live = trackAbortListeners(caller.signal);
+
+    for (let run = 0; run < 3; run += 1) {
+      const fetchImpl = fetchMockResolving(
+        okResponse('data: {"type":"text-delta","delta":"hi"}\n\n' + 'data: [DONE]\n\n'),
+      );
+      await collect<Chunk>(
+        streamFromProvider({ ...BASE, fetchImpl, signal: caller.signal, idleWatchdog: true }),
+      );
+      expect(live.size).toBe(0);
+    }
+  });
+
+  it('removes its listeners when the consumer stops reading early', async () => {
+    const caller = new AbortController();
+    const live = trackAbortListeners(caller.signal);
+    const fetchImpl = makeStallingFetch(() => undefined);
+
+    const iterator = streamFromProvider({
+      ...BASE,
+      fetchImpl,
+      signal: caller.signal,
+      idleWatchdog: { idleMs: 60_000 },
+    })[Symbol.asyncIterator]();
+    await iterator.next();
+    expect(live.size).toBe(1);
+    await iterator.return?.();
+
+    expect(live.size).toBe(0);
+  });
+
+  it('still forwards a caller abort to the request while the stream is open', async () => {
+    const caller = new AbortController();
+    let aborted = false;
+    const fetchImpl = makeStallingFetch(() => {
+      aborted = true;
+    });
+
+    const iterator = streamFromProvider({
+      ...BASE,
+      fetchImpl,
+      signal: caller.signal,
+      idleWatchdog: { idleMs: 60_000 },
+      catchTransportErrors: true,
+    })[Symbol.asyncIterator]();
+    await iterator.next();
+    caller.abort();
+
+    expect(aborted).toBe(true);
+    expect((await iterator.next()).value).toMatchObject({
+      type: 'error',
+      code: 'STREAM_TIMEOUT_OR_ABORT',
+    });
+    await iterator.return?.();
+  });
+
   it('accepts idleWatchdog: true and uses watchdog defaults', async () => {
     const sseText = 'data: {"type":"text-delta","delta":"fast"}\n\n' + 'data: [DONE]\n\n';
     const fetchImpl = fetchMockResolving(okResponse(sseText));
