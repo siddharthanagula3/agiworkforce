@@ -21,6 +21,7 @@ import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
 import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
+import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
@@ -388,6 +389,7 @@ async function attemptStream(
       response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
     );
     if (truncated.length > 0) callbacks.onAttachmentsTruncated?.(truncated);
+    surfaceTermsNotice(response.headers);
   }
 
   for await (const event of readServerSentEvents(response, {
