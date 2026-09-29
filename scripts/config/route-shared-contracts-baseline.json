@@ -164,7 +164,6 @@
     "skills/[name]/files/[...path]",
     "skills/installs",
     "skills/installs/[name]",
-    "status/notices",
     "study/sessions",
     "telemetry/client",
     "user/delete-account/cancel",
@@ -175,7 +174,6 @@
     "waitlist/access",
     "waitlist/cloud-managed",
     "waitlist/public",
-    "web-push",
-    "web-search/allowance"
+    "web-push"
   ]
 }
