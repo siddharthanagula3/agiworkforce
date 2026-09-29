@@ -15,6 +15,7 @@ import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { getThermalState, recordPerfEvent } from '@/services/performanceMonitor';
+import { startPeakMemorySampler } from '@/services/processFootprint';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { imageLimitRefusal } from '@/src/features/chat/utils/attachmentValidation';
 import {
@@ -2132,21 +2133,28 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         };
 
         const localStartedAt = Date.now();
-        const result = await localGenerate(localRef.modelPath, {
-          modelId: localRef.modelId,
-          prompt: messageContent,
-          messages: localMessages,
-          requestId: assistantMessageId,
-          signal: controller.signal,
-          onToken: (token) => {
-            if (controller.signal.aborted) return;
-            if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();
-            lastDeltaTimes.set(conversationId, Date.now());
-            localTokenCount += 1;
-            localStreamingRaw += token;
-            updateLocalStream(parseCurrentTurnAssistantOutput(localStreamingRaw, content));
-          },
-        });
+        const memorySampler = startPeakMemorySampler();
+        let localPeakMemoryMB = 0;
+        let result: Awaited<ReturnType<typeof localGenerate>>;
+        try {
+          result = await localGenerate(localRef.modelPath, {
+            modelId: localRef.modelId,
+            prompt: messageContent,
+            messages: localMessages,
+            requestId: assistantMessageId,
+            signal: controller.signal,
+            onToken: (token) => {
+              if (controller.signal.aborted) return;
+              if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();
+              lastDeltaTimes.set(conversationId, Date.now());
+              localTokenCount += 1;
+              localStreamingRaw += token;
+              updateLocalStream(parseCurrentTurnAssistantOutput(localStreamingRaw, content));
+            },
+          });
+        } finally {
+          localPeakMemoryMB = await memorySampler.stop();
+        }
         if (controller.signal.aborted || result.aborted) {
           abortControllers.delete(conversationId);
           streamingConversations.delete(conversationId);
@@ -2175,7 +2183,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ts: Date.now(),
             tokensPerSecond,
             firstTokenLatencyMs: localFirstTokenAt - localStartedAt,
-            peakMemoryMB: 0,
+            peakMemoryMB: localPeakMemoryMB,
             backend: result.runtime,
             thermalState: getThermalState(),
           });
