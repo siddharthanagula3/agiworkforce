@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, Copy, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
+import { Check, Copy, Download, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -11,7 +11,8 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
-import { shareGeneratedImage } from '@/services/fileCreation';
+import { saveGeneratedImageToPhotos, shareGeneratedImage } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 
 import { imageSettingsCaption } from '@/src/features/image/imageSettingsCaption';
 import {
@@ -144,6 +145,19 @@ export function ImageFullScreen({
     }
   }, [imageUrl]);
 
+  const [saved, setSaved] = useState(false);
+  const handleSave = useCallback(async () => {
+    if (!imageUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await saveGeneratedImageToPhotos(imageUrl);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      Alert.alert('Could not save image', toUserMessage(error, 'Try again in a moment.'));
+    }
+  }, [imageUrl]);
+
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     if (!imageUrl) return;
@@ -243,6 +257,25 @@ export function ImageFullScreen({
                 accessibilityRole="button"
               >
                 <Trash2 size={18} color={colors.cameraOverlayText} />
+              </Pressable>
+            ) : null}
+
+            {!directUri ? (
+              <Pressable
+                onPress={handleSave}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel={saved ? 'Image saved to Photos' : 'Save image to Photos'}
+                accessibilityRole="button"
+              >
+                {saved ? (
+                  <Check size={18} color={colors.cameraOverlayText} />
+                ) : (
+                  <Download size={18} color={colors.cameraOverlayText} />
+                )}
               </Pressable>
             ) : null}
 
