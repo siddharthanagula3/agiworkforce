@@ -37,6 +37,15 @@ pub struct FileDiff {
     pub hunks: Vec<String>,
     pub additions: usize,
     pub deletions: usize,
+    pub hunk_previews: Vec<Vec<String>>,
+    pub hunk_patches: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiffReviewOutcome {
+    pub approved: Vec<PathBuf>,
+    pub stage_hunks: Vec<String>,
+    pub discard_hunks: Vec<String>,
 }
 
 impl FileDiff {
@@ -52,16 +61,28 @@ impl FileDiff {
             hunks,
             additions,
             deletions,
+            hunk_previews: Vec::new(),
+            hunk_patches: Vec::new(),
         }
+    }
+
+    pub fn with_hunk_patches(mut self, patches: Vec<String>) -> Self {
+        if patches.len() == self.hunk_previews.len() {
+            self.hunk_patches = patches;
+        }
+        self
     }
 
     /// Counts and status come from the parsed model, so the overlay cannot
     /// disagree with the diff it is showing.
     pub fn from_model(file: &crate::diff_model::FileDiff) -> Self {
         let mut preview = Vec::new();
+        let mut hunk_previews = Vec::new();
         for hunk in &file.hunks {
-            preview.push(hunk.header());
-            preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
+            let mut lines = vec![hunk.header()];
+            lines.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
+            preview.extend(lines.iter().cloned());
+            hunk_previews.push(lines);
         }
         Self {
             path: file.path().to_path_buf(),
@@ -69,6 +90,8 @@ impl FileDiff {
             hunks: preview,
             additions: file.additions(),
             deletions: file.deletions(),
+            hunk_previews,
+            hunk_patches: Vec::new(),
         }
     }
 }
@@ -77,6 +100,8 @@ pub struct DiffReviewView {
     pub files: Vec<FileDiff>,
     pub cursor: usize,
     pub decisions: HashMap<PathBuf, ReviewDecision>,
+    pub hunk: Option<usize>,
+    pub hunk_decisions: HashMap<(PathBuf, usize), ReviewDecision>,
     done: bool,
 }
 
@@ -86,6 +111,8 @@ impl DiffReviewView {
             decisions: HashMap::new(),
             cursor: 0,
             files,
+            hunk: None,
+            hunk_decisions: HashMap::new(),
             done: false,
         }
     }
@@ -93,19 +120,107 @@ impl DiffReviewView {
     fn move_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
+            self.hunk = None;
         }
     }
 
     fn move_down(&mut self) {
         if self.cursor + 1 < self.files.len() {
             self.cursor += 1;
+            self.hunk = None;
         }
     }
 
-    fn set_decision(&mut self, decision: ReviewDecision) {
-        if let Some(file) = self.files.get(self.cursor) {
-            self.decisions.insert(file.path.clone(), decision);
+    fn selectable_hunks(&self) -> usize {
+        self.files
+            .get(self.cursor)
+            .map(|file| file.hunk_patches.len())
+            .unwrap_or(0)
+    }
+
+    fn next_hunk(&mut self) {
+        let count = self.selectable_hunks();
+        if count == 0 {
+            return;
         }
+        self.hunk = Some(match self.hunk {
+            None => 0,
+            Some(index) => (index + 1).min(count - 1),
+        });
+    }
+
+    fn previous_hunk(&mut self) {
+        self.hunk = match self.hunk {
+            None | Some(0) => None,
+            Some(index) => Some(index - 1),
+        };
+    }
+
+    fn set_decision(&mut self, decision: ReviewDecision) {
+        let Some(path) = self.files.get(self.cursor).map(|file| file.path.clone()) else {
+            return;
+        };
+        match self.hunk {
+            Some(index) => {
+                self.decisions.remove(&path);
+                self.hunk_decisions.insert((path, index), decision);
+            }
+            None => {
+                self.hunk_decisions
+                    .retain(|(hunk_path, _), _| *hunk_path != path);
+                self.decisions.insert(path, decision);
+            }
+        }
+    }
+
+    fn file_label(&self, file: &FileDiff) -> Option<&'static str> {
+        self.decisions
+            .get(&file.path)
+            .map(|d| d.label())
+            .or_else(|| {
+                self.hunk_decisions
+                    .keys()
+                    .any(|(path, _)| *path == file.path)
+                    .then_some("[~] By hunk ")
+            })
+    }
+
+    fn hunk_status(&self) -> Option<String> {
+        let index = self.hunk?;
+        let file = self.files.get(self.cursor)?;
+        let decision = self
+            .hunk_decisions
+            .get(&(file.path.clone(), index))
+            .map(|d| d.label())
+            .unwrap_or("[ ] Pending");
+        Some(format!(
+            "hunk {} of {}  {decision}",
+            index + 1,
+            file.hunk_patches.len()
+        ))
+    }
+
+    pub fn outcome(&self) -> DiffReviewOutcome {
+        let approved = self
+            .decisions
+            .iter()
+            .filter(|(_, decision)| **decision == ReviewDecision::Approve)
+            .map(|(path, _)| path.clone())
+            .collect();
+        let mut outcome = DiffReviewOutcome {
+            approved,
+            ..DiffReviewOutcome::default()
+        };
+        for file in &self.files {
+            for (index, patch) in file.hunk_patches.iter().enumerate() {
+                match self.hunk_decisions.get(&(file.path.clone(), index)) {
+                    Some(ReviewDecision::Approve) => outcome.stage_hunks.push(patch.clone()),
+                    Some(ReviewDecision::Reject) => outcome.discard_hunks.push(patch.clone()),
+                    _ => {}
+                }
+            }
+        }
+        outcome
     }
 
     fn approved_count(&self) -> usize {
@@ -116,10 +231,21 @@ impl DiffReviewView {
     }
 
     fn current_hunks(&self) -> &[String] {
-        self.files
-            .get(self.cursor)
-            .map(|f| f.hunks.as_slice())
-            .unwrap_or_default()
+        let Some(file) = self.files.get(self.cursor) else {
+            return &[];
+        };
+        match self.hunk.and_then(|index| file.hunk_previews.get(index)) {
+            Some(lines) => lines.as_slice(),
+            None => file.hunks.as_slice(),
+        }
+    }
+
+    fn preview_rows(&self) -> usize {
+        if self.hunk.is_some() {
+            12
+        } else {
+            3
+        }
     }
 }
 
@@ -139,11 +265,7 @@ impl InteractiveView for DiffReviewView {
         // File list
         for (i, file) in self.files.iter().enumerate() {
             let cursor = if i == self.cursor { "❯" } else { " " };
-            let decision_str = self
-                .decisions
-                .get(&file.path)
-                .map(|d| d.label())
-                .unwrap_or("[ ] Pending   ");
+            let decision_str = self.file_label(file).unwrap_or("[ ] Pending   ");
             let name = sanitize_terminal_text(
                 file.path
                     .file_name()
@@ -161,13 +283,17 @@ impl InteractiveView for DiffReviewView {
         out.push_str("│ ──────────────────────────────────────────────────────────  │\n");
 
         // Hunk preview for current file
-        for hunk in self.current_hunks().iter().take(3) {
+        if let Some(status) = self.hunk_status() {
+            out.push_str(&format!("│  {}│\n", pad_to_cols(&status, 58)));
+        }
+        for hunk in self.current_hunks().iter().take(self.preview_rows()) {
             let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
             out.push_str(&format!("│  {hunk}│\n"));
         }
 
         out.push_str("│                                                            │\n");
         out.push_str("│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │\n");
+        out.push_str("│  ←→ pick a hunk; n on a hunk discards it                   │\n");
         out.push_str("└────────────────────────────────────────────────────────────┘\n");
         out
     }
@@ -210,6 +336,7 @@ impl InteractiveView for DiffReviewView {
                 Some(ReviewDecision::Approve) => ("[y] Approved", ui_success()),
                 Some(ReviewDecision::Reject) => ("[n] Rejected", ui_danger()),
                 Some(ReviewDecision::Skip) => ("[s] Skipped ", ui_warning()),
+                None if self.file_label(file).is_some() => ("[~] By hunk ", ui_accent()),
                 None => ("[ ] Pending   ", ui_muted()),
             };
             let name = sanitize_terminal_text(
@@ -241,7 +368,14 @@ impl InteractiveView for DiffReviewView {
         ));
 
         // Hunk preview, +added green, -removed red, @@ headers accented.
-        for hunk in self.current_hunks().iter().take(3) {
+        if let Some(status) = self.hunk_status() {
+            out.push(Line::from(vec![
+                Span::styled("│  ".to_string(), border),
+                Span::styled(pad_to_cols(&status, 58), Style::default().fg(ui_accent())),
+                Span::styled("│".to_string(), border),
+            ]));
+        }
+        for hunk in self.current_hunks().iter().take(self.preview_rows()) {
             let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
             let style = if hunk.starts_with('+') {
                 Style::default().fg(ui_success())
@@ -266,6 +400,9 @@ impl InteractiveView for DiffReviewView {
             "│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │",
         ));
         out.push(bs(
+            "│  ←→ pick a hunk; n on a hunk discards it                   │",
+        ));
+        out.push(bs(
             "└────────────────────────────────────────────────────────────┘",
         ));
         Some(out)
@@ -283,6 +420,14 @@ impl InteractiveView for DiffReviewView {
             }
             KeyAction::Char('s') | KeyAction::Char('S') => {
                 self.set_decision(ReviewDecision::Skip);
+                ViewAction::Continue
+            }
+            KeyAction::Right => {
+                self.next_hunk();
+                ViewAction::Continue
+            }
+            KeyAction::Left => {
+                self.previous_hunk();
                 ViewAction::Continue
             }
             KeyAction::Up => {
@@ -308,13 +453,13 @@ impl InteractiveView for DiffReviewView {
     fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
         // Only invoked on Submit (Enter). Hand back the approved paths for the host
         // to stage; rejected/skipped files are intentionally left untouched.
-        let approved: Vec<std::path::PathBuf> = self
-            .decisions
-            .iter()
-            .filter(|(_, decision)| **decision == ReviewDecision::Approve)
-            .map(|(path, _)| path.clone())
-            .collect();
-        Some(super::interactive::OverlayResult::DiffApproved(approved))
+        let outcome = self.outcome();
+        if outcome.stage_hunks.is_empty() && outcome.discard_hunks.is_empty() {
+            return Some(super::interactive::OverlayResult::DiffApproved(
+                outcome.approved,
+            ));
+        }
+        Some(super::interactive::OverlayResult::DiffReviewed(outcome))
     }
 
     fn is_done(&self) -> bool {
