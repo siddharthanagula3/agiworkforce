@@ -7,6 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
   requireOrganizationPermission,
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
@@ -147,8 +148,11 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Shared session not found');
   }
 
+  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
+
   await recordAuditEvent({
     userId,
+    organizationId,
     eventType: 'share_link_revoked',
     request,
     endpoint: SHARE_AUDIT_ENDPOINT,
