@@ -331,7 +331,8 @@ account Terms confirmation also links to Terms and Privacy
 (`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
 Settings → Privacy links to Terms and Privacy
 (`src/features/settings/cloud-privacy/index.tsx`). Password recovery opens
-`agiworkforce.com/auth/reset-password` (`app/(auth)/reset-password.tsx`), and
+`agiworkforce.com/login`, whose password step offers Forgot password
+(`app/(auth)/reset-password.tsx`), and
 the desktop-pairing safety disclosure opens `agiworkforce.com/security`
 (`src/features/companion/components/PairingRiskDisclosure.tsx`).
 
@@ -345,7 +346,10 @@ scheme requires a confirmation alert first.
 **D. Not `agiworkforce.com`.** Settings → Connectors → GitHub opens the GitHub App
 install flow at `${API_URL}/api/github/install/start`
 (`src/features/settings/cloud-connectors/index.tsx:690`, URL from
-`services/connectors.ts:7-9`), an OAuth start on our own host. The legal screen
+`services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
+button in the new cloud code session sheet runs the same install in an in-app
+authentication session that returns to `agiworkforce://github/installed`
+(`src/features/cloud-code/githubInstall.ts`), not the external browser. The legal screen
 `app/legal/article-50.tsx:34` opens the EU AI Act text at
 `artificialintelligenceact.eu`. A map result card opens the maps app
 (`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to

@@ -6,54 +6,17 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S64.01: Current-page context.
-
-- Done when: The assistant reads the page open in the user's browser and answers with it as context.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Recommend decline at leader parity: Claude documents only shared selected text (support.claude.com/en/articles/10263469); ChatGPT page 403, logged in founder-research-needed-to-proceed.md. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
-
-## S64.02: Selected-text context.
-
-- Done when: Text the user highlights on a web page reaches the assistant as context for a question.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Recommend done at parity: selected text arrives through the share sheet as in Claude; waits on the ChatGPT founder check. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
-
 ## S64.05: Page summary.
 
 - Done when: One action summarizes the page the user is viewing.
 - Wave: 3
-- Already works on: desktop, chrome
+- Already works on: desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same as S64.01. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
-
-## S64.06: Question about page.
-
-- Done when: The user asks a free-form question and the answer uses the current page's content.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same as S64.01. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
+Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 
 ## S64.07: Question about video/transcript.
 

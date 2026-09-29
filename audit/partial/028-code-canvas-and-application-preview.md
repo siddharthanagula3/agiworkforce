@@ -88,17 +88,14 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 ## S28.07: Code completion where offered.
 
 - Done when: The code editor offers code completion (where the product offers it).
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Inline ghost-text completions exist but are off by default; the user must turn on agiWorkforce.inlineCompletions.enabled in Settings. | flag-off |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/package.json:1060-1064`, `apps/extension-vscode/src/core/providerSetup.ts:78-90`
 
 ## S28.08: Search across generated files.
 

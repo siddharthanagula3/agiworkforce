@@ -61,6 +61,7 @@ pub(crate) mod process_tree;
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
 pub use features::plan::plan_mode;
 pub mod provider;
+pub mod remote_control;
 pub mod repl;
 pub mod repo;
 pub mod safety;
@@ -858,6 +859,9 @@ enum Command {
         #[arg(long)]
         no_memory: bool,
     },
+    /// Let the AGI Workforce phone app list, start, follow and steer sessions in this folder.
+    #[command(alias = "rc")]
+    RemoteControl,
     /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
     #[command(alias = "bg")]
     Background {
@@ -1750,6 +1754,7 @@ fn invocation_requires_project_trust(cli: &Cli) -> bool {
                 | Command::Review { .. }
                 | Command::Apply { .. }
                 | Command::AppServer { .. }
+                | Command::RemoteControl
                 | Command::Resume { .. }
                 | Command::Fork { .. }
                 | Command::Background {
@@ -5981,6 +5986,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Completion { shell } => {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
                 Ok(())
+            }
+            Command::RemoteControl => {
+                let workspace_root = std::env::current_dir()?;
+                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
+                    app_config.clone(),
+                    workspace_root.clone(),
+                )?);
+                remote_control::run(host, &workspace_root).await
             }
             Command::AppServer {
                 listen,

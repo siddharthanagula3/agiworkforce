@@ -240,6 +240,7 @@ const respondToApproval = z.object({
     requestId: z.string().min(1).max(200),
     decision: ApprovalDecisionSchema,
     guidance: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
+    answer: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
   }),
 });
 

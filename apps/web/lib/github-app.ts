@@ -128,7 +128,11 @@ export function getGitHubAppInstallUrl(): string | null {
     : null;
 }
 
-export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string): string {
+export function getGitHubUserAuthorizationUrl(
+  state: string,
+  redirectUri: string,
+  codeChallenge?: string,
+): string {
   if (!isGitHubInstallationLinkingAvailable() || !GITHUB_APP_CLIENT_ID) {
     throw new Error('GitHub App user authorization is not configured');
   }
@@ -148,10 +152,18 @@ export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string
   authorizeUrl.searchParams.set('client_id', GITHUB_APP_CLIENT_ID);
   authorizeUrl.searchParams.set('redirect_uri', callbackUrl.toString());
   authorizeUrl.searchParams.set('state', state);
+  if (codeChallenge) {
+    authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+    authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+  }
   return authorizeUrl.toString();
 }
 
-export async function exchangeGitHubOAuthCode(code: string, redirectUri: string): Promise<string> {
+export async function exchangeGitHubOAuthCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier?: string,
+): Promise<string> {
   if (
     !isGitHubInstallationLinkingAvailable() ||
     !GITHUB_APP_CLIENT_ID ||
@@ -174,6 +186,7 @@ export async function exchangeGitHubOAuthCode(code: string, redirectUri: string)
       client_secret: GITHUB_APP_CLIENT_SECRET,
       code,
       redirect_uri: redirectUri,
+      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
     }),
     signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
   });
