@@ -135,8 +135,12 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Project not found');
   }
 
+  if (data['server_version'] === null || data['server_version'] === undefined) {
+    throw createError.internal('Project version unavailable');
+  }
+
   return NextResponse.json({
-    project: mapProjectRow(data),
+    project: { ...mapProjectRow(data), serverVersion: String(data['server_version']) },
   });
 }
 

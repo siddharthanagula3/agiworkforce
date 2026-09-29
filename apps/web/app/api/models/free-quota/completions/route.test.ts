@@ -115,6 +115,35 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   beginFreeTrialRequest: mocks.begin,
   settleFreeTrialRequest: mocks.settle,
 }));
+vi.mock('@/lib/server/free-pools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/free-pools')>();
+  return {
+    ...actual,
+    loadFreePools: () => {
+      const document = actual.loadFreePools();
+      const inventory = document.inventory!;
+      return {
+        ...document,
+        inventory: {
+          ...inventory,
+          termsReview: {
+            terms: {
+              commercialUseAllowed: true,
+              thirdPartyServingAllowed: true,
+              proxyingAllowed: true,
+              promptsExcludedFromTraining: true,
+            },
+            evidenceUrl: 'https://provider.example/terms',
+            reviewedBy: 'fixture-reviewer',
+            verifiedAtMs: Date.now() - 60_000,
+            expiresAtMs: Date.now() + 86_400_000,
+            approvedOfferingKeys: inventory.entries.map((entry) => entry.offeringKey),
+          },
+        },
+      };
+    },
+  };
+});
 vi.mock('@agiworkforce/providers-factory', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const guarded = Object.fromEntries(
@@ -365,6 +394,58 @@ describe('Qwen free quota turns on the Free plan', () => {
       ),
     );
     await (await post()).text();
+    expect((await sharedState()).used.get(model!)).toBe(42);
+  });
+
+  it.each([
+    ['empty', {}],
+    ['zero tokens', { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }],
+    ['missing completion count', { prompt_tokens: 12 }],
+    ['negative completion count', { prompt_tokens: 12, completion_tokens: -1 }],
+    ['non-numeric completion count', { prompt_tokens: 12, completion_tokens: '3' }],
+    ['an unsafe combined count', { prompt_tokens: Number.MAX_SAFE_INTEGER, completion_tokens: 1 }],
+  ])('keeps the reserved allowance when provider usage is %s', async (_name, usage) => {
+    mocks.stream.mockResolvedValue(sse(JSON.stringify({ choices: [], usage }), '[DONE]'));
+
+    const response = await post();
+    expect(response.status).toBe(200);
+    const reserved = (await sharedState()).used.get(model!);
+    expect(reserved).toBeGreaterThan(0);
+    await response.text();
+
+    expect((await sharedState()).used.get(model!)).toBe(reserved);
+  });
+
+  it('keeps the reservation when the final provider usage invalidates an earlier count', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({ choices: [], usage: { prompt_tokens: 40, completion_tokens: 2 } }),
+        JSON.stringify({ choices: [], usage: {} }),
+        '[DONE]',
+      ),
+    );
+
+    const response = await post();
+    expect(response.status).toBe(200);
+    const reserved = (await sharedState()).used.get(model!);
+    await response.text();
+
+    expect((await sharedState()).used.get(model!)).toBe(reserved);
+  });
+
+  it('does not reduce a valid usage count when a later report is smaller', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({ choices: [], usage: { prompt_tokens: 40, completion_tokens: 2 } }),
+        JSON.stringify({ choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+        '[DONE]',
+      ),
+    );
+
+    const response = await post();
+    expect(response.status).toBe(200);
+    await response.text();
+
     expect((await sharedState()).used.get(model!)).toBe(42);
   });
 

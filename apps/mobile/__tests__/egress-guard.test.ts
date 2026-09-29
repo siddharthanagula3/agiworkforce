@@ -22,6 +22,8 @@ import {
   OUR_CLOUD_HOSTS,
   EgressBlockedError,
 } from '../lib/egressGuard';
+import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
+import { API_URL } from '../lib/constants';
 
 beforeEach(() => {
   mockSecureFetch.mockReset().mockResolvedValue(new Response('ok', { status: 200 }));
@@ -108,6 +110,38 @@ describe('guardedFetch, Local mode (block our-cloud, allow provider)', () => {
     await guardedFetch('https://api.anthropic.com/v1/messages', init);
     expect(mockSecureFetch).toHaveBeenCalledTimes(1);
     expect(mockSecureFetch).toHaveBeenCalledWith('https://api.anthropic.com/v1/messages', init);
+  });
+});
+
+describe('guardedFetch, signed-in Terms control during Cloud entry', () => {
+  const termsUrl = new URL(TERMS_ACCEPTANCE_PATH, API_URL).toString();
+  const authorizedGet = { method: 'GET', headers: { Authorization: 'Bearer session-token' } };
+
+  it('allows only an explicitly marked signed-in Terms request before Cloud unlocks', async () => {
+    await expect(guardedFetch(termsUrl, authorizedGet)).rejects.toBeInstanceOf(EgressBlockedError);
+    await guardedFetch(termsUrl, authorizedGet, { authControl: true });
+    await guardedFetch(
+      termsUrl,
+      { method: 'POST', headers: { Authorization: 'Bearer session-token' } },
+      { authControl: true },
+    );
+    expect(mockSecureFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not turn the auth exception into a general managed-cloud bypass', async () => {
+    const requests = [
+      [new URL('/api/chat/send', API_URL).toString(), authorizedGet],
+      [termsUrl, { method: 'GET' }],
+      [termsUrl, { method: 'DELETE', headers: authorizedGet.headers }],
+      [`${termsUrl}?next=chat`, authorizedGet],
+      [termsUrl.replace('https://', 'http://'), authorizedGet],
+    ] as const;
+    for (const [url, init] of requests) {
+      await expect(guardedFetch(url, init, { authControl: true })).rejects.toBeInstanceOf(
+        EgressBlockedError,
+      );
+    }
+    expect(mockSecureFetch).not.toHaveBeenCalled();
   });
 });
 

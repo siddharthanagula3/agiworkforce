@@ -18,6 +18,7 @@ import {
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -137,12 +138,10 @@ export default function AccountSecurityScreen() {
         setStatus(nextStatus);
         setSessionTimeout(timeout);
         setAuditEntries(entries);
-      } catch (loadError) {
+      } catch {
         if (signal?.aborted) return;
         if (!isCloudAccountEpochCurrent(account)) return;
-        setError(
-          loadError instanceof Error ? loadError.message : 'Could not load account security.',
-        );
+        setError('Could not load account security. Retry.');
       } finally {
         if (isCloudAccountEpochCurrent(account)) setLoading(false);
       }
@@ -160,13 +159,11 @@ export default function AccountSecurityScreen() {
         if (!isCloudAccountEpochCurrent(account)) return;
         setSessions(next);
         setSessionsError(null);
-      } catch (loadError) {
+      } catch {
         if (signal?.aborted) return;
         if (!isCloudAccountEpochCurrent(account)) return;
         setSessions(null);
-        setSessionsError(
-          loadError instanceof Error ? loadError.message : 'Could not load your devices.',
-        );
+        setSessionsError('Could not load your devices. Retry.');
       }
     },
     [clerkUserId],
@@ -188,11 +185,8 @@ export default function AccountSecurityScreen() {
                 try {
                   await revokeAccountSession(row.id);
                   await loadSessions();
-                } catch (revokeError) {
-                  Alert.alert(
-                    'Could not sign out that device',
-                    revokeError instanceof Error ? revokeError.message : 'Please try again.',
-                  );
+                } catch {
+                  Alert.alert('Could not sign out that device', 'Please try again.');
                 } finally {
                   setRevokingSessionId(null);
                 }
@@ -300,12 +294,9 @@ export default function AccountSecurityScreen() {
       setSavingTimeout(true);
       try {
         await saveSessionTimeout(next);
-      } catch (saveError) {
+      } catch {
         setSessionTimeout(previous);
-        Alert.alert(
-          'Could not save session timeout',
-          saveError instanceof Error ? saveError.message : 'Please try again.',
-        );
+        Alert.alert('Could not save session timeout', 'Please try again.');
       } finally {
         setSavingTimeout(false);
       }
@@ -383,7 +374,7 @@ export default function AccountSecurityScreen() {
       <SettingsScreenShell title="Account Security">
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+          onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-account-security'))}
         />
       </SettingsScreenShell>
     );

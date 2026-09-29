@@ -1,6 +1,7 @@
 /** @type {import('expo/config').ExpoConfig} */
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
 
@@ -11,6 +12,13 @@ if (
   throw new Error(
     `[clerk] ${appEnv} builds require EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to be a live Clerk publishable key.`,
   );
+}
+
+if (
+  (appEnv === 'production' || appEnv === 'preview') &&
+  (!hostedOrigin || new URL(hostedOrigin).protocol !== 'https:')
+) {
+  throw new Error(`[expo-router] ${appEnv} builds require an HTTPS EXPO_PUBLIC_API_URL origin.`);
 }
 
 function envIsTruthy(name) {
@@ -30,7 +38,6 @@ const shouldUseProductionEntitlements =
 const iosEntitlements = shouldUseProductionEntitlements
   ? {
       'com.apple.developer.siri': true,
-      'com.apple.developer.natural-language.translation': true,
     }
   : {};
 
@@ -56,7 +63,7 @@ const conditionalPlugins = [
 const config = {
   name: 'AGI Workforce',
   slug: 'agi-workforce',
-  version: '1.2.0',
+  version: '0.0.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'agiworkforce',
@@ -215,7 +222,7 @@ const config = {
     ],
     'expo-background-task',
     'expo-image',
-    'expo-router',
+    hostedOrigin ? ['expo-router', { origin: hostedOrigin }] : 'expo-router',
     'expo-secure-store',
     [
       'expo-build-properties',

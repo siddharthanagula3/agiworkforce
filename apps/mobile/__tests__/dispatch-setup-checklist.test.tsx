@@ -146,9 +146,11 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
     expect(cta).toBeGreaterThan(lastStep);
   });
 
-  it('echoes the signed-in account in the second step', () => {
+  it('explains that the pairing code authorizes this phone', () => {
     const screen = render(<DesktopSetupChecklistView />);
-    expect(screen.getByText('Sign in on that computer as founder@agiworkforce.com')).toBeTruthy();
+    expect(
+      screen.getByText('Sign in on Desktop; the short-lived pairing code authorizes this phone'),
+    ).toBeTruthy();
   });
 
   it('renders the risk paragraph directly beneath the pair button', () => {
@@ -218,6 +220,19 @@ describe('PAR-M28, PairingRiskDisclosure', () => {
 });
 
 describe('PAR-M28, DisconnectedView (returning users)', () => {
+  it('offers the desktop setup steps without starting pairing', () => {
+    const onScanPress = jest.fn();
+    const onShowSetupSteps = jest.fn();
+    const screen = render(
+      <DisconnectedView onScanPress={onScanPress} onShowSetupSteps={onShowSetupSteps} />,
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Show desktop setup steps again' }));
+
+    expect(onShowSetupSteps).toHaveBeenCalledTimes(1);
+    expect(onScanPress).not.toHaveBeenCalled();
+  });
+
   it('also states the risk before the scanner is reachable', () => {
     const screen = render(<DisconnectedView onScanPress={jest.fn()} />);
 

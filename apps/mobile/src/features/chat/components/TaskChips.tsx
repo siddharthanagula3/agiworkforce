@@ -1,11 +1,23 @@
 import { useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { Image as ImageIcon, PenLine, Search } from 'lucide-react-native';
+import { getModelMetadataById } from '@agiworkforce/types';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useCapability } from '@/src/lib/capabilities';
+import { useTierStore } from '@/src/features/billing/store';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export type TaskChipType = 'write' | 'research';
 export type TaskSuggestionType = 'image' | TaskChipType;
+
+export const TASK_CHIP_DRAFT_STARTERS: Record<TaskSuggestionType, string> = {
+  image: 'Create an image of ',
+  write: 'Help me write ',
+  research: 'Look up ',
+};
 
 export const TASK_CHIP_SEND_CONTEXT: Record<
   TaskChipType,
@@ -40,10 +52,31 @@ interface TaskChipsProps {
   activeChip?: TaskChipType | null;
   onChipPress: (chip: TaskSuggestionType) => void;
   showCloudSuggestions: boolean;
+  modelId?: string | null;
 }
 
-export function TaskChips({ activeChip, onChipPress, showCloudSuggestions }: TaskChipsProps) {
+export function TaskChips({
+  activeChip,
+  onChipPress,
+  showCloudSuggestions,
+  modelId,
+}: TaskChipsProps) {
   const colors = useThemeColors();
+  const webSearchEnabled = useChatViewStore((state) => state.features.webSearch);
+  const genericWebSearchAvailable = useTierStore((state) => state.genericWebSearchAvailable);
+  const webSearchAllowed = useCapability('canUseWebSearch');
+  const model = modelId ? getModelMetadataById(modelId) : null;
+  const showWebSearchSuggestion =
+    showCloudSuggestions &&
+    FEATURES.webSearch &&
+    webSearchEnabled &&
+    webSearchAllowed &&
+    isWebSearchAvailable({
+      provider: model?.provider,
+      modelSupportsNativeSearch: model?.capabilities.search,
+      modelSupportsTools: model?.capabilities.tools,
+      genericBackendConfigured: genericWebSearchAvailable,
+    });
 
   const handlePress = useCallback(
     (type: TaskSuggestionType) => {
@@ -54,7 +87,11 @@ export function TaskChips({ activeChip, onChipPress, showCloudSuggestions }: Tas
 
   return (
     <View style={{ width: '100%', gap: 2 }}>
-      {CHIPS.filter((chip) => showCloudSuggestions || !chip.cloudOnly).map((chip) => {
+      {CHIPS.filter(
+        (chip) =>
+          (showCloudSuggestions || !chip.cloudOnly) &&
+          (chip.type !== 'research' || showWebSearchSuggestion),
+      ).map((chip) => {
         const active = activeChip === chip.type;
         const contentColor = active ? colors.teal : colors.textSecondary;
         return (

@@ -30,6 +30,9 @@ vi.mock('./StaleSessionRecovery', () => ({
     />
   ),
 }));
+vi.mock('./TermsReviewSignOut', () => ({
+  TermsReviewSignOut: () => <button type="button">Sign out</button>,
+}));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
     mocks.redirect(url);
@@ -122,6 +125,7 @@ describe('/login/complete', () => {
     expect(screen.getByTestId('terms-gate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Finish signing in' })).toBeInTheDocument();
     expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(mocks.recorder).toHaveBeenCalledWith({ redirectTo: '/chat', surface: 'web-login' });
     expect(mocks.gate).toHaveBeenCalledWith(
       expect.objectContaining({ restorePreAuthMarker: false, confirmationLabel: 'Continue' }),

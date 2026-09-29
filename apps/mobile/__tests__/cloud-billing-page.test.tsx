@@ -139,6 +139,8 @@ jest.mock('@/src/features/auth/store', () => ({
 }));
 
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
+import * as mobileIapHook from '../src/features/billing/useMobileIap';
+import * as mobileIapService from '../src/features/billing/mobileIapService';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
@@ -236,7 +238,10 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(queryByText('Free plan')).toBeNull();
     expect(mockRefreshTier).not.toHaveBeenCalled();
     fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-billing' },
+    });
   });
 
   it('shows the Local Mode banner and does not refresh the tier while chat is set to Local', async () => {
@@ -284,7 +289,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
   it('always renders the plan badge, never swaps it for an indefinite spinner', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { queryByText } = render(<CloudBillingScreen />);
-    expect(queryByText('Chat on web, iOS, Android, and desktop')).toBeTruthy();
+    expect(queryByText('Free plan')).toBeTruthy();
   });
 
   it('shows a canceled recorded plan without granting paid feature status', () => {
@@ -500,5 +505,57 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(false);
     expect(queryByText('Unavailable in the app')).toBeNull();
     expect(queryByText('Plan changes are not in this app yet')).toBeNull();
+  });
+
+  it('offers the waitlist and keeps upgrade API failures out of the screen', async () => {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
+      connected: false,
+      loading: false,
+      restoring: false,
+      purchasingKey: null,
+      catalog: {
+        enabled: false,
+        platform: 'ios',
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'Paid upgrades are opening in stages.',
+        unavailableCode: 'waitlist_access_required',
+      },
+      storeProducts: new Map(),
+      priceFor: jest.fn(),
+      error: null,
+      lastResult: null,
+      purchase: jest.fn(),
+      restore: jest.fn(),
+      reload: jest.fn(),
+    });
+    const joinSpy = jest
+      .spyOn(mobileIapService, 'joinBillingUpgradeWaitlist')
+      .mockRejectedValue(new Error('Private waitlist route failed at /internal/billing'));
+    const redeemSpy = jest
+      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
+      .mockRejectedValue(new Error('Private access route failed at /internal/billing'));
+
+    try {
+      const screen = render(<CloudBillingScreen />);
+
+      expect(screen.getByLabelText('Join upgrade waitlist').props.accessibilityState.disabled).toBe(
+        false,
+      );
+      expect(screen.getByText('Or enter an access code below')).toBeTruthy();
+      expect(screen.queryByText('Plan changes are not in this app yet')).toBeNull();
+      await act(async () => fireEvent.press(screen.getByLabelText('Join upgrade waitlist')));
+      expect(joinSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Could not join the waitlist. Try again.')).toBeTruthy();
+
+      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
+      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
+      expect(redeemSpy).toHaveBeenCalledWith('AGI2026');
+      expect(screen.getByText('Could not redeem this code. Check it and try again.')).toBeTruthy();
+    } finally {
+      iapSpy.mockRestore();
+      joinSpy.mockRestore();
+      redeemSpy.mockRestore();
+    }
   });
 });

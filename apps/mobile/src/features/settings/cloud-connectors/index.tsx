@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Image, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { Plug, Link, CheckCircle, ChevronRight, RefreshCw, ShieldCheck } from 'lucide-react-native';
+import { toolApprovalPolicyOption } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -9,16 +10,21 @@ import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/component
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
+  SettingsGroup,
   SettingsInfo,
+  SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as WebBrowser from 'expo-web-browser';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
+import { connectorFailureMessage } from './connectorFailureMessage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -569,6 +575,7 @@ export default function CloudConnectorsScreen({
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
@@ -599,9 +606,9 @@ export default function CloudConnectorsScreen({
       if (!isCloudAccountEpochCurrent(account)) return null;
       setDirectory(nextDirectory);
       return nextDirectory;
-    } catch (err) {
+    } catch {
       if (!isCloudAccountEpochCurrent(account)) return null;
-      setError(err instanceof Error ? err.message : 'Could not load connectors');
+      setError('Could not load connectors. Retry.');
       return null;
     } finally {
       if (isCloudAccountEpochCurrent(account)) setLoading(false);
@@ -722,11 +729,11 @@ export default function CloudConnectorsScreen({
               );
             }
           })
-          .catch((err: unknown) => {
+          .catch((connectError: unknown) => {
             if (!isConnectorActionCurrent(account)) return;
             Alert.alert(
               `Could not connect ${entry.name}`,
-              err instanceof Error ? err.message : 'Please try again.',
+              connectorFailureMessage(connectError, 'connect'),
             );
           })
           .finally(() => {
@@ -774,7 +781,7 @@ export default function CloudConnectorsScreen({
   }, [activeFilter, connections, search, connectionFor]);
 
   const handleSignIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-connectors'));
   }, [router]);
 
   const directoryVisible =
@@ -808,6 +815,25 @@ export default function CloudConnectorsScreen({
           body="Only providers marked Connect are configured in this deployment. Custom MCP tokens are encrypted and never shown again."
           icon={Plug}
         />
+
+        {FEATURES.connectors && (
+          <>
+            <SettingsGroup>
+              <SettingsRow
+                label="Action approvals"
+                value={toolApprovalPolicyOption(toolApprovalPolicy).shortLabel}
+                icon={ShieldCheck}
+                onPress={() => router.push('/(app)/settings/auto-approve')}
+                isLast
+              />
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Choose when AGI asks before a connected tool acts.
+                </Text>
+              </View>
+            </SettingsGroup>
+          </>
+        )}
 
         {!FEATURES.connectors && <WaitlistPlaceholder />}
 

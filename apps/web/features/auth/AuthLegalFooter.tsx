@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { useAuthCopy } from './authCopy';
+import { AccountDataDisclosure } from './AccountDataDisclosure';
 import {
   AUTH_FOOTER_CLASS,
   AUTH_FOOTER_LINK_CLASS,
@@ -19,17 +20,20 @@ export function AuthLegalFooter({ variant = 'links' }: { variant?: 'links' | 'si
 
   if (variant === 'signup') {
     return (
-      <p className={AUTH_FOOTER_SENTENCE_CLASS} data-testid="auth-legal-footer">
-        {copy.text('flow.legal.agreementLead', 'By signing up, you agree to the')}{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.terms} className={AUTH_FOOTER_LINK_CLASS}>
-          {terms}
-        </Link>{' '}
-        {copy.text('flow.legal.agreementJoin', 'and acknowledge the')}{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className={AUTH_FOOTER_LINK_CLASS}>
-          {privacy}
-        </Link>
-        .
-      </p>
+      <div className="space-y-4" data-testid="auth-legal-footer">
+        <p className={AUTH_FOOTER_SENTENCE_CLASS}>
+          {copy.text('flow.legal.agreementLead', 'By signing up, you agree to the')}{' '}
+          <Link href={CANONICAL_POLICY_ROUTES.terms} className={AUTH_FOOTER_LINK_CLASS}>
+            {terms}
+          </Link>{' '}
+          {copy.text('flow.legal.agreementJoin', 'and acknowledge the')}{' '}
+          <Link href={CANONICAL_POLICY_ROUTES.privacy} className={AUTH_FOOTER_LINK_CLASS}>
+            {privacy}
+          </Link>
+          .
+        </p>
+        <AccountDataDisclosure />
+      </div>
     );
   }
   return (

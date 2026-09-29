@@ -31,6 +31,9 @@ export interface CombinedChatState {
   currentConversationId: string | null;
   messages: Record<string, ChatMessage[]>;
   isLoadingConversations: boolean;
+  isLoadingMoreConversations: boolean;
+  hasMoreCloudConversations: boolean;
+  conversationLoadError: string | null;
   isLoadingMessages: boolean;
   isStreaming: boolean;
   streamingConversationIds: string[];
@@ -57,7 +60,8 @@ export interface CombinedChatState {
   chatStyle: ChatStyle;
   features: ChatFeatures;
   setCurrentConversationId: (id: string | null) => void;
-  loadConversations: () => Promise<void>;
+  loadConversations: (options?: { firstPageOnly?: boolean }) => Promise<void>;
+  loadMoreConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
   forkConversation: (
     sourceConversationId: string,
@@ -75,7 +79,7 @@ export interface CombinedChatState {
     conversationId: string,
     messageId: string,
     reaction: 'thumbsUp' | 'thumbsDown' | null,
-  ) => void;
+  ) => Promise<void>;
   enqueueOfflineMessage: (
     conversationId: string,
     content: string,
@@ -180,9 +184,13 @@ function buildCombinedState(
     currentConversationId: msg.currentConversationId,
     messages: mergedMessages,
     isLoadingConversations: msg.isLoadingConversations,
+    isLoadingMoreConversations: msg.isLoadingMoreConversations,
+    hasMoreCloudConversations: msg.hasMoreCloudConversations,
+    conversationLoadError: msg.conversationLoadError,
     isLoadingMessages: msg.isLoadingMessages,
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
+    loadMoreConversations: msg.loadMoreConversations,
     createConversation: msg.createConversation,
     forkConversation: msg.forkConversation,
     deleteConversation: msg.deleteConversation,

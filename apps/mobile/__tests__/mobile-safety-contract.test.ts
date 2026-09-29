@@ -116,7 +116,8 @@ describe('what a notification is allowed to say on a locked screen', () => {
 
 describe('deleting an account', () => {
   it('names the consequence, the timing and what is left behind', () => {
-    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/permanently deletes/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/permanent deletion/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cancel before erasure begins/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cannot be undone/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/signed out/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Local Mode data stays on this device/);
@@ -144,8 +145,8 @@ describe('deleting an account', () => {
 });
 
 describe('what this repository hands a store reviewer', () => {
-  it('asks for no demo account and keeps no credential in the listing', () => {
-    expect(LISTING_IOS.app_review_information?.demo_account_required).toBe(false);
+  it('requires a review account without storing credentials in the repository', () => {
+    expect(LISTING_IOS.app_review_information?.demo_account_required).toBe(true);
 
     const withCredentials = storeListingFiles()
       .filter((file) => CREDENTIAL_SHAPE.test(file.text))

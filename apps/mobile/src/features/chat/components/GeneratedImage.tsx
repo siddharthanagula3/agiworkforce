@@ -46,11 +46,8 @@ export function GeneratedImage({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await shareGeneratedImage(imageUrl);
-    } catch (error) {
-      Alert.alert(
-        'Could not share image',
-        error instanceof Error ? error.message : 'Save the image and try again.',
-      );
+    } catch {
+      Alert.alert('Could not share image', 'Save the image and try again.');
     }
   }, [imageUrl]);
 

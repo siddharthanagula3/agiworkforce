@@ -43,6 +43,7 @@ import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecy
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Waveform } from '@/src/features/voice/components/Waveform';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
@@ -51,6 +52,10 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
@@ -94,6 +99,7 @@ interface QueuedFollowUp {
 export interface ChatInputHandle {
   addAttachments: (items: Attachment[]) => void;
   focus?: () => void;
+  prefillText?: (starter: string) => void;
 }
 
 interface ChatInputProps {
@@ -185,6 +191,7 @@ export function ChatInput({
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const workMode = useChatViewStore((s) => s.workMode);
   const mediaModelId = mediaModelIdForMode(mediaMode);
   const mediaModelName = mediaModelId
     ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
@@ -243,6 +250,9 @@ export function ChatInput({
     () => ({
       focus: () => {
         inputRef.current?.focus();
+      },
+      prefillText: (starter: string) => {
+        setText((current) => (current.trim() ? current : starter));
       },
       addAttachments: (items: Attachment[]) => {
         const { accepted, rejected } = validateAttachments(items, appMode);
@@ -492,29 +502,38 @@ export function ChatInput({
     (id: string) => {
       const target = attachments.find((a) => a.id === id);
       if (!target) return;
+      const accountEpoch = captureCloudAccountEpoch();
+      if (!isCloudAccountEpochCurrent(accountEpoch)) return;
       void uploadWithRetry(
         { uri: target.uri, name: target.fileName, type: target.mimeType },
         target.fileName,
         target.id,
         { temporary: useSettingsStore.getState().isTemporaryChat },
-      ).then((result) => {
-        if (!result) return;
-        // A resumed upload owns a Cloud asset, so the next send reuses it
-        // instead of uploading the same bytes again.
-        setAttachments((prev) =>
-          prev.map((a) =>
-            a.id === id
-              ? {
-                  ...a,
-                  assetId: result.id,
-                  uri: result.url,
-                  fileSize: result.byteCount,
-                  sendFailed: false,
-                }
-              : a,
-          ),
-        );
-      });
+      )
+        .then((result) => {
+          if (!result || !isCloudAccountEpochCurrent(accountEpoch)) return;
+          // A resumed upload owns a Cloud asset, so the next send reuses it
+          // instead of uploading the same bytes again.
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    assetId: result.id,
+                    uri: result.url,
+                    fileSize: result.byteCount,
+                    sendFailed: false,
+                  }
+                : a,
+            ),
+          );
+        })
+        .catch(() => {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+          useUploadLifecycleStore
+            .getState()
+            .settle(id, 'failed', 'Could not upload this file. Check your connection and retry.');
+        });
     },
     [attachments],
   );
@@ -602,10 +621,11 @@ export function ChatInput({
   }, [finishDictation]);
 
   const handleVoiceError = useCallback(
-    (message: string) => {
+    (message: string, permissionDenied?: boolean) => {
       resetRecordingUi();
       setVoiceResetSignal((value) => value + 1);
-      Alert.alert('Voice input unavailable', message);
+      if (permissionDenied) showVoicePermissionAlert(message);
+      else Alert.alert('Voice input unavailable', message);
     },
     [resetRecordingUi],
   );
@@ -705,7 +725,11 @@ export function ChatInput({
           ? 'Describe the video to create'
           : isThreadActive
             ? 'Reply to AGI'
-            : "What's on your mind?";
+            : appMode === 'cloud' &&
+                workMode === 'agiwork' &&
+                canUseBillingPlanCapability(subscriptionTier, 'agi_work')
+              ? 'Work with AGI'
+              : "What's on your mind?";
 
   return (
     <View

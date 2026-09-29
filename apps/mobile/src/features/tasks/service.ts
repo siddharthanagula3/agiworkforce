@@ -62,7 +62,7 @@ export function cancelCloudRun(runId: string, signal?: AbortSignal): Promise<Clo
 export function describeCloudRunError(error: unknown, fallback: string): string {
   if (error instanceof ManagedCloudAgentRunAlreadyResumingError) return ALREADY_RESUMING_MESSAGE;
   if (error instanceof ManagedCloudAgentRunApprovalExpiredError) return APPROVAL_EXPIRED_MESSAGE;
-  return error instanceof Error && error.message ? error.message : fallback;
+  return fallback;
 }
 
 export function isAbortedCloudRunError(error: unknown): boolean {

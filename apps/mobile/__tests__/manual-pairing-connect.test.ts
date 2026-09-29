@@ -61,6 +61,7 @@ jest.mock('../services/companionNotifications', () => ({
 }));
 
 import { useConnectionStore } from '../stores/connectionStore';
+import { ManualPairingClaimError } from '../services/manualPairing';
 
 const PAIR_TOKEN = 'a'.repeat(64);
 const PAIRING_SECRET = '9f'.repeat(32);
@@ -108,7 +109,9 @@ describe('Connection store manual pairing', () => {
 
   it('surfaces a failed claim without opening a WebSocket', async () => {
     mockClaimManualPairingToken.mockRejectedValueOnce(
-      new Error('That pairing code is invalid or expired. Generate a new code on Desktop.'),
+      new ManualPairingClaimError(
+        'That pairing code is invalid or expired. Generate a new code on Desktop.',
+      ),
     );
 
     useConnectionStore.getState().connect(`agiw3:ABCD-EFGH-IJKL:${PAIRING_SECRET}`);
@@ -118,6 +121,19 @@ describe('Connection store manual pairing', () => {
     });
     expect(useConnectionStore.getState().error).toContain('invalid or expired');
     expect(mockSignalingClient).not.toHaveBeenCalled();
+  });
+
+  it('hides unexpected network diagnostics from the pairing screen', async () => {
+    mockClaimManualPairingToken.mockRejectedValueOnce(
+      new Error('private relay hostname and token'),
+    );
+
+    useConnectionStore.getState().connect(V3_PAYLOAD);
+
+    await waitFor(() => expect(useConnectionStore.getState().status).toBe('error'));
+    expect(useConnectionStore.getState().error).toBe(
+      'Manual pairing failed. Generate a new code and try again.',
+    );
   });
 });
 

@@ -65,6 +65,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const mutedRef = useRef(false);
   const pttHeldRef = useRef(false);
   const captureRef = useRef<CaptureEntry | null>(null);
+  const turnInFlightRef = useRef(false);
   const startListeningRef = useRef<() => void>(() => {});
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -75,24 +76,17 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, []);
 
-  const processTranscript = useCallback(async (entry: CaptureEntry, text: string) => {
-    if (entry.consumed) return;
-    entry.consumed = true;
-    if (captureRef.current === entry) captureRef.current = null;
-    // Only a user-requested stop has a latency worth showing; a recognizer that
-    // finalized on its own has no stop event to measure from.
-    if (entry.stopRequestedAt) {
-      optionsRef.current.onSttComplete?.(Date.now() - entry.stopRequestedAt);
-    }
-
-    if (!activeRef.current) return;
+  const respondToText = useCallback(async (text: string): Promise<boolean> => {
+    if (!activeRef.current || turnInFlightRef.current) return false;
+    turnInFlightRef.current = true;
     setPhase('thinking');
     setAudioLevel(0);
 
     const trimmed = text.trim();
     if (!trimmed) {
       setPhase('idle');
-      return;
+      turnInFlightRef.current = false;
+      return false;
     }
     setTranscriptPreview(trimmed);
 
@@ -108,15 +102,17 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         setTranscriptPreview(message);
         setPhase('idle');
       }
-      return;
+      turnInFlightRef.current = false;
+      return false;
     }
 
-    if (!activeRef.current) return;
+    turnInFlightRef.current = false;
+    if (!activeRef.current) return true;
     if (!aiResponse?.trim()) {
       setTranscriptPreview('Sent to chat.');
       setPhase('idle');
       setAudioLevel(0);
-      return;
+      return true;
     }
 
     setPhase('speaking');
@@ -144,7 +140,36 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         setAudioLevel(0);
       }
     }
+    return true;
   }, []);
+
+  const processTranscript = useCallback(
+    async (entry: CaptureEntry, text: string) => {
+      if (entry.consumed) return;
+      entry.consumed = true;
+      if (captureRef.current === entry) captureRef.current = null;
+      if (entry.stopRequestedAt) {
+        optionsRef.current.onSttComplete?.(Date.now() - entry.stopRequestedAt);
+      }
+      await respondToText(text);
+    },
+    [respondToText],
+  );
+
+  const submitText = useCallback(
+    async (text: string): Promise<boolean> => {
+      if (!text.trim() || !activeRef.current || turnInFlightRef.current) return false;
+      autoListenRef.current = false;
+      const entry = captureRef.current;
+      if (entry) entry.consumed = true;
+      captureRef.current = null;
+      if (VoiceInput.isCapturing()) await VoiceInput.cancelCapture();
+      await optionsRef.current.stopSpeaking();
+      if (!activeRef.current) return false;
+      return respondToText(text);
+    },
+    [respondToText],
+  );
 
   const stopListeningAndProcess = useCallback(async () => {
     if (!activeRef.current) return;
@@ -159,7 +184,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
   const startListening = useCallback(
     async (viaPtt = false) => {
-      if (!activeRef.current || mutedRef.current) return;
+      if (!activeRef.current || mutedRef.current || turnInFlightRef.current) return;
       if (VoiceInput.isCapturing()) return;
       if (!voiceInputEnabledRef.current) {
         setPhase('idle');
@@ -284,7 +309,12 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' || !optionsRef.current.enabled) return;
+      if (nextState === 'active') {
+        activeRef.current = optionsRef.current.enabled;
+        return;
+      }
+      if (!optionsRef.current.enabled) return;
+      activeRef.current = false;
       autoListenRef.current = false;
       pttHeldRef.current = false;
       setPhase('idle');
@@ -321,6 +351,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     muted,
     audioLevel,
     transcriptPreview,
+    submitText,
     handleOrbPress,
     handleOrbPressIn,
     handleOrbPressOut,

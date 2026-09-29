@@ -54,6 +54,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
       animationType="slide"
       statusBarTranslucent
       accessibilityViewIsModal
+      onRequestClose={onDecline}
     >
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View

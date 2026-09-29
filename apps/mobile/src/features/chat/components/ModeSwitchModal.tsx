@@ -94,6 +94,7 @@ export function ModeSwitchModal({
           >
             <Pressable
               onPress={handleCancel}
+              accessibilityRole="button"
               style={{
                 minHeight: 44,
                 justifyContent: 'center',
@@ -109,6 +110,7 @@ export function ModeSwitchModal({
             </Pressable>
             <Pressable
               onPress={handleConfirm}
+              accessibilityRole="button"
               style={{
                 minHeight: 44,
                 justifyContent: 'center',

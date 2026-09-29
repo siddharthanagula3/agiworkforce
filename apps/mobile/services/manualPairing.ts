@@ -25,6 +25,8 @@ export const PAIRING_UPDATE_REQUIRED_MESSAGE =
 
 export const PAIRING_SECRET_REQUIRED_MESSAGE = `The ${PAIRING_CODE_LENGTH}-character code alone can no longer secure this connection. Scan the QR code on Desktop, or use Copy pairing link and paste it here.`;
 
+export class ManualPairingClaimError extends Error {}
+
 export interface ParsedPairingPayload {
   code: string;
   pairingSecret: string | null;
@@ -128,7 +130,7 @@ export function signalingHttpBaseUrl(wsUrl: string = WS_URL): string {
 
 function parseClaimResponse(value: unknown, expectedCode: string): ManualPairingClaim {
   if (!value || typeof value !== 'object') {
-    throw new Error('The pairing service returned an invalid response.');
+    throw new ManualPairingClaimError('The pairing service returned an invalid response.');
   }
   const record = value as Record<string, unknown>;
   const code = typeof record['code'] === 'string' ? record['code'] : '';
@@ -144,7 +146,7 @@ function parseClaimResponse(value: unknown, expectedCode: string): ManualPairing
     expiresAt <= Date.now() ||
     !/^wss?:\/\//.test(wsUrl)
   ) {
-    throw new Error('The pairing service returned an invalid response.');
+    throw new ManualPairingClaimError('The pairing service returned an invalid response.');
   }
   return { code, pairToken, expiresAt, wsUrl };
 }
@@ -152,7 +154,9 @@ function parseClaimResponse(value: unknown, expectedCode: string): ManualPairing
 export async function claimManualPairingToken(rawCode: string): Promise<ManualPairingClaim> {
   const code = normalizePairingInput(rawCode).toUpperCase();
   if (!isRelayPairingCode(code)) {
-    throw new Error(`Enter the ${PAIRING_CODE_LENGTH}-character pairing code shown on Desktop.`);
+    throw new ManualPairingClaimError(
+      `Enter the ${PAIRING_CODE_LENGTH}-character pairing code shown on Desktop.`,
+    );
   }
 
   // The relay mints a pair token for whoever asks, and it cannot tell one
@@ -169,20 +173,24 @@ export async function claimManualPairingToken(rawCode: string): Promise<ManualPa
   });
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error('That pairing code is invalid or expired. Generate a new code on Desktop.');
+      throw new ManualPairingClaimError(
+        'That pairing code is invalid or expired. Generate a new code on Desktop.',
+      );
     }
     if (response.status === 409) {
-      throw new Error('That pairing code is already connected to a phone.');
+      throw new ManualPairingClaimError('That pairing code is already connected to a phone.');
     }
     if (response.status === 403) {
-      throw new Error(
+      throw new ManualPairingClaimError(
         'That pairing code belongs to a different account. Sign in as that account on Desktop, or generate a code here.',
       );
     }
     if (response.status === 401) {
-      throw new Error('Sign in on this phone before pairing it with Desktop.');
+      throw new ManualPairingClaimError('Sign in on this phone before pairing it with Desktop.');
     }
-    throw new Error('Manual pairing is temporarily unavailable. Please try again.');
+    throw new ManualPairingClaimError(
+      'Manual pairing is temporarily unavailable. Please try again.',
+    );
   }
 
   return parseClaimResponse(await response.json(), code);

@@ -14,7 +14,13 @@ jest.mock('../services/api', () => {
   }
   MockApiPaywallError.prototype = Object.create(Error.prototype);
   return {
-    api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
+    api: {
+      get: jest.fn(),
+      post: jest.fn(),
+      put: jest.fn(),
+      delete: jest.fn(),
+      uploadFile: jest.fn(),
+    },
     ApiPaywallError: MockApiPaywallError,
   };
 });
@@ -61,26 +67,31 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+import { Alert } from 'react-native';
+import { api } from '../services/api';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { ApiHttpError } from '../services/apiErrors';
+import { managedCloudChat } from '../services/managedCloudChat';
+import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
+import { AGENT_EVENT_SCHEMA_VERSION, getProviderOfferings } from '@agiworkforce/types';
+import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
+  captureCloudAccountEpoch,
   invalidateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000002';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -103,12 +114,105 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 function lastAssistantMessage() {
   const msgs = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
   return msgs.find((m) => m.role === 'assistant');
 }
 
+function readyPromotionalChatModel(requiresImageInput = false): string {
+  const offering = Object.entries(getProviderOfferings()).find(
+    ([, candidate]) =>
+      candidate.provider === 'qwen' &&
+      candidate.quotaProbeProtocol === 'chat' &&
+      (!requiresImageInput || candidate.quotaChatImageInput === true),
+  );
+  if (!offering) throw new Error('Expected a Qwen chat offering in the generated catalog.');
+  const model = offering[0];
+  useFreeQuotaCatalogueStore.setState({
+    account: captureCloudAccountEpoch(),
+    catalogue: {
+      issuer: 'QwenCloud',
+      observedOn: '2026-09-27',
+      evidenceUrl: 'https://docs.qwencloud.com/resources/free-quota',
+      reportedEligible: 1,
+      reportedUnavailable: 0,
+      models: [
+        {
+          key: model,
+          displayName: 'Provider-funded chat',
+          providerModelId: null,
+          category: 'chat',
+          limit: 100,
+          unit: 'tokens',
+          consumedApproximate: 0,
+          expiresOn: null,
+          status: 'ready',
+        },
+      ],
+    },
+    error: null,
+    loading: false,
+  });
+  (api.get as jest.Mock).mockResolvedValue(useFreeQuotaCatalogueStore.getState().catalogue);
+  return model;
+}
+
 describe('cloud send: finish_reason capture', () => {
+  it('keeps a stale Free conversation from sending after another device deletes it', async () => {
+    const model = readyPromotionalChatModel();
+    jest
+      .spyOn(managedCloudChat, 'getConversation')
+      .mockRejectedValue(new ManagedCloudChatHttpError('Not found', 404));
+    const createConversation = jest
+      .spyOn(managedCloudChat, 'createConversation')
+      .mockRejectedValue(new ManagedCloudChatHttpError('Conversation unavailable', 409));
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'Do not send into a deleted thread', model);
+
+    expect(accepted).toBe(false);
+    expect(createConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: CONV_ID, model }),
+    );
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(useChatCloudMessageStore.getState().messages[CONV_ID]).toEqual([]);
+    expect(useChatExecutionStore.getState().error).toBe(
+      'This Free conversation is no longer available in AGI Cloud. Start a new chat and send again.',
+    );
+  });
+
+  it('does not create a Free conversation under a new account after a stale 404', async () => {
+    const model = readyPromotionalChatModel();
+    let rejectLookup!: (error: Error) => void;
+    let lookupStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      lookupStarted = resolve;
+    });
+    jest.spyOn(managedCloudChat, 'getConversation').mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectLookup = reject;
+          lookupStarted();
+        }),
+    );
+    const createConversation = jest.spyOn(managedCloudChat, 'createConversation');
+
+    const send = useChatExecutionStore.getState().sendMessage(CONV_ID, 'account A prompt', model);
+    await started;
+    invalidateCloudAccount();
+    activateCloudAccount('cloud-stream-test-user-b');
+    rejectLookup(new ManagedCloudChatHttpError('Not found', 404));
+
+    await expect(send).resolves.toBe(false);
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(mockStreamChat).not.toHaveBeenCalled();
+  });
+
   it('fails closed before starting an ownerless Cloud stream', async () => {
     invalidateCloudAccount();
 
@@ -232,6 +336,172 @@ describe('cloud send: x_stream_error capture (mid-stream provider failure)', () 
     await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
 
     expect(lastAssistantMessage()?.metadata?.streamError).toBeUndefined();
+  });
+
+  it('invalidates a cached provider-funded model after a streamed quota refusal', async () => {
+    const offering = Object.entries(getProviderOfferings()).find(
+      ([, candidate]) => candidate.provider === 'qwen' && candidate.quotaProbeProtocol === 'chat',
+    );
+    if (!offering) throw new Error('Expected a Qwen chat offering in the generated catalog.');
+    const model = offering[0];
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: {
+        issuer: 'QwenCloud',
+        observedOn: '2026-09-27',
+        evidenceUrl: 'https://docs.qwencloud.com/resources/free-quota',
+        reportedEligible: 1,
+        reportedUnavailable: 0,
+        models: [
+          {
+            key: model,
+            displayName: 'Provider-funded chat',
+            providerModelId: null,
+            category: 'chat',
+            limit: 100,
+            unit: 'tokens',
+            consumedApproximate: 0,
+            expiresOn: null,
+            status: 'ready',
+          },
+        ],
+      },
+      error: null,
+      loading: false,
+    });
+    (api.get as jest.Mock).mockResolvedValue(useFreeQuotaCatalogueStore.getState().catalogue);
+    jest.spyOn(managedCloudChat, 'getConversation').mockResolvedValue({
+      conversation: {
+        id: CONV_ID,
+        title: 'Cloud Chat',
+        projectId: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        isTemporary: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      messages: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_stream_error: {
+          message: 'Provider free allowance exhausted',
+          code: 'free_quota_exhausted',
+        },
+      });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', model);
+
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+    expect(useFreeQuotaCatalogueStore.getState().catalogue).toBeNull();
+  });
+
+  it('sends an attached image to an image-capable provider-funded Free offering', async () => {
+    const model = readyPromotionalChatModel(true);
+    jest.spyOn(managedCloudChat, 'getConversation').mockResolvedValue({
+      conversation: {
+        id: CONV_ID,
+        title: 'Cloud Chat',
+        projectId: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        isTemporary: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      messages: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'I can see the image.' });
+      callbacks.onDone();
+    });
+    const assetId = '0190a000-0000-7000-8000-000000000104';
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.text === 'Upload & Send')?.onPress?.();
+    });
+    (api.uploadFile as jest.Mock).mockResolvedValue({
+      id: assetId,
+      url: 'https://agi.example/image.png',
+      mimeType: 'image/png',
+      name: 'image.png',
+      byteCount: 100,
+      type: 'image',
+    });
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'Describe this image', model, [
+        {
+          id: 'image-attachment',
+          uri: 'file:///image.png',
+          mimeType: 'image/png',
+          fileName: 'image.png',
+        },
+      ]);
+
+    expect(accepted).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Send files to AGI Cloud?',
+      expect.stringContaining('image.png'),
+      expect.any(Array),
+      expect.any(Object),
+    );
+    expect(api.uploadFile).toHaveBeenCalledTimes(1);
+    expect(mockStreamChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model,
+        messages: expect.arrayContaining([
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Describe this image' },
+              { type: 'file', file: { asset_id: assetId } },
+            ],
+          },
+        ]),
+      }),
+      expect.any(Object),
+      expect.any(Object),
+    );
+
+    const documentAccepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'Read this document', model, [
+        {
+          id: 'document-attachment',
+          uri: 'file:///document.pdf',
+          mimeType: 'application/pdf',
+          fileName: 'document.pdf',
+          assetId: '0190a000-0000-7000-8000-000000000105',
+        },
+      ]);
+    expect(documentAccepted).toBe(false);
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+
+    const followUpAccepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'Summarize your answer.', model);
+    expect(followUpAccepted).toBe(true);
+    const followUpRequest = mockStreamChat.mock.calls[1]?.[0];
+    expect(followUpRequest?.messages).toEqual(
+      expect.arrayContaining([
+        {
+          role: 'user',
+          content:
+            'Describe this image\n[An attachment in this earlier message is unavailable in this turn.]',
+        },
+        { role: 'user', content: 'Summarize your answer.' },
+      ]),
+    );
   });
 
   it('marks a cleanly closed empty provider stream as retryable instead of a successful blank bubble', async () => {

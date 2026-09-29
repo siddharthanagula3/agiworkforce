@@ -5,7 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
-import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
+import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
 import { resolveConnectorToolMetadata } from './tool-metadata';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
@@ -294,6 +294,6 @@ async function workspaceToolRules(
   db: DatabaseAdapter,
   organizationId: string | null,
 ): Promise<ReadonlyArray<ConnectorToolPermissionEntry>> {
-  const policy = await readConnectorPolicySafely(db, organizationId);
+  const policy = organizationId ? await readConnectorPolicy(db, organizationId) : null;
   return policy?.toolRules ?? [];
 }

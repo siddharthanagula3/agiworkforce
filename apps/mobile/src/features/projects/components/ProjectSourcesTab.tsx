@@ -9,6 +9,7 @@ import {
   cloudProjectSources,
   useProjectSourceTarget,
   useProjectStore,
+  ProjectSourceError,
 } from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
@@ -34,8 +35,8 @@ export const PROJECT_SOURCE_MIME_TYPES: readonly string[] = [
 
 const EMPTY_SOURCES: DisplaySource[] = [];
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message.trim() ? error.message : fallback;
+export function projectSourceErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof ProjectSourceError && error.message.trim() ? error.message : fallback;
 }
 
 function SourceRow({
@@ -136,6 +137,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
+  const requestRef = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -156,9 +158,11 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   );
 
   const refreshCloudSources = useCallback(async () => {
+    const request = ++requestRef.current;
+    setBusy(true);
     try {
       const files = await cloudProjectSources.list(projectId);
-      if (!mounted.current) return;
+      if (!mounted.current || requestRef.current !== request) return;
       setCloudSources(
         files.map((file) => ({
           id: file.id,
@@ -169,21 +173,24 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       );
       setLoadError(null);
     } catch (error) {
-      if (!mounted.current) return;
-      setLoadError(errorMessage(error, 'Could not load this project’s sources.'));
+      if (!mounted.current || requestRef.current !== request) return;
+      setLoadError(
+        projectSourceErrorMessage(error, 'Could not load this project’s sources. Retry.'),
+      );
+    } finally {
+      if (mounted.current && requestRef.current === request) setBusy(false);
     }
   }, [projectId]);
 
   useEffect(() => {
     if (target !== 'cloud') {
+      requestRef.current += 1;
       setCloudSources(EMPTY_SOURCES);
       setLoadError(null);
+      setBusy(false);
       return;
     }
-    setBusy(true);
-    void refreshCloudSources().finally(() => {
-      if (mounted.current) setBusy(false);
-    });
+    void refreshCloudSources();
   }, [target, refreshCloudSources]);
 
   const sources = target === 'cloud' ? cloudSources : localSources;
@@ -218,7 +225,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           uri: asset.uri,
         });
       } catch (error) {
-        failures.push(errorMessage(error, `"${asset.name}" could not be added.`));
+        failures.push(
+          projectSourceErrorMessage(error, `"${asset.name}" could not be added. Try again.`),
+        );
       }
     }
     if (target === 'cloud') await refreshCloudSources();
@@ -235,7 +244,10 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         await removeSource(projectId, sourceId);
         if (target === 'cloud') await refreshCloudSources();
       } catch (error) {
-        Alert.alert('Could not remove source', errorMessage(error, 'Please try again.'));
+        Alert.alert(
+          'Could not remove source',
+          projectSourceErrorMessage(error, 'Please try again.'),
+        );
       }
     },
     [projectId, target, removeSource, refreshCloudSources],
@@ -280,7 +292,20 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           body="This project is no longer available on this device, so sources cannot be added."
         />
       ) : loadError ? (
-        <Notice title="Could not load sources" body={loadError} />
+        <View className="items-center">
+          <Notice title="Could not load sources" body={loadError} />
+          <Pressable
+            onPress={() => void refreshCloudSources()}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading project sources"
+            accessibilityState={{ disabled: busy }}
+            className="min-h-[48px] min-w-[140px] items-center justify-center rounded-xl px-5"
+            style={{ backgroundColor: colors.surfaceElevated }}
+          >
+            <Text style={{ color: colors.textPrimary }}>Try Again</Text>
+          </Pressable>
+        </View>
       ) : sources.length === 0 ? (
         <Notice title="No sources added yet" body="Add files to give the project more context." />
       ) : (
