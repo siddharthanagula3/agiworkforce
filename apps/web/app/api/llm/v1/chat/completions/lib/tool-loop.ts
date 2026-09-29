@@ -149,7 +149,7 @@ import {
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
-import type { ResearchDomainPolicy } from './research-sources';
+import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
@@ -2893,6 +2893,16 @@ function recordProviderStepFailure(input: {
  * Named rather than inlined so the gate has a seam a test can reach; it had
  * none.
  */
+/** The address a device browser step would open or download, if it has one. */
+function deviceStepAddress(input: Record<string, unknown>): string | null {
+  const tool = input['tool'];
+  const url = input['url'];
+  return (tool === 'device_browser_navigate' || tool === 'device_browser_download') &&
+    typeof url === 'string'
+    ? url
+    : null;
+}
+
 export function hasPrivateContext(
   processed: Pick<ProcessedRequest, 'autoMemoryFacts' | 'sensitiveContextPresent'>,
   messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
@@ -6373,6 +6383,15 @@ export async function* runToolLoop(
           // A pause can hold only one boundary per step, and an approval already
           // claims it. The model is told why rather than left with a call that
           // silently never ran, so it can ask again once the approval is decided.
+          if (!refusal && plan) {
+            const address = deviceStepAddress(plan.input);
+            if (
+              address !== null &&
+              !researchDomainAllowed(processed.deviceWebDomainPolicy ?? null, address)
+            ) {
+              refusal = `Your workspace administrator does not allow the assistant to open ${address} in your browser.`;
+            }
+          }
           if (!refusal && approvalCalls.length > 0) {
             refusal =
               'This turn is waiting on an approval, so the step was not sent to your device. Ask again after the approval is decided.';
