@@ -414,9 +414,33 @@ function patchPausedToolCall(
 
 function resumePausedTurn(
   turn: PendingApprovalTurn,
-  callbacks: StreamCallbacks,
+  resumeCallbacks: StreamCallbacks,
   signal: AbortSignal,
 ): Promise<void> {
+  let trackedRunId: string | null = null;
+  const release = () => {
+    if (trackedRunId && activeCloudRuns.get(turn.conversationId)?.runId === trackedRunId) {
+      activeCloudRuns.delete(turn.conversationId);
+    }
+  };
+  const callbacks: StreamCallbacks = {
+    ...resumeCallbacks,
+    onRunReference: (reference) => {
+      if (!signal.aborted) {
+        trackedRunId = reference.runId;
+        activeCloudRuns.set(turn.conversationId, reference);
+      }
+      resumeCallbacks.onRunReference?.(reference);
+    },
+    onDone: () => {
+      release();
+      resumeCallbacks.onDone();
+    },
+    onError: (error) => {
+      release();
+      resumeCallbacks.onError(error);
+    },
+  };
   const operationId = uuidv7();
   const deviceResults = turn.deviceResults;
   if (deviceResults) {
