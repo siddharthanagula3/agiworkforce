@@ -558,6 +558,7 @@ pub async fn add_memory(
                 updated_at: chrono::Utc::now().to_rfc3339(),
                 source_conversation_id: None,
                 source_conversation_title: None,
+                project_id: None,
             },
         );
         if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
@@ -746,6 +747,57 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
     cache.context_prompt()
 }
 
+pub fn account_memory_context_for(
+    privacy: PrivacyMode,
+    config_dir: &Path,
+    project: Option<&str>,
+) -> String {
+    if privacy != PrivacyMode::Managed {
+        return String::new();
+    }
+    let cache = load_memory_cache(config_dir);
+    if cache.account_memory_off {
+        return String::new();
+    }
+    cache.context_prompt_for(project)
+}
+
+pub async fn add_project_memory(
+    privacy: PrivacyMode,
+    project_id: &str,
+    content: &str,
+    category: Option<&str>,
+) -> Result<bool, CloudError> {
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreateMemory<'a> {
+        content: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        category: Option<&'a str>,
+        source: &'a str,
+        project_id: &'a str,
+    }
+    #[derive(serde::Deserialize)]
+    struct Created {
+        #[serde(default)]
+        merged: bool,
+    }
+    let session = CloudSession::open(privacy)?;
+    let created: Created = session
+        .client
+        .post(
+            "/api/memory",
+            &CreateMemory {
+                content,
+                category,
+                source: MEMORY_SOURCE,
+                project_id,
+            },
+        )
+        .await?;
+    Ok(created.merged)
+}
+
 pub fn project_instructions_context(
     privacy: PrivacyMode,
     config_dir: &Path,
@@ -792,6 +844,7 @@ mod tests {
             updated_at: "2026-09-13T00:00:00Z".to_string(),
             source_conversation_id: None,
             source_conversation_title: None,
+            project_id: None,
         });
         save_memory_cache(dir.path(), &cache).expect("save");
 

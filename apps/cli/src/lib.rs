@@ -1363,6 +1363,10 @@ enum MemorySubcommand {
         /// Optional category label.
         #[arg(long)]
         category: Option<String>,
+        /// Keep it with the account project this directory is linked to (`agi projects link`),
+        /// so only that project's conversations draw on it.
+        #[arg(long)]
+        project: bool,
     },
     /// Remove a memory from the account by id or exact text.
     Forget {
@@ -3548,6 +3552,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
+            let linked = agent::linked_cloud_project();
             let mut topics: Vec<&str> = cache
                 .entries
                 .iter()
@@ -3569,7 +3574,12 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                     let pin = if entry.pinned { "*" } else { " " };
                     let origin = entry.source.as_deref().unwrap_or("web");
                     let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
-                    println!("{pin} {}  [{origin}, updated {updated}]", entry.id);
+                    let scope = match entry.project_id.as_deref() {
+                        Some(project) if Some(project) == linked.as_deref() => ", this project",
+                        Some(_) => ", another project",
+                        None => "",
+                    };
+                    println!("{pin} {}  [{origin}{scope}, updated {updated}]", entry.id);
                     println!(
                         "    {}",
                         terminal_text::sanitize_terminal_text(&entry.content)
@@ -3702,10 +3712,35 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             }
             Ok(())
         }
-        MemorySubcommand::Add { text, category } => {
+        MemorySubcommand::Add {
+            text,
+            category,
+            project,
+        } => {
             let content = text.join(" ");
             if content.trim().is_empty() {
                 anyhow::bail!("Usage: agi memory add <text>");
+            }
+            if *project {
+                let project_id = agent::linked_cloud_project().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "This directory is not linked to an account project. Link it with `agi projects link`, or drop --project to remember it account-wide."
+                    )
+                })?;
+                let merged =
+                    cloud::add_project_memory(privacy, &project_id, &content, category.as_deref())
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let _ = cloud::refresh_memory(privacy).await;
+                println!(
+                    "{} in this project's memory; its conversations on every client draw on it.",
+                    if merged {
+                        "Merged with a memory already"
+                    } else {
+                        "Remembered"
+                    }
+                );
+                return Ok(());
             }
             let refusals = cloud::add_memory(privacy, &content, category.as_deref())
                 .await
