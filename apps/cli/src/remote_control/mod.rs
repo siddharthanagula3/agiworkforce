@@ -28,6 +28,87 @@ const RECONNECT_MAX: Duration = Duration::from_secs(30);
 const RECEIPT_LEDGER: usize = 256;
 const PAIRING_CODE_LENGTH: usize = 12;
 const ENDS_PAIRING: [&str; 3] = ["device_revoked", "pairing_not_found", "pairing_expired"];
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const END_PAIRING_TIMEOUT: Duration = Duration::from_secs(3);
+
+type Stop = tokio::sync::watch::Receiver<bool>;
+
+enum Step<T> {
+    Stopped,
+    Done(T),
+}
+
+async fn stopped(mut stop: Stop) {
+    while !*stop.borrow_and_update() {
+        if stop.changed().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    }
+}
+
+async fn or_stopped<T>(stop: &Stop, work: impl std::future::Future<Output = T>) -> Step<T> {
+    tokio::select! {
+        biased;
+        () = stopped(stop.clone()) => Step::Stopped,
+        value = work => Step::Done(value),
+    }
+}
+
+fn stop_on_ctrl_c() -> Stop {
+    let (sender, receiver) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            let _ = sender.send(true);
+        }
+    });
+    receiver
+}
+
+fn register_frame(pairing: &Pairing) -> Message {
+    Message::Text(
+        json!({
+            "type": "register",
+            "code": pairing.code,
+            "role": "desktop",
+            "pairToken": pairing.pair_token,
+            "metadata": {
+                "deviceType": "cli",
+                "deviceName": device_name(),
+                "app": "agiworkforce-cli",
+                "version": env!("CARGO_PKG_VERSION"),
+                "capabilities": ["code-sessions", "code-session-start"],
+            },
+        })
+        .to_string()
+        .into(),
+    )
+}
+
+fn end_pairing_frame() -> Message {
+    Message::Text(json!({ "type": "end_pairing" }).to_string().into())
+}
+
+async fn connect(ws_url: &str, origin: &str) -> Result<Socket> {
+    tokio::time::timeout(CONNECT_TIMEOUT, open_socket(ws_url, origin))
+        .await
+        .map_err(|_| anyhow!("The Remote Control relay did not answer in time"))?
+}
+
+async fn end_pairing(pairing: &Pairing, origin: &str) {
+    let attempt = async {
+        let socket = open_socket(&pairing.ws_url, origin).await?;
+        let (mut sink, _) = socket.split();
+        sink.send(register_frame(pairing)).await?;
+        sink.send(end_pairing_frame()).await?;
+        let _ = sink.close().await;
+        anyhow::Ok(())
+    };
+    let _ = tokio::time::timeout(END_PAIRING_TIMEOUT, attempt).await;
+}
+
+fn backoff(attempt: u32) -> Duration {
+    (RECONNECT_BASE * 2u32.saturating_pow(attempt.min(5))).min(RECONNECT_MAX)
+}
 
 type Socket = WebSocketStream<reqwest::Upgraded>;
 
@@ -340,38 +421,26 @@ impl<H: DeveloperSessionHost> Relay<H> {
 
     async fn serve(
         &mut self,
+        stop: &Stop,
         socket: Socket,
         notifications: &mut tokio::sync::broadcast::Receiver<
             agiworkforce_protocol::developer_session::AppServerNotification,
         >,
     ) -> SessionEnd {
         let (mut sink, mut stream) = socket.split();
-        let register = json!({
-            "type": "register",
-            "code": self.pairing.code,
-            "role": "desktop",
-            "pairToken": self.pairing.pair_token,
-            "metadata": {
-                "deviceType": "cli",
-                "deviceName": device_name(),
-                "app": "agiworkforce-cli",
-                "version": env!("CARGO_PKG_VERSION"),
-                "capabilities": ["code-sessions", "code-session-start"],
-            },
-        });
-        if sink
-            .send(Message::Text(register.to_string().into()))
-            .await
-            .is_err()
-        {
+        if sink.send(register_frame(&self.pairing)).await.is_err() {
             return SessionEnd::Dropped;
         }
         let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
         loop {
             let outgoing = tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    let _ = sink.send(Message::Text(json!({ "type": "end_pairing" }).to_string().into())).await;
-                    let _ = sink.close().await;
+                biased;
+                () = stopped(stop.clone()) => {
+                    let _ = tokio::time::timeout(END_PAIRING_TIMEOUT, async {
+                        let _ = sink.send(end_pairing_frame()).await;
+                        let _ = sink.close().await;
+                    })
+                    .await;
                     return SessionEnd::Stopped;
                 }
                 _ = heartbeat.tick() => vec![Message::Text(json!({ "type": "heartbeat" }).to_string().into())],
@@ -396,8 +465,10 @@ impl<H: DeveloperSessionHost> Relay<H> {
                 },
             };
             for message in outgoing {
-                if sink.send(message).await.is_err() {
-                    return SessionEnd::Dropped;
+                match or_stopped(stop, sink.send(message)).await {
+                    Step::Done(Ok(())) => {}
+                    Step::Done(Err(_)) => return SessionEnd::Dropped,
+                    Step::Stopped => break,
                 }
             }
         }
@@ -405,10 +476,14 @@ impl<H: DeveloperSessionHost> Relay<H> {
 }
 
 pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Path) -> Result<()> {
+    let stop = stop_on_ctrl_c();
     let jwt = crate::tier_cache::load_jwt()
         .ok_or_else(|| anyhow!("Sign in with `agi login` before starting Remote Control"))?;
     let base = web_base()?;
-    let pairing = request_pairing(&base, &jwt).await?;
+    let Step::Done(pairing) = or_stopped(&stop, request_pairing(&base, &jwt)).await else {
+        return Ok(());
+    };
+    let pairing = pairing?;
     let secret = crate::features::a2a::security::generate_random_token(32);
     let folder = workspace
         .file_name()
@@ -438,38 +513,100 @@ pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Pa
     println!("Anyone with this line can control sessions in this folder until you stop. Press Ctrl+C to stop.");
 
     crate::device_registry::set_remote_control(true);
-    let _heartbeat = crate::device_registry::spawn_heartbeat_loop();
+    let heartbeat = crate::device_registry::spawn_heartbeat_loop();
     let mut attempt: u32 = 0;
+    let mut paired_end_sent = false;
     let result = loop {
-        let socket = match open_socket(&relay.pairing.ws_url, &base).await {
-            Ok(socket) => socket,
-            Err(error) if attempt == 0 => break Err(error),
-            Err(_) => {
+        let socket = match or_stopped(&stop, connect(&relay.pairing.ws_url, &base)).await {
+            Step::Stopped => break Ok(()),
+            Step::Done(Ok(socket)) => socket,
+            Step::Done(Err(error)) if attempt == 0 => break Err(error),
+            Step::Done(Err(_)) => {
                 attempt += 1;
-                tokio::time::sleep(
-                    (RECONNECT_BASE * 2u32.saturating_pow(attempt)).min(RECONNECT_MAX),
-                )
-                .await;
+                if let Step::Stopped = or_stopped(&stop, tokio::time::sleep(backoff(attempt))).await
+                {
+                    break Ok(());
+                }
                 continue;
             }
         };
-        match relay.serve(socket, &mut notifications).await {
-            SessionEnd::Stopped => break Ok(()),
+        match relay.serve(&stop, socket, &mut notifications).await {
+            SessionEnd::Stopped => {
+                paired_end_sent = true;
+                break Ok(());
+            }
             SessionEnd::Ended(reason) => break Err(anyhow!("Remote Control stopped: {reason}")),
             SessionEnd::Dropped => {
                 attempt += 1;
                 relay.dispatch = None;
                 relay.code_host.reset();
                 println!("Remote Control: the relay connection dropped. Reconnecting.");
-                tokio::time::sleep(
-                    (RECONNECT_BASE * 2u32.saturating_pow(attempt.min(5))).min(RECONNECT_MAX),
-                )
-                .await;
+                if let Step::Stopped = or_stopped(&stop, tokio::time::sleep(backoff(attempt))).await
+                {
+                    break Ok(());
+                }
             }
         }
     };
+    heartbeat.abort();
     crate::device_registry::set_remote_control(false);
-    crate::device_registry::send_heartbeat().await;
+    if result.is_ok() && !paired_end_sent {
+        end_pairing(&relay.pairing, &base).await;
+    }
+    let _ = tokio::time::timeout(
+        END_PAIRING_TIMEOUT,
+        crate::device_registry::send_heartbeat(),
+    )
+    .await;
     println!("Remote Control is off.");
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PROMPT: Duration = Duration::from_millis(500);
+
+    fn cancel_soon() -> Stop {
+        let (sender, receiver) = tokio::sync::watch::channel(false);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let _ = sender.send(true);
+        });
+        receiver
+    }
+
+    #[tokio::test]
+    async fn cancelling_during_the_reconnect_backoff_exits_at_once() {
+        let stop = cancel_soon();
+        let started = std::time::Instant::now();
+        let step = or_stopped(&stop, tokio::time::sleep(RECONNECT_MAX)).await;
+        assert!(matches!(step, Step::Stopped));
+        assert!(started.elapsed() < PROMPT);
+    }
+
+    #[tokio::test]
+    async fn cancelling_while_the_relay_never_answers_exits_at_once() {
+        let stop = cancel_soon();
+        let started = std::time::Instant::now();
+        let step = or_stopped(&stop, std::future::pending::<Result<Socket>>()).await;
+        assert!(matches!(step, Step::Stopped));
+        assert!(started.elapsed() < PROMPT);
+    }
+
+    #[tokio::test]
+    async fn a_stop_that_came_before_the_wait_is_not_lost() {
+        let (sender, stop) = tokio::sync::watch::channel(false);
+        sender.send(true).expect("receiver alive");
+        let step = or_stopped(&stop, tokio::time::sleep(RECONNECT_MAX)).await;
+        assert!(matches!(step, Step::Stopped));
+    }
+
+    #[tokio::test]
+    async fn work_that_finishes_first_is_returned() {
+        let (_sender, stop) = tokio::sync::watch::channel(false);
+        let step = or_stopped(&stop, async { 7 }).await;
+        assert!(matches!(step, Step::Done(7)));
+    }
 }

@@ -94,6 +94,10 @@ fn safe_tail(value: &str, limit: usize) -> String {
     clip_tail(&crate::secret_redaction::redact_tool_output(value), limit)
 }
 
+fn snapshot_partial(partial: &str) -> String {
+    safe_tail(partial, PARTIAL_RESPONSE_LENGTH)
+}
+
 fn safe_head(value: &str, limit: usize) -> String {
     clip_head(&crate::secret_redaction::redact_tool_output(value), limit)
 }
@@ -385,7 +389,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             "title": clip_head(&read.thread.title, TITLE_LENGTH),
             "status": status,
             "activeTurnId": state.active_turn_id,
-            "partialResponse": state.partial_response,
+            "partialResponse": snapshot_partial(&state.partial_response),
             "messages": messages,
             "pendingApprovals": pending,
             "fileChanges": file_changes,
@@ -1100,5 +1104,26 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             }
             _ => Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_snapshot_never_carries_a_secret_streamed_into_the_partial_answer() {
+        let partial = "Found the key sk-ant-abcdefghijklmnopqrstuvwxyz0123 in .env";
+        let sent = snapshot_partial(partial);
+        assert!(!sent.contains("sk-ant-abcdefghijklmnopqrstuvwxyz0123"));
+        assert!(sent.contains("[REDACTED_ANTHROPIC_KEY]"));
+    }
+
+    #[test]
+    fn a_snapshot_keeps_the_newest_part_of_a_long_partial_answer() {
+        let partial = format!("{}tail", "x".repeat(PARTIAL_RESPONSE_LENGTH));
+        let sent = snapshot_partial(&partial);
+        assert_eq!(sent.chars().count(), PARTIAL_RESPONSE_LENGTH);
+        assert!(sent.ends_with("tail"));
     }
 }
