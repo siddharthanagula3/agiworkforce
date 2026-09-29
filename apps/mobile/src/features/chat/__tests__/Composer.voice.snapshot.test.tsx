@@ -6,6 +6,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {
+    ...tokens,
     colors: tokens.colors,
     useTheme: () => ({ colors: tokens.colors, isDark: true }),
     useThemeColors: () => tokens.colors,

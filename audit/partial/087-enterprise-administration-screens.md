@@ -216,8 +216,8 @@ Code: `apps/cli/src/claude_parity.rs:2021-2021`, `apps/cli/src/features/exec/too
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
-| desktop | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
+| web | partial | owner: stand up the EU database, bucket, log sink and KMS, then set the AGI_DATA_REGION_EU_* variables (apps/web/lib/server/data-region.ts) | infra |
+| desktop | partial | owner: stand up the EU database, bucket, log sink and KMS, then set the AGI_DATA_REGION_EU_* variables (apps/web/lib/server/data-region.ts) | infra |
 
 Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 

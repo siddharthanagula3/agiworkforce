@@ -134,13 +134,13 @@ Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upgrade entry exists, but paid checkout sits behind the beta_redemptions waitlist gate (see S81). | flag-off |
-| desktop | partial | Same flow as web: the upgrade ends at checkout behind the beta_redemptions waitlist gate. | flag-off |
+| web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 
-Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:104-109`, `apps/web/shared/components/layout/WebAppShell.tsx:489-489`, `apps/web/shared/components/layout/WebAppShell.tsx:510-510`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:113-126`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:113-126`, `apps/mobile/lib/v1FeatureFlags.ts:1-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2355-2355`
 
 ## S5.33: Offline indicator.
 

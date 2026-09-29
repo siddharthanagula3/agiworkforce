@@ -81,13 +81,13 @@ Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-96
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
-| desktop | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
+| web | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
+| desktop | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1372-1372`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1920-1920`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 ## S17.17: Read aloud.
 

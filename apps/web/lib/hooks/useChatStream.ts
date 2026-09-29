@@ -445,8 +445,44 @@ function isTermsAcceptanceRequiredChatError(error: unknown): boolean {
   );
 }
 
-function termsAcceptancePageHref(returnTo: string): string {
-  return `/login/complete?redirectTo=${encodeURIComponent(returnTo)}`;
+function termsAcceptancePageHref(returnTo: string, review = false): string {
+  return `/login/complete?${review ? 'review=terms&' : ''}redirectTo=${encodeURIComponent(returnTo)}`;
+}
+
+const TERMS_NOTICE_SEEN_KEY = 'agi.terms-notice-seen';
+
+/**
+ * The gateway names a newer Terms of Service version on a turn from an account
+ * that accepted an older one. Continued use accepts it, as with ChatGPT and
+ * Claude, so this is a one-time notice per version, not a click-through;
+ * while a material revision is pending it names the date and offers to accept.
+ */
+function surfaceTermsNotice(response: Response): void {
+  const version = response.headers.get('X-AGI-Terms-Notice')?.trim();
+  if (!version) return;
+  try {
+    if (window.localStorage.getItem(TERMS_NOTICE_SEEN_KEY) === version) return;
+    window.localStorage.setItem(TERMS_NOTICE_SEEN_KEY, version);
+  } catch {
+    return;
+  }
+  const requiredFrom = Date.parse(response.headers.get('X-AGI-Terms-Required-From') ?? '');
+  if (Number.isFinite(requiredFrom)) {
+    const deadline = new Date(requiredFrom).toLocaleDateString(undefined, { dateStyle: 'long' });
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    toast.info(`Our Terms of Service were updated. Accept them by ${deadline} to keep chatting.`, {
+      duration: 15_000,
+      action: {
+        label: 'Review terms',
+        onClick: () => window.location.assign(termsAcceptancePageHref(returnTo, true)),
+      },
+    });
+    return;
+  }
+  toast.info('Our Terms of Service were updated. Using AGI Workforce means you accept them.', {
+    duration: 15_000,
+    action: { label: 'Read terms', onClick: () => window.open('/terms', '_blank', 'noopener') },
+  });
 }
 
 function readChatApiErrorPayload(
@@ -4095,6 +4131,7 @@ export function useChatStream(
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
+          surfaceTermsNotice(response);
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);

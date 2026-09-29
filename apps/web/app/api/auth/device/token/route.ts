@@ -17,7 +17,7 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
-import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { CURRENT_TERMS_VERSION, mustAcceptTerms } from '@/lib/server/terms';
 import { devicePairingFlow } from '@/lib/validations/device';
 import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 
@@ -125,7 +125,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
   // The code stays approved and unconsumed so the client can keep polling while the account
   // re-accepts on web, rather than losing an in-flight sign-in to a terms revision.
-  if (!(await hasAcceptedCurrentTerms(record.user_id))) {
+  if (await mustAcceptTerms(record.user_id, 'device-token')) {
     return NextResponse.json(
       {
         error: 'terms_acceptance_required',

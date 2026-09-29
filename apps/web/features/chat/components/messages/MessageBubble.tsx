@@ -27,6 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkfor
 import {
   Brain,
   Check,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -75,6 +76,7 @@ import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
+import { useSaveAsSkill } from '@/features/skills/components/save-as-skill';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
   getModelMetadataById,
@@ -1031,6 +1033,7 @@ const MessageBubbleComponent = function MessageBubble({
 
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const projectAnswerSave = useProjectAnswerSave();
+  const saveAsSkill = useSaveAsSkill();
   const [savingToProject, setSavingToProject] = useState(false);
   const saveToProject = useCallback(async () => {
     if (!projectAnswerSave || savingToProject) return;
@@ -3416,6 +3419,12 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <FolderOpen className="me-2 h-4 w-4" aria-hidden="true" />
                             {savingToProject ? 'Saving to project…' : 'Save to project'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && hasReadableTurn && !message.isStreaming && saveAsSkill && (
+                          <DropdownMenuItem onClick={saveAsSkill.save}>
+                            <BookOpen className="me-2 h-4 w-4" aria-hidden="true" />
+                            Save as skill
                           </DropdownMenuItem>
                         )}
                         {!isUser && (

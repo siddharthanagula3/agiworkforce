@@ -75,7 +75,7 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Recommend connectors on the new-chat screen; the "+" sheet's Connectors row only opens the Connectors screen. | handler, ui |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; the connector catalogue and names live in that screen. | codex |
 | cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`
@@ -206,7 +206,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
-| desktop | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
+| web | partial | web: switch-on AGI_BOT_CHALLENGE_ENFORCED=1 and flag guest.chat (surface web), off by owner decision for now. desktop: declined (lead ruling 2026-09-28): guest chat is web-only; the ChatGPT and Claude desktop apps require sign-in | switch |
+| desktop | partial | web: switch-on AGI_BOT_CHALLENGE_ENFORCED=1 and flag guest.chat (surface web), off by owner decision for now. desktop: declined (lead ruling 2026-09-28): guest chat is web-only; the ChatGPT and Claude desktop apps require sign-in | switch |
 
-Code: `apps/web/proxy.ts:283-283`, `apps/web/app/chat/layout.tsx:42-42`, `apps/web/features/chat/guest/guest-chat-stream.ts:86-86`, `apps/web/features/chat/guest/GuestChat.tsx:228-228`
+Code: `apps/web/lib/guest-chat/guest-chat-access.ts:33-33`
