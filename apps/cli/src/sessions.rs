@@ -129,6 +129,15 @@ struct SessionMetadata {
     cwd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     git_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    imported_from: Option<String>,
+}
+
+pub fn imported_from(conn: &Connection, session_id: &str) -> Option<String> {
+    read_metadata(&conn.base_dir, session_id)
+        .ok()
+        .flatten()
+        .and_then(|metadata| metadata.imported_from)
 }
 
 fn validate_metadata(metadata: &SessionMetadata) -> Result<()> {
@@ -599,6 +608,7 @@ pub fn import_hosted_session(
     title: &str,
     model: Option<&str>,
     messages: Vec<Message>,
+    origin: &str,
 ) -> Result<()> {
     let mut session = match find_session_path(&conn.base_dir, session_id) {
         Some(path) => load_managed_session_from_path(&path)?,
@@ -623,6 +633,7 @@ pub fn import_hosted_session(
     let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
     metadata.title = Some(title.to_string());
     metadata.custom_title = true;
+    metadata.imported_from = Some(origin.to_string());
     if let Some(model) = model {
         metadata.model = Some(model.to_string());
     }
@@ -763,6 +774,7 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
         model: Some(source_summary.model),
         cwd: Some(source_summary.cwd),
         git_branch: Some(source_summary.git_branch),
+        imported_from: source_metadata.and_then(|metadata| metadata.imported_from),
     };
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
