@@ -74,6 +74,7 @@
     "product-plan",
     "product-routes",
     "project-file-citations",
+    "project-templates",
     "prompt-cache-plan",
     "prompt-enhancement",
     "provider",
@@ -124,6 +125,7 @@
     "workspace-analytics"
   ],
   "cloudContractsModules": [
+    "account-deletion",
     "agent-events",
     "artifact-index",
     "capability-handshake",
@@ -137,6 +139,7 @@
     "device-steps",
     "domain-events",
     "embeddings",
+    "free-quota",
     "generated-files",
     "header-names",
     "interactive-cards",
@@ -158,6 +161,7 @@
     "schedules",
     "skills",
     "sync",
+    "terms-acceptance",
     "tool-approval-resume",
     "tool-events"
   ],
