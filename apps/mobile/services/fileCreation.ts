@@ -64,7 +64,7 @@ function sanitizeFileName(title: string): string {
 function markdownToHtml(content: string, title: string): string {
   const { html, hasMath } = markdownToExportHtml(content);
 
-  const timestamp = new Date().toLocaleDateString('en-US', {
+  const timestamp = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
