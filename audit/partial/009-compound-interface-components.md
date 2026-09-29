@@ -274,6 +274,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Destination search exists, but no hardware-keyboard shortcut opens a command palette (declined for now, needs a native key-command module). | codex |
+| mobile | partial | D-2026-09-28-27: a global command palette is not built on mobile. | codex |
 
 Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`

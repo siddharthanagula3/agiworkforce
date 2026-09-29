@@ -112,15 +112,3 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S7.32: Print-specific layouts.
-
-- Done when: Printing a conversation or report produces a print-specific layout: no app chrome, the whole content, paper-friendly colours and sensible page breaks.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Conversation export makes a paper-styled PDF with page-break-inside avoidance on table rows, but there is no Print action (no printAsync) and no wider page-break rules. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:35-36`, `apps/mobile/services/fileCreation.ts:197-198`
