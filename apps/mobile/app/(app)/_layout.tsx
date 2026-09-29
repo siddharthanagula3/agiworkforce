@@ -67,6 +67,8 @@ export default function AppLayout() {
         <Drawer.Screen name="companion/index" options={HIDDEN} />
         <Drawer.Screen name="companion/agent/[id]" options={HIDDEN} />
         <Drawer.Screen name="companion/code/[threadId]" options={HIDDEN} />
+        <Drawer.Screen name="cloud-code/index" options={HIDDEN} />
+        <Drawer.Screen name="cloud-code/[sessionId]" options={HIDDEN} />
 
         {/* Profile */}
         <Drawer.Screen name="profile/index" options={HIDDEN} />
