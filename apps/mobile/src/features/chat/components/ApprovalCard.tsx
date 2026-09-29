@@ -287,7 +287,11 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                     color: colors.textPrimary,
                   }}
                 />
-                <View className="flex-row gap-2">
+                <View
+                  className="flex-row gap-2"
+                  role="group"
+                  accessibilityLabel="Confirm or cancel the rejection"
+                >
                   <Pressable
                     onPress={handleRejectPress}
                     className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg active:opacity-80"
@@ -324,7 +328,11 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                 </View>
               </View>
             ) : (
-              <View className="flex-row gap-2">
+              <View
+                className="flex-row gap-2"
+                role="group"
+                accessibilityLabel={`Approve or reject ${approval.toolName}`}
+              >
                 <Pressable
                   onPress={handleApprove}
                   className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl active:opacity-80"
