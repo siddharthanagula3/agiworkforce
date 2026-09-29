@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0350: the workspace switch that turns product analytics off
+-- Migration 0348: the workspace switch that turns product analytics off
 --
 -- Why    : product usage events are recorded per account only with the
 --          member's own product_analytics consent. A workspace administrator
