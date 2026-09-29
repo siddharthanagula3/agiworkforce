@@ -3,7 +3,14 @@ import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { X, Send, AlertTriangle, FileText, Paperclip } from 'lucide-react-native';
+import {
+  X,
+  Send,
+  AlertTriangle,
+  FileText,
+  MessageCircleQuestionMark,
+  Paperclip,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -21,6 +28,12 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 
 const MAX_SHARED_BYTES = 100 * 1024;
 const NEW_CHAT_DRAFT_KEY = 'new-chat';
+const SHARED_URL = /\bhttps?:\/\/[^\s<>"]+/i;
+const SUMMARIZE_PROMPT = 'Summarize this page.';
+
+export function sharedPageUrl(raw: string): string | null {
+  return SHARED_URL.exec(raw)?.[0] ?? null;
+}
 
 function boundSharedText(raw: string): { text: string; truncated: boolean } {
   const cleaned = raw.replace(/<\/?shared_via_intent>/gi, '').replace(/<\/?system>/gi, '');
@@ -107,6 +120,51 @@ export default function SharePreviewScreen() {
       Alert.alert('Error', 'Could not start chat. Please try again.');
     }
   };
+
+  const pageUrl = sharedPageUrl(rawText);
+
+  const handleSummarize = async () => {
+    if (sending || !pageUrl) return;
+    setSending(true);
+    try {
+      const { createConversation, sendMessage } = useChatStore.getState();
+      const { selectedModel } = useModelStore.getState();
+      const id = await createConversation(SUMMARIZE_PROMPT);
+      sendMessage(id, `${SUMMARIZE_PROMPT}\n\n${sanitised}`, selectedModel);
+      router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id } });
+    } catch {
+      setSending(false);
+      Alert.alert('Error', 'Could not start chat. Please try again.');
+    }
+  };
+
+  const handleAskAbout = () => {
+    if (sending || !pageUrl || !provenance) return;
+    setSending(true);
+    const openConversationId = useChatStore.getState().currentConversationId;
+    const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
+    setDraft(draftKey, `${draftText}\n\n`, provenance);
+    if (openConversationId) {
+      router.replace({
+        pathname: '/(app)/chat/[id]' as const,
+        params: { id: openConversationId },
+      });
+      return;
+    }
+    router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+  };
+
+  const quickActionStyle = {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  } as const;
 
   const handleDismiss = () => {
     if (router.canGoBack()) {
@@ -258,6 +316,35 @@ export default function SharePreviewScreen() {
             </Text>
           </View>
         )}
+
+        {pageUrl && !hasAttachments ? (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => void handleSummarize()}
+              disabled={sending}
+              accessibilityRole="button"
+              accessibilityLabel="Summarize this page"
+              style={quickActionStyle}
+            >
+              <FileText size={15} color={themeColors.textPrimary} />
+              <Text style={{ color: themeColors.textPrimary, fontWeight: '600' }}>
+                Summarize this page
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleAskAbout}
+              disabled={sending || !provenance}
+              accessibilityRole="button"
+              accessibilityLabel="Ask about this page"
+              style={quickActionStyle}
+            >
+              <MessageCircleQuestionMark size={15} color={themeColors.textPrimary} />
+              <Text style={{ color: themeColors.textPrimary, fontWeight: '600' }}>
+                Ask about this page
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Text
           style={{ color: themeColors.textMuted, fontSize: typeScale.caption, textAlign: 'center' }}
