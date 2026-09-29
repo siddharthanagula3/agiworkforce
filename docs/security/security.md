@@ -106,10 +106,10 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `search_files`              | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `create_schedule`           | asks                   | asks                           | write, reversible                                                                |
 | `draft_plugin`              | asks                   | runs                           | read, reversible                                                                 |
-| `device_read_file`          | asks                   | asks                           | read, reversible                                                                 |
+| `device_read_file`          | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `device_list_folder`        | asks                   | asks                           | read, reversible                                                                 |
-| `device_find_files`         | asks                   | asks                           | read, reversible                                                                 |
-| `device_search_text`        | asks                   | asks                           | read, reversible                                                                 |
+| `device_find_files`         | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_search_text`        | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `device_write_file`         | asks                   | asks                           | write, not reversible                                                            |
 | `device_edit_file`          | asks                   | asks                           | write, not reversible                                                            |
 | `device_run_command`        | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |

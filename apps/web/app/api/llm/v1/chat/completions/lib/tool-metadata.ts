@@ -271,7 +271,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
   device_read_file: {
     actionClass: 'read',
     reversible: true,
-    acceptsUntrustedContent: false,
+    acceptsUntrustedContent: true,
     createsEgressPath: false,
     declared: true,
     readsPrivateData: true,
@@ -287,7 +287,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
   device_find_files: {
     actionClass: 'read',
     reversible: true,
-    acceptsUntrustedContent: false,
+    acceptsUntrustedContent: true,
     createsEgressPath: false,
     declared: true,
     readsPrivateData: true,
@@ -295,7 +295,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
   device_search_text: {
     actionClass: 'read',
     reversible: true,
-    acceptsUntrustedContent: false,
+    acceptsUntrustedContent: true,
     createsEgressPath: false,
     declared: true,
     readsPrivateData: true,
