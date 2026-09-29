@@ -442,7 +442,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": "2.0.0",
-      "computedHash": "sha256-tree-v1:dcd017c06d52642ab8814e4c3e76587e95f3f739866016cf0985a672fe1d7ef3"
+      "computedHash": "sha256-tree-v1:50f3b46007bbe048abd6b56a31c58e65bd40014792a40824779761667dea5320"
     },
     "ms-frontend-design-review": {
       "path": ".agents/skills/ms-frontend-design-review",
