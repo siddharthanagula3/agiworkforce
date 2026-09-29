@@ -54,7 +54,6 @@ Code: `packages/platform/utils/src/greeting.ts:88-88`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Add task commands for research and writing and list them on the welcome screen; today only /image (and /review for code) set up a task type, found by typing "/". | ui, handler |
-| vscode | partial | Inconsistent with CLI S12.05, credited partial for /image and /review behind '/': VS Code's registered @agi participant has the same task commands, each mapped to a task prompt by the handler. |  |
 
 Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
 

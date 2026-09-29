@@ -191,9 +191,9 @@ Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:41
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud only switches to the managed cloud model; the app-server's hand_off_thread can target Cloud but no client calls it, and there is no cloud importer. | handler |
-| vscode | partial | Continue in the Cloud starts a new cloud session from the pushed branch and a new goal after review; it carries no session history and needs AGI_E2B_EXECUTION=1. | flag-off |
+| vscode | partial | Met at parity with claude --cloud (new session from the pushed branch, D-2026-09-28-25); needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/developer_host.rs:1678-1678`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:79-80`
+Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/developer_host.rs:1678-1678`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:79-80`, `docs/decisions/2026-09-27-founder-decisions.md:391-391`
 
 ## S110.23: Cloud result → local repository application.
 
