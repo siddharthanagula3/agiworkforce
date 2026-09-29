@@ -25,6 +25,7 @@ jest.mock('expo-image', () => {
 });
 
 jest.mock('../src/ui/theme', () => ({
+  ...jest.requireActual('../src/ui/theme/tokens'),
   useThemeColors: () => ({
     surfaceBase: '#111',
     surfaceOverlay: '#222',

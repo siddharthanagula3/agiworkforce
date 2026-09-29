@@ -1,5 +1,5 @@
 import type { MessageAttachment } from '@/types/chat';
-import { DocParseError, parseDocument } from '@/services/docParser';
+import { parseDocument } from '@/services/docParser';
 
 export const ATTACHED_DOC_MAX_CHARS = 100_000;
 
@@ -23,7 +23,7 @@ export async function buildAttachedDocumentContext(
       context.push(`[Attached file: ${name} (${file.mimeType})]\n${body}`);
     } catch (error) {
       context.push(
-        error instanceof DocParseError && error.code === 'ENCRYPTED_PDF'
+        (error as { code?: unknown } | null)?.code === 'ENCRYPTED_PDF'
           ? `[Attached file: ${name} (${file.mimeType}) is password protected, so its contents cannot be read. Tell the user this file is password protected and ask them to attach a copy without a password.]`
           : `[Attached file: ${name} (${file.mimeType}), content could not be extracted on-device]`,
       );
