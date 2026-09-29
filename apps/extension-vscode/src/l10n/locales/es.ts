@@ -614,6 +614,20 @@ const es = {
   'savedApprovals.allowCommandDetail':
     'AGI ejecuta cualquier comando que empiece así, en cada sesión, sin preguntar.',
   'savedApprovals.allowConfirm': 'Permitir siempre',
+  'providerKeys.title': 'Claves de API de proveedores',
+  'providerKeys.placeholder':
+    'Claves que la AGI CLI usa para llamar a un proveedor con tu propia cuenta',
+  'providerKeys.empty': 'Esta AGI CLI no muestra proveedores que acepten una clave de API',
+  'providerKeys.stored': 'Clave guardada',
+  'providerKeys.fromEnvironment': 'Desde {envVar}',
+  'providerKeys.notSet': 'Sin configurar',
+  'providerKeys.setDetail': 'Elige para introducir una clave; se guarda en el llavero del sistema',
+  'providerKeys.prompt': 'Clave de API de {provider}',
+  'providerKeys.removeTitle': '¿Eliminar la clave guardada de {provider}?',
+  'providerKeys.removeDetail':
+    'Los modelos de {provider} dejan de funcionar con tu propia cuenta hasta que vuelvas a añadir una clave.',
+  'providerKeys.saved': 'AGI Workforce: clave de {provider} guardada.',
+  'providerKeys.noun': 'claves de API de proveedores',
   'savedApprovals.noun': 'aprobaciones guardadas',
   'webview.alwaysAllow': 'Permitir siempre',
   'webview.alwaysAllowHint':

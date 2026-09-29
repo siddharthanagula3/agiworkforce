@@ -215,6 +215,11 @@
         "icon": "$(shield)"
       },
       {
+        "command": "agi-workforce.showProviderKeys",
+        "title": "AGI Workforce: Provider API Keys",
+        "icon": "$(key)"
+      },
+      {
         "command": "agi-workforce.showArchivedSessions",
         "title": "AGI Workforce: Archived Sessions",
         "icon": "$(archive)"

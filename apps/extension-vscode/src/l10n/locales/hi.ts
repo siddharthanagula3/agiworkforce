@@ -507,6 +507,20 @@ const hi = {
   'savedApprovals.allowCommandDetail':
     'AGI इससे शुरू होने वाली कोई भी कमांड हर सत्र में बिना पूछे चलाएगा।',
   'savedApprovals.allowConfirm': 'हमेशा अनुमति दें',
+  'providerKeys.title': 'प्रदाता API कुंजियाँ',
+  'providerKeys.placeholder':
+    'वे कुंजियाँ जिनसे AGI CLI आपके अपने खाते से किसी प्रदाता को कॉल करता है',
+  'providerKeys.empty': 'यह AGI CLI ऐसा कोई प्रदाता नहीं दिखाता जो API कुंजी लेता हो',
+  'providerKeys.stored': 'कुंजी सहेजी गई',
+  'providerKeys.fromEnvironment': '{envVar} से',
+  'providerKeys.notSet': 'सेट नहीं',
+  'providerKeys.setDetail': 'कुंजी डालने के लिए चुनें; यह आपके सिस्टम कीचेन में रखी जाती है',
+  'providerKeys.prompt': '{provider} API कुंजी',
+  'providerKeys.removeTitle': 'सहेजी गई {provider} कुंजी हटाएँ?',
+  'providerKeys.removeDetail':
+    'जब तक फिर से कुंजी नहीं जोड़ी जाती, {provider} के मॉडल आपके अपने खाते से काम नहीं करेंगे।',
+  'providerKeys.saved': 'AGI Workforce: {provider} कुंजी सहेजी गई।',
+  'providerKeys.noun': 'प्रदाता API कुंजियाँ',
   'savedApprovals.noun': 'सहेजी गई स्वीकृतियाँ',
   'webview.alwaysAllow': 'हमेशा अनुमति दें',
   'webview.alwaysAllowHint':
