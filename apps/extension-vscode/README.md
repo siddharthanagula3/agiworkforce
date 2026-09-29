@@ -21,7 +21,7 @@ driven by the AGI CLI running on your own machine.
 ## Requirements
 
 - VS Code 1.100 or newer.
-- **AGI CLI 1.7.1 or newer** available as `agi` on your `PATH`, chat, agent runs, and
+- **AGI CLI 0.0.1 or newer** available as `agi` on your `PATH`, chat, agent runs, and
   session history all run through the local `agi app-server` process. If the
   binary lives elsewhere, point `agiWorkforce.cliPath` at it.
 - A trusted workspace. In a restricted workspace, agent file writes are

@@ -266,6 +266,7 @@ export function sharesManagedRoute(offering: ProviderOffering): boolean {
 export type FreeQuotaUnavailableReason =
   | 'not_integrated'
   | 'quota_only_not_observed'
+  | 'terms_review_missing'
   | 'media_not_served'
   | 'allowance_unknown'
   | 'credential_missing'
@@ -291,6 +292,7 @@ export interface FreeQuotaDecisionInput {
   apiKey: string;
   mediaServed: boolean;
   state: FreeQuotaState | null;
+  termsReviewed: boolean;
 }
 
 function unavailable(reason: FreeQuotaUnavailableReason): FreeQuotaDecision {
@@ -315,6 +317,7 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
     return unavailable('not_integrated');
   }
   if (!entry.quotaOnlyObserved) return unavailable('quota_only_not_observed');
+  if (!input.termsReviewed) return unavailable('terms_review_missing');
   if (offering.quotaProbeProtocol !== 'chat' && !input.mediaServed) {
     return unavailable('media_not_served');
   }

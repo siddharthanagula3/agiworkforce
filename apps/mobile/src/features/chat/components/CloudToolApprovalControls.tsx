@@ -1,5 +1,7 @@
-import { Pressable, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { useRecyclingState } from '@shopify/flash-list';
 import { ShieldAlert } from 'lucide-react-native';
+import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import {
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_APPROVAL_HIGH_RISK_NOTICE,
@@ -18,6 +20,13 @@ export type CloudToolApprovalDecision = 'approved' | 'rejected';
 export type ResolveCloudToolApproval = (
   toolCallId: string,
   decision: CloudToolApprovalDecision,
+  guidance?: string,
+) => void;
+
+export type AllowCloudToolForChat = (
+  toolCallId: string,
+  toolName: string,
+  guidance?: string,
 ) => void;
 
 export interface CloudToolApprovalPreview {
@@ -54,7 +63,9 @@ interface CloudToolApprovalControlsProps {
   args?: Record<string, unknown>;
   riskLevel?: RiskLevel;
   decision?: CloudToolApprovalDecision;
+  guidance?: string;
   onResolve?: ResolveCloudToolApproval;
+  onAllowForChat?: AllowCloudToolForChat;
 }
 
 const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 } as const;
@@ -125,12 +136,18 @@ export function CloudToolApprovalControls({
   args,
   riskLevel,
   decision,
+  guidance: savedGuidance,
   onResolve,
+  onAllowForChat,
 }: CloudToolApprovalControlsProps) {
   const colors = useThemeColors();
   const disabled = !onResolve;
   const preview = cloudToolApprovalPreview(toolName, args);
-  const resolve = (next: CloudToolApprovalDecision) => onResolve?.(toolCallId, next);
+  const [guidance, setGuidance] = useRecyclingState(savedGuidance ?? '', [toolCallId]);
+  const [guidanceOpen, setGuidanceOpen] = useRecyclingState(Boolean(savedGuidance), [toolCallId]);
+  const resolve = (next: CloudToolApprovalDecision) =>
+    onResolve?.(toolCallId, next, guidance.trim() || undefined);
+  const canAllowForChat = Boolean(onAllowForChat) && !disabled && riskLevel !== 'high';
 
   return (
     <View style={{ gap: 7 }}>
@@ -159,7 +176,36 @@ export function CloudToolApprovalControls({
 
       {preview.diff ? <DiffPreview diff={preview.diff} /> : null}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      {guidanceOpen ? (
+        <TextInput
+          value={guidance}
+          onChangeText={setGuidance}
+          editable={!disabled}
+          multiline
+          autoFocus={!savedGuidance}
+          maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
+          placeholder="Tell the agent what to do instead"
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.teal}
+          accessibilityLabel={`Guidance for ${summary}`}
+          accessibilityHint="Sent to the agent with Allow or Deny"
+          style={{
+            minHeight: 64,
+            maxHeight: 140,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.inputSurface,
+            color: colors.textPrimary,
+            fontSize: 13,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            textAlignVertical: 'top',
+          }}
+        />
+      ) : null}
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <Pressable
           onPress={() => resolve('approved')}
           disabled={disabled}
@@ -184,6 +230,28 @@ export function CloudToolApprovalControls({
             </Text>
           </View>
         </Pressable>
+        {canAllowForChat ? (
+          <Pressable
+            onPress={() => onAllowForChat?.(toolCallId, toolName, guidance.trim() || undefined)}
+            accessibilityRole="button"
+            accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allowForChat}: ${summary}`}
+            hitSlop={HIT_SLOP}
+          >
+            <View
+              style={{
+                paddingHorizontal: 13,
+                paddingVertical: 7,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
+                {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => resolve('rejected')}
           disabled={disabled}
@@ -209,6 +277,20 @@ export function CloudToolApprovalControls({
             </Text>
           </View>
         </Pressable>
+        {guidanceOpen || disabled ? null : (
+          <Pressable
+            onPress={() => setGuidanceOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Add guidance for ${summary}`}
+            hitSlop={HIT_SLOP}
+          >
+            <View style={{ paddingHorizontal: 6, paddingVertical: 7 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+                Add guidance
+              </Text>
+            </View>
+          </Pressable>
+        )}
       </View>
     </View>
   );

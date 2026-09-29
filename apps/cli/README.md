@@ -15,7 +15,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v1.7.1 │ catalog-selected-model │ provider │ main │ 4% ctx
+ AGI Workforce v0.0.1 │ catalog-selected-model │ provider │ main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

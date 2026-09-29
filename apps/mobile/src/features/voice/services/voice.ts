@@ -7,6 +7,7 @@ import {
   type VoiceInputMeteringEvent,
   type OnDeviceTranscriptResult,
 } from './voiceInput';
+import { activeSpeechLanguage } from './speechSettings';
 export { VoiceCaptureError, type VoicePartialResult } from './voiceInput';
 
 export type VoiceMeteringEvent = VoiceInputMeteringEvent & {
@@ -42,7 +43,9 @@ export async function startRecording(onMetering?: MeteringCallback): Promise<voi
         })
     : undefined;
 
-  const session = await startCaptureSession(meteringAdapter);
+  const session = await startCaptureSession(meteringAdapter, undefined, {
+    lang: activeSpeechLanguage(),
+  });
   const capturePromise: Promise<OnDeviceTranscriptResult> = session.result.then((result) => {
     _lastResult = result;
     return result;

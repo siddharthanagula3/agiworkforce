@@ -9,7 +9,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingChecklist } from './ConnectionStateViews';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
@@ -88,7 +88,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
   }, [accountEmail]);
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 32, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -114,9 +114,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           className="mb-8"
           steps={[
             'Install AGI Workforce on your computer, then open it in Managed Cloud',
-            accountEmail
-              ? `Sign in on that computer as ${accountEmail}`
-              : 'Sign in on that computer with the account you use here',
+            'Sign in on Desktop; the short-lived pairing code authorizes this phone',
             'Turn on Dispatch in Settings → Connections, then generate a pairing code',
           ]}
         />

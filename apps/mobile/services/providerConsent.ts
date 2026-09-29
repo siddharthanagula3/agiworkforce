@@ -5,7 +5,7 @@ import {
   type ChineseHqProviderId,
 } from '@agiworkforce/compliance';
 import {
-  mmkvConsentLedger,
+  mmkvRoutingConsentLedger,
   mmkvDisclosureLedger,
   recordNamedProviderConsent,
 } from './complianceLedger';
@@ -15,19 +15,15 @@ const DISCLOSURE_VERSION_FALLBACK = 'unrecorded';
 
 export type ChineseHqConsentMap = Readonly<Record<ChineseHqProviderId, boolean>>;
 
-function currentDisclosureVersion(): string {
-  return mmkvDisclosureLedger.read()?.disclosureCopyHash ?? DISCLOSURE_VERSION_FALLBACK;
-}
-
 export function readChineseHqConsent(): ChineseHqConsentMap {
   const entries = CHINESE_HQ_PROVIDER_IDS.map(
-    (id) => [id, mmkvConsentLedger.getNamedProviderConsent(id)?.accepted === true] as const,
+    (id) => [id, mmkvRoutingConsentLedger.getNamedProviderConsent(id)?.accepted === true] as const,
   );
   return Object.fromEntries(entries) as ChineseHqConsentMap;
 }
 
 export function isChineseHqProviderAccepted(providerId: ChineseHqProviderId): boolean {
-  return mmkvConsentLedger.getNamedProviderConsent(providerId)?.accepted === true;
+  return mmkvRoutingConsentLedger.getNamedProviderConsent(providerId)?.accepted === true;
 }
 
 export function setChineseHqProviderConsent(
@@ -35,11 +31,15 @@ export function setChineseHqProviderConsent(
   accepted: boolean,
   now: () => Date = () => new Date(),
 ): void {
+  const disclosureVersion = mmkvDisclosureLedger.read()?.disclosureCopyHash;
+  if (accepted && !disclosureVersion) {
+    throw new Error('Accept the privacy disclosure before enabling this provider.');
+  }
   recordNamedProviderConsent({
     providerId,
     accepted,
     acceptedAt: now().toISOString(),
-    disclosureVersion: currentDisclosureVersion(),
+    disclosureVersion: disclosureVersion ?? DISCLOSURE_VERSION_FALLBACK,
     surface: CONSENT_SURFACE,
   });
 }

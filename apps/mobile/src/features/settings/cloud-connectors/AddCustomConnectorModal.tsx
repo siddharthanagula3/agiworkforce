@@ -111,9 +111,9 @@ export function AddCustomConnectorModal({
       reset();
       onAdded(connector);
       onClose();
-    } catch (err) {
+    } catch {
       if (!isFormScopeCurrent(requestScope)) return;
-      setError(err instanceof Error ? err.message : 'Could not add this connector.');
+      setError('Could not add this connector. Check its URL and try again.');
       setSubmitting(false);
     }
   }, [authToken, canSubmit, isFormScopeCurrent, name, onAdded, onClose, reset, url]);

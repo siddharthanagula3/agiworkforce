@@ -1,24 +1,47 @@
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   MAX_CLOUD_AGENT_RUN_STEER_LENGTH,
   isCloudAgentRunSteerable,
   type CloudAgentRun,
+  type CloudAgentRunSteer,
 } from '@agiworkforce/cloud-contracts';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
-import { describeCloudRunSteerError, steerCloudRun } from '../cloudRunSteer';
+import { handOffConversationSend } from '@/src/features/chat/conversationSendHandoff';
+import { describeCloudRunSteerError, steerCloudRun, withdrawCloudRunSteer } from '../cloudRunSteer';
 
 export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
   const colors = useThemeColors();
+  const router = useRouter();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const queued = run.pendingSteers ?? [];
   const steerable = isCloudAgentRunSteerable(run);
+  const finished = TERMINAL_AGENT_TASK_STATES.has(run.workState ?? run.state);
+  const conversationId = run.conversationId;
   if (!steerable && queued.length === 0) return null;
+
+  const sendAsNewMessage = async (steer: CloudAgentRunSteer) => {
+    if (!conversationId || resendingId) return;
+    setResendingId(steer.id);
+    setError(null);
+    try {
+      await withdrawCloudRunSteer(run.id, steer.id);
+      handOffConversationSend(conversationId, steer.text);
+      router.push(`/chat/${conversationId}`);
+    } catch (err) {
+      setError(describeCloudRunSteerError(err));
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const send = async () => {
     const message = draft.trim();
@@ -67,12 +90,31 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
             {steer.text}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-            {steerable
-              ? 'Queued. The agent reads it at its next step.'
-              : 'The task stopped before the agent read this.'}
+            {finished
+              ? 'Not read before the task finished'
+              : 'Queued. The agent reads it at its next step.'}
           </Text>
+          {finished && conversationId ? (
+            <Button
+              title="Send as new message"
+              variant="secondary"
+              accessibilityLabel="Send this message as a new message in the chat"
+              loading={resendingId === steer.id}
+              disabled={resendingId !== null}
+              onPress={() => void sendAsNewMessage(steer)}
+            />
+          ) : null}
         </View>
       ))}
+      {!steerable && error ? (
+        <Text
+          accessibilityRole="alert"
+          selectable
+          style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}
+        >
+          {error}
+        </Text>
+      ) : null}
       {steerable ? (
         <>
           <TextInput

@@ -173,14 +173,23 @@ function readProviderFailure(data: unknown, status?: number): ProviderFailure {
 function readUsage(value: unknown): TokenUsage | null {
   if (!value || typeof value !== 'object') return null;
   const usage = value as Record<string, unknown>;
-  const promptTokens = Number(usage['prompt_tokens'] ?? 0);
-  const completionTokens = Number(usage['completion_tokens'] ?? 0);
-  const reportedTotal = Number(usage['total_tokens'] ?? 0);
-  if (![promptTokens, completionTokens, reportedTotal].every(Number.isFinite)) return null;
+  const promptTokens = usage['prompt_tokens'];
+  const completionTokens = usage['completion_tokens'];
+  const reportedTotal = usage['total_tokens'];
+  const validCount = (count: unknown): count is number =>
+    typeof count === 'number' && Number.isSafeInteger(count) && count >= 0;
+  if (
+    !validCount(promptTokens) ||
+    !validCount(completionTokens) ||
+    !Number.isSafeInteger(promptTokens + completionTokens) ||
+    promptTokens + completionTokens === 0 ||
+    (reportedTotal !== undefined && !validCount(reportedTotal))
+  )
+    return null;
   return {
     promptTokens,
     completionTokens,
-    totalTokens: Math.max(reportedTotal, promptTokens + completionTokens),
+    totalTokens: Math.max(reportedTotal ?? 0, promptTokens + completionTokens),
   };
 }
 
@@ -284,8 +293,10 @@ function meteredChatStream(
     } catch {
       return line;
     }
-    const reported = readUsage(event['usage']);
-    if (reported) usage = reported;
+    if (Object.prototype.hasOwnProperty.call(event, 'usage')) {
+      const reported = readUsage(event['usage']);
+      usage = reported && usage && reported.totalTokens < usage.totalTokens ? usage : reported;
+    }
     const choices = event['choices'];
     if (
       Array.isArray(choices) &&

@@ -99,13 +99,10 @@ export function ConversationExportSheet({
           result = await exportToMarkdown(md, title);
         }
 
-        handleClose();
         await shareFile(result.uri);
-      } catch (err) {
-        Alert.alert(
-          'Export Failed',
-          err instanceof Error ? err.message : 'Something went wrong. Please try again.',
-        );
+        handleClose();
+      } catch {
+        Alert.alert('Export Failed', 'Could not export or share this conversation. Try again.');
       } finally {
         setLoadingKey(null);
       }

@@ -8,11 +8,13 @@ import {
   MAX_TICKET_MESSAGE_CHARS,
   TICKET_STATUS_LABEL,
   TICKET_STATUS_MEANING,
+} from '@agiworkforce/cloud-contracts/support';
+import {
   canReplyToTicket,
   closeSupportTicket,
   readSupportTicket,
   replyToSupportTicket,
-  type SupportTicketThread,
+  type SupportTicketThreadView,
 } from './service';
 
 function formatDateTime(iso: string): string {
@@ -24,7 +26,7 @@ function formatDateTime(iso: string): string {
 
 export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
   const colors = useThemeColors();
-  const [thread, setThread] = useState<SupportTicketThread | null>(null);
+  const [thread, setThread] = useState<SupportTicketThreadView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);

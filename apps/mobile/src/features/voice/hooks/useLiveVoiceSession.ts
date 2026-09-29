@@ -162,7 +162,7 @@ export function useLiveVoiceSession({
       return module.LiveVoiceSession.start({
         voice: isLiveVoice(chosenVoice) ? chosenVoice : null,
         conversationId: conversationRef.current,
-        language: activeSpeechLanguage().split('-')[0]?.trim().toLowerCase() || null,
+        language: activeSpeechLanguage()?.split('-')[0]?.trim().toLowerCase() || null,
         callbacks: {
           onStarted: () => {
             if (cancelled) return;

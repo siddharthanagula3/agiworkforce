@@ -7,7 +7,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
-import { logger } from '@/lib/logger';
 import type { ConnectorAccessPolicy } from './connector-policy-evaluator';
 
 export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
@@ -81,36 +80,12 @@ export async function readConnectorPolicy(
   return row ? format(row) : null;
 }
 
-/**
- * Reads the policy without letting a database fault stop a member working.
- *
- * Connector governance is a deployment control over which approved
- * integrations staff use, not a containment barrier, the tenancy layer is what
- * stops cross-workspace access, and that fails closed. Denying every connector
- * because the policy table blipped would break every member's tools for an
- * infrastructure reason no administrator chose.
- */
-export async function readConnectorPolicySafely(
-  db: DatabaseAdapter,
-  organizationId: string | null,
-): Promise<OrganizationConnectorPolicy | null> {
-  if (!organizationId) return null;
-  try {
-    return await readConnectorPolicy(db, organizationId);
-  } catch (error) {
-    logger.error(
-      { error, organizationId },
-      '[connector-policy] read failed; request treated as ungoverned',
-    );
-    return null;
-  }
-}
-
 export async function readWorkspaceWebDomainPolicy(
   db: DatabaseAdapter,
   organizationId: string | null,
 ): Promise<ResearchDomainPolicy | null> {
-  const policy = await readConnectorPolicySafely(db, organizationId);
+  if (!organizationId) return null;
+  const policy = await readConnectorPolicy(db, organizationId);
   if (!policy) return null;
   if (policy.allowedWebDomains.length === 0 && policy.blockedWebDomains.length === 0) return null;
   return { allow: policy.allowedWebDomains, deny: policy.blockedWebDomains };

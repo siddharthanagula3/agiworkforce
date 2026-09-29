@@ -1,4 +1,10 @@
 import { MAX_CHAT_ATTACHMENT_BYTES, isChatImageMimeType } from '@agiworkforce/cloud-contracts';
+import {
+  getHarnessMediaInput,
+  getModelMetadataById,
+  getRegistryRoute,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 import { isParseableDocument } from '@/services/docParser';
 import { isHeicImage } from '@/src/features/media/image-normalization';
 
@@ -74,4 +80,24 @@ export function validateAttachments<T extends ValidatableAttachment>(
     else rejected.push({ fileName: item.fileName, reason: verdict });
   }
   return { accepted, rejected };
+}
+
+export function maxImagesPerMessage(modelId: string): number | null {
+  const override = getModelMetadataById(modelId)?.imageInput?.maxImagesPerRequest;
+  if (override !== undefined) return override;
+  const route = listManagedRoutesForModel(modelId)[0];
+  const harnessId = route ? getRegistryRoute(route.routeId)?.harnessId : undefined;
+  return harnessId ? (getHarnessMediaInput(harnessId).maxImagesPerRequest ?? null) : null;
+}
+
+export function imageLimitRefusal(
+  modelId: string,
+  attachments: ReadonlyArray<Pick<ValidatableAttachment, 'mimeType'>> | undefined,
+): string | null {
+  const limit = maxImagesPerMessage(modelId);
+  const count = attachments?.filter((a) => a.mimeType.startsWith('image/')).length ?? 0;
+  if (limit === null || count <= limit) return null;
+  const excess = count - limit;
+  const modelName = getModelMetadataById(modelId)?.name ?? modelId;
+  return `${modelName} can read up to ${limit} images in one message. Remove ${excess} ${excess === 1 ? 'image' : 'images'} to send it.`;
 }

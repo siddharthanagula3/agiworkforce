@@ -1,12 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+
+let mockCameraGranted = true;
+const mockClipboardRead = jest.fn<Promise<string>, []>();
+
+jest.mock('expo-clipboard', () => ({ getStringAsync: () => mockClipboardRead() }));
 
 jest.mock('expo-camera', () => {
   const { View } = require('react-native');
   return {
     CameraView: (props: Record<string, unknown>) => <View testID="camera-view" {...props} />,
-    useCameraPermissions: () => [{ granted: true }, jest.fn()],
+    useCameraPermissions: () => [{ granted: mockCameraGranted }, jest.fn()],
   };
 });
 
@@ -73,6 +78,62 @@ const PAIRING_SECRET = '9f'.repeat(32);
 const DESKTOP_PAIRING_PAYLOAD = `agiw3:WXYZ1234ABCD:${PAIRING_SECRET}`;
 
 describe('QRScanner manual pairing', () => {
+  beforeEach(() => {
+    mockCameraGranted = true;
+    mockClipboardRead.mockReset();
+  });
+
+  it('keeps Connect disabled until a code is entered', () => {
+    const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+
+    expect(screen.getByLabelText('Connect').props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(screen.getByPlaceholderText('ABCD EFGH IJKL'), 'WXYZ 1234 ABCD');
+    expect(screen.getByLabelText('Connect').props.accessibilityState.disabled).not.toBe(true);
+  });
+
+  it('can open manual entry when camera permission is denied', () => {
+    mockCameraGranted = false;
+    const onClose = jest.fn();
+    const screen = render(<QRScanner onScan={jest.fn()} onClose={onClose} />);
+
+    fireEvent.press(screen.getByLabelText('Enter Code Manually'));
+
+    expect(screen.getByPlaceholderText('ABCD EFGH IJKL')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Back to camera options'));
+    fireEvent.press(screen.getByLabelText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('pastes a complete pairing link and can submit it', async () => {
+    mockClipboardRead.mockResolvedValue(`  ${DESKTOP_PAIRING_PAYLOAD}  `);
+    const onScan = jest.fn();
+    const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+
+    fireEvent.press(screen.getByLabelText('Paste code'));
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('ABCD EFGH IJKL').props.value).toBe(
+        DESKTOP_PAIRING_PAYLOAD,
+      ),
+    );
+    fireEvent.press(screen.getByLabelText('Connect'));
+
+    expect(onScan).toHaveBeenCalledWith(DESKTOP_PAIRING_PAYLOAD);
+  });
+
+  it('explains an empty clipboard without replacing an entered code', async () => {
+    mockClipboardRead.mockResolvedValue('');
+    const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+    fireEvent.changeText(screen.getByPlaceholderText('ABCD EFGH IJKL'), 'WXYZ 1234 ABCD');
+
+    fireEvent.press(screen.getByLabelText('Paste code'));
+
+    await waitFor(() => expect(screen.getByText(/Clipboard is empty/)).toBeTruthy());
+    expect(screen.getByPlaceholderText('ABCD EFGH IJKL').props.value).toBe('WXYZ 1234 ABCD');
+  });
+
   it('shows the Desktop code format and submits a spaced 12-character code', () => {
     const onScan = jest.fn();
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);

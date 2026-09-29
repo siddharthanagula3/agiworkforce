@@ -7,6 +7,7 @@ const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>();
+let mockRemoteStatus = 'disconnected';
 const mockClerkState: {
   user: null | {
     fullName?: string | null;
@@ -18,6 +19,11 @@ const mockClerkState: {
 
 jest.mock('@clerk/expo', () => ({
   useUser: () => mockClerkState,
+}));
+
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: mockRemoteStatus }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -94,6 +100,7 @@ describe('Settings page', () => {
     useSettingsStore.setState({ themeMode: 'system', accentColor: 'neutral' });
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+    mockRemoteStatus = 'disconnected';
     useTierStore.setState({
       tier: 'free',
       billingTier: 'free',
@@ -132,7 +139,32 @@ describe('Settings page', () => {
     expect(getByText('Shared Links')).toBeTruthy();
     expect(getByText('Account Security')).toBeTruthy();
     expect(getByText('Device Integrations')).toBeTruthy();
+    expect(getByText('Remote')).toBeTruthy();
+    expect(getByText('Storage')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
+  });
+
+  it('opens Remote from Settings and reflects the paired Desktop state', () => {
+    const screen = render(<SettingsTabScreen />);
+
+    expect(screen.getByLabelText('Remote. Not paired')).toBeTruthy();
+    mockRemoteStatus = 'connected';
+    screen.rerender(<SettingsTabScreen />);
+    expect(screen.getByLabelText('Remote. Connected')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Remote. Connected'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
+  });
+
+  it('opens Storage from Settings with a return path to the same screen', () => {
+    const screen = render(<SettingsTabScreen />);
+
+    fireEvent.press(screen.getByLabelText('Storage'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/storage',
+      params: { returnTo: '/(app)/(tabs)/settings' },
+    });
   });
 
   it('does not duplicate the Skills catalog or expose an unbuilt Plugins setting', () => {
@@ -285,7 +317,14 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Reflect. Sign in'));
     fireEvent.press(getByLabelText('Shared Links. Sign in'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenNthCalledWith(1, {
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-reflect' },
+    });
+    expect(mockPush).toHaveBeenNthCalledWith(2, {
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-shared-links' },
+    });
   });
 
   it('opens the existing Shared Links and Device Integrations screens from Settings', () => {
@@ -309,7 +348,18 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Connectors. Sign in'));
 
     expect(mockPush).toHaveBeenCalledTimes(3);
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenNthCalledWith(1, {
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-billing' },
+    });
+    expect(mockPush).toHaveBeenNthCalledWith(2, {
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-usage' },
+    });
+    expect(mockPush).toHaveBeenNthCalledWith(3, {
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-connectors' },
+    });
   });
 
   it('navigates to real local settings routes', () => {

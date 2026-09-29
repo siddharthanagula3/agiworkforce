@@ -111,6 +111,7 @@ export * from './paywall-vocabulary';
 export * from './interactive-cards';
 export * from './places-search';
 export * from './project-file-citations';
+export * from './project-templates';
 export * from './web-search-citations';
 export * from './search-provider';
 

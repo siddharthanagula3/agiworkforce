@@ -152,6 +152,22 @@ export {
 } from './authProviders';
 export type { AuthProvider, AuthProviderId } from './authProviders';
 export {
+  AUTH_ERROR_KINDS,
+  AUTH_NOTICE_KINDS,
+  classifyAuthError,
+  classifyProviderCallbackError,
+  isAuthNoticeKind,
+  isRetryableAuthError,
+  readVendorAuthError,
+} from './authErrorTaxonomy';
+export type {
+  AuthErrorDescriptor,
+  AuthErrorField,
+  AuthErrorKind,
+  AuthNoticeKind,
+  VendorAuthError,
+} from './authErrorTaxonomy';
+export {
   WORKSPACE_POLICY_POLL_INTERVAL_MS,
   browserWorkspacePolicyEnvironment,
   createWorkspacePolicyPoller,

@@ -56,6 +56,7 @@ export interface ScheduleRun {
   result: string | null;
   error: string | null;
   pendingApproval?: ManagedCloudScheduleRunPendingApproval | null;
+  timingNote: string | null;
 }
 
 export type CreateScheduleInput = Omit<
@@ -73,9 +74,9 @@ interface ScheduleState {
   error: string | null;
 
   fetchSchedules: () => Promise<void>;
-  createSchedule: (data: CreateScheduleInput) => Promise<void>;
+  createSchedule: (data: CreateScheduleInput) => Promise<boolean>;
   updateSchedule: (id: string, data: Partial<CreateScheduleInput>) => Promise<void>;
-  deleteSchedule: (id: string) => Promise<void>;
+  deleteSchedule: (id: string) => Promise<boolean>;
   toggleSchedule: (id: string) => Promise<void>;
   fetchRuns: (scheduleId: string) => Promise<void>;
   resolveRunApproval: (
@@ -110,9 +111,7 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to fetch schedules:', error);
-          set({
-            error: error instanceof Error ? error.message : 'Failed to load schedules',
-          });
+          set({ error: 'Could not load scheduled tasks. Check your connection and retry.' });
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
@@ -120,20 +119,19 @@ export const useScheduleStore = create<ScheduleState>()(
 
       createSchedule: async (data) => {
         const account = captureCloudAccountEpoch();
-        if (!account) return;
+        if (!account) return false;
         set({ loading: true, error: null });
         try {
           const schedule = await apiCreateSchedule(data);
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
           set((state) => ({
             schedules: [schedule, ...state.schedules],
           }));
+          return true;
         } catch (error) {
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
           console.warn('Failed to create schedule:', error);
-          set({
-            error: error instanceof Error ? error.message : 'Failed to create schedule',
-          });
+          set({ error: 'Could not create this task. Check your connection and retry.' });
           throw error;
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ loading: false });
@@ -153,9 +151,7 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to update schedule:', error);
-          set({
-            error: error instanceof Error ? error.message : 'Failed to update schedule',
-          });
+          set({ error: 'Could not save this task. Check your connection and retry.' });
           throw error;
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ loading: false });
@@ -164,22 +160,31 @@ export const useScheduleStore = create<ScheduleState>()(
 
       deleteSchedule: async (id) => {
         const account = captureCloudAccountEpoch();
-        if (!account) return;
-        const prev = get().schedules;
+        if (!account) return false;
+        const previousSchedules = get().schedules;
+        const removedSchedule = previousSchedules.find((schedule) => schedule.id === id);
+        const removedIndex = previousSchedules.findIndex((schedule) => schedule.id === id);
         set((state) => ({
           schedules: state.schedules.filter((s) => s.id !== id),
         }));
 
         try {
           await apiDeleteSchedule(id);
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
+          return true;
         } catch (error) {
-          if (!isCloudAccountEpochCurrent(account)) return;
+          if (!isCloudAccountEpochCurrent(account)) return false;
           console.warn('Failed to delete schedule:', error);
-          set({ schedules: prev });
-          set({
-            error: error instanceof Error ? error.message : 'Failed to delete schedule',
-          });
+          if (removedSchedule) {
+            set((state) => {
+              if (state.schedules.some((schedule) => schedule.id === id)) return state;
+              const schedules = [...state.schedules];
+              schedules.splice(Math.min(removedIndex, schedules.length), 0, removedSchedule);
+              return { schedules };
+            });
+          }
+          set({ error: 'Could not delete this task. Check your connection and retry.' });
+          return false;
         }
       },
 
@@ -202,19 +207,22 @@ export const useScheduleStore = create<ScheduleState>()(
         }));
 
         try {
-          await apiToggleSchedule(id, newActive);
+          const updated = await apiToggleSchedule(id, newActive);
           if (!isCloudAccountEpochCurrent(account)) return;
+          set((state) => ({
+            schedules: state.schedules.map((item) =>
+              item.id === id && item.isActive === newActive ? updated : item,
+            ),
+          }));
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to toggle schedule:', error);
           set((state) => ({
             schedules: state.schedules.map((s) =>
-              s.id === id ? { ...s, isActive: !newActive } : s,
+              s.id === id && s.isActive === newActive ? { ...s, isActive: schedule.isActive } : s,
             ),
           }));
-          set({
-            error: error instanceof Error ? error.message : 'Failed to toggle schedule',
-          });
+          set({ error: 'Could not change this task. Check your connection and retry.' });
         }
       },
 
@@ -248,7 +256,7 @@ export const useScheduleStore = create<ScheduleState>()(
           set((state) => ({
             runsErrorBySchedule: {
               ...state.runsErrorBySchedule,
-              [scheduleId]: error instanceof Error ? error.message : 'Failed to load run history',
+              [scheduleId]: 'Could not load run history. Check your connection and retry.',
             },
           }));
         } finally {

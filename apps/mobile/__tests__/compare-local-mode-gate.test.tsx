@@ -58,6 +58,7 @@ import CompareScreen from '../src/features/compare';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useTierStore } from '../src/features/billing/store';
 import { EgressBlockedError } from '../lib/egressGuard';
 import {
   __resetCloudAccountSessionForTests,
@@ -74,6 +75,7 @@ beforeEach(() => {
   activateCloudAccount('account-a');
   useAuthStore.setState({ clerkUserId: 'account-a', isClerkLoaded: true, isClerkSignedIn: true });
   useWaitlistStore.setState({ cloudUnlocked: true });
+  useTierStore.setState({ tier: 'max' });
   mockStreamChat.mockResolvedValue(undefined);
 });
 
@@ -104,7 +106,10 @@ describe('CompareScreen in Local Mode', () => {
     render(<CompareScreen />);
 
     fireEvent.press(screen.getByLabelText('Switch to AGI Cloud'));
-    expect(mockRouter.push).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-compare' },
+    });
     expect(useChatAppModeStore.getState().appMode).toBe('local');
   });
 
@@ -126,6 +131,26 @@ describe('CompareScreen in Local Mode', () => {
     });
     expect(verdict).toBe(false);
     expect(mockStreamChat).not.toHaveBeenCalled();
+  });
+
+  it('aborts an active Cloud comparison when the user switches to Local Mode', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    render(<CompareScreen />);
+    fireEvent.press(screen.getByLabelText('Send comparison prompt'));
+
+    const callbacksA = mockStreamChat.mock.calls[0]?.[1] as StreamCallbacks;
+    const signalA = mockStreamChat.mock.calls[0]?.[2] as AbortSignal;
+    const signalB = mockStreamChat.mock.calls[1]?.[2] as AbortSignal;
+    act(() => callbacksA.onDelta({ content: 'cloud-only-output' }));
+    expect(screen.getByText('cloud-only-output')).toBeTruthy();
+
+    act(() => useChatAppModeStore.setState({ appMode: 'local' }));
+
+    expect(signalA.aborted).toBe(true);
+    expect(signalB.aborted).toBe(true);
+    expect(screen.queryByText('cloud-only-output')).toBeNull();
+    act(() => callbacksA.onDelta({ content: 'late-cloud-output' }));
+    expect(screen.queryByText('late-cloud-output')).toBeNull();
   });
 });
 

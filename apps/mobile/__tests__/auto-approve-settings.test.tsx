@@ -137,7 +137,14 @@ describe('Action approvals settings screen', () => {
       fireEvent.press(screen.getByLabelText(rowLabel(READ_ONLY)));
     });
 
-    await waitFor(() => expect(screen.getByText('Preference service unavailable')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Your approval default could not be saved. Check your connection and try again.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText('Preference service unavailable')).toBeNull();
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
   });
 });

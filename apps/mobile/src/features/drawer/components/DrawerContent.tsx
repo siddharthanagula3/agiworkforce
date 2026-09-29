@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -9,8 +9,10 @@ import {
   Bot,
   Bell,
   CalendarClock,
+  ChevronRight,
   FolderOpen,
   HelpCircle,
+  BarChart3,
   MessageSquare,
   MonitorSmartphone,
   Pin,
@@ -21,7 +23,7 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
@@ -35,8 +37,11 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
+  InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
@@ -51,6 +56,7 @@ import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 
 type RoutePath =
   | '/(app)/chats'
+  | '/(app)/search'
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
@@ -62,6 +68,7 @@ type RoutePath =
   | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
+  | '/(app)/settings/cloud-usage'
   | '/(app)/about'
   | '/(app)/profile'
   | '/(app)/projects/[id]'
@@ -268,13 +275,41 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const tier = useTierStore((s) => s.tier);
-  // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
-  // a plan that includes AGI Work. The server is still authoritative.
-  const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const usageOwnerId = useCloudUsageStore((s) => s.ownerId);
+  const usageSnapshot = useCloudUsageStore((s) => s.snapshot);
+  const usageLoading = useCloudUsageStore((s) => s.loading);
+  const usageError = useCloudUsageStore((s) => s.error);
+  const refreshUsage = useCloudUsageStore((s) => s.refresh);
+  // Same gate the [+] sheet applied before this moved: Cloud-only, and only
+  // where the capability document grants AGI Work. The server is still authoritative.
+  const showAgiWork = appMode === 'cloud' && grantedCapabilities.includes('canUseAgiWork');
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
+
+  useEffect(() => {
+    if (
+      (drawerOpen || usesPersistentDrawer) &&
+      appMode === 'cloud' &&
+      isClerkSignedIn &&
+      clerkUserId
+    ) {
+      void refreshUsage();
+    }
+  }, [drawerOpen, usesPersistentDrawer, appMode, isClerkSignedIn, clerkUserId, refreshUsage]);
+
+  const visibleUsage = usageOwnerId === clerkUserId ? usageSnapshot : null;
+  const remainingUsage =
+    visibleUsage && !usageError
+      ? visibleUsage.weeklyResetAt !== null
+        ? `Week ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.weeklyUsagePercentage)))}%`
+        : visibleUsage.usageResetAt !== null
+          ? `Period ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.usagePercentage)))}%`
+          : null
+      : null;
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
@@ -298,11 +333,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
 
-  // Chats owns search for chats, projects, files, library and artifacts, so
-  // this hands off to it with its field already focused rather than keeping a
-  // second search implementation in the drawer.
   const handleOpenSearch = useCallback(() => {
-    navigate('/(app)/chats', { focusSearch: '1' });
+    navigate('/(app)/search');
   }, [navigate]);
 
   const displayedConversations = useMemo(() => {
@@ -331,7 +363,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     // Only show non-tombstoned projects. Local mode: read from local store as before.
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
-      return source.slice(0, 6);
+      return source
+        .slice()
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .slice(0, 6);
     }
     return localProjects.slice(0, 6);
   }, [appMode, cloudProjects, localProjects]);
@@ -457,7 +492,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                     accessibilityRole="button"
                     accessibilityLabel={`Open project: ${project.name}`}
                     style={{
-                      minHeight: 34,
+                      minHeight: 44,
                       borderRadius: 8,
                       paddingHorizontal: 10,
                       justifyContent: 'center',
@@ -501,11 +536,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                         )
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={`Open conversation: ${conversation.title}`}
+                      accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
                       accessibilityHint="Long press to pin or delete"
                       accessibilityState={{ selected: active }}
                       style={{
-                        minHeight: 34,
+                        minHeight: 44,
                         borderRadius: 8,
                         paddingHorizontal: 10,
                         flexDirection: 'row',
@@ -517,17 +552,31 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                       {conversation.pinned ? (
                         <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
                       ) : null}
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          flex: 1,
-                          color: active ? colors.textPrimary : colors.textSecondary,
-                          fontSize: 14,
-                          fontWeight: active ? '600' : '400',
-                        }}
-                      >
-                        {conversation.title || 'Untitled chat'}
-                      </Text>
+                      {rename.conversationId === conversation.id ? (
+                        <InlineRenameField rename={rename} />
+                      ) : (
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            flex: 1,
+                            color: active ? colors.textPrimary : colors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: active ? '600' : '400',
+                          }}
+                        >
+                          {conversation.title || 'Untitled chat'}
+                        </Text>
+                      )}
+                      {conversation.unread ? (
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: colors.textPrimary,
+                          }}
+                        />
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -537,6 +586,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 No recent chats
               </Text>
             )}
+            <Pressable
+              onPress={() => navigate('/(app)/chats')}
+              accessibilityRole="button"
+              accessibilityLabel="See all chats"
+              style={{
+                minHeight: 44,
+                marginTop: 4,
+                paddingHorizontal: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>See all chats</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -551,6 +616,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           gap: 2,
         }}
       >
+        {appMode === 'cloud' && isClerkSignedIn && clerkUserId ? (
+          <NavRow
+            label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
+            icon={BarChart3}
+            onPress={() => navigate('/(app)/settings/cloud-usage')}
+          />
+        ) : null}
         <NavRow
           label="Settings"
           icon={Settings}
@@ -568,7 +640,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-      <RenameConversationModal rename={rename} />
+      <RenameConversationModal rename={rename} inline />
     </SafeAreaView>
   );
 }

@@ -47,6 +47,10 @@ if [[ -n "${BUILD_ID}" ]]; then
 elif [[ -n "${LOCAL_PATH}" ]]; then
   require_file "${LOCAL_PATH}"
   [[ "${LOCAL_PATH}" == *.ipa ]] || die "iOS submissions require an .ipa file"
+  require_cmd python3
+  EXPECTED_VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).expo.version)' "${MOBILE_DIR}/app.config.js")"
+  EXPECTED_BUNDLE_ID="$(node -e 'process.stdout.write(require(process.argv[1]).expo.ios.bundleIdentifier)' "${MOBILE_DIR}/app.config.js")"
+  python3 "$(dirname "${BASH_SOURCE[0]}")/verify-ios-ipa.py" "${LOCAL_PATH}" "${EXPECTED_VERSION}" "${EXPECTED_BUNDLE_ID}"
   ARGS+=(--path "${LOCAL_PATH}")
 else
   die "unreachable submission source"
