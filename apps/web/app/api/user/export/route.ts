@@ -2060,6 +2060,10 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'Holds the live tokens a connector authenticates with. The connection itself is exported as user_connectors.',
   connector_oauth_authorizations:
     'In-flight authorization codes and verifiers for a connector handshake; a live credential, not subject content.',
+  github_install_authorizations:
+    'In-flight GitHub App install states and a sealed PKCE verifier, kept for ten minutes; a live credential, not subject content. The linked installation is exported with github_installations.',
+  desktop_sign_in_grants:
+    'One-time desktop sign-in handoffs, stored as hashes and redeemable for about a minute; sign-in plumbing, not subject content. The signed-in computers are exported as desktop_devices.',
   account_sessions:
     'Session state, not subject content. The devices that hold those sessions are exported as desktop_devices and mobile_devices.',
   account_lockout_attempts:
