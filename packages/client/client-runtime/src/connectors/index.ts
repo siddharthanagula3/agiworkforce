@@ -60,6 +60,7 @@ export type {
 export {
   acceptConnectorInput,
   connectorInputFieldError,
+  connectorInputFieldIssue,
   dismissConnectorInput,
   initialConnectorInputDraft,
   readConnectorInputLink,
@@ -69,6 +70,7 @@ export type {
   ConnectorInputDraft,
   ConnectorInputDraftValue,
   ConnectorInputField,
+  ConnectorInputFieldIssue,
   ConnectorInputLink,
   ConnectorInputOption,
   ConnectorInputPrompt,
