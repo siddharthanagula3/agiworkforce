@@ -1,4 +1,5 @@
 import {
+  CONNECTOR_OAUTH_APP_RETURN_PARAM,
   CONNECTOR_POLICY_PATH,
   ConnectConflictResponseSchema,
   type ConnectRequest,
@@ -252,7 +253,8 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
 
   async function startOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
     await requireConnector(connectorId);
-    const path = `${endpoints.oauthStart}?connectorId=${encodeURIComponent(connectorId)}&mode=json`;
+    const appReturn = surface === 'mobile' ? `&${CONNECTOR_OAUTH_APP_RETURN_PARAM}=1` : '';
+    const path = `${endpoints.oauthStart}?connectorId=${encodeURIComponent(connectorId)}&mode=json${appReturn}`;
     return parseConnectorOAuthStart(connectorId, await http.get(path));
   }
 
@@ -304,6 +306,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
           kind: 'oauth-required',
           connectorId: start.connectorId,
           authorizeUrl: start.authorizeUrl,
+          appReturn: start.appReturn,
         };
       }
     },

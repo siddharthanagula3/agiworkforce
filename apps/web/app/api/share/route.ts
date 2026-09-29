@@ -215,8 +215,9 @@ async function handleCreateShare(request: NextRequest) {
 
   const [data] = await db.query<SharedSessionRow>(
     `insert into shared_sessions
-       (token, owner_id, title, model_id, provider, messages, total_messages, expires_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+       (token, owner_id, title, model_id, provider, messages, total_messages, conversation_id,
+        expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
      returning token, expires_at, total_messages, visibility`,
     [
       token,
@@ -226,6 +227,7 @@ async function handleCreateShare(request: NextRequest) {
       provider ?? null,
       JSON.stringify(sanitizedMessages),
       sanitizedMessages.length,
+      conversationId ?? null,
       expiresAt,
     ],
   );

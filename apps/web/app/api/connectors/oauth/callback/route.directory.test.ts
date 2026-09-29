@@ -24,6 +24,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  appReturnOwner: vi.fn(async () => null),
   ConnectorOAuthStoreUnavailableError: class extends Error {},
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: vi.fn(),

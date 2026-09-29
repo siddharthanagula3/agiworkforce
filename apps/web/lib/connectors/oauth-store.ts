@@ -156,6 +156,34 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
   }
 }
 
+export async function markAppReturn(userId: string, state: string): Promise<boolean> {
+  const rows = await getNeonDb().query<{ id: string }>(
+    `update public.connector_oauth_authorizations
+        set app_return = true
+      where state_hash = $1
+        and user_id = $2
+        and consumed_at is null
+        and expires_at > now()
+      returning id`,
+    [hashOAuthState(state), userId],
+  );
+  return rows.length > 0;
+}
+
+export async function appReturnOwner(state: string): Promise<string | null> {
+  const rows = await getNeonDb().query<{ user_id: string }>(
+    `select user_id
+       from public.connector_oauth_authorizations
+      where state_hash = $1
+        and app_return
+        and consumed_at is null
+        and expires_at > now()
+      limit 1`,
+    [hashOAuthState(state)],
+  );
+  return rows[0]?.user_id ?? null;
+}
+
 interface PendingAuthorizationRow {
   user_id: string;
   connector_id: string;

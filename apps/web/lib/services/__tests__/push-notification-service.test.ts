@@ -24,7 +24,8 @@ const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
 const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
 const VAPID_SUBJECT_ENV = 'WEB_PUSH_VAPID_SUBJECT';
 
-const { getPushTokensForUser, sendPushToUser } = await import('../push-notification-service');
+const { deviceAcceptsNotice, getPushTokensForUser, sendPushToUser } =
+  await import('../push-notification-service');
 const { resetWebPushCredentialCache } = await import('../web-push-service');
 
 const TOKEN_A = 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]';
@@ -266,5 +267,55 @@ describe('sendPushToUser, every transport the account registered', () => {
 
     expect(result.sent).toBe(1);
     expect(mocks.fetch.mock.calls.map((call) => call[0])).toEqual([WEB_ENDPOINT]);
+  });
+});
+
+function devicePreferences(overrides: Record<string, unknown> = {}) {
+  return {
+    version: 1,
+    timezone: 'UTC',
+    categories: { approvals: true, task_updates: false },
+    eventTypes: { agent_approval_needed: true, task_completed: false },
+    quietHours: { enabled: false, days: [], startTime: '22:00', endTime: '07:00', timezone: 'UTC' },
+    ...overrides,
+  };
+}
+
+describe('device push preferences', () => {
+  const noon = new Date('2026-09-29T12:00:00Z');
+
+  it('delivers everything to a device that has not said what it wants', () => {
+    expect(deviceAcceptsNotice(null, 'task_completed', noon)).toBe(true);
+    expect(deviceAcceptsNotice({ garbage: true }, 'task_completed', noon)).toBe(true);
+  });
+
+  it('skips a notice type the device turned off', () => {
+    expect(deviceAcceptsNotice(devicePreferences(), 'task_completed', noon)).toBe(false);
+    expect(deviceAcceptsNotice(devicePreferences(), 'agent_approval_needed', noon)).toBe(true);
+  });
+
+  it("holds a notice inside the device's quiet hours", () => {
+    const quiet = devicePreferences({
+      eventTypes: {},
+      quietHours: {
+        enabled: true,
+        days: [0, 1, 2, 3, 4, 5, 6],
+        startTime: '11:00',
+        endTime: '13:00',
+        timezone: 'UTC',
+      },
+    });
+    expect(deviceAcceptsNotice(quiet, 'task_completed', noon)).toBe(false);
+  });
+
+  it('only sends to the devices that want the notice', async () => {
+    mocks.query.mockResolvedValue([
+      { push_token: TOKEN_A, push_preferences: devicePreferences() },
+      { push_token: TOKEN_B, push_preferences: null },
+    ]);
+
+    await expect(getPushTokensForUser('user-1', 'task_completed', noon)).resolves.toEqual([
+      TOKEN_B,
+    ]);
   });
 });

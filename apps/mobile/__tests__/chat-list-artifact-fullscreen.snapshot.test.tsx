@@ -55,6 +55,8 @@ jest.mock('lucide-react-native', () => {
     BookOpen: factory('book-open'),
     Image: factory('image'),
     FileText: factory('file-text'),
+    FileCode: factory('file-code'),
+    FileDown: factory('file-down'),
     BarChart3: factory('bar-chart'),
     Eye: factory('eye'),
     Code: factory('code'),
@@ -117,9 +119,13 @@ jest.mock('@agiworkforce/utils/format', () => ({
   truncate: (s: string, n: number) => s.slice(0, n),
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
+  };
+});
 
 jest.mock('@agiworkforce/types', () => ({
   summarizeGeneratedFileBundle: () => ({

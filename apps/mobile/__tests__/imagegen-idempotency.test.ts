@@ -123,6 +123,26 @@ describe('generateImage, idempotency', () => {
     expect(result.images?.[0]?.url).toBe('https://cdn.test/x.png');
   });
 
+  it('keeps the fallback key stable across retries of the same turn', async () => {
+    const unavailable = () =>
+      new ApiHttpError('Durable image jobs are not available', 503, 'image_job_store_unavailable');
+    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
+    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
+    const first = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
+      'Idempotency-Key'
+    ];
+
+    mockPost.mockReset();
+    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
+    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
+    const second = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
+      'Idempotency-Key'
+    ];
+
+    expect(second).toBe(first);
+    expect(isManagedMediaIdempotencyKey(first!)).toBe(true);
+  });
+
   it('rejects an empty prompt before spending a key', async () => {
     await expect(generateImage({ prompt: '   ' })).rejects.toThrow(/non-empty prompt/);
     expect(mockPost).not.toHaveBeenCalled();

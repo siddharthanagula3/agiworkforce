@@ -96,8 +96,15 @@ describe('a share outlives archiving of the conversation it came from', () => {
     const insert = callsMatching(/insert into shared_sessions/i)[0];
     const params = insert![1] as unknown[];
     expect(JSON.parse(String(params[5]))).toEqual([MESSAGE]);
-    expect(sqlOf(insert!)).not.toMatch(/conversation_id/);
-    expect(params).not.toContain(CONVERSATION_ID);
+  });
+
+  it('records the chat it came from, so deleting that chat can revoke the link', async () => {
+    await share();
+
+    const insert = callsMatching(/insert into shared_sessions/i)[0];
+    const params = insert![1] as unknown[];
+    expect(sqlOf(insert!)).toMatch(/conversation_id/);
+    expect(params[7]).toBe(CONVERSATION_ID);
   });
 
   it('lists the share by owner alone, never through the conversation it was taken from', async () => {

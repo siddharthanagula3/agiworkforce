@@ -13,6 +13,7 @@ import {
   useNotificationPrefsStore,
   type NotificationCategory,
 } from '@/stores/notificationPrefsStore';
+import { MOBILE_PUSH_TOKEN_PATH } from '@agiworkforce/cloud-contracts';
 import type { TimeFocusWeekday } from '@agiworkforce/types';
 
 import { api } from './api';
@@ -23,7 +24,7 @@ import {
 } from './notificationEventTypes';
 import type { PushNotificationAccountContext } from './notifications';
 
-export const PUSH_TOKEN_REGISTRATION_PATH = '/api/mobile/push-token';
+export const PUSH_TOKEN_REGISTRATION_PATH = MOBILE_PUSH_TOKEN_PATH;
 export const PUSH_DELIVERY_PREFERENCES_VERSION = 1;
 
 const PREFERENCE_SYNC_DEBOUNCE_MS = 800;

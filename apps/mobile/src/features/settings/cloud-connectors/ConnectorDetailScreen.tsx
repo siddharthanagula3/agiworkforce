@@ -40,6 +40,8 @@ import {
   resetConnectorToolPermission,
   setConnectorToolPermission,
   startConnectorOAuth,
+  authorizeConnectorInApp,
+  type InAppConnectorAuthorization,
   type ConnectedConnector,
   type ConnectorCapabilityCatalog,
   type ConnectorListing,
@@ -290,6 +292,21 @@ function PermissionRow({
   );
 }
 
+function announceInAppAuthorization(name: string, outcome: InAppConnectorAuthorization): void {
+  if (outcome === 'connected' || outcome === 'dismissed') return;
+  if (outcome === 'denied') {
+    Alert.alert(
+      `${name} was not connected`,
+      'The authorization was declined. Nothing was connected.',
+    );
+    return;
+  }
+  Alert.alert(
+    `Could not connect ${name}`,
+    'The authorization did not finish. Nothing was connected. Try again in a moment.',
+  );
+}
+
 export default function ConnectorDetailScreen({ connectorId }: { connectorId: string }) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -523,6 +540,14 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
           setCredentialsPath(result.credentialsPath);
           return;
         }
+        if (result.appReturn) {
+          const outcome = await authorizeConnectorInApp(result.authorizeUrl);
+          if (!isActionCurrent(account)) return;
+          const refreshed = await load();
+          if (!isActionCurrent(account) || refreshed?.connection) return;
+          announceInAppAuthorization(name, outcome);
+          return;
+        }
         const opened = await openUntrustedUrlInAppBrowser(result.authorizeUrl);
         if (!isActionCurrent(account)) return;
         if (!opened) {
@@ -569,6 +594,14 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
       try {
         const start = await startConnectorOAuth(targetConnectorId);
         if (!isActionCurrent(account)) return;
+        if (start.appReturn) {
+          const outcome = await authorizeConnectorInApp(start.authorizeUrl);
+          if (!isActionCurrent(account)) return;
+          await load();
+          if (!isActionCurrent(account) || outcome === 'invalid_state') return;
+          announceInAppAuthorization(connectorName, outcome);
+          return;
+        }
         const opened = await openUntrustedUrlInAppBrowser(start.authorizeUrl);
         if (!isActionCurrent(account)) return;
         if (!opened) {
@@ -589,7 +622,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         if (isActionCurrent(account)) setReconnecting(false);
       }
     })();
-  }, [connection, isActionCurrent, load, reconnecting]);
+  }, [connection, connectorName, isActionCurrent, load, reconnecting]);
 
   const disconnect = useCallback(() => {
     if (!connection || disconnecting) return;

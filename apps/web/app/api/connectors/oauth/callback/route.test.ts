@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     }
   }
   return {
+    appReturnOwner: vi.fn(async () => null),
     authUser: vi.fn(),
     consumePending: vi.fn(),
     upsertGrant: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: (...a: unknown[]) => mocks.upsertGrant(...a),
@@ -132,6 +134,25 @@ afterEach(() => {
 });
 
 describe('GET /api/connectors/oauth/callback', () => {
+  it('hands an app-started sign-in back to the app without finishing it here', async () => {
+    mocks.appReturnOwner.mockResolvedValueOnce('user-1');
+
+    const response = await GET(
+      request(`?state=${STATE}&code=auth-code&iss=https%3A%2F%2Fauth.example.com`),
+    );
+
+    const target = new URL(response.headers.get('location') as string);
+    expect(`${target.protocol}//${target.host}${target.pathname}`).toBe(
+      'agiworkforce://connectors/oauth',
+    );
+    expect(target.searchParams.get('state')).toBe(STATE);
+    expect(target.searchParams.get('code')).toBe('auth-code');
+    expect(target.searchParams.get('iss')).toBe('https://auth.example.com');
+    expect(mocks.authUser).not.toHaveBeenCalled();
+    expect(mocks.consumePending).not.toHaveBeenCalled();
+    expect(mocks.exchange).not.toHaveBeenCalled();
+  });
+
   it('stores an encrypted grant and returns to the connectors surface', async () => {
     mocks.consumePending.mockResolvedValue(pending());
     mocks.exchange.mockResolvedValue({
