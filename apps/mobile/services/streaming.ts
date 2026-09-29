@@ -195,11 +195,32 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
       'Content-Type': 'application/json',
       ...platformRequestHeaders(),
     }),
-    fetchImpl: (input, init) =>
-      isDetachedResume(input)
-        ? guardedFetch(input, init, { stream: true })
-        : guardedFetch(input, init),
+    fetchImpl: async (input, init) => {
+      const response = isDetachedResume(input)
+        ? await guardedFetch(input, init, { stream: true })
+        : await guardedFetch(input, init);
+      if (response.status === 403) await noticeRunRefusal(response);
+      return response;
+    },
   });
+}
+
+/**
+ * A run's approve, resume, follow and cancel calls pass the same gate as a chat
+ * turn, so a passkey step-up, an unavailable account or new terms can refuse
+ * them too. The caller still sees the refusal; this makes the app act on it as
+ * it does for a turn, instead of showing a bare 403.
+ */
+async function noticeRunRefusal(response: Response): Promise<void> {
+  const text = await response
+    .clone()
+    .text()
+    .catch(() => '');
+  streamAuthRefusal(403, text);
+  if (isTermsRefusal(text)) {
+    const terms = useTermsAcceptanceStore.getState();
+    if (terms.userId && terms.status !== 'checking') void terms.recheck(terms.userId);
+  }
 }
 
 function isDetachedResume(input: RequestInfo | URL): boolean {
