@@ -224,7 +224,6 @@ export const BROWSER_COMMAND_POLL_WINDOW_MS = 20_000;
 export const BROWSER_COMMAND_TIMEOUT_MS = 45_000;
 
 export const BROWSER_COMMANDS = [
-  'browser_list_tabs',
   'browser_read_page',
   'browser_click',
   'browser_type',
@@ -246,13 +245,6 @@ export const BROWSER_CDP_COMMANDS: readonly BrowserCommand[] = [
   'browser_console',
   'browser_network',
 ];
-
-export interface BrowserTabSummary {
-  tabId: number;
-  title: string;
-  url: string;
-  active: boolean;
-}
 
 export interface BrowserCommandRequest {
   version: typeof BROWSER_COMMAND_PROTOCOL_VERSION;

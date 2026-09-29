@@ -1,10 +1,8 @@
 import {
   BROWSER_COMMAND_PROTOCOL_VERSION,
   isBrowserCommandRequest,
-  type BrowserCommand,
   type BrowserCommandRequest,
   type BrowserCommandResult,
-  type BrowserTabSummary,
 } from '@agiworkforce/types';
 import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab } from '../browser-tools/tabAuthority';
@@ -21,8 +19,7 @@ export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
  * authority over what Chrome may do.
  */
 export interface DesktopCommandContext {
-  resolveTabId: (requestedTabId: number | undefined) => Promise<number | null>;
-  listTabs: () => Promise<BrowserTabSummary[]>;
+  resolveTabId: () => Promise<number | null>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
   capture: (tabId: number) => Promise<string>;
@@ -66,12 +63,8 @@ function requireSelector(args: Record<string, unknown>): string {
   return selector;
 }
 
-type PageCommandRequest = BrowserCommandRequest & {
-  command: Exclude<BrowserCommand, 'browser_list_tabs'>;
-};
-
 async function execute(
-  request: PageCommandRequest,
+  request: BrowserCommandRequest,
   tabId: number,
   context: DesktopCommandContext,
 ): Promise<unknown> {
@@ -164,19 +157,12 @@ export async function runDesktopBrowserCommand(
   }
 
   try {
-    if (raw.command === 'browser_list_tabs') {
-      return succeeded(raw.id, { tabs: await context.listTabs() });
-    }
-    const requestedTabId =
-      raw.command === 'browser_read_page' && Number.isInteger(raw.args['tabId'])
-        ? (raw.args['tabId'] as number)
-        : undefined;
-    const tabId = await context.resolveTabId(requestedTabId);
+    const tabId = await context.resolveTabId();
     if (tabId === null) {
       return failed(raw.id, 'No web page is open in Chrome for that action.');
     }
     await authorizeBrowserToolTab(tabId);
-    return succeeded(raw.id, await execute({ ...raw, command: raw.command }, tabId, context));
+    return succeeded(raw.id, await execute(raw, tabId, context));
   } catch (error) {
     return failed(raw.id, error instanceof Error ? error.message : 'That action failed.');
   }
