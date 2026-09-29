@@ -825,10 +825,11 @@ pub fn schedule_prompt(arg: &str) -> String {
 Create a clock schedule with cron_create and see existing ones with cron_list. For everything else run `agi schedules` in the shell: \
 `agi schedules edit|pause|resume|run|runs|approve|deny <schedule>`, and to start a schedule when an event arrives, \
 `agi schedules triggers add <schedule> --source github|slack|gmail|google_calendar|connector [--event TYPE] [--account ACCOUNT] [--when \"FIELD OPERATOR VALUE\"] [--debounce SECONDS]`, \
-with `agi schedules triggers list|pause|resume|watch|remove` to manage them. \
+with `agi schedules triggers list|pause|resume|watch` to manage them. \
 Before creating anything, ask for whatever is missing: how often or on which event, which repository, workspace or mailbox, and what each run should do. \
-Write the run's prompt so it works without this conversation. Confirm with me before deleting a schedule or trigger, then pass --yes. \
-When a trigger is added, show me the endpoint, signing secret or verification code it prints, since they are shown only once. \
+Write the run's prompt so it works without this conversation. Confirm with me before deleting a schedule. \
+Never remove a trigger yourself: ask me to run `agi schedules triggers remove <trigger>` in my own terminal. \
+If adding a trigger says its signing secret or verification code was withheld, tell me to run the same add command in my own terminal to see them; never ask for them or repeat them. \
 If I ask why a run did something, read `agi schedules runs <schedule>` before answering."
     )
 }
@@ -2759,7 +2760,18 @@ mod tests {
             );
             assert!(prompt.contains("cron_create"), "{prompt}");
             assert!(prompt.contains("agi schedules triggers add"), "{prompt}");
-            assert!(prompt.contains("shown only once"), "{prompt}");
+            assert!(
+                !prompt.contains("show me the endpoint, signing secret"),
+                "{prompt}"
+            );
+            assert!(
+                prompt.contains("never ask for them or repeat them"),
+                "{prompt}"
+            );
+            assert!(
+                prompt.contains("Never remove a trigger yourself"),
+                "{prompt}"
+            );
         }
     }
 
