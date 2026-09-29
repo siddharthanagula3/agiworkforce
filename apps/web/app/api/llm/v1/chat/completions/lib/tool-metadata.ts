@@ -100,9 +100,22 @@ export interface ToolMetadata {
    * that can write, send, buy, change credentials or touch the user's machine.
    */
   autoInReadOnlyMode?: boolean;
+  /**
+   * Reads what only the user can see: files, screen or signed-in pages on
+   * their own machine. It makes the lethal-trifecta check count the tool as a
+   * sensitive source even though it is a platform tool.
+   */
+  readsPrivateData?: boolean;
 }
 
 export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  agi_reconnect: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   web_search: {
     actionClass: 'read',
     reversible: true,
@@ -267,6 +280,212 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     reversible: true,
     acceptsUntrustedContent: false,
     createsEgressPath: false,
+    declared: true,
+  },
+  agi_work: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_read_file: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_list_folder: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_find_files: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_search_text: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_write_file: {
+    actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_edit_file: {
+    actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_run_command: {
+    actionClass: 'execute',
+    reversible: false,
+    acceptsUntrustedContent: true,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_start_command: {
+    actionClass: 'execute',
+    reversible: false,
+    acceptsUntrustedContent: true,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_command_output: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_command_stop: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_screenshot: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_zoom: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_move: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_scroll: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_wait: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  device_click: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_drag: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_type: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_key: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_browser_read_page: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_browser_screenshot: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_browser_console: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_browser_network: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  device_browser_navigate: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_browser_click: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_browser_type: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  device_browser_download: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
     declared: true,
   },
 });
@@ -455,14 +674,6 @@ const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, T
     gmail: GMAIL_TOOL_METADATA,
   });
 
-const CONNECTOR_RECONNECT_METADATA: ToolMetadata = Object.freeze({
-  actionClass: 'read',
-  reversible: true,
-  acceptsUntrustedContent: false,
-  createsEgressPath: false,
-  declared: true,
-});
-
 export const UNKNOWN_TOOL_METADATA: ToolMetadata = Object.freeze({
   actionClass: 'write',
   reversible: false,
@@ -477,7 +688,9 @@ export function resolveToolMetadata(name: string): ToolMetadata {
 
   const parsed = parseQualifiedToolName(name);
   if (parsed) {
-    if (parsed.toolName === CONNECTOR_RECONNECT_TOOL_NAME) return CONNECTOR_RECONNECT_METADATA;
+    if (parsed.toolName === CONNECTOR_RECONNECT_TOOL_NAME) {
+      return PLATFORM_TOOL_METADATA[CONNECTOR_RECONNECT_TOOL_NAME] ?? UNKNOWN_TOOL_METADATA;
+    }
     const connector = CONNECTOR_TOOL_METADATA[parsed.serverId]?.[parsed.toolName];
     if (connector) return connector;
   }
@@ -565,7 +778,8 @@ export function toolAcceptsUntrustedContent(name: string): boolean {
 export function isSensitiveSourceTool(
   def: Pick<WebMcpToolDef, 'qualifiedName' | 'origin'>,
 ): boolean {
-  if (PLATFORM_TOOL_METADATA[def.qualifiedName]) return false;
+  const platform = PLATFORM_TOOL_METADATA[def.qualifiedName];
+  if (platform) return platform.readsPrivateData === true;
   return parseQualifiedToolName(def.qualifiedName) !== null || def.origin === 'connector';
 }
 
@@ -625,7 +839,7 @@ export function toContractToolDefinition(
  * before this predicate is reached.
  */
 export function policyAutoApprovesTool(policy: ToolApprovalPolicy, qualifiedName: string): boolean {
-  if (policy === 'ask_every_time') return false;
+  if (policy === 'ask_every_time' || isDeviceStepTool(qualifiedName)) return false;
   const metadata = resolveToolMetadata(qualifiedName);
   if (metadata.declared && metadata.autoInReadOnlyMode === true) return true;
   if (policy === 'autonomous') return !isDestructiveToolMetadata(metadata);

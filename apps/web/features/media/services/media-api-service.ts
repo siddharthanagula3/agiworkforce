@@ -1,3 +1,4 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
 import type {
@@ -47,7 +48,7 @@ export interface VideoGenerationRequest {
 export interface VideoGenerationResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: Extract<LifecycleStatus, 'queued' | 'completed' | 'failed'> | 'processing';
   provider: string;
   model: string;
   estimated_duration_secs: number;
@@ -58,7 +59,7 @@ export interface VideoGenerationResponse {
 export interface VideoStatusResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+  status: Extract<LifecycleStatus, 'queued' | 'completed' | 'failed'> | 'processing' | 'timeout';
   video_url?: string;
   thumbnail_url?: string;
   progress?: number;

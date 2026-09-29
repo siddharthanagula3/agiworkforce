@@ -314,6 +314,7 @@ import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
+  toolCreatesEgressPath,
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
@@ -6342,10 +6343,18 @@ export async function* runToolLoop(
           let plan: (typeof planned)[number] | null = null;
           try {
             const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
+            const summary = describeDeviceStep(step, deviceHost.roots);
             plan = {
               tc,
-              summary: describeDeviceStep(step, deviceHost.roots),
-              input: { ...step } as Record<string, unknown>,
+              summary,
+              input: {
+                ...step,
+                ...(untrustedContentInContext &&
+                sensitiveSourceAvailable &&
+                toolCreatesEgressPath(step.tool)
+                  ? { review: summary }
+                  : {}),
+              } as Record<string, unknown>,
             };
           } catch (error) {
             refusal =

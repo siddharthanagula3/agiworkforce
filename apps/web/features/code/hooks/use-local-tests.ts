@@ -1,5 +1,6 @@
 'use client';
 
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DesktopRuntimeError,
@@ -22,7 +23,8 @@ import { LOCAL_CODE_COPY, detectTestCommand } from '../local-code';
 
 const PACKAGE_MANIFEST = 'package.json';
 
-export type LocalTestsStatus = 'idle' | 'running' | 'passed' | 'failed' | 'unavailable';
+export type LocalTestsStatus =
+  Extract<LifecycleStatus, 'idle' | 'running' | 'failed'> | 'passed' | 'unavailable';
 
 export interface LocalTestsState {
   status: LocalTestsStatus;
