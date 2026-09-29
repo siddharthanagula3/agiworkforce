@@ -17,16 +17,22 @@ fn strip_www(host: &str) -> &str {
 }
 
 /// Accepts what an administrator types: a bare domain, a leading dot, a `*.`
-/// wildcard or a whole URL. Anything else narrows nothing.
+/// wildcard or a whole URL. An internationalised name becomes its punycode
+/// form, which is what a URL's host carries. Anything else narrows nothing.
 fn normalize_rule(raw: &str) -> Option<String> {
-    let value = raw.trim().to_ascii_lowercase();
-    let host = if value.contains("://") {
-        reqwest::Url::parse(&value).ok()?.host_str()?.to_string()
+    let value = raw.trim();
+    let value = value
+        .strip_prefix("*.")
+        .or_else(|| value.strip_prefix('.'))
+        .unwrap_or(value);
+    let as_url = if value.contains("://") {
+        value.to_string()
     } else {
-        value
+        format!("https://{value}")
     };
-    let host = host.trim_start_matches("*.").trim_start_matches('.');
-    let host = strip_www(host).trim_end_matches('.');
+    let parsed = reqwest::Url::parse(&as_url).ok()?;
+    let host = parsed.host_str()?.to_ascii_lowercase();
+    let host = strip_www(host.trim_end_matches('.'));
     let valid = !host.is_empty()
         && host.contains('.')
         && host
@@ -38,7 +44,7 @@ fn normalize_rule(raw: &str) -> Option<String> {
 fn host_of(url: &str) -> Option<String> {
     let parsed = reqwest::Url::parse(url).ok()?;
     let host = parsed.host_str()?.to_ascii_lowercase();
-    Some(strip_www(&host).to_string())
+    Some(strip_www(host.trim_end_matches('.')).to_string())
 }
 
 fn matches_rule(host: &str, rule: &str) -> bool {
@@ -150,6 +156,20 @@ mod tests {
     }
 
     #[test]
+    fn a_trailing_dot_does_not_slip_past_a_block() {
+        let r = rules(&[], &["blocked.com"]);
+        assert!(r.refusal("https://blocked.com./page").is_some());
+        assert!(r.refusal("https://www.blocked.com./page").is_some());
+    }
+
+    #[test]
+    fn an_internationalised_rule_matches_its_punycode_host() {
+        let r = rules(&[], &["bücher.example"]);
+        assert!(r.refusal("https://xn--bcher-kva.example/").is_some());
+        assert!(r.refusal("https://bücher.example/").is_some());
+    }
+
+    #[test]
     fn a_rule_that_is_not_a_domain_narrows_nothing() {
         assert_eq!(
             SiteRules::from_policy(&ConnectorAccessPolicy {
@@ -203,6 +223,44 @@ mod tests {
             assert!(matches!(
                 local_tool_policy_from(Err(CloudError::SessionExpired), true),
                 LocalToolPolicy::Unreadable(reason) if reason.contains("agi login")
+            ));
+        }
+
+        #[test]
+        fn a_read_is_reused_only_for_the_same_account() {
+            use crate::claude_parity::connectors::cached_read_reusable;
+            use std::time::Duration;
+            let rules = LocalToolPolicy::Rules(ConnectorAccessPolicy::default());
+            assert!(cached_read_reusable(
+                Some("a"),
+                rules.clone(),
+                Duration::ZERO,
+                Some("a")
+            ));
+            assert!(!cached_read_reusable(
+                Some("a"),
+                rules.clone(),
+                Duration::ZERO,
+                Some("b")
+            ));
+            assert!(!cached_read_reusable(
+                Some("a"),
+                rules,
+                Duration::ZERO,
+                None
+            ));
+            let unreadable = LocalToolPolicy::Unreadable("x".to_string());
+            assert!(cached_read_reusable(
+                Some("a"),
+                unreadable.clone(),
+                Duration::from_secs(5),
+                Some("a")
+            ));
+            assert!(!cached_read_reusable(
+                Some("a"),
+                unreadable,
+                Duration::from_secs(120),
+                Some("a")
             ));
         }
 
