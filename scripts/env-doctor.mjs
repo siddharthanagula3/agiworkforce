@@ -195,6 +195,8 @@ const platformProvidedKeys = new Set([
   'COMPUTERNAME',
   'COMSPEC',
   'DEV',
+  'DISABLE_TELEMETRY',
+  'DO_NOT_TRACK',
   'EDITOR',
   'GITHUB_SHA',
   'HOME',

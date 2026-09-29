@@ -3,11 +3,32 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::client::CloudClient;
+use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
 
 const CONTRACT: &str =
     include_str!("../../../../packages/contracts/types/src/product-analytics.ts");
 const SEND_TIMEOUT: Duration = Duration::from_secs(3);
+
+fn env_opts_out(value: Option<&str>) -> bool {
+    value.map(str::trim).is_some_and(|value| {
+        !value.is_empty()
+            && !matches!(
+                value.to_ascii_lowercase().as_str(),
+                "0" | "false" | "off" | "no"
+            )
+    })
+}
+
+fn enabled(config: &CliConfig) -> bool {
+    config.telemetry.product_analytics
+        && ![
+            std::env::var("DISABLE_TELEMETRY").ok(),
+            std::env::var("DO_NOT_TRACK").ok(),
+        ]
+        .iter()
+        .any(|value| env_opts_out(value.as_deref()))
+}
 
 fn contract_string(name: &str) -> Option<&'static str> {
     CONTRACT.lines().find_map(|line| {
@@ -39,6 +60,11 @@ fn consent_granted(body: &Value) -> bool {
             consents.iter().any(|record| {
                 record.get("purpose").and_then(Value::as_str) == Some(purpose)
                     && record.get("granted").and_then(Value::as_bool) == Some(true)
+                    && record
+                        .get("noticeVersion")
+                        .and_then(Value::as_str)
+                        .zip(contract_string("PRODUCT_ANALYTICS_NOTICE_VERSION"))
+                        .is_some_and(|(recorded, required)| recorded >= required)
             })
         })
 }
@@ -72,9 +98,11 @@ async fn send(privacy: PrivacyMode, name: &'static str) {
     let _ = client.post::<_, Value>(ingest_path, &body).await;
 }
 
-pub async fn record(privacy: PrivacyMode, name: &'static str) {
-    if privacy != PrivacyMode::Managed {
+pub fn record(config: &CliConfig, privacy: PrivacyMode, name: &'static str) {
+    if privacy != PrivacyMode::Managed || !enabled(config) {
         return;
     }
-    let _ = tokio::time::timeout(SEND_TIMEOUT, send(privacy, name)).await;
+    tokio::spawn(async move {
+        let _ = tokio::time::timeout(SEND_TIMEOUT, send(privacy, name)).await;
+    });
 }
