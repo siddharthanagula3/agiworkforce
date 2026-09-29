@@ -297,6 +297,7 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...(usage.speed === 'fast' ? { speed: 'fast' as const } : {}),
         ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
         ...(usage.webFetchRequests ? { webFetchRequests: usage.webFetchRequests } : {}),
         ...(hostedCodeExecution ? { hostedCodeExecution } : {}),

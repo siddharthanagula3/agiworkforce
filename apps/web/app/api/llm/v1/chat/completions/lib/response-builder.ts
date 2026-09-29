@@ -146,6 +146,7 @@ export async function buildNonStreamResponse(
         cacheReadTokens: llmResponse.cachedInputTokens,
         cacheWriteTokens: llmResponse.cacheCreationInputTokens,
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+        ...(llmResponse.speed === 'fast' ? { speed: 'fast' as const } : {}),
         ...(llmResponse.webSearchRequests
           ? { webSearchRequests: llmResponse.webSearchRequests }
           : {}),

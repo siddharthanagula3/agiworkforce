@@ -132,7 +132,6 @@ const UsageSchema = z
     toolSpendMicrousd: z.number().nonnegative().optional(),
     providerCostDollars: z.number().finite().nonnegative().optional(),
     providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
-    speed: z.literal('fast').optional(),
   })
   .strict();
 const usageSchemaCoversObservedProviderUsage: SameKeys<
