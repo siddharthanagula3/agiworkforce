@@ -1,4 +1,6 @@
+import { create } from 'zustand';
 import { api } from '@/services/api';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -66,13 +68,72 @@ function requirePublishedToken(shareUrl: string): string {
   return token;
 }
 
+interface PublishedArtifactAudiences {
+  ownerId: string | null;
+  byId: Record<string, PublishedArtifactAudience>;
+  record: (ownerId: string, artifactId: string, audience: PublishedArtifactAudience | null) => void;
+  replace: (ownerId: string, byId: Record<string, PublishedArtifactAudience>) => void;
+}
+
+export const usePublishedArtifactAudiences = create<PublishedArtifactAudiences>()((set) => ({
+  ownerId: null,
+  byId: {},
+  record: (ownerId, artifactId, audience) =>
+    set((state) => {
+      const byId = state.ownerId === ownerId ? { ...state.byId } : {};
+      if (audience) byId[artifactId] = audience;
+      else delete byId[artifactId];
+      return { ownerId, byId };
+    }),
+  replace: (ownerId, byId) => set({ ownerId, byId }),
+}));
+
+export function usePublishedArtifactAudience(artifactId: string): PublishedArtifactAudience | null {
+  return usePublishedArtifactAudiences((state) =>
+    state.ownerId !== null && state.ownerId === captureCloudAccountEpoch()?.ownerId
+      ? (state.byId[artifactId] ?? null)
+      : null,
+  );
+}
+
+type PublishedArtifactList = {
+  artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
+  workspace?: unknown;
+};
+
+async function listPublishedArtifacts(): Promise<PublishedArtifactList> {
+  const account = captureCloudAccountEpoch();
+  const response = await api.get<PublishedArtifactList>('/api/artifacts/publish');
+  if (account && captureCloudAccountEpoch()?.ownerId === account.ownerId) {
+    const byId: Record<string, PublishedArtifactAudience> = {};
+    for (const entry of response.artifacts ?? []) {
+      if (typeof entry.artifactId === 'string' && typeof entry.shareUrl === 'string') {
+        byId[entry.artifactId] = readAudience(entry.visibility);
+      }
+    }
+    usePublishedArtifactAudiences.getState().replace(account.ownerId, byId);
+  }
+  return response;
+}
+
+export async function refreshPublishedArtifactAudiences(): Promise<void> {
+  if (useChatAppModeStore.getState().appMode !== 'cloud') return;
+  await listPublishedArtifacts();
+}
+
+export function recordPublishedArtifactAudience(
+  artifactId: string,
+  audience: PublishedArtifactAudience | null,
+): void {
+  const account = captureCloudAccountEpoch();
+  if (account)
+    usePublishedArtifactAudiences.getState().record(account.ownerId, artifactId, audience);
+}
+
 export async function fetchArtifactPublication(
   artifactId: string,
 ): Promise<ArtifactPublicationState> {
-  const response = await api.get<{
-    artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
-    workspace?: unknown;
-  }>('/api/artifacts/publish');
+  const response = await listPublishedArtifacts();
   const match = (response.artifacts ?? []).find(
     (entry) => entry.artifactId === artifactId && typeof entry.shareUrl === 'string',
   );

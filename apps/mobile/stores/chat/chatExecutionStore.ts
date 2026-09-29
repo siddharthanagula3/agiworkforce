@@ -97,7 +97,6 @@ import {
   isCapabilityRequestable,
 } from '@/src/features/billing/store';
 import { useProjectStore } from '@/src/features/projects/store';
-import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -331,6 +330,7 @@ export const LOCAL_NO_MODEL_MESSAGE =
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const MAX_DEFERRED_SENDS = 5;
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const deferredSends = new Map<string, DeferredSend[]>();
 const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
@@ -356,6 +356,41 @@ interface PendingApprovalTurn {
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
+const TERMINAL_RESUME_STATUSES = new Set([404, 409, 410]);
+
+function isTerminalResumeError(error: unknown): boolean {
+  return error instanceof ApiHttpError && TERMINAL_RESUME_STATUSES.has(error.status);
+}
+
+function pendingPhoneSteps(calls: PendingApprovalCall[]): PhoneDeviceStep[] {
+  return calls.flatMap((call) => (call.deviceStep ? [call.deviceStep] : []));
+}
+
+function storedPhoneSteps(metadata: ChatMessage['metadata']): Map<string, PhoneDeviceStep> {
+  const raw = (metadata as Record<string, unknown> | undefined)?.['phoneDeviceSteps'];
+  const steps = new Map<string, PhoneDeviceStep>();
+  if (!Array.isArray(raw)) return steps;
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const step = entry as Record<string, unknown>;
+    if (
+      typeof step['toolCallId'] === 'string' &&
+      typeof step['name'] === 'string' &&
+      typeof step['deviceId'] === 'string' &&
+      typeof step['input'] === 'object' &&
+      step['input'] !== null &&
+      isPhoneStepTool(step['name'])
+    ) {
+      steps.set(step['toolCallId'], {
+        toolCallId: step['toolCallId'],
+        name: step['name'],
+        deviceId: step['deviceId'],
+        input: step['input'] as Record<string, unknown>,
+      });
+    }
+  }
+  return steps;
+}
 const interactiveCardResponsesInFlight = new Set<string>();
 const agiWorkPlanDecisionsInFlight = new Set<string>();
 
@@ -530,7 +565,10 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
       )
       .map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
     if (!runReference.success || calls.length === 0) return false;
-    if (calls.some((call) => isPhoneStepTool(call.name))) return false;
+    const phoneSteps = storedPhoneSteps(message.metadata);
+    if (calls.some((call) => isPhoneStepTool(call.name) && !phoneSteps.has(call.toolCallId))) {
+      return false;
+    }
 
     const decisions = new Map<string, 'approved' | 'rejected'>();
     const guidance = new Map<string, string>();
@@ -541,6 +579,30 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
       if (call.toolCallId && call.approvalGuidance) {
         guidance.set(call.toolCallId, call.approvalGuidance);
       }
+    }
+    if (phoneSteps.size > 0) {
+      const toolCalls = message.toolCalls ?? [];
+      const turn = pausedTurn(runReference.data.runId, conversationId, [
+        ...calls.filter((call) => !phoneSteps.has(call.toolCallId)),
+        ...[...phoneSteps.values()].map((step) => ({
+          toolCallId: step.toolCallId,
+          name: step.name,
+          deviceStep: step,
+        })),
+      ]);
+      for (const [toolCallId, decision] of decisions) turn.decisions.set(toolCallId, decision);
+      for (const [toolCallId, note] of guidance) turn.guidance.set(toolCallId, note);
+      for (const call of toolCalls) {
+        if (!call.toolCallId || !phoneSteps.has(call.toolCallId)) continue;
+        if (call.status !== 'succeeded' && call.status !== 'failed') continue;
+        turn.deviceStarted?.add(call.toolCallId);
+        turn.deviceResults?.set(call.toolCallId, {
+          content: typeof call.output === 'string' ? call.output : '',
+          isError: call.status === 'failed',
+        });
+      }
+      pendingApprovalTurns.set(assistantMessageId, turn);
+      return true;
     }
     pendingApprovalTurns.set(assistantMessageId, {
       runId: runReference.data.runId,
@@ -1732,13 +1794,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     const activeProjectId = conversation?.projectId ?? null;
-    if (activeProjectId) {
-      const activeProject =
-        executionMode === 'local'
-          ? useProjectStore.getState().projects.find((p) => p.id === activeProjectId)
-          : useCloudProjectStore
-              .getState()
-              .projects.find((p) => p.id === activeProjectId && p.deletedAt === null);
+    if (activeProjectId && executionMode === 'local') {
+      const activeProject = useProjectStore
+        .getState()
+        .projects.find((p) => p.id === activeProjectId);
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
@@ -2219,7 +2278,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               messages: historyMessages,
               stream: true,
               operationId: assistantMessageId,
-              ...(isTemporaryChat || temporaryConversation
+              ...(CLOUD_CONVERSATION_ID.test(conversationId)
                 ? { conversation_id: conversationId }
                 : {}),
               thinking: thinkingEnabled,
@@ -2521,6 +2580,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       ...(agentActivity ? { agentActivity } : {}),
                       ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
                       ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                      ...(pendingPhoneSteps(turnPendingApprovals).length > 0
+                        ? { phoneDeviceSteps: pendingPhoneSteps(turnPendingApprovals) }
+                        : {}),
                     },
                   }
                 : m,
@@ -3177,12 +3239,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               approvalArtifactProvenance,
             );
 
+            const phoneStepsPaused = pendingPhoneSteps(turnPendingApprovals);
             const hasTurnMetadata =
               turnFinishReason !== undefined ||
               turnStreamError !== undefined ||
               agentActivity !== undefined ||
               generatedFilesMetadata.length > 0 ||
-              turnInteractiveCards.length > 0;
+              turnInteractiveCards.length > 0 ||
+              phoneStepsPaused.length > 0 ||
+              turn.deviceResults !== undefined;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
@@ -3211,6 +3276,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                               ? { streamError: turnStreamError }
                               : {}),
                             ...(agentActivity ? { agentActivity } : {}),
+                            phoneDeviceSteps:
+                              phoneStepsPaused.length > 0 ? phoneStepsPaused : undefined,
                           },
                         }
                       : {}),
@@ -3262,9 +3329,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent || cloudContentRaw;
-            if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
+            const terminal = isTerminalResumeError(error);
+            if (turn.deviceResults || terminal) pendingApprovalTurns.delete(assistantMessageId);
             const checkpointIds = new Set(
-              turn.deviceResults ? [] : turn.calls.map((c) => c.toolCallId),
+              turn.deviceResults && !terminal ? [] : turn.calls.map((c) => c.toolCallId),
             );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
@@ -3277,12 +3345,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                         ? {
                             ...t,
                             status: 'awaiting-approval' as const,
-                            requiresApproval: true,
+                            requiresApproval: !terminal,
                             approvalDecision: undefined,
                             output: undefined,
                           }
                         : t,
                     ),
+                    ...(terminal
+                      ? { metadata: { ...m.metadata, phoneDeviceSteps: undefined } }
+                      : {}),
                   }
                 : m,
             );
@@ -3311,7 +3382,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isApprovalAccountCurrent()) return;
       turn.resolving = false;
       turn.decisions.clear();
-      if (turn.deviceResults) pendingApprovalTurns.delete(assistantMessageId);
+      const terminal = isTerminalResumeError(caughtErr);
+      if (turn.deviceResults || terminal) pendingApprovalTurns.delete(assistantMessageId);
       if (!controller.signal.aborted) {
         const innerMsgStore = getConversationMessageStore(conversationId);
         const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -3323,12 +3395,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 isStreaming: false,
                 toolCalls: (m.toolCalls ?? []).map((tool) =>
                   tool.toolCallId &&
-                  !turn.deviceResults &&
+                  (!turn.deviceResults || terminal) &&
                   turn.calls.some((call) => call.toolCallId === tool.toolCallId)
                     ? {
                         ...tool,
                         status: 'awaiting-approval' as const,
-                        requiresApproval: true,
+                        requiresApproval: !terminal,
                         approvalDecision: undefined,
                         output: undefined,
                       }

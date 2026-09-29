@@ -14,6 +14,11 @@ import {
 } from '@agiworkforce/client-runtime';
 import * as WebBrowser from 'expo-web-browser';
 import {
+  CONNECTOR_CALLS_PATH,
+  ConnectorCallLogResponseSchema,
+  type ConnectorCallEntry,
+} from '@agiworkforce/cloud-contracts';
+import {
   CONNECTOR_DIRECTORY_MAX_LIMIT,
   CONNECTOR_DIRECTORY_PATH,
   CONNECTOR_OAUTH_APP_RETURN_URL,
@@ -257,4 +262,10 @@ export async function completeConnectorAuthorization(
     await api.post<unknown>(CONNECTOR_OAUTH_COMPLETE_PATH, request.data),
   );
   return response.status;
+}
+
+export async function fetchConnectorCalls(connectorId: string): Promise<ConnectorCallEntry[]> {
+  const params = new URLSearchParams({ connectorId, limit: '20' });
+  const body = await api.get<unknown>(`${CONNECTOR_CALLS_PATH}?${params.toString()}`);
+  return ConnectorCallLogResponseSchema.parse(body).calls;
 }

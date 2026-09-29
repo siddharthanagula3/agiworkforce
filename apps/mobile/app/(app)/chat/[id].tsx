@@ -44,6 +44,8 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
+import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
@@ -108,7 +110,7 @@ import {
   isSelectableModelIdForAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
-import { useTierStore } from '@/src/features/billing/store';
+import { isCapabilityRequestable, useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   executionModeForSelection,
@@ -143,7 +145,7 @@ import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import {
@@ -780,6 +782,13 @@ export default function ChatScreen() {
     [conversationExecutionMode],
   );
 
+  useEffect(() => {
+    if (conversationExecutionMode !== 'cloud' || !isClerkSignedIn) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ChatScreen] publication states unavailable', error);
+    });
+  }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
+
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
@@ -1050,7 +1059,7 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(conversationExecutionMode),
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -1068,7 +1077,7 @@ export default function ChatScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(
     (messageId: string) => {
@@ -1228,6 +1237,16 @@ export default function ChatScreen() {
   }, []);
 
   const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
+
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const agiWorkGoal = buildAgiWorkGoalInput(goal);
+      if (!id || !agiWorkGoal || !isCapabilityRequestable('canUseAgiWork')) return false;
+      void sendMessage(id, goal, selectedModel, undefined, { workMode: 'agiwork', agiWorkGoal });
+      return true;
+    },
+    [id, selectedModel, sendMessage],
+  );
 
   useEffect(() => {
     if (requestedVoiceMode !== 'live') return;
@@ -1962,7 +1981,18 @@ export default function ChatScreen() {
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
         {/* Picker modal only -- the trigger lives in the "+" sheet. */}
-        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
+        <ProjectSelectorBar
+          openSignal={projectPickerOpenSignal}
+          {...(conversation && id
+            ? {
+                conversation: {
+                  id,
+                  ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+                  executionMode: conversationExecutionMode,
+                },
+              }
+            : {})}
+        />
 
         {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
@@ -2014,6 +2044,7 @@ export default function ChatScreen() {
           ensureConversation={handleEnsureVoiceConversation}
           onSwitchToText={handleSwitchLiveVoiceToText}
           onEnded={handleLiveVoiceEnded}
+          onStartWorkTask={handleVoiceStartWorkTask}
         />
 
         {/* Conversation export bottom sheet */}

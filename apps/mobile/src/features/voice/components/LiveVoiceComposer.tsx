@@ -9,6 +9,7 @@ export interface LiveVoiceComposerProps {
   ensureConversation: () => Promise<string | null>;
   onSwitchToText: () => void;
   onEnded: (message: string | null) => void;
+  onStartWorkTask?: (goal: string) => boolean;
 }
 
 export function LiveVoiceComposer({
@@ -18,6 +19,7 @@ export function LiveVoiceComposer({
   ensureConversation,
   onSwitchToText,
   onEnded,
+  onStartWorkTask,
 }: LiveVoiceComposerProps) {
   const controller = useLiveVoiceSession({
     active: visible,
@@ -25,6 +27,7 @@ export function LiveVoiceComposer({
     model,
     ensureConversation,
     onEnded,
+    ...(onStartWorkTask ? { onStartWorkTask } : {}),
   });
 
   const handleExit = useCallback(() => onEnded(null), [onEnded]);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { bigintGreater } from '@agiworkforce/sync';
+import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
 export interface CloudProject {
@@ -17,6 +18,11 @@ export interface CloudProject {
   deletedAt: string | null;
   serverVersion?: string;
 }
+
+export type CloudProjectDetails = Pick<
+  ManagedCloudProject,
+  'iconEmoji' | 'accentColor' | 'defaultModelId' | 'conversationCount' | 'knowledgeFileCount'
+>;
 
 const pendingProjectFetches = new Map<string, { generation: number; count: number }>();
 
@@ -48,12 +54,15 @@ interface CloudProjectState {
   projects: CloudProject[];
 
   activeProjectId: string | null;
+  details: Record<string, CloudProjectDetails>;
 
   upsertCloudProject: (project: CloudProject) => void;
   hardDeleteCloudProject: (id: string) => void;
   applyCloudProjectDeltas: (deltas: CloudProject[]) => void;
   setActiveCloudProject: (id: string | null) => void;
   clearCloudProjectData: () => void;
+  setCloudProjectDetails: (projects: readonly ManagedCloudProject[]) => void;
+  patchCloudProjectDetails: (id: string, patch: Partial<CloudProjectDetails>) => void;
 }
 
 export const useCloudProjectStore = create<CloudProjectState>()(
@@ -61,6 +70,7 @@ export const useCloudProjectStore = create<CloudProjectState>()(
     (set) => ({
       projects: [],
       activeProjectId: null,
+      details: {},
 
       upsertCloudProject: (project) => {
         set((state) => {
@@ -120,7 +130,29 @@ export const useCloudProjectStore = create<CloudProjectState>()(
 
       clearCloudProjectData: () => {
         for (const entry of pendingProjectFetches.values()) entry.generation += 1;
-        set({ projects: [], activeProjectId: null });
+        set({ projects: [], activeProjectId: null, details: {} });
+      },
+
+      setCloudProjectDetails: (projects) => {
+        set((state) => {
+          const details = { ...state.details };
+          for (const project of projects) {
+            details[project.id] = {
+              iconEmoji: project.iconEmoji ?? null,
+              accentColor: project.accentColor ?? null,
+              defaultModelId: project.defaultModelId ?? null,
+              conversationCount: project.conversationCount ?? null,
+              knowledgeFileCount: project.knowledgeFileCount ?? null,
+            };
+          }
+          return { details };
+        });
+      },
+
+      patchCloudProjectDetails: (id, patch) => {
+        set((state) => ({
+          details: { ...state.details, [id]: { ...state.details[id], ...patch } },
+        }));
       },
     }),
     {

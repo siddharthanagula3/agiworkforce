@@ -116,7 +116,8 @@ function SessionList({ onBack }: { onBack: () => void }) {
   const router = useRouter();
   const colors = useThemeColors();
   const [filter, setFilter] = useState<CloudCodeSessionStatusFilter>(DEFAULT_FILTER);
-  const { status, sessions, error, refreshing, load } = useCloudCodeSessions(filter);
+  const { status, sessions, availability, runtimes, error, refreshing, load } =
+    useCloudCodeSessions(filter);
   const loadRef = useRef(load);
   loadRef.current = load;
   const focusedOnce = useRef(false);
@@ -164,6 +165,8 @@ function SessionList({ onBack }: { onBack: () => void }) {
       <Header onBack={onBack} onNew={() => setNewSessionOpen(true)} />
       <NewCloudCodeSessionSheet
         visible={newSessionOpen}
+        availability={availability}
+        runtimes={runtimes}
         onClose={() => setNewSessionOpen(false)}
         onCreated={handleCreated}
       />
