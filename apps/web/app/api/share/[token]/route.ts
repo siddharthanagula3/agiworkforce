@@ -128,21 +128,33 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
 
   const db = getNeonDb();
 
-  let deleted: number;
+  let deleted: Array<{ id: string }>;
   try {
-    deleted = await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
-      token,
-      userId,
-    ]);
+    deleted = await db.query<{ id: string }>(
+      'delete from shared_sessions where token = $1 and owner_id = $2 returning id',
+      [token, userId],
+    );
   } catch (err) {
     logger.error({ err, share: shareRef(token), userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 
   // A caller who merely holds the link must not be told the revocation worked.
-  if (deleted === 0) {
+  const revoked = deleted[0];
+  if (!revoked) {
     throw createError.notFound('Shared session not found');
   }
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'share_link_revoked',
+    request,
+    outcome: 'success',
+    severity: 'info',
+    detail: { resourceType: 'share_link', resourceId: revoked.id },
+  }).catch((error) => {
+    logger.error({ error, userId }, 'Failed to record share-link audit event');
+  });
 
   return NextResponse.json({ success: true });
 }

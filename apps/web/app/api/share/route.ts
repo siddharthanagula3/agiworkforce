@@ -104,6 +104,7 @@ function sanitizeMessages(messages: Array<Record<string, unknown>>): SanitizedMe
 }
 
 type SharedSessionRow = {
+  id: string;
   token: string;
   expires_at: string;
   total_messages: number;
@@ -218,7 +219,7 @@ async function handleCreateShare(request: NextRequest) {
        (token, owner_id, title, model_id, provider, messages, total_messages, conversation_id,
         expires_at)
      values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
-     returning token, expires_at, total_messages, visibility`,
+     returning id, token, expires_at, total_messages, visibility`,
     [
       token,
       userId,
@@ -249,7 +250,7 @@ async function handleCreateShare(request: NextRequest) {
       severity: 'info',
       detail: {
         resourceType: 'share',
-        resourceId: data.token,
+        resourceId: data.id,
         source: secretPatternNames.join(','),
         count: secretMatchCount,
         status: 'redacted',
@@ -258,6 +259,22 @@ async function handleCreateShare(request: NextRequest) {
       logger.error({ error, userId }, 'Failed to record secret-redaction audit event');
     });
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_created',
+    request,
+    outcome: 'success',
+    severity: 'info',
+    detail: {
+      resourceType: 'share_link',
+      resourceId: data.id,
+      ...(conversationId ? { conversationId } : {}),
+    },
+  }).catch((error) => {
+    logger.error({ error, userId }, 'Failed to record share-link audit event');
+  });
 
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const shareUrl = `${appUrl}/share/${data.token}`;

@@ -360,6 +360,8 @@ export type AuditEventType =
   | 'privacy_request_submitted'
   | 'organization_share_granted'
   | 'organization_share_revoked'
+  | 'share_link_created'
+  | 'share_link_revoked'
   | 'support_action_proposed'
   | 'support_action_confirmed'
   | 'device_renamed'
@@ -847,6 +849,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'organization_share_granted':
     case 'organization_share_revoked':
       return 'organization_share';
+    case 'share_link_created':
+    case 'share_link_revoked':
+      return 'share_link';
     case 'support_action_proposed':
     case 'support_action_confirmed':
       return 'support_action';
