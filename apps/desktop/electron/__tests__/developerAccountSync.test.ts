@@ -133,6 +133,19 @@ describe('reconcileDeveloperAccount', () => {
     expect(host.seen[2]?.params).toEqual({ refresh: true });
   });
 
+  it('leaves a CLI sign-in the user made themselves when the app signs out', async () => {
+    const host = hostCalls({ 'account/status': { signedIn: true, email: 'dev@example.com' } });
+
+    const outcome = await reconcileDeveloperAccount(
+      host.call,
+      bridge({ signedIn: false, email: null }),
+      false,
+    );
+
+    expect(outcome).toBe('unchanged');
+    expect(host.methods()).toEqual(['account/status']);
+  });
+
   it('does nothing when both sides are already signed out', async () => {
     const host = hostCalls({ 'account/status': SIGNED_OUT_HOST });
     const shell = bridge({ signedIn: false, email: null });
