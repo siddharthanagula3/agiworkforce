@@ -1,7 +1,20 @@
 'use client';
 
 import { useEffect } from 'react';
-import { TERMINAL_LIFECYCLE_STATUSES } from '@agiworkforce/types';
+import {
+  DISPATCH_TASK_REPLY_LIMITS,
+  TERMINAL_LIFECYCLE_STATUSES,
+  type DispatchTaskPendingField,
+  type DispatchTaskPendingStep,
+  type DispatchTaskStepReply,
+} from '@agiworkforce/types';
+import {
+  acceptConnectorInput,
+  connectorInputFieldError,
+  readConnectorInputPrompts,
+  type ConnectorInputField,
+  type ConnectorInputPrompt,
+} from '@agiworkforce/client-runtime';
 import {
   isDeviceStepTool,
   type DesktopRuntimeEvent,
@@ -25,11 +38,14 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { desktopChatModelId } from '../lib/desktop-chat-model';
 import { reportDispatchTask, setDispatchTaskRunnerReady } from '../lib/runtime-client';
 
-export type DesktopChatRuntime = Pick<UseChatStreamReturn, 'sendMessage' | 'stopGeneration'>;
+export type DesktopChatRuntime = Pick<
+  UseChatStreamReturn,
+  'sendMessage' | 'stopGeneration' | 'resolveToolApproval' | 'resolveToolInput'
+>;
 
 type DispatchUpdate = Omit<DispatchTaskReport, 'requestId' | 'conversationId'>;
 
-interface DispatchRun {
+export interface DispatchRun {
   requestId: string;
   conversationId: string | null;
   runtime: DesktopChatRuntime;
@@ -49,6 +65,8 @@ const WAITING_ON_ANSWER = 'Waiting for your answer in AGI Cloud on the computer.
 const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Cloud on the computer.';
 const CANCELLED = 'The task was stopped.';
 const RUNNER_NOT_READY = 'AGI Cloud on the computer was not ready to run this task.';
+const REPLY_NOT_ACCEPTED = 'The computer could not use this answer. Check it and send it again.';
+const CHOICE_NOT_OFFERED = 'Choose one of the options offered.';
 
 const TERMINAL: ReadonlySet<string> = new Set(TERMINAL_LIFECYCLE_STATUSES);
 
@@ -98,6 +116,68 @@ function waitsOnAnswer(answer: Message | undefined): boolean {
   );
 }
 
+function phoneField(field: ConnectorInputField): DispatchTaskPendingField | null {
+  const title = field.title.slice(0, DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+  if (field.kind === 'text') {
+    return {
+      key: field.key,
+      title,
+      kind: 'text',
+      required: field.required,
+      ...(field.format === undefined ? {} : { format: field.format }),
+      ...(field.minLength === undefined ? {} : { minLength: field.minLength }),
+      ...(field.maxLength === undefined ? {} : { maxLength: field.maxLength }),
+    };
+  }
+  if (field.kind !== 'choice') return null;
+  return {
+    key: field.key,
+    title,
+    kind: 'choice',
+    required: field.required,
+    options: field.options.slice(0, DISPATCH_TASK_REPLY_LIMITS.options).map((option) => ({
+      value: option.value,
+      label: option.label.slice(0, DISPATCH_TASK_REPLY_LIMITS.summaryLength),
+    })),
+  };
+}
+
+function pendingSteps(answer: Message | undefined): DispatchTaskPendingStep[] {
+  const steps: DispatchTaskPendingStep[] = [];
+  for (const tool of answer?.metadata?.tools ?? []) {
+    const toolCallId = tool.toolCallId;
+    if (!toolCallId || toolCallId.length > DISPATCH_TASK_REPLY_LIMITS.idLength) continue;
+    if (tool.status === 'awaiting_approval') {
+      steps.push({
+        toolCallId,
+        kind: 'approval',
+        summary: (tool.summary ?? tool.name).slice(0, DISPATCH_TASK_REPLY_LIMITS.summaryLength),
+      });
+      continue;
+    }
+    if (tool.status !== 'awaiting_input' || !tool.inputRequests) continue;
+    const prompts = readConnectorInputPrompts(tool.inputRequests);
+    const [prompt] = prompts;
+    if (prompts.length !== 1 || prompt?.mode !== 'form') continue;
+    const fields = prompt.fields.map(phoneField);
+    if (
+      fields.length === 0 ||
+      fields.length > DISPATCH_TASK_REPLY_LIMITS.fields ||
+      fields.some((field) => field === null)
+    ) {
+      continue;
+    }
+    steps.push({
+      toolCallId,
+      kind: 'input',
+      inputKey: prompt.key,
+      message: prompt.message.slice(0, DISPATCH_TASK_REPLY_LIMITS.summaryLength),
+      fields: fields as DispatchTaskPendingField[],
+    });
+  }
+  return steps.slice(0, DISPATCH_TASK_REPLY_LIMITS.steps);
+}
+
 function waitsOnPermission(answer: Message | undefined): boolean {
   return (
     devicePromptOpen &&
@@ -130,7 +210,14 @@ function updateFor(run: DispatchRun): DispatchUpdate {
   const conversationId = run.conversationId;
   if (conversationId === null) return { status: 'running' };
   const answer = finalAnswer(conversationId);
-  if (waitsOnAnswer(answer)) return { status: 'awaiting_input', message: WAITING_ON_ANSWER };
+  if (waitsOnAnswer(answer)) {
+    const pending = pendingSteps(answer);
+    return {
+      status: 'awaiting_input',
+      message: WAITING_ON_ANSWER,
+      ...(pending.length > 0 ? { pending } : {}),
+    };
+  }
   if (!run.settled || inFlight(conversationId, answer)) {
     return waitsOnPermission(answer)
       ? { status: 'awaiting_input', message: WAITING_ON_PERMISSION }
@@ -228,6 +315,88 @@ function cancelRun(requestId: string): void {
   send(run, { status: 'cancelled', message: CANCELLED });
 }
 
+export function replyFieldError(
+  prompt: ConnectorInputPrompt,
+  values: Readonly<Record<string, string>>,
+): string | null {
+  if (prompt.mode !== 'form') return REPLY_NOT_ACCEPTED;
+  for (const field of prompt.fields) {
+    const value = values[field.key];
+    if (
+      field.kind === 'choice' &&
+      value !== undefined &&
+      value !== '' &&
+      !field.options.some((option) => option.value === value)
+    ) {
+      return `${field.title}: ${CHOICE_NOT_OFFERED}`;
+    }
+    const error = connectorInputFieldError(field, value);
+    if (error) return `${field.title}: ${error}`;
+  }
+  return null;
+}
+
+function rejectReply(run: DispatchRun, toolCallId: string, message: string): void {
+  send(run, { ...updateFor(run), replyError: { toolCallId, message } });
+}
+
+async function answerStep(
+  run: DispatchRun,
+  answer: Message,
+  step: DispatchTaskPendingStep,
+  reply: DispatchTaskStepReply,
+): Promise<void> {
+  if (reply.kind === 'approval') {
+    await run.runtime.resolveToolApproval(
+      answer.id,
+      reply.toolCallId,
+      reply.approved ? 'approved' : 'rejected',
+    );
+    return;
+  }
+  const tool = answer.metadata?.tools?.find((entry) => entry.toolCallId === reply.toolCallId);
+  if (step.kind !== 'input' || reply.inputKey !== step.inputKey || !tool?.inputRequests) return;
+  const prompt = readConnectorInputPrompts(tool.inputRequests).find(
+    (candidate) => candidate.key === step.inputKey,
+  );
+  if (!prompt) return;
+  const error = replyFieldError(prompt, reply.values);
+  if (error) {
+    rejectReply(run, reply.toolCallId, error);
+    return;
+  }
+  await run.runtime.resolveToolInput(
+    answer.id,
+    reply.toolCallId,
+    acceptConnectorInput([prompt], { [step.inputKey]: reply.values }),
+  );
+}
+
+async function replyToRun(requestId: string, replies: DispatchTaskStepReply[]): Promise<void> {
+  const run = runs.get(requestId);
+  if (!run || run.conversationId === null) return;
+  const answer = finalAnswer(run.conversationId);
+  if (!answer) return;
+  await answerReplies(run, answer, replies);
+}
+
+export async function answerReplies(
+  run: DispatchRun,
+  answer: Message,
+  replies: DispatchTaskStepReply[],
+): Promise<void> {
+  const pending = new Map(pendingSteps(answer).map((step) => [step.toolCallId, step]));
+  for (const reply of replies) {
+    const step = pending.get(reply.toolCallId);
+    if (!step || step.kind !== reply.kind) continue;
+    try {
+      await answerStep(run, answer, step, reply);
+    } catch {
+      rejectReply(run, reply.toolCallId, REPLY_NOT_ACCEPTED);
+    }
+  }
+}
+
 function onRuntimeEvent(event: DesktopRuntimeEvent): void {
   if (event.kind === 'dispatch-task') {
     if (latestRuntime) {
@@ -245,6 +414,10 @@ function onRuntimeEvent(event: DesktopRuntimeEvent): void {
     cancelRun(event.requestId);
     return;
   }
+  if (event.kind === 'dispatch-task-reply') {
+    void replyToRun(event.requestId, event.replies).catch(() => undefined);
+    return;
+  }
   if (event.kind === 'device-prompt-changed') {
     devicePromptOpen = event.open;
     refreshAll();
@@ -252,13 +425,13 @@ function onRuntimeEvent(event: DesktopRuntimeEvent): void {
 }
 
 export function useDispatchTaskRunner(host: HostBridge, runtime: DesktopChatRuntime): void {
-  const { sendMessage, stopGeneration } = runtime;
+  const { sendMessage, stopGeneration, resolveToolApproval, resolveToolInput } = runtime;
   const { isLoaded, isSignedIn } = useCurrentUser();
   const ready = isLoaded && isSignedIn;
 
   useEffect(() => {
-    latestRuntime = { sendMessage, stopGeneration };
-  }, [sendMessage, stopGeneration]);
+    latestRuntime = { sendMessage, stopGeneration, resolveToolApproval, resolveToolInput };
+  }, [sendMessage, stopGeneration, resolveToolApproval, resolveToolInput]);
 
   useEffect(() => {
     if (host.shell !== 'electron' || isQuickAskWindow() || !isLoaded) return;
