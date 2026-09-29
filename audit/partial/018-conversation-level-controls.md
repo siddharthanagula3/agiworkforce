@@ -206,13 +206,13 @@ Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, 
 
 - Done when: The user can set instructions that apply only to this conversation.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | L2/R-k: the auditor searched for a per-conversation instructions UI and missed the terminal equivalent. `agi --system-prompt` / `--system-prompt-file` / `--append-system-prompt-file` (lib.rs:245-247, 470-475) set instructions for that session only and reach both the REPL and the TUI as effective_system_prompt (4609-4640). Launch-time only, so partial. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -220,11 +220,10 @@ Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, 
 
 - Done when: Tool enablement (web search, code, etc.) can be set for this conversation and persists across its turns.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | L2/R-k: --allowedTools/--disallowedTools (lib.rs:392-402) are passed into the session for every turn (4626-4630, and the TUI branch below it), which is per-conversation tool enablement that persists across the session's turns; there is no mid-session control, so partial. |  |
 | chrome | missing | Not built on this surface. |  |
 
 ## S18.26: Conversation-level connected accounts.

@@ -43,14 +43,13 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 - Done when: Selecting a connector opens a detail page with its description, publisher, sign-in requirement, tools and links.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-| cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.05: Supported-operation list.
 
@@ -199,14 +198,13 @@ Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 - Done when: The user controls whether a connector's write actions run automatically, need approval, or are blocked.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-| cli | partial | Every MCP tool call asks (fail closed); there is no standing per-tool allow or block for MCP tools (`agi approvals` rules are shell command prefixes). | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`, `apps/cli/src/agent/tools.rs:134-142`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 ## S55.28: Data-retention explanation.
 
