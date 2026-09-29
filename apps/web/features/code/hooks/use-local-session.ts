@@ -27,6 +27,7 @@ export interface LocalApproval {
   requestId: string;
   summary: string;
   detail: string;
+  question?: { question: string; options: string[] };
 }
 
 export interface LocalSessionState {
@@ -46,7 +47,7 @@ export interface LocalSessionState {
     maxTurns?: number,
   ) => Promise<void>;
   stop: () => Promise<void>;
-  decideApproval: (approved: boolean) => Promise<void>;
+  decideApproval: (approved: boolean, note?: string) => Promise<void>;
 }
 
 /**
@@ -105,6 +106,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
       if (event.type === 'runtime-stopped') {
         setError(LOCAL_CODE_COPY.runtimeStopped);
         setTurn((current) => (current.outcome ? current : { ...current, outcome: 'failed' }));
+        setApproval(null);
         return;
       }
       if (event.threadId !== threadId) return;
@@ -207,6 +209,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           requestId: event.requestId,
           summary: event.summary,
           detail: event.detail,
+          ...(event.question ? { question: event.question } : {}),
         });
         return;
       }
@@ -268,13 +271,20 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
       await interruptDeveloperTurn(rootId, threadId, turnId);
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.turnFailed));
+      // The host dropped the turn before it could say so, so no interrupted
+      // event will come; left running, the turn could never be stopped again.
+      setTurn((current) =>
+        current.turnId === turnId && !current.outcome
+          ? { ...current, outcome: 'interrupted' }
+          : current,
+      );
     } finally {
       setStopping(false);
     }
   }, [rootId, threadId]);
 
   const decideApproval = useCallback(
-    async (approved: boolean) => {
+    async (approved: boolean, note?: string) => {
       if (!rootId || !threadId || !approval) return;
       try {
         await answerDeveloperApproval({
@@ -283,6 +293,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           turnId: approval.turnId,
           requestId: approval.requestId,
           approved,
+          ...(note ? { note } : {}),
         });
       } catch (cause: unknown) {
         setError(toUserMessage(cause, LOCAL_CODE_COPY.turnFailed));
