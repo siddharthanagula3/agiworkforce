@@ -383,8 +383,7 @@ struct TuiApp {
     model_name: String,
     provider_name: String,
     mode: InteractionMode,
-    /// Detected sandbox backend for the footer indicator.
-    /// `None` means sandboxing was explicitly disabled via `--no-sandbox`.
+    /// Detected sandbox backend. `/status` reports it only while the sandbox is on.
     sandbox_type: Option<crate::sandbox::SandboxType>,
     // Agent picker popup
     agent_picker: super::widgets::agent_picker::AgentPickerState,
@@ -478,7 +477,7 @@ struct FallbackBanner {
 const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
-    fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
+    fn new(session: AgentSession, config: CliConfig) -> Self {
         // Restore the persisted theme before the first frame. Without this the
         // picker recoloured the running TUI and the choice died at restart.
         let theme_choice = config
@@ -549,11 +548,7 @@ impl TuiApp {
                 }
             });
 
-        let sandbox_type = if sandbox_disabled {
-            None
-        } else {
-            Some(crate::sandbox::SandboxType::detect())
-        };
+        let sandbox_type = Some(crate::sandbox::SandboxType::detect());
         let mode = InteractionMode::for_session(&session);
 
         let mut command_registry =
@@ -4587,7 +4582,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
                 app.mode.label(),
-                crate::sandbox::status_word(app.sandbox_type),
+                crate::sandbox::status_word(
+                    app.sandbox_type
+                        .filter(|_| !crate::sandbox::sandbox_disabled())
+                ),
                 app.session.turn_count,
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
@@ -5561,7 +5559,6 @@ pub async fn run(
     provider_override: Option<String>,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
-    sandbox_disabled: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
@@ -5778,7 +5775,7 @@ pub async fn run(
     )
     .await;
 
-    let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    let mut app = TuiApp::new(session, config.clone());
     if let Some(temperature) = config.default.temperature {
         if crate::model_catalog::model_rejects_sampling_parameters(&app.session.model) {
             app.chat_messages.push(ChatMessage {
@@ -7965,7 +7962,7 @@ mod tests {
         let model = crate::model_catalog::fast_completion_model("anthropic");
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
-        TuiApp::new(session, config, true /* sandbox_disabled */)
+        TuiApp::new(session, config)
     }
 
     fn modes_reached_by_shift_tab(app: &TuiApp) -> Vec<InteractionMode> {

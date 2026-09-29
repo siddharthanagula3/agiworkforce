@@ -112,7 +112,7 @@ pub(super) async fn execute_run_command(
         let cmd = command.to_string();
         let structured = structured.clone();
         let sandbox_result = async move {
-            let mgr = crate::sandbox::SandboxManager::for_command_execution(cwd.clone(), network)
+            let mgr = crate::sandbox::SandboxManager::for_agent_command(cwd.clone(), network)
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             let executed = match &structured {
                 Some((program, args)) => {
@@ -248,7 +248,7 @@ async fn start_in_background(
         }
         let network =
             sandbox_network_policy(command, require_confirmation, approval_callback).await;
-        match crate::sandbox::SandboxManager::for_command_execution(cwd, network) {
+        match crate::sandbox::SandboxManager::for_agent_command(cwd, network) {
             Ok(manager) => Some(manager),
             Err(error) => {
                 return Ok(refuse(format!(
