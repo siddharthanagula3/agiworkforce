@@ -31,6 +31,10 @@ vi.mock('workflow', () => ({
   getWritable: vi.fn(),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+vi.mock('@/lib/services/research-report-settlement', () => ({
+  readRunResearchReport: vi.fn(async () => null),
+  recordResearchRunSettledCost: vi.fn(async () => true),
+}));
 vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   getCloudAgentExecutionUsage: mocks.usage,
   summarizeCloudAgentRunOutcome: mocks.summarize,

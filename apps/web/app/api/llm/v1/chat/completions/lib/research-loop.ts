@@ -318,20 +318,8 @@ export interface ResearchLoopOptions {
   guidance?: string;
   sources?: ResearchSourceRequest;
   readConnectorSources?: (queries: readonly string[]) => Promise<readonly ResearchConnectorRead[]>;
-  /**
-   * Runs each provider turn and each search or page read the loop makes. A
-   * durable caller records every one under a stable key, so a retried step
-   * replays the recorded result instead of calling and billing again.
-   */
   operations?: ResearchOperationExecutor;
-  /** The state a previous invocation handed off at a round boundary. */
   resumeFrom?: ResearchLoopCheckpoint;
-  /**
-   * The limits of one invocation of a longer run. Past `handOffAfterMs` the
-   * loop hands its state to `onCheckpoint` at the next round boundary and
-   * returns without a terminal event, so the caller can continue it in a
-   * fresh invocation.
-   */
   invocation?: ResearchInvocationLimits;
 }
 
