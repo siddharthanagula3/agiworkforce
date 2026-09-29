@@ -139,6 +139,38 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
     route: 'llm/v1/chat/completions/runs/[runId]/steer/[steerId]/route.ts',
     reason: 'own_content',
   },
+  { route: 'agents/collaboration/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/communication/[id]/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/communication/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/log-message/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/session/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/tool-executions/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/tools/route.ts', reason: 'no_governed_state' },
+  { route: 'artifacts/runtime/[token]/connectors/route.ts', reason: 'no_governed_state' },
+  {
+    route: 'chat/conversations/[id]/code-runs/route.ts',
+    reason: 'gap',
+    expectedEvent: 'tool_executed',
+  },
+  {
+    route: 'code/sessions/handoff/route.ts',
+    reason: 'gap',
+    expectedEvent: 'code_session_lifecycle_changed',
+  },
+  {
+    route: 'code/sessions/route.ts',
+    reason: 'gap',
+    expectedEvent: 'code_session_lifecycle_changed',
+  },
+  { route: 'github/install/complete/route.ts', reason: 'gap', expectedEvent: 'connector_added' },
+  { route: 'github/install/pending/route.ts', reason: 'no_governed_state' },
+  {
+    route: 'share/[token]/route.ts',
+    reason: 'gap',
+    expectedEvent: 'organization_share_granted',
+  },
+  { route: 'usage/deduct/route.ts', reason: 'no_governed_state' },
+  { route: 'usage/estimate/route.ts', reason: 'no_governed_state' },
 ] as const;
 
 export interface RequiredRouteAuditEvents {
