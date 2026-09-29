@@ -214,6 +214,11 @@ export interface ChatMessageListProps {
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
   enableFollowUpSuggestions?: boolean;
+  /**
+   * Sends a prompt as the user's next turn. onSendMessage fills the composer for
+   * follow-up suggestions; Save as skill sends at once, as Claude's does.
+   */
+  onSubmitPrompt?: (prompt: string) => void;
   temporaryChat?: boolean;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
@@ -1164,6 +1169,7 @@ const ChatMessageListComponent = ({
   onResumeVideo,
   onRetryVideo,
   onSendMessage,
+  onSubmitPrompt,
   isUserTyping = false,
   className,
   onPaywallUpgrade,
@@ -1380,13 +1386,13 @@ const ChatMessageListComponent = ({
   // Any finished answer can become a skill, as Claude offers: the menu item asks
   // for the draft, whose Save creates it. Only where the account may author
   // skills, and never in a temporary chat, which keeps nothing.
-  const skillAuthoring = useSkillAuthoringCapability(Boolean(onSendMessage) && !temporaryChat);
+  const skillAuthoring = useSkillAuthoringCapability(Boolean(onSubmitPrompt) && !temporaryChat);
   const saveAsSkill = useMemo<SaveAsSkill | null>(
     () =>
-      skillAuthoring && onSendMessage && !isLoading
-        ? { save: () => onSendMessage(SAVE_AS_SKILL_PROMPT) }
+      skillAuthoring && onSubmitPrompt && !isLoading
+        ? { save: () => onSubmitPrompt(SAVE_AS_SKILL_PROMPT) }
         : null,
-    [skillAuthoring, onSendMessage, isLoading],
+    [skillAuthoring, onSubmitPrompt, isLoading],
   );
 
   const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
@@ -2101,6 +2107,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onResumeVideo === next.onResumeVideo &&
     prev.onRetryVideo === next.onRetryVideo &&
     prev.onSendMessage === next.onSendMessage &&
+    prev.onSubmitPrompt === next.onSubmitPrompt &&
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&
     prev.onPaywallDismiss === next.onPaywallDismiss &&
