@@ -162,7 +162,10 @@ function ToolRow({
         onPress={hasDetails ? onToggle : undefined}
         disabled={!hasDetails}
         accessibilityRole={hasDetails ? 'button' : undefined}
-        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} details for ${entry.summary}`}
+        accessibilityLabel={`${entry.summary}, ${statusLabel}`}
+        accessibilityHint={
+          hasDetails ? `${expanded ? 'Hides' : 'Shows'} the details of this step` : undefined
+        }
         accessibilityState={hasDetails ? { expanded } : undefined}
       >
         {({ pressed }) => (
@@ -287,7 +290,13 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
     : Loader2;
 
   return (
-    <View style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}>
+    <View
+      style={{ flexDirection: 'row', gap: 9, paddingVertical: 6 }}
+      accessible
+      accessibilityLabel={`${entry.summary}, ${TOOL_STATUS_PRESENTATION[progressStatus].label}${
+        entry.detail ? `, ${entry.detail}` : ''
+      }`}
+    >
       <Icon size={16} color={statusColor} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{entry.summary}</Text>
