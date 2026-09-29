@@ -223,8 +223,6 @@ pub async fn sync_session(
     Ok(response.applied.messages.len())
 }
 
-/// Send a bug report or product feedback to the team's feedback store and say
-/// what happened, including why it could not be sent.
 pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
     let client = match CloudClient::connect_managed() {
         Ok(client) => client,
