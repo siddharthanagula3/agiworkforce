@@ -2066,6 +2066,8 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     "Per-turn cost accounting: estimated and actual cost, reservation and settlement state, and a usage blob carrying each provider observation's own cost. Exporting it would hand every requester this product's provider economics. The subject's own managed usage is exported as the managed usage summary.",
   user_two_factor:
     'Holds the live second factor. This download is a file handed to whoever ends up with it, and a credential in it stays valid.',
+  bank_account_items:
+    'Holds the live Plaid access token of each linked bank. Which banks are linked is visible in the finance view; the balances and transactions are read from the bank, not stored here.',
   connector_oauth_grants:
     'Holds the live tokens a connector authenticates with. The connection itself is exported as user_connectors.',
   connector_oauth_authorizations:

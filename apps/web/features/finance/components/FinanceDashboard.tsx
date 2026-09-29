@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { LinkedBanks } from './LinkedBanks';
 
 type ReadyOverview = Extract<FinanceOverviewResponse, { status: 'ready' }>;
 
@@ -329,6 +330,7 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
 export function FinanceDashboard() {
   const [period, setPeriod] = useState<FinanceOverviewPeriod>('30d');
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [reloadKey, setReloadKey] = useState(0);
   const periodLabelId = useId();
 
   useEffect(() => {
@@ -348,7 +350,7 @@ export function FinanceDashboard() {
         setState({ kind: 'error', message: toUserMessage(error, LOAD_FAILED) });
       });
     return () => controller.abort();
-  }, [period]);
+  }, [period, reloadKey]);
 
   const overview = state.kind === 'loaded' ? state.overview : null;
 
@@ -398,6 +400,7 @@ export function FinanceDashboard() {
         <>
           <Summary overview={overview} />
           <Accounts accounts={overview.accounts} />
+          <LinkedBanks onChanged={() => setReloadKey((key) => key + 1)} />
           <SpendingByCategory overview={overview} />
           <ByMonth overview={overview} />
           <RecentTransactions overview={overview} />

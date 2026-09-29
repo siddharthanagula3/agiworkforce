@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import {
+  BANK_ACCOUNTS_CONNECTOR_ID,
   connectorCategoryToolName,
   connectorCredentialsPath,
   isConnectorCategoryToolName,
@@ -28,6 +29,7 @@ import {
 
 import { Text } from '@/components/ui/text';
 import { ConnectorCallLog } from './ConnectorCallLog';
+import { LinkedBanks } from './LinkedBanks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   connectConnector,
@@ -1116,6 +1118,10 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 />
               ))}
             </SettingsGroup>
+          ) : null}
+
+          {connection.connectorId === BANK_ACCOUNTS_CONNECTOR_ID ? (
+            <LinkedBanks onChanged={() => void load()} />
           ) : null}
 
           {permissionConnectorId ? <ConnectorCallLog connectorId={permissionConnectorId} /> : null}

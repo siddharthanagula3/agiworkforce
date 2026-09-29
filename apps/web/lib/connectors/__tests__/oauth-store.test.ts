@@ -102,7 +102,7 @@ describe('pending authorizations', () => {
     expect(sql).toMatch(/set consumed_at = now\(\)/);
     expect(sql).toMatch(/consumed_at is null/);
     expect(sql).toMatch(/expires_at > now\(\)/);
-    expect(params).toEqual([STATE_HASH]);
+    expect(params).toEqual([STATE_HASH, null]);
     expect(pending?.codeVerifier).toBe('verifier-value');
   });
 

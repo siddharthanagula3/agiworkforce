@@ -11,8 +11,12 @@ import {
   consumePendingAuthorization,
   createPendingAuthorization,
   getConnectorOAuthGrant,
+  pendingAuthorizationOwner,
+  revokeConnectorOAuthGrant,
   upsertConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
+import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { AppError, ErrorCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
@@ -219,6 +223,9 @@ export async function completeBankAccountsHostedLink(
   userId: string,
   linkToken: string,
 ): Promise<HostedLinkCompletion> {
+  if ((await pendingAuthorizationOwner(linkToken, BANK_ACCOUNTS_CONNECTOR_ID)) !== userId) {
+    return 'not_found';
+  }
   const session = await plaidRequest<{
     link_sessions?: Array<{
       results?: {
@@ -233,10 +240,8 @@ export async function completeBankAccountsHostedLink(
     .flatMap((entry) => entry.results?.item_add_results ?? [])
     .find((result) => typeof result.public_token === 'string' && result.public_token.length > 0);
   if (!added?.public_token) return 'not_finished';
-  const pending = await consumePendingAuthorization(linkToken);
-  if (!pending || pending.userId !== userId || pending.connectorId !== BANK_ACCOUNTS_CONNECTOR_ID) {
-    return 'not_found';
-  }
+  const pending = await consumePendingAuthorization(linkToken, userId);
+  if (!pending || pending.connectorId !== BANK_ACCOUNTS_CONNECTOR_ID) return 'not_found';
   await connectBankAccounts(userId, added.public_token, added.institution?.name ?? null);
   return 'connected';
 }
@@ -262,6 +267,71 @@ async function removePlaidItem(accessToken: string): Promise<void> {
   }
 }
 
+interface BankItem {
+  id: string | null;
+  accessToken: string;
+  institutionName: string | null;
+  excludedAccountIds: readonly string[];
+}
+
+interface BankItemRow {
+  id: string;
+  access_token_enc: string;
+  institution_name: string | null;
+  excluded_account_ids: string[] | null;
+}
+
+async function readBankItems(userId: string): Promise<BankItem[]> {
+  const rows = await getNeonDb().query<BankItemRow>(
+    `select id, access_token_enc, institution_name, excluded_account_ids
+       from public.bank_account_items
+      where user_id = $1
+      order by created_at`,
+    [userId],
+  );
+  if (rows.length === 0) {
+    const legacy = await readBankAccountsToken(userId);
+    return legacy
+      ? [{ id: null, accessToken: legacy, institutionName: null, excludedAccountIds: [] }]
+      : [];
+  }
+  return rows.flatMap((row) => {
+    try {
+      return [
+        {
+          id: row.id,
+          accessToken: decryptConnectorToken(row.access_token_enc, 'plaid-access-token'),
+          institutionName: row.institution_name,
+          excludedAccountIds: row.excluded_account_ids ?? [],
+        },
+      ];
+    } catch {
+      logger.warn({ itemId: row.id }, '[bank-accounts] a stored bank link could not be opened');
+      return [];
+    }
+  });
+}
+
+async function recordBankItem(
+  userId: string,
+  item: { plaidItemId: string; accessToken: string; institutionName: string | null },
+): Promise<void> {
+  await getNeonDb().execute(
+    `insert into public.bank_account_items (user_id, plaid_item_id, access_token_enc, institution_name)
+     values ($1, $2, $3, $4)
+     on conflict (user_id, plaid_item_id) do update
+       set access_token_enc = excluded.access_token_enc,
+           institution_name = coalesce(excluded.institution_name, public.bank_account_items.institution_name),
+           updated_at = now()`,
+    [
+      userId,
+      item.plaidItemId,
+      encryptConnectorToken(item.accessToken, 'plaid-access-token'),
+      item.institutionName,
+    ],
+  );
+}
+
 export async function connectBankAccounts(
   userId: string,
   publicToken: string,
@@ -272,7 +342,26 @@ export async function connectBankAccounts(
     '/item/public_token/exchange',
     { public_token: publicToken },
   );
-  const previous = await readBankAccountsToken(userId);
+  const [recorded] = await getNeonDb().query<{ count: number }>(
+    `select count(*)::int as count from public.bank_account_items where user_id = $1`,
+    [userId],
+  );
+  const legacy = (recorded?.count ?? 0) === 0 ? await readBankAccountsToken(userId) : null;
+  if (legacy && legacy !== exchanged.access_token) {
+    const existing = await plaidRequest<{ item: { item_id: string } }>('/item/get', {
+      access_token: legacy,
+    });
+    await recordBankItem(userId, {
+      plaidItemId: existing.item.item_id,
+      accessToken: legacy,
+      institutionName: null,
+    });
+  }
+  await recordBankItem(userId, {
+    plaidItemId: exchanged.item_id,
+    accessToken: exchanged.access_token,
+    institutionName,
+  });
   await upsertConnectorOAuthGrant(
     userId,
     BANK_ACCOUNTS_CONNECTOR_ID,
@@ -286,12 +375,94 @@ export async function connectBankAccounts(
     },
     { accountLabel: institutionName },
   );
-  if (previous && previous !== exchanged.access_token) await removePlaidItem(previous);
 }
 
 export async function removeBankAccountsItem(userId: string): Promise<void> {
-  const accessToken = await readBankAccountsToken(userId);
-  if (accessToken) await removePlaidItem(accessToken);
+  for (const item of await readBankItems(userId)) await removePlaidItem(item.accessToken);
+  await getNeonDb().execute(`delete from public.bank_account_items where user_id = $1`, [userId]);
+}
+
+export async function removeBankItem(userId: string, itemId: string): Promise<boolean> {
+  const item = (await readBankItems(userId)).find((candidate) => candidate.id === itemId);
+  if (!item) return false;
+  await removePlaidItem(item.accessToken);
+  await getNeonDb().execute(
+    `delete from public.bank_account_items where id = $1 and user_id = $2`,
+    [itemId, userId],
+  );
+  const [left] = await getNeonDb().query<{ count: number }>(
+    `select count(*)::int as count from public.bank_account_items where user_id = $1`,
+    [userId],
+  );
+  if ((left?.count ?? 0) === 0) await revokeConnectorOAuthGrant(userId, BANK_ACCOUNTS_CONNECTOR_ID);
+  return true;
+}
+
+export async function setBankItemExcludedAccounts(
+  userId: string,
+  itemId: string,
+  excludedAccountIds: readonly string[],
+): Promise<boolean> {
+  const rows = await getNeonDb().query<{ id: string }>(
+    `update public.bank_account_items
+        set excluded_account_ids = $3::text[], updated_at = now()
+      where id = $1 and user_id = $2
+      returning id`,
+    [itemId, userId, [...new Set(excludedAccountIds)]],
+  );
+  return rows.length > 0;
+}
+
+export interface BankItemSummary {
+  id: string;
+  institutionName: string | null;
+  status: 'ready' | 'reconnect' | 'unavailable';
+  accounts: Array<{
+    accountId: string;
+    name: string;
+    mask: string | null;
+    type: string;
+    subtype: string | null;
+    included: boolean;
+  }>;
+}
+
+export async function listBankItems(userId: string): Promise<BankItemSummary[]> {
+  const items = (await readBankItems(userId)).filter(
+    (item): item is BankItem & { id: string } => item.id !== null,
+  );
+  return Promise.all(
+    items.map(async (item): Promise<BankItemSummary> => {
+      try {
+        const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
+          access_token: item.accessToken,
+        });
+        return {
+          id: item.id,
+          institutionName: item.institutionName,
+          status: 'ready',
+          accounts: listed.accounts.map((account) => ({
+            accountId: account.account_id,
+            name: account.official_name ?? account.name,
+            mask: account.mask ?? null,
+            type: account.type,
+            subtype: account.subtype ?? null,
+            included: !item.excludedAccountIds.includes(account.account_id),
+          })),
+        };
+      } catch (error) {
+        return {
+          id: item.id,
+          institutionName: item.institutionName,
+          status:
+            error instanceof PlaidApiError && error.plaidCode === PLAID_ITEM_LOGIN_REQUIRED
+              ? 'reconnect'
+              : 'unavailable',
+          accounts: [],
+        };
+      }
+    }),
+  );
 }
 
 export function bankAccountsUnavailableReason(): string | null {
@@ -375,30 +546,64 @@ function fenced(value: unknown): string {
   return fenceUntrustedContent(JSON.stringify(value), UNTRUSTED_BANK_TAG, UNTRUSTED_BANK_SENTINEL);
 }
 
+function summarizeAccount(account: PlaidAccount): BankAccountSummary {
+  return {
+    accountId: account.account_id,
+    name: account.official_name ?? account.name,
+    mask: account.mask ?? null,
+    type: account.type,
+    subtype: account.subtype ?? null,
+    available: account.balances.available,
+    current: account.balances.current,
+    limit: account.balances.limit,
+    currency: currencyOf(account.balances),
+  };
+}
+
+function summarizeTransaction(transaction: PlaidTransaction): BankTransactionSummary {
+  return {
+    accountId: transaction.account_id,
+    date: transaction.date,
+    description: transaction.merchant_name ?? transaction.name,
+    amount: transaction.amount,
+    currency: currencyOf(transaction),
+    pending: transaction.pending,
+    category: transaction.personal_finance_category?.primary ?? null,
+  };
+}
+
 async function readBalances(
-  accessToken: string,
+  items: readonly BankItem[],
   args: Record<string, unknown>,
 ): Promise<BankAccountsToolResult> {
   const parsed = BalancesArgs.safeParse(args);
   if (!parsed.success) {
     return { content: 'account_ids must be a list of account_id values.', isError: true };
   }
-  const answered = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/balance/get', {
-    access_token: accessToken,
-    ...(parsed.data.account_ids ? { options: { account_ids: parsed.data.account_ids } } : {}),
-  });
+  const wanted = parsed.data.account_ids ? new Set(parsed.data.account_ids) : null;
+  const accounts: BankAccountSummary[] = [];
+  for (const item of items) {
+    const answered = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/balance/get', {
+      access_token: item.accessToken,
+    });
+    for (const account of answered.accounts) {
+      if (item.excludedAccountIds.includes(account.account_id)) continue;
+      if (wanted && !wanted.has(account.account_id)) continue;
+      accounts.push(summarizeAccount(account));
+    }
+  }
   return {
     content: fenced({
-      accounts: answered.accounts.map((account) => ({
-        account_id: account.account_id,
-        name: account.official_name ?? account.name,
-        mask: account.mask ?? null,
+      accounts: accounts.map((account) => ({
+        account_id: account.accountId,
+        name: account.name,
+        mask: account.mask,
         type: account.type,
-        subtype: account.subtype ?? null,
-        available: account.balances.available,
-        current: account.balances.current,
-        limit: account.balances.limit,
-        currency: currencyOf(account.balances),
+        subtype: account.subtype,
+        available: account.available,
+        current: account.current,
+        limit: account.limit,
+        currency: account.currency,
       })),
     }),
     isError: false,
@@ -406,7 +611,7 @@ async function readBalances(
 }
 
 async function readTransactions(
-  accessToken: string,
+  items: readonly BankItem[],
   args: Record<string, unknown>,
 ): Promise<BankAccountsToolResult> {
   const parsed = TransactionsArgs.safeParse(args);
@@ -417,30 +622,43 @@ async function readTransactions(
     };
   }
   const { start_date, end_date, account_ids, count, offset } = parsed.data;
-  const answered = await plaidRequest<{
-    transactions: PlaidTransaction[];
-    total_transactions: number;
-  }>('/transactions/get', {
-    access_token: accessToken,
-    start_date,
-    end_date,
-    options: {
-      count: count ?? TRANSACTIONS_DEFAULT_COUNT,
-      offset: offset ?? 0,
-      ...(account_ids ? { account_ids } : {}),
-    },
-  });
+  const limit = count ?? TRANSACTIONS_DEFAULT_COUNT;
+  const skip = offset ?? 0;
+  const transactions: BankTransactionSummary[] = [];
+  let total = 0;
+  for (const item of items) {
+    const answered = await plaidRequest<{
+      transactions: PlaidTransaction[];
+      total_transactions: number;
+    }>('/transactions/get', {
+      access_token: item.accessToken,
+      start_date,
+      end_date,
+      options: {
+        count: Math.min(TRANSACTIONS_MAX_COUNT, skip + limit),
+        offset: 0,
+        ...(account_ids ? { account_ids } : {}),
+      },
+    });
+    total += answered.total_transactions;
+    for (const transaction of answered.transactions) {
+      if (!item.excludedAccountIds.includes(transaction.account_id)) {
+        transactions.push(summarizeTransaction(transaction));
+      }
+    }
+  }
+  transactions.sort((left, right) => right.date.localeCompare(left.date));
   return {
     content: fenced({
-      total_transactions: answered.total_transactions,
-      transactions: answered.transactions.map((transaction) => ({
-        account_id: transaction.account_id,
+      total_transactions: total,
+      transactions: transactions.slice(skip, skip + limit).map((transaction) => ({
+        account_id: transaction.accountId,
         date: transaction.date,
-        description: transaction.merchant_name ?? transaction.name,
+        description: transaction.description,
         amount: transaction.amount,
-        currency: currencyOf(transaction),
+        currency: transaction.currency,
         pending: transaction.pending,
-        category: transaction.personal_finance_category?.primary ?? null,
+        category: transaction.category,
       })),
     }),
     isError: false,
@@ -452,8 +670,8 @@ export async function executeBankAccountsTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<BankAccountsToolResult> {
-  const accessToken = await readBankAccountsToken(userId);
-  if (!accessToken) {
+  const items = await readBankItems(userId);
+  if (items.length === 0) {
     return {
       content: 'No bank account is connected. Ask the user to connect one in Settings, Connectors.',
       isError: true,
@@ -461,8 +679,8 @@ export async function executeBankAccountsTool(
   }
   try {
     return toolName === GET_ACCOUNT_BALANCES_TOOL
-      ? await readBalances(accessToken, args)
-      : await readTransactions(accessToken, args);
+      ? await readBalances(items, args)
+      : await readTransactions(items, args);
   } catch (error) {
     if (error instanceof PlaidApiError && error.plaidCode === PLAID_PRODUCT_NOT_READY) {
       return {
@@ -523,55 +741,44 @@ export async function readBankAccountOverview(
   userId: string,
   range: { startDate: string; endDate: string },
 ): Promise<BankAccountOverview> {
-  const accessToken = await readBankAccountsToken(userId);
-  if (!accessToken) return { status: 'not_connected' };
+  const items = await readBankItems(userId);
+  if (items.length === 0) return { status: 'not_connected' };
   try {
-    const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
-      access_token: accessToken,
-    });
-    const transactions: PlaidTransaction[] = [];
+    const accounts: BankAccountSummary[] = [];
+    const transactions: BankTransactionSummary[] = [];
     let totalTransactions = 0;
-    do {
-      const page = await plaidRequest<{
-        transactions: PlaidTransaction[];
-        total_transactions: number;
-      }>('/transactions/get', {
-        access_token: accessToken,
-        start_date: range.startDate,
-        end_date: range.endDate,
-        options: { count: OVERVIEW_TRANSACTION_PAGE_SIZE, offset: transactions.length },
+    for (const item of items) {
+      const excluded = new Set(item.excludedAccountIds);
+      const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
+        access_token: item.accessToken,
       });
-      totalTransactions = page.total_transactions;
-      transactions.push(...page.transactions);
-      if (page.transactions.length === 0) break;
-    } while (
-      transactions.length < totalTransactions &&
-      transactions.length < OVERVIEW_MAX_TRANSACTIONS
-    );
-    return {
-      status: 'ready',
-      accounts: listed.accounts.map((account) => ({
-        accountId: account.account_id,
-        name: account.official_name ?? account.name,
-        mask: account.mask ?? null,
-        type: account.type,
-        subtype: account.subtype ?? null,
-        available: account.balances.available,
-        current: account.balances.current,
-        limit: account.balances.limit,
-        currency: currencyOf(account.balances),
-      })),
-      transactions: transactions.map((transaction) => ({
-        accountId: transaction.account_id,
-        date: transaction.date,
-        description: transaction.merchant_name ?? transaction.name,
-        amount: transaction.amount,
-        currency: currencyOf(transaction),
-        pending: transaction.pending,
-        category: transaction.personal_finance_category?.primary ?? null,
-      })),
-      totalTransactions,
-    };
+      accounts.push(
+        ...listed.accounts
+          .filter((account) => !excluded.has(account.account_id))
+          .map(summarizeAccount),
+      );
+      let fetched = 0;
+      do {
+        const page = await plaidRequest<{
+          transactions: PlaidTransaction[];
+          total_transactions: number;
+        }>('/transactions/get', {
+          access_token: item.accessToken,
+          start_date: range.startDate,
+          end_date: range.endDate,
+          options: { count: OVERVIEW_TRANSACTION_PAGE_SIZE, offset: fetched },
+        });
+        if (fetched === 0) totalTransactions += page.total_transactions;
+        fetched += page.transactions.length;
+        transactions.push(
+          ...page.transactions
+            .filter((transaction) => !excluded.has(transaction.account_id))
+            .map(summarizeTransaction),
+        );
+        if (page.transactions.length === 0 || fetched >= page.total_transactions) break;
+      } while (transactions.length < OVERVIEW_MAX_TRANSACTIONS);
+    }
+    return { status: 'ready', accounts, transactions, totalTransactions };
   } catch (error) {
     if (error instanceof PlaidApiError && error.plaidCode === PLAID_PRODUCT_NOT_READY) {
       return { status: 'preparing' };
