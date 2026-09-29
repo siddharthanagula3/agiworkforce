@@ -79,18 +79,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S58.12: Server health and logs.
-
-- Done when: Each server shows its health and the user can read recent logs or call history.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Detail screen shows health (Not responding, needs reauthorization) but no recent logs or call history. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
-
 ## S58.13: Enable/disable server.
 
 - Done when: The user can disable a configured server without removing it, and re-enable it.

@@ -190,10 +190,9 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
-| mobile | partial | Switch-on: AGI_E2B_EXECUTION=1 and E2B_API_KEY in production (same as web). | switch |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/runtime.ts:1070-1070`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:95-96`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S21.23: Reset runtime.
 

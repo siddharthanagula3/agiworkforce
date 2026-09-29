@@ -26,6 +26,7 @@ export interface LibraryAsset {
   sourceLabel: string;
   eraseAfter: string | null;
   model: string | null;
+  conversationId: string | null;
 }
 
 export interface LibraryPage {
@@ -65,6 +66,7 @@ export function mapLibraryItem(item: LibraryItem): LibraryAsset {
       item.model ?? item.source_surface ?? (item.origin === 'uploaded' ? 'Upload' : 'Generated'),
     eraseAfter: item.erase_after ?? null,
     model: item.model ?? null,
+    conversationId: item.conversation_id ?? null,
   };
 }
 
