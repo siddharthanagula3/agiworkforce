@@ -87,7 +87,6 @@
     "llm/v1/chat/completions/runs/[runId]/archive",
     "llm/v1/chat/completions/runs/[runId]/pause",
     "llm/v1/chat/completions/runs/[runId]/resume/stream",
-    "maps/config",
     "maps/tile/[z]/[x]/[y]",
     "mcp-apps/payload/[payloadId]",
     "mcp-apps/sandbox",

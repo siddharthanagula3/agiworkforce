@@ -1,4 +1,9 @@
 import {
+  MAP_CONFIG_PATH,
+  parseMapTileConfig,
+  type MapTileConfig,
+} from '@agiworkforce/cloud-contracts';
+import {
   MAP_SEARCH_MIN_ZOOM,
   type MapSearchCardBody,
   type MapSearchView,
@@ -15,31 +20,6 @@ const FIT_WIDTH = 260;
 const FIT_HEIGHT = 140;
 const FIT_MAX_ZOOM = 15;
 const MAX_LATITUDE = 85.05112878;
-const MAP_CONFIG_PATH = '/api/maps/config';
-
-interface MapTileConfig {
-  tileUrlTemplate: string;
-  attribution: string;
-  darkTileUrlTemplate: string;
-  darkAttribution: string;
-  dimLightTiles: boolean;
-  minZoom: number;
-  maxZoom: number;
-}
-
-function isMapTileConfig(value: unknown): value is MapTileConfig {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<MapTileConfig>;
-  return (
-    typeof candidate.tileUrlTemplate === 'string' &&
-    typeof candidate.attribution === 'string' &&
-    typeof candidate.darkTileUrlTemplate === 'string' &&
-    typeof candidate.darkAttribution === 'string' &&
-    typeof candidate.dimLightTiles === 'boolean' &&
-    typeof candidate.minZoom === 'number' &&
-    typeof candidate.maxZoom === 'number'
-  );
-}
 
 let configRequest: Promise<MapTileConfig | null> | null = null;
 
@@ -51,7 +31,7 @@ function loadMapTileConfig(access: AnswerFileAccess): Promise<MapTileConfig | nu
     .then((blob) => blob.text())
     .then((text) => {
       const value: unknown = JSON.parse(text);
-      return isMapTileConfig(value) ? value : null;
+      return parseMapTileConfig(value);
     })
     .catch(() => {
       configRequest = null;
