@@ -293,6 +293,12 @@ pub async fn renew_managed_session_if_expiring() -> Option<String> {
             .err()
             .map(|error| format!("The renewed AGI Workforce session could not be saved: {error:#}. Run agi login.")),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
+        crate::oauth::DeviceSessionRenewal::Revoked => Some(match logout() {
+            Ok(()) => "Your AGI Workforce session ended. Sign in again to continue.".to_string(),
+            Err(error) => format!(
+                "Your AGI Workforce session ended, and the saved credential could not be removed: {error:#}. Run agi logout, then sign in again."
+            ),
+        }),
         crate::oauth::DeviceSessionRenewal::Unavailable => None,
     }
 }
