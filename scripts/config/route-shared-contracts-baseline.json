@@ -34,10 +34,6 @@
     "artifacts/index",
     "artifacts/publish",
     "artifacts/publish/[token]",
-    "auth/device/approve",
-    "auth/device/code",
-    "auth/device/refresh",
-    "auth/device/token",
     "auth/logout",
     "auth/step-up",
     "billing/invoices",
@@ -170,7 +166,6 @@
     "voice/transcribe",
     "waitlist/access",
     "waitlist/cloud-managed",
-    "waitlist/public",
     "web-push"
   ]
 }

@@ -10,20 +10,10 @@ import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
-
-interface DeviceAuthorizationDetails {
-  user_code: string;
-  client: {
-    name: string;
-    type: string;
-  };
-  scopes: Array<{
-    id: string;
-    label: string;
-    description: string;
-  }>;
-  expires_at: string;
-}
+import {
+  DeviceAuthorizationLookupResponseSchema,
+  type DeviceAuthorizationLookupResponse,
+} from '@agiworkforce/cloud-contracts';
 
 function formatUserCode(value: string): string {
   const clean = value
@@ -52,53 +42,9 @@ function getTermsAcceptanceUrl(body: unknown): string | null {
     : null;
 }
 
-function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDetails | null {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
-  const candidate = body as Record<string, unknown>;
-  const client = candidate['client'];
-  const scopes = candidate['scopes'];
-  if (
-    typeof candidate['user_code'] !== 'string' ||
-    typeof candidate['expires_at'] !== 'string' ||
-    !client ||
-    typeof client !== 'object' ||
-    Array.isArray(client) ||
-    typeof (client as Record<string, unknown>)['name'] !== 'string' ||
-    typeof (client as Record<string, unknown>)['type'] !== 'string' ||
-    !Array.isArray(scopes)
-  ) {
-    return null;
-  }
-
-  const parsedScopes = scopes.flatMap((scope) => {
-    if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return [];
-    const record = scope as Record<string, unknown>;
-    if (
-      typeof record['id'] !== 'string' ||
-      typeof record['label'] !== 'string' ||
-      typeof record['description'] !== 'string'
-    ) {
-      return [];
-    }
-    return [
-      {
-        id: record['id'],
-        label: record['label'],
-        description: record['description'],
-      },
-    ];
-  });
-  if (parsedScopes.length !== scopes.length || parsedScopes.length === 0) return null;
-
-  return {
-    user_code: candidate['user_code'],
-    client: {
-      name: (client as Record<string, string>)['name']!,
-      type: (client as Record<string, string>)['type']!,
-    },
-    scopes: parsedScopes,
-    expires_at: candidate['expires_at'],
-  };
+function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationLookupResponse | null {
+  const parsed = DeviceAuthorizationLookupResponseSchema.safeParse(body);
+  return parsed.success && parsed.data.scopes.length > 0 ? parsed.data : null;
 }
 
 function DeviceForm() {
@@ -108,7 +54,7 @@ function DeviceForm() {
   const signOut = useSignOut();
   const isDesktopSurface = searchParams.get('surface') === 'desktop';
   const [code, setCode] = useState(formatUserCode(searchParams.get('user_code') || ''));
-  const [details, setDetails] = useState<DeviceAuthorizationDetails | null>(null);
+  const [details, setDetails] = useState<DeviceAuthorizationLookupResponse | null>(null);
   const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
