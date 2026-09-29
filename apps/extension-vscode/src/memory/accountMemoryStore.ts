@@ -25,6 +25,7 @@ export const ACCOUNT_MEMORY_CURSOR_KEY = 'agiWorkforce.accountMemoryCursor';
 export const ACCOUNT_MEMORY_OWNER_KEY = 'agiWorkforce.accountMemoryOwner';
 export const ACCOUNT_MEMORY_SCOPE_KEY = 'agiWorkforce.accountMemoryScope';
 export const ACCOUNT_MEMORY_VERSIONS_KEY = 'agiWorkforce.accountMemoryVersions';
+export const ACCOUNT_MEMORY_UNSCOPED_KEY = 'agiWorkforce.accountMemoryUnscoped';
 export const WORKSPACE_MEMORY_ADOPTED_KEY = 'agiWorkforce.workspaceMemoryAdopted';
 
 export type AccountMemoryStatus = 'ready' | 'signed-out' | 'unreachable';
@@ -131,6 +132,13 @@ export class AccountMemoryStore {
     );
   }
 
+  turnFacts(): MemoryFact[] {
+    if (this.scope() === undefined || this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
+      return [];
+    }
+    return this.cachedFacts();
+  }
+
   async signedOut(): Promise<boolean> {
     return (await getAccountAuthState(this.secrets)).status !== 'signed-in';
   }
@@ -150,7 +158,12 @@ export class AccountMemoryStore {
       await this.discardAnotherWorkspacesCache(await this.client.readScope());
       const cursor = this.storage.get<string>(ACCOUNT_MEMORY_CURSOR_KEY) ?? INITIAL_CURSOR;
       const page = await this.client.pullAll(cursor);
+      if (this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
+        await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
+        await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
+      }
       await this.applyDeltas(page.memories);
+      await this.storage.update(ACCOUNT_MEMORY_UNSCOPED_KEY, false);
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, selectNextCursor(cursor, page.cursor));
       await this.adoptWorkspaceFacts();
       this.changed.fire();
@@ -270,13 +283,6 @@ export class AccountMemoryStore {
       if (conflict.current !== null) versions[conflict.id] = conflict.current.server_version;
     }
     await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, versions);
-    await this.storage.update(
-      ACCOUNT_MEMORY_CURSOR_KEY,
-      selectNextCursor(
-        this.storage.get<string>(ACCOUNT_MEMORY_CURSOR_KEY) ?? INITIAL_CURSOR,
-        response.cursor,
-      ),
-    );
   }
 
   private async applyLocalWrites(items: MemoryPushItem[]): Promise<void> {
@@ -332,7 +338,10 @@ export class AccountMemoryStore {
 
   private async discardAnotherWorkspacesCache(scope: MemoryScope): Promise<void> {
     const recorded = this.scope();
-    if (recorded !== undefined && recorded.organizationId !== scope.organizationId) {
+    if (recorded === undefined && this.cachedFacts().length > 0) {
+      await this.storage.update(ACCOUNT_MEMORY_UNSCOPED_KEY, true);
+      await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);
+    } else if (recorded !== undefined && recorded.organizationId !== scope.organizationId) {
       await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
       await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);

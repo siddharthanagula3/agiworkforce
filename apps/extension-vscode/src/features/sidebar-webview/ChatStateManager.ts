@@ -3605,7 +3605,7 @@ export class ChatStateManager {
         const customInstructionInput = buildCustomInstructionInput(this._context, {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
-        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
+        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
         const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
         const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
           type: 'text',
