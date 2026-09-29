@@ -68,7 +68,10 @@ import {
   getDefaultCloudModelIdForTier,
   getSelectableModelById,
   getShortDisplayName,
+  isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import {
@@ -101,7 +104,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
@@ -188,6 +191,39 @@ export default function ChatTabScreen() {
     (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
   );
   const activeMode = appMode;
+  const activeCloudProjectId = useCloudProjectStore((s) => s.activeProjectId);
+  const projectDefaultModelId = useCloudProjectStore((s) =>
+    s.activeProjectId ? (s.details[s.activeProjectId]?.defaultModelId ?? null) : null,
+  );
+  const hasActiveProjectDetails = useCloudProjectStore((s) =>
+    s.activeProjectId ? s.details[s.activeProjectId] !== undefined : true,
+  );
+  const appliedProjectDefaultRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !isClerkSignedIn || hasActiveProjectDetails) return;
+    const controller = new AbortController();
+    void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [activeMode, hasActiveProjectDetails, isClerkSignedIn]);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !activeCloudProjectId || !projectDefaultModelId) return;
+    const key = `${activeCloudProjectId}:${projectDefaultModelId}`;
+    if (appliedProjectDefaultRef.current === key) return;
+    if (!isSelectableModelIdForAccess(projectDefaultModelId, cloudUnlocked, subscriptionTier)) {
+      return;
+    }
+    appliedProjectDefaultRef.current = key;
+    setModel(projectDefaultModelId);
+  }, [
+    activeCloudProjectId,
+    activeMode,
+    cloudUnlocked,
+    projectDefaultModelId,
+    setModel,
+    subscriptionTier,
+  ]);
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
       ? skillSelection.name
@@ -693,7 +729,7 @@ export default function ChatTabScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(appMode),
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -711,7 +747,7 @@ export default function ChatTabScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [appMode]);
 
   const handleOpenSkills = useCallback(() => {
     router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);

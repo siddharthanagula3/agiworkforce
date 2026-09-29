@@ -418,4 +418,6 @@ export {
   type ResponseStylePreference,
   type TechnicalLevel,
 } from './response-style-preferences';
+export * from './chart-spec';
+export * from './connector-connect-required';
 export * from './image-jobs';

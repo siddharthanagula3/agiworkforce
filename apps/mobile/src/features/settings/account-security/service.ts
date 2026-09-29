@@ -47,6 +47,7 @@ export function groupAuditEntries(entries: AuditLogEntry[]): GroupedAuditEntry[]
 export interface AccountSecurityStatus {
   twoFactorEnabled: boolean;
   backupCodesReady: boolean;
+  enrollmentAvailable: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,6 +61,7 @@ export function parseAccountSecurityStatus(value: unknown): AccountSecurityStatu
   return {
     twoFactorEnabled: value['enabled'],
     backupCodesReady: value['backup_codes_ready'] === true,
+    enrollmentAvailable: value['enrollment_available'] === true,
   };
 }
 
@@ -264,4 +266,38 @@ export async function fetchSignInMethods(signal?: AbortSignal): Promise<SignInMe
     api.get<unknown>('/api/account-security', { signal }).catch(() => null),
   ]);
   return { identities: readIdentities(identities), keys: readKeys(security) };
+}
+
+function readBackupCodes(value: unknown): string[] {
+  const codes = isRecord(value) ? value['backup_codes'] : null;
+  if (!Array.isArray(codes) || !codes.every((code) => typeof code === 'string')) {
+    throw new Error('Account security returned no backup codes.');
+  }
+  return codes;
+}
+
+export async function startAuthenticatorSetup(
+  headers: Record<string, string>,
+): Promise<{ secret: string; otpauthUrl: string }> {
+  const response = await api.post<unknown>('/api/settings/2fa/setup', {}, { headers });
+  const secret = isRecord(response) ? response['secret'] : null;
+  const otpauthUrl = isRecord(response) ? response['otpauth_url'] : null;
+  if (typeof secret !== 'string' || typeof otpauthUrl !== 'string') {
+    throw new Error('Account security returned an invalid setup key.');
+  }
+  return { secret, otpauthUrl };
+}
+
+export async function verifyAuthenticatorCode(code: string): Promise<string[]> {
+  return readBackupCodes(await api.post<unknown>('/api/settings/2fa/verify', { code }));
+}
+
+export async function regenerateBackupCodes(headers: Record<string, string>): Promise<string[]> {
+  return readBackupCodes(
+    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers }),
+  );
+}
+
+export async function turnOffTwoFactor(headers: Record<string, string>): Promise<void> {
+  await api.delete('/api/settings/2fa', { headers });
 }

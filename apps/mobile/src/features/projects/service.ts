@@ -1,4 +1,8 @@
 import { mapFetchedManagedProject } from '@agiworkforce/sync';
+import {
+  listAllManagedCloudProjects,
+  type ManagedCloudProjectUpdateRequest,
+} from '@agiworkforce/cloud-contracts';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import {
   assertCloudAccountEpochCurrent,
@@ -45,5 +49,35 @@ export async function loadMissingCloudProject(
     );
   } finally {
     pending.release();
+  }
+}
+
+export async function refreshCloudProjectDetails(signal?: AbortSignal): Promise<void> {
+  const account = captureCloudAccountEpoch();
+  if (!account || useChatAppModeStore.getState().appMode !== 'cloud') return;
+  const projects = await listAllManagedCloudProjects(managedCloudProjects, { signal });
+  assertCloudAccountEpochCurrent(account);
+  if (signal?.aborted) return;
+  useCloudProjectStore
+    .getState()
+    .setCloudProjectDetails(projects.filter((project) => project.ownerUserId === account.ownerId));
+}
+
+export async function updateCloudProjectAppearance(
+  projectId: string,
+  patch: Pick<ManagedCloudProjectUpdateRequest, 'iconEmoji' | 'accentColor'>,
+): Promise<void> {
+  const account = captureCloudAccountEpoch();
+  if (!account) throw new Error('Cloud account is unavailable');
+  const store = useCloudProjectStore.getState();
+  const previous = store.details[projectId];
+  store.patchCloudProjectDetails(projectId, patch);
+  try {
+    const project = await managedCloudProjects.updateProject(projectId, patch);
+    assertCloudAccountEpochCurrent(account);
+    useCloudProjectStore.getState().setCloudProjectDetails([project]);
+  } catch (error) {
+    if (previous) useCloudProjectStore.getState().patchCloudProjectDetails(projectId, previous);
+    throw error;
   }
 }
