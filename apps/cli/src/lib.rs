@@ -5810,10 +5810,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             }
                         }
                         if !report.conflicts.is_empty() {
-                            println!("Conflicts (local kept):");
+                            println!("Conflicts (local kept, imported version saved beside it):");
                             for f in &report.conflicts {
-                                println!("  {}", f);
+                                println!("  {f}  ->  {f}.imported");
                             }
+                            println!(
+                                "Compare the two, keep the one you want under the original name, and delete the .imported copy."
+                            );
                         }
                         Ok(())
                     }

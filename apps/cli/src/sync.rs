@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -166,6 +166,13 @@ impl ConfigSync {
     // ----- Hashing -----
 
     /// Compute SHA256 hex digest for a byte slice.
+    fn keep_imported_copy(local: &Path, imported: &[u8]) -> Result<()> {
+        let mut name = local.as_os_str().to_owned();
+        name.push(".imported");
+        let copy = PathBuf::from(name);
+        fs::write(&copy, imported).with_context(|| format!("failed to write {}", copy.display()))
+    }
+
     fn sha256_hex(data: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -358,6 +365,7 @@ impl ConfigSync {
                             report.files_updated.push(rel_path.clone());
                         }
                         Err(_) => {
+                            Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
                             report.conflicts.push(rel_path.clone());
                         }
                     }
@@ -369,10 +377,12 @@ impl ConfigSync {
                             report.files_updated.push(rel_path.clone());
                         }
                         Err(_) => {
+                            Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
                             report.conflicts.push(rel_path.clone());
                         }
                     }
                 } else {
+                    Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
                     report.conflicts.push(rel_path.clone());
                 }
             } else {
