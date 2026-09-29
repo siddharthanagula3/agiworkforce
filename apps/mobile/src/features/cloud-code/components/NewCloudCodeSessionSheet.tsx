@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import type { CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import {
@@ -150,152 +158,162 @@ export function NewCloudCodeSessionSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <Text
-            accessibilityRole="header"
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
-          >
-            New cloud session
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close new session"
-            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ gap: 16, paddingBottom: 32 }}
-        >
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Task</Text>
-            <TextInput
-              value={task}
-              onChangeText={setTask}
-              placeholder="Describe what to build or fix"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxLength={CLOUD_CODE_LIMITS.task}
-              accessibilityLabel="Task"
-              testID="new-cloud-code-task"
-              style={{ ...inputStyle, minHeight: 96, paddingTop: 10, textAlignVertical: 'top' }}
-            />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Text
+              accessibilityRole="header"
+              style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+            >
+              New cloud session
+            </Text>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close new session"
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
-
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Repository</Text>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search repositories"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Search repositories"
-              style={inputStyle}
-            />
-            <View accessibilityRole="radiogroup">
-              {[null, ...repositories].map((entry) => {
-                const selected = (entry?.fullName ?? null) === (repository?.fullName ?? null);
-                const label = entry ? entry.fullName : 'No repository';
-                return (
-                  <Pressable
-                    key={entry ? `${entry.installationId}:${entry.fullName}` : 'none'}
-                    onPress={() => chooseRepository(entry)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={label}
-                    testID={
-                      entry ? `new-cloud-code-repo-${entry.fullName}` : 'new-cloud-code-repo-none'
-                    }
-                    style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 }}
-                  >
-                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
-                      {label}
-                    </Text>
-                    {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-            {loadingRepositories ? <ActivityIndicator color={colors.textMuted} /> : null}
-            {repositoriesError ? (
-              <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
-                {repositoriesError}
-              </Text>
-            ) : null}
-            {repository ? (
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ gap: 16, paddingBottom: 32 }}
+          >
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Task</Text>
               <TextInput
-                value={branch}
-                onChangeText={setBranch}
-                placeholder={
-                  repository.defaultBranch
-                    ? `Branch (default ${repository.defaultBranch})`
-                    : 'Branch'
-                }
+                value={task}
+                onChangeText={setTask}
+                placeholder="Describe what to build or fix"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxLength={CLOUD_CODE_LIMITS.task}
+                accessibilityLabel="Task"
+                testID="new-cloud-code-task"
+                style={{ ...inputStyle, minHeight: 96, paddingTop: 10, textAlignVertical: 'top' }}
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Repository</Text>
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search repositories"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
-                accessibilityLabel="Branch"
+                accessibilityLabel="Search repositories"
                 style={inputStyle}
               />
-            ) : null}
-          </View>
-
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Network access</Text>
-            <View accessibilityRole="radiogroup">
-              {NETWORK_OPTIONS.map((option) => {
-                const locked = repository !== null && option.id === 'none';
-                const selected = (repository ? 'trusted' : networkAccess) === option.id;
-                return (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => setNetworkAccess(option.id)}
-                    disabled={locked}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled: locked }}
-                    accessibilityLabel={`${option.label}. ${option.description}`}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      minHeight: 52,
-                      gap: 8,
-                      opacity: locked ? 0.5 : 1,
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
-                        {option.label}
+              <View accessibilityRole="radiogroup">
+                {[null, ...repositories].map((entry) => {
+                  const selected = (entry?.fullName ?? null) === (repository?.fullName ?? null);
+                  const label = entry ? entry.fullName : 'No repository';
+                  return (
+                    <Pressable
+                      key={entry ? `${entry.installationId}:${entry.fullName}` : 'none'}
+                      onPress={() => chooseRepository(entry)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={label}
+                      testID={
+                        entry ? `new-cloud-code-repo-${entry.fullName}` : 'new-cloud-code-repo-none'
+                      }
+                      style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 }}
+                    >
+                      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                        {label}
                       </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                        {option.description}
-                      </Text>
-                    </View>
-                    {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-                  </Pressable>
-                );
-              })}
+                      {selected ? <Check size={16} color={colors.textPrimary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {loadingRepositories ? <ActivityIndicator color={colors.textMuted} /> : null}
+              {repositoriesError ? (
+                <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                  {repositoriesError}
+                </Text>
+              ) : null}
+              {repository ? (
+                <TextInput
+                  value={branch}
+                  onChangeText={setBranch}
+                  placeholder={
+                    repository.defaultBranch
+                      ? `Branch (default ${repository.defaultBranch})`
+                      : 'Branch'
+                  }
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Branch"
+                  style={inputStyle}
+                />
+              ) : null}
             </View>
-          </View>
 
-          {error ? (
-            <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
-              {error}
-            </Text>
-          ) : null}
-          <Button
-            title={creating ? 'Starting…' : 'Start session'}
-            onPress={() => void handleCreate()}
-            disabled={!canCreate}
-            testID="new-cloud-code-start"
-          />
-        </ScrollView>
-      </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Network access</Text>
+              <View accessibilityRole="radiogroup">
+                {NETWORK_OPTIONS.map((option) => {
+                  const locked = repository !== null && option.id === 'none';
+                  const selected = (repository ? 'trusted' : networkAccess) === option.id;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      onPress={() => setNetworkAccess(option.id)}
+                      disabled={locked}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, disabled: locked }}
+                      accessibilityLabel={`${option.label}. ${option.description}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        minHeight: 52,
+                        gap: 8,
+                        opacity: locked ? 0.5 : 1,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+                          {option.label}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                          {option.description}
+                        </Text>
+                      </View>
+                      {selected ? <Check size={16} color={colors.textPrimary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {error ? (
+              <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                {error}
+              </Text>
+            ) : null}
+            <Button
+              title={creating ? 'Starting…' : 'Start session'}
+              onPress={() => void handleCreate()}
+              disabled={!canCreate}
+              testID="new-cloud-code-start"
+            />
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
