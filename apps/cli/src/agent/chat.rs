@@ -610,6 +610,7 @@ impl AgentSession {
             task_type: crate::routing::classify::developer_task_type(task_type),
             trust_mode: previous.trust_mode,
             speed_first: previous.speed_first,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         }));
     }
 
@@ -3410,6 +3411,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         session

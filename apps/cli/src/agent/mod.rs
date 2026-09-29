@@ -1907,6 +1907,7 @@ impl AgentSession {
                         task_type: crate::routing::classify::developer_task_type(task_type),
                         trust_mode: TrustMode::ManagedCloud,
                         speed_first,
+                        policy_version: crate::runtime::session::current_routing_policy_version(),
                     },
                 ));
                 format!(
@@ -2962,6 +2963,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
                 trust_mode: agiworkforce_model_registry::TrustMode::Local,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         let source_before = std::fs::read(&source_path).expect("read Local source");
