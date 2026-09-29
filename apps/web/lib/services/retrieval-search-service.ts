@@ -290,6 +290,7 @@ interface IndexedSourceChunkRow {
   content: string;
   start_offset: number | null;
   end_offset: number | null;
+  document_end: number | string | null;
 }
 
 /**
@@ -304,15 +305,17 @@ export async function readIndexedSourceText(
 ): Promise<IndexedSourceText | null> {
   let rows: IndexedSourceChunkRow[];
   try {
-    // Only the chunks that start inside the cap leave the database, plus the one
-    // that crosses it, which tells the reader the file goes on.
+    // Only the chunks that start inside the cap leave the database. Windows
+    // overlap, so a chunk's place is its start offset, not the characters
+    // before it, and document_end says whether the file goes on past them.
     rows = await scope.db.query<IndexedSourceChunkRow>(
       `with ${healthSpaceDocuments(5)},
       ordered as (
         select c.chunk_index, c.source_kind, c.title, c.content, c.start_offset, c.end_offset,
                coalesce(sum(char_length(c.content)) over (
                  order by c.chunk_index rows between unbounded preceding and 1 preceding
-               ), 0) as chars_before
+               ), 0) as chars_before,
+               char_length(c.content) as chars
           from retrieval_chunks c
           join retrieval_documents d on d.id = c.document_id and d.chunk_version = c.chunk_version
           left join web_artifacts artifact on artifact.id = d.artifact_id
@@ -331,9 +334,15 @@ export async function readIndexedSourceText(
            and asset.deleted_at is null
            and coalesce(asset.temporary_chat, false) = false
       )
-      select source_kind, title, content, start_offset, end_offset
-        from ordered
-       where chars_before <= $6
+      positioned as (
+        select ordered.*,
+               coalesce(start_offset, chars_before) as position,
+               max(coalesce(end_offset, chars_before + chars)) over () as document_end
+          from ordered
+      )
+      select source_kind, title, content, start_offset, end_offset, document_end
+        from positioned
+       where position <= $6
        order by chunk_index`,
       [
         scope.userId,
@@ -362,7 +371,8 @@ export async function readIndexedSourceText(
     covered = row.end_offset ?? -1;
     if (text.length > request.maxChars) break;
   }
-  const truncated = text.length > request.maxChars;
+  const truncated =
+    text.length > request.maxChars || Number(first.document_end ?? 0) > request.maxChars;
   return {
     sourceId: request.sourceId,
     sourceKind: first.source_kind,

@@ -11,13 +11,19 @@ import {
 
 const FILE_ID = '11111111-1111-4111-8111-111111111111';
 
-function chunk(content: string, start: number | null, end: number | null) {
+function chunk(
+  content: string,
+  start: number | null,
+  end: number | null,
+  documentEnd: number | null = end,
+) {
   return {
     source_kind: 'library_file',
     title: 'Q3 plan.pdf',
     content,
     start_offset: start,
     end_offset: end,
+    document_end: documentEnd,
   };
 }
 
@@ -93,5 +99,29 @@ describe('open_file', () => {
 
     expect(result.isError).toBe(false);
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('places overlapping windows by their start offset and says when the file goes on', async () => {
+    const window = 'x'.repeat(1_400);
+    const { ctx, query } = context([
+      chunk(window, 0, 1_400, 90_000),
+      chunk(window, 1_200, 2_600, 90_000),
+    ]);
+
+    const result = await executeFileTool(OPEN_FILE_TOOL_NAME, { file_id: FILE_ID }, ctx);
+
+    const [sql] = query.mock.calls[0] as unknown as [string];
+    expect(sql).toContain('coalesce(start_offset, chars_before) as position');
+    expect(result.content).toContain('The file continues past 60000 characters');
+    expect(result.content).toContain('x'.repeat(2_600));
+    expect(result.content).not.toContain('x'.repeat(2_601));
+  });
+
+  it('adds no continuation note when the whole file was read', async () => {
+    const { ctx } = context([chunk('Short and complete.', 0, 19)]);
+
+    const result = await executeFileTool(OPEN_FILE_TOOL_NAME, { file_id: FILE_ID }, ctx);
+
+    expect(result.content).not.toContain('The file continues');
   });
 });
