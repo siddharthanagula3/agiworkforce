@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import {
   formatRelativeTime,
@@ -813,7 +814,13 @@ export class ChatStateManager {
   private _resumeAttemptSeq = 0;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
-  private readonly _queuedSends: PendingChatSend[] = [];
+  /**
+   * Follow-ups wait in the shared client send queue, as they do on web, mobile
+   * and Chrome; the queue holds their order and each id's payload stays here,
+   * since editor context and attachments are not queue commands.
+   */
+  private readonly _sendQueue: MessageQueue = createMessageQueue({ laneCap: MAX_QUEUED_SENDS });
+  private readonly _queuedSendPayloads = new Map<string, PendingChatSend>();
   private _inFlightSend?: PendingChatSend;
   private readonly _steeringSends = new Set<PendingChatSend>();
   private _loadedConversation?: ConversationLoadedPayload;
@@ -1275,11 +1282,10 @@ export class ChatStateManager {
       }
 
       case 'cancelQueuedMessage': {
-        const index = this._queuedSends.findIndex(
-          (request) => request.clientMessageId === msg.payload.clientMessageId,
+        const [command] = this._sendQueue.dequeueAllMatching(
+          (queued) => queued.id === msg.payload.clientMessageId,
         );
-        if (index === -1) break;
-        const [request] = this._queuedSends.splice(index, 1);
+        const request = command ? this._releaseQueuedPayload(command.id) : undefined;
         if (request !== undefined) this._dropSend(request, 'Queued follow-up cancelled.');
         break;
       }
@@ -1719,7 +1725,7 @@ export class ChatStateManager {
         const index = this._pendingAttachments.findIndex((entry) => entry.id === id);
         if (index !== -1) this._pendingAttachments.splice(index, 1);
         this._removeOwnedAttachment(this._inFlightSend, id);
-        for (const queued of this._queuedSends) this._removeOwnedAttachment(queued, id);
+        for (const queued of this._queuedSendList()) this._removeOwnedAttachment(queued, id);
         for (const steering of this._steeringSends) this._removeOwnedAttachment(steering, id);
         break;
       }
@@ -2381,7 +2387,7 @@ export class ChatStateManager {
         if (this._activeTurn?.turnId === snapshot?.turnId) delete this._activeTurn;
         this._turnLifecycleActive = false;
         this._turnLifecycleEpoch = undefined;
-        const next = this._queuedSends.shift();
+        const next = this._takeQueuedSend();
         if (next !== undefined) void this._drainSendLifecycle(next, true);
       }
     }
@@ -2874,8 +2880,9 @@ export class ChatStateManager {
   }
 
   private _dropQueuedSends(message: string): void {
-    for (const request of this._queuedSends.splice(0)) {
-      this._dropSend(request, message);
+    for (const command of this._sendQueue.dequeueAll()) {
+      const request = this._releaseQueuedPayload(command.id);
+      if (request !== undefined) this._dropSend(request, message);
     }
   }
 
@@ -2899,7 +2906,7 @@ export class ChatStateManager {
       payload: {
         kind: 'cancelled',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds: [],
         clientMessageId: request.clientMessageId,
       },
@@ -3098,7 +3105,7 @@ export class ChatStateManager {
     this.pushEditorContext();
 
     if (this._turnLifecycleActive) {
-      if (this._queuedSends.length + this._steeringSends.size >= MAX_QUEUED_SENDS) {
+      if (this._sendQueue.size() + this._steeringSends.size >= MAX_QUEUED_SENDS) {
         this._rejectFollowUpCapacity(request);
         return;
       }
@@ -3141,7 +3148,7 @@ export class ChatStateManager {
             payload: {
               kind: 'error',
               message: t('chatNotice.queuedNotStarted'),
-              queueDepth: this._queuedSends.length,
+              queueDepth: this._sendQueue.size(),
               attachmentIds: [],
               clientMessageId: current.clientMessageId,
             },
@@ -3150,9 +3157,8 @@ export class ChatStateManager {
         this._restoreUnconsumedAttachments(current);
         delete this._inFlightSend;
         current =
-          conversationEpoch === this._conversationEpoch &&
-          this._queuedSends[0]?.epoch === conversationEpoch
-            ? this._queuedSends.shift()
+          conversationEpoch === this._conversationEpoch
+            ? this._takeQueuedSend((next) => next.epoch === conversationEpoch)
             : undefined;
         queued = current !== undefined;
       }
@@ -3163,18 +3169,24 @@ export class ChatStateManager {
       }
       this._turnLifecycleActive = false;
       this._turnLifecycleEpoch = undefined;
-      const nextEpochRequest = this._queuedSends.shift();
+      const nextEpochRequest = this._takeQueuedSend();
       if (nextEpochRequest !== undefined) void this._drainSendLifecycle(nextEpochRequest, true);
     }
   }
 
   private _enqueueSend(request: PendingChatSend, kind: 'queued' | 'queue-fallback'): void {
-    if (this._queuedSends.length >= MAX_QUEUED_SENDS) {
+    if (this._sendQueue.size() >= MAX_QUEUED_SENDS) {
       this._rejectFollowUpCapacity(request);
       return;
     }
-    this._queuedSends.push(request);
-    const queueDepth = this._queuedSends.length;
+    this._queuedSendPayloads.set(request.clientMessageId, request);
+    this._sendQueue.enqueue({
+      id: request.clientMessageId,
+      value: request.text,
+      mode: 'prompt',
+      priority: 'next',
+    });
+    const queueDepth = this._sendQueue.size();
     this._post({
       type: 'followUpStatus',
       payload: {
@@ -3190,6 +3202,29 @@ export class ChatStateManager {
     });
   }
 
+  private _releaseQueuedPayload(id: string): PendingChatSend | undefined {
+    const request = this._queuedSendPayloads.get(id);
+    this._queuedSendPayloads.delete(id);
+    return request;
+  }
+
+  private _queuedSendList(): PendingChatSend[] {
+    return this._sendQueue
+      .getSnapshot()
+      .flatMap((command) => this._queuedSendPayloads.get(command.id) ?? []);
+  }
+
+  /** The next follow-up in order, taken only when the head is one `accept` allows. */
+  private _takeQueuedSend(
+    accept: (request: PendingChatSend) => boolean = () => true,
+  ): PendingChatSend | undefined {
+    const head = this._sendQueue.peek();
+    const request = head ? this._queuedSendPayloads.get(head.id) : undefined;
+    if (head === undefined || request === undefined || !accept(request)) return undefined;
+    this._sendQueue.dequeueIf(head.id);
+    return this._releaseQueuedPayload(head.id);
+  }
+
   private _rejectFollowUpCapacity(request: PendingChatSend): void {
     const attachmentIds = request.attachments.map((entry) => entry.id);
     const message = tPlural('chatNotice.followUpCapacity', MAX_QUEUED_SENDS);
@@ -3199,7 +3234,7 @@ export class ChatStateManager {
       payload: {
         kind: 'error',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds,
         clientMessageId: request.clientMessageId,
       },
@@ -3248,7 +3283,7 @@ export class ChatStateManager {
           message: turnStillActive
             ? 'Steering the active turn.'
             : 'Steer was accepted just as the active turn finished.',
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3270,7 +3305,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message: error instanceof Error ? error.message : t('chatNotice.steerFailed'),
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3368,7 +3403,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message,
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3641,7 +3676,7 @@ export class ChatStateManager {
             type: 'turnStarted',
             payload: {
               queued: true,
-              queueRemaining: this._queuedSends.length,
+              queueRemaining: this._sendQueue.size(),
               clientMessageId: request.clientMessageId,
               text: request.text,
             },

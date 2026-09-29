@@ -328,6 +328,7 @@ interface ExtractedChatTokens {
   cacheReadTokens: number;
   cacheWriteTotalTokens: number;
   cacheWrite1hSubsetTokens: number;
+  speed?: 'fast';
 }
 
 function extractChatTokens(usage: Record<string, unknown>): ExtractedChatTokens {
@@ -340,6 +341,7 @@ function extractChatTokens(usage: Record<string, unknown>): ExtractedChatTokens 
       numeric(usage['cacheWriteTokens']) ?? numeric(usage['cacheCreationInputTokens']) ?? 0,
     cacheWrite1hSubsetTokens:
       numeric(usage['cacheWrite1hTokens']) ?? numeric(usage['cacheCreation1hInputTokens']) ?? 0,
+    ...(usage['speed'] === 'fast' ? { speed: 'fast' as const } : {}),
   };
 }
 
@@ -350,6 +352,7 @@ function chatTokenUsageInput(tokens: ExtractedChatTokens): {
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
   cacheCreation1hInputTokens: number;
+  speed?: 'fast';
 } {
   return {
     promptTokens: tokens.promptTokens,
@@ -358,6 +361,7 @@ function chatTokenUsageInput(tokens: ExtractedChatTokens): {
     cacheReadInputTokens: tokens.cacheReadTokens,
     cacheCreationInputTokens: tokens.cacheWriteTotalTokens,
     cacheCreation1hInputTokens: tokens.cacheWrite1hSubsetTokens,
+    ...(tokens.speed ? { speed: tokens.speed } : {}),
   };
 }
 

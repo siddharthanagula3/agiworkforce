@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
+import { View, Modal, Alert, useWindowDimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
 import { Check, Copy, Download, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -231,7 +232,7 @@ export function ImageFullScreen({
             }}
           >
             {onEditArea && !directUri ? (
-              <Pressable
+              <PressableBox
                 onPress={() => setEditing(true)}
                 style={{
                   padding: 10,
@@ -242,11 +243,11 @@ export function ImageFullScreen({
                 accessibilityRole="button"
               >
                 <Paintbrush size={18} color={colors.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {onDelete ? (
-              <Pressable
+              <PressableBox
                 onPress={handleDelete}
                 style={{
                   padding: 10,
@@ -257,11 +258,11 @@ export function ImageFullScreen({
                 accessibilityRole="button"
               >
                 <Trash2 size={18} color={colors.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {!directUri ? (
-              <Pressable
+              <PressableBox
                 onPress={handleSave}
                 style={{
                   padding: 10,
@@ -276,11 +277,11 @@ export function ImageFullScreen({
                 ) : (
                   <Download size={18} color={colors.cameraOverlayText} />
                 )}
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Share button */}
-            <Pressable
+            <PressableBox
               onPress={handleShare}
               style={{
                 padding: 10,
@@ -291,9 +292,9 @@ export function ImageFullScreen({
               accessibilityRole="button"
             >
               <Share2 size={18} color={colors.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
 
-            <Pressable
+            <PressableBox
               onPress={handleCopy}
               style={{
                 padding: 10,
@@ -308,10 +309,10 @@ export function ImageFullScreen({
               ) : (
                 <Copy size={18} color={colors.cameraOverlayText} />
               )}
-            </Pressable>
+            </PressableBox>
 
             {/* Close button */}
-            <Pressable
+            <PressableBox
               onPress={handleClose}
               style={{
                 padding: 10,
@@ -322,7 +323,7 @@ export function ImageFullScreen({
               accessibilityRole="button"
             >
               <X size={18} color={colors.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Zoomable image area */}

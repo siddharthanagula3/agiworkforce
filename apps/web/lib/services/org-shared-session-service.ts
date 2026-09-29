@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { CONVERSATION_SHARE_VISIBILITIES } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
@@ -14,7 +15,7 @@ import {
  * page and leaves the transcript readable only to members holding the grant row
  * in `organization_shared_sessions`. Expiry applies to both.
  */
-export const SHARED_SESSION_VISIBILITIES = ['public', 'organization'] as const;
+export const SHARED_SESSION_VISIBILITIES = CONVERSATION_SHARE_VISIBILITIES;
 
 export type SharedSessionVisibility = (typeof SHARED_SESSION_VISIBILITIES)[number];
 

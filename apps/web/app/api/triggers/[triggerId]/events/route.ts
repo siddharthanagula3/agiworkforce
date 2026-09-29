@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudEventTriggerDeliveryListResponse } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -39,7 +40,11 @@ async function handleListDeliveries(
   const offset = Math.max(0, integerQueryValue(url.searchParams.get('offset'), 0));
   try {
     const events = await listTriggerDeliveries(db, userId, triggerId, { limit, offset });
-    return NextResponse.json({ events, pagination: { limit, offset } });
+    const payload: ManagedCloudEventTriggerDeliveryListResponse = {
+      events,
+      pagination: { limit, offset },
+    };
+    return NextResponse.json(payload);
   } catch (error) {
     rethrowTriggerError(error);
   }

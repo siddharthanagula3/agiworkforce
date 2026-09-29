@@ -42,3 +42,12 @@ describe('ingestUsageChunk, provider-reported cost', () => {
     expect(acc.providerReportedCostUsd).toBeUndefined();
   });
 });
+
+describe('ingestUsageChunk, served speed', () => {
+  it('keeps the speed the provider reported for the call', () => {
+    const acc = createUsageAccumulator();
+    ingestUsageChunk(acc, usageChunk({ inputTokens: 10, outputTokens: 2, speed: 'fast' }));
+    ingestUsageChunk(acc, usageChunk({ outputTokens: 4 }));
+    expect(acc.speed).toBe('fast');
+  });
+});

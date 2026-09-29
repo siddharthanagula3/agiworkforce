@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { CloudOff, HardDrive, PackageOpen, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -77,7 +78,7 @@ function ErrorScreen({
       </Text>
 
       {onRetry && (
-        <Pressable
+        <PressableBox
           onPress={onRetry}
           style={{
             backgroundColor: colors.teal,
@@ -92,11 +93,11 @@ function ErrorScreen({
           <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: typeScale.body }}>
             {retryLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       )}
 
       {onDismiss && (
-        <Pressable
+        <PressableBox
           onPress={onDismiss}
           style={{ alignItems: 'center', paddingVertical: spacing.sm }}
           accessibilityRole="button"
@@ -105,7 +106,7 @@ function ErrorScreen({
           <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
             {cancelLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       )}
     </View>
   );

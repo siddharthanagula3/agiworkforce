@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Activity, Send, Square } from 'lucide-react-native';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
@@ -79,7 +80,7 @@ export function DispatchTaskComposer() {
           />
           <View className="flex-row items-center justify-between pt-2">
             <Text className="text-xs text-white/30">{prompt.trim().length}/20,000</Text>
-            <Pressable
+            <PressableBox
               onPress={() => void handleSend()}
               disabled={!canSend}
               className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${
@@ -102,7 +103,7 @@ export function DispatchTaskComposer() {
               >
                 {isSending ? 'Sending…' : 'Send'}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
           {sendError ? (
             <Text
@@ -143,14 +144,14 @@ export function DispatchTaskComposer() {
                       {STATUS_LABELS[task.status] ?? task.status}
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
-                      <Pressable
+                      <PressableBox
                         onPress={() => void cancelDispatchTask(task.requestId, task.taskId)}
                         className="rounded-md bg-red-500/10 p-1.5 active:bg-red-500/20"
                         accessibilityRole="button"
                         accessibilityLabel={`Cancel ${task.title}`}
                       >
                         <Square size={10} color={colors.agentError} />
-                      </Pressable>
+                      </PressableBox>
                     )}
                   </View>
                   {pending ? (
@@ -169,7 +170,7 @@ export function DispatchTaskComposer() {
                     </Text>
                   )}
                   {task.result ? (
-                    <Pressable
+                    <PressableBox
                       onPress={() =>
                         setExpandedResult((current) =>
                           current === task.requestId ? null : task.requestId,
@@ -190,7 +191,7 @@ export function DispatchTaskComposer() {
                       >
                         {task.result}
                       </Text>
-                    </Pressable>
+                    </PressableBox>
                   ) : null}
                 </View>
               );

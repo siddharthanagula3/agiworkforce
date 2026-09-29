@@ -29,7 +29,7 @@ import {
   type AdminPolicyInput,
 } from '@/lib/services/organization-policy-service';
 import type { AdminPolicy, WorkspaceControls } from '@agiworkforce/types';
-import { ControlsPatchSchema } from './controls-schema';
+import { ControlsPatchSchema, assertOwnerTurnsOnFastMode } from './controls-schema';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
 import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
 import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
@@ -262,6 +262,11 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       'Requiring multi-factor authentication is temporarily unavailable, because members cannot set up an authenticator app yet.',
     );
   }
+  assertOwnerTurnsOnFastMode(
+    membership.role,
+    current.policy.controls.featureAccess.fast_mode === true,
+    next.controls.featureAccess.fast_mode,
+  );
   await assertPolicyChangeWontLockOutRequester(next, userId, request);
   assertPolicyCoherent(next);
 

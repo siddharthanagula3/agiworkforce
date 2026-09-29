@@ -2,6 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import {
+  NotificationMarkReadRequestSchema,
+  type NotificationFeedResponseWire,
+  type NotificationMarkReadResponse,
+} from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -25,13 +30,6 @@ const ListQuerySchema = z.object({
   unread: z.enum(['true', 'false']).optional(),
 });
 
-const MAX_IDS_PER_REQUEST = MAX_FEED_LIMIT;
-
-const MarkReadSchema = z.union([
-  z.object({ all: z.literal(true) }).strict(),
-  z.object({ ids: z.array(z.string().uuid()).min(1).max(MAX_IDS_PER_REQUEST) }).strict(),
-]);
-
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 async function handleList(request: NextRequest): Promise<NextResponse> {
@@ -49,7 +47,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   }
 
   const { db, userId } = await getUserScopedDb(request, FEED_SCOPE);
-  const feed = await listNotifications(db, userId, {
+  const feed: NotificationFeedResponseWire = await listNotifications(db, userId, {
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
     before: parsed.data.before ?? null,
     unreadOnly: parsed.data.unread === 'true',
@@ -67,7 +65,9 @@ async function handleMarkRead(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse as NextResponse;
 
-  const parsed = MarkReadSchema.safeParse(await request.json().catch(() => null));
+  const parsed = NotificationMarkReadRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     throw createError.badRequest('Invalid notification selection', parsed.error.flatten());
   }
@@ -78,7 +78,8 @@ async function handleMarkRead(request: NextRequest): Promise<NextResponse> {
     'all' in parsed.data ? { all: true } : { ids: parsed.data.ids },
   );
 
-  return NextResponse.json({ updated }, { headers: NO_STORE });
+  const reply: NotificationMarkReadResponse = { updated };
+  return NextResponse.json(reply, { headers: NO_STORE });
 }
 
 export const GET = withErrorHandler(handleList);

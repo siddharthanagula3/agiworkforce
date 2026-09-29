@@ -19,12 +19,12 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -133,7 +133,7 @@ export function ReportFlagButton({
 
   return (
     <>
-      <Pressable
+      <PressableBox
         testID="report-flag-button"
         onPress={handleOpen}
         accessibilityRole="button"
@@ -143,7 +143,7 @@ export function ReportFlagButton({
       >
         <Flag size={12} color={colors.textMuted} />
         <Text style={[styles.flagLabel, { color: colors.textMuted }]}>Report</Text>
-      </Pressable>
+      </PressableBox>
 
       <Modal
         visible={modalVisible}
@@ -156,7 +156,7 @@ export function ReportFlagButton({
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Pressable
+          <PressableBox
             style={[styles.backdrop, { backgroundColor: colors.scrim }]}
             onPress={handleClose}
           />
@@ -171,7 +171,7 @@ export function ReportFlagButton({
                   {DELIVERY_BODY[saved.delivery.kind]}
                 </Text>
                 {saved.delivery.kind !== 'email-composer-opened' && (
-                  <Pressable
+                  <PressableBox
                     testID="report-email-handoff-btn"
                     onPress={() => void handleEmailHandoff()}
                     disabled={loading}
@@ -187,9 +187,9 @@ export function ReportFlagButton({
                         Email this report to support
                       </Text>
                     )}
-                  </Pressable>
+                  </PressableBox>
                 )}
-                <Pressable
+                <PressableBox
                   testID="report-close-btn"
                   onPress={handleClose}
                   accessibilityRole="button"
@@ -209,7 +209,7 @@ export function ReportFlagButton({
                   >
                     Done
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -228,7 +228,7 @@ export function ReportFlagButton({
                 {/* Category picker */}
                 <View style={styles.categoryList}>
                   {CATEGORIES.map((cat) => (
-                    <Pressable
+                    <PressableBox
                       key={cat.id}
                       testID={`report-category-${cat.id}`}
                       onPress={() => setSelectedCategory(cat.id)}
@@ -259,7 +259,7 @@ export function ReportFlagButton({
                       <Text style={[styles.categoryLabel, { color: colors.textPrimary }]}>
                         {cat.label}
                       </Text>
-                    </Pressable>
+                    </PressableBox>
                   ))}
                 </View>
 
@@ -288,7 +288,7 @@ export function ReportFlagButton({
                 />
 
                 {/* Email hand-off opt-in, the only path off this device */}
-                <Pressable
+                <PressableBox
                   testID="report-email-toggle"
                   onPress={() => setSendEmail((v) => !v)}
                   accessibilityRole="button"
@@ -326,7 +326,7 @@ export function ReportFlagButton({
                       Opens your mail app with the report filled in.
                     </Text>
                   </View>
-                </Pressable>
+                </PressableBox>
 
                 {errorMessage && (
                   <Text
@@ -344,7 +344,7 @@ export function ReportFlagButton({
                 )}
 
                 {/* Save, "submit" would name a transmission that does not happen */}
-                <Pressable
+                <PressableBox
                   testID="report-submit-btn"
                   onPress={handleSubmit}
                   disabled={!selectedCategory || loading}
@@ -365,16 +365,16 @@ export function ReportFlagButton({
                       Save report
                     </Text>
                   )}
-                </Pressable>
+                </PressableBox>
 
-                <Pressable
+                <PressableBox
                   testID="report-cancel-btn"
                   onPress={handleClose}
                   accessibilityRole="button"
                   style={styles.cancelBtn}
                 >
                   <Text style={[styles.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
-                </Pressable>
+                </PressableBox>
               </ScrollView>
             )}
           </View>

@@ -58,7 +58,7 @@ import {
   isSupportedRuntimeVersion as isSupportedCliVersion,
   messageKindForAgentEvent,
 } from '@agiworkforce/types';
-import { redactSecrets } from '../core/telemetry';
+import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
@@ -1230,7 +1230,7 @@ class JsonlConnection {
       this.close(
         new Error(
           `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
-            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+            redactTelemetryText(line.slice(0, MAX_REJECTED_LINE_CHARS)),
           )}`,
         ),
       );

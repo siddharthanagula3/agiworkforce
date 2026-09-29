@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
+import { FlatList, Modal, View, useWindowDimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Square, Volume2, X } from 'lucide-react-native';
@@ -56,7 +57,7 @@ function VoiceSampleButton({ voiceId, voiceName }: { voiceId: string; voiceName:
   if (!file) return null;
   const Icon = playing ? Square : Volume2;
   return (
-    <Pressable
+    <PressableBox
       onPress={() => {
         if (playing) {
           stopVoiceSample();
@@ -86,7 +87,7 @@ function VoiceSampleButton({ voiceId, voiceName }: { voiceId: string; voiceName:
       <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
         {playing ? 'Stop sample' : 'Play sample'}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -220,7 +221,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             >
               Choose your voice
             </Text>
-            <Pressable
+            <PressableBox
               onPress={onDismiss}
               accessibilityRole="button"
               accessibilityLabel="Close voice picker"
@@ -235,7 +236,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           <View style={{ flex: 1, minHeight: 200, justifyContent: 'center' }}>
@@ -294,7 +295,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
           </View>
 
           <View style={{ paddingHorizontal: 28 }}>
-            <Pressable
+            <PressableBox
               onPress={handleStart}
               accessibilityRole="button"
               accessibilityLabel={active ? `Start voice with ${active.name}` : 'Start voice'}
@@ -303,7 +304,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               <View style={PILL}>
                 <Text style={PILL_LABEL}>Start Voice</Text>
               </View>
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </Animated.View>

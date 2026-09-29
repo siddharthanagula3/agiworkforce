@@ -14,6 +14,7 @@ export interface UsageAccumulator {
   webFetchRequests?: number;
   codeExecutionRequests?: number;
   codeExecutionContainerIds?: string[];
+  speed?: 'standard' | 'fast';
 }
 
 function maxCount(current: number | undefined, next: number | undefined): number | undefined {
@@ -49,6 +50,7 @@ export function ingestUsageChunk(acc: UsageAccumulator, chunk: StreamChunk): voi
   if (reportedCost !== undefined) {
     acc.providerReportedCostUsd = reportedCost;
   }
+  if (chunk.speed !== undefined) acc.speed = chunk.speed;
   acc.webSearchRequests = maxCount(acc.webSearchRequests, chunk.webSearchRequests);
   acc.webFetchRequests = maxCount(acc.webFetchRequests, chunk.webFetchRequests);
   acc.codeExecutionRequests = maxCount(acc.codeExecutionRequests, chunk.codeExecutionRequests);

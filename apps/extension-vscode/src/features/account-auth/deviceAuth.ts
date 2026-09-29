@@ -2,7 +2,16 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
-import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkforce/types';
+import {
+  pollDeviceAuthorization as pollSharedDeviceAuthorization,
+  refreshDeviceSession as refreshSharedDeviceSession,
+  requestDeviceAuthorization as requestSharedDeviceAuthorization,
+  slowedDevicePollIntervalMs,
+  type DeviceAuthorizationPollResult,
+  type DeviceAuthorizationPost,
+  type DeviceAuthorizationRequest,
+  type DeviceSessionRefreshResult,
+} from '@agiworkforce/client-runtime';
 import {
   clearAccountToken,
   getAccountRefreshToken,
@@ -15,42 +24,18 @@ import { getExtensionUserAgent } from '../../platform/version';
 import { describeRemoteEnvironment } from '../../platform/remoteEnvironment';
 
 const REQUEST_TIMEOUT_MS = 10_000;
-const MIN_POLL_INTERVAL_MS = 3_000;
-const MAX_POLL_INTERVAL_MS = 10_000;
-const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 2_500;
 const REMOTE_BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 8_000;
 
-export type DeviceAuthPost = (
-  url: string,
-  payload: unknown,
-  headers?: Readonly<Record<string, string>>,
-) => Promise<{ status: number; body: string }>;
+export type DeviceAuthPost = DeviceAuthorizationPost;
+export type {
+  DeviceAuthorizationPollResult,
+  DeviceAuthorizationRequest,
+  DeviceSessionRefreshResult,
+};
 
 export type DeviceAuthOpenExternal = (url: string) => PromiseLike<boolean>;
 export type DeviceAuthBrowserOpenResult = 'opened' | 'rejected' | 'unconfirmed';
-
-export interface DeviceAuthorizationRequest {
-  deviceCode: string;
-  userCode: string;
-  verificationUrl: string;
-  pollIntervalMs: number;
-  expiresInMs: number;
-}
-
-export type DeviceAuthorizationPollResult =
-  | { kind: 'approved'; token: string; expiresAt: number; refreshToken?: string }
-  | { kind: 'pending' }
-  | { kind: 'denied' }
-  | { kind: 'expired' }
-  | { kind: 'rejected'; message: string };
-
-export type DeviceSessionRefreshResult =
-  | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
-  | { kind: 'unavailable' }
-  | { kind: 'revoked' }
-  | { kind: 'terms-required'; acceptanceUrl: string | null }
-  | { kind: 'account-unavailable'; message: string };
 
 /**
  * A remote window forwards openExternal to the local client, so the round trip
@@ -104,169 +89,27 @@ const postJson: DeviceAuthPost = (urlString, payload, headers) =>
     request.end();
   });
 
-function parseRecord(body: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(body) as unknown;
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function requiredString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`AGI Cloud returned an invalid ${key}.`);
-  }
-  return value;
-}
-
-function requiredPositiveNumber(record: Record<string, unknown>, key: string): number {
-  const value = record[key];
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`AGI Cloud returned an invalid ${key}.`);
-  }
-  return value;
-}
-
-export async function requestDeviceAuthorization(
+export function requestDeviceAuthorization(
   origin: string,
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceAuthorizationRequest> {
-  const trustedOrigin = new URL(origin).origin;
-  const response = await post(`${trustedOrigin}/api/auth/device/code`, { surface: 'vscode' });
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error('Could not start AGI Cloud sign-in. Try again.');
-  }
-
-  const raw = parseRecord(response.body);
-  const contract: DeviceAuthorizationStartResponse = {
-    device_code: requiredString(raw, 'device_code'),
-    user_code: requiredString(raw, 'user_code'),
-    verification_uri: requiredString(raw, 'verification_uri'),
-    verification_uri_complete: requiredString(raw, 'verification_uri_complete'),
-    interval: requiredPositiveNumber(raw, 'interval'),
-    expires_in: requiredPositiveNumber(raw, 'expires_in'),
-  };
-
-  const verificationUrl = new URL(contract.verification_uri_complete);
-  if (verificationUrl.origin !== trustedOrigin) {
-    throw new Error('AGI Cloud returned an untrusted verification URL.');
-  }
-
-  return {
-    deviceCode: contract.device_code,
-    userCode: contract.user_code,
-    verificationUrl: verificationUrl.toString(),
-    pollIntervalMs: Math.min(
-      MAX_POLL_INTERVAL_MS,
-      Math.max(MIN_POLL_INTERVAL_MS, contract.interval * 1000),
-    ),
-    expiresInMs: Math.min(MAX_AUTH_WINDOW_MS, contract.expires_in * 1000),
-  };
+  return requestSharedDeviceAuthorization(origin, post, 'vscode');
 }
 
-export async function pollDeviceAuthorization(
+export function pollDeviceAuthorization(
   origin: string,
   deviceCode: string,
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceAuthorizationPollResult> {
-  let response: { status: number; body: string };
-  try {
-    response = await post(`${new URL(origin).origin}/api/auth/device/token`, {
-      device_code: deviceCode,
-    });
-  } catch {
-    return { kind: 'pending' };
-  }
-
-  const body = parseRecord(response.body);
-  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
-  if (response.status === 403 && error === 'authorization_pending') {
-    return { kind: 'pending' };
-  }
-  if (response.status === 400 && error === 'access_denied') {
-    return { kind: 'denied' };
-  }
-  if (response.status === 400 && (error === 'expired_token' || error === 'invalid_grant')) {
-    return { kind: 'expired' };
-  }
-  if (response.status < 200 || response.status >= 300) {
-    return {
-      kind: 'rejected',
-      message: 'AGI Cloud rejected the device sign-in request. Start again.',
-    };
-  }
-
-  const tokenResponse: TokenResponse = {
-    access_token: requiredString(body, 'access_token'),
-    token_type: requiredString(body, 'token_type'),
-    expires_in: requiredPositiveNumber(body, 'expires_in'),
-  };
-  if (tokenResponse.token_type.toLowerCase() !== 'bearer') {
-    return { kind: 'rejected', message: 'AGI Cloud returned an unsupported token type.' };
-  }
-  const refreshToken = typeof body['refresh_token'] === 'string' ? body['refresh_token'] : '';
-  return {
-    kind: 'approved',
-    token: tokenResponse.access_token,
-    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
-    ...(refreshToken === '' ? {} : { refreshToken }),
-  };
+  return pollSharedDeviceAuthorization(origin, deviceCode, post);
 }
 
-/**
- * Rotates a device session against the same endpoint every other surface uses.
- * A transport failure is 'unavailable', not 'revoked': losing the credential
- * because the network blinked would send the editor back through device code.
- */
-export async function refreshDeviceSession(
+export function refreshDeviceSession(
   origin: string,
   refreshToken: string,
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceSessionRefreshResult> {
-  let response: { status: number; body: string };
-  try {
-    response = await post(`${new URL(origin).origin}/api/auth/device/refresh`, {
-      refresh_token: refreshToken,
-    });
-  } catch {
-    return { kind: 'unavailable' };
-  }
-
-  const body = parseRecord(response.body);
-  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
-  if (error === 'terms_acceptance_required') {
-    const url = body['acceptance_url'];
-    return { kind: 'terms-required', acceptanceUrl: typeof url === 'string' ? url : null };
-  }
-  if (error === 'invalid_grant') return { kind: 'revoked' };
-  if (error === 'account_unavailable') {
-    const description = body['error_description'];
-    return {
-      kind: 'account-unavailable',
-      message:
-        typeof description === 'string' && description.trim() !== ''
-          ? description
-          : 'This AGI Cloud account cannot be used right now. Sign in on the web to see why.',
-    };
-  }
-  if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
-
-  try {
-    const tokenType = requiredString(body, 'token_type');
-    if (tokenType.toLowerCase() !== 'bearer') return { kind: 'unavailable' };
-    return {
-      kind: 'renewed',
-      token: requiredString(body, 'access_token'),
-      expiresAt: Date.now() + requiredPositiveNumber(body, 'expires_in') * 1000,
-      refreshToken: requiredString(body, 'refresh_token'),
-    };
-  } catch {
-    return { kind: 'unavailable' };
-  }
+  return refreshSharedDeviceSession(origin, refreshToken, post);
 }
 
 export async function revokeDeviceAuthorization(
@@ -368,17 +211,19 @@ export async function signInToAgiCloud(
       progress.report({
         message: `Approve code ${authorization.userCode}. ${whereTheBrowserOpens}`,
       });
-      const maxPolls = Math.max(
-        1,
-        Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs),
-      );
+      const deadline = Date.now() + authorization.expiresInMs;
+      let pollIntervalMs = authorization.pollIntervalMs;
 
-      for (let attempt = 0; attempt < maxPolls; attempt++) {
+      while (Date.now() + pollIntervalMs <= deadline) {
         if (cancelToken.isCancellationRequested) return false;
-        await new Promise((resolve) => setTimeout(resolve, authorization.pollIntervalMs));
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         if (cancelToken.isCancellationRequested) return false;
 
         const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
+        if (result.kind === 'slow_down') {
+          pollIntervalMs = slowedDevicePollIntervalMs(pollIntervalMs, result);
+          continue;
+        }
         if (result.kind === 'approved') {
           await setAccountToken(secrets, result.token, result.expiresAt, result.refreshToken);
           vscode.window.showInformationMessage('Signed in to AGI Cloud.');

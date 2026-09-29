@@ -1,4 +1,5 @@
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -32,7 +33,7 @@ export function TemporaryChatToggle() {
   };
 
   return (
-    <Pressable
+    <PressableBox
       onPress={handlePress}
       hitSlop={8}
       style={{
@@ -70,6 +71,6 @@ export function TemporaryChatToggle() {
           </View>
         </Animated.View>
       ) : null}
-    </Pressable>
+    </PressableBox>
   );
 }

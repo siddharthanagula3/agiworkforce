@@ -59,6 +59,7 @@ export async function buildNonStreamResponse(
     codeExecutionRequests?: number;
     codeExecutionContainerIds?: string[];
     providerElapsedMs?: number;
+    speed?: 'standard' | 'fast';
     citations?: unknown[];
     search_results?: unknown[];
   },
@@ -90,6 +91,7 @@ export async function buildNonStreamResponse(
     cacheReadInputTokens: llmResponse.cachedInputTokens,
     cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
     cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
+    speed: llmResponse.speed,
   };
   const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
     codeExecutionRequests: llmResponse.codeExecutionRequests,
@@ -144,6 +146,7 @@ export async function buildNonStreamResponse(
         cacheReadTokens: llmResponse.cachedInputTokens,
         cacheWriteTokens: llmResponse.cacheCreationInputTokens,
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+        ...(llmResponse.speed === 'fast' ? { speed: 'fast' as const } : {}),
         ...(llmResponse.webSearchRequests
           ? { webSearchRequests: llmResponse.webSearchRequests }
           : {}),

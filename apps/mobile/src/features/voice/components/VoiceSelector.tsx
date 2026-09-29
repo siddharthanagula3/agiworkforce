@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
-import { View, Pressable, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
+import { View, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -129,7 +130,7 @@ export const VoiceSelector = forwardRef<
     ({ item }: { item: VoiceInfo }) => {
       const isSelected = selectedVoiceId === item.identifier && selectedPresetId === null;
       return (
-        <Pressable
+        <PressableBox
           onPress={() => handleSelectSystemVoice(item)}
           style={{
             flexDirection: 'row',
@@ -164,7 +165,7 @@ export const VoiceSelector = forwardRef<
               {item.quality} · {item.language}
             </Text>
           </View>
-          <Pressable
+          <PressableBox
             onPress={() => handlePlaySample(item)}
             style={{
               padding: 8,
@@ -175,8 +176,8 @@ export const VoiceSelector = forwardRef<
             accessibilityRole="button"
           >
             <Play size={16} color={colors.textSecondary} />
-          </Pressable>
-        </Pressable>
+          </PressableBox>
+        </PressableBox>
       );
     },
     [
@@ -245,7 +246,7 @@ export const VoiceSelector = forwardRef<
               {availableLanguages.map((lang) => {
                 const selected = speechLanguage === lang.code;
                 return (
-                  <Pressable
+                  <PressableBox
                     key={lang.code}
                     onPress={() => handleSelectLanguage(lang.code)}
                     style={{
@@ -269,7 +270,7 @@ export const VoiceSelector = forwardRef<
                     >
                       {lang.label}
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </RNScrollView>
@@ -300,7 +301,7 @@ export const VoiceSelector = forwardRef<
           {VOICE_PRESETS.map((preset) => {
             const isSelected = selectedPresetId === preset.id;
             return (
-              <Pressable
+              <PressableBox
                 key={preset.id}
                 onPress={() => handleSelectPreset(preset.id)}
                 style={{
@@ -343,7 +344,7 @@ export const VoiceSelector = forwardRef<
                 >
                   {preset.description}
                 </Text>
-              </Pressable>
+              </PressableBox>
             );
           })}
         </View>

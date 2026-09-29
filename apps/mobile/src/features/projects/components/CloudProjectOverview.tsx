@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Modal, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -81,7 +82,7 @@ export function CloudProjectOverview({
       testID="project-detail-cloud-header"
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Pressable
+        <PressableBox
           onPress={() => setPickerOpen(true)}
           accessibilityRole="button"
           accessibilityLabel="Change project icon and colour"
@@ -95,7 +96,7 @@ export function CloudProjectOverview({
           }}
         >
           <Icon size={22} color={accent} />
-        </Pressable>
+        </PressableBox>
         <Text
           accessibilityRole="header"
           style={{
@@ -139,7 +140,7 @@ export function CloudProjectOverview({
         statusBarTranslucent
         onRequestClose={() => setPickerOpen(false)}
       >
-        <Pressable
+        <PressableBox
           accessibilityViewIsModal
           style={{ flex: 1, backgroundColor: colors.scrim }}
           onPress={() => setPickerOpen(false)}
@@ -171,7 +172,7 @@ export function CloudProjectOverview({
             {PROJECT_ACCENTS.map((entry) => {
               const selected = details?.accentColor === entry.id;
               return (
-                <Pressable
+                <PressableBox
                   key={entry.id}
                   onPress={() => applyAppearance({ accentColor: entry.id })}
                   accessibilityRole="radio"
@@ -189,7 +190,7 @@ export function CloudProjectOverview({
                   }}
                 >
                   {selected ? <Check size={18} color={colors.white} /> : null}
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>
@@ -206,7 +207,7 @@ export function CloudProjectOverview({
               {PROJECT_ICONS.map((entry) => {
                 const selected = (details?.iconEmoji ?? 'folder') === entry.id;
                 return (
-                  <Pressable
+                  <PressableBox
                     key={entry.id}
                     onPress={() => applyAppearance({ iconEmoji: entry.id })}
                     accessibilityRole="radio"
@@ -222,7 +223,7 @@ export function CloudProjectOverview({
                     }}
                   >
                     <entry.Icon size={20} color={selected ? accent : colors.textSecondary} />
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </View>

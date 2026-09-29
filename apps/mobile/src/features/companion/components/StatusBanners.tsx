@@ -1,5 +1,6 @@
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, motion } from '@/src/ui/theme';
@@ -49,14 +50,14 @@ export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBa
           <Text className="text-xs font-semibold text-red-400 mb-0.5">Desktop unreachable</Text>
           <Text className="text-xs text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
         </View>
-        <Pressable
+        <PressableBox
           onPress={onReconnect}
           className="px-2.5 py-1.5 rounded-lg bg-red-500/20 active:bg-red-500/30"
           accessibilityLabel="Reconnect to desktop"
           accessibilityRole="button"
         >
           <Text className="text-xs text-red-400 font-medium">Reconnect</Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );
@@ -79,14 +80,14 @@ export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBanne
           </Text>
           <Text className="text-xs text-amber-400/70">Desktop connection lost.</Text>
         </View>
-        <Pressable
+        <PressableBox
           onPress={onReconnect}
           className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 active:bg-amber-500/30"
           accessibilityLabel="Reconnect now"
           accessibilityRole="button"
         >
           <RotateCcw size={13} color={colors.agentWarning} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

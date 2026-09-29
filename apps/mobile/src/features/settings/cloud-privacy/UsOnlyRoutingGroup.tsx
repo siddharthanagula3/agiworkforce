@@ -7,6 +7,11 @@ import {
   isBillingPlanTier,
   normalizeSubscriptionAccessTier,
 } from '@agiworkforce/types';
+import {
+  ME_ROUTING_PREFERENCES_PATH,
+  RoutingPreferencesSchema,
+  type RoutingPreferences,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
@@ -14,18 +19,15 @@ import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
-const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+const ROUTING_PREFERENCES_PATH = ME_ROUTING_PREFERENCES_PATH;
 const LABEL = 'Only use AI providers based in the US';
 const US_ONLY_PLAN_LABELS = US_ONLY_ROUTING_TIERS.flatMap((tier) =>
   isBillingPlanTier(tier) ? [BILLING_PLAN_PRICING[tier].label] : [],
 ).join(' and ');
 
-type RoutingPreferences = Record<string, unknown> & { us_only?: boolean };
-
 function readPreferences(body: unknown): RoutingPreferences {
-  return body && typeof body === 'object' && !Array.isArray(body)
-    ? (body as RoutingPreferences)
-    : {};
+  const parsed = RoutingPreferencesSchema.safeParse(body);
+  return parsed.success ? parsed.data : {};
 }
 
 export function UsOnlyRoutingGroup() {

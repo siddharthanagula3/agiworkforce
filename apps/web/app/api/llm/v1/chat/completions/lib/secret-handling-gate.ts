@@ -6,7 +6,11 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { redactSecrets, scanForSecrets, type SecretDetection } from '@/lib/security/secrets-audit';
+import {
+  redactAuditedSecrets,
+  scanForSecrets,
+  type SecretDetection,
+} from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import type { ProcessedRequest } from './request-processor';
@@ -119,7 +123,7 @@ export async function applySecretHandlingToTexts(
   if (action !== 'redacted') return { action, texts: [...texts] };
 
   const names = new Set(high.map((detection) => detection.name));
-  const redacted = texts.map((text) => (text ? redactSecrets(text, names) : text));
+  const redacted = texts.map((text) => (text ? redactAuditedSecrets(text, names) : text));
   const residue = scanForSecrets(redacted.join(MESSAGE_SCAN_BOUNDARY)).filter((detection) =>
     names.has(detection.name),
   );
@@ -159,7 +163,7 @@ export async function applySecretHandlingToRequest(
     // splitting it apart again loses the mapping whenever a replacement eats a
     // boundary, and the fallback for a short split was the caller's own
     // unredacted text.
-    const redactedTexts = spans.map((span) => redactSecrets(span.text, highConfidenceNames));
+    const redactedTexts = spans.map((span) => redactAuditedSecrets(span.text, highConfidenceNames));
 
     const residue = scanForSecrets(redactedTexts.join(MESSAGE_SCAN_BOUNDARY)).filter((detection) =>
       highConfidenceNames.has(detection.name),

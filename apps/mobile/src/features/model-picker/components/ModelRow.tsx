@@ -1,4 +1,5 @@
-import { ActivityIndicator, View, Pressable, Switch } from 'react-native';
+import { ActivityIndicator, View, Switch } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Brain, Check, Cloud, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
@@ -126,7 +127,7 @@ export function ModelRow({
 
   return (
     <View>
-      <Pressable
+      <PressableBox
         testID={`model-row-${model.id}`}
         onPress={handlePress}
         onLongPress={handleLongPress}
@@ -265,7 +266,7 @@ export function ModelRow({
             <Star size={14} color={colors.agentWarning} fill={colors.agentWarning} />
           ) : null}
         </View>
-      </Pressable>
+      </PressableBox>
 
       {isLocked ? (
         <View
@@ -300,7 +301,7 @@ export function ModelRow({
 
       {isDownloading ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
-          <Pressable
+          <PressableBox
             testID={`model-cancel-${model.id}`}
             onPress={handleCancelDownload}
             accessibilityRole="button"
@@ -313,7 +314,7 @@ export function ModelRow({
             >
               Cancel download
             </Text>
-          </Pressable>
+          </PressableBox>
         </View>
       ) : null}
 

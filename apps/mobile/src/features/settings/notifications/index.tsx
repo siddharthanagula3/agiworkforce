@@ -29,7 +29,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   useNotificationPrefsStore,
-  type NotificationCategory,
+  type PushPreferenceGroup,
 } from '@/stores/notificationPrefsStore';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import {
@@ -42,7 +42,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
-import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categories';
+import { PUSH_PREFERENCE_GROUPS, PUSH_PREFERENCE_GROUP_COPY } from './categories';
 import { useAgentActivityPushSync } from './useAgentActivityPushSync';
 import { useTimeFocusSync } from './useTimeFocusSync';
 import { BREAK_REMINDER_MINUTES, type TimeFocusWeekday } from '@agiworkforce/types';
@@ -63,7 +63,7 @@ function breakReminderLabel(minutes: number | null): string {
 }
 
 interface CategoryMeta {
-  id: NotificationCategory;
+  id: PushPreferenceGroup;
   label: string;
   description: string;
   icon: LucideIcon;
@@ -71,7 +71,7 @@ interface CategoryMeta {
 }
 
 function getCategories(c: ColorScheme): CategoryMeta[] {
-  const presentation: Record<NotificationCategory, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
+  const presentation: Record<PushPreferenceGroup, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
     chat_replies: {
       icon: MessageSquare,
       iconColor: c.teal,
@@ -85,9 +85,9 @@ function getCategories(c: ColorScheme): CategoryMeta[] {
       iconColor: c.textMuted,
     },
   };
-  return NOTIFICATION_CATEGORIES.map((id) => ({
+  return PUSH_PREFERENCE_GROUPS.map((id) => ({
     id,
-    ...NOTIFICATION_CATEGORY_COPY[id],
+    ...PUSH_PREFERENCE_GROUP_COPY[id],
     ...presentation[id],
   }));
 }

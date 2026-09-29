@@ -6,7 +6,7 @@ import { createError } from '@/lib/errors';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import {
   appendHandoffMessage,
   getSessionForOwner,
@@ -89,7 +89,7 @@ async function handlePost(request: NextRequest, context: RouteContext) {
   const row = await appendHandoffMessage({
     sessionId,
     author: 'user',
-    body: redactSecrets(parsed.data.body),
+    body: redactTranscriptText(parsed.data.body),
   });
   if (!row) throw createError.internal('Could not send that message');
 

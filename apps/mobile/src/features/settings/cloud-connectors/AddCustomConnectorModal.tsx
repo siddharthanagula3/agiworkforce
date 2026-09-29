@@ -3,11 +3,11 @@ import {
   Modal,
   View,
   TextInput,
-  Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -200,7 +200,7 @@ export function AddCustomConnectorModal({
           ) : null}
 
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-            <Pressable
+            <PressableBox
               onPress={handleClose}
               accessibilityRole="button"
               accessibilityLabel="Cancel"
@@ -214,8 +214,8 @@ export function AddCustomConnectorModal({
               }}
             >
               <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={handleSubmit}
               disabled={!canSubmit}
               accessibilityRole="button"
@@ -241,7 +241,7 @@ export function AddCustomConnectorModal({
                   Add
                 </Text>
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </KeyboardAvoidingView>

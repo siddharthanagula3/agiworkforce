@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
-  Pressable,
   ActivityIndicator,
   Alert,
   Modal,
@@ -10,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import * as DocumentPicker from 'expo-document-picker';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { FileText, Plus, Trash2, Type } from 'lucide-react-native';
@@ -117,7 +117,7 @@ function SourceRow({
       </View>
 
       {/* Remove */}
-      <Pressable
+      <PressableBox
         onPress={handleRemove}
         className="p-2 rounded-lg"
         style={{ backgroundColor: `${colors.agentError}10` }}
@@ -125,7 +125,7 @@ function SourceRow({
         accessibilityRole="button"
       >
         <Trash2 size={15} color={colors.agentError} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -163,7 +163,7 @@ function UploadProgressRow({
           {position}
         </Text>
       </View>
-      <Pressable
+      <PressableBox
         onPress={onCancel}
         accessibilityRole="button"
         accessibilityLabel="Cancel adding sources"
@@ -173,7 +173,7 @@ function UploadProgressRow({
         <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
           Cancel
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -414,7 +414,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     <View className="flex-1">
       {/* Add sources button */}
       <View className="px-4 pt-4 pb-2">
-        <Pressable
+        <PressableBox
           onPress={() => void handleAddSources()}
           disabled={busy || target === 'unknown'}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
@@ -433,8 +433,8 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             Add sources
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={() => setTextEditorOpen(true)}
           disabled={busy || target === 'unknown'}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
@@ -452,7 +452,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           <Text className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>
             Add text
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
 
       {uploadProgress ? (
@@ -521,15 +521,15 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
               }}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-              <Pressable
+              <PressableBox
                 onPress={closeTextEditor}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
                 style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
               >
                 <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={() => void handleSaveText()}
                 disabled={busy || !textBody.trim()}
                 accessibilityRole="button"
@@ -547,7 +547,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
                 ) : (
                   <Text style={{ color: colors.teal, fontWeight: '600' }}>Add</Text>
                 )}
-              </Pressable>
+              </PressableBox>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -561,7 +561,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       ) : loadError ? (
         <View className="items-center">
           <Notice title="Could not load sources" body={loadError} />
-          <Pressable
+          <PressableBox
             onPress={() => void refreshCloudSources()}
             disabled={busy}
             accessibilityRole="button"
@@ -571,7 +571,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
             style={{ backgroundColor: colors.surfaceElevated }}
           >
             <Text style={{ color: colors.textPrimary }}>Try Again</Text>
-          </Pressable>
+          </PressableBox>
         </View>
       ) : sources.length === 0 ? (
         <Notice

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -140,7 +141,7 @@ export function RecurrencePicker({
           {MOBILE_SUPPORTED_SCHEDULE_RECURRENCES.map((recurrence) => {
             const selected = value === recurrence;
             return (
-              <Pressable
+              <PressableBox
                 key={recurrence}
                 onPress={() => handleTypeChange(recurrence)}
                 className={`px-4 py-2 rounded-full border ${
@@ -161,7 +162,7 @@ export function RecurrencePicker({
                 >
                   {RECURRENCE_LABELS[recurrence]}
                 </Text>
-              </Pressable>
+              </PressableBox>
             );
           })}
         </View>
@@ -182,7 +183,7 @@ export function RecurrencePicker({
             {DAY_LABELS.map((label, idx) => {
               const selected = daysOfWeek.includes(idx);
               return (
-                <Pressable
+                <PressableBox
                   key={idx}
                   onPress={() => handleDayToggle(idx)}
                   className={`w-9 h-9 rounded-full items-center justify-center ${
@@ -199,7 +200,7 @@ export function RecurrencePicker({
                   >
                     {label}
                   </Text>
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>
@@ -218,7 +219,7 @@ export function RecurrencePicker({
             {MONTH_DAYS.map((day) => {
               const selected = dayOfMonth === day;
               return (
-                <Pressable
+                <PressableBox
                   key={day}
                   onPress={() => handleDayOfMonthChange(day)}
                   className={`w-9 h-9 rounded-lg items-center justify-center ${
@@ -235,7 +236,7 @@ export function RecurrencePicker({
                   >
                     {day}
                   </Text>
-                </Pressable>
+                </PressableBox>
               );
             })}
           </ScrollView>

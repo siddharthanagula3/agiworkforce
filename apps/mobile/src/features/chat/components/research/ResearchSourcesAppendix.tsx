@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -65,7 +66,7 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
         <WebSearchResultCard key={`${source.url}-${index}`} result={source} />
       ))}
       {hidden > 0 || expanded ? (
-        <Pressable
+        <PressableBox
           onPress={() => setExpanded((value) => !value)}
           accessibilityRole="button"
           accessibilityLabel={
@@ -85,7 +86,7 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
           ) : (
             <ChevronDown size={13} color={colors.textSecondary} />
           )}
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );

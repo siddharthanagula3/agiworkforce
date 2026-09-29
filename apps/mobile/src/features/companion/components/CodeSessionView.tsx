@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Check,
   ChevronRight,
@@ -63,7 +64,7 @@ function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
 
   return (
     <View>
-      <Pressable
+      <PressableBox
         onPress={() => setExpanded((open) => !open)}
         disabled={!tool.output}
         accessibilityRole="button"
@@ -86,7 +87,7 @@ function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
             <ChevronRight size={12} color={colors.textMuted} />
           </View>
         ) : null}
-      </Pressable>
+      </PressableBox>
       {expanded && tool.output ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <Text
@@ -128,7 +129,7 @@ function PlanUsageLine() {
   ].filter((part): part is string => part !== null);
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() =>
         router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
       }
@@ -139,7 +140,7 @@ function PlanUsageLine() {
       <Text className="text-xs" style={{ color: colors.textMuted }} numberOfLines={1}>
         {`Plan usage · ${parts.join(' · ')}`}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -243,7 +244,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             </Text>
           ) : null}
           <View className="flex-row gap-2">
-            <Pressable
+            <PressableBox
               onPress={() =>
                 void answerCodeApproval(
                   rootId,
@@ -261,8 +262,8 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               <Text className="text-xs font-semibold" style={{ color: colors.agentError }}>
                 Deny
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={() =>
                 void answerCodeApproval(rootId, threadId, approval.turnId, approval.requestId, true)
               }
@@ -277,7 +278,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
                 Approve
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </Card>
       ))}
@@ -311,7 +312,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           ) : null}
           <View className="flex-row items-center justify-end gap-2 pt-2">
             {running && thread.activeTurnId ? (
-              <Pressable
+              <PressableBox
                 onPress={() => void interruptCodeTurn(rootId, threadId, thread.activeTurnId ?? '')}
                 className="flex-row items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 active:bg-red-500/20"
                 accessibilityRole="button"
@@ -321,9 +322,9 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                 <Text className="text-xs font-semibold" style={{ color: colors.agentError }}>
                   Stop
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
-            <Pressable
+            <PressableBox
               onPress={() => void handleSend()}
               disabled={!canSend}
               className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${canSend ? '' : 'bg-white/10'}`}
@@ -344,7 +345,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               >
                 {sending ? 'Sending…' : 'Send'}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
           {sendError ? (
             <Text
@@ -476,7 +477,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
         <Card variant="elevated">
           <SectionTitle>Conversation</SectionTitle>
           {thread.transcript?.hasEarlier || !thread.transcript ? (
-            <Pressable
+            <PressableBox
               onPress={() =>
                 void requestCodeTranscript(
                   rootId,
@@ -490,7 +491,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               <Text className="text-xs font-semibold" style={{ color: colors.teal }}>
                 {thread.transcript ? 'Load earlier messages' : 'Show the full conversation'}
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
           <View className="gap-2">
             {(thread.transcript?.messages ?? thread.messages).map((message, index) => (

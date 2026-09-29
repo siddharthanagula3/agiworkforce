@@ -66,7 +66,11 @@ export const ManagedCloudProjectKnowledgeFileSchema = z.object({
 
 export const ManagedCloudProjectKnowledgeReindexResponseSchema = z.object({
   indexing: ManagedCloudProjectKnowledgeIndexStateSchema.nullable(),
+  dispatched: z.boolean().optional(),
 });
+export type ManagedCloudProjectKnowledgeReindexResponse = z.input<
+  typeof ManagedCloudProjectKnowledgeReindexResponseSchema
+>;
 
 export const ManagedCloudProjectKnowledgeListResponseSchema = z.object({
   files: z.array(ManagedCloudProjectKnowledgeFileSchema),

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
-import { AppState, Pressable, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { create } from 'zustand';
 import {
   ALL_PLATFORM_CAPABILITIES,
@@ -148,14 +149,14 @@ export function CapabilityUnavailable({
       <Text style={styles.title}>{label} is unavailable right now</Text>
       <Text style={styles.body}>{CAPABILITY_SWITCHED_OFF_BODY}</Text>
       {onDismiss ? (
-        <Pressable
+        <PressableBox
           onPress={onDismiss}
           style={styles.button}
           accessibilityRole="button"
           accessibilityLabel={dismissLabel}
         >
           <Text style={styles.buttonText}>{dismissLabel}</Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );

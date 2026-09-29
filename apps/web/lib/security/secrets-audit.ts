@@ -100,7 +100,7 @@ export function containsSecrets(content: string): boolean {
   return false;
 }
 
-export function redactSecrets(content: string, allowedNames?: ReadonlySet<string>): string {
+export function redactAuditedSecrets(content: string, allowedNames?: ReadonlySet<string>): string {
   let redacted = content;
 
   for (const { name, pattern } of SECRET_PATTERNS) {
@@ -195,7 +195,7 @@ export function redactSecretsFromValue<T>(value: T): ValueSecretScanResult<T> {
   const detections = scanForSecrets(strings.join(VALUE_SCAN_BOUNDARY));
   if (detections.length === 0) return { value, detections };
 
-  const redactedStrings = strings.map((text) => redactSecrets(text));
+  const redactedStrings = strings.map((text) => redactAuditedSecrets(text));
 
   const residue = scanForSecrets(redactedStrings.join(VALUE_SCAN_BOUNDARY));
   if (residue.length > 0) {

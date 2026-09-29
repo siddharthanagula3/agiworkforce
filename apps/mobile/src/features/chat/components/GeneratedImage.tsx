@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -113,7 +114,7 @@ export function GeneratedImage({
 
   return (
     <View style={{ marginVertical: 6 }}>
-      <Pressable
+      <PressableBox
         onPress={onPress}
         onLongPress={handleLongPress}
         accessibilityLabel={revisedPrompt ?? 'Generated image'}
@@ -159,7 +160,7 @@ export function GeneratedImage({
             accessibilityLabel={revisedPrompt ?? 'Generated image'}
           />
         </View>
-      </Pressable>
+      </PressableBox>
 
       {/* Revised prompt text */}
       {revisedPrompt && loadState === 'loaded' ? (

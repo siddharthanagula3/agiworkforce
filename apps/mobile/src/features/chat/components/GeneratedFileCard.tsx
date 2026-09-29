@@ -1,4 +1,5 @@
-import { Image, Pressable, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import type { ReactElement } from 'react';
 import {
   AlertTriangle,
@@ -240,7 +241,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
         </Text>
       ) : null}
       {onOpenSourceSession && presentation.sourceSessionLabel ? (
-        <Pressable
+        <PressableBox
           onPress={onOpenSourceSession}
           accessibilityRole="button"
           accessibilityLabel={`Open ${presentation.sourceSessionLabel}`}
@@ -256,7 +257,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
           >
             {presentation.sourceSessionLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );

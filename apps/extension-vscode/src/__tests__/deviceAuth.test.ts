@@ -388,6 +388,35 @@ describe('VS Code AGI Cloud credential storage', () => {
     await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal-credential');
   });
 
+  it('adds five seconds to the poll interval each time the server says slow_down', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_750_000_000_000);
+    const secrets = createSecretStorage();
+    const polledAt: number[] = [];
+    let polls = 0;
+    const post = vi.fn<DeviceAuthPost>(async (url) => {
+      if (url.endsWith('/api/auth/device/code')) return { status: 200, body: startBody };
+      polledAt.push(Date.now());
+      polls += 1;
+      return polls < 3
+        ? { status: 429, body: JSON.stringify({ error: 'slow_down' }) }
+        : {
+            status: 200,
+            body: JSON.stringify({
+              access_token: 'signed-developer-token',
+              token_type: 'Bearer',
+              expires_in: 604800,
+            }),
+          };
+    });
+
+    const signedIn = signInToAgiCloud(secrets, post, vi.fn().mockResolvedValue(true));
+    await vi.advanceTimersByTimeAsync(5_000 + 10_000 + 15_000);
+
+    await expect(signedIn).resolves.toBe(true);
+    expect(polledAt.map((at) => at - 1_750_000_000_000)).toEqual([5_000, 15_000, 30_000]);
+  });
+
   it('keeps a denied sign-in out of storage entirely', async () => {
     vi.useFakeTimers();
     const secrets = createSecretStorage();

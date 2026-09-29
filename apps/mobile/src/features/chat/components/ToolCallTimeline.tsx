@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { View, Pressable, Modal, ScrollView } from 'react-native';
+import { View, Modal, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   ChevronDown,
   ChevronRight,
@@ -215,7 +216,7 @@ function ToolCallTimelineRow({
 
   return (
     <View>
-      <Pressable
+      <PressableBox
         onPress={toggle}
         disabled={!hasBody}
         accessibilityRole={hasBody ? 'button' : 'text'}
@@ -273,7 +274,7 @@ function ToolCallTimelineRow({
             )
           ) : null}
         </View>
-      </Pressable>
+      </PressableBox>
 
       {isSearch ? <WebSearchToolCard tool={tool} showSources={!expanded} /> : null}
 
@@ -302,7 +303,7 @@ function ToolCallTimelineRow({
                     : 'Send a new message to continue.'}
                 </Text>
                 {onResendApproval ? (
-                  <Pressable
+                  <PressableBox
                     onPress={onResendApproval}
                     accessibilityRole="button"
                     accessibilityLabel="Resend"
@@ -323,7 +324,7 @@ function ToolCallTimelineRow({
                     >
                       Resend
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 ) : null}
               </>
             ) : (
@@ -436,7 +437,7 @@ function ToolCallTimelineRow({
               ) : null}
               <ExecutionErrorOutput tool={tool} fontSize={11.5} numberOfLines={12} />
               {needsFullScreen(tool) ? (
-                <Pressable
+                <PressableBox
                   onPress={() => onOpenFullScreen(tool)}
                   accessibilityRole="button"
                   accessibilityLabel={`View full output for ${nameText}`}
@@ -453,7 +454,7 @@ function ToolCallTimelineRow({
                   >
                     View full output
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           )}
@@ -585,7 +586,7 @@ export function ToolCallDetailsSheet({
           >
             {label.displayName}
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close tool details"
@@ -600,7 +601,7 @@ export function ToolCallDetailsSheet({
             }}
           >
             <X size={16} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
           {tool.searchResults?.length ? (
@@ -733,7 +734,7 @@ export function ToolCallTimeline({
 
   return (
     <View style={{ marginBottom: 4 }}>
-      <Pressable
+      <PressableBox
         onPress={handleToggle}
         accessibilityRole="button"
         accessibilityLabel={`${summary}${collapsed ? ', collapsed' : ', expanded'}`}
@@ -745,7 +746,7 @@ export function ToolCallTimeline({
         ) : (
           <ChevronDown size={12} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {!collapsed ? (
         <View>
