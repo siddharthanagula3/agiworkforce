@@ -844,6 +844,56 @@ impl AgentSession {
             .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
     }
 
+    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+        const MAX_RESOURCE_CHARS: usize = 50_000;
+        let privacy_mode = self.privacy_mode;
+        let Some(manager) = self.mcp_manager.as_mut() else {
+            return (prompt.to_string(), Vec::new());
+        };
+        let mut attached = String::new();
+        let mut notices = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for token in prompt.split_whitespace() {
+            let Some((server, uri)) = token
+                .strip_prefix('@')
+                .and_then(|mention| mention.split_once(':'))
+            else {
+                continue;
+            };
+            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+                continue;
+            }
+            match manager.read_resource(server, uri, privacy_mode).await {
+                Ok(contents) => {
+                    for content in contents {
+                        match content.text {
+                            Some(text) => {
+                                let shown: String = text.chars().take(MAX_RESOURCE_CHARS).collect();
+                                attached.push_str(&format!(
+                                    "\n\n<mcp_resource server=\"{server}\" uri=\"{}\">\n{shown}\n</mcp_resource>",
+                                    content.uri
+                                ));
+                                if shown.len() < text.len() {
+                                    notices.push(format!(
+                                        "{server}:{} was cut to {MAX_RESOURCE_CHARS} characters.",
+                                        content.uri
+                                    ));
+                                }
+                            }
+                            None => notices.push(format!(
+                                "{server}:{} is not text, so it was not added.",
+                                content.uri
+                            )),
+                        }
+                    }
+                }
+                Err(error) => notices.push(format!("Could not read {server}:{uri}: {error:#}")),
+            }
+        }
+        (format!("{prompt}{attached}"), notices)
+    }
+
     fn permitted_mcp_definitions(&self, manager: &crate::mcp::McpManager) -> Vec<ToolDefinition> {
         manager
             .tool_definitions(self.privacy_mode)
