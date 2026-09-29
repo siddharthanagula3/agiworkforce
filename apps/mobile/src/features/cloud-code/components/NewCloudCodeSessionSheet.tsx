@@ -147,6 +147,7 @@ export function NewCloudCodeSessionSheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
+      accessibilityViewIsModal
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
