@@ -32,6 +32,7 @@ import {
   parseToolStatusDelta,
   parseToolResultDelta,
   parseToolApprovalRequestDelta,
+  parseToolInputRequestDelta,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   readAttachmentTruncationHeader,
@@ -89,6 +90,14 @@ export interface StreamToolApprovalRequest {
   args?: unknown;
 }
 
+export interface StreamToolInputRequest {
+  tool_call_id: string;
+  name: string;
+  connector_id?: string;
+  input_requests: Record<string, unknown>;
+  round?: number;
+}
+
 export interface StreamGeneratedFile {
   id: string;
   file_name: string;
@@ -107,6 +116,7 @@ export interface StreamDelta {
   x_tool_status?: StreamToolStatus;
   x_tool_result?: StreamToolResult;
   x_tool_approval_request?: StreamToolApprovalRequest;
+  x_tool_input_request?: StreamToolInputRequest;
   x_agent_event?: AgentEventEnvelope;
   x_code_result?: unknown;
   x_search_results?: unknown;
@@ -149,6 +159,14 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
   if (delta.x_tool_approval_request !== undefined) {
     delta.x_tool_approval_request =
       parseToolApprovalRequestDelta(delta.x_tool_approval_request) ?? delta.x_tool_approval_request;
+  }
+  if (delta.x_tool_input_request !== undefined) {
+    const inputRequest = parseToolInputRequestDelta(delta.x_tool_input_request);
+    if (inputRequest) {
+      delta.x_tool_input_request = inputRequest;
+    } else {
+      delete delta.x_tool_input_request;
+    }
   }
   if (delta.x_agent_event !== undefined) {
     const agentEvent = parseAgentEventDelta(delta.x_agent_event);
@@ -278,6 +296,12 @@ interface ApprovalResumeRequest {
   guidance?: string;
 }
 
+interface ToolInputResumeRequest {
+  run_id: string;
+  operationId: string;
+  tool_inputs: Array<{ tool_call_id: string; input_responses: Record<string, unknown> }>;
+}
+
 interface DeviceStepResumeRequest {
   run_id: string;
   operationId: string;
@@ -303,7 +327,11 @@ export interface FreeQuotaStreamRequest {
 
 async function attemptStream(
   body:
-    InitialStreamRequest | ApprovalResumeRequest | DeviceStepResumeRequest | FreeQuotaStreamRequest,
+    | InitialStreamRequest
+    | ApprovalResumeRequest
+    | ToolInputResumeRequest
+    | DeviceStepResumeRequest
+    | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
   path: string = COMPLETIONS_PATH,
@@ -735,6 +763,14 @@ export function streamToolApprovalResume(
   return streamCheckpointResume(body, callbacks, TOOL_APPROVAL_RESUME_PATH, signal);
 }
 
+export function streamToolInputResume(
+  body: ToolInputResumeRequest,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamCheckpointResume(body, callbacks, TOOL_INPUT_RESUME_PATH, signal);
+}
+
 export function streamDeviceStepResume(
   body: DeviceStepResumeRequest,
   callbacks: StreamCallbacks,
@@ -744,7 +780,7 @@ export function streamDeviceStepResume(
 }
 
 async function streamCheckpointResume(
-  body: ApprovalResumeRequest | DeviceStepResumeRequest,
+  body: ApprovalResumeRequest | ToolInputResumeRequest | DeviceStepResumeRequest,
   callbacks: StreamCallbacks,
   path: string,
   signal?: AbortSignal,
