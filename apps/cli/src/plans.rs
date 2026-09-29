@@ -34,7 +34,7 @@ const CLOUD_CHAT_TIERS: &[&str] = &[
 
 const PRO_TIERS: &[&str] = &["pro", "max", "max_15x", "team", "enterprise"];
 
-const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 13] = [
+const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 16] = [
     ("managed_chat", CLOUD_CHAT_TIERS),
     ("chat_tools", CLOUD_CHAT_TIERS),
     ("projects", CLOUD_CHAT_TIERS),
@@ -42,15 +42,18 @@ const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 13] = [
     ("skills_connectors", CLOUD_CHAT_TIERS),
     ("cloud_sync", CLOUD_CHAT_TIERS),
     ("agi_work", PRO_TIERS),
+    ("deep_research", PRO_TIERS),
     ("image_generation", PRO_TIERS),
     ("video_generation", &["max_15x", "enterprise"]),
     ("managed_api", PRO_TIERS),
     ("developer_surfaces", PRO_TIERS),
+    ("slack_app", PRO_TIERS),
+    ("artifact_connectors", PRO_TIERS),
     ("team_admin", &["team", "enterprise"]),
     ("enterprise_controls", &["enterprise"]),
 ];
 
-const PLAN_CAPABILITY_LABELS: [(&str, &str); 13] = [
+const PLAN_CAPABILITY_LABELS: [(&str, &str); 16] = [
     (
         "managed_chat",
         "Managed Cloud chat on web, desktop, mobile and Chrome",
@@ -61,10 +64,13 @@ const PLAN_CAPABILITY_LABELS: [(&str, &str); 13] = [
     ("skills_connectors", "Skills and connectors"),
     ("cloud_sync", "Sync across devices"),
     ("agi_work", "AGI Work"),
+    ("deep_research", "Deep Research"),
     ("image_generation", "Image generation"),
     ("video_generation", "Video generation"),
     ("managed_api", "Managed API access"),
     ("developer_surfaces", "Managed Cloud in the CLI and VS Code"),
+    ("slack_app", "AGI Workforce in Slack"),
+    ("artifact_connectors", "Connected apps in published apps"),
     ("team_admin", "Team administration"),
     ("enterprise_controls", "SSO, SCIM and admin controls"),
 ];

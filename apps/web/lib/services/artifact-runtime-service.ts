@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
+import type { NextRequest } from 'next/server';
+
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { randomUUID } from 'node:crypto';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -55,6 +58,10 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
+import type {
+  ArtifactRuntimeConnector,
+  ArtifactRuntimeConnectorTool,
+} from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
 export const ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -265,23 +272,34 @@ function runsWithoutAsking(
   );
 }
 
-export async function buildArtifactConnectorPlan(input: {
+interface ArtifactConnectorScope {
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
   planTier: string;
-  modelKey: string;
   connectors: readonly string[];
-}): Promise<ArtifactConnectorPlan | null> {
+  request: NextRequest;
+}
+
+interface ArtifactConnectorAccess {
+  toolApprovalPolicy: ToolApprovalPolicy;
+  connectorPermissions: ConnectorToolPermissions;
+  tools: WebMcpToolDef[];
+}
+
+type ArtifactToolStanding = 'available' | ArtifactRuntimeConnectorTool['unavailableReason'];
+
+async function loadArtifactConnectorAccess(
+  input: ArtifactConnectorScope,
+): Promise<ArtifactConnectorAccess | null> {
   const policy = getTierPolicy(input.planTier);
   if (
-    getModelMetadataById(input.modelKey)?.capabilities?.tools !== true ||
     policy.allowToolUse === false ||
     policy.allowMCP === false ||
-    !(await connectorsAllowedWithoutRequest({
-      userId: input.userId,
+    !(await connectorsAllowedForTurn(input.request, input.userId, {
       organizationId: input.organizationId,
-      planTier: input.planTier,
+      subscriptionTier: input.planTier,
+      chatSurface: resolveCloudChatSurface(input.request),
     }))
   ) {
     return null;
@@ -296,18 +314,81 @@ export async function buildArtifactConnectorPlan(input: {
     organizationId: input.organizationId,
     isToolDenied: connectorPermissions.isConnectorToolDenied,
   });
-  const mcpTools = catalog.tools.filter(
-    (tool) =>
-      tool.origin === 'connector' &&
-      input.connectors.includes(tool.serverId) &&
-      !connectorPermissions.isDenied(tool.qualifiedName) &&
-      runsWithoutAsking(tool.qualifiedName, toolApprovalPolicy, connectorPermissions),
+  return {
+    toolApprovalPolicy,
+    connectorPermissions,
+    tools: catalog.tools.filter(
+      (tool) => tool.origin === 'connector' && input.connectors.includes(tool.serverId),
+    ),
+  };
+}
+
+function artifactToolStanding(
+  tool: WebMcpToolDef,
+  access: ArtifactConnectorAccess,
+): ArtifactToolStanding {
+  if (access.connectorPermissions.isDenied(tool.qualifiedName)) return 'blocked';
+  return runsWithoutAsking(
+    tool.qualifiedName,
+    access.toolApprovalPolicy,
+    access.connectorPermissions,
+  )
+    ? 'available'
+    : 'needs_approval';
+}
+
+function artifactConnectorLabel(id: string, tools: readonly WebMcpToolDef[]): string {
+  return (
+    tools.find((tool) => tool.serverId === id && tool.serverLabel)?.serverLabel ??
+    id
+      .split(/[_.-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
   );
-  const usable = new Set(mcpTools.map((tool) => tool.serverId));
+}
+
+export async function describeArtifactConnectors(
+  input: ArtifactConnectorScope,
+): Promise<ArtifactRuntimeConnector[] | null> {
+  const access = await loadArtifactConnectorAccess(input);
+  if (!access) return null;
+  return input.connectors.map((id) => {
+    const tools = access.tools.filter((tool) => tool.serverId === id);
+    return {
+      id,
+      label: artifactConnectorLabel(id, access.tools),
+      connected: tools.length > 0,
+      tools: tools.map((tool) => {
+        const standing = artifactToolStanding(tool, access);
+        return {
+          name: tool.qualifiedName,
+          label: tool.toolName,
+          description: tool.description,
+          available: standing === 'available',
+          unavailableReason: standing === 'available' ? null : standing,
+        };
+      }),
+    };
+  });
+}
+
+export async function buildArtifactConnectorPlan(
+  input: ArtifactConnectorScope & { modelKey: string; allowedTools: readonly string[] },
+): Promise<ArtifactConnectorPlan | null> {
+  if (getModelMetadataById(input.modelKey)?.capabilities?.tools !== true) return null;
+  const access = await loadArtifactConnectorAccess(input);
+  if (!access) return null;
+  const allowed = new Set(input.allowedTools);
+  const available = access.tools.filter(
+    (tool) => artifactToolStanding(tool, access) === 'available',
+  );
+  const mcpTools = available.filter((tool) => allowed.has(tool.qualifiedName));
+  const usable = new Set(available.map((tool) => tool.serverId));
   return {
     mcpTools,
-    connectorPermissions,
-    toolApprovalPolicy,
+    connectorPermissions: access.connectorPermissions,
+    toolApprovalPolicy: access.toolApprovalPolicy,
     connectorExecutor: makeUserConnectorExecutor(input.userId, input.organizationId),
     unusable: input.connectors.filter((connector) => !usable.has(connector)),
   };

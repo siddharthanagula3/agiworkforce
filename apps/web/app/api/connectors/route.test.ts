@@ -79,6 +79,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: (...args: unknown[]) => mocks.evictCustomCaches(...args),
 }));
 vi.mock('@/lib/connectors/oauth-setup', () => ({
+  regionRequirement: vi.fn(() => null),
   describeConnectorSetup: (...args: unknown[]) => mocks.describeSetup(...args),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
@@ -138,6 +139,9 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
   resolveConnectorAccessToken: vi.fn(),
 }));
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/agi/installations/new'),
   isGitHubAppConfigured: vi.fn(() => true),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
