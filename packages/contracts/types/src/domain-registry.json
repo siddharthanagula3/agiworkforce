@@ -75,6 +75,7 @@
         "device_pairings",
         "device_registrations",
         "mobile_devices",
+        "mobile_intent_tokens",
         "web_push_subscriptions"
       ]
     },
