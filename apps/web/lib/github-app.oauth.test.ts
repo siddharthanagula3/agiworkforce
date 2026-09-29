@@ -118,6 +118,27 @@ describe('GitHub App user authorization ownership proof', () => {
     expect(without.searchParams.has('code_challenge_method')).toBe(false);
   });
 
+  it("names an installation's account from the app's own view of it", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: 987654, account: { login: 'acme', type: 'Organization' } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const github = await loadConfiguredGitHubApp(Buffer.from(TEST_PRIVATE_KEY).toString('base64'));
+
+    await expect(github.getGitHubInstallationAccount(987654)).resolves.toEqual({
+      accountLogin: 'acme',
+      accountType: 'Organization',
+    });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/app/installations/987654');
+    expect((init.headers as Record<string, string>)['Authorization']).toMatch(/^Bearer /);
+
+    mockFetch.mockResolvedValue(new Response('{}', { status: 404 }));
+    await expect(github.getGitHubInstallationAccount(987654)).resolves.toBeNull();
+  });
+
   it('checks every page of user-accessible installations and returns GitHub metadata', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({
       id: index + 1,

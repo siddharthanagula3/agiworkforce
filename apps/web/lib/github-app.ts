@@ -355,6 +355,46 @@ export async function getGitHubAppJwt(): Promise<string> {
   return `${signingInput}.${signature}`;
 }
 
+const gitHubAppInstallationSchema = z.object({
+  id: z.number().int().positive(),
+  account: z.object({
+    login: z.string().min(1).max(256),
+    type: z.enum(['User', 'Organization']),
+  }),
+});
+
+export interface GitHubInstallationAccount {
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+}
+
+export async function getGitHubInstallationAccount(
+  installationId: number,
+): Promise<GitHubInstallationAccount | null> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0) return null;
+  const jwt = await getGitHubAppJwt();
+  const response = await fetch(
+    buildGitHubApiUrl(`/app/installations/${encodeURIComponent(String(installationId))}`),
+    {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+      },
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`GitHub installation lookup failed: ${response.status}`);
+  }
+  const parsed = gitHubAppInstallationSchema.safeParse(await response.json());
+  if (!parsed.success || parsed.data.id !== installationId) {
+    throw new Error('GitHub installation response was invalid');
+  }
+  return { accountLogin: parsed.data.account.login, accountType: parsed.data.account.type };
+}
+
 export type GitHubInstallationDeletion =
   | { status: 'deleted' }
   | { status: 'already-absent' }

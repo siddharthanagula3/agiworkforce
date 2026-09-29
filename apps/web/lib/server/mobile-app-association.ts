@@ -38,9 +38,16 @@ export function appleAppSiteAssociationResponse(): Response {
                 '/': '/open/*',
                 comment: 'A notice or email link to a task, report, schedule, artifact or file.',
               },
+              {
+                '/': '/github/installed',
+                comment: 'A GitHub App install started in the app, returned for confirmation.',
+              },
             ],
           },
         ],
+      },
+      webcredentials: {
+        apps: [IOS_APPLICATION_IDENTIFIER],
       },
     },
     { headers: ASSOCIATION_HEADERS },
