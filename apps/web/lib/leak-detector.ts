@@ -11,7 +11,7 @@
  * request; the registry's broader detectors are scan-and-warn only.
  *
  * Consumers must not mutate the array. Patterns are unanchored and non-global,
- * so a redactor has to rebuild them with the `g` flag (see `redactSecrets`).
+ * so a redactor has to rebuild them with the `g` flag (see `globalRulePattern` in @agiworkforce/utils).
  */
 export { ASSERTABLE_SECRET_PATTERNS as SECRET_PATTERNS } from './security/secret-patterns';
 
