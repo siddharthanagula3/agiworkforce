@@ -1136,6 +1136,17 @@ enum CodeSubcommand {
         /// Session id, as `agi code list` prints it.
         id: String,
     },
+    /// List the approvals cloud Code sessions are waiting on.
+    Approvals {
+        /// Only this session. Omit to check every open session.
+        id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Approve a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Approve { handle: String },
+    /// Reject a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Reject { handle: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2573,6 +2584,75 @@ async fn handle_code_command(
                 *json,
                 output,
             )
+        }
+        CodeSubcommand::Approvals { id, json } => {
+            let sessions = match id {
+                Some(id) => vec![
+                    code_sessions::show(&client, id)
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?
+                        .session,
+                ],
+                None => code_sessions::list(&client, "open")
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?,
+            };
+            let mut pending = Vec::new();
+            for session in sessions {
+                let approvals = code_sessions::approvals(&client, &session.id)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                if !approvals.is_empty() {
+                    pending.push((session, approvals));
+                }
+            }
+            let value = serde_json::to_value(
+                pending
+                    .iter()
+                    .flat_map(|(session, approvals)| {
+                        approvals.iter().map(move |approval| {
+                            serde_json::json!({
+                                "handle": code_sessions::approval_handle(&session.id, approval),
+                                "sessionId": session.id,
+                                "approval": approval,
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )?;
+            render_structured(
+                value,
+                code_sessions::render_approvals(&pending),
+                *json,
+                output,
+            )
+        }
+        CodeSubcommand::Approve { handle } | CodeSubcommand::Reject { handle } => {
+            let approve = matches!(action, CodeSubcommand::Approve { .. });
+            let (session, turn, step) =
+                code_sessions::parse_approval_handle(handle).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Use the handle `agi code approvals` prints, as <session>/<turn>/<step>."
+                    )
+                })?;
+            println!(
+                "{} the step; the session continues in the cloud, which can take a few minutes.",
+                if approve { "Approving" } else { "Rejecting" }
+            );
+            let outcome = code_sessions::decide_approval(&client, session, turn, step, approve)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let status = outcome
+                .get("status")
+                .or_else(|| outcome.get("stopReason"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("recorded");
+            println!(
+                "{} ({}). `agi code show {session}` shows what it did next.",
+                if approve { "Approved" } else { "Rejected" },
+                terminal_text::sanitize_terminal_text(status)
+            );
+            Ok(())
         }
         CodeSubcommand::Show { id, json } => {
             let detail = code_sessions::show(&client, id)
