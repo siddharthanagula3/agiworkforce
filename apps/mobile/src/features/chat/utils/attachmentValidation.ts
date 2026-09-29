@@ -4,6 +4,8 @@ import {
   getModelMetadataById,
   getRegistryRoute,
   listManagedRoutesForModel,
+  OFFICE_ATTACHMENT_EXTENSIONS,
+  OFFICE_ATTACHMENT_MIME_TYPES,
 } from '@agiworkforce/types';
 import { isParseableDocument } from '@/services/docParser';
 import { isHeicImage } from '@/src/features/media/image-normalization';
@@ -44,6 +46,14 @@ export interface AttachmentValidationResult<T> {
  * has not resolved its destination is never the reason an unsendable file gets
  * staged. The production caller (ChatInput) always passes it.
  */
+function isOfficeDocument(a: ValidatableAttachment): boolean {
+  const extension = a.fileName.split('.').pop()?.toLowerCase() ?? '';
+  return (
+    OFFICE_ATTACHMENT_MIME_TYPES.includes(a.mimeType.toLowerCase()) ||
+    OFFICE_ATTACHMENT_EXTENSIONS.includes(extension)
+  );
+}
+
 export function isAcceptableAttachment(
   a: ValidatableAttachment,
   destination: AttachmentDestination = 'cloud',
@@ -65,7 +75,10 @@ export function isAcceptableAttachment(
     return true;
   }
   if (isParseableDocument(a.uri, a.mimeType)) return true;
-  return `“${a.fileName}” isn’t a supported file type. Try an image, PDF, text, CSV, Markdown, or code file.`;
+  if (destination === 'cloud' && isOfficeDocument(a)) return true;
+  return destination === 'cloud'
+    ? `“${a.fileName}” isn’t a supported file type. Try an image, PDF, Word, Excel, PowerPoint, text, CSV, Markdown, or code file.`
+    : `“${a.fileName}” isn’t a supported file type on this device. Try an image, PDF, text, CSV, Markdown, or code file, or switch to AGI Cloud for Word, Excel and PowerPoint.`;
 }
 
 export function validateAttachments<T extends ValidatableAttachment>(
