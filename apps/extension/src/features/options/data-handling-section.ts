@@ -5,6 +5,12 @@ import {
 } from '../privacy/dataHandling';
 import { CLOUD_MIRRORING_STORAGE_KEY, parseCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import {
+  DESKTOP_TAB_LIST_LABEL,
+  DESKTOP_TAB_LIST_STORAGE_KEY,
+  describeDesktopTabListConsent,
+  parseDesktopTabListConsent,
+} from '../privacy/desktopTabList';
+import {
   ERROR_REPORTING_CONSENT_STORAGE_KEY,
   parseErrorReportingConsent,
 } from '../observability/errorReportingConsent';
@@ -168,7 +174,23 @@ export function createDataHandlingSection(storage: DataHandlingStorage): DataHan
   });
   element.appendChild(errorReporting.row);
 
-  const loaded = Promise.all([cloudMirroring.loaded, errorReporting.loaded]).then(() => undefined);
+  const desktopTabList = buildToggleRow(storage, {
+    idPrefix: 'opt-desktop-tab-list',
+    label: DESKTOP_TAB_LIST_LABEL,
+    storageKey: DESKTOP_TAB_LIST_STORAGE_KEY,
+    defaultChecked: false,
+    parse: parseDesktopTabListConsent,
+    describe: describeDesktopTabListConsent,
+    loadFailureMessage: LOAD_FAILURE_TEXT,
+    saveFailureMessage: SAVE_FAILURE_TEXT,
+  });
+  element.appendChild(desktopTabList.row);
+
+  const loaded = Promise.all([
+    cloudMirroring.loaded,
+    errorReporting.loaded,
+    desktopTabList.loaded,
+  ]).then(() => undefined);
 
   return {
     element,

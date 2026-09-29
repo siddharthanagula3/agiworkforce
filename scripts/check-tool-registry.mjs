@@ -69,6 +69,7 @@ export const UNDECLARED_BASELINE = new Map([
   ['device_type', DEVICE_STEP_REASON],
   ['device_key', DEVICE_STEP_REASON],
   ['device_wait', DEVICE_STEP_REASON],
+  ['browser_list_tabs', BROWSER_COMMAND_REASON],
   ['browser_read_page', BROWSER_COMMAND_REASON],
   ['browser_click', BROWSER_COMMAND_REASON],
   ['browser_type', BROWSER_COMMAND_REASON],
