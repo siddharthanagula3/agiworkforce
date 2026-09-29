@@ -136,12 +136,22 @@ fn seal_matches(expected: &str, actual: &str) -> bool {
             == 0
 }
 
+/// The one policy read this account last took from the server, kept in the
+/// credential store. Only the sealed copy of exactly that read opens, so an
+/// older copy from any workspace, the personal one included, is refused.
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
+struct NewestPolicyRead {
+    revision: u64,
+    organization: String,
+    fetched_at: u64,
+}
+
 fn open_sealed(
     key: &[u8],
     owner: &str,
     cached: &CachedPolicy,
     now: u64,
-    newest_revision: u64,
+    newest: &NewestPolicyRead,
 ) -> Option<EffectiveWorkspacePolicy> {
     let expected = seal_for(
         key,
@@ -156,10 +166,12 @@ fn open_sealed(
     let fresh = cached.fetched_at <= now + CLOCK_SKEW_SECS
         && now.saturating_sub(cached.fetched_at) <= SEALED_POLICY_MAX_AGE_SECS;
     let policy: EffectiveWorkspacePolicy = serde_json::from_str(&cached.policy).ok()?;
-    (fresh
-        && policy.revision >= newest_revision
-        && policy.organization_id.as_deref().unwrap_or_default() == cached.organization)
-        .then_some(policy)
+    let read = NewestPolicyRead {
+        revision: policy.revision,
+        organization: policy.organization_id.clone().unwrap_or_default(),
+        fetched_at: cached.fetched_at,
+    };
+    (fresh && read.organization == cached.organization && &read == newest).then_some(policy)
 }
 
 fn now_secs() -> u64 {
@@ -169,16 +181,14 @@ fn now_secs() -> u64 {
         .unwrap_or_default()
 }
 
-fn revision_account(owner: &str, organization: &str) -> String {
-    format!("revision:{owner}:{organization}")
+fn newest_read_account(owner: &str) -> String {
+    format!("newest-read:{owner}")
 }
 
-fn newest_revision(owner: &str, organization: &str) -> u64 {
-    crate::secure_store::get(CACHE_KEY_SERVICE, &revision_account(owner, organization))
-        .ok()
-        .flatten()
-        .and_then(|stored| stored.trim().parse().ok())
-        .unwrap_or(0)
+fn newest_read(owner: &str) -> Option<NewestPolicyRead> {
+    let stored =
+        crate::secure_store::get(CACHE_KEY_SERVICE, &newest_read_account(owner)).ok()??;
+    serde_json::from_str(&stored).ok()
 }
 
 fn cache_key() -> Option<Vec<u8>> {
@@ -217,8 +227,8 @@ fn load_cached() -> Option<EffectiveWorkspacePolicy> {
     if cached.seal.is_empty() {
         return None;
     }
-    let newest = newest_revision(&owner, &cached.organization);
-    open_sealed(&cache_key()?, &owner, &cached, now_secs(), newest)
+    let newest = newest_read(&owner)?;
+    open_sealed(&cache_key()?, &owner, &cached, now_secs(), &newest)
 }
 
 fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
@@ -357,6 +367,16 @@ mod sealed_cache_tests {
         }
     }
 
+    fn newest_of(cached: &CachedPolicy) -> NewestPolicyRead {
+        NewestPolicyRead {
+            revision: serde_json::from_str::<EffectiveWorkspacePolicy>(&cached.policy)
+                .map(|policy| policy.revision)
+                .unwrap_or_default(),
+            organization: cached.organization.clone(),
+            fetched_at: cached.fetched_at,
+        }
+    }
+
     #[test]
     fn hmac_matches_the_rfc_4231_vector() {
         let key = [0x0bu8; 20];
@@ -372,7 +392,7 @@ mod sealed_cache_tests {
             "user_1",
             r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        let policy = open_sealed(&KEY, "user_1", &cached, NOW, 0).expect("opens");
+        let policy = open_sealed(&KEY, "user_1", &cached, NOW, &newest_of(&cached)).expect("opens");
         assert!(policy.governed);
         assert_eq!(
             policy.code.and_then(|code| code.allow_mcp_servers),
@@ -382,33 +402,55 @@ mod sealed_cache_tests {
 
     #[test]
     fn a_hand_edited_policy_or_another_owner_is_ignored() {
-        let mut cached = sealed(
+        let original = sealed(
             "user_1",
             r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        assert!(open_sealed(&KEY, "user_2", &cached, NOW, 0).is_none());
-        cached.policy = r#"{"governed":true,"code":{"allowMcpServers":true}}"#.to_string();
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_none());
-        let other_key = sealed("user_1", &cached.policy);
-        assert!(open_sealed(&[8u8; 32], "user_1", &other_key, NOW, 0).is_none());
+        let newest = newest_of(&original);
+        assert!(open_sealed(&KEY, "user_2", &original, NOW, &newest).is_none());
+        let mut edited = sealed(
+            "user_1",
+            r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        edited.policy = r#"{"governed":true,"code":{"allowMcpServers":true}}"#.to_string();
+        assert!(open_sealed(&KEY, "user_1", &edited, NOW, &newest).is_none());
+        assert!(open_sealed(&[8u8; 32], "user_1", &original, NOW, &newest).is_none());
     }
 
     #[test]
-    fn a_sealed_policy_expires_and_an_older_revision_is_refused() {
+    fn a_sealed_policy_expires_and_is_refused_when_dated_ahead() {
         let cached = sealed(
             "user_1",
             r#"{"organizationId":"org_a","revision":4,"governed":true}"#,
         );
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 6 * DAY, 4).is_some());
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 8 * DAY, 4).is_none());
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW - DAY, 4).is_none());
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 5).is_none());
-        let mut rewound = sealed(
+        let newest = newest_of(&cached);
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 6 * DAY, &newest).is_some());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 8 * DAY, &newest).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW - DAY, &newest).is_none());
+    }
+
+    #[test]
+    fn only_the_newest_read_opens_so_an_older_copy_from_any_workspace_is_refused() {
+        let workspace = sealed(
             "user_1",
-            r#"{"organizationId":"org_a","revision":4,"governed":true}"#,
+            r#"{"organizationId":"org_a","revision":4,"governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        rewound.fetched_at = NOW + 6 * DAY;
-        assert!(open_sealed(&KEY, "user_1", &rewound, NOW + 7 * DAY, 4).is_none());
+        let newest = newest_of(&workspace);
+        let personal = sealed("user_1", r#"{"revision":0,"governed":false}"#);
+        assert!(open_sealed(&KEY, "user_1", &personal, NOW, &newest).is_none());
+        let older = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","revision":3,"governed":true}"#,
+        );
+        assert!(open_sealed(&KEY, "user_1", &older, NOW, &newest).is_none());
+        let mut earlier = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","revision":4,"governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        earlier.fetched_at = NOW - DAY;
+        earlier.seal = seal_for(&KEY, "user_1", "org_a", NOW - DAY, &earlier.policy);
+        assert!(open_sealed(&KEY, "user_1", &earlier, NOW, &newest).is_none());
+        assert!(open_sealed(&KEY, "user_1", &workspace, NOW, &newest).is_some());
     }
 
     #[test]
@@ -417,17 +459,9 @@ mod sealed_cache_tests {
             "user_1",
             r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_some());
+        let newest = newest_of(&cached);
         cached.organization = "org_b".to_string();
-        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_none());
-        let mut moved = sealed(
-            "user_1",
-            r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
-        );
-        moved.policy =
-            r#"{"organizationId":"org_b","governed":true,"code":{"allowMcpServers":false}}"#
-                .to_string();
-        assert!(open_sealed(&KEY, "user_1", &moved, NOW, 0).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW, &newest).is_none());
     }
 }
 
@@ -513,11 +547,17 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
     };
     let organization = policy.organization_id.clone().unwrap_or_default();
     let fetched_at = now_secs();
-    if let Err(error) = crate::secure_store::set(
-        CACHE_KEY_SERVICE,
-        &revision_account(owner, &organization),
-        &policy.revision.to_string(),
-    ) {
+    let newest = NewestPolicyRead {
+        revision: policy.revision,
+        organization: organization.clone(),
+        fetched_at,
+    };
+    let Ok(newest) = serde_json::to_string(&newest) else {
+        return;
+    };
+    if let Err(error) =
+        crate::secure_store::set(CACHE_KEY_SERVICE, &newest_read_account(owner), &newest)
+    {
         tracing::debug!("[workspace_policy] could not record the policy revision: {error}");
         return;
     }

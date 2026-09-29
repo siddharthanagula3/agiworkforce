@@ -28,7 +28,7 @@ pub fn write_owner_only(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path
         .parent()
         .with_context(|| format!("{} has no parent directory", path.display()))?;
-    fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    create_private_dir(parent)?;
     let temp = parent.join(format!(
         ".{}.{}.tmp",
         path.file_name()
@@ -52,6 +52,20 @@ pub fn write_owner_only(path: &Path, data: &[u8]) -> Result<()> {
         .with_context(|| format!("write {}", temp.display()))?;
     drop(file);
     fs::rename(&temp, path).with_context(|| format!("replace {}", path.display()))
+}
+
+/// Create `dir` and any missing parents readable by the owner alone.
+fn create_private_dir(dir: &Path) -> Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder
+        .create(dir)
+        .with_context(|| format!("create {}", dir.display()))
 }
 
 fn secret_path(service: &str, account: &str) -> Result<PathBuf> {

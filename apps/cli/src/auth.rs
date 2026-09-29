@@ -355,10 +355,14 @@ impl AuthStore {
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
         if let Some(index) = parse_auth_keyring_index(&data) {
-            let store = load_keyring_auth(&OsKeyring, index)?;
-            if !crate::secure_store::uses_keychain() {
-                store.save()?;
+            if crate::secure_store::uses_keychain() {
+                return load_keyring_auth(&OsKeyring, index);
             }
+            // A Linux install upgraded from the kernel keyring may find it
+            // emptied by a reboot; that is a signed-out store, not a failure
+            // that blocks signing in again.
+            let store = load_keyring_auth(&OsKeyring, index).unwrap_or_default();
+            store.save()?;
             return Ok(store);
         }
 
