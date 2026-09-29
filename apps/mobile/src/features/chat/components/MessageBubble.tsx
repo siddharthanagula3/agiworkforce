@@ -1,4 +1,5 @@
 import { View, Pressable, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -213,12 +214,18 @@ function TurnNotice({
   actionLabel,
   actionAccessibilityLabel,
   onAction,
+  secondaryLabel,
+  secondaryAccessibilityLabel,
+  onSecondary,
 }: {
   icon: React.ComponentType<{ size?: number; color?: string }>;
   message: string;
   actionLabel?: string;
   actionAccessibilityLabel: string;
   onAction?: () => void;
+  secondaryLabel?: string;
+  secondaryAccessibilityLabel?: string;
+  onSecondary?: () => void;
 }) {
   const colors = useThemeColors();
   return (
@@ -257,6 +264,18 @@ function TurnNotice({
         >
           <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
             {actionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+      {secondaryLabel && onSecondary ? (
+        <Pressable
+          onPress={onSecondary}
+          accessibilityRole="button"
+          accessibilityLabel={secondaryAccessibilityLabel ?? secondaryLabel}
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+            {secondaryLabel}
           </Text>
         </Pressable>
       ) : null}
@@ -485,6 +504,7 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
+  const router = useRouter();
   const researchSources = useMemo<ToolSearchResult[]>(() => {
     if (!research) return [];
     const seen = new Set<string>();
@@ -1540,6 +1560,19 @@ export const MessageBubble = memo(function MessageBubble({
                 actionLabel={onSwitchModel ? 'Switch model' : undefined}
                 actionAccessibilityLabel="Switch model"
                 onAction={onSwitchModel}
+                secondaryLabel="Report"
+                secondaryAccessibilityLabel="Report this refusal as incorrect"
+                onSecondary={() =>
+                  router.push({
+                    pathname: '/(app)/feedback',
+                    params: {
+                      appeal: 'safety_refusal',
+                      conversationId: message.conversationId,
+                      messageId: message.id,
+                      ...(typeof finishReason === 'string' ? { finishReason } : {}),
+                    },
+                  })
+                }
               />
             ) : null}
 
