@@ -45,6 +45,7 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
@@ -778,6 +779,13 @@ export default function ChatScreen() {
     },
     [conversationExecutionMode],
   );
+
+  useEffect(() => {
+    if (conversationExecutionMode !== 'cloud' || !isClerkSignedIn) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ChatScreen] publication states unavailable', error);
+    });
+  }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
 
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const waitlistJoined = useWaitlistStore((s) => s.joined);

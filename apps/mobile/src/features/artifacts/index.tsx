@@ -28,6 +28,8 @@ import type { MobileArtifact, MobileArtifactKind } from './types';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { ArtifactAudienceChip } from '@/src/features/chat/components/ArtifactAudienceChip';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureAccountScopedUiState,
@@ -104,6 +106,13 @@ export function ArtifactsGalleryScreen({
       ),
     [cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
   );
+
+  useEffect(() => {
+    if (!clerkUserId) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ArtifactsGallery] publication states unavailable', error);
+    });
+  }, [clerkUserId]);
 
   const openDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -325,6 +334,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
           <KindIcon size={12} color={artifact.accentColor} />
           <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />
+          <ArtifactAudienceChip artifactId={artifact.id} />
         </View>
 
         {/* Code / text preview area */}
