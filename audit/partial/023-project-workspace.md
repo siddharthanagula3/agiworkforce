@@ -36,11 +36,11 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
-| mobile | partial | Files and Add text work on mobile; a connected-service (Google Drive) source has no phone picker yet (web uses the Google Picker, itself waiting on GOOGLE_PICKER_API_KEY/APP_ID). The 0-byte cap text is stale: free is 100 MB and team seats resolve to team (billing-catalog.ts:358, :413). | handler, ui |
+| mobile | partial | owner: files and text work on the phone; a Google Drive source waits on the owner's Google connector keys (Drive entry and GOOGLE_PICKER_API_KEY/APP_ID). Plan storage caps are 100 MB for Free and the team allowance for Team seats (billing-catalog.ts:358, :413). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:264-264`, `packages/contracts/types/src/billing-catalog.ts:358-358`
+Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:264-264`
 
 ## S23.11: Project Memory.
 

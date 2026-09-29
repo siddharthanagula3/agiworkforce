@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | home-screen quick actions and Android equivalent; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile |  |
+| mobile | partial | home-screen widgets on iOS and Android with New chat, Camera and Dictate (ruling 4); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check |  |
 
-Code: `apps/mobile/app/_layout.tsx:1-1`
+Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.05: Compact floating assistant.
 
@@ -36,10 +36,10 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Siri Ask opens for review instead of sending or starting voice; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
+| mobile | partial | dictation entry from the home-screen widget (ruling 4); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/_layout.tsx:1-1`
+Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.08: Selected-text rewrite shortcut.
 
@@ -49,21 +49,6 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | system-wide selected-text rewrite; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
-
-## S109.09: Screenshot-to-chat shortcut.
-
-- Done when: A shortcut captures the screen and attaches it to an AGI chat.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | screen-capture shortcut; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
-
-Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S109.11: Hardware shortcut/macropad integration.
 
@@ -73,10 +58,10 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Action Button guidance; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
+| mobile | partial | iOS Control 'Open AGI Workforce' for Control Center, Lock Screen and Action Button (ruling 6); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/_layout.tsx:1-1`
+Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.13: Headset/earbud invocation.
 
@@ -86,9 +71,9 @@ Code: `apps/mobile/app/_layout.tsx:1-1`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Siri over earbuds answering aloud; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
+| mobile | partial | iOS Ask intent that runs without opening the app and returns a speakable answer for Siri/AirPods (ruling 5); native targets planned (WidgetKit extension with ControlWidget, Android AppWidgetProvider, background Ask intent) and waiting on lead approval of the targets and the token approach; then a new build and device check | handler |
 
-Code: `apps/mobile/app/_layout.tsx:1-1`
+Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:7-7`
 
 ## S109.16: Messaging-platform access.
 
