@@ -60,6 +60,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S53.27: Recorded-demonstration creation.
+
+- Done when: A user can create a skill by recording a demonstration of the task.
+- Wave: 4
+- Build on: web, desktop, mobile, vscode, chrome
+
 ## S53.28: Screen-and-voice teaching flow.
 
 - Done when: A user can teach a skill by showing the screen and narrating with voice.

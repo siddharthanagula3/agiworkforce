@@ -16,15 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S107.05: Public artifact gallery.
-
-- Done when: Anyone can browse a public gallery of artifacts that users published, and open one.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-
 ## S107.11: Remix/fork.
 
 - Done when: From a public shared conversation a viewer copies it into their own account and keeps working on it.

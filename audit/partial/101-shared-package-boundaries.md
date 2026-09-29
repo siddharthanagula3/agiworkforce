@@ -138,14 +138,6 @@ Code: `packages/ui/ui/package.json:2-5`
 
 Code: `scripts/check-mobile-primitives.mjs:20-20`, `scripts/check-mobile-primitives.mjs:84-84`, `scripts/config/mobile-primitives-baseline.json:1-2`, `package.json:134-134`
 
-## S101.33: Platform-specific renderers.
-
-- Done when: Each surface has a renderer for the shared content model that declares which block kinds it renders and degrades the rest.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S101.34: Shared telemetry conventions.
 
 - Done when: Telemetry and analytics follow one shared vocabulary and redaction path on every surface.

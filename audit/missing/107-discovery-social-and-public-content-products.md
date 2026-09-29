@@ -24,6 +24,12 @@ nothing is left.
 - Wave: 5
 - Build on: web, desktop, mobile
 
+## S107.05: Public artifact gallery.
+
+- Done when: Anyone can browse a public gallery of artifacts that users published, and open one.
+- Wave: 5
+- Build on: mobile
+
 ## S107.06: Public generated-app gallery.
 
 - Done when: Anyone can browse a public gallery of apps or sites that users generated and published.

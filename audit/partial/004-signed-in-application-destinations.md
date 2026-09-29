@@ -260,19 +260,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.34: Custom-assistant builder.
-
-- Done when: A builder lets the user define a custom assistant (name, instructions, knowledge, tools, starters), preview it and save it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S4.35: Skills manager.
 
 - Done when: A skills manager lists installed and available skills and lets the user install, enable/disable, author and remove them.

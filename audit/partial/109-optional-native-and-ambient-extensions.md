@@ -26,15 +26,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S109.08: Selected-text rewrite shortcut.
-
-- Done when: Text selected in any app can be rewritten by AGI with a shortcut and the result put back in place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | missing | Not built on this surface. |  |
-
 ## S109.11: Hardware shortcut/macropad integration.
 
 - Done when: A hardware button or macropad (Stream Deck, iPhone Action Button, etc.) can trigger AGI actions through a supported integration.

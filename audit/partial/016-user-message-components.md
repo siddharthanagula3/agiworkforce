@@ -173,15 +173,3 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S16.22: Message-level deep link.
-
-- Done when: A user can obtain and open a link that lands on one specific message in a conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |

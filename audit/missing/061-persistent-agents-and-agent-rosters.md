@@ -24,11 +24,23 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S61.11: Presence/activity indicator.
+
+- Done when: The roster shows whether each agent is currently working, idle or offline.
+- Wave: 4
+- Build on: web, desktop, cli, vscode, chrome
+
 ## S61.12: Active responsibility list.
 
 - Done when: Each agent shows the list of responsibilities it currently owns.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S61.19: Agent pause/disable.
+
+- Done when: The user can pause or disable an agent so it stops acting until re-enabled.
+- Wave: 4
+- Build on: web, desktop, cli, vscode, chrome
 
 ## S61.21: Agent configuration versioning.
 

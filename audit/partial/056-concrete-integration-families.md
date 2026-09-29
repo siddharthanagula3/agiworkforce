@@ -451,19 +451,6 @@ Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/c
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S56.44: Native messaging applications.
-
-- Done when: The assistant can read or send messages in native messaging apps (iMessage, SMS, WhatsApp, Telegram) on the user's behalf.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S56.45: Local notes and calendars.
 
 - Done when: The assistant can read and add to the notes and calendars stored on the user's own device.

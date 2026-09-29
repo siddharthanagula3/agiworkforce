@@ -50,19 +50,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S52.05: Live test/preview pane.
-
-- Done when: While configuring an assistant the user can try it in a preview/test chat that reflects unsaved changes.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S52.06: Assistant name.
 
 - Done when: An assistant has a user-set name shown wherever it is listed or used.
@@ -194,19 +181,6 @@ nothing is left.
 - Done when: A builder can make an assistant available to everyone in their workspace/organization.
 - Wave: 3
 - Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S52.39: Export or migration.
-
-- Done when: A user can export an assistant or migrate assistants in from/out to another product.
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

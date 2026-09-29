@@ -6,46 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S71.11: Audio-route controls.
-
-- Done when: During voice the user can choose the audio output route (speaker, Bluetooth, headset) and the session switches.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S71.18: Background upload recovery.
-
-- Done when: An attachment upload interrupted by backgrounding continues or resumes automatically when the app returns.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S71.23: System shortcuts/App Intents.
-
-- Done when: OS-level shortcuts (Siri/App Intents, Spotlight, launcher shortcuts) can start AGI actions such as ask or summarize.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S71.26: Foldable adaptation.
-
-- Done when: On foldables the layout adapts when the device folds or unfolds (and ideally around the hinge).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S71.29: Cellular-data preferences.
-
-- Done when: The user can choose whether large transfers use cellular data, and the app obeys it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S71.31: App-store purchase and restoration.
 
 - Done when: The user can buy a plan or credits through the App Store / Google Play and restore purchases.

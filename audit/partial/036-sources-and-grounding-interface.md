@@ -113,14 +113,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S36.15: Highlighted passage in source viewer.
-
-- Done when: Opening a citation shows the source with the cited passage highlighted.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S36.16: Claim-to-source relationship.
 
 - Done when: Each citation sits at the claim it supports so the user can tell which source backs which claim.
@@ -157,14 +149,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S36.24: User-controlled evidence set.
-
-- Done when: The user controls the set of evidence an answer may use (add, pin, remove sources) and the answer respects it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 
 ## S36.25: Citation-preserving export.
 

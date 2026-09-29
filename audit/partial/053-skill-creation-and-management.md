@@ -200,19 +200,6 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S53.27: Recorded-demonstration creation.
-
-- Done when: A user can create a skill by recording a demonstration of the task.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S53.36: Permission and provenance summary.
 
 - Done when: A skill shows a summary of the permissions it uses and where it came from.
