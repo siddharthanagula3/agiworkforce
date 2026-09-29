@@ -7,6 +7,7 @@ import {
   extractUnifiedDiff,
   fitRemoteSnapshot,
   isTestCommand,
+  parseDispatchTaskReplies,
   parseRemoteCodeRequest,
   parseTestSummary,
   type RemoteCodeDiff,
@@ -21,6 +22,7 @@ import {
   type RemoteCodeTestRun,
   type RemoteCodeToolRecord,
   type DispatchTaskControlRequest,
+  type DispatchTaskPendingStep,
   type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
 import type {
@@ -68,6 +70,7 @@ interface DispatchTaskDetail {
   message?: string;
   result?: string;
   error?: string;
+  pending?: DispatchTaskPendingStep[];
 }
 
 interface ToolInFlight {
@@ -139,6 +142,12 @@ export function parseDispatchTask(
         : boundedText(record['taskId'], REMOTE_CODE_LIMITS.idLength);
     if (taskId === null) return null;
     return { action, version: 1, requestId, ...(taskId ? { taskId } : {}), sentAt };
+  }
+  if (action === 'dispatch.task.reply') {
+    const taskRequestId = boundedText(record['taskRequestId'], REMOTE_CODE_LIMITS.idLength);
+    const replies = parseDispatchTaskReplies(record['replies']);
+    if (!taskRequestId || !replies) return null;
+    return { action, version: 1, requestId, taskRequestId, replies, sentAt };
   }
   return null;
 }
@@ -496,6 +505,33 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     await publishSessions();
   }
 
+  function pendingSteps(state: ThreadState): DispatchTaskPendingStep[] {
+    return [...state.pendingApprovals.values()].map((approval) => ({
+      toolCallId: approval.requestId,
+      kind: 'approval' as const,
+      summary: approval.summary,
+    }));
+  }
+
+  async function replyToDispatchedTask(
+    request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.reply' }>,
+  ): Promise<void> {
+    const task = dispatches.get(request.taskRequestId);
+    const state = task ? threads.get(threadKey(task.rootId, task.threadId)) : undefined;
+    if (!task || !state) return;
+    for (const reply of request.replies) {
+      const approval = state.pendingApprovals.get(reply.toolCallId);
+      if (reply.kind !== 'approval' || !approval) continue;
+      await deps.answerApproval({
+        rootId: task.rootId,
+        threadId: task.threadId,
+        turnId: approval.turnId,
+        requestId: approval.requestId,
+        approved: reply.approved,
+      });
+    }
+  }
+
   async function cancelDispatchedTask(
     request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.cancel' }>,
   ): Promise<void> {
@@ -588,6 +624,10 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     }
     if (dispatch?.action === 'dispatch.task.cancel') {
       await cancelDispatchedTask(dispatch);
+      return true;
+    }
+    if (dispatch?.action === 'dispatch.task.reply') {
+      await replyToDispatchedTask(dispatch);
       return true;
     }
     const request = parseRemoteCodeRequest(action, payload);
@@ -726,6 +766,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           await sendTaskStatus(task.requestId, 'awaiting_input', {
             taskId: task.threadId,
             message: `Waiting for approval: ${approval.summary}`,
+            pending: pendingSteps(state),
           });
         }
         return;

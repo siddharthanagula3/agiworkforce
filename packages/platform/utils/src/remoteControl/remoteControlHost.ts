@@ -5,6 +5,7 @@ import {
   clipRemoteText,
   isRelayPairingCode,
   type DispatchTaskLifecycleStatus,
+  type DispatchTaskPendingStep,
 } from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
@@ -49,7 +50,7 @@ export type RemoteSocketFactory = (wsUrl: string) => WebSocket;
 
 export type DispatchPageEvent = Extract<
   DesktopRuntimeEvent,
-  { kind: 'dispatch-task' | 'dispatch-task-cancel' }
+  { kind: 'dispatch-task' | 'dispatch-task-cancel' | 'dispatch-task-reply' }
 >;
 
 export interface DispatchTaskPages {
@@ -186,7 +187,12 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     requestId: string,
     task: PageTask,
     status: DispatchTaskLifecycleStatus,
-    detail: { message?: string; result?: string; error?: string } = {},
+    detail: {
+      message?: string;
+      result?: string;
+      error?: string;
+      pending?: DispatchTaskPendingStep[];
+    } = {},
   ): Promise<void> {
     const message = clipped(detail.message);
     const result =
@@ -202,6 +208,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       ...(message === undefined ? {} : { message }),
       ...(result === undefined ? {} : { result }),
       ...(error === undefined ? {} : { error }),
+      ...(status === 'awaiting_input' && detail.pending?.length ? { pending: detail.pending } : {}),
       updatedAt: new Date().toISOString(),
     };
     const delivered = await send('dispatch.task.status', payload);
@@ -247,6 +254,17 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       }
       return true;
     }
+    if (request.action === 'dispatch.task.reply') {
+      const task = pageTasks.get(request.taskRequestId);
+      if (!task) return false;
+      if (task.finished) return true;
+      pages.deliver(task.page, {
+        kind: 'dispatch-task-reply',
+        requestId: request.taskRequestId,
+        replies: request.replies,
+      });
+      return true;
+    }
     const page = pages.current();
     if (page === null) return false;
     const delivered = pages.deliver(page, {
@@ -279,6 +297,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         ...(report.message === undefined ? {} : { message: report.message }),
         ...(report.result === undefined ? {} : { result: report.result }),
         ...(report.error === undefined ? {} : { error: report.error }),
+        ...(report.pending === undefined ? {} : { pending: report.pending }),
       }),
     );
     return true;

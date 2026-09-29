@@ -43,11 +43,12 @@ import {
   ingestRemoteCodeControl,
   useRemoteCodeStore,
 } from '@/src/features/companion/remote-code/store';
-import type {
-  ControlReceiptEvent,
-  ControlReceiptOutcome,
-  DispatchTaskLifecycleStatus,
-  DispatchTaskStatusEvent,
+import {
+  parseDispatchTaskPendingSteps,
+  type ControlReceiptEvent,
+  type ControlReceiptOutcome,
+  type DispatchTaskLifecycleStatus,
+  type DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 import {
   claimManualPairingToken,
@@ -508,7 +509,12 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     normalized['result'] === undefined ? undefined : boundedString(normalized['result'], 4_000);
   const error =
     normalized['error'] === undefined ? undefined : boundedString(normalized['error'], 4_000);
+  const pending =
+    normalized['pending'] === undefined
+      ? undefined
+      : parseDispatchTaskPendingSteps(normalized['pending']);
   if (
+    pending === null ||
     (normalized['taskId'] !== undefined && !taskId) ||
     (normalized['message'] !== undefined && !message) ||
     (normalized['result'] !== undefined && !result) ||
@@ -526,6 +532,7 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     ...(message ? { message } : {}),
     ...(result ? { result } : {}),
     ...(error ? { error } : {}),
+    ...(pending && pending.length > 0 ? { pending } : {}),
     updatedAt,
   };
 }
