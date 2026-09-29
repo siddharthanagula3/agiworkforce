@@ -13,7 +13,7 @@ pub(crate) mod terminal_palette;
 pub(crate) mod transcript_cell;
 
 mod composer_edits;
-mod markdown_renderer;
+pub(crate) mod markdown_renderer;
 mod prompt_history;
 mod tui_app;
 pub mod widgets;

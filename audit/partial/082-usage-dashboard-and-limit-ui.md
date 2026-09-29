@@ -194,9 +194,8 @@ Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 | --- | --- | --- | --- |
 | mobile | partial | Mobile shows no estimate; the server-side reservation estimate is not exposed to clients. | ui, api |
 | cli | partial | The cited 'estimate' is a retrospective session cost (estimated because it is priced locally), not an estimate of what a task will cost; during a turn the status line reuses the pre-turn total. |  |
-| vscode | partial | The quick-pick figure sums measured usage of finished requests; it says nothing about a task before or while it runs. |  |
 
-Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`, `apps/extension-vscode/src/core/commandSetup.ts:2044-2047`
+Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`
 
 ## S82.24: Budget warning.
 

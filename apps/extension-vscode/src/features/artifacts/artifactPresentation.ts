@@ -3,6 +3,7 @@ import type {
   ManagedCloudPublishedArtifact,
 } from '@agiworkforce/cloud-contracts';
 import type { ResourceVisibility } from '@agiworkforce/types';
+import { accountRefusalMessage } from '../../utils/accountRefusal';
 
 const ARTIFACT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -150,6 +151,8 @@ export function artifactContextValue(published: boolean): string {
 }
 
 export function describeArtifactFailure(error: unknown): string {
+  const refusal = accountRefusalMessage(error);
+  if (refusal) return refusal;
   const status = (error as { status?: unknown } | null)?.status;
   if (status === 401) return 'your AGI Cloud session expired, sign in again';
   if (status === 403) return 'this account cannot read artifacts on its current plan';

@@ -227,7 +227,11 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
-        const permissions = await loadConnectorToolPermissions(db, userId);
+        const permissions = await loadConnectorToolPermissions(
+          db,
+          userId,
+          processed.organizationId ?? null,
+        );
         const [operatorTools, connectorTools] = await Promise.all([
           loadMcpToolDefs(),
           loadUserConnectorToolDefs(userId, {

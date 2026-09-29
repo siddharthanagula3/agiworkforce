@@ -175,18 +175,6 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S25.26: Download original.
-
-- Done when: Users can download the original file.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only files generated in a chat can be opened or downloaded from their chat bubble; there is no file store to download originals from. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:441-454`
-
 ## S25.27: Download converted representation.
 
 - Done when: Users can download a converted representation of a file (e.g. PDF, text).
@@ -208,9 +196,6 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:441-454`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | The artifacts drawer copies an artifact's whole content; there is no reader to select part of it. | ui |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-212`
 
 ## S25.29: Open in native application.
 

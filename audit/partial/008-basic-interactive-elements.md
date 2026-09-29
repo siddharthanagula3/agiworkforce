@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S8.03: Destructive buttons.
-
-- Done when: Irreversible actions use a distinct destructive button style (danger colour before hover) whose label meets contrast.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`
-
 ## S8.06: Toggle buttons.
 
 - Done when: A toggle button (a button with an on/off pressed state announced to assistive tech) is used in shipped UI.
@@ -48,18 +36,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mob
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S8.14: Checkboxes.
-
-- Done when: Checkboxes (independent on/off choices in a list, with checked state exposed) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The only checkbox inputs are drawn as switch tracks in settings; there is no plain checkbox for multi-choice lists. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1164-1172`
 
 ## S8.15: Radio groups.
 

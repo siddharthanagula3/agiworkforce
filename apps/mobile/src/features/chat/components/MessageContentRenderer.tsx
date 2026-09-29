@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react';
 import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
@@ -226,6 +228,143 @@ const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
 const nestedBullets = ['•', '◦', '▪'];
 
 type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+
+const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+function tableCellNumber(value: string): number {
+  const trimmed = value.trim();
+  if (!/^[-+(]?[$€£₹]?[\d.,]+%?\)?$/.test(trimmed)) return Number.NaN;
+  const negative = trimmed.startsWith('(') && trimmed.endsWith(')');
+  const parsed = Number(trimmed.replace(/[()%$€£₹,\s]/g, ''));
+  return negative ? -parsed : parsed;
+}
+
+function compareTableCells(a: string, b: string): number {
+  const left = tableCellNumber(a);
+  const right = tableCellNumber(b);
+  if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right;
+  return TABLE_SORT_COLLATOR.compare(a, b);
+}
+
+type TableSort = { column: number; direction: 'ascending' | 'descending' } | null;
+
+function MarkdownTable({
+  rows,
+  columnWidths,
+  keyBase,
+  renderColors,
+  citations,
+}: {
+  rows: string[][];
+  columnWidths: number[];
+  keyBase: string;
+  renderColors: ColorScheme;
+  citations: readonly CitationSource[];
+}) {
+  const [sort, setSort] = useState<TableSort>(null);
+  const [header = [], ...body] = rows;
+  const numCols = columnWidths.length;
+  const sortedBody = useMemo(() => {
+    if (!sort) return body;
+    const ordered = [...body].sort((a, b) =>
+      compareTableCells(a[sort.column] ?? '', b[sort.column] ?? ''),
+    );
+    return sort.direction === 'ascending' ? ordered : ordered.reverse();
+  }, [body, sort]);
+  const sortable = body.length > 1;
+
+  const cellStyle = (colIdx: number) => ({
+    width: columnWidths[colIdx],
+    borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
+    borderRightColor: renderColors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: 'center' as const,
+  });
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      style={{ marginVertical: 8 }}
+      contentContainerStyle={{
+        borderWidth: 1,
+        borderColor: renderColors.border,
+        borderRadius: 4,
+        overflow: 'hidden',
+        flexDirection: 'column',
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          borderBottomWidth: 1,
+          borderBottomColor: renderColors.border,
+          backgroundColor: renderColors.surfaceHover,
+        }}
+      >
+        {Array.from({ length: numCols }).map((_, colIdx) => {
+          const label = header[colIdx] ?? '';
+          const active = sort?.column === colIdx ? sort.direction : null;
+          const next = active === 'ascending' ? 'descending' : 'ascending';
+          const content = (
+            <Text
+              style={{
+                fontSize: 13,
+                color: renderColors.textPrimary,
+                fontWeight: '500',
+                lineHeight: 19,
+              }}
+            >
+              {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
+              {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
+            </Text>
+          );
+          return sortable ? (
+            <Pressable
+              key={`${keyBase}-th-${colIdx}`}
+              style={cellStyle(colIdx)}
+              onPress={() => setSort({ column: colIdx, direction: next })}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
+              accessibilityHint={`Sorts the table by this column, ${next}`}
+            >
+              {content}
+            </Pressable>
+          ) : (
+            <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
+              {content}
+            </View>
+          );
+        })}
+      </View>
+      {sortedBody.map((row, rowIdx) => (
+        <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
+          {Array.from({ length: numCols }).map((_, colIdx) => (
+            <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: renderColors.textSecondary,
+                  fontWeight: '400',
+                  lineHeight: 19,
+                }}
+                selectable
+              >
+                {renderInlineMarkdown(
+                  row[colIdx] || '',
+                  `${keyBase}-tdil-${rowIdx}-${colIdx}`,
+                  renderColors,
+                  citations,
+                )}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
 
 function collectListItems(
   lines: string[],
@@ -460,63 +599,14 @@ function renderTextSegment(
               );
             });
             nodes.push(
-              <ScrollView
+              <MarkdownTable
                 key={`${keyBase}-table-${idx}`}
-                horizontal
-                showsHorizontalScrollIndicator
-                style={{ marginVertical: 8 }}
-                contentContainerStyle={{
-                  borderWidth: 1,
-                  borderColor: renderColors.border,
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  flexDirection: 'column',
-                }}
-              >
-                {tableRows.map((row, rowIdx) => (
-                  <View
-                    key={`${keyBase}-tr-${idx}-${rowIdx}`}
-                    style={{
-                      flexDirection: 'row',
-                      borderBottomWidth: rowIdx === 0 ? 1 : 0,
-                      borderBottomColor: renderColors.border,
-                      backgroundColor: rowIdx === 0 ? renderColors.surfaceHover : undefined,
-                    }}
-                  >
-                    {Array.from({ length: numCols }).map((_, colIdx) => (
-                      <View
-                        key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
-                        style={{
-                          width: columnWidths[colIdx],
-                          borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
-                          borderRightColor: renderColors.border,
-                          paddingHorizontal: 8,
-                          paddingVertical: 6,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color:
-                              rowIdx === 0 ? renderColors.textPrimary : renderColors.textSecondary,
-                            fontWeight: rowIdx === 0 ? '500' : '400',
-                            lineHeight: 19,
-                          }}
-                          selectable
-                        >
-                          {renderInlineMarkdown(
-                            row[colIdx] || '',
-                            `${keyBase}-tdil-${idx}-${rowIdx}-${colIdx}`,
-                            renderColors,
-                            citations,
-                          )}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </ScrollView>,
+                rows={tableRows}
+                columnWidths={columnWidths}
+                keyBase={`${keyBase}-t${idx}`}
+                renderColors={renderColors}
+                citations={citations}
+              />,
             );
           }
           continue;

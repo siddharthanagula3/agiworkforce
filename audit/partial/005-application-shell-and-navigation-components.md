@@ -44,7 +44,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 | mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | projects drawer lists a project's chats; the recents list is not grouped. Parity check pending (lead decision list). | ui |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
@@ -63,13 +62,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The auditor searched only icon identifiers. openWorkSurface composes cloud tasks and schedules into one quick pick (surfaces/index.ts:306-318) whose rows carry each item's ThemeIcon as a $(icon) label prefix plus a section separator per type (treeQuickPick.ts:83-108; cloudTasksTree.ts:34, schedulesTree.ts:37). Partial: only that pick mixes types, the row icons encode run state rather than type, the separator is the type marker, and no list mixes chats, projects or files. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
@@ -93,15 +91,14 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 - Done when: Each row has an overflow (⋯) menu with its actions (share, rename, pin, archive, move, delete).
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The cited row has no overflow control: actions open only on long-press (DrawerContent.tsx:496-504, hint "Long press to pin or delete"; ChatsListScreen.tsx:331-333 likewise) and the sheet offers rename, pin, archive (cloud only) and delete (useConversationActions.ts:115-133), with no share or move. partial, miss ui; remaining: add a visible more-options control and share/move actions. |  |
-| cli | partial | The /history picker only resumes; rename, fork and export are separate commands on the current session and deletion is agi history delete. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`, `apps/cli/src/tui/widgets/session_picker.rs:10-13`, `apps/cli/src/tui/tui_app.rs:3574-3579`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
 
 ## S5.21: Inline rename field.
 
@@ -116,18 +113,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `a
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
-
-## S5.25: Back and forward navigation.
-
-- Done when: Back and forward navigation move through the user's in-app history.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only drawer sub-pages have a Back button; switching tabs, chats and runs keeps no back/forward history. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6639-6640`, `apps/extension/src/side_panel.ts:6686-6686`
 
 ## S5.26: Global command palette.
 
@@ -185,14 +170,13 @@ Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:104-109`, `apps/we
 
 - Done when: A status indicator shows whether the app is connected to its backend/runtime and offers reconnect when not.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a network-offline banner; no connected/reconnecting status for the cloud session. | ui |
-| cli | partial | The status bar shows the access mode (Local / Your key / Managed) but not whether the backend is reachable. | ui |
 
-Code: `apps/mobile/app/_layout.tsx:724-725`, `apps/cli/src/tui/tui_app.rs:1985-1995`
+Code: `apps/mobile/app/_layout.tsx:724-725`
 
 ## S5.33: Offline indicator.
 

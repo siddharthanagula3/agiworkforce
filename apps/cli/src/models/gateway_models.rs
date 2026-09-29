@@ -105,6 +105,19 @@ async fn fetch_from_endpoint(
         );
     }
     if status.as_u16() == 403 {
+        let body: serde_json::Value = response.json().await.unwrap_or_default();
+        let error = body.get("error");
+        let code = error
+            .and_then(|error| error.get("code"))
+            .and_then(|code| code.as_str())
+            .unwrap_or("");
+        if matches!(code, "account_unavailable" | "passkey_required") {
+            let message = error
+                .and_then(|error| error.get("message"))
+                .and_then(|message| message.as_str())
+                .unwrap_or("This account cannot be used right now; sign in on the web to see why.");
+            anyhow::bail!("{message}");
+        }
         anyhow::bail!("managed model discovery credential lacks the models:read scope (HTTP 403)");
     }
     if !status.is_success() {

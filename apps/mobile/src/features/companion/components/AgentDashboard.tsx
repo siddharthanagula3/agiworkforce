@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
@@ -358,8 +358,8 @@ function ApprovalCard({ request }: ApprovalCardProps) {
   const RiskShieldIcon = request.riskLevel === 'high' ? ShieldAlert : ShieldCheck;
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       layout={LinearTransition.springify()}
     >
       <View
@@ -485,7 +485,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
       : null;
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
+    <Animated.View entering={FadeIn.duration(motion.quick)} layout={LinearTransition.springify()}>
       <Pressable
         onPress={onPress}
         accessibilityLabel={`Agent: ${agent.name}, status: ${agent.status}`}
@@ -816,7 +816,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
         return (
           <Animated.View
             key={agent.id}
-            entering={FadeIn.duration(200)}
+            entering={FadeIn.duration(motion.quick)}
             layout={LinearTransition.springify()}
             className="mb-2"
           >
@@ -1025,8 +1025,8 @@ export function AgentDashboard() {
       {/* Emergency stop, only shown when there are active agents */}
       {hasRunningAgents && (
         <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
           style={{
             position: 'absolute',
             bottom: 16,

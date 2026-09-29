@@ -16,9 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Side panel strings come from _locales and follow Chrome's UI language; no in-extension choice. | ui |
-
-Code: `apps/extension/src/side_panel.ts:8120-8122`
 
 ## S84.04: Accent color where offered.
 
@@ -76,18 +73,6 @@ Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 
-## S84.18: Notification channels.
-
-- Done when: The user can choose which channels (push, email, in-app/browser) deliver each notification category.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only one on/off toggle for task notifications; no per-category or per-channel choice. | ui |
-
-Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:1048-1052`
-
 ## S84.19: Quiet hours.
 
 - Done when: The user can set quiet hours during which notifications are held.
@@ -119,8 +104,5 @@ Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi features only lists feature flags; there is no opt-in command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:853-854`

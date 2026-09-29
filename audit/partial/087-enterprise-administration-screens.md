@@ -140,24 +140,13 @@ nothing is left.
 
 - Done when: An administrator decides which individual tools members and agents may use (allow, block or require approval) and the tool loop enforces it.
 - Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Admins can block whole connectors, plugins, MCP hosts and features (browser, computer use, code), but cannot allow, block or require approval for individual tools such as web search or code execution. | ui, handler |
-| desktop | partial | Admins can block whole connectors, plugins, MCP hosts and features (browser, computer use, code), but cannot allow, block or require approval for individual tools such as web search or code execution. | ui, handler |
-| cli | partial | The CLI enforces per-tool allow/ask/deny rules an administrator installs as a machine-wide managed-settings.json (not from the workspace console), and a managed deny is reported as coming from the repository policy.toml. | states |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:549-551`, `apps/web/lib/services/connector-policy-service.ts:89-96`, `apps/web/lib/user-connector-tools.ts:1790-1808`, `apps/cli/src/platform/policy/engine.rs:96-116`
-
-## S87.16: Connector policy.
-
-- Done when: An administrator allows or blocks connectors (and custom connectors) for the workspace, and blocked connectors are not offered or connectable.
-- Wave: 3
 - Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Not 'missing': the CLI ships a connector-policy evaluator, the /api/settings/organization/connector-policy path, a /connectors slash command that renders the policy, and an install-app gate that consults it; the chain is dead only because fetch_workspace_policy is never called. That is a partial with miss ['handler'] (remaining: call connectors::fetch_workspace_policy at session start so /connectors and the install gate see the workspace policy). The auditor treated the same code as partial for S87.17 cli, so the cell is inconsistent (L7). |  |
+| cli | partial | Workspace connector tool rules apply to Managed CLI turns on the server and show in /connectors, and a managed deny now names the managed policy; rules for local CLI tools still come only from a machine managed-settings.json, not from the console (Claude Code's server-managed settings are the reference). | states |
+
+Code: `apps/cli/src/claude_parity.rs:2021-2021`, `apps/cli/src/features/exec/tools/mod.rs:498-498`, `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:177-178`
 
 ## S87.18: Private marketplace.
 

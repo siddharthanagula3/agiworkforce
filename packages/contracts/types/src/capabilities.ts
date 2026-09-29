@@ -117,8 +117,8 @@ const MOBILE: CapabilityRow = {
   canUseAgiWork: true,
   canUseVideoGeneration: true,
   canUseConnectors: true,
-  canUsePlugins: false, // SPEC-SILENT · current: not surfaced in mobile composer
-  canUseSkills: false, // SPEC-SILENT · current: not surfaced in mobile composer
+  canUsePlugins: true,
+  canUseSkills: true,
   canUseWorkingDirectory: false,
   canUseFileSystem: false,
   canRunLocalCode: false,
@@ -302,7 +302,7 @@ export const DISCOVERABLE_SURFACE_CAPABILITIES: Readonly<
     availability: Object.freeze({
       web: isCapabilityEnabled('web', 'canUsePlugins'),
       desktop: isCapabilityEnabled('desktop', 'canUsePlugins'),
-      mobile: isCapabilityEnabled('mobile', 'canUsePlugins'),
+      mobile: false,
       cli: false,
       vscode: false,
       chrome: false,

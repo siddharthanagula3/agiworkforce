@@ -10,7 +10,7 @@ use crate::tui::truncate_cols;
 
 const TITLE: &str = "Sessions";
 const EMPTY: &str = "(no sessions to resume)";
-const HINT: &str = "↑↓ navigate   Enter resume   Esc close";
+const HINT: &str = "↑↓ navigate   Enter resume   r rename   Esc close";
 
 /// One resumable session, already formatted for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +92,13 @@ impl InteractiveView for SessionPickerView {
     }
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
+        if key == KeyAction::Char('r') {
+            let Some(entry) = self.entries.get(self.state.cursor()) else {
+                return ViewAction::Continue;
+            };
+            self.done = true;
+            return ViewAction::SideAction(format!("complete:rename {} ", entry.id));
+        }
         match self.state.handle_list_key(key) {
             Some(ViewAction::Submit(index)) => {
                 if self.entries.is_empty() {

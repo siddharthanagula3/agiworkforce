@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { isAuthGateRefusal } from '@/lib/api-auth-response';
 import type { AccountUsageLimitsResponse, ManagedTurnSlotReading } from '@agiworkforce/types';
 import { readManagedTurnSlots, withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -10,8 +11,6 @@ import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { readFileStorageMeter } from '@/lib/server/file-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { readTierUnitUsage } from '@/lib/services/tier-unit-quota-service';
 import { readMonthlyImageUsage } from '@/lib/services/account-usage-history-service';
@@ -35,7 +34,7 @@ async function handler(request: NextRequest) {
   try {
     scoped = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
   } catch (error) {
-    if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
+    if (isApiKeyScopeError(error) || isAuthGateRefusal(error)) {
       throw error;
     }
     throw createError.unauthorized('Authentication required');

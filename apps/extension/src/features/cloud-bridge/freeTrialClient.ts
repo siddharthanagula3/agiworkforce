@@ -40,7 +40,12 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
+import {
+  getFreshClerkAuthContext,
+  getFreshClerkToken,
+  revokeSyncedWebSession,
+  signOutClerk,
+} from './clerkAuth';
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
@@ -153,6 +158,20 @@ function normalizeAccessString(value: unknown, maxLength: number): string | unde
     : undefined;
 }
 
+const ACCOUNT_UNAVAILABLE_CODE = 'ACCOUNT_UNAVAILABLE';
+const ACCOUNT_UNAVAILABLE_MESSAGE =
+  'This AGI account cannot be used right now. Open your account on the web to see why.';
+
+export class AccountUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly recoveryPath: string | null,
+  ) {
+    super(message);
+    this.name = 'AccountUnavailableError';
+  }
+}
+
 export async function getManagedModelAccess(
   token: string,
   signal?: AbortSignal,
@@ -172,7 +191,17 @@ export async function getManagedModelAccess(
     fetch(MANAGED_USAGE_ENDPOINT, requestOptions),
   ]);
   if (!response.ok || !usageResponse.ok) {
-    const status = !response.ok ? response.status : usageResponse.status;
+    const failed = !response.ok ? response : usageResponse;
+    const status = failed.status;
+    if (status === 403) {
+      const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
+      if (refusal.code === ACCOUNT_UNAVAILABLE_CODE) {
+        throw new AccountUnavailableError(
+          refusal.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+          refusal.recoveryPath ?? null,
+        );
+      }
+    }
     throw new Error(
       status === 401 ? 'Authentication is required' : `Account access is unavailable (${status})`,
     );
@@ -410,6 +439,21 @@ export async function clearAuthToken(): Promise<void> {
   await clearAutofillProfile();
 }
 
+const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
+
+export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
+  let webSessionEnded = true;
+  try {
+    await revokeSyncedWebSession();
+  } catch (error) {
+    console.warn('[AGI] Ending the web session failed:', error);
+    webSessionEnded = false;
+  }
+  await clearAuthToken();
+  await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
+  return { webSessionEnded };
+}
+
 export type FreeTrialContentPart =
   | { type: 'text'; text: string }
   | {
@@ -602,6 +646,7 @@ export type FreeTrialChunk =
       code:
         | 'quota_exceeded'
         | 'auth_required'
+        | 'account_suspended'
         | 'plan_required'
         | 'rate_limited'
         | 'server_error'
@@ -830,7 +875,17 @@ function quotaBlock(code: string, recovery: unknown): ManagedQuotaBlock {
 interface GatewayErrorBody {
   code?: string;
   message?: string;
+  recoveryPath?: string;
   recovery?: unknown;
+}
+
+function isGatewayPath(path: string): boolean {
+  if (!path.startsWith('/')) return false;
+  try {
+    return new URL(path, FREE_TRIAL_GATEWAY).origin === new URL(FREE_TRIAL_GATEWAY).origin;
+  } catch {
+    return false;
+  }
 }
 
 function readGatewayErrorBody(body: string): GatewayErrorBody {
@@ -847,9 +902,15 @@ function readGatewayErrorBody(body: string): GatewayErrorBody {
   const record = error as Record<string, unknown>;
   const code = normalizeAccessString(record['code'], 100);
   const message = normalizeAccessString(record['message'], 500);
+  const details = record['details'];
+  const recoveryPath =
+    details && typeof details === 'object' && !Array.isArray(details)
+      ? normalizeAccessString((details as Record<string, unknown>)['recoveryPath'], 200)
+      : undefined;
   return {
     ...(code ? { code } : {}),
     ...(message ? { message } : {}),
+    ...(recoveryPath && isGatewayPath(recoveryPath) ? { recoveryPath } : {}),
     recovery: record['recovery'],
   };
 }
@@ -1014,6 +1075,13 @@ const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 42
 
 function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
   const gatewayError = readGatewayErrorBody(body);
+  if (gatewayError.code === ACCOUNT_UNAVAILABLE_CODE) {
+    return {
+      type: 'error',
+      code: 'account_suspended',
+      message: gatewayError.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+    };
+  }
   const block = accountLimitBlock(gatewayError.code);
   if (block && gatewayError.code) {
     const code = accountLimitFailureCode(block);

@@ -49,7 +49,6 @@ Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/feature
 | --- | --- | --- | --- |
 | mobile | partial | Only an already-connected connector opens a detail screen; tapping an unconnected entry connects it or does nothing, so there is no page to read about a connector before connecting. | ui |
 | cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
-| vscode | partial | VS Code shows a tooltip per connected connector (health, source, auth type, scopes); catalogue detail pages open on web. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `apps/mobile/app/(app)/connectors/[id].tsx:9-10`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
 
@@ -233,9 +232,8 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile tool rows show a humanized tool name with a one-letter server badge, not the provider name. | ui |
-| vscode | partial | Only the local-runtime tool name is shown with a generic plug icon; cloud connector calls are not labelled with their provider. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `packages/contracts/types/src/tool-display.ts:137-148`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5660-5662`
+Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `packages/contracts/types/src/tool-display.ts:137-148`
 
 ## S55.30: Missing-scope request.
 
