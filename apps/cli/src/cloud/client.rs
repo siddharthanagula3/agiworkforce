@@ -519,6 +519,46 @@ impl Reply {
     }
 }
 
+pub async fn connectivity_line(privacy: PrivacyMode) -> String {
+    if privacy != PrivacyMode::Managed {
+        return format!("AGI Cloud: not used by this {} session", privacy.label());
+    }
+    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
+    let Some(base) = tier_cache::resolve_agi_api_base(&raw_base) else {
+        return format!("AGI Cloud: {raw_base} is not an AGI Workforce address");
+    };
+    let started = std::time::Instant::now();
+    let probe = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map(|client| client.get(format!("{base}/api/health")).send());
+    let outcome = match probe {
+        Ok(request) => request.await,
+        Err(_) => {
+            return "AGI Cloud: unreachable. Check your connection, then run /status to try again."
+                .to_string()
+        }
+    };
+    match outcome {
+        Ok(response) if response.status().is_success() => format!(
+            "AGI Cloud: reachable ({} ms)",
+            started.elapsed().as_millis()
+        ),
+        Ok(response) => format!(
+            "AGI Cloud: answered HTTP {}. Run /status to try again.",
+            response.status().as_u16()
+        ),
+        Err(error) if error.is_timeout() => {
+            "AGI Cloud: no answer within 5 seconds. Check your connection, then run /status to try again."
+                .to_string()
+        }
+        Err(_) => {
+            "AGI Cloud: unreachable. Check your connection, then run /status to try again.".to_string()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -600,45 +640,5 @@ mod tests {
             message: "boom".to_string()
         }
         .is_boundary());
-    }
-}
-
-pub async fn connectivity_line(privacy: PrivacyMode) -> String {
-    if privacy != PrivacyMode::Managed {
-        return format!("AGI Cloud: not used by this {} session", privacy.label());
-    }
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
-    let Some(base) = tier_cache::resolve_agi_api_base(&raw_base) else {
-        return format!("AGI Cloud: {raw_base} is not an AGI Workforce address");
-    };
-    let started = std::time::Instant::now();
-    let probe = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map(|client| client.get(format!("{base}/api/health")).send());
-    let outcome = match probe {
-        Ok(request) => request.await,
-        Err(_) => {
-            return "AGI Cloud: unreachable. Check your connection, then run /status to try again."
-                .to_string()
-        }
-    };
-    match outcome {
-        Ok(response) if response.status().is_success() => format!(
-            "AGI Cloud: reachable ({} ms)",
-            started.elapsed().as_millis()
-        ),
-        Ok(response) => format!(
-            "AGI Cloud: answered HTTP {}. Run /status to try again.",
-            response.status().as_u16()
-        ),
-        Err(error) if error.is_timeout() => {
-            "AGI Cloud: no answer within 5 seconds. Check your connection, then run /status to try again."
-                .to_string()
-        }
-        Err(_) => {
-            "AGI Cloud: unreachable. Check your connection, then run /status to try again.".to_string()
-        }
     }
 }
