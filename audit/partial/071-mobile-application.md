@@ -13,9 +13,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Audio-route switching works on iOS only (audioRouteSwitchingSupported is false on Android); Android routing is not built. | surface-only |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:23-38`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-71`
 
 ## S71.18: Background upload recovery.
 
@@ -24,9 +21,9 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:23-38`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Uploads run only in the foreground; backgrounding marks them interrupted and the user must tap Retry, which restarts from zero. | handler |
+| mobile | partial | uploads stop when backgrounded; background upload sessions and resume need the leader check first; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | handler |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:358-362`, `apps/mobile/src/features/chat/upload/uploadLifecycle.ts:28-46`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:209-214`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.19: Conversation restoration after process death.
 
@@ -35,9 +32,9 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:358-362`, `apps/mobile/src/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Messages and drafts persist, but relaunch opens a new chat (index redirects to the chat tab) and an interrupted reply is marked failed rather than resumed. | states |
+| mobile | partial | relaunch opens a new chat; restoring the last chat and resuming a detached reply need the leader check first; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | states |
 
-Code: `apps/mobile/stores/chat/chatCloudMessageStore.ts:183-190`, `apps/mobile/app/(app)/index.tsx:1-5`, `apps/mobile/stores/chat/chatCloudMessageStore.ts:41-50`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.23: System shortcuts/App Intents.
 
@@ -46,20 +43,9 @@ Code: `apps/mobile/stores/chat/chatCloudMessageStore.ts:183-190`, `apps/mobile/a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | iOS App Intents work; Android has no launcher shortcuts or App Actions. | surface-only |
+| mobile | partial | Android launcher shortcuts / App Actions; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | surface-only |
 
-Code: `apps/mobile/app.config.js:294-303`, `apps/mobile/app/_layout.tsx:512-543`, `apps/mobile/app.config.js:183-186`
-
-## S71.25: Tablet layout.
-
-- Done when: On tablets the app uses a wider layout (persistent drawer, multi-column grids) and adapts to split view.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Drawer and grids widen, but the chat transcript and composer have no tablet reading width and split-view values are unused. | ui |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:13-37`, `apps/mobile/src/shared/hooks/useResponsiveLayout.ts:20-48`, `apps/mobile/app.config.js:64-66`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.26: Foldable adaptation.
 
@@ -68,9 +54,9 @@ Code: `apps/mobile/app/(app)/_layout.tsx:13-37`, `apps/mobile/src/shared/hooks/u
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Layout follows window width on resize, but there is no hinge or table-top posture handling. | ui |
+| mobile | partial | foldable hinge and table-top handling (no installed package exposes posture); waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
 
-Code: `apps/mobile/src/shared/hooks/useTabletLayout.ts:27-69`, `apps/mobile/app/(app)/_layout.tsx:13-37`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.27: Landscape adaptation.
 
@@ -79,9 +65,9 @@ Code: `apps/mobile/src/shared/hooks/useTabletLayout.ts:27-69`, `apps/mobile/app/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The app is locked to portrait (orientation: portrait in app.config.js) so phones never rotate. | ui |
+| mobile | partial | app locked to portrait (app.config.js:67); waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
 
-Code: `apps/mobile/app.config.js:56-66`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:29-52`
+Code: `apps/mobile/app.config.js:67-67`
 
 ## S71.29: Cellular-data preferences.
 
@@ -90,9 +76,9 @@ Code: `apps/mobile/app.config.js:56-66`, `apps/mobile/src/shared/hooks/useTablet
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cellular setting governs only on-device model downloads; attachment uploads, voice and media downloads ignore it. | ui |
+| mobile | partial | cellular choice covers model downloads only; whether uploads, voice and media obey it; waits on founder research entry 1 (leader phone behaviour; help.openai.com refused); current behaviour kept meanwhile | ui |
 
-Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/features/model-picker/installStore.ts:344-358`
+Code: `apps/mobile/app/_layout.tsx:1-1`
 
 ## S71.31: App-store purchase and restoration.
 
@@ -101,6 +87,6 @@ Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native purchase and receipt code exist, but the catalogue is server-gated by MOBILE_IAP_ENABLED and FEATURES.billing is false. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:142-148`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-494`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:428-436`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`

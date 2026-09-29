@@ -95,12 +95,11 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The share extension drafts an ordinary chat, never an AGI Work task from an email thread. | flag-off, handler |
 | cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
 | vscode | partial | Turns run through the local CLI and inherit its limits: operator-gated Gmail, Always-allow tools only, no email intake. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:93-93`, `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
+Code: `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
 
 ## S110.11: Team mention → coding session.
 
@@ -125,10 +124,9 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | ui, flag-off |
-| mobile | partial | No design-to-code handoff from the phone; only steering an existing desktop Code session and downloading design source. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.14: Completed task → reusable Skill.
 

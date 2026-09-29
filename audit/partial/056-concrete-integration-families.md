@@ -16,10 +16,10 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
 | desktop | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds the Gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
+| mobile | partial | owner: add the Gmail entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON (gmail.compose for send_draft); the phone uses the same server connector path and in-app OAuth return as web | flag-off |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.02: Email reading.
 
@@ -31,11 +31,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
 | desktop | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds the Gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
+| mobile | partial | owner: add the Gmail entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON (gmail.compose for send_draft); the phone uses the same server connector path and in-app OAuth return as web | flag-off |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.03: Email drafting.
 
@@ -47,10 +47,10 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
 | desktop | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
-| mobile | partial | Server-side gate: create_draft works only once the owner adds the Gmail descriptor and client pair. | flag-off |
+| mobile | partial | owner: add the Gmail entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON (gmail.compose for send_draft); the phone uses the same server connector path and in-app OAuth return as web | flag-off |
 | chrome | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.04: Email sending.
 
@@ -62,11 +62,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/app/ap
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place; also complete Google sensitive-scope verification for gmail.send | flag-off |
 | desktop | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place; also complete Google sensitive-scope verification for gmail.send | flag-off |
-| mobile | partial | Server-side gate: send_draft works only once the owner adds the Gmail descriptor and client pair with gmail.compose. | flag-off |
+| mobile | partial | owner: add the Gmail entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON (gmail.compose for send_draft); the phone uses the same server connector path and in-app OAuth return as web | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | 0bdcfd2f3 adds send_draft, a non-reversible external send that asks under every policy; it runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/gmail-actions.ts:21-21`, `apps/web/lib/connectors/gmail-actions.ts:347-347`, `apps/web/lib/user-connector-tools.ts:2605-2605`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:258-258`
+Code: `apps/web/lib/connectors/gmail-actions.ts:21-21`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.05: Email attachments.
 
@@ -77,12 +77,12 @@ Code: `apps/web/lib/connectors/gmail-actions.ts:21-21`, `apps/web/lib/connectors
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
 | desktop | partial | owner: create the Google Gmail OAuth client, add the gmail entry to CONNECTOR_OAUTH_PROVIDERS_JSON and set its client id and secret in Vercel, per docs/runbooks/connector-oauth-apps.md; code (tools and scope ceiling) is in place | flag-off |
-| mobile | partial | Server-side gate: attachment tools work only once the owner adds the Gmail descriptor and client pair. | flag-off |
+| mobile | partial | owner: add the Gmail entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON (gmail.compose for send_draft); the phone uses the same server connector path and in-app OAuth return as web | flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | read_attachments and create_draft_with_attachments (0bdcfd2f3, b1a59f084) run once the owner adds the gmail descriptor and client pair. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/connectors/gmail-actions.ts:369-369`, `apps/web/lib/connectors/gmail-actions.ts:307-307`, `apps/web/lib/user-connector-tools.ts:2375-2375`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.07: Calendar search.
 
@@ -94,10 +94,10 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/web/lib/co
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Calendar CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works | flag-off |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.08: Free/busy inspection.
 
@@ -109,11 +109,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Calendar CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.09: Event creation.
 
@@ -125,11 +125,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Calendar CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.10: Event editing and cancellation.
 
@@ -141,11 +141,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Calendar CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.11: Meeting invitations.
 
@@ -156,12 +156,12 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Calendar CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works | flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:42-42`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.12: Contacts and recipient lookup.
 
@@ -189,10 +189,10 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:44-44`, `apps/web/lib/co
 | --- | --- | --- | --- |
 | web | partial | owner: add the google-drive entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON; create_file and drive.file are in place | flag-off |
 | desktop | partial | owner: add the google-drive entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON; create_file and drive.file are in place | flag-off |
-| mobile | partial | Server-side gate: works only once the operator adds a Google Drive CONNECTOR_OAUTH_PROVIDERS_JSON entry. | flag-off |
+| mobile | partial | owner: add the Google Drive entry and client pair to CONNECTOR_OAUTH_PROVIDERS_JSON | flag-off |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:43-43`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:43-43`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`
 
 ## S56.17: Folder and sharing management.
 
@@ -246,11 +246,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:43-43`, `apps/mobile/src
 | --- | --- | --- | --- |
 | web | partial | owner: register the Slack connector app with the search:read.* scopes and add the slack entry with its client pair (Teams has no verified hosted MCP server and stays out of scope) | flag-off |
 | desktop | partial | owner: register the Slack connector app with the search:read.* scopes and add the slack entry with its client pair (Teams has no verified hosted MCP server and stays out of scope) | flag-off |
-| mobile | partial | Slack needs the owner to register the app and add its descriptor; Teams has no verified Microsoft-hosted MCP server. | flag-off |
+| mobile | partial | owner: register the Slack connector app with search:read.* scopes and add its entry; Teams stays out of scope (no verified hosted MCP server) | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Slack's search:read scopes are admitted (693fe31f9); the owner must register the Slack app with them and add its descriptor; Teams has no Microsoft-hosted MCP server that could be verified. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:90-90`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:90-90`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.22: Team-message drafting and posting.
 
@@ -334,10 +334,10 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:90-90`, `apps/web/lib/co
 | --- | --- | --- | --- |
 | web | partial | owner: create the GitHub App (Actions read for S56.33) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID and _CLIENT_SECRET; github-mcp is pinned (GitLab has no pinned server) | flag-off |
 | desktop | partial | owner: create the GitHub App (Actions read for S56.33) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID and _CLIENT_SECRET; github-mcp is pinned (GitLab has no pinned server) | flag-off |
-| mobile | partial | The GitHub connector cannot search a repository and GitLab has no pinned server; also needs the operator GitLab entry. | handler, flag-off |
+| mobile | partial | owner: create the GitHub App (Actions read) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_SECRET; GitLab has no pinned server | handler, flag-off |
 | chrome | partial | GitHub hosted MCP (search_code) is pinned as github-mcp and connects once the owner adds its descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET; GitLab has no pinned server. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/mobile/services/streaming.ts:167-167`, `apps/mobile/services/streaming.ts:130-132`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.33: CI status and logs.
 
@@ -349,11 +349,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/mobile/s
 | --- | --- | --- | --- |
 | web | partial | owner: create the GitHub App (Actions read for S56.33) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID and _CLIENT_SECRET; github-mcp is pinned (GitLab has no pinned server) | flag-off |
 | desktop | partial | owner: create the GitHub App (Actions read for S56.33) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID and _CLIENT_SECRET; github-mcp is pinned (GitLab has no pinned server) | flag-off |
-| mobile | partial | Works only once the owner adds the github-mcp descriptor, the GitHub App with Actions read and the client id and secret. | flag-off |
+| mobile | partial | owner: create the GitHub App (Actions read) and add the github-mcp entry with CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_SECRET; GitLab has no pinned server | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | The github-mcp descriptor with the actions toolset (list_workflow_runs, get_job_logs) works once the owner adds it, a GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-connector-tools.ts:1310-1310`, `docs/development/connectors-setup.md:222-222`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/web/lib/connectors/oauth-registry.ts:21-21`, `apps/web/app/api/llm/v1/chat/completions/route.ts:818-818`, `apps/extension/src/features/side-panel/bubbles.ts:932-932`
 
 ## S56.34: Design-file inspection.
 
@@ -501,8 +501,8 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:234-234`, `apps/web/lib/
 | --- | --- | --- | --- |
 | web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
-| mobile | partial | Open Plaid Hosted Link from the mobile connectors screen (US, read-only transactions) and add per-account disconnect; no transfers, payments or trades; no React Native SDK needed. | ui, flag-off |
+| mobile | partial | owner first: Plaid agreement, production transactions access, compliance review, PLAID_CLIENT_ID/SECRET/ENV. Code: link-token route must request hosted_link with an app-scheme completion redirect and a way to obtain the public token (link/token/get), then the phone opens Hosted Link instead of the web link | ui, flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | partials/mcp-web ca04fbda2 and 0bd9bccf0: Bank accounts connect through Plaid Link (plaid.com/docs/link/web and /docs/api, read 2026-09-28), as in ChatGPT's personal finance experience: live balances from /accounts/balance/get and transactions from /transactions/get as declared read tools, transactions product only, United States banks only, results fenced, save_memory refused for the rest of a turn that read bank data, and /item/remove on every disconnect and on account erasure. It stays unavailable until the owner signs Plaid's agreement, gets production access for transactions, completes the Dashboard compliance center details OAuth banks need, has a lawyer confirm whether the GLBA Safeguards Rule applies, and sets PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV. Extension chats read it once it is connected in the web app. | flag-off |
 
-Code: `apps/web/lib/connectors/plaid-config.ts:32-32`, `apps/web/lib/connectors/bank-accounts.ts:376-376`, `apps/web/lib/connectors/bank-accounts.ts:154-154`, `apps/web/lib/connectors/bank-accounts.ts:191-191`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`, `apps/web/lib/connectors/plaid-config.ts:22-22`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:56-56`, `apps/web/lib/connectors/bank-accounts.ts:154-154`
