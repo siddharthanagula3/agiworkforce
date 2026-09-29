@@ -80,9 +80,9 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. Google Sheets lives on docs.google.com, so the Chrome panel gets the Google Docs guidance (wrong editor selectors); it reads visible page text only and cannot use the Google Sheets API. | ui, handler |
+| chrome | partial | fd28507aca: Sheets now gets Sheets guidance (formula bar and Name box) instead of the Docs selectors; no Sheets API read/write (Claude in Chrome works in Google apps without API setup, code.claude.com/docs/en/chrome). | handler |
 
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
+Code: `apps/extension/src/features/content/platform-prompts.ts:26-26`
 
 ## S106.07: Assistant inside Google Slides.
 
@@ -93,9 +93,9 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. Google Slides lives on docs.google.com, so the Chrome panel gets the Google Docs guidance (wrong editor selectors); it reads visible page text only and cannot use the Google Slides API. | ui, handler |
+| chrome | partial | fd28507aca: Slides now gets Slides guidance; no Slides API. | handler |
 
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
+Code: `apps/extension/src/features/content/platform-prompts.ts:34-34`
 
 ## S106.08: Host-document selection context.
 

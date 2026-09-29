@@ -127,18 +127,6 @@ Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S86.23: Saved approvals.
-
-- Done when: The user can review the approvals they chose to remember (always-allow/deny) and remove any of them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
-
-Code: `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/computer-use/approvalPolicy.ts:209-247`
-
 ## S86.25: Revoke all optional grants.
 
 - Done when: One action withdraws every optional permission granted to AGI (connectors, saved approvals, device grants, folders).
