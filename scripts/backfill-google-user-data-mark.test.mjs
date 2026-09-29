@@ -68,6 +68,11 @@ test('reads every kind of Google evidence the product records', () => {
     /external_resource_references/,
     /research_reports/,
     /user_custom_connectors cc/,
+    /organization_mcp_servers os/,
+    /'orgmcp-' \|\| os\.short_id/,
+    /m\.metadata -> 'tool_calls'/,
+    /m\.metadata -> 'toolCalls'/,
+    /call\.entry -> 'function' ->> 'name'/,
     /\(googleapis\|google\|youtube\)/,
   ]) {
     assert.match(APPLY_SQL, evidence);

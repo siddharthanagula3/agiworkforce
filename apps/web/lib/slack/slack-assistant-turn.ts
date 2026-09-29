@@ -30,7 +30,7 @@ import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/to
 import {
   GOOGLE_USER_DATA_SLACK_RESUME_MESSAGE,
   runMessagesCarryGoogleUserData,
-  withoutGoogleUserDataTools,
+  withoutGoogleHostedTools,
 } from '@/lib/connectors/google-user-data-runs';
 import { logger } from '@/lib/logger';
 import { moderateManagedPrompt } from '@/lib/moderation';
@@ -479,12 +479,13 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
     webAllowed: true,
     connectors: input.surface === 'direct_message' ? null : [],
   });
-  // Slack has no setting that turns Google connectors on for it, so their
-  // tools are never offered here: Slack messages reach models chosen without
+  // Slack has no setting that turns Google connectors on for it, so neither
+  // their tools nor a custom, workspace or directory server on a Google API
+  // host is ever offered here: Slack messages reach models chosen without
   // regard to Google API Limited Use.
   const plan: ScheduledToolPlan = {
     ...fullPlan,
-    mcpTools: withoutGoogleUserDataTools(fullPlan.mcpTools),
+    mcpTools: await withoutGoogleHostedTools(db, userId, organizationId, fullPlan.mcpTools),
   };
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);

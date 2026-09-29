@@ -63,15 +63,38 @@ function arrayAt(path) {
 
 const SERVER_OF = (expression) => `substring(${expression} from '^mcp__([^_][^_]*)__')`;
 
-// A user's own MCP server whose URL host is a Google domain, reached as
-// 'custom-<short_id>'.
-const GOOGLE_HOSTED_CUSTOM = (serverId) => `exists (
-  select 1
-    from public.user_custom_connectors cc
-   where cc.user_id = c.user_id
-     and ${serverId} = 'custom-' || cc.short_id
-     and lower(substring(cc.url from '^[a-z]+://(?:[^/@]*@)?([^/:?#]+)'))
-         ~ '(^|\\.)(googleapis|google|youtube)\\.com\\.?$'
+const GOOGLE_HOST = `'(^|\\.)(googleapis|google|youtube)\\.com\\.?$'`;
+const HOST_OF = (url) => `lower(substring(${url} from '^[a-z]+://(?:[^/@]*@)?([^/:?#]+)'))`;
+
+/**
+ * True when a connector server id is Google's, by the same rules the runtime
+ * reads (apps/web/lib/connectors/google-user-data.ts): a Google connector or
+ * its directory id, a user's own server reached as 'custom-<short_id>', or a
+ * workspace server reached as 'orgmcp-<short_id>', either on a Google host.
+ * A workspace server counts whether or not it is still published or retired,
+ * since it may have been either when the chat called it.
+ */
+const IS_GOOGLE_SERVER = (serverId) => `(
+  ${serverId} = any ($3::text[])
+  or exists (
+    select 1
+      from public.user_custom_connectors cc
+     where cc.user_id = c.user_id
+       and ${serverId} = 'custom-' || cc.short_id
+       and ${HOST_OF('cc.url')} ~ ${GOOGLE_HOST}
+  )
+  or exists (
+    select 1
+      from public.organization_mcp_servers os
+     where ${serverId} = 'orgmcp-' || os.short_id
+       and (c.organization_id is null or os.organization_id = c.organization_id)
+       and ${HOST_OF('os.url')} ~ ${GOOGLE_HOST}
+  )
+)`;
+
+const TOOL_CALL_NAMES = (path) => `exists (
+  select 1 from jsonb_array_elements(${arrayAt(path)}) as call(entry)
+   where ${IS_GOOGLE_SERVER(SERVER_OF("coalesce(call.entry -> 'function' ->> 'name', call.entry ->> 'name')"))}
 )`;
 
 // $3 is the id array, $4 the mention pattern.
@@ -83,24 +106,24 @@ const EVIDENCE = `(
        and (
          exists (
            select 1 from jsonb_array_elements(${arrayAt("m.metadata -> 'tools'")}) as tool(entry)
-            where tool.entry ->> 'connectorId' = any ($3::text[])
-               or ${SERVER_OF("tool.entry ->> 'name'")} = any ($3::text[])
-               or ${GOOGLE_HOSTED_CUSTOM(SERVER_OF("tool.entry ->> 'name'"))}
+            where ${IS_GOOGLE_SERVER("tool.entry ->> 'connectorId'")}
+               or ${IS_GOOGLE_SERVER(SERVER_OF("tool.entry ->> 'name'"))}
          )
          or (
            (m.metadata -> 'toolInvocations' ->> 'observed') = 'true'
            and exists (
              select 1
                from jsonb_array_elements_text(${arrayAt("m.metadata -> 'toolInvocations' -> 'offered'")}) as offered(name)
-              where ${SERVER_OF('offered.name')} = any ($3::text[])
-                 or ${GOOGLE_HOSTED_CUSTOM(SERVER_OF('offered.name'))}
+              where ${IS_GOOGLE_SERVER(SERVER_OF('offered.name'))}
            )
          )
-         or m.metadata -> 'mcpContext' -> 'prompt' ->> 'connectorId' = any ($3::text[])
+         or ${TOOL_CALL_NAMES("m.metadata -> 'tool_calls'")}
+         or ${TOOL_CALL_NAMES("m.metadata -> 'toolCalls'")}
+         or ${IS_GOOGLE_SERVER("m.metadata -> 'mcpContext' -> 'prompt' ->> 'connectorId'")}
          or exists (
            select 1
              from jsonb_array_elements(${arrayAt("m.metadata -> 'mcpContext' -> 'resources'")}) as resource(entry)
-            where resource.entry ->> 'connectorId' = any ($3::text[])
+            where ${IS_GOOGLE_SERVER("resource.entry ->> 'connectorId'")}
          )
          or m.metadata::text ~ $4
        )

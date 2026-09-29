@@ -23,6 +23,10 @@ import { validateAttachmentMeta } from '@agiworkforce/types';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
 import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
+import {
+  externalOriginHoldsGoogleUserData,
+  GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE,
+} from '@/lib/connectors/google-user-data-runs';
 import type { BillingPlanTier, ProjectKnowledgeIndexState } from '@agiworkforce/types';
 import {
   findProjectKnowledgeDocument,
@@ -167,7 +171,12 @@ export function isSchemaNotReady(error: unknown): boolean {
 }
 
 export type ProjectKnowledgeRegistration =
-  | { status: 'created'; file: ReturnType<typeof projectKnowledgeResponse> }
+  | {
+      status: 'created';
+      file: ReturnType<typeof projectKnowledgeResponse>;
+      /** Why part of the file was not read, for the person who added it. */
+      notice?: string;
+    }
   | { status: 'unavailable' };
 
 export interface ProjectKnowledgeScope {
@@ -348,6 +357,7 @@ export async function registerProjectKnowledgeFile(
         organizationId,
         planTier,
         documentId: `${projectId}:${body.checksumSha256.trim()}`,
+        forceNoTraining: externalOriginHoldsGoogleUserData(origin),
       },
     });
   } catch (error) {
@@ -418,7 +428,9 @@ export async function registerProjectKnowledgeFile(
         body.mimeType.trim(),
         body.byteCount,
         body.checksumSha256.trim(),
-        unreadableUploadSummary(body.mimeType, extraction.extractedText),
+        extraction.scannedTextWithheld && extraction.extractedText === null
+          ? GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE
+          : unreadableUploadSummary(body.mimeType, extraction.extractedText),
         body.sourceSurface,
         userId,
         sealedKey,
@@ -492,5 +504,6 @@ export async function registerProjectKnowledgeFile(
   return {
     status: 'created',
     file: projectKnowledgeResponse(data, projectId, indexStates.get(fileId) ?? null),
+    ...(extraction.scannedTextWithheld ? { notice: GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE } : {}),
   };
 }

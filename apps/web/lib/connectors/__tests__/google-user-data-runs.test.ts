@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const directory = vi.hoisted(() => ({ resolve: vi.fn() }));
+
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveDirectoryTarget: directory.resolve,
+}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -8,6 +14,9 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 
 const {
   connectorIdsReachGoogleUserData,
+  externalOriginHoldsGoogleUserData,
+  publishedArtifactSourceHoldsGoogleUserData,
+  withoutGoogleHostedTools,
   retrievalDocumentHoldsGoogleUserData,
   retrievalQueryMayCarryGoogleUserData,
   runMessagesCarryGoogleUserData,
@@ -197,5 +206,132 @@ describe('retrievalQueryMayCarryGoogleUserData', () => {
         'user-1',
       ),
     ).resolves.toBe(true);
+  });
+});
+
+describe('withoutGoogleHostedTools', () => {
+  const hostedRows: Responder = (sql) => {
+    if (sql.includes('from public.user_custom_connectors')) {
+      return [
+        { short_id: 'sheetsproxy', url: 'https://sheets.googleapis.com/mcp' },
+        { short_id: 'notes', url: 'https://notes.example.com/mcp' },
+      ];
+    }
+    if (sql.includes('from public.organization_mcp_servers')) {
+      return [{ short_id: 'orgdocs', url: 'https://docs.google.com/mcp' }];
+    }
+    return [];
+  };
+
+  function tools() {
+    return [
+      { serverId: GMAIL_CONNECTOR_ID },
+      { serverId: 'custom-sheetsproxy' },
+      { serverId: 'custom-notes' },
+      { serverId: 'orgmcp-orgdocs' },
+      { serverId: 'dir-aaaaaaaaaaaa' },
+      { serverId: 'dir-bbbbbbbbbbbb' },
+      { serverId: 'linear', googleUserData: true as const },
+      { serverId: 'github' },
+    ];
+  }
+
+  it('drops Google connectors and every server on a Google API host', async () => {
+    directory.resolve.mockImplementation(async (id: string) =>
+      id === 'dir-aaaaaaaaaaaa'
+        ? { mcpUrl: 'https://mcp.googleapis.com/v1' }
+        : { mcpUrl: 'https://mcp.example.com' },
+    );
+    const { db } = fakeDb(hostedRows);
+
+    const kept = await withoutGoogleHostedTools(db, 'user-1', 'org-1', tools());
+
+    expect(kept.map((tool) => tool.serverId)).toEqual([
+      'custom-notes',
+      'dir-bbbbbbbbbbbb',
+      'github',
+    ]);
+  });
+
+  it('drops every custom, workspace and directory server when their hosts cannot be read', async () => {
+    directory.resolve.mockRejectedValue(new Error('directory offline'));
+    const { db } = fakeDb(() => {
+      throw new Error('connection reset');
+    });
+
+    const kept = await withoutGoogleHostedTools(db, 'user-1', 'org-1', tools());
+
+    expect(kept.map((tool) => tool.serverId)).toEqual(['github']);
+  });
+
+  it('reads nothing when no custom, workspace or directory server is offered', async () => {
+    const { db, query } = fakeDb(hostedRows);
+
+    const kept = await withoutGoogleHostedTools(db, 'user-1', null, [
+      { serverId: GMAIL_CONNECTOR_ID },
+      { serverId: 'github' },
+    ]);
+
+    expect(kept).toEqual([{ serverId: 'github' }]);
+    expect(query).not.toHaveBeenCalled();
+    expect(directory.resolve).not.toHaveBeenCalled();
+  });
+});
+
+describe('externalOriginHoldsGoogleUserData', () => {
+  it('recognises a Drive import by connector, provider or Google host', () => {
+    expect(
+      externalOriginHoldsGoogleUserData({
+        provider: 'google_drive',
+        uri: 'https://drive.google.com/file/d/abc/view',
+        connectorId: GOOGLE_DRIVE_CONNECTOR_ID,
+      }),
+    ).toBe(true);
+    expect(
+      externalOriginHoldsGoogleUserData({
+        provider: 'google_drive',
+        uri: 'https://example.com/a',
+        connectorId: null,
+      }),
+    ).toBe(true);
+    expect(
+      externalOriginHoldsGoogleUserData({
+        provider: 'web',
+        uri: 'https://storage.googleapis.com/bucket/file.pdf',
+      }),
+    ).toBe(true);
+  });
+
+  it('treats an upload or a non-Google import as ordinary', () => {
+    expect(externalOriginHoldsGoogleUserData(undefined)).toBe(false);
+    expect(
+      externalOriginHoldsGoogleUserData({
+        provider: 'github',
+        uri: 'https://github.com/acme/repo',
+        connectorId: 'github',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('publishedArtifactSourceHoldsGoogleUserData', () => {
+  it.each([
+    ['a marked source chat', [{ marked: true }], true],
+    ['an unmarked or absent source chat', [{ marked: false }], false],
+    ['a published app that cannot be found', [], true],
+  ])('answers for %s', async (_label, rows, expected) => {
+    const { db, query } = fakeDb(() => rows);
+
+    await expect(publishedArtifactSourceHoldsGoogleUserData(db, 'pub-1')).resolves.toBe(expected);
+    expect(query.mock.calls[0]![0]).toContain('p.conversation_id');
+    expect(query.mock.calls[0]![1]).toEqual(['pub-1']);
+  });
+
+  it('fails closed when the source chat cannot be read', async () => {
+    const { db } = fakeDb(() => {
+      throw new Error('connection reset');
+    });
+
+    await expect(publishedArtifactSourceHoldsGoogleUserData(db, 'pub-1')).resolves.toBe(true);
   });
 });

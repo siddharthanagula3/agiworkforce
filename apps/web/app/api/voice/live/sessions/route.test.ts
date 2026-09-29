@@ -22,7 +22,17 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
   requireEnv: vi.fn(),
+  keepsOutOfTraining: vi.fn<(modelId: string) => boolean | null>(() => null),
 }));
+
+vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/provider-training-opt-out')>();
+  return {
+    ...actual,
+    modelKeepsInputsOutOfTraining: (modelId: string) =>
+      mocks.keepsOutOfTraining(modelId) ?? actual.modelKeepsInputsOutOfTraining(modelId),
+  };
+});
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -178,6 +188,7 @@ describe('POST /api/voice/live/sessions', () => {
     mocks.reserve.mockResolvedValue(RESERVATION);
     mocks.finalize.mockResolvedValue({});
     mocks.providerStarted.mockResolvedValue(undefined);
+    mocks.keepsOutOfTraining.mockReturnValue(null);
   });
 
   it('creates the session server-side with the live model, webrtc transport and delegation', async () => {
@@ -408,6 +419,57 @@ describe('POST /api/voice/live/sessions', () => {
     expect(response.status).toBe(503);
     expect(await errorCode(response)).toBe('billing_unavailable');
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  describe('in a chat that holds Google user data', () => {
+    function googleDb(evidence: 'marked' | 'history') {
+      const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('to_regclass')) return [{ ready: true }];
+        if (sql.includes('google_user_data_at is not null as marked')) {
+          return [{ marked: evidence === 'marked', project_id: null }];
+        }
+        if (sql.includes('from public.web_messages m')) {
+          return [{ metadata: { tools: [{ name: 'mcp__gmail__search_threads' }] } }];
+        }
+        return [];
+      });
+      mocks.userScopedDb.mockResolvedValue({
+        db: { query },
+        userId: 'user-1',
+        organizationId: null,
+      });
+      return query;
+    }
+
+    it.each(['marked', 'history'] as const)(
+      'refuses to start when the voice models may train (%s) and reserves nothing',
+      async (evidence) => {
+        mocks.keepsOutOfTraining.mockReturnValue(false);
+        const query = googleDb(evidence);
+
+        const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+        expect(response.status).toBe(403);
+        expect(await errorCode(response)).toBe('model_may_train');
+        expect(mocks.reserve).not.toHaveBeenCalled();
+        expect(mocks.fetch).not.toHaveBeenCalled();
+        if (evidence === 'history') {
+          expect(
+            query.mock.calls.some(([sql]) => sql.includes('set google_user_data_at = now()')),
+          ).toBe(true);
+        }
+      },
+    );
+
+    it('starts when both voice models keep inputs out of training', async () => {
+      mocks.keepsOutOfTraining.mockReturnValue(true);
+      googleDb('marked');
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).not.toBe(403);
+      expect(mocks.reserve).toHaveBeenCalled();
+    });
   });
 
   it('needs a conversation to record the session in before anything is reserved', async () => {

@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
+  sourceHoldsGoogleUserData: vi.fn(),
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
@@ -25,6 +26,14 @@ const mocks = vi.hoisted(() => ({
   db: { query: vi.fn() },
 }));
 
+vi.mock('@/lib/connectors/google-user-data-runs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  publishedArtifactSourceHoldsGoogleUserData: mocks.sourceHoldsGoogleUserData,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getNeonDb: () => ({ service: true }),
+}));
 vi.mock('@/lib/logger', () => ({
   PINO_LEVELS: vi.fn(),
   loggerOptions: vi.fn(),
@@ -213,7 +222,7 @@ import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-s
 import { POST } from '../route';
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
-const ARTIFACT = { token: TOKEN, ownerId: 'owner-9' };
+const ARTIFACT = { token: TOKEN, ownerId: 'owner-9', publishedArtifactId: 'published-1' };
 const ROUTE = { provider: 'anthropic', modelKey: 'claude-fast' };
 
 function call(body: unknown, token = TOKEN) {
@@ -242,6 +251,7 @@ beforeEach(() => {
   });
   mocks.assertAccountActive.mockResolvedValue(undefined);
   mocks.readRunnableArtifact.mockResolvedValue(ARTIFACT);
+  mocks.sourceHoldsGoogleUserData.mockResolvedValue(false);
   mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({ allowed: true });
   mocks.resolveEntitlementBundle.mockResolvedValue({ plan: 'pro', subscription: { tier: 'pro' } });
   mocks.evaluateManagedComputeAccess.mockResolvedValue({ allowed: true });
@@ -397,6 +407,25 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
       'Summarize',
       'pro',
       { needsTools: true, googleUserData },
+    );
+  });
+
+  it('forces no-training for a run whose app was made in a chat holding Google data', async () => {
+    mocks.sourceHoldsGoogleUserData.mockResolvedValue(true);
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sourceHoldsGoogleUserData).toHaveBeenCalledWith(
+      { service: true },
+      ARTIFACT.publishedArtifactId,
+    );
+    expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
+      mocks.db,
+      'user-1',
+      'Summarize',
+      'pro',
+      { needsTools: false, googleUserData: true },
     );
   });
 

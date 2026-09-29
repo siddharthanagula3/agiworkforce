@@ -438,6 +438,33 @@ describe('extractProjectKnowledgeFile', () => {
       expect(result.extractedText).toBeNull();
     });
 
+    it('keeps a Google scan with no text when no model that keeps it out of training can read it', async () => {
+      scannedDocument();
+      const { ScannedTextWithheldError } = await import('./scanned-document-text');
+      transcribeMocks.transcribeScannedPages.mockRejectedValue(
+        new ScannedTextWithheldError('project-1:scan'),
+      );
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+            forceNoTraining: true,
+          },
+        }),
+      );
+
+      expect(result.extractedText).toBeNull();
+      expect(result.scannedTextWithheld).toBe(true);
+      expect(transcribeMocks.transcribeScannedPages).toHaveBeenCalledWith(
+        expect.objectContaining({ forceNoTraining: true }),
+      );
+    });
+
     it('does not read the pictures for a caller that cannot pay for it', async () => {
       scannedDocument();
 

@@ -25,7 +25,11 @@ import {
   readRunnableArtifact,
   selectArtifactRuntimeRoute,
 } from '@/lib/services/artifact-runtime-service';
-import { connectorIdsReachGoogleUserData } from '@/lib/connectors/google-user-data-runs';
+import {
+  connectorIdsReachGoogleUserData,
+  publishedArtifactSourceHoldsGoogleUserData,
+} from '@/lib/connectors/google-user-data-runs';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { artifactConnectorsGateResponse } from '@/lib/services/artifact-connector-gate';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
@@ -159,11 +163,19 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   }
   const prompt = secrets.texts[0] ?? parsed.data.prompt;
 
+  // Decided per run: a Google connector the run can call, or an app made in a
+  // chat that holds Google user data, keeps the whole run off models that may
+  // train. The source chat belongs to the app's owner, not the viewer, so it is
+  // read on the service connection; unreadable counts as marked.
+  const googleUserData =
+    connectorIdsReachGoogleUserData(connectors) ||
+    (await publishedArtifactSourceHoldsGoogleUserData(getNeonDb(), artifact.publishedArtifactId));
+
   let route;
   try {
     route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan, {
       needsTools: connectors.length > 0,
-      googleUserData: connectorIdsReachGoogleUserData(connectors),
+      googleUserData,
     });
   } catch (error) {
     if (error instanceof ArtifactRuntimeRouteUnavailableError) {

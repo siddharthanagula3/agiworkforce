@@ -1,12 +1,20 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
+import { CUSTOM_SERVER_PREFIX, ORG_SHARED_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
 import {
   conversationHoldsGoogleUserData,
+  googleHostedCustomServerIds,
   GOOGLE_USER_DATA_CONNECTOR_IDS,
+  isGoogleApiUrl,
   isGoogleUserDataConnector,
   messagesCarryGoogleToolUse,
 } from '@/lib/connectors/google-user-data';
+import {
+  isDirectoryServerId,
+  resolveDirectoryTarget,
+} from '@/lib/connectors/mcp-directory-targets';
 import { logger } from '@/lib/logger';
 
 type GoogleUserDataDb = Pick<DatabaseAdapter, 'query'>;
@@ -22,23 +30,123 @@ export const GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE =
 export const GOOGLE_USER_DATA_SLACK_RESUME_MESSAGE =
   'This answer used data from your Google account, and its model does not keep that data out of training, so it cannot continue. Ask again in Slack.';
 
+export const GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE =
+  'This file came from your Google account and has scanned pages. No model that keeps Google data out of training can read them right now, so their text was not extracted. The file is still in the project.';
+
 export function connectorIdsReachGoogleUserData(connectorIds: readonly string[]): boolean {
   return connectorIds.some(isGoogleUserDataConnector);
 }
 
-export function toolsReachGoogleUserData(tools: readonly { serverId: string }[]): boolean {
-  return tools.some((tool) => isGoogleUserDataConnector(tool.serverId));
+export function toolsReachGoogleUserData(
+  tools: readonly { serverId: string; googleUserData?: true }[],
+): boolean {
+  return tools.some(
+    (tool) => tool.googleUserData === true || isGoogleUserDataConnector(tool.serverId),
+  );
+}
+
+interface RunTool {
+  serverId: string;
+  googleUserData?: true;
 }
 
 /**
  * Drops every tool of a Google connector from a run plan, the reconnect tool
  * included, since a surface that never offers Google data has no reason to
- * prompt for a Google reconnect either.
+ * prompt for a Google reconnect either. A tool the catalog flagged as served
+ * from a Google API host goes too.
  */
-export function withoutGoogleUserDataTools<T extends { serverId: string }>(
+export function withoutGoogleUserDataTools<T extends RunTool>(tools: readonly T[]): T[] {
+  return tools.filter(
+    (tool) => tool.googleUserData !== true && !isGoogleUserDataConnector(tool.serverId),
+  );
+}
+
+async function directoryServerOnGoogleHost(serverId: string): Promise<boolean> {
+  try {
+    const target = await resolveDirectoryTarget(serverId);
+    return target === null || isGoogleApiUrl(target.mcpUrl);
+  } catch (error) {
+    logger.warn(
+      { error, serverId },
+      'Directory server host unreadable; treating it as served from Google',
+    );
+    return true;
+  }
+}
+
+/**
+ * For a surface that never carries Google user data, such as Slack: removes
+ * Google connectors and every custom, workspace or directory server hosted on
+ * a Google API host. A host that cannot be read counts as a Google one.
+ */
+export async function withoutGoogleHostedTools<T extends RunTool>(
+  db: GoogleUserDataDb,
+  userId: string,
+  organizationId: string | null,
   tools: readonly T[],
-): T[] {
-  return tools.filter((tool) => !isGoogleUserDataConnector(tool.serverId));
+): Promise<T[]> {
+  const candidates = withoutGoogleUserDataTools(tools);
+  const customIds = candidates
+    .map((tool) => tool.serverId)
+    .filter((id) => id.startsWith(CUSTOM_SERVER_PREFIX) || id.startsWith(ORG_SHARED_SERVER_PREFIX));
+  const directoryIds = [
+    ...new Set(candidates.map((tool) => tool.serverId).filter(isDirectoryServerId)),
+  ];
+  if (customIds.length === 0 && directoryIds.length === 0) return candidates;
+
+  const hosted =
+    customIds.length > 0 ? await googleHostedCustomServerIds(db, userId, organizationId) : [];
+  const blocked = new Set<string>(hosted ?? customIds);
+  const directoryHosts = await Promise.all(
+    directoryIds.map(async (id) => [id, await directoryServerOnGoogleHost(id)] as const),
+  );
+  for (const [id, onGoogle] of directoryHosts) if (onGoogle) blocked.add(id);
+  return candidates.filter((tool) => !blocked.has(tool.serverId));
+}
+
+/**
+ * Whether a file imported from outside came from a Google connector or a
+ * Google API host, so any model that reads it must keep inputs out of training.
+ */
+export function externalOriginHoldsGoogleUserData(
+  origin: Pick<ExternalResourceReferenceInput, 'provider' | 'uri' | 'connectorId'> | undefined,
+): boolean {
+  if (!origin) return false;
+  return (
+    (origin.connectorId ? isGoogleUserDataConnector(origin.connectorId) : false) ||
+    isGoogleUserDataConnector(origin.provider) ||
+    isGoogleUserDataConnector(origin.provider.replace(/_/g, '-')) ||
+    isGoogleApiUrl(origin.uri)
+  );
+}
+
+/**
+ * A published app belongs to the conversation it was made in. When that chat
+ * holds Google user data, or its state cannot be read, every run of the app
+ * stays on models that keep inputs out of training.
+ */
+export async function publishedArtifactSourceHoldsGoogleUserData(
+  db: GoogleUserDataDb,
+  publishedArtifactId: string,
+): Promise<boolean> {
+  try {
+    const [row] = await db.query<{ marked: boolean }>(
+      `select coalesce(c.google_user_data_at is not null, false) as marked
+         from public.published_artifacts p
+         left join public.web_conversations c on c.id = p.conversation_id
+        where p.id = $1::uuid
+        limit 1`,
+      [publishedArtifactId],
+    );
+    return !row || row.marked !== false;
+  } catch (error) {
+    logger.warn(
+      { error, publishedArtifactId },
+      'Published app source chat unreadable; running it only on models that keep inputs out of training',
+    );
+    return true;
+  }
 }
 
 /**
