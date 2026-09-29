@@ -220,8 +220,6 @@ impl PolicyEngine {
         self.resolve_target(RuleTarget::Named(tool_name), primary_arg)
     }
 
-    /// Evaluate an MCP tool call by its server and tool, so a rule for one
-    /// server can never match another whose joined name shares a prefix.
     pub fn resolve_mcp(&self, server: &str, tool: &str) -> PolicyResolution {
         self.resolve_target(RuleTarget::Mcp { server, tool }, "")
     }
@@ -313,13 +311,14 @@ enum RuleTarget<'a> {
     Mcp { server: &'a str, tool: &'a str },
 }
 
-/// The highest-priority rule in one layer that matches this call.
+/// The rule in one layer that decides this call: any matching deny, else the
+/// highest-priority match.
 fn best_rule<'a>(
     rules: &'a [CompiledRule],
     target: RuleTarget<'_>,
     primary_arg: &str,
 ) -> Option<&'a PolicyRule> {
-    let mut best: Option<(&PolicyRule, u16)> = None;
+    let mut best: Option<(&PolicyRule, (bool, u16))> = None;
     for compiled in rules {
         let rule = &compiled.rule;
         if !rule_names_tool(&rule.tool, target) {
@@ -332,9 +331,10 @@ fn best_rule<'a>(
                 continue;
             }
         }
+        let rank = (decision_of(rule) == PolicyDecision::Deny, rule.priority);
         match best {
-            Some((_, previous)) if rule.priority <= previous => {}
-            _ => best = Some((rule, rule.priority)),
+            Some((_, previous)) if rank <= previous => {}
+            _ => best = Some((rule, rank)),
         }
     }
     best.map(|(rule, _)| rule)
@@ -354,8 +354,6 @@ fn rule_names_tool(rule_tool: &str, target: RuleTarget<'_>) -> bool {
     }
 }
 
-/// Split an `mcp__<server>[__<tool>]` rule into its server and tool. Server
-/// names cannot contain `__`, so the first separator is the boundary.
 fn parse_mcp_rule(rule_tool: &str) -> Option<(&str, Option<&str>)> {
     let rest = rule_tool.strip_prefix(MCP_TOOL_PREFIX)?;
     Some(match rest.split_once("__") {
@@ -375,7 +373,6 @@ pub fn mcp_rule_target(server: &str, tool: Option<&str>) -> String {
     }
 }
 
-/// Save or clear the user's rule for an MCP server, or one tool on it.
 pub fn set_user_mcp_rule(
     server: &str,
     tool: Option<&str>,
@@ -388,7 +385,6 @@ pub fn set_user_mcp_rule(
     write_user_mcp_rule(&mcp_rule_target(server, tool), tool.is_none(), decision)
 }
 
-/// Clear a saved MCP rule by the exact target it was stored under.
 pub fn remove_user_mcp_rule(target: &str) -> Result<PathBuf> {
     write_user_mcp_rule(target, false, None)
 }
@@ -1020,6 +1016,59 @@ mod tests {
         assert!(
             error.to_string().contains("must not contain '__'"),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn a_tool_allow_cannot_undo_a_server_block_in_the_same_layer() {
+        let engine = make_engine(vec![
+            rule(&mcp_rule_target("github", None), None, "deny", 10),
+            rule(
+                &mcp_rule_target("github", Some("search")),
+                None,
+                "allow",
+                20,
+            ),
+        ]);
+        assert_eq!(
+            engine.resolve_mcp("github", "search").decision,
+            PolicyDecision::Deny
+        );
+    }
+
+    #[test]
+    fn a_lower_priority_deny_wins_over_a_higher_allow() {
+        let engine = make_engine(vec![
+            rule("run_command", Some("rm"), "deny", 10),
+            rule("run_command", Some("rm -rf build"), "allow", 900),
+        ]);
+        assert_eq!(
+            engine.evaluate("run_command", "rm -rf build"),
+            PolicyDecision::Deny
+        );
+    }
+
+    #[test]
+    fn a_workspace_block_wins_over_a_user_allow_for_an_mcp_tool() {
+        let engine = layered(vec![
+            (PolicyLayer::Managed, vec![]),
+            (
+                PolicyLayer::User,
+                vec![rule(
+                    &mcp_rule_target("github", Some("search")),
+                    None,
+                    "allow",
+                    20,
+                )],
+            ),
+            (
+                PolicyLayer::Workspace,
+                vec![rule(&mcp_rule_target("github", None), None, "deny", 10)],
+            ),
+        ]);
+        assert_eq!(
+            engine.resolve_mcp("github", "search").decision,
+            PolicyDecision::Deny
         );
     }
 }
