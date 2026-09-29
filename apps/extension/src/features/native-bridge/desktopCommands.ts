@@ -8,6 +8,7 @@ import {
 import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contracts';
 import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
+import { watchDownloadsStartedBy } from '../browser-tools/downloads';
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
@@ -337,6 +338,7 @@ export async function runDesktopBrowserCommand(
     const rules = siteRulesOf(raw.siteRules);
     const refusal = rules ? await refusalBeforeActing(raw, tabId, rules, context) : null;
     if (refusal) return failed(raw.id, refusal);
+    if (rules && MOVES_THE_TAB.has(raw.command)) watchDownloadsStartedBy(rules);
     const value = await execute(raw, tabId, context);
     const landed = await readTabUrl(tabId, context);
     if (rules) {

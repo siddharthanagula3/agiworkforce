@@ -39,6 +39,10 @@ vi.stubGlobal('chrome', {
       Promise.resolve((permissions.origins ?? []).every((pattern) => grantedOrigins.has(pattern))),
     ),
   },
+  downloads: {
+    onCreated: { addListener: vi.fn(), removeListener: vi.fn() },
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
   tabs: {
     get: vi.fn((tabId: number) => {
       const tab = tabs.get(tabId);

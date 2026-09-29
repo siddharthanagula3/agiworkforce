@@ -207,7 +207,7 @@ export async function startBrowserToolDownload(
  * reports the final address on the item; one the workspace blocks is cancelled
  * and its partial file removed, so nothing from that site stays on disk.
  */
-function guardFinalDownloadUrl(id: number, rules: WebDomainRules): void {
+export function guardFinalDownloadUrl(id: number, rules: WebDomainRules): void {
   let settled = false;
   const refuse = async () => {
     settled = true;
@@ -238,6 +238,23 @@ function guardFinalDownloadUrl(id: number, rules: WebDomainRules): void {
   void chrome.downloads.search({ id }).then(([item]) => {
     judge(item?.finalUrl, item?.state !== undefined && item.state !== 'in_progress');
   });
+}
+
+const CLICK_DOWNLOAD_WATCH_MS = 10_000;
+
+/**
+ * A click or a form can start a download the command never named. For a short
+ * while after such a command, every download Chrome starts is held to the
+ * workspace's rules by its final address, like one the assistant asked for.
+ */
+export function watchDownloadsStartedBy(rules: WebDomainRules): () => void {
+  const onCreated = (item: chrome.downloads.DownloadItem) => {
+    guardFinalDownloadUrl(item.id, rules);
+  };
+  chrome.downloads.onCreated.addListener(onCreated);
+  const stop = () => chrome.downloads.onCreated.removeListener(onCreated);
+  setTimeout(stop, CLICK_DOWNLOAD_WATCH_MS);
+  return stop;
 }
 
 export async function listSessionDownloads(): Promise<DownloadRecord[]> {
