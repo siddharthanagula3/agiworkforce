@@ -21,20 +21,21 @@ use agiworkforce_protocol::developer_session::{
     LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
     McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
     McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    ModelListParams, PendingApprovalSnapshot, PermissionRulesResponse, PermissionsAddParams,
+    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
+    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
+    WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -439,6 +440,8 @@ impl CliDeveloperSessionHost {
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
             plugin_updates: true,
+            permission_rules: true,
+            trust: true,
         }
     }
 
@@ -3537,6 +3540,42 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn list_permission_rules(
+        &self,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_permission_rules)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn add_permission(
+        &self,
+        params: PermissionsAddParams,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::add_permission(params))
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_trusted_folders)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn revoke_trusted_folder(
+        &self,
+        params: TrustRevokeParams,
+    ) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::revoke_trusted_folder(&params.path))
             .await
             .map_err(internal_error)?
     }

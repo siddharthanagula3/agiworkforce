@@ -9,16 +9,17 @@ use agiworkforce_protocol::developer_session::{
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginSetEnabledParams, PluginUpdateResponse, ProtocolVersionUnsupportedData,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
     TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
     WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
@@ -424,6 +425,30 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PermissionsRemoveParams,
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PERMISSIONS_REMOVE))
+    }
+
+    async fn list_permission_rules(
+        &self,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_RULES))
+    }
+
+    async fn add_permission(
+        &self,
+        _params: PermissionsAddParams,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_ADD))
+    }
+
+    async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TRUST_LIST))
+    }
+
+    async fn revoke_trusted_folder(
+        &self,
+        _params: TrustRevokeParams,
+    ) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TRUST_REVOKE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1130,6 +1155,44 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_RULES => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_permission_rules()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_ADD => {
+                let params = match parse_params::<PermissionsAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .add_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TRUST_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_trusted_folders()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TRUST_REVOKE => {
+                let params = match parse_params::<TrustRevokeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .revoke_trusted_folder(params)
                     .await
                     .map(serde_json::to_value)
             }
