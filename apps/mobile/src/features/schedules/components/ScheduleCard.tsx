@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Pressable, type GestureResponderEvent } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Clock, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Clock, Trash2, ChevronDown, ChevronUp, Play } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
-import type { Schedule } from '../store';
+import { useScheduleStore, type Schedule } from '../store';
+import { triggerScheduleNow } from '../service';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 
@@ -24,6 +25,7 @@ interface ScheduleCardProps {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const RUN_NOW_FAILED = 'The run could not start. Try again.';
 
 function formatTime(timeOfDay: string): string {
   const [hoursStr, minutesStr] = timeOfDay.split(':');
@@ -162,6 +164,32 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const hasLegacyCadence = !isMobileScheduleRecurrenceSupported(schedule.recurrence);
+  const fetchRuns = useScheduleStore((s) => s.fetchRuns);
+  const fetchSchedules = useScheduleStore((s) => s.fetchSchedules);
+  const [starting, setStarting] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const handleRunNow = useCallback(
+    async (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      if (starting) return;
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setStarting(true);
+      setRunError(null);
+      try {
+        await triggerScheduleNow(schedule.id);
+        setHistoryExpanded(true);
+        await Promise.all([fetchRuns(schedule.id), fetchSchedules()]);
+      } catch (error) {
+        setRunError(error instanceof Error && error.message ? error.message : RUN_NOW_FAILED);
+      } finally {
+        setStarting(false);
+      }
+    },
+    [starting, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules],
+  );
 
   const handleDelete = useCallback(
     (event: GestureResponderEvent) => {
@@ -246,6 +274,20 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
             <View className="flex-row items-center gap-1">
+              <Pressable
+                onPress={handleRunNow}
+                disabled={starting}
+                hitSlop={8}
+                className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
+                accessibilityLabel={starting ? 'Starting a run' : 'Run now'}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: starting, busy: starting }}
+              >
+                <Play size={11} color={colors.textMuted} />
+                <Text className="text-[10px] text-white/40">
+                  {starting ? 'Starting…' : 'Run now'}
+                </Text>
+              </Pressable>
               {/* History toggle */}
               <Pressable
                 onPress={handleToggleHistory}
@@ -272,6 +314,12 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               </Pressable>
             </View>
           </View>
+
+          {runError ? (
+            <Text className="mt-2 text-xs leading-4" style={{ color: colors.agentError }}>
+              {runError}
+            </Text>
+          ) : null}
 
           {/* Expandable run history */}
           {historyExpanded && (
