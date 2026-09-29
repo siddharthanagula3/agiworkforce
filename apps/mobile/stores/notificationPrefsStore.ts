@@ -13,9 +13,14 @@ import {
   type TimeFocusWeekday,
 } from '@agiworkforce/types';
 
-export type NotificationCategory = 'chat_replies' | 'tasks' | 'product';
+/**
+ * The switches this device offers for its own pushes, like the push settings in
+ * the ChatGPT and Claude apps. They group push event types; the account feed
+ * files its rows under the shared NOTIFICATION_CATEGORIES instead.
+ */
+export type PushPreferenceGroup = 'chat_replies' | 'tasks' | 'product';
 
-export const DEFAULT_CATEGORY_ENABLED: Readonly<Record<NotificationCategory, boolean>> = {
+export const DEFAULT_CATEGORY_ENABLED: Readonly<Record<PushPreferenceGroup, boolean>> = {
   chat_replies: true,
   tasks: true,
   product: false,
@@ -28,7 +33,7 @@ const LEGACY_CATEGORY_DEFAULTS = {
   status: false,
 } as const;
 
-type LegacyNotificationCategory = keyof typeof LEGACY_CATEGORY_DEFAULTS;
+type LegacyPushPreferenceGroup = keyof typeof LEGACY_CATEGORY_DEFAULTS;
 
 export type QuietHours = QuietHoursPreferences;
 
@@ -43,12 +48,12 @@ export function deviceTimezone(): string {
 }
 
 export interface NotificationPrefsState {
-  categoryEnabled: Record<NotificationCategory, boolean>;
+  categoryEnabled: Record<PushPreferenceGroup, boolean>;
   vibrationEnabled: Record<'critical' | 'high' | 'normal' | 'low', boolean>;
   quietHours: QuietHours;
   breakReminderMinutes: BreakReminderMinutes | null;
 
-  setCategoryEnabled: (category: NotificationCategory, enabled: boolean) => void;
+  setCategoryEnabled: (category: PushPreferenceGroup, enabled: boolean) => void;
   setVibrationEnabled: (priority: 'critical' | 'high' | 'normal' | 'low', enabled: boolean) => void;
   setQuietHours: (quietHours: Partial<QuietHours>) => void;
   setBreakReminderMinutes: (minutes: BreakReminderMinutes | null) => void;
@@ -57,7 +62,7 @@ export interface NotificationPrefsState {
   shouldNotify: (type: NotificationEventType) => boolean;
 }
 
-export function getCategoryForType(type: NotificationEventType): NotificationCategory {
+export function getCategoryForType(type: NotificationEventType): PushPreferenceGroup {
   switch (type) {
     case 'chat_message':
       return 'chat_replies';
@@ -81,12 +86,12 @@ export function getCategoryForType(type: NotificationEventType): NotificationCat
 
 export function migrateLegacyCategoryEnabled(
   legacy: unknown,
-): Record<NotificationCategory, boolean> {
+): Record<PushPreferenceGroup, boolean> {
   if (legacy === null || typeof legacy !== 'object' || Array.isArray(legacy)) {
     return { ...DEFAULT_CATEGORY_ENABLED };
   }
-  const source = legacy as Partial<Record<LegacyNotificationCategory, unknown>>;
-  const flag = (key: LegacyNotificationCategory): boolean => {
+  const source = legacy as Partial<Record<LegacyPushPreferenceGroup, unknown>>;
+  const flag = (key: LegacyPushPreferenceGroup): boolean => {
     const value = source[key];
     return typeof value === 'boolean' ? value : LEGACY_CATEGORY_DEFAULTS[key];
   };
