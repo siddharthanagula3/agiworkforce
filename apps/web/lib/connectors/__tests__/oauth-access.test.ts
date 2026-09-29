@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => {
     record: vi.fn(),
     revokeAtProvider: vi.fn(),
     getProvider: vi.fn(),
+    dbQuery: vi.fn(),
     ConnectorOAuthTokenError,
     ConnectorGrantDecryptionError,
     ConnectorGrantLockTimeoutError,
@@ -73,27 +75,38 @@ vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
   upsertConnectorOAuthGrant: vi.fn(),
 }));
 
-vi.mock('@/lib/connectors/oauth-client', () => ({
+vi.mock('@/lib/connectors/oauth-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ConnectorOAuthTokenError: mocks.ConnectorOAuthTokenError,
   refreshAccessToken: (...a: unknown[]) => mocks.refresh(...a),
   revokeTokenAtProvider: (...a: unknown[]) => mocks.revokeAtProvider(...a),
   TOKEN_REQUEST_TIMEOUT_MS: 10_000,
 }));
 
-vi.mock('@/lib/connectors/oauth-registry', () => ({
+vi.mock('@/lib/connectors/oauth-registry', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getConnectorOAuthProvider: (...a: unknown[]) => mocks.getProvider(...a),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ privileged: true }) }));
-vi.mock('@/lib/services/notification-service', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getNeonDb: () => ({ privileged: true, query: (...a: unknown[]) => mocks.dbQuery(...a) }),
+}));
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   recordNotification: (...a: unknown[]) => mocks.record(...a),
 }));
 
-vi.mock('@/lib/connectors/mcp-discovery', () => ({
+vi.mock('@/lib/connectors/mcp-discovery', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   refreshDiscoveredGrant: mocks.refreshDiscovered,
 }));
 
-import { disconnectConnectorOAuthGrant, resolveConnectorAccessToken } from '../oauth-access';
+import {
+  disconnectConnectorOAuthGrant,
+  resolveConnectorAccessToken,
+  revokeAllConnectorTokensAtProviders,
+} from '../oauth-access';
 
 const PROVIDER = {
   connectorId: 'linear',
@@ -218,7 +231,7 @@ describe('resolveConnectorAccessToken', () => {
     ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
     expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'default');
     expect(mocks.record).toHaveBeenCalledWith(
-      { privileged: true },
+      expect.objectContaining({ privileged: true }),
       expect.objectContaining({
         userId: 'u1',
         category: 'connector',
@@ -387,5 +400,50 @@ describe('disconnectConnectorOAuthGrant', () => {
 
     await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toBe(true);
     expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+  });
+});
+
+describe('revokeAllConnectorTokensAtProviders', () => {
+  const google = { revocationUrl: 'https://oauth2.googleapis.com/revoke' };
+
+  beforeEach(() => {
+    mocks.dbQuery.mockReset();
+    mocks.listRevocable.mockReset();
+    mocks.revokeAtProvider.mockReset();
+    mocks.getProvider.mockReset();
+  });
+
+  it('revokes every account of every connector that has a revocation endpoint', async () => {
+    mocks.dbQuery.mockResolvedValue([{ connector_id: 'gmail' }, { connector_id: 'no-revoke' }]);
+    mocks.getProvider.mockImplementation((id: string) => (id === 'gmail' ? google : {}));
+    mocks.listRevocable.mockResolvedValue([
+      { accountKey: 'default', token: 'r1', tokenTypeHint: 'refresh_token' },
+      { accountKey: 'work', token: 'r2', tokenTypeHint: 'refresh_token' },
+    ]);
+    mocks.revokeAtProvider.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 2,
+      revoked: 1,
+    });
+    expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'gmail');
+    expect(mocks.listRevocable).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(google, 'r2', 'refresh_token');
+  });
+
+  it('never throws when the grants cannot be read or a token cannot be listed', async () => {
+    mocks.dbQuery.mockRejectedValueOnce(new Error('db down'));
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 0,
+      revoked: 0,
+    });
+
+    mocks.dbQuery.mockResolvedValue([{ connector_id: 'gmail' }]);
+    mocks.getProvider.mockReturnValue(google);
+    mocks.listRevocable.mockRejectedValue(new MockDecryptionError());
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 0,
+      revoked: 0,
+    });
   });
 });

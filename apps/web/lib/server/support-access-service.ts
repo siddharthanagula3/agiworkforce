@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { MEMBERSHIP_STATUSES_THAT_MAY_ACT } from '@/lib/server/workspace-scope';
 
 // A refused read is appended to the trail as well as a granted one, and each
 // event carries the hash of the one before it, so a removed row leaves a break.
@@ -21,6 +22,33 @@ export const SUPPORT_ACCESS_SCOPES = Object.freeze([
 ] as const);
 
 export type SupportAccessScope = (typeof SUPPORT_ACCESS_SCOPES)[number];
+
+export const SUPPORT_ACCESS_PURPOSES = Object.freeze([
+  'support',
+  'security',
+  'abuse',
+  'legal',
+  'customer_consent',
+] as const);
+
+export type SupportAccessPurpose = (typeof SUPPORT_ACCESS_PURPOSES)[number];
+
+// Google API Limited Use lets a person read Google user data only with the
+// user's consent, for security or abuse investigation (a bug included), or to
+// comply with law. A 'support' grant is none of those, so it never shows it.
+const GOOGLE_USER_DATA_PURPOSES: ReadonlySet<SupportAccessPurpose> = new Set([
+  'security',
+  'abuse',
+  'legal',
+  'customer_consent',
+]);
+
+export const GOOGLE_USER_DATA_WITHHELD =
+  'Withheld: this is Google user data, shown only under a security, abuse, legal or customer consent grant.';
+
+export function grantMayReadGoogleUserData(grant: Pick<SupportAccessGrant, 'purpose'>): boolean {
+  return GOOGLE_USER_DATA_PURPOSES.has(grant.purpose);
+}
 
 export type SupportAccessStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired';
 
@@ -44,6 +72,7 @@ export interface SupportAccessGrant {
   revokedByUserId: string | null;
   reason: string;
   ticketRef: string;
+  purpose: SupportAccessPurpose;
   scopes: SupportAccessScope[];
   status: SupportAccessStatus;
   requestedAt: string;
@@ -91,6 +120,56 @@ export class SupportAccessRequestError extends Error {
 
 function isSupportAccessScope(value: unknown): value is SupportAccessScope {
   return typeof value === 'string' && (SUPPORT_ACCESS_SCOPES as readonly string[]).includes(value);
+}
+
+export function isSupportAccessPurpose(value: unknown): value is SupportAccessPurpose {
+  return (
+    typeof value === 'string' && (SUPPORT_ACCESS_PURPOSES as readonly string[]).includes(value)
+  );
+}
+
+function assertPurpose(purpose: unknown): SupportAccessPurpose {
+  if (!isSupportAccessPurpose(purpose)) {
+    throw new SupportAccessRequestError(
+      `Name the purpose of this access: ${SUPPORT_ACCESS_PURPOSES.join(', ')}.`,
+    );
+  }
+  return purpose;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Evidence for a 'customer_consent' grant. Consent has to be the customer's own
+ * words, not the operator's account of them, so the ticket reference must be an
+ * in-product support ticket (support_tickets.id) raised by an active member of
+ * the workspace. This proves the ticket exists and who raised it; it cannot
+ * read whether the text actually consents, which is what the second operator
+ * checks in that ticket before approving.
+ */
+async function consentingMember(
+  tx: DatabaseAdapter,
+  organizationId: string,
+  ticketRef: string,
+): Promise<string> {
+  const refused = new SupportAccessRequestError(
+    'A customer consent grant needs the id of the support ticket in which a member of this ' +
+      'workspace gave that consent.',
+  );
+  if (!UUID_RE.test(ticketRef)) throw refused;
+  const [row] = await tx.query<{ user_id: string }>(
+    `select ticket.user_id
+       from public.support_tickets as ticket
+       join public.organization_members as member
+         on member.user_id = ticket.user_id
+        and member.organization_id = $2
+        and member.status = any ($3::text[])
+      where ticket.id = $1
+      limit 1`,
+    [ticketRef, organizationId, MEMBERSHIP_STATUSES_THAT_MAY_ACT],
+  );
+  if (!row) throw refused;
+  return row.user_id;
 }
 
 export function parseSupportAccessScopes(value: unknown): SupportAccessScope[] {
@@ -153,6 +232,7 @@ interface GrantRow extends Record<string, unknown> {
   revoked_by_user_id: string | null;
   reason: string;
   ticket_ref: string;
+  purpose: string;
   scopes: string[];
   status: SupportAccessStatus;
   requested_at: string | Date;
@@ -177,7 +257,7 @@ interface EventRow extends Record<string, unknown> {
 }
 
 const GRANT_COLUMNS = `id, organization_id, requested_by_user_id, approved_by_user_id,
-  revoked_by_user_id, reason, ticket_ref, scopes, status, requested_at, decided_at,
+  revoked_by_user_id, reason, ticket_ref, purpose, scopes, status, requested_at, decided_at,
   expires_at, revoked_at`;
 
 const EVENT_COLUMNS = `id, grant_id, organization_id, actor_user_id, event, resource_type,
@@ -197,6 +277,7 @@ function mapGrant(row: GrantRow): SupportAccessGrant {
     revokedByUserId: row.revoked_by_user_id,
     reason: row.reason,
     ticketRef: row.ticket_ref,
+    purpose: isSupportAccessPurpose(row.purpose) ? row.purpose : 'support',
     scopes: row.scopes.filter(isSupportAccessScope),
     status: row.status,
     requestedAt: iso(row.requested_at) ?? '',
@@ -303,6 +384,7 @@ export interface RequestSupportAccessInput {
   requestedByUserId: string;
   reason: string;
   ticketRef: string;
+  purpose: SupportAccessPurpose;
   scopes: readonly SupportAccessScope[];
 }
 
@@ -311,15 +393,20 @@ export async function requestSupportAccess(
 ): Promise<SupportAccessGrant> {
   const reason = assertReason(input.reason);
   const ticketRef = assertTicketRef(input.ticketRef);
+  const purpose = assertPurpose(input.purpose);
   const scopes = parseSupportAccessScopes([...input.scopes]);
 
   return input.db.transaction(async (tx) => {
+    const consentFrom =
+      purpose === 'customer_consent'
+        ? await consentingMember(tx, input.organizationId, ticketRef)
+        : null;
     const [row] = await tx.query<GrantRow>(
       `insert into public.support_access_grants
-         (organization_id, requested_by_user_id, reason, ticket_ref, scopes)
-       values ($1, $2, $3, $4, $5::text[])
+         (organization_id, requested_by_user_id, reason, ticket_ref, scopes, purpose)
+       values ($1, $2, $3, $4, $5::text[], $6)
        returning ${GRANT_COLUMNS}`,
-      [input.organizationId, input.requestedByUserId, reason, ticketRef, scopes],
+      [input.organizationId, input.requestedByUserId, reason, ticketRef, scopes, purpose],
     );
     if (!row) throw new SupportAccessRequestError('The break-glass request was not recorded.');
     await appendEvent(tx, {
@@ -327,7 +414,7 @@ export async function requestSupportAccess(
       organizationId: input.organizationId,
       actorUserId: input.requestedByUserId,
       event: 'requested',
-      detail: { reason, ticketRef, scopes },
+      detail: { reason, ticketRef, purpose, scopes, ...(consentFrom ? { consentFrom } : {}) },
     });
     return mapGrant(row);
   });
@@ -381,7 +468,11 @@ export async function approveSupportAccess(
       organizationId: row.organization_id,
       actorUserId: input.actorUserId,
       event: 'approved',
-      detail: { requestedBy: row.requested_by_user_id, expiresAt: iso(row.expires_at) },
+      detail: {
+        requestedBy: row.requested_by_user_id,
+        purpose: mapGrant(row).purpose,
+        expiresAt: iso(row.expires_at),
+      },
     });
     return mapGrant(row);
   });
@@ -584,6 +675,7 @@ export interface RecordSupportAccessInput {
   resourceType: string;
   resourceId?: string | null;
   rowCount?: number | null;
+  detail?: Record<string, unknown>;
 }
 
 export async function recordSupportDataAccess(input: RecordSupportAccessInput): Promise<void> {
@@ -596,7 +688,11 @@ export async function recordSupportDataAccess(input: RecordSupportAccessInput): 
       resourceType: input.resourceType,
       resourceId: input.resourceId ?? null,
       rowCount: input.rowCount ?? null,
-      detail: { ticketRef: input.grant.ticketRef },
+      detail: {
+        ...input.detail,
+        ticketRef: input.grant.ticketRef,
+        purpose: input.grant.purpose,
+      },
     }),
   );
 }
@@ -609,18 +705,25 @@ export interface OperatorContentListing<T> {
   records: readonly T[];
   organizationIdOf: (record: T) => string | null;
   withoutContent: (record: T) => T;
+  googleUserData?: {
+    carries: (record: T) => boolean;
+    withhold: (record: T) => T;
+  };
 }
 
 export interface OperatorContentView<T> {
   records: T[];
   grantedOrganizationIds: string[];
   redactedCount: number;
+  googleUserDataWithheldCount: number;
 }
 
 /**
  * An operator listing that spans tenants. A row whose workspace no live grant
- * covers is served without its content, and each workspace actually read is
- * appended to that workspace's own trail under the grant that allowed it.
+ * covers is served without its content, a row carrying Google user data is
+ * served without it unless the grant's purpose allows reading it, and each
+ * workspace actually read is appended to that workspace's own trail under the
+ * grant that allowed it.
  */
 export async function readOperatorContentUnderGrants<T>(
   input: OperatorContentListing<T>,
@@ -637,20 +740,29 @@ export async function readOperatorContentUnderGrants<T>(
   });
 
   const served = new Map<string, number>();
+  const withheld = new Map<string, number>();
   let redactedCount = 0;
+  let googleUserDataWithheldCount = 0;
   const records = input.records.map((record) => {
     const organizationId = input.organizationIdOf(record);
-    if (!organizationId || !grants.has(organizationId)) {
+    const grant = organizationId ? grants.get(organizationId) : undefined;
+    if (!organizationId || !grant) {
       redactedCount += 1;
       return input.withoutContent(record);
     }
     served.set(organizationId, (served.get(organizationId) ?? 0) + 1);
+    if (input.googleUserData?.carries(record) && !grantMayReadGoogleUserData(grant)) {
+      googleUserDataWithheldCount += 1;
+      withheld.set(organizationId, (withheld.get(organizationId) ?? 0) + 1);
+      return input.googleUserData.withhold(record);
+    }
     return record;
   });
 
   for (const [organizationId, rowCount] of served) {
     const grant = grants.get(organizationId);
     if (!grant) continue;
+    const googleUserDataWithheld = withheld.get(organizationId) ?? 0;
     try {
       await recordSupportDataAccess({
         db: input.db,
@@ -658,6 +770,7 @@ export async function readOperatorContentUnderGrants<T>(
         actorUserId: input.actorUserId,
         resourceType: input.resourceType,
         rowCount,
+        ...(googleUserDataWithheld > 0 ? { detail: { googleUserDataWithheld } } : {}),
       });
     } catch (error) {
       logger.error(
@@ -667,7 +780,12 @@ export async function readOperatorContentUnderGrants<T>(
     }
   }
 
-  return { records, grantedOrganizationIds: [...served.keys()].sort(), redactedCount };
+  return {
+    records,
+    grantedOrganizationIds: [...served.keys()].sort(),
+    redactedCount,
+    googleUserDataWithheldCount,
+  };
 }
 
 export interface SupportAccessReadInput extends SupportAccessLookup {

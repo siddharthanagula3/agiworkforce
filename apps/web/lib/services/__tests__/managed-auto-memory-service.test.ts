@@ -7,7 +7,8 @@ function processed(autoMemoryFacts: string[]): ProcessedRequest {
   return {
     requestId: 'request-1',
     autoMemoryFacts,
-  } as ProcessedRequest;
+    chatRequest: { messages: [] },
+  } as unknown as ProcessedRequest;
 }
 
 describe('recordManagedAutoMemoryTurn', () => {
@@ -116,6 +117,59 @@ describe('recordManagedAutoMemoryTurn', () => {
 
     const statements = query.mock.calls.map((call) => String(call[0]));
     expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(true);
+  });
+
+  it('keeps nothing from a conversation that holds Google user data', async () => {
+    const query = asQuery(
+      vi.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('google_user_data_at is not null as marked')) {
+          return [{ marked: true, project_id: null }];
+        }
+        return answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }];
+      }),
+    );
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: {
+        ...processed(['User prefers concise answers']),
+        conversationId: '52d14f7e-0b3d-40c7-952d-987e841033c5',
+      },
+      outcome: 'completed',
+    });
+
+    const statements = query.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(false);
+  });
+
+  it('keeps nothing from a turn whose history shows a Google tool call', async () => {
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
+    );
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: {
+        ...processed(['User prefers concise answers']),
+        chatRequest: {
+          messages: [
+            {
+              role: 'assistant',
+              tool_calls: [{ id: 'c', function: { name: 'mcp__gmail__search_threads' } }],
+            },
+          ],
+        },
+      } as unknown as ProcessedRequest,
+      outcome: 'completed',
+    });
+
+    const statements = query.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(false);
   });
 
   it('swallows persistence failures so memory cannot break a successful response', async () => {

@@ -1,6 +1,7 @@
 import terms_2026_08_11 from './terms/2026-08-11.json';
 import privacy_2026_09_21 from './privacy/2026-09-21.json';
 import privacy_2026_09_22 from './privacy/2026-09-22.json';
+import privacy_2026_09_27 from './privacy/2026-09-27.json';
 import acceptableUse_2026_08_05 from './acceptableUse/2026-08-05.json';
 import acceptableUse_2026_09_22 from './acceptableUse/2026-09-22.json';
 import cookies_2026_09_12 from './cookies/2026-09-12.json';
@@ -19,6 +20,7 @@ export const ARCHIVED_POLICY_TEXT = {
   privacy: {
     '2026-09-21': privacy_2026_09_21,
     '2026-09-22': privacy_2026_09_22,
+    '2026-09-27': privacy_2026_09_27,
   },
   acceptableUse: {
     '2026-08-05': acceptableUse_2026_08_05,
