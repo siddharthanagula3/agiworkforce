@@ -5,12 +5,17 @@ const mocks = vi.hoisted(() => ({
   resolveRoute: vi.fn(),
   dispatchProvider: vi.fn(),
   reserve: vi.fn(),
+  optOut: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readProviderTrainingOptOut: mocks.optOut,
 }));
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -57,6 +62,7 @@ function selected(provider: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.available.mockReturnValue(new Set(['openai', 'deepseek']));
+  mocks.optOut.mockResolvedValue(false);
   mocks.resolveRoute.mockReturnValue(selected('openai'));
   mocks.dispatchProvider.mockImplementation((route: { provider: string }) => route.provider);
   // Stops the call at billing: these tests are about which route may be used.
@@ -96,6 +102,63 @@ describe('transcribeScannedPages and Google user data', () => {
     await expect(transcribeScannedPages(input(true))).rejects.toBeInstanceOf(
       ScannedTextWithheldError,
     );
+  });
+
+  it('withholds a Google scan with the Google reason', async () => {
+    mocks.available.mockReturnValue(new Set(['deepseek']));
+
+    await expect(transcribeScannedPages(input(true))).rejects.toMatchObject({
+      reason: 'google_user_data',
+    });
+  });
+});
+
+describe('transcribeScannedPages and the training opt-out setting', () => {
+  it.each([
+    ['on', () => mocks.optOut.mockResolvedValue(true)],
+    ['unreadable', () => mocks.optOut.mockRejectedValue(new Error('connection reset'))],
+  ])(
+    'offers only no-training providers for any file while the setting is %s',
+    async (_label, arrange) => {
+      arrange();
+
+      await expect(transcribeScannedPages(input())).rejects.toThrow('stop at billing');
+
+      expect(mocks.optOut).toHaveBeenCalledWith(expect.anything(), 'user-1');
+      const providers = mocks.resolveRoute.mock.calls[0]![6] as Set<string>;
+      expect([...providers]).toEqual(['openai']);
+    },
+  );
+
+  it('withholds the scan for an opted-out user when no such provider is available', async () => {
+    mocks.optOut.mockResolvedValue(true);
+    mocks.available.mockReturnValue(new Set(['deepseek']));
+
+    const refusal = transcribeScannedPages(input());
+
+    await expect(refusal).rejects.toBeInstanceOf(ScannedTextWithheldError);
+    await expect(refusal).rejects.toMatchObject({ reason: 'training_opt_out' });
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('withholds the scan for an opted-out user when the route dispatches through a provider that may train', async () => {
+    mocks.optOut.mockResolvedValue(true);
+    mocks.dispatchProvider.mockReturnValue('deepseek');
+
+    await expect(transcribeScannedPages(input())).rejects.toMatchObject({
+      reason: 'training_opt_out',
+    });
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unrestricted pick while the setting is off', async () => {
+    mocks.resolveRoute.mockReturnValue(selected('deepseek'));
+
+    await expect(transcribeScannedPages(input())).rejects.toThrow('stop at billing');
+
+    const providers = mocks.resolveRoute.mock.calls[0]![6] as Set<string>;
+    expect([...providers].sort()).toEqual(['deepseek', 'openai']);
+    expect(mocks.reserve).toHaveBeenCalledWith(expect.objectContaining({ provider: 'deepseek' }));
   });
 
   it('routes an ordinary scan over every managed provider and returns null when none serves it', async () => {

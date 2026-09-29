@@ -24,6 +24,10 @@ import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/
 import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 import {
+  SCAN_WITHHELD_TRAINING_OPT_OUT_MESSAGE,
+  type ScanWithheldReason,
+} from '@/lib/server/scanned-document-text';
+import {
   externalOriginHoldsGoogleUserData,
   GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE,
 } from '@/lib/connectors/google-user-data-runs';
@@ -155,6 +159,13 @@ async function purgeUploadedKnowledgeObject(
       );
     }
   }
+}
+
+/** The curated line a person sees when a scan's pages were left unread. */
+export function scanWithheldNotice(reason: ScanWithheldReason): string {
+  return reason === 'google_user_data'
+    ? GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE
+    : SCAN_WITHHELD_TRAINING_OPT_OUT_MESSAGE;
 }
 
 function unreadableUploadSummary(mimeType: string, extractedText: string | null): string | null {
@@ -428,8 +439,8 @@ export async function registerProjectKnowledgeFile(
         body.mimeType.trim(),
         body.byteCount,
         body.checksumSha256.trim(),
-        extraction.scannedTextWithheld && extraction.extractedText === null
-          ? GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE
+        extraction.scannedTextWithheld
+          ? scanWithheldNotice(extraction.scannedTextWithheld)
           : unreadableUploadSummary(body.mimeType, extraction.extractedText),
         body.sourceSurface,
         userId,
@@ -504,6 +515,8 @@ export async function registerProjectKnowledgeFile(
   return {
     status: 'created',
     file: projectKnowledgeResponse(data, projectId, indexStates.get(fileId) ?? null),
-    ...(extraction.scannedTextWithheld ? { notice: GOOGLE_USER_DATA_SCAN_WITHHELD_MESSAGE } : {}),
+    ...(extraction.scannedTextWithheld
+      ? { notice: scanWithheldNotice(extraction.scannedTextWithheld) }
+      : {}),
   };
 }
