@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } f
 import { useSession } from '@clerk/expo';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { requestStepUpGrant, type StepUpChallenge, type StepUpLevel } from '../services/stepUp';
@@ -336,7 +336,14 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  dialog: { width: '100%', maxWidth: 420, borderRadius: 14, padding: 20, borderWidth: 1, gap: 12 },
+  dialog: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 14,
+    padding: dialogPadding,
+    borderWidth: 1,
+    gap: 12,
+  },
   title: { fontSize: 17, fontWeight: '600' },
   body: { fontSize: 14, lineHeight: 20 },
   field: { gap: 6 },

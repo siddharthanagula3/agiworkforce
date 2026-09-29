@@ -12,7 +12,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, dialogPadding } from '@/src/ui/theme';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -196,7 +196,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             backgroundColor: '#1a1a1a',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            paddingHorizontal: 24,
+            paddingHorizontal: dialogPadding,
             paddingBottom: 40,
             paddingTop: 24,
             borderTopWidth: 1,

@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, dialogPadding } from '@/src/ui/theme';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -106,7 +106,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 20,
+              paddingHorizontal: dialogPadding,
               paddingBottom: 16,
             }}
           >
@@ -132,7 +132,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
 
           {/* Options */}
           <View
-            style={{ paddingHorizontal: 20, gap: 4 }}
+            style={{ paddingHorizontal: dialogPadding, gap: 4 }}
             accessibilityRole="radiogroup"
             accessibilityLabel="Chat style"
           >

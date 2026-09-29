@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import {
   openSupportEmail,
   saveContentReport,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 24,
+    padding: dialogPadding,
     paddingBottom: 40,
     maxHeight: '85%',
   },
