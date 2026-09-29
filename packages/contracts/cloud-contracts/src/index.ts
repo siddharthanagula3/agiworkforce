@@ -54,6 +54,7 @@ export * from './capability-handshake';
 export * from './schedules';
 export * from './live-voice-tools';
 export * from './triggers';
+export * from './conversation-shares';
 export * from './slack';
 export * from './skills';
 export * from './plugin-marketplaces';
