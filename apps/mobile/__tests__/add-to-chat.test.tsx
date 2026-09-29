@@ -386,16 +386,31 @@ describe('AddToChatSheet', () => {
 
     it('shows the Video row on an entitled plan', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useTierStore.setState({ tier: 'max_15x', grantedCapabilities: ['canUseImages'] });
+      useTierStore.setState({
+        tier: 'max_15x',
+        grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
+      });
 
       const { getByText } = renderSheet();
 
       expect(getByText('Video')).toBeTruthy();
     });
 
-    it('updates the selected video-model row immediately after the user picks another model', () => {
+    it('hides the Video row when only the image capability is granted', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'max_15x', grantedCapabilities: ['canUseImages'] });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Video')).toBeNull();
+    });
+
+    it('updates the selected video-model row immediately after the user picks another model', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({
+        tier: 'max_15x',
+        grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
+      });
       useChatViewStore.setState({ mediaMode: 'video', selectedMediaModel: {} });
       const candidates = listMediaModels('video');
       expect(candidates.length).toBeGreaterThan(1);

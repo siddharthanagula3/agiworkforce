@@ -1193,6 +1193,7 @@ if (__AgiApp) {
   const handleOpenInNewTab = () => {
     const page = sandboxedPreviewPage(artifact.title || 'Artifact', getPreviewHTML());
 
+    // eslint-disable-next-line no-restricted-syntax -- the page only frames the artifact in a sandbox without allow-same-origin
     const blob = new Blob([page], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');

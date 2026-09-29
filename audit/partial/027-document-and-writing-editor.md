@@ -154,7 +154,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No Word/DOCX export: the artifact Download as sheet offers Markdown, PDF and text only. | ui |
+| mobile | partial | Add Word (.docx) to the artifact Download as sheet on mobile so document artifacts download as .docx alongside Markdown, PDF and text. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 

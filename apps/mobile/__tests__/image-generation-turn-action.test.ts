@@ -115,10 +115,10 @@ describe('runImageGenerationTurn', () => {
       },
     );
 
-    expect(generate).toHaveBeenCalledWith({
-      prompt: 'Create an image of Mars',
-      model: 'registry-image-route',
-    });
+    expect(generate).toHaveBeenCalledWith(
+      { prompt: 'Create an image of Mars', model: 'registry-image-route' },
+      { operationId: 'assistant-1' },
+    );
     expect(callbacks.begin).toHaveBeenCalledWith(
       'conversation-1',
       'Create an image of Mars',
@@ -325,12 +325,15 @@ describe('runImageGenerationTurn', () => {
       'registry-image-route',
       [{ url: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' }],
     );
-    expect(generate).toHaveBeenCalledWith({
-      prompt: 'make it a poster',
-      model: 'registry-image-route',
-      operation: 'edit',
-      source_image: { b64_json: 'cmVmZXJlbmNlLWJ5dGVz' },
-    });
+    expect(generate).toHaveBeenCalledWith(
+      {
+        prompt: 'make it a poster',
+        model: 'registry-image-route',
+        operation: 'edit',
+        source_image: { b64_json: 'cmVmZXJlbmNlLWJ5dGVz' },
+      },
+      { operationId: expect.any(String) },
+    );
     expect(
       ManagedMediaImageGenerationRequestSchema.safeParse(generate.mock.calls[0]?.[0]).success,
     ).toBe(true);

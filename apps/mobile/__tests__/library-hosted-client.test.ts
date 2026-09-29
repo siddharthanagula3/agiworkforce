@@ -74,6 +74,8 @@ describe('library client mapping', () => {
       prompt: 'a cobalt circle',
       createdAt: '2026-09-01T00:00:00.000Z',
       sourceLabel: 'sol-1',
+      eraseAfter: null,
+      model: 'sol-1',
     });
   });
 

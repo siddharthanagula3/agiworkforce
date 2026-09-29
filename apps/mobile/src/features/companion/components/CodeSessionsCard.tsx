@@ -10,6 +10,12 @@ import { useThemeColors } from '@/src/ui/theme';
 import { listCodeSessions } from '../remote-code/service';
 import { useRemoteCodeStore } from '../remote-code/store';
 
+const REMOTE_SESSION_ORIGIN_LABELS = {
+  cli: 'CLI',
+  vscode: 'VS Code',
+  desktop: 'Desktop',
+} as const;
+
 const STATUS_LABELS: Record<RemoteCodeSessionStatus, string> = {
   idle: 'Idle',
   running: 'Running',
@@ -90,7 +96,13 @@ export function CodeSessionsCard() {
                     {session.title}
                   </Text>
                   <Text className="text-[10px] text-white/45" numberOfLines={1}>
-                    {session.branch ? `${session.folder} · ${session.branch}` : session.folder}
+                    {[
+                      session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
+                      session.folder,
+                      session.branch,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 </View>
                 <Badge
