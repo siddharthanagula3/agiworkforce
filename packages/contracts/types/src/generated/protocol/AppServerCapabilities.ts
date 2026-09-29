@@ -53,4 +53,5 @@ export type AppServerCapabilities = {
    * `plan/decide` approves or rejects the plan a plan-mode turn proposed.
    */
   planDecisions?: boolean;
+  pullRequests?: boolean;
 };

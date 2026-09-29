@@ -115,6 +115,8 @@ pub mod method {
     pub const PERMISSIONS_LIST: &str = "permissions/list";
     pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
     pub const PLAN_DECIDE: &str = "plan/decide";
+    pub const GIT_PULL_REQUEST_PLAN: &str = "git/pullRequest/plan";
+    pub const GIT_PULL_REQUEST: &str = "git/pullRequest";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -388,6 +390,8 @@ pub struct AppServerCapabilities {
     /// `plan/decide` approves or rejects the plan a plan-mode turn proposed.
     #[serde(default, skip_serializing_if = "is_false")]
     pub plan_decisions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pull_requests: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2485,6 +2489,73 @@ pub struct PermissionsListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestPlanParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestCommit {
+    pub commit: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestPlanResponse {
+    pub remote: String,
+    pub branch: String,
+    pub head: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base: Option<String>,
+    pub commits: Vec<GitPullRequestCommit>,
+    pub needs_push: bool,
+    pub notices: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub blocked: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub body: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub draft: bool,
+    pub confirmed_head: String,
+    pub confirmed_commits: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestResponse {
+    pub url: String,
+    pub created: bool,
+    pub pushed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

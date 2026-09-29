@@ -160,6 +160,7 @@ const capabilitiesSchema = z.object({
   mcpInspect: z.boolean().optional(),
   pluginUpdates: z.boolean().optional(),
   planDecisions: z.boolean().optional(),
+  pullRequests: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -376,6 +377,8 @@ const threadSearchResponseSchema = z.object({
 
 export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
 
+const PULL_REQUEST_TIMEOUT_MS = 240_000;
+
 const savedPermissionsResponseSchema = z.object({
   permissions: z
     .array(
@@ -390,6 +393,28 @@ const savedPermissionsResponseSchema = z.object({
 });
 
 export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
+
+const pullRequestPlanSchema = z.object({
+  remote: z.string(),
+  branch: z.string(),
+  head: z.string(),
+  base: z.string().optional(),
+  commits: z.array(z.object({ commit: z.string(), subject: z.string() })).max(10_000),
+  needsPush: z.boolean(),
+  notices: z.array(z.string()),
+  blocked: z.string().optional(),
+});
+
+export type PullRequestPlan = z.infer<typeof pullRequestPlanSchema>;
+
+const pullRequestResultSchema = z.object({
+  url: z.string().url(),
+  created: z.boolean(),
+  pushed: z.boolean(),
+  note: z.string().optional(),
+});
+
+export type PullRequestResult = z.infer<typeof pullRequestResultSchema>;
 
 const mcpServerInspectionSchema = z.object({
   name: z.string().min(1).max(512),
@@ -1321,6 +1346,24 @@ export class LocalRuntimeClient {
     await connection.request(
       'plan/decide',
       feedback === undefined ? { threadId, decision } : { threadId, decision, feedback },
+    );
+  }
+
+  async planPullRequest(): Promise<PullRequestPlan> {
+    const connection = await this.readyConnection();
+    return pullRequestPlanSchema.parse(await connection.request('git/pullRequest/plan', {}));
+  }
+
+  async createPullRequest(request: {
+    title: string;
+    body?: string;
+    base: string;
+    confirmedHead: string;
+    confirmedCommits: number;
+  }): Promise<PullRequestResult> {
+    const connection = await this.readyConnection();
+    return pullRequestResultSchema.parse(
+      await connection.request('git/pullRequest', request, PULL_REQUEST_TIMEOUT_MS),
     );
   }
 
