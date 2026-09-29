@@ -88,6 +88,12 @@ const config = {
       NSTranslationUsageDescription:
         'AGI Workforce uses on-device translation to translate text between languages privately.',
       NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
