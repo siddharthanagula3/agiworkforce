@@ -19,6 +19,7 @@ import {
   type ToolInputResponseWire,
 } from '@agiworkforce/cloud-contracts';
 import {
+  AccountUnavailableError,
   createMultimodalUserContent,
   getAuthToken,
   MANAGED_CHAT_FILE_ASSET_ID,
@@ -494,6 +495,9 @@ export async function executeChromeManagedChat(
   } catch (error) {
     if (request.signal?.aborted) {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
+    }
+    if (error instanceof AccountUnavailableError) {
+      return { status: 'error', code: 'account_suspended', message: error.message };
     }
     return {
       status: 'error',

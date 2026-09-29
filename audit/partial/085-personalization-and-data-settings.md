@@ -169,9 +169,6 @@ Code: `apps/mobile/src/features/settings/data-controls/index.tsx:167-195`, `apps
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Log out removes the account session and saved keys; there is no control to clear the chat history kept in chrome.storage (only one-by-one delete). | ui |
-
-Code: `apps/extension/src/options.ts:1426-1441`
 
 ## S85.26: Delete account.
 

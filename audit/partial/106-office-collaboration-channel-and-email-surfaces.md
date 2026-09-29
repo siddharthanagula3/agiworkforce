@@ -15,9 +15,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Word add-in. On Word on the web the Chrome in-page or side panel treats the document as a generic web page: no Word-specific guidance, it reads only visible page text, and it cannot read or change the document through the Word API. Desktop Word gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.02: Assistant inside Excel.
 
@@ -28,9 +25,6 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Excel add-in. On Excel on the web the Chrome in-page or side panel treats the document as a generic web page: no Excel-specific guidance, it reads only visible page text, and it cannot read or change the document through the Excel API. Desktop Excel gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.03: Assistant inside PowerPoint.
 
@@ -41,9 +35,6 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No PowerPoint add-in. On PowerPoint on the web the Chrome in-page or side panel treats the document as a generic web page: no PowerPoint-specific guidance, it reads only visible page text, and it cannot read or change the document through the PowerPoint API. Desktop PowerPoint gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.04: Assistant inside Outlook.
 
@@ -54,9 +45,6 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Outlook add-in. On Outlook on the web the Chrome in-page or side panel treats the document as a generic web page: no Outlook-specific guidance, it reads only visible page text, and it cannot read or change the document through the Outlook API. Desktop Outlook gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.05: Assistant inside Google Docs.
 
@@ -67,9 +55,6 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. The Chrome panel on Google Docs gets Google Docs guidance and reads visible page text only; it cannot read or edit the file through the Google API. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.06: Assistant inside Google Sheets.
 
@@ -80,9 +65,6 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | fd28507aca: Sheets now gets Sheets guidance (formula bar and Name box) instead of the Docs selectors; no Sheets API read/write (Claude in Chrome works in Google apps without API setup, code.claude.com/docs/en/chrome). | handler |
-
-Code: `apps/extension/src/features/content/platform-prompts.ts:26-26`
 
 ## S106.07: Assistant inside Google Slides.
 
@@ -93,9 +75,6 @@ Code: `apps/extension/src/features/content/platform-prompts.ts:26-26`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | fd28507aca: Slides now gets Slides guidance; no Slides API. | handler |
-
-Code: `apps/extension/src/features/content/platform-prompts.ts:34-34`
 
 ## S106.08: Host-document selection context.
 
@@ -107,9 +86,8 @@ Code: `apps/extension/src/features/content/platform-prompts.ts:34-34`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | Selected text can be shared from a host app into AGI through the share sheet, then sent as a draft; the assistant never reads the live host selection or ranges. | ui, handler |
-| chrome | partial | Right-click "Ask AGI" hands selected page text to the side panel; host editors that draw their own selection or menu (Docs, Sheets, Excel on the web) are not read through a host API, and cells or slide objects are not captured. | handler |
 
-Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`, `apps/extension/src/background.ts:4526-4529`
+Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`
 
 ## S106.12: Shared conversation context across supported host applications.
 
@@ -120,9 +98,6 @@ Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-14
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | Only as the same Chrome side-panel chat that stays open while the user switches between web host tabs (each turn gets the current site's guidance); no host add-ins share a session. | ui |
-
-Code: `apps/extension/src/side_panel.ts:10879-10887`, `apps/extension/src/background.ts:4930-4937`
 
 ## S106.13: Slack direct-message assistant.
 
@@ -157,9 +132,6 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Teams app or bot. The Chrome panel beside Teams on the web gets Teams guidance and reads visible page text; it cannot read or post Teams messages through Teams. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.16: Mention-to-task handoff.
 

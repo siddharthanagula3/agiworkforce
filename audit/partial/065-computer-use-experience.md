@@ -139,9 +139,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | Claude in Chrome keeps working when the user switches tabs (support.claude.com/en/articles/12012173). The run still stops when another tab is activated outside a take-over; working in a hidden tab needs a live check that Page.captureScreenshot answers for a background tab before the cancellation can be lifted. | handler |
+| chrome | partial | partials/privacy c46c84d983: switching tabs no longer cancels a run and steps no longer require the run tab to be active; the run enables CDP focus emulation. Live check (final pass): start a run, switch to another tab, and confirm Page.captureScreenshot and input keep working in the background tab. | live |
 
-Code: `apps/extension/src/background.ts:4919-4919`
+Code: `apps/extension/src/features/computer-use/agentLoop.ts:565-565`, `apps/extension/src/background.ts:2805-2807`
 
 ## S65.19: User-input arbitration.
 
