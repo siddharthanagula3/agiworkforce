@@ -1451,6 +1451,7 @@ export const MessageBubble = memo(function MessageBubble({
                 messageId={message.id}
                 content={message.content}
                 isStreaming={Boolean(message.isStreaming)}
+                failed={hasMessageStreamError(message)}
                 finalArtifacts={inlineArtifacts}
               />
             ) : null}
