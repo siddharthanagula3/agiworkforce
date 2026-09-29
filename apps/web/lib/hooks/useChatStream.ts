@@ -21,6 +21,7 @@ import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   inspectStreamSequence,
   isStreamEnvelope,
+  messageKindForAgentEvent,
   type InteractiveCard,
   type InteractiveCardClientCapability,
   type InteractiveCardResponsePayload,
@@ -97,6 +98,10 @@ import {
   withoutGenerationProgress,
   type AgentActivityState,
   type AgentActivityToolEntry,
+  readServerSentEvents,
+  ServerSentEventDecoder,
+  splitJoinedServerSentEventData,
+  SSE_DONE_DATA,
 } from '@agiworkforce/client-runtime';
 import {
   INTERACTIVE_CARD_RESPONSE_PATH,
@@ -1173,20 +1178,10 @@ function turnResumeEndpoint(turnId: string): string {
 
 /** Reads the replay leg and returns only the assistant text the cursor did not cover. */
 async function readTurnResumeRemainder(body: ReadableStream<Uint8Array>): Promise<string> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let out = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = done ? '' : (lines.pop() ?? '');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
+  for await (const event of readServerSentEvents(body, { acceptUnterminatedFinalFrame: true })) {
+    for (const payload of splitJoinedServerSentEventData(event.data)) {
+      if (!payload || payload === SSE_DONE_DATA) continue;
       try {
         const parsed = JSON.parse(payload) as {
           choices?: Array<{ delta?: { content?: unknown } }>;
@@ -1195,10 +1190,9 @@ async function readTurnResumeRemainder(body: ReadableStream<Uint8Array>): Promis
           if (typeof choice.delta?.content === 'string') out += choice.delta.content;
         }
       } catch {
-        // A partial frame completes on the next read.
+        continue;
       }
     }
-    if (done) break;
   }
   return out;
 }
@@ -2337,7 +2331,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  const frames = new ServerSentEventDecoder();
   let fullAssistantContent = ctx.seedContent ?? '';
   let inThinkingBlock = false;
   let contentBuffer = '';
@@ -2535,6 +2529,24 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
+  const recordAgentEventOutcome = (event: AgentEvent) => {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'error' && event.type === 'error' && !streamErrorInfo) {
+      streamErrorInfo = readStreamErrorFrame(event);
+    }
+    if (event.type === 'stop') {
+      finishReason =
+        event.reason === 'max-tokens'
+          ? 'length'
+          : event.reason === 'cancelled'
+            ? 'stopped'
+            : event.reason === 'error'
+              ? 'error'
+              : 'stop';
+    }
+    return kind;
+  };
+
   const replayDurableRun = async (): Promise<StreamOutcome> => {
     if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
     beginStreamPhase(assistantMessageId, 'reconnecting');
@@ -2566,7 +2578,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         signal: terminalFollowAbort.signal,
         onEvent: (envelope) => {
           endStreamPhase(assistantMessageId, 'reconnecting');
-          if (envelope.event.type === 'text-delta' && envelope.event.delta) {
+          const kind = recordAgentEventOutcome(envelope.event);
+          if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
               envelope.event.delta,
@@ -2577,20 +2590,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
             }
           }
-          if (envelope.event.type === 'error' && !streamErrorInfo) {
-            streamErrorInfo = readStreamErrorFrame(envelope.event);
-          }
-          if (envelope.event.type === 'stop') {
-            finishReason =
-              envelope.event.reason === 'max-tokens'
-                ? 'length'
-                : envelope.event.reason === 'cancelled'
-                  ? 'stopped'
-                  : envelope.event.reason === 'error'
-                    ? 'error'
-                    : 'stop';
-          }
-          if (envelope.event.type === 'input-requested') {
+          if (kind === 'approval' && envelope.event.type === 'input-requested') {
             const { toolCallId, connectorId, toolName, inputRequests } = envelope.event;
             if (
               inputRequests &&
@@ -2664,39 +2664,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
-  const collectEventPayloads = (rawEvent: string): string[] => {
-    const dataLines: string[] = [];
-    for (const rawLine of rawEvent.split('\n')) {
-      const line = rawLine.trim();
-      if (!line || !line.startsWith('data:')) continue;
-      const value = line.slice(5);
-      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
-    }
-    if (dataLines.length <= 1) return dataLines;
-    const joined = dataLines.join('\n');
-    try {
-      JSON.parse(joined);
-      return [joined];
-    } catch {
-      return dataLines;
-    }
-  };
-
-  const drainEventPayloads = (flushAll: boolean): string[] => {
-    buffer = buffer.replace(/\r\n|\r/g, '\n');
-    const payloads: string[] = [];
-    let boundary = buffer.indexOf('\n\n');
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      payloads.push(...collectEventPayloads(rawEvent));
-      boundary = buffer.indexOf('\n\n');
-    }
-    if (flushAll && buffer.trim()) {
-      payloads.push(...collectEventPayloads(buffer));
-    }
-    if (flushAll) buffer = '';
-    return payloads;
+  const drainEventPayloads = (text: string, done: boolean): string[] => {
+    const events = frames.push(text);
+    if (done) events.push(...frames.finish({ acceptUnterminatedFrame: true }).events);
+    return events.flatMap((event) => splitJoinedServerSentEventData(event.data));
   };
 
   try {
@@ -2705,10 +2676,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (!done && value && value.byteLength > 0) latencyTrace?.markFirstChunk();
       markFirstStreamActivitySeen();
 
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      const text = done ? decoder.decode() : decoder.decode(value, { stream: true });
 
-      for (const data of drainEventPayloads(done)) {
-        if (data === '[DONE]') {
+      for (const data of drainEventPayloads(text, done)) {
+        if (data === SSE_DONE_DATA) {
           // A terminator only says the producer is finished. If this client
           // missed an earlier frame, settlement must wait for cursor replay.
           if (sequenceGapSeen) continue;
@@ -2769,24 +2740,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             agentEnvelope && !admitAgentEvent(assistantMessageId, agentEnvelope),
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
-            if (agentEnvelope.event.type === 'text-delta') {
+            const kind = recordAgentEventOutcome(agentEnvelope.event);
+            if (kind === 'text' && agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
                 agentEnvelope.event.delta,
               ).pending;
-            }
-            if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
-              streamErrorInfo = readStreamErrorFrame(agentEnvelope.event);
-            }
-            if (agentEnvelope.event.type === 'stop') {
-              finishReason =
-                agentEnvelope.event.reason === 'max-tokens'
-                  ? 'length'
-                  : agentEnvelope.event.reason === 'cancelled'
-                    ? 'stopped'
-                    : agentEnvelope.event.reason === 'error'
-                      ? 'error'
-                      : 'stop';
             }
             applySourceListEvent(agentEnvelope.event);
             const previousAgentActivity = currentAgentActivity;
