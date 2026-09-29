@@ -111,15 +111,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 - Done when: Tabular data is shown in a table with column headers that the user can sort (and scroll) to inspect the rows.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
 | cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`
+Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 
@@ -283,16 +282,13 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 - Done when: An inbox lists the user's notifications newest first, marks which are unread (visibly and for screen readers), and lets them open or mark them read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Unread is shown by colour and weight only and the row label omits it; add "unread" to the accessibility label. The inbox also holds only pushes this device received. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(app)/notifications/index.tsx:113-113`, `apps/mobile/app/(app)/notifications/index.tsx:170-170`
 
 ## S9.38: Keyboard-command palette.
 

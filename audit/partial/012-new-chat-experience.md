@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: The new-chat screen greets the signed-in user by their (preferred) name when one is known.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The web's time-of-day greeting helpers moved out of unified-chat into @agiworkforce/utils/greeting (01171618ee), so mobile can import them. What remains is ChatEmptyState using resolveGreetingHeadline in place of its own Hi, name. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/platform/utils/src/greeting.ts:101-101`
 
 ## S12.03: Neutral greeting when personalization is disabled.
 
