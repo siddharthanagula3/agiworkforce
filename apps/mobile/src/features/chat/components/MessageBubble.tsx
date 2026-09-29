@@ -1,4 +1,6 @@
 import { View, Pressable, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { readConnectorConnectRequest, type ConnectorConnectRequest } from '@agiworkforce/types';
+import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -505,6 +507,23 @@ export const MessageBubble = memo(function MessageBubble({
   const isAssistant = message.role === 'assistant';
   const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
   const router = useRouter();
+  const connectRequests = useMemo(() => {
+    const seen = new Set<string>();
+    const requests: ConnectorConnectRequest[] = [];
+    for (const call of message.toolCalls ?? []) {
+      if (call.status !== 'failed') continue;
+      const request = readConnectorConnectRequest({
+        qualifiedToolName: call.name,
+        result: call.output,
+        isError: true,
+      });
+      if (request && !seen.has(request.connectorId)) {
+        seen.add(request.connectorId);
+        requests.push(request);
+      }
+    }
+    return requests;
+  }, [message.toolCalls]);
   const researchSources = useMemo<ToolSearchResult[]>(() => {
     if (!research) return [];
     const seen = new Set<string>();
@@ -1262,6 +1281,13 @@ export const MessageBubble = memo(function MessageBubble({
                 onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
               />
             ) : null}
+            {connectRequests.map((request) => (
+              <ConnectorConnectCard
+                key={request.connectorId}
+                request={request}
+                {...(onRetryMessage ? { onRetryTurn: () => onRetryMessage(message.id) } : {})}
+              />
+            ))}
 
             {/* Approval requests */}
             {isAssistant && message.approvalRequests && message.approvalRequests.length > 0 ? (
