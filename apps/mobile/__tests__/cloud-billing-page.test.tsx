@@ -128,6 +128,7 @@ const mockTierState = {
   billingTier: 'free',
   billingStatus: 'none',
   billingSource: 'none',
+  billingCancelsAtPeriodEnd: false,
   refreshTier: mockRefreshTier,
 };
 jest.mock('@/src/features/billing/store', () => ({
@@ -144,6 +145,7 @@ import * as mobileIapService from '../src/features/billing/mobileIapService';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
+import * as releaseState from '../src/features/release-state';
 import { ApiHttpError } from '../services/apiErrors';
 
 describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', () => {
@@ -157,6 +159,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
       billingTier: 'free',
       billingStatus: 'none',
       billingSource: 'none',
+      billingCancelsAtPeriodEnd: false,
     });
     Object.assign(mockAuthState, {
       isClerkLoaded: true,
@@ -497,6 +500,70 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).not.toHaveBeenCalledWith(
       'https://apps.apple.com/account/subscriptions',
     );
+  });
+
+  it('tells a store subscriber that deleting the app does not cancel the plan', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'google',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByText } = render(<CloudBillingScreen />);
+
+    expect(getByText('Deleting this app does not cancel your plan')).toBeTruthy();
+    expect(
+      getByText(
+        "Your plan renews through the store you bought it from until you cancel it in that store's subscription settings.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it('points the uninstall line at the store row once the store is published', () => {
+    const displayName = jest.spyOn(releaseState, 'storeDisplayName').mockReturnValue('Google Play');
+    const managementUrl = jest
+      .spyOn(releaseState, 'storeSubscriptionManagementUrl')
+      .mockReturnValue('https://play.google.com/store/account/subscriptions');
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'google',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByText, getByLabelText } = render(<CloudBillingScreen />);
+
+    expect(
+      getByText(
+        'Your plan renews through Google Play until you cancel it there. To cancel, tap Manage in Google Play above.',
+      ),
+    ).toBeTruthy();
+    fireEvent.press(getByLabelText('Manage in Google Play'));
+    expect(openExternalUrl).toHaveBeenCalledWith(
+      'https://play.google.com/store/account/subscriptions',
+    );
+    displayName.mockRestore();
+    managementUrl.mockRestore();
+  });
+
+  it('keeps the uninstall line off web plans and plans already set to end', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+    const web = render(<CloudBillingScreen />);
+    expect(web.queryByText('Deleting this app does not cancel your plan')).toBeNull();
+    web.unmount();
+
+    Object.assign(mockTierState, { billingSource: 'apple', billingCancelsAtPeriodEnd: true });
+    const ending = render(<CloudBillingScreen />);
+    expect(ending.queryByText('Deleting this app does not cancel your plan')).toBeNull();
   });
 });
 
