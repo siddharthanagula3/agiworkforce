@@ -67,11 +67,11 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A failure is shown as an alert and the recording is dropped; the user must tap the mic and speak again. | ui, handler |
+| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | partial | A failed transcription prints an error and returns to the SPACE prompt to record again; the audio is not retried. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:607-607`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:207-207`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:207-207`
 
 ## S49.07: Discard recording.
 
@@ -138,12 +138,12 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | F1: the cited VoiceOnboardingSheet is shown only by handleOpenVoiceMode, the long-press voice-mode path ([id].tsx:978-985, chat.tsx:699-702). Composer dictation (tap or hold the mic, ChatInput.tsx:1134-1142) goes straight to VoiceService.startRecording -> startCaptureSession, whose only gate is the OS microphone permission (voiceInput.ts:224-228). So the product notice does not precede dictation capture, the subject of this section; partial. |  |
+| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | partial | Only a startup line naming the transcription backend (OpenAI API or local whisper); no consent step. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:58-58`, `apps/mobile/app/(app)/chat/[id].tsx:980-980`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:112-112`
 
 ## S49.19: Recording-duration display.
 
