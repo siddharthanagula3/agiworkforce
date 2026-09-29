@@ -15,6 +15,7 @@ import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { TimezonePickerField } from './TimezonePickerField';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
@@ -278,16 +279,13 @@ export function ScheduleForm({
 
         {/* Timezone */}
         <View className="mb-6 mt-2">
-          <Input
-            label="Timezone"
+          <TimezonePickerField
             value={timezone}
-            onChangeText={(text) => {
-              setTimezone(text);
+            deviceTimezone={getDeviceTimezone()}
+            onChange={(zone) => {
+              setTimezone(zone);
               if (errors.timezone) setErrors((current) => ({ ...current, timezone: '' }));
             }}
-            placeholder="America/New_York"
-            autoCapitalize="none"
-            autoCorrect={false}
             error={errors.timezone}
           />
         </View>
