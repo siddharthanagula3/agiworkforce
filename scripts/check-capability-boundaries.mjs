@@ -118,7 +118,7 @@ export const CLIENT_ROOTS = Object.freeze([
  * holds it. Naming capabilities is fine; deciding them locally is not.
  */
 const HANDSHAKE_CONSUMER_RE =
-  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities)/;
+  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities|resolveCapabilityDocumentDecision|capabilityAllowed\()/;
 
 const MIN_DISTINCT_CAPABILITIES = 3;
 
@@ -178,6 +178,10 @@ export const PROVIDER_ADAPTER_PATHS = new Map([
   [
     'apps/web/app/api/media/image/lib/image-generation-provider.ts',
     'the image-generation adapter itself',
+  ],
+  [
+    'apps/web/app/api/voice/speech/route.ts',
+    'the read-aloud route is the speech adapter: it calls the OpenAI audio/speech endpoint itself',
   ],
   [
     'apps/web/lib/e2b/hosted-code-execution.ts',
