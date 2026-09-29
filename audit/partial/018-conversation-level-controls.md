@@ -33,14 +33,11 @@ nothing is left.
 
 - Done when: A conversation can be archived (hidden, kept) and later restored.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A chat archived on web stays in the mobile Chats list. A chat archived on the phone comes back on the next sync pull, because the mobile store port drops the archived flag the sync delta carries. The fix is in post-codex/chat-gates-chat-lifecycle-mobile-archive-and-delete.patch: the port keeps archived chats out of the local list, and unarchiving brings them back (cloudSyncEngine.ts is held). | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/client/sync/src/conversations.ts:67-67`, `apps/mobile/services/cloudSyncEngine.ts:100-100`
 
 ## S18.06: Duplicate.
 
@@ -65,18 +62,6 @@ Code: `packages/client/sync/src/conversations.ts:67-67`, `apps/mobile/services/c
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S18.09: Change conversation mode.
-
-- Done when: Within a conversation, the user can switch its working mode (e.g. chat vs agent/work/plan) and later turns follow it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A Cloud conversation shows a Chat and Work switch above its composer, so later turns run as chat or AGI Work, as Claude's mobile message box does; in post-codex/chat-gates-s18.09-mobile-work-mode-in-conversation.patch. | ui |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 ## S18.11: Conversation search.
 
@@ -142,16 +127,13 @@ Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 - Done when: The user can share a conversation (e.g. a read-only link) from the conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A Cloud conversation's menu offers Share link, which confirms, creates the link through POST /api/share and opens the share sheet; temporary chats are refused; links are revoked in Settings, Shared links. In post-codex/chat-gates-s18.19-mobile-share-link.patch ([id].tsx is held). Both leaders share links from iOS (help.openai.com 7925741; support.claude.com 10593882). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 ## S18.20: Shared-link management.
 
@@ -180,14 +162,11 @@ Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 - Done when: The user can inspect what context and sources the conversation is using (files, instructions, memory, token budget).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 80e2426e74: a context sheet shows estimated tokens against the model window and messages and attachments by kind; the long-chat warning opens it. post-codex/w-chat-s18.22-mobile-context-menu-entry.patch adds 'What is in context' to the held chat screen's conversation menu so it is reachable at any length. | codex |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:46-46`
 
 ## S18.23: Usage summary.
 

@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: Inside a notebook, a source list sits beside the conversation so the user can see what grounds the answers.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s37.04-mobile-chat-project-sources.patch: a chat in a project shows a Project sources header button opening a sheet "{project} sources" with the existing ProjectSourcesTab, as web ProjectSourcesToggleButton + ProjectSourcesPanel (a sheet on narrow layouts). Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-137`
 
 ## S37.06: Add files.
 
@@ -66,7 +63,7 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | L4: the code settles it. Mobile's completions payload (InitialStreamRequest) has no conversation_id, and the server loads project sources only inside the `chatRequest.conversation_id ?` leg, so project knowledge never reaches a mobile turn; only the locally prepended instructions apply. partial, miss [handler]; remaining: 'Mobile turns send no conversation_id, so the server never retrieves project knowledge; only the project's instructions (prepended locally) apply.' |  |
+| mobile | partial | Non-temporary mobile turns still send no conversation_id (only temporary chats do), so the server never loads project sources for a mobile turn. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -219,6 +216,6 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chat project selector applies only the project's instructions (local system message); its sources are not brought in on mobile. | handler |
+| mobile | partial | The chat project selector applies only project instructions locally; sources are not brought in because turns carry no conversation_id. | handler |
 
 Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`

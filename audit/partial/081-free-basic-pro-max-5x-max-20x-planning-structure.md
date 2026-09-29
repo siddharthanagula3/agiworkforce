@@ -6,64 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S81.03: Basic-plan feature bundle.
-
-- Done when: The Basic plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Basic's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED (lead switches FEATURES.billing on at run end; MOBILE_IAP_ENABLED is an owner setting). | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.04: Pro-plan feature bundle.
-
-- Done when: The Pro plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Pro's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.05: Max 5x feature bundle.
-
-- Done when: The Max 5x plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Max 5x's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.06: Max 15x feature bundle.
-
-- Done when: The Max 15x plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The top Max tier's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.14: Separate generation settings.
-
-- Done when: Plans differ in generation settings (e.g. reasoning effort, manual model choice), the UI shows the gated options, and the server clamps requests to the plan.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
-
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.
@@ -72,6 +14,6 @@ Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile copy now says an upgrade starts a new billing period that day; upgrading in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED, which the lead switches on at run end. | flag-off |
+| mobile | partial | In-app upgrade still cannot be started: FEATURES.billing is false and MOBILE_IAP_ENABLED is unset, so no charge/renewal confirmation is shown in the app. | flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:388-388`

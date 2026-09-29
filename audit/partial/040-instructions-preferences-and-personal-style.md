@@ -46,15 +46,12 @@ nothing is left.
 
 - Done when: For one conversation the user can override their standing style/instructions without changing their defaults.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s40.19-mobile-style-per-conversation.patch: the chat Style choice is kept per conversation (persisted); each chat screen binds its conversation on focus, a new chat starts from the default and its pre-send choice moves onto the created chat; sends read the conversation style, as web style-store bindConversation/adoptSelection. Waits on the Codex hold. | persistence |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:771-775`, `apps/mobile/stores/chat/chatExecutionStore.ts:388-393`
 
 ## S40.20: Writing-style examples.
 

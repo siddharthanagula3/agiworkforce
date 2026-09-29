@@ -58,31 +58,25 @@ nothing is left.
 
 - Done when: Nothing from a temporary chat is saved to memory.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same root cause as S39.28: the server's save_memory tool runs in a mobile temporary chat because the turn names no conversation. Fixed by post-codex/chat-gates-temporary-mobile-conversation-id.patch. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/services/streaming.ts:186-186`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3167-3167`
 
 ## S41.06: Custom-instruction choice.
 
 - Done when: The user can choose whether custom instructions apply in a temporary chat.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s41.06-mobile-personalization.patch replaces privacy-s41.06.patch: the held hunks (services/streaming.ts, stores/chat/chatExecutionStore.ts) are rebased on the Codex working copy and the free hunks (TemporaryChatBanner.tsx, settingsStore.ts) on integration, each half checked with git apply --check. The Personalized switch ships only with the request field it sets, so nothing lands before Codex. | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 
 ## S41.07: Plugin availability in temporary mode.
 

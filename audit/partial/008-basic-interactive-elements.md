@@ -95,29 +95,23 @@ nothing is left.
 
 - Done when: A date picker (calendar or native date control) is used where a date is entered in shipped UI.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-chat-s8.25-s8.26-mobile-native-date-time-pickers.patch adds @react-native-community/datetimepicker 9.1.0 (Expo SDK 57's bundled version) to the held apps/mobile/package.json and replaces the typed date with the native date picker (Android dialog, iOS inline). Lead installs after Codex commits; the patch is typechecked once the module is installed. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.26: Time pickers.
 
 - Done when: A time picker (native or custom time control) is used where a time is entered in shipped UI.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same post-codex patch as S8.25: the hour and minute lists become the native time picker. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.28: Color pickers.
 
@@ -192,14 +186,11 @@ Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 - Done when: Toasts (transient, non-blocking notifications that dismiss themselves) are used in shipped UI.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A cross-platform toast (showToast, ToastHost, with an optional action, announced to screen readers, dismissing after 5 s) mounted at the app root, in post-codex/w-chat-s8.45-s10.05-mobile-toast-and-archive-undo.patch. The root layout is held, so the new file ships inside the patch. | codex |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`
 
 ## S8.48: Pagination controls.
 
@@ -210,15 +201,3 @@ Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S8.50: Error states.
-
-- Done when: Error states (a view-level message with a recovery action when content fails to load or a request fails) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Codex's held ChatsListScreen already shows a load error with Retry and a Loading chats state instead of No chats yet. Done once Codex commits it; nothing to add. | codex |
-
-Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:1-1`

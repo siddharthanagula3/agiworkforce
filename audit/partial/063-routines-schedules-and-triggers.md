@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: A browsable gallery of ready-made routines the user can start from at any time.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S63.01-schedule-template-gallery.patch shows the templates under a non-empty list | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/schedules/index.tsx:1-1`
 
 ## S63.03: Create routine from a completed task.
 
@@ -202,11 +199,8 @@ Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:67
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S63.33-schedule-run-timing.patch (held service/store on Codex base, free ScheduleRunHistory on integration) shows late or skipped run notes | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/schedules.ts:707-707`

@@ -110,18 +110,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S60.13: Reviewable task plan.
-
-- Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S57.26-S60.13-clarify-plan-held.patch (free part committed 9b36ba0b67) | handler |
-
-Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
-
 ## S60.17: Parallel-work indicator.
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.

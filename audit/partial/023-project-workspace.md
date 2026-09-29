@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Lead ruling: cross-device sync goes on (ChatGPT and Claude sync every chat). Switch-on FEATURES.crossDeviceSync in the final pass. | ui, flag-off |
+| mobile | partial | No mobile UI to choose a project icon or colour and the cloud project header shows only the name; the project header component with icon/colour no longer exists. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`
@@ -27,7 +27,7 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Lead ruling: cross-device sync goes on (ChatGPT and Claude sync every chat). Switch-on FEATURES.crossDeviceSync in the final pass. | flag-off |
+| mobile | partial | Cloud project screen shows the name, a sync line and Chats/Work/Sources tabs, but no description or counts. | flag-off |
 
 Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
 
@@ -51,7 +51,7 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/pr
 | --- | --- | --- | --- |
 | web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
-| mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
+| mobile | partial | Sources tab adds picked files only; there is no text or connected-service source, and the 0-byte upload cap for never-paid Free users and Team seats is unchanged. | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -98,16 +98,13 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mo
 
 - Done when: Autonomous work tasks can be started in a project and the project lists their state.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s23.14-mobile-project-work-tab.patch: cloud project screen gets a Work tab (new ProjectWorkTab) listing up to 50 AGI Work runs from GET /api/llm/v1/chat/completions/runs?projectId= across all states; title or "Untitled run", workState/state label and colour, tap opens the chat, "No work yet" empty copy, error with Try again, as web ProjectWorkPanel. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:63-63`
 
 ## S23.15: Project routines.
 

@@ -35,16 +35,13 @@ nothing is left.
 
 - Done when: The research plan is shown before searching and the user can edit its steps (add/remove/reword) before approving.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s35-mobile-research-plan-edit-run-again.patch: the plan card becomes editable (reword, remove, add up to 6 steps of 300 chars) and Approve sends the edited steps as approvedSteps, as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263-269`, `apps/mobile/app/(app)/chat/[id].tsx:563-563`
 
 ## S35.05: Source-selection panel.
 
@@ -173,16 +170,13 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263
 
 - Done when: The user can pause a running research task and resume it later from where it stopped.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack 5aafcc7ab0: the run card offers Pause while a run searches whenever it is given a handler. The handler (the cloud agent run pause route) and its wiring through the chat screen, MessageBubble and MessageList are post-codex/p-slack-s35.17-mobile-pause-held.patch, split from p-privacy's patch and checked with git apply --check on the Codex working copy; apply after Codex lands. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:170-170`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:214-214`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:358-358`
 
 ## S35.18: Cancel research.
 
@@ -222,31 +216,25 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:170
 
 - Done when: The report reader shows an outline of its sections the user can navigate.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack f1e1d8113e: the renderer reports each section heading's position under the outline's own id. Left: the report screen's outline rows scroll to their section once post-codex/p-slack-mobile-research-citations-outline.patch lands (ReportsScreen.tsx held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-306`, `apps/mobile/src/features/research/reportSections.ts:18-18`
 
 ## S35.22: Linked citations.
 
 - Done when: Citations in the report link to their sources.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: the [n] markers in a research report link to its sources, in the chat card and on the report screen once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S35.23: Tables and charts.
 
@@ -274,16 +262,13 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-1
 
 - Done when: The user can refresh or rerun a finished research report to get updated results.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same patch: Run again on a completed research card sends a fresh research turn for the same question, as web's Run again. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:289-294`
 
 ## S35.28: Export report.
 
