@@ -62,12 +62,12 @@ Code: `apps/mobile/src/features/archived-chats/service.ts:69-69`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Share' exports the chat as a file through the OS share sheet; creating a share link is only possible on web. | ui |
+| mobile | partial | post-codex/chat-gates-s18.19-mobile-share-link.patch (in the ordered series) creates the link after saying who can open it ('Anyone with the link can read the messages in this chat until the link expires') and hands it to the share sheet to copy or send. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1604`
+Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 
 ## S10.09: Share file or folder.
 
@@ -266,10 +266,10 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
+| mobile | partial | Codex's held chat screen mounts ContextWarningChip above the composer (chat/[id].tsx:1497 in the Codex copy). For every model it warns before sending once the thread nears the model's context window, and offers New chat. Done once Codex commits. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
+Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 
 ## S10.29: Credit-purchase dialog.
 
