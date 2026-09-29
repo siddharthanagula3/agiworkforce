@@ -637,77 +637,137 @@ const MAX_QUESTION_OPTIONS: usize = 6;
 // M36: LSP tools
 // ---------------------------------------------------------------------------
 
-async fn lsp_request_for_file(args: &HashMap<String, String>, method: &str) -> Result<ToolResult> {
-    let file = match args.get("file").filter(|s| !s.is_empty()) {
-        Some(f) => f.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: method.into(),
-                success: false,
-                output: "Missing required argument: file".into(),
-            })
+const MAX_LSP_DOCUMENT_BYTES: u64 = 2_000_000;
+
+fn resolve_lsp_document(
+    file: &str,
+    root: &std::path::Path,
+) -> std::result::Result<(std::path::PathBuf, String), String> {
+    let validated = crate::path_security::validate_workspace_path_with_cwd(file, root)
+        .map_err(|reason| format!("Refusing to read outside project: {reason}"))?;
+    if crate::sensitive_files::is_sensitive_file(file)
+        || crate::sensitive_files::is_sensitive_file(&validated.to_string_lossy())
+    {
+        return Err(crate::sensitive_files::sensitive_refusal(file));
+    }
+    if !validated.is_file() {
+        return Err(format!("No such file: {file}"));
+    }
+    let document = crate::repo::layout::comparable_path(&validated);
+    let uri = crate::platform::lsp::client::path_to_file_uri(&document);
+    Ok((document, uri))
+}
+
+fn lsp_position(args: &HashMap<String, String>, key: &str) -> u32 {
+    args.get(key)
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
+async fn lsp_request_for_file(
+    args: &HashMap<String, String>,
+    tool_name: &str,
+    method: &str,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    let refuse = |output: String| ToolResult {
+        tool_name: tool_name.into(),
+        success: false,
+        output,
+    };
+    let Some(file) = args.get("file").filter(|s| !s.is_empty()) else {
+        return Ok(refuse("Missing required argument: file".into()));
+    };
+    let root = crate::repo::layout::comparable_path(
+        &workspace_root
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from(".")),
+    );
+    let (document, uri) = match resolve_lsp_document(file, &root) {
+        Ok(resolved) => resolved,
+        Err(reason) => return Ok(refuse(reason)),
+    };
+    let ext = document.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let (Some((server_cmd, server_args)), Some(language_id)) = (
+        crate::lsp::server_for_extension(ext),
+        crate::lsp::language_id_for_extension(ext),
+    ) else {
+        return Ok(refuse(format!("No LSP server configured for .{ext} files")));
+    };
+    match tokio::fs::metadata(&document).await {
+        Ok(metadata) if metadata.len() > MAX_LSP_DOCUMENT_BYTES => {
+            return Ok(refuse(format!(
+                "{file} is too large for the language server tools ({} bytes; limit {MAX_LSP_DOCUMENT_BYTES} bytes)",
+                metadata.len()
+            )));
         }
+        Ok(_) => {}
+        Err(e) => return Ok(refuse(format!("Failed to inspect {file}: {e}"))),
+    }
+    let text = match tokio::fs::read_to_string(&document).await {
+        Ok(text) => text,
+        Err(e) => return Ok(refuse(format!("Failed to read {file}: {e}"))),
     };
-    let ext = std::path::Path::new(&file)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
-        return Ok(ToolResult {
-            tool_name: method.into(),
-            success: false,
-            output: format!("No LSP server configured for .{ext} files"),
-        });
-    };
-    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
+    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &root).await {
         Ok(c) => c,
-        Err(e) => {
-            return Ok(ToolResult {
-                tool_name: method.into(),
-                success: false,
-                output: format!("Failed to spawn {server_cmd}: {e}"),
+        Err(e) => return Ok(refuse(format!("Failed to spawn {server_cmd}: {e}"))),
+    };
+    let text_document = serde_json::json!({"uri": uri});
+    let params = match method {
+        "textDocument/definition" | "textDocument/hover" | "textDocument/completion" => {
+            serde_json::json!({
+                "textDocument": text_document,
+                "position": {
+                    "line": lsp_position(args, "line"),
+                    "character": lsp_position(args, "character"),
+                },
             })
         }
+        "textDocument/formatting" => serde_json::json!({
+            "textDocument": text_document,
+            "options": {
+                "tabSize": args
+                    .get("tab_size")
+                    .and_then(|value| value.parse::<u32>().ok())
+                    .unwrap_or(4),
+                "insertSpaces": true,
+            },
+        }),
+        _ => serde_json::json!({"textDocument": text_document}),
     };
-    let uri = format!("file://{file}");
-    let params = if method == "textDocument/definition" || method == "textDocument/hover" {
-        let line = args
-            .get("line")
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        let character = args
-            .get("character")
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        serde_json::json!({
-            "textDocument": {"uri": uri},
-            "position": {"line": line, "character": character},
-        })
-    } else {
-        serde_json::json!({"textDocument": {"uri": uri}})
+    let result = match client.open_document(&uri, language_id, &text).await {
+        Ok(()) => client.request(method, params).await,
+        Err(e) => Err(e),
     };
-    let result = client.request(method, params).await;
     let _ = client.shutdown().await;
     match result {
         Ok(v) => Ok(ToolResult {
-            tool_name: method.into(),
+            tool_name: tool_name.into(),
             success: true,
             output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()),
         }),
-        Err(e) => Ok(ToolResult {
-            tool_name: method.into(),
-            success: false,
-            output: format!("LSP {method} failed: {e}"),
-        }),
+        Err(e) => Ok(refuse(format!("LSP {method} failed: {e}"))),
     }
 }
 
-pub(super) async fn execute_lsp_definition(args: &HashMap<String, String>) -> Result<ToolResult> {
-    lsp_request_for_file(args, "textDocument/definition").await
+pub(super) async fn execute_lsp_definition(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    lsp_request_for_file(
+        args,
+        "lsp_definition",
+        "textDocument/definition",
+        workspace_root,
+    )
+    .await
 }
-pub(super) async fn execute_lsp_hover(args: &HashMap<String, String>) -> Result<ToolResult> {
-    lsp_request_for_file(args, "textDocument/hover").await
+pub(super) async fn execute_lsp_hover(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    lsp_request_for_file(args, "lsp_hover", "textDocument/hover", workspace_root).await
 }
 // Diagnostics are server-pushed (textDocument/publishDiagnostics) and the stdio
 // client has no notification reader, so nothing is ever collected. This must
@@ -739,76 +799,123 @@ pub(super) async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> R
     })
 }
 
-pub(super) async fn execute_lsp_completion(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let file = match args.get("file").filter(|s| !s.is_empty()) {
-        Some(f) => f.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: "lsp_completion".into(),
-                success: false,
-                output: "Missing required argument: file".into(),
-            })
-        }
-    };
-    let line = args
-        .get("line")
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(0);
-    let character = args
-        .get("character")
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(0);
-    let ext = std::path::Path::new(&file)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-    let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
-        return Ok(ToolResult {
-            tool_name: "lsp_completion".into(),
-            success: false,
-            output: format!("No LSP server configured for .{ext} files"),
-        });
-    };
-    let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
-        Ok(c) => c,
-        Err(e) => {
-            return Ok(ToolResult {
-                tool_name: "lsp_completion".into(),
-                success: false,
-                output: format!("Failed to spawn {server_cmd}: {e}"),
-            })
-        }
-    };
-    let uri = format!("file://{file}");
-    let params = serde_json::json!({
-        "textDocument": {"uri": uri},
-        "position": {"line": line, "character": character},
-    });
-    let result = client.request("textDocument/completion", params).await;
-    let _ = client.shutdown().await;
-    match result {
-        Ok(v) => Ok(ToolResult {
-            tool_name: "lsp_completion".into(),
-            success: true,
-            output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()),
-        }),
-        Err(e) => Ok(ToolResult {
-            tool_name: "lsp_completion".into(),
-            success: false,
-            output: format!("LSP completion failed: {e}"),
-        }),
-    }
+pub(super) async fn execute_lsp_completion(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    lsp_request_for_file(
+        args,
+        "lsp_completion",
+        "textDocument/completion",
+        workspace_root,
+    )
+    .await
 }
 
 pub(super) async fn execute_lsp_document_symbols(
     args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
 ) -> Result<ToolResult> {
-    lsp_request_for_file(args, "textDocument/documentSymbol").await
+    lsp_request_for_file(
+        args,
+        "lsp_document_symbols",
+        "textDocument/documentSymbol",
+        workspace_root,
+    )
+    .await
 }
 
-pub(super) async fn execute_lsp_format(args: &HashMap<String, String>) -> Result<ToolResult> {
-    lsp_request_for_file(args, "textDocument/formatting").await
+pub(super) async fn execute_lsp_format(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    lsp_request_for_file(
+        args,
+        "lsp_format",
+        "textDocument/formatting",
+        workspace_root,
+    )
+    .await
+}
+
+#[cfg(test)]
+mod lsp_document_tests {
+    use super::resolve_lsp_document;
+
+    fn workspace() -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::tempdir().expect("workspace");
+        let root = crate::repo::layout::comparable_path(tmp.path());
+        (tmp, root)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_relative_file_resolves_under_the_session_root() {
+        let (_tmp, root) = workspace();
+        std::fs::create_dir(root.join("src")).expect("create src");
+        std::fs::write(root.join("src").join("main.rs"), "fn main() {}\n").expect("seed file");
+
+        let (document, uri) =
+            resolve_lsp_document("src/main.rs", &root).expect("a file inside the root");
+
+        assert_eq!(document, root.join("src").join("main.rs"));
+        assert_eq!(uri, format!("{}{}/src/main.rs", "file://", root.display()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reserved_characters_are_escaped_in_the_uri() {
+        let (_tmp, root) = workspace();
+        std::fs::create_dir(root.join("a b")).expect("create dir");
+        std::fs::write(root.join("a b").join("c#d?.py"), "x = 1\n").expect("seed file");
+
+        let (_, uri) = resolve_lsp_document("a b/c#d?.py", &root).expect("a file inside the root");
+
+        assert!(uri.ends_with("/a%20b/c%23d%3F.py"), "{uri}");
+    }
+
+    #[test]
+    fn a_file_outside_the_root_is_refused_before_any_server_starts() {
+        let (_tmp, root) = workspace();
+        let outside = tempfile::tempdir().expect("outside");
+        let escaped = outside.path().join("x.rs");
+        std::fs::write(&escaped, "fn x() {}\n").expect("seed file");
+
+        assert!(resolve_lsp_document("../x.rs", &root).is_err());
+        assert!(resolve_lsp_document(&escaped.to_string_lossy(), &root).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_out_of_the_root_is_refused() {
+        let (_tmp, root) = workspace();
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::write(outside.path().join("x.rs"), "fn x() {}\n").expect("seed file");
+        std::os::unix::fs::symlink(outside.path().join("x.rs"), root.join("linked.rs"))
+            .expect("create link");
+
+        assert!(resolve_lsp_document("linked.rs", &root).is_err());
+    }
+
+    #[test]
+    fn credential_files_and_missing_files_are_refused() {
+        let (_tmp, root) = workspace();
+        std::fs::create_dir(root.join("config")).expect("create config");
+        std::fs::write(root.join("config").join("credentials.py"), "TOKEN = 1\n")
+            .expect("seed file");
+
+        let refusal = resolve_lsp_document("config/credentials.py", &root)
+            .expect_err("a credential file never reaches a language server");
+
+        assert!(refusal.contains("credential-file policy"), "{refusal}");
+        assert!(resolve_lsp_document("src/missing.rs", &root).is_err());
+    }
+
+    #[test]
+    fn no_document_uri_is_built_by_concatenation() {
+        let needle = concat!("format!(\"file:", "//");
+        assert!(!include_str!("mod.rs").contains(needle));
+    }
 }
 
 #[cfg(test)]

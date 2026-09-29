@@ -23,6 +23,19 @@ pub fn server_for_extension(ext: &str) -> Option<(&'static str, &'static [&'stat
     }
 }
 
+pub fn language_id_for_extension(ext: &str) -> Option<&'static str> {
+    match ext {
+        "rs" => Some("rust"),
+        "ts" => Some("typescript"),
+        "tsx" => Some("typescriptreact"),
+        "js" => Some("javascript"),
+        "jsx" => Some("javascriptreact"),
+        "go" => Some("go"),
+        "py" => Some("python"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,5 +57,14 @@ mod tests {
     #[test]
     fn server_for_unknown_extension() {
         assert!(server_for_extension("xyz").is_none());
+    }
+
+    #[test]
+    fn every_served_extension_names_its_language() {
+        for ext in ["rs", "ts", "tsx", "js", "jsx", "go", "py"] {
+            assert!(server_for_extension(ext).is_some(), "{ext}");
+            assert!(language_id_for_extension(ext).is_some(), "{ext}");
+        }
+        assert_eq!(language_id_for_extension("tsx"), Some("typescriptreact"));
     }
 }
