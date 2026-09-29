@@ -52,7 +52,6 @@ const FIX =
   'read the stream with readServerSentEvents or ServerSentEventDecoder from @agiworkforce/client-runtime';
 
 export const PENDING = Object.freeze({
-  'apps/web/lib/hooks/useChatStream.ts': `p-mcp-web: ${FIX}`,
   'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${FIX}`,
   'apps/extension-vscode/src/utils/api.ts': `p-sessions: ${FIX}`,
   'apps/desktop/src/api/cloudApi.ts': `p-electron: ${FIX}`,
