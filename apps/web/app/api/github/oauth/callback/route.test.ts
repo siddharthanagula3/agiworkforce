@@ -222,9 +222,7 @@ describe('GitHub OAuth callback ownership proof', () => {
 
     expect(response.status).toBe(307);
     const location = new URL(response.headers.get('location') ?? '');
-    expect(`${location.protocol}//${location.host}${location.pathname}`).toBe(
-      'agiworkforce://github/installed',
-    );
+    expect(location.origin + location.pathname).toBe('https://agiworkforce.com/github/installed');
     expect(location.searchParams.get('code')).toBe('one-time-code');
     expect(location.searchParams.get('state')).toBe(OAUTH_STATE);
     expect(getClerkAuthUser).not.toHaveBeenCalled();
