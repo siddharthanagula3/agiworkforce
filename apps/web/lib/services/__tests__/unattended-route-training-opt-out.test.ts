@@ -94,7 +94,7 @@ function selected(modelKey: string) {
   } as never;
 }
 
-const scope = () => ({ db: optOutDb(), userId: 'user-1' });
+const scope = () => ({ db: optOutDb() as never, userId: 'user-1' });
 const lastRouting = () =>
   vi.mocked(resolveAutoRoute).mock.calls.at(-1)?.[0] as { availableProviderIds?: Set<string> };
 
