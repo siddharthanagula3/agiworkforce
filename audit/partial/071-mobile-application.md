@@ -13,20 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Works on iOS only (audioRouteSwitchingSupported returns false on Android and the picker hides); add Android audio routing. | surface-only |
+| mobile | partial | Audio-route switching works on iOS only (audioRouteSwitchingSupported is false on Android); Android routing is not built. | surface-only |
 
 Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:23-38`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-71`
-
-## S71.14: Quick reply to agent questions.
-
-- Done when: When an agent asks the user a question, the user can answer it from the phone (notification reply or quick answer field).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The phone shows that a task is waiting for input but cannot answer it ("answered where the task was started"); add an answer field and a reply action on the notification. | ui, handler |
-
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:240-268`, `apps/mobile/services/notificationCategories.ts:6-23`
 
 ## S71.18: Background upload recovery.
 
@@ -35,7 +24,7 @@ Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:240-268
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Uploads run only in the foreground: backgrounding marks them interrupted and the user must tap Retry, which restarts from zero; add a background upload session or automatic resume. | handler |
+| mobile | partial | Uploads run only in the foreground; backgrounding marks them interrupted and the user must tap Retry, which restarts from zero. | handler |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:358-362`, `apps/mobile/src/features/chat/upload/uploadLifecycle.ts:28-46`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:209-214`
 
@@ -46,7 +35,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:358-362`, `apps/mobile/src/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Messages and drafts persist, but a relaunch opens a new chat instead of the last conversation and an interrupted reply is marked failed rather than resumed. | states |
+| mobile | partial | Messages and drafts persist, but relaunch opens a new chat (index redirects to the chat tab) and an interrupted reply is marked failed rather than resumed. | states |
 
 Code: `apps/mobile/stores/chat/chatCloudMessageStore.ts:183-190`, `apps/mobile/app/(app)/index.tsx:1-5`, `apps/mobile/stores/chat/chatCloudMessageStore.ts:41-50`
 
@@ -57,7 +46,7 @@ Code: `apps/mobile/stores/chat/chatCloudMessageStore.ts:183-190`, `apps/mobile/a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | iOS App Intents (Ask, Summarize, Scan, Translate, and more) work; Android has no launcher shortcuts or App Actions, only the text-selection action. | surface-only |
+| mobile | partial | iOS App Intents work; Android has no launcher shortcuts or App Actions. | surface-only |
 
 Code: `apps/mobile/app.config.js:294-303`, `apps/mobile/app/_layout.tsx:512-543`, `apps/mobile/app.config.js:183-186`
 
@@ -68,7 +57,7 @@ Code: `apps/mobile/app.config.js:294-303`, `apps/mobile/app/_layout.tsx:512-543`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The drawer turns persistent (from 1000pt wide) and Library/Artifacts grids widen, but the chat transcript and composer stretch edge to edge with no tablet reading width; the computed split-view and size-class values are unused. | ui |
+| mobile | partial | Drawer and grids widen, but the chat transcript and composer have no tablet reading width and split-view values are unused. | ui |
 
 Code: `apps/mobile/app/(app)/_layout.tsx:13-37`, `apps/mobile/src/shared/hooks/useResponsiveLayout.ts:20-48`, `apps/mobile/app.config.js:64-66`
 
@@ -79,7 +68,7 @@ Code: `apps/mobile/app/(app)/_layout.tsx:13-37`, `apps/mobile/src/shared/hooks/u
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Layout follows window width on every resize, so unfolding switches to the wider layout, but there is no hinge or table-top posture handling. | ui |
+| mobile | partial | Layout follows window width on resize, but there is no hinge or table-top posture handling. | ui |
 
 Code: `apps/mobile/src/shared/hooks/useTabletLayout.ts:27-69`, `apps/mobile/app/(app)/_layout.tsx:13-37`
 
@@ -90,7 +79,7 @@ Code: `apps/mobile/src/shared/hooks/useTabletLayout.ts:27-69`, `apps/mobile/app/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The app is locked to portrait in app.config (orientation: portrait), so phones never rotate; layouts are width-driven and would adapt if the lock were lifted. | ui |
+| mobile | partial | The app is locked to portrait (orientation: portrait in app.config.js) so phones never rotate. | ui |
 
 Code: `apps/mobile/app.config.js:56-66`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:29-52`
 
@@ -101,7 +90,7 @@ Code: `apps/mobile/app.config.js:56-66`, `apps/mobile/src/shared/hooks/useTablet
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cellular switch only governs on-device model downloads; attachment uploads, voice and media downloads ignore it. | ui |
+| mobile | partial | The cellular setting governs only on-device model downloads; attachment uploads, voice and media downloads ignore it. | ui |
 
 Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/features/model-picker/installStore.ts:344-358`
 
@@ -112,6 +101,6 @@ Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native purchase code and receipt verification exist, but the server enables the catalogue only when MOBILE_IAP_ENABLED is set and the user is paid or on the billing waitlist; FEATURES.billing is false. | flag-off |
+| mobile | partial | Native purchase and receipt code exist, but the catalogue is server-gated by MOBILE_IAP_ENABLED and FEATURES.billing is false. | flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:142-148`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-494`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:428-436`

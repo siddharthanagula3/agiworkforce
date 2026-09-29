@@ -185,16 +185,13 @@ nothing is left.
 
 - Done when: In a temporary chat nothing is read from or saved to memory, and the temporary chat is never used later as past-chat context.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Cloud turns carry no conversation_id, so the server cannot tell that a chat is temporary. It loads memory, offers save_memory, honours standing approvals and files generated media in the Library. post-codex/chat-gates-temporary-mobile-conversation-id.patch sends the temporary conversation's id, so the server applies the same temporary-chat rules it applies on web. Until that lands, the S41.03 banner's promise is also untrue on mobile. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/services/streaming.ts:186-186`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3167-3167`
 
 ## S39.29: Sensitive-Memory controls.
 
@@ -204,7 +201,7 @@ Code: `apps/mobile/services/streaming.ts:186-186`, `apps/web/app/api/llm/v1/chat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack cf040c03f9: in Cloud mode the phone edits the never-remember terms and the per-source switches in the same memory preference namespace the server enforces. Left: Local mode learning has no credential or special-category filter; the shared prohibitedMemoryCategory lives in @agiworkforce/context, which apps/mobile/package.json (held by Codex) does not list, so it needs that dependency after Codex lands or the classifier moved into @agiworkforce/types. | handler |
+| mobile | partial | Cloud mode edits never-remember terms server-side, but Local mode learning has no credential or special-category filter (prohibitedMemoryCategory is not available to apps/mobile). | handler |
 
 Code: `apps/mobile/app/(app)/settings/memory.tsx:460-460`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:15-15`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:98-98`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:248-248`
 
