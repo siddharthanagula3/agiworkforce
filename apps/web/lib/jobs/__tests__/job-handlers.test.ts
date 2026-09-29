@@ -12,6 +12,12 @@ const mocks = vi.hoisted(() => ({
   recordResearchReportSettledCost: vi.fn(),
   enqueueJob: vi.fn(),
   fireEventTriggerJob: vi.fn(),
+  sendRelayRevocation: vi.fn(),
+}));
+
+vi.mock('@/lib/device-steps/device-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/device-steps/device-registry')>()),
+  sendRelayRevocation: mocks.sendRelayRevocation,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -302,6 +308,26 @@ describe('file-processing and research settlement', () => {
 });
 
 describe('the registry', () => {
+  it('retries a device revoke until the signaling relay takes it', async () => {
+    const handler = BACKGROUND_JOB_HANDLERS['webhooks.signaling-device-revoke']!;
+    const payload = { deviceId: 'device-1', reason: 'unlinked' };
+
+    mocks.sendRelayRevocation.mockResolvedValueOnce({
+      configured: true,
+      reachable: false,
+      closed: null,
+    });
+    await expect(handler(context(payload))).rejects.toThrow(/did not take/);
+
+    mocks.sendRelayRevocation.mockResolvedValueOnce({
+      configured: true,
+      reachable: true,
+      closed: 2,
+    });
+    await expect(handler(context(payload))).resolves.toEqual({ deviceId: 'device-1', closed: 2 });
+    expect(mocks.sendRelayRevocation).toHaveBeenLastCalledWith('device-1', 'unlinked');
+  });
+
   it('registers a handler for every kind a producer can enqueue', () => {
     expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(
       [
@@ -317,6 +343,7 @@ describe('the registry', () => {
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',
         'webhooks.developer-delivery',
+        'webhooks.signaling-device-revoke',
       ].sort(),
     );
   });

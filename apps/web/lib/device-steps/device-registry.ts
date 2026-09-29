@@ -18,6 +18,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import type { PlatformCapability } from '@agiworkforce/types';
 import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
+import { enqueueJob } from '@/lib/jobs/job-service';
 
 /**
  * What the device registry says about the machine a step would be sent to.
@@ -181,34 +182,63 @@ export async function propagateDeviceRevocation(
     deviceId: revocation.deviceId,
   });
 
+  const relay = await sendRelayRevocation(revocation.deviceId, revocation.reason);
+  if (relay.reachable) {
+    return {
+      remoteWorkStopped,
+      liveSessionsDropped: relay.closed,
+      signalingReachable: true,
+    };
+  }
+  if (relay.configured) {
+    // A relay that is down keeps the device's live socket open, so the revoke
+    // is queued and retried until the relay takes it.
+    await enqueueJob(db, {
+      kind: DEVICE_REVOCATION_JOB_KIND,
+      userId: revocation.userId,
+      payload: { deviceId: revocation.deviceId, reason: revocation.reason },
+      idempotencyKey: `device-revoke:${revocation.deviceId}:${revocation.reason}`,
+    }).catch(() => undefined);
+  }
+  return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+}
+
+export const DEVICE_REVOCATION_JOB_KIND = 'webhooks.signaling-device-revoke';
+
+export interface RelayRevocation {
+  readonly configured: boolean;
+  readonly reachable: boolean;
+  readonly closed: number | null;
+}
+
+/** Tells the signaling relay to close the device's sockets and refuse it. */
+export async function sendRelayRevocation(
+  deviceId: string,
+  reason: DeviceRevocationReason,
+): Promise<RelayRevocation> {
   const url = process.env['SIGNALING_HTTP_URL'];
   const secret = process.env['SIGNALING_INTERNAL_SECRET'];
-  if (!url || !secret) {
-    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
-  }
-
+  if (!url || !secret) return { configured: false, reachable: false, closed: null };
   try {
     const response = await fetch(
-      `${url.replace(/\/+$/, '')}/devices/${encodeURIComponent(revocation.deviceId)}/revoke`,
+      `${url.replace(/\/+$/, '')}/devices/${encodeURIComponent(deviceId)}/revoke`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ reason: revocation.reason }),
+        body: JSON.stringify({ reason }),
         signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
       },
     );
-    if (!response.ok) {
-      return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
-    }
+    if (!response.ok) return { configured: true, reachable: false, closed: null };
     const payload: unknown = await response.json().catch(() => null);
     const closed = (payload as { closed?: unknown } | null)?.closed;
     return {
-      remoteWorkStopped,
-      liveSessionsDropped: typeof closed === 'number' ? closed : null,
-      signalingReachable: true,
+      configured: true,
+      reachable: true,
+      closed: typeof closed === 'number' ? closed : null,
     };
   } catch {
-    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+    return { configured: true, reachable: false, closed: null };
   }
 }
 
