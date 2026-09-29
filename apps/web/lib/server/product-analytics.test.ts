@@ -12,7 +12,15 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/consent-records', () => ({
-  hasConsent: mocks.hasConsent,
+  readLatestConsent: async (userId: string, purpose: string) => {
+    const { PRODUCT_ANALYTICS_NOTICE_VERSION } = await import('@agiworkforce/types');
+    return (await mocks.hasConsent(userId, purpose))
+      ? { purpose, granted: true, noticeVersion: PRODUCT_ANALYTICS_NOTICE_VERSION }
+      : null;
+  },
+}));
+vi.mock('@/lib/services/organization-policy-gate', () => ({
+  workspacesPermitProductAnalytics: async () => true,
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
