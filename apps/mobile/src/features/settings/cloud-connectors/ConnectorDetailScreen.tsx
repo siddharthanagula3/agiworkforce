@@ -27,6 +27,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { Text } from '@/components/ui/text';
+import { ConnectorCallLog } from './ConnectorCallLog';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   connectConnector,
@@ -1116,6 +1117,8 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               ))}
             </SettingsGroup>
           ) : null}
+
+          {permissionConnectorId ? <ConnectorCallLog connectorId={permissionConnectorId} /> : null}
 
           {linksGroup}
 

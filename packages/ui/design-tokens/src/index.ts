@@ -510,6 +510,15 @@ export const agiNativeColors = {
   },
 } as const;
 
+export const agiProjectAccents = [
+  { id: 'emerald', label: 'Emerald', hex: '#10b981' },
+  { id: 'sky', label: 'Sky', hex: '#0ea5e9' },
+  { id: 'amber', label: 'Amber', hex: '#f59e0b' },
+  { id: 'rose', label: 'Rose', hex: '#f43f5e' },
+  { id: 'violet', label: 'Violet', hex: '#8b5cf6' },
+  { id: 'zinc', label: 'Zinc', hex: '#71717a' },
+] as const;
+
 export const agiExtensionCssVars = {
   dark: {
     '--agi-ext-bg': agiPalette.dark.surface.base,
