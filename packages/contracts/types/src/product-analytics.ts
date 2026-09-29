@@ -252,12 +252,12 @@ export function createProductAnalyticsEmitter(
 
 export const PRODUCT_ANALYTICS_CONSENT_PATH = '/api/consent';
 
-export const PRODUCT_ANALYTICS_NOTICE_VERSION = '2026-09-29';
+export const PRODUCT_ANALYTICS_NOTICE_VERSION = 'product-analytics-v1';
 
 export const PRODUCT_ANALYTICS_CHOICES_PATH = '/settings/privacy';
 
 export function coversProductAnalytics(noticeVersion: unknown): boolean {
-  return typeof noticeVersion === 'string' && noticeVersion >= PRODUCT_ANALYTICS_NOTICE_VERSION;
+  return noticeVersion === PRODUCT_ANALYTICS_NOTICE_VERSION;
 }
 
 const ACCOUNT_CONSENT_TTL_MS = 10 * 60_000;
