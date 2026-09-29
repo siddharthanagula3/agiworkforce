@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   ),
   deleteBackupObject: vi.fn(async (_key: string, _options?: unknown) => 'deleted'),
   forgetBackupReplicas: vi.fn(async (_keys: readonly string[]) => 0),
+  revokeAllConnectorTokensAtProviders: vi.fn(async (_userId: string) => ({
+    attempted: 0,
+    revoked: 0,
+  })),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -69,6 +73,10 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
 }));
 vi.mock('@/lib/e2b/session-store', () => ({
   deleteE2BSessionsForUser: (...args: unknown[]) => mocks.deleteE2BSessionsForUser(...args),
+}));
+vi.mock('@/lib/connectors/oauth-access', () => ({
+  revokeAllConnectorTokensAtProviders: (userId: string) =>
+    mocks.revokeAllConnectorTokensAtProviders(userId),
 }));
 vi.mock('@/lib/server/object-backup', () => ({
   resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
@@ -464,6 +472,37 @@ describe('eraseUserAccountData', () => {
     expect(report.cacheKeysFailed).toBe(2);
     expect(report.complete).toBe(false);
     expect(report.profileRetained).toBe(true);
+  });
+
+  it('revokes connector tokens upstream before it deletes the grant rows', async () => {
+    primeDb({});
+    let revokedBeforeGrantDelete = false;
+    mocks.revokeAllConnectorTokensAtProviders.mockImplementation(async () => {
+      revokedBeforeGrantDelete = !executedStatements().some((sql) =>
+        sql.includes('delete from public.connector_oauth_grants'),
+      );
+      return { attempted: 1, revoked: 1 };
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.revokeAllConnectorTokensAtProviders).toHaveBeenCalledWith('user-1');
+    expect(revokedBeforeGrantDelete).toBe(true);
+    expect(report.complete).toBe(true);
+  });
+
+  it('still erases the grants when upstream revocation fails', async () => {
+    primeDb({});
+    mocks.revokeAllConnectorTokensAtProviders.mockRejectedValue(new Error('provider down'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes('delete from public.connector_oauth_grants where user_id = $1'),
+      ),
+    ).toBe(true);
+    expect(report.complete).toBe(true);
   });
 
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {

@@ -126,6 +126,7 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         client: None,
         repository: None,
         writer: None,
+        location: None,
     };
     let response = AppServerResponse::success(
         10,
@@ -162,6 +163,7 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             client: None,
             repository: None,
             writer: None,
+            location: None,
         },
         messages: vec![DeveloperMessage {
             role: "assistant".to_string(),
@@ -209,6 +211,7 @@ fn the_wider_thread_summary_stays_additive() {
         client: None,
         repository: None,
         writer: None,
+        location: None,
     };
     let value = serde_json::to_value(&bare).expect("serialize bare summary");
     for absent in [

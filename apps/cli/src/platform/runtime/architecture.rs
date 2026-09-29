@@ -128,8 +128,11 @@ mod tests {
 
     #[test]
     fn a_directory_that_is_not_a_project_reports_nothing_rather_than_guessing() {
-        let dir = tempfile::tempdir().expect("temp dir");
-        assert!(discover(dir.path()).is_none());
+        let home = tempfile::tempdir().expect("config home");
+        crate::compaction::with_config_home(home.path(), || {
+            let dir = tempfile::tempdir().expect("temp dir");
+            assert!(discover(dir.path()).is_none());
+        })
     }
 
     #[test]

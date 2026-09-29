@@ -13,9 +13,12 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   gatewayEmbed: vi.fn(),
   available: vi.fn(),
+  trainingOptOut: vi.fn(),
+  noTrainingProviderIds: vi.fn(),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -36,6 +39,16 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   listAvailableManagedProviderIds: mocks.available,
   resolveServerProviderCredentials: vi.fn(() => ({ apiKey: 'gateway-key' })),
 }));
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/side-call-training-policy')>();
+  mocks.trainingOptOut.mockImplementation(actual.sideCallTrainingOptOut);
+  mocks.noTrainingProviderIds.mockImplementation(actual.noTrainingProviderIds);
+  return {
+    ...actual,
+    sideCallTrainingOptOut: mocks.trainingOptOut,
+    noTrainingProviderIds: mocks.noTrainingProviderIds,
+  };
+});
 vi.mock('@agiworkforce/providers-factory', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createVercelGatewayEmbeddings: vi.fn(() => ({ embed: mocks.gatewayEmbed })),
@@ -53,6 +66,7 @@ const db = {} as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.trainingOptOut.mockResolvedValue(true);
   mocks.available.mockReturnValue(new Set(['vercel_gateway']));
   mocks.access.mockResolvedValue({
     allowed: true,
@@ -185,6 +199,61 @@ describe('embedTextsMetered', () => {
     });
     await expect(failure).rejects.toBeInstanceOf(RetrievalEmbeddingError);
     await expect(failure).rejects.toMatchObject({ code: 'not_entitled' });
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+});
+
+describe('embedTextsMetered training policy', () => {
+  it('embeds Google-derived text only with providers that keep inputs out of training, whatever the account preference', async () => {
+    mocks.trainingOptOut.mockResolvedValue(false);
+    mocks.gatewayEmbed.mockResolvedValue({ vectors: [[0.1]], promptTokens: 1 });
+
+    await embedTextsMetered({
+      db,
+      userId: 'user-1',
+      organizationId: null,
+      texts: ['from gmail'],
+      purpose: 'document',
+      operationKey: 'doc-1:1:0',
+      forceNoTraining: true,
+    });
+
+    expect(mocks.trainingOptOut).not.toHaveBeenCalled();
+    expect(mocks.noTrainingProviderIds).toHaveBeenCalledWith(new Set(['vercel_gateway']));
+  });
+
+  it('follows the account preference when the text carries no Google data', async () => {
+    mocks.trainingOptOut.mockResolvedValue(false);
+    mocks.gatewayEmbed.mockResolvedValue({ vectors: [[0.1]], promptTokens: 1 });
+
+    await embedTextsMetered({
+      db,
+      userId: 'user-1',
+      organizationId: null,
+      texts: ['plain'],
+      purpose: 'query',
+      operationKey: 'user-1:conversation',
+    });
+
+    expect(mocks.trainingOptOut).toHaveBeenCalledOnce();
+    expect(mocks.noTrainingProviderIds).not.toHaveBeenCalled();
+  });
+
+  it('refuses rather than falling back when no embedding provider keeps inputs out of training', async () => {
+    mocks.noTrainingProviderIds.mockReturnValueOnce(new Set());
+
+    await expect(
+      embedTextsMetered({
+        db,
+        userId: 'user-1',
+        organizationId: null,
+        texts: ['from drive'],
+        purpose: 'document',
+        operationKey: 'doc-2:1:0',
+        forceNoTraining: true,
+      }),
+    ).rejects.toMatchObject({ code: 'no_route' });
+    expect(mocks.gatewayEmbed).not.toHaveBeenCalled();
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 });

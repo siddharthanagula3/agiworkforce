@@ -401,17 +401,17 @@ pub fn status_invalidates_tier(status: u16) -> bool {
 /// The web route nests subscription details under `plan`.
 /// We no longer read `credits`, the flat subscription model has no per-use credits.
 #[derive(Debug, Deserialize)]
-struct MeApiResponse {
-    plan: Option<MePlan>,
+pub(crate) struct MeApiResponse {
+    pub(crate) plan: Option<MePlan>,
     #[serde(default)]
-    capability_handshake: Option<CapabilityDocumentWire>,
+    pub(crate) capability_handshake: Option<CapabilityDocumentWire>,
 }
 
 #[derive(Debug, Deserialize)]
-struct MePlan {
+pub(crate) struct MePlan {
     /// e.g. `"free"`, `"basic"`, `"pro"`, `"max"`, `"max_15x"`,
     /// `"team"`, `"enterprise"`.
-    tier: Option<String>,
+    pub(crate) tier: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

@@ -4056,32 +4056,35 @@ mod tests {
 
     #[test]
     fn edited_added_and_removed_instruction_files_each_reach_the_conversation() {
-        let dir = tempfile::tempdir().unwrap();
-        checkout_whose_branches_disagree(dir.path());
-        let mut session = AgentSession::new("fixture-model", &test_context(), None);
-        assert!(session.refresh_instructions_in(dir.path()));
+        let home = tempfile::tempdir().expect("config home");
+        crate::compaction::with_config_home(home.path(), || {
+            let dir = tempfile::tempdir().unwrap();
+            checkout_whose_branches_disagree(dir.path());
+            let mut session = AgentSession::new("fixture-model", &test_context(), None);
+            assert!(session.refresh_instructions_in(dir.path()));
 
-        std::fs::write(dir.path().join("AGENTS.md"), "Indent with two spaces.\n").unwrap();
-        assert!(session.refresh_instructions_in(dir.path()));
-        assert!(last_system_message(&session).contains("Indent with two spaces."));
+            std::fs::write(dir.path().join("AGENTS.md"), "Indent with two spaces.\n").unwrap();
+            assert!(session.refresh_instructions_in(dir.path()));
+            assert!(last_system_message(&session).contains("Indent with two spaces."));
 
-        let package = dir.path().join("packages").join("ui");
-        std::fs::create_dir_all(&package).unwrap();
-        std::fs::write(package.join("AGENTS.md"), "Components are functions.\n").unwrap();
-        assert!(session.refresh_instructions_in(&package));
-        let nested = last_system_message(&session);
-        assert!(nested.contains("Indent with two spaces."), "{nested}");
-        assert!(nested.contains("Components are functions."), "{nested}");
+            let package = dir.path().join("packages").join("ui");
+            std::fs::create_dir_all(&package).unwrap();
+            std::fs::write(package.join("AGENTS.md"), "Components are functions.\n").unwrap();
+            assert!(session.refresh_instructions_in(&package));
+            let nested = last_system_message(&session);
+            assert!(nested.contains("Indent with two spaces."), "{nested}");
+            assert!(nested.contains("Components are functions."), "{nested}");
 
-        std::fs::remove_file(package.join("AGENTS.md")).unwrap();
-        std::fs::remove_file(dir.path().join("AGENTS.md")).unwrap();
-        assert!(session.refresh_instructions_in(&package));
-        let removed = last_system_message(&session);
-        assert!(
-            removed.contains("no longer apply") && !removed.contains("Indent with"),
-            "{removed}"
-        );
-        assert!(!session.refresh_instructions_in(&package));
+            std::fs::remove_file(package.join("AGENTS.md")).unwrap();
+            std::fs::remove_file(dir.path().join("AGENTS.md")).unwrap();
+            assert!(session.refresh_instructions_in(&package));
+            let removed = last_system_message(&session);
+            assert!(
+                removed.contains("no longer apply") && !removed.contains("Indent with"),
+                "{removed}"
+            );
+            assert!(!session.refresh_instructions_in(&package));
+        })
     }
 
     #[test]

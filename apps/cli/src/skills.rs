@@ -646,7 +646,10 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
                 if !v.is_empty() {
                     category = Some(v);
                 }
-            } else if let Some(val) = line.strip_prefix("env_vars:") {
+            } else if let Some(val) = line
+                .strip_prefix("env_vars:")
+                .or_else(|| line.strip_prefix("env:"))
+            {
                 active_list = Some("env_vars");
                 env_vars.extend(parse_inline_list(val));
             } else if let Some(val) = line
@@ -1223,6 +1226,28 @@ pub fn format_skill_list(skills: &[Skill]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn manifests_match_the_golden_fixtures_shared_with_the_skills_package() {
+        let fixtures: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../packages/tools/skills/src/__fixtures__/skill-manifests.golden.json"
+        ))
+        .expect("fixtures");
+        for fixture in fixtures {
+            let parsed =
+                parse_frontmatter(fixture["source"].as_str().expect("source")).expect("parses");
+            let optional = |value: String, absent: &str| (value != absent).then_some(value);
+            let actual = serde_json::json!({
+                "name": optional(parsed.name, "untitled"),
+                "description": optional(parsed.description, ""),
+                "version": parsed.version,
+                "body": parsed.body.trim(),
+                "tools": parsed.tools,
+                "env": parsed.env_vars,
+            });
+            assert_eq!(actual, fixture["expected"], "{}", fixture["case"]);
+        }
+    }
     use super::*;
 
     // ---- helpers ----------------------------------------------------------

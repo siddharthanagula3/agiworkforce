@@ -210,6 +210,29 @@ describe('host messages the phone accepts', () => {
     expect(read('somewhere')).toEqual(entry);
   });
 
+  it('keeps a cloud session marked as cloud and ignores any other location', () => {
+    const entry = {
+      rootId: 'root-1',
+      threadId: 'cloud:5f1c',
+      title: 'Fix retry',
+      folder: 'api',
+      branch: null,
+      status: 'idle',
+      model: null,
+      updatedAt: SENT_AT,
+    };
+    const read = (location: unknown) =>
+      parseRemoteCodeSessions({
+        action: 'code.sessions',
+        version: 1,
+        sessions: [{ ...entry, location }],
+        unavailable: [],
+        syncedAt: SENT_AT,
+      })?.sessions[0];
+    expect(read('cloud')?.location).toBe('cloud');
+    expect(read('mars')).toEqual(entry);
+  });
+
   it('reads live diff and test events and refuses an oversized diff', () => {
     const diff = {
       action: 'code.session.event',

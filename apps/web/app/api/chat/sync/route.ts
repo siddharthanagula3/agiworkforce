@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { markSyncedConversationsGoogleUserData } from '@/lib/connectors/google-user-data';
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
@@ -633,6 +634,7 @@ async function handlePush(request: NextRequest) {
     }
 
     if (messages.length > 0) {
+      await markSyncedConversationsGoogleUserData(db, userId, organizationId ?? null, messages);
       const rows = await pushMessages(db, userId, messages);
       collectBatchRows(rows, applied.messages, conflicts.messages);
 

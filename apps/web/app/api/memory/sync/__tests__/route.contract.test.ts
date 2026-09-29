@@ -21,19 +21,23 @@ vi.mock('server-only', () => ({}));
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   withRateLimit: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',
@@ -98,6 +102,19 @@ describe('GET /api/memory/sync?since=, shared cloud contract', () => {
     expect(body.memories[0].project_id).toBe(PROJECT_ID);
     expect(body.memories[1].project_id).toBeNull();
     expect(String(mockQuery.mock.calls[0]?.[0])).toContain('m.project_id::text as project_id');
+  });
+
+  it('never pulls a memory learned in a conversation that holds Google user data', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await GET(
+      new Request('http://localhost:3000/api/memory/sync?since=0', { method: 'GET' }) as never,
+    );
+
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain("google_source.id::text = to_jsonb(m)->>'source_conversation_id'");
+    expect(sql).toContain('google_source.google_user_data_at is not null');
+    expect(sql).toContain('google_any.user_id = m.user_id');
   });
 
   it('empty pull page parses', async () => {

@@ -1247,7 +1247,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 69,
+      "rows": 79,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
@@ -1488,6 +1488,28 @@
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.test.ts",
           "name": "production readers survive a rotation"
+        }
+      ]
+    },
+    {
+      "id": "no-memory-from-google-turns",
+      "section": "5.5 Google user data (Limited Use)",
+      "kind": "prose",
+      "sentence": "**Memories.** New memories are not saved from a turn that holds Google data.",
+      "implementation": [
+        "apps/web/lib/services/managed-auto-memory-service.ts",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-auto-memory-service.test.ts",
+          "name": "keeps nothing from a conversation that holds Google user data"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.google-memory.test.ts",
+          "name": "refuses to save and never reaches the memory store"
         }
       ]
     }

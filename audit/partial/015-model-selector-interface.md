@@ -155,7 +155,7 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /fast toggles between the session model and a fast model (original_model is restored on the way back); it does not enable a faster tier of the chosen model. Same reading as the Chrome cell. |  |
+| cli | partial | Waits on the c-platform fast tier (per-model fast tier and price in the registry, speed or service_tier in the gateway, provider payloads and billing); then /fast switches to that tier of the same model. |  |
 | vscode | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 

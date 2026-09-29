@@ -86,6 +86,10 @@ const pt = {
     'Este modelo não está disponível para seu plano atual ou sua configuração de provedor.',
   'chatNotice.trustBeforeResume':
     'Confie neste espaço de trabalho antes de retomar uma sessão de desenvolvimento.',
+  'chatNotice.cloudSessionReadOnly':
+    'Esta sessão do Code na nuvem abre aqui somente para leitura. Continue-a na web ou execute `agi code teleport` para trazê-la para este computador.',
+  'chatNotice.openOnWeb': 'Abrir na web',
+  'conversationTree.cloudLabel': 'Nuvem',
   'chatNotice.stopBeforeOpening':
     'Interrompa a resposta atual antes de abrir outra sessão de desenvolvimento.',
   'chatNotice.historyUnavailable':

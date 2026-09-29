@@ -60,11 +60,8 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | An agent can be activated in the current session (/agents <name>) to try it, but there is no separate test session beside the editor; activation changes the live conversation. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3663-3680`, `apps/cli/src/agents.rs:55-76`
 
 ## S52.06: Assistant name.
 
@@ -196,17 +193,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3663-3680`, `apps/cli/src/agents.rs:55-76`
 
 - Done when: A builder can make an assistant available to everyone in their workspace/organization.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Project agents (.agiworkforce/agents in the repo) reach teammates only by committing the file; there is no workspace-level sharing or access control. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:396-445`, `apps/cli/src/agents.rs:376-385`, `apps/cli/src/agents.rs:167-190`
 
 ## S52.39: Export or migration.
 
@@ -218,8 +213,5 @@ Code: `apps/cli/src/agents.rs:396-445`, `apps/cli/src/agents.rs:376-385`, `apps/
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Claude Code agents are read in place and copied in by the Claude migration, but there is no export of an agent to another product or format. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:160-166`, `apps/cli/src/ecosystem.rs:585-589`

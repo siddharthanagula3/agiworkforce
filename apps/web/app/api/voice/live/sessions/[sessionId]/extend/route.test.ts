@@ -15,7 +15,17 @@ const mocks = vi.hoisted(() => ({
   storeReady: vi.fn(),
   getSession: vi.fn(),
   touchSession: vi.fn(),
+  keepsOutOfTraining: vi.fn<(modelId: string) => boolean | null>(() => null),
 }));
+
+vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/provider-training-opt-out')>();
+  return {
+    ...actual,
+    modelKeepsInputsOutOfTraining: (modelId: string) =>
+      mocks.keepsOutOfTraining(modelId) ?? actual.modelKeepsInputsOutOfTraining(modelId),
+  };
+});
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
@@ -126,6 +136,7 @@ function stepCalls(): Array<Record<string, unknown>> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.keepsOutOfTraining.mockReturnValue(null);
   mocks.csrf.mockResolvedValue(null);
   mocks.auth.mockResolvedValue({ userId: 'user-1' });
   mocks.userScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
@@ -407,5 +418,24 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
     );
 
     expect(response.status).toBe(204);
+  });
+});
+
+describe('a session whose chat now holds Google user data', () => {
+  it('is not extended while the voice models may train', async () => {
+    mocks.keepsOutOfTraining.mockReturnValue(false);
+    mocks.getSession.mockResolvedValue({
+      ...activeSession(),
+      conversationId: '22222222-2222-4222-8222-222222222222',
+    });
+    db.query.mockImplementation(async (sql: string) =>
+      sql.includes('as marked') ? [{ marked: true, project_id: null }] : [],
+    );
+
+    const response = await extend({ block: 2, settlement: SETTLEMENT });
+
+    expect(response.status).toBe(403);
+    expect((await errorBody(response))['code']).toBe('model_may_train');
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 });

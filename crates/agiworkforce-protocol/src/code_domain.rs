@@ -1260,6 +1260,7 @@ impl CodeSession {
                 .and_then(Repository::primary_remote)
                 .map(|remote| remote.url.clone()),
             writer: None,
+            location: None,
         }
     }
 
