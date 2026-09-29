@@ -15,7 +15,7 @@ import {
   extractRouteReferencesFromSource,
   missingRouteTableMigrations,
 } from './lib/route-table-contract.mjs';
-import { parseCliArgs } from './neon-migrate.mjs';
+import { migrationConnectionString, parseCliArgs } from './neon-migrate.mjs';
 
 function ledgerRow(migration, overrides = {}) {
   return {
@@ -99,6 +99,32 @@ test('CLI accepts the pnpm separator and explicit safety confirmations', () => {
     confirmProduction: false,
     json: false,
   });
+});
+
+test('apply and baseline reach the direct endpoint, which can hold the session lock', () => {
+  const pooled =
+    'postgresql://alex:Ab%40C-pooler.x@ep-cool-darkness-123456-pooler.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
+  const direct =
+    'postgresql://alex:Ab%40C-pooler.x@ep-cool-darkness-123456.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
+  for (const command of ['apply', 'baseline']) {
+    assert.equal(migrationConnectionString({ AGI_DATABASE_URL: pooled }, command), direct);
+    assert.equal(
+      migrationConnectionString(
+        { NEON_DATABASE_URL: pooled.replace('/db?', ':5432/db?') },
+        command,
+      ),
+      direct.replace('/db?', ':5432/db?'),
+    );
+  }
+  for (const command of ['status', 'verify', 'record', 'deployments']) {
+    assert.equal(migrationConnectionString({ AGI_DATABASE_URL: pooled }, command), pooled);
+  }
+  const local = 'postgres://postgres:postgres@localhost:5432/agiworkforce_test';
+  assert.equal(
+    migrationConnectionString({ AGI_DATABASE_URL: local, DATABASE_URL: pooled }, 'apply'),
+    local,
+  );
+  assert.equal(migrationConnectionString({}, 'apply'), undefined);
 });
 
 test('CLI parses the deployment record identity', () => {
