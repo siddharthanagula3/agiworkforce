@@ -174,7 +174,9 @@
     "packages_one": "{{count}} Paket",
     "packages_other": "{{count}} Pakete",
     "unreadNotifications_one": "{{count}} ungelesene Benachrichtigung",
-    "unreadNotifications_other": "{{count}} ungelesene Benachrichtigungen"
+    "unreadNotifications_other": "{{count}} ungelesene Benachrichtigungen",
+    "textBlocks_one": "{{count}} Textblock",
+    "textBlocks_other": "{{count}} Textblöcke"
   },
   "relative": {
     "minutesAgo_one": "vor {{count}} Minute",

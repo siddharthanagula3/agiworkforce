@@ -460,7 +460,11 @@
     "foundSources_one": "{{count}} स्रोत मिला",
     "foundSources_other": "{{count}} स्रोत मिले",
     "mapPreviewPlaces_one": "{{count}} स्थान के साथ मानचित्र पूर्वावलोकन",
-    "mapPreviewPlaces_other": "{{count}} स्थानों के साथ मानचित्र पूर्वावलोकन"
+    "mapPreviewPlaces_other": "{{count}} स्थानों के साथ मानचित्र पूर्वावलोकन",
+    "lines_one": "{{count}} पंक्ति",
+    "lines_other": "{{count}} पंक्तियाँ",
+    "words_one": "{{count}} शब्द",
+    "words_other": "{{count}} शब्द"
   },
   "markdownTable": {
     "label": "तालिका",

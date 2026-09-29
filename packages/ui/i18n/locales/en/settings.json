@@ -196,6 +196,10 @@
     "connectorsNeedReconnect_one": "{{count}} connector needs to be reconnected",
     "connectorsNeedReconnect_other": "{{count}} connectors need to be reconnected",
     "deletedArchivedChats_one": "Deleted {{count}} archived chat.",
-    "deletedArchivedChats_other": "Deleted {{count}} archived chats."
+    "deletedArchivedChats_other": "Deleted {{count}} archived chats.",
+    "memoriesAdded_one": "Added {{count}} memory",
+    "memoriesAdded_other": "Added {{count}} memories",
+    "factsFound_one": "Found {{count}} fact from {{source}}.",
+    "factsFound_other": "Found {{count}} facts from {{source}}."
   }
 }
