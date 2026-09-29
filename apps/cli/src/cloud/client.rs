@@ -264,12 +264,51 @@ impl CloudClient {
         serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
+    /// Send, and on a 401 renew the session once and send again. A token the
+    /// server refuses before it was due to expire (a passkey enrolled, the
+    /// device unlinked) would otherwise fail every call while the account still
+    /// looked signed in. A refresh that is refused too, or a second 401, forgets
+    /// the credential, so the next status reads signed out and the user, or the
+    /// desktop's account sync, signs in again.
+    async fn send_renewing<T: DeserializeOwned>(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+    ) -> Result<T, CloudError> {
+        match Self::send(build(self)).await {
+            Err(CloudError::SessionExpired) => {}
+            other => return other,
+        }
+        use crate::app_server::account::{
+            forget_refused_session, recover_rejected_session, RejectedSessionRecovery,
+        };
+        match recover_rejected_session(&self.jwt).await {
+            RejectedSessionRecovery::Renewed => {
+                let renewed = CloudClient::connect_managed()?;
+                match Self::send(build(&renewed)).await {
+                    Err(CloudError::SessionExpired) => {
+                        forget_refused_session();
+                        Err(CloudError::SessionExpired)
+                    }
+                    other => other,
+                }
+            }
+            RejectedSessionRecovery::Refused(message) => Err(CloudError::Api {
+                status: 403,
+                message,
+            }),
+            RejectedSessionRecovery::Ended(_) | RejectedSessionRecovery::Unavailable => {
+                Err(CloudError::SessionExpired)
+            }
+        }
+    }
+
     pub async fn get<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::GET, path).query(query)).await
+        self.send_renewing(|client| client.request(reqwest::Method::GET, path).query(query))
+            .await
     }
 
     pub async fn post<B: Serialize, T: DeserializeOwned>(
@@ -277,7 +316,8 @@ impl CloudClient {
         path: &str,
         body: &B,
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::POST, path).json(body)).await
+        self.send_renewing(|client| client.request(reqwest::Method::POST, path).json(body))
+            .await
     }
 
     /// Send one declared [`Route`]. Commands that name their route go through
@@ -288,13 +328,16 @@ impl CloudClient {
         query: &[(&str, String)],
         body: Option<&serde_json::Value>,
     ) -> Result<T, CloudError> {
-        let mut builder = self
-            .request(route.method.reqwest(), &route.path)
-            .query(query);
-        if let Some(body) = body {
-            builder = builder.json(body);
-        }
-        Self::send(builder).await
+        self.send_renewing(|client| {
+            let builder = client
+                .request(route.method.reqwest(), &route.path)
+                .query(query);
+            match body {
+                Some(body) => builder.json(body),
+                None => builder,
+            }
+        })
+        .await
     }
 
     /// POST one billable Managed Cloud operation. The key identifies the
