@@ -9,7 +9,7 @@ import { resolveGeneratedVideoUri } from './videoUri';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaVideoGenerationRequest } from '@agiworkforce/cloud-contracts';
 
-export type VideoGenRequest = ManagedMediaVideoGenerationRequest;
+export type VideoGenRequest = ManagedMediaVideoGenerationRequest & { conversation_id?: string };
 
 export interface VideoGenStartResponse {
   success?: boolean;

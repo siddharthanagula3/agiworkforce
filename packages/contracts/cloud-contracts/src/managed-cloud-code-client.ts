@@ -174,7 +174,11 @@ function apiError(body: unknown, status: number): CloudCodeApiError {
       error: z
         .union([
           z.string(),
-          z.object({ code: z.string().optional(), message: z.string().optional() }),
+          z.object({
+            code: z.string().optional(),
+            message: z.string().optional(),
+            details: z.object({ reason: z.string().optional() }).passthrough().optional(),
+          }),
         ])
         .optional(),
       message: z.string().optional(),
@@ -187,7 +191,7 @@ function apiError(body: unknown, status: number): CloudCodeApiError {
     (typeof parsed.data.error === 'string' ? parsed.data.error : undefined) ??
     parsed.data.message ??
     `Request failed (${status}).`;
-  return new CloudCodeApiError(message, status, nested?.code);
+  return new CloudCodeApiError(message, status, nested?.details?.reason ?? nested?.code);
 }
 
 export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): CloudCodeApi {
@@ -202,6 +206,15 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
       response = await config.fetchImpl(path, init, { runsAgentTurn });
     } catch (error) {
       if (isAbortError(error)) throw error;
+      const refusedStatus = (error as { status?: unknown } | null)?.status;
+      if (error instanceof Error && typeof refusedStatus === 'number' && refusedStatus > 0) {
+        const code = (error as { code?: unknown }).code;
+        throw new CloudCodeApiError(
+          error.message,
+          refusedStatus,
+          typeof code === 'string' ? code : undefined,
+        );
+      }
       throw new CloudCodeApiError(
         'Could not reach managed Code. Check your connection and retry.',
         0,

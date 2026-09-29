@@ -18,8 +18,8 @@ import {
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
-import { ApiPaywallError } from './api';
-import { httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
+import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -197,6 +197,9 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
   });
 }
 
+const TERMS_REVIEW_MESSAGE =
+  'The Terms of Service need your agreement before AGI Cloud can answer. Review them in the app, then send again.';
+
 function isTermsRefusal(text: string): boolean {
   const body = parseJsonBody(text) as { error?: { code?: unknown } } | null;
   return String(body?.error?.code ?? '').toLowerCase() === 'terms_acceptance_required';
@@ -272,6 +275,7 @@ async function attemptStream(
   callbacks: StreamCallbacks,
   signal: AbortSignal,
   path: string = COMPLETIONS_PATH,
+  sessionRecovered = false,
 ): Promise<boolean> {
   const token = await getAuthToken();
   if (signal.aborted) throw new AbortError('Stream cancelled before network egress');
@@ -319,6 +323,18 @@ async function attemptStream(
   if (!response.ok) {
     const text = await response.text();
 
+    if (response.status === 401 && !sessionRecovered && !signal.aborted) {
+      if (await recoverStreamSession()) {
+        return attemptStream(body, callbacks, signal, path, true);
+      }
+    }
+
+    const authRefusal = streamAuthRefusal(response.status, text);
+    if (authRefusal) {
+      callbacks.onError(authRefusal);
+      return false;
+    }
+
     if (response.status === 429) {
       const rateLimitError = rateLimitErrorFrom(parseJsonBody(text));
       if (rateLimitError) throw rateLimitError;
@@ -329,7 +345,9 @@ async function attemptStream(
     // account's standing sends the app to the in-app terms review.
     if (response.status === 403 && isTermsRefusal(text)) {
       const terms = useTermsAcceptanceStore.getState();
-      if (terms.userId && terms.status !== 'checking') void terms.verify(terms.userId);
+      if (terms.userId && terms.status !== 'checking') void terms.recheck(terms.userId);
+      callbacks.onError(new ApiHttpError(TERMS_REVIEW_MESSAGE, 403, 'terms_acceptance_required'));
+      return false;
     }
 
     if (response.status === 403) {
