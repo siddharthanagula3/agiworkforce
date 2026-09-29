@@ -10,6 +10,21 @@
       "file": "apps/web/lib/server/support-access-service.ts",
       "migration": 344,
       "reason": "Break-glass grants read and write support_access_grants.purpose; the deploy applies 0344 before this code ships."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "migration": 343,
+      "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
+    },
+    {
+      "file": "apps/web/lib/services/conversation-branch-service.ts",
+      "migration": 343,
+      "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
+    },
+    {
+      "file": "apps/web/lib/services/past-chat-context-service.ts",
+      "migration": 343,
+      "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
     }
   ]
 }

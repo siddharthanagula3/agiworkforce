@@ -81,6 +81,7 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   readArtifactStorageValue: vi.fn(),
   writeArtifactStorageValue: vi.fn(),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
+  ArtifactRuntimeGoogleUserDataRouteError: class ArtifactRuntimeGoogleUserDataRouteError extends Error {},
   readRunnableArtifact: mocks.readRunnableArtifact,
   selectArtifactRuntimeRoute: mocks.selectArtifactRuntimeRoute,
   buildArtifactConnectorPlan: mocks.buildArtifactConnectorPlan,
@@ -381,6 +382,37 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
 
     expect(response.status).toBe(503);
     expect(await errorCode(response)).toBe('model_unavailable');
+  });
+
+  it.each([
+    ['a Google connector', ['linear', 'gmail'], true],
+    ['no Google connector', ['linear'], false],
+  ])('routes a run that names %s accordingly', async (_label, connectors, googleUserData) => {
+    const response = await call({ prompt: 'Summarize', connectors });
+
+    expect(response.status).toBe(200);
+    expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
+      mocks.db,
+      'user-1',
+      'Summarize',
+      'pro',
+      { needsTools: true, googleUserData },
+    );
+  });
+
+  it('answers 503 when the run refuses a model that may train on Google data', async () => {
+    mocks.completeArtifactPrompt.mockRejectedValue(
+      new ArtifactRuntimeRouteUnavailableError('This app reads data from your Google account.'),
+    );
+
+    const response = await call({ prompt: 'Summarize', connectors: ['gmail'] });
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error).toEqual({
+      code: 'model_unavailable',
+      message: 'This app reads data from your Google account.',
+    });
   });
 
   it('refuses connectors the plan cannot use', async () => {

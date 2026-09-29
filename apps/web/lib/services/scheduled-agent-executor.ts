@@ -18,7 +18,6 @@ import {
   connectedGoogleUserDataConnectorIds,
   projectHoldsGoogleUserData,
   readsGoogleUserData,
-  userHoldsGoogleUserDataConversation,
 } from '@/lib/connectors/google-user-data';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -693,17 +692,16 @@ async function scheduledRunReachesGoogleUserData(
   db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
   userId: string,
   task: ScheduleTask,
-  sources: { project: boolean; recentChats?: boolean | undefined },
+  sources: { project: boolean },
 ): Promise<boolean> {
   const connected = await connectedGoogleUserDataConnectorIds(db, userId);
   const connectors = task.connectors ?? null;
   if (connected.some((connectorId) => connectors === null || connectors.includes(connectorId))) {
     return true;
   }
-  if (task.projectId && sources.project && (await projectHoldsGoogleUserData(db, task.projectId))) {
-    return true;
-  }
-  return sources.recentChats === true && (await userHoldsGoogleUserDataConversation(db, userId));
+  return Boolean(
+    task.projectId && sources.project && (await projectHoldsGoogleUserData(db, task.projectId)),
+  );
 }
 
 async function selectScheduledRoute(

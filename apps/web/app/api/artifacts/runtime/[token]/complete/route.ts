@@ -25,6 +25,7 @@ import {
   readRunnableArtifact,
   selectArtifactRuntimeRoute,
 } from '@/lib/services/artifact-runtime-service';
+import { connectorIdsReachGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { artifactConnectorsGateResponse } from '@/lib/services/artifact-connector-gate';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
@@ -162,6 +163,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   try {
     route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan, {
       needsTools: connectors.length > 0,
+      googleUserData: connectorIdsReachGoogleUserData(connectors),
     });
   } catch (error) {
     if (error instanceof ArtifactRuntimeRouteUnavailableError) {
@@ -236,6 +238,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return refusal(error.status, error.code, error.message);
+    }
+    if (error instanceof ArtifactRuntimeRouteUnavailableError) {
+      return refusal(503, 'model_unavailable', error.message);
     }
     throw error;
   }

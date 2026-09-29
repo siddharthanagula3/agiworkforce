@@ -8,11 +8,15 @@ import {
 
 const mocks = vi.hoisted(() => ({ embed: vi.fn(), readRegion: vi.fn() }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/data-region', () => ({ readOrganizationRegion: mocks.readRegion }));
-vi.mock('@/lib/services/retrieval-embedding-service', async () => {
+vi.mock('@/lib/server/data-region', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readOrganizationRegion: mocks.readRegion,
+}));
+vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => {
   class RetrievalEmbeddingError extends Error {
     constructor(
       message: string,
@@ -21,7 +25,11 @@ vi.mock('@/lib/services/retrieval-embedding-service', async () => {
       super(message);
     }
   }
-  return { embedTextsMetered: mocks.embed, RetrievalEmbeddingError };
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    embedTextsMetered: mocks.embed,
+    RetrievalEmbeddingError,
+  };
 });
 
 const { buildTsQuery, createPostgresSearchProvider } = await import('../retrieval-search-service');
@@ -62,9 +70,13 @@ const ROWS = [
   },
 ];
 
-function scopedDb(options: { embeddingsPresent: boolean }) {
+function scopedDb(options: { embeddingsPresent: boolean; googleMarked?: boolean | 'unreadable' }) {
   const query = vi.fn(async (sql: string, _params?: unknown[]): Promise<unknown[]> => {
     if (sql.includes('as present')) return [{ present: options.embeddingsPresent }];
+    if (sql.includes('google_user_data_at')) {
+      if (options.googleMarked === 'unreadable') throw new Error('connection reset');
+      return [{ holds: options.googleMarked === true }];
+    }
     return ROWS;
   });
   const adapter = {
@@ -134,6 +146,33 @@ describe('createPostgresSearchProvider', () => {
     expect(params[5]).toBe('enterprise & pricing:*');
     expect(String(params[6]).startsWith('[0.5,')).toBe(true);
   });
+
+  it.each([
+    ['holds a chat marked as carrying Google data', true, true],
+    ['holds no such chat', false, false],
+    ['cannot be checked', 'unreadable' as const, true],
+  ])(
+    'embeds the query with providers that keep inputs out of training when the account %s',
+    async (_label, googleMarked, forced) => {
+      mocks.embed.mockResolvedValue({
+        vectors: [Array.from({ length: RETRIEVAL_EMBEDDING_DIMENSIONS }, () => 0.5)],
+        model: 'embedding-model',
+        routeId: 'route',
+      });
+      const { adapter } = scopedDb({ embeddingsPresent: true, googleMarked });
+
+      await createPostgresSearchProvider({
+        db: adapter,
+        userId: 'user-1',
+        organizationId: null,
+        semantic: true,
+      }).search({ text: 'quarterly invoice', limit: 5 });
+
+      expect(mocks.embed).toHaveBeenCalledWith(
+        expect.objectContaining({ purpose: 'query', forceNoTraining: forced }),
+      );
+    },
+  );
 
   it('ranks by full text alone when the query embedding is refused', async () => {
     mocks.embed.mockRejectedValue(new RetrievalEmbeddingError('no credits', 'billing_refused'));

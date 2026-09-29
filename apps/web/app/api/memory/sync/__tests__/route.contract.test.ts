@@ -100,6 +100,18 @@ describe('GET /api/memory/sync?since=, shared cloud contract', () => {
     expect(String(mockQuery.mock.calls[0]?.[0])).toContain('m.project_id::text as project_id');
   });
 
+  it('never pulls a memory learned in a conversation that holds Google user data', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await GET(
+      new Request('http://localhost:3000/api/memory/sync?since=0', { method: 'GET' }) as never,
+    );
+
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain("google_source.id::text = to_jsonb(m)->>'source_conversation_id'");
+    expect(sql).toContain('google_source.google_user_data_at is not null');
+  });
+
   it('empty pull page parses', async () => {
     mockQuery.mockResolvedValueOnce([]);
     const res = await GET(

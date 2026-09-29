@@ -2,11 +2,21 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import firstPartyTargets from '@/lib/connectors/directory/sources/first-party.json';
+import vendorDirectory from '@/lib/connectors/directory/sources/vendor-directory.json';
+import { directoryServerId } from '@/lib/connectors/mcp-directory-targets';
+import { CONNECTOR_OAUTH_SCOPE_CEILINGS } from '@/lib/connectors/oauth-scope-allowlist';
+import { MANAGED_CLOUD_TRIGGER_SOURCES } from '@agiworkforce/cloud-contracts';
 import {
   conversationHoldsGoogleUserData,
+  GOOGLE_USER_DATA_CONNECTOR_IDS,
+  GOOGLE_USER_DATA_TRIGGER_SOURCES,
+  isGoogleApiUrl,
+  isGoogleUserDataConnector,
   isGoogleUserDataToolName,
   messagesCarryGoogleToolUse,
   resolveGoogleUserDataTurn,
+  turnHoldsGoogleUserData,
 } from '../google-user-data';
 
 const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
@@ -131,5 +141,95 @@ describe('resolveGoogleUserDataTurn', () => {
       throw new Error('connection reset');
     });
     await expect(resolveGoogleUserDataTurn(db, 'user-1', plainTurn)).resolves.toBe('connectors');
+  });
+});
+
+describe('the Google connector set covers every Google-owned connector', () => {
+  const inSet = new Set(GOOGLE_USER_DATA_CONNECTOR_IDS);
+
+  it('includes every first-party connector served from a Google API host', () => {
+    const google = (firstPartyTargets as Array<{ connectorId: string; url: string }>)
+      .filter((target) => isGoogleApiUrl(target.url))
+      .map((target) => target.connectorId);
+    expect(google.length).toBeGreaterThan(0);
+    expect(google.filter((id) => !inSet.has(id))).toEqual([]);
+  });
+
+  it('includes every directory entry Google publishes or hosts', () => {
+    const google = (
+      vendorDirectory as Array<{
+        id: string;
+        mcpUrl?: string | null;
+        publisher?: { name?: string };
+      }>
+    )
+      .filter(
+        (entry) =>
+          /^google\b/i.test(entry.publisher?.name ?? '') ||
+          (entry.mcpUrl ? isGoogleApiUrl(entry.mcpUrl) : false),
+      )
+      .map((entry) => entry.id);
+    expect(google).toContain('bigquery');
+    expect(google.filter((id) => !inSet.has(id))).toEqual([]);
+  });
+
+  it('includes every OAuth connector that asks for a Google API scope', () => {
+    const google = Object.entries(CONNECTOR_OAUTH_SCOPE_CEILINGS)
+      .filter(([, scopes]) => [...scopes].some((scope) => isGoogleApiUrl(String(scope))))
+      .map(([connectorId]) => connectorId);
+    expect(google).toEqual(expect.arrayContaining(['gmail', 'google-sheets', 'youtube', 'gcp']));
+    expect(google.filter((id) => !inSet.has(id))).toEqual([]);
+  });
+
+  it('recognizes a Google connector under its directory server id', () => {
+    expect(isGoogleUserDataConnector(directoryServerId('bigquery'))).toBe(true);
+    expect(isGoogleUserDataToolName(`mcp__${directoryServerId('bigquery')}__execute_sql`)).toBe(
+      true,
+    );
+    expect(isGoogleUserDataConnector(directoryServerId('linear'))).toBe(false);
+  });
+
+  it('treats every trigger source named for a Google product as Google data', () => {
+    const google = MANAGED_CLOUD_TRIGGER_SOURCES.filter((source) =>
+      /^(gmail|google|youtube)/.test(source),
+    );
+    expect(google.length).toBeGreaterThan(0);
+    expect(google.filter((source) => !GOOGLE_USER_DATA_TRIGGER_SOURCES.has(source))).toEqual([]);
+  });
+});
+
+describe('turnHoldsGoogleUserData', () => {
+  it('holds when a Google tool ran in a turn with no conversation', async () => {
+    const { db, query } = database(() => []);
+    await expect(
+      turnHoldsGoogleUserData(db, 'user-1', {
+        conversationId: null,
+        messages: [],
+        googleToolRan: true,
+      }),
+    ).resolves.toBe(true);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('reads the conversation marker, and treats an unreadable one as holding', async () => {
+    const clean = database(() => [{ marked: false, project_id: null }]);
+    await expect(
+      turnHoldsGoogleUserData(clean.db, 'user-1', {
+        conversationId: CONVERSATION_ID,
+        messages: [],
+        googleToolRan: false,
+      }),
+    ).resolves.toBe(false);
+
+    const broken = database(() => {
+      throw new Error('connection reset');
+    });
+    await expect(
+      turnHoldsGoogleUserData(broken.db, 'user-1', {
+        conversationId: CONVERSATION_ID,
+        messages: [],
+        googleToolRan: false,
+      }),
+    ).resolves.toBe(true);
   });
 });

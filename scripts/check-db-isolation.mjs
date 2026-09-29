@@ -118,6 +118,13 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
       'flag, so reading across workspaces can only add a restriction, never expose a row',
   },
   {
+    match: /lib\/connectors\/google-user-data-runs\.ts$/,
+    reason:
+      'Google Limited Use routing for runs outside a chat and for retrieval embeddings: each ' +
+      'statement is keyed by the account plus a source id and returns only a conversation id ' +
+      'or a flag, so reading across workspaces can only add a restriction, never expose a row',
+  },
+  {
     match: /lib\/jobs\/google-user-data-jobs\.ts$/,
     reason:
       'the operator dead-jobs view already spans every tenant behind the break-glass gate; this ' +

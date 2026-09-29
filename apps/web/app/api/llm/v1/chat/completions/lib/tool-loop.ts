@@ -60,9 +60,13 @@ import {
 } from '@/lib/identity/operation-identity';
 import { logger } from '@/lib/logger';
 import {
+  GOOGLE_USER_DATA_MEMORY_REFUSAL,
   GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+  isGoogleUserDataToolName,
   markConversationGoogleUserData,
+  messagesCarryGoogleToolUse,
   readsGoogleUserData,
+  turnHoldsGoogleUserData,
 } from '@/lib/connectors/google-user-data';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
@@ -2077,6 +2081,7 @@ async function runMcpTool(
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
+    googleUserDataRead?: () => boolean;
     healthSpaceProjectId?: string | null;
   },
 ): Promise<ToolLoopToolResult> {
@@ -2193,6 +2198,20 @@ async function runMcpTool(
       executionContext.sensitiveDataRead?.() === true
     ) {
       return { content: SENSITIVE_DATA_MEMORY_REFUSAL, isError: true };
+    }
+    if (
+      toolCall.qualifiedName === SAVE_MEMORY_TOOL_NAME &&
+      (await turnHoldsGoogleUserData(
+        callerScopedDb(executionContext, executionContext.userId),
+        executionContext.userId,
+        {
+          conversationId: executionContext.conversationId,
+          messages: [],
+          googleToolRan: executionContext.googleUserDataRead?.() === true,
+        },
+      ))
+    ) {
+      return { content: GOOGLE_USER_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
@@ -3297,6 +3316,7 @@ export async function executeOfferedToolCall(
             requestId,
             planTier: input.planTier,
             surface: input.surface,
+            conversationId,
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
             queueSandboxFiles: async (files) => {
               const { executor } = await resolveExecutor();
@@ -3391,6 +3411,7 @@ export async function* runToolLoop(
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;
+  let googleUserDataRead = messagesCarryGoogleToolUse(processed.chatRequest?.messages ?? []);
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -4776,12 +4797,14 @@ export async function* runToolLoop(
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
               sensitiveDataRead: () => sensitiveDataRead,
+              googleUserDataRead: () => googleUserDataRead,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
             sensitiveDataRead = true;
           }
+          if (isGoogleUserDataToolName(tc.qualifiedName)) googleUserDataRead = true;
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
           return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;
