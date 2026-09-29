@@ -24,6 +24,7 @@ import {
   SYNCED_APP_SURFACES,
   type PlatformCapability,
   type SyncedAppSurface,
+  type WorkspaceFeature,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { MeDisabledFeature, MeResponse } from '@agiworkforce/cloud-contracts';
@@ -40,6 +41,7 @@ import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { resolveEffectiveWorkspaceControls } from '@/lib/services/organization-policy-gate';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 import {
   buildFlagSubject,
@@ -76,6 +78,36 @@ async function closedFeatures(
     capability,
     reason: versionDisableReason(definitions, capability),
   }));
+}
+
+const WORKSPACE_FEATURE_CAPABILITIES: ReadonlyArray<
+  readonly [WorkspaceFeature, PlatformCapability]
+> = [
+  ['research', 'canUseDeepResearch'],
+  ['work', 'canUseAgiWork'],
+  ['skills', 'canUseSkills'],
+  ['plugins', 'canUsePlugins'],
+];
+
+async function workspaceCapabilityDecisions(
+  userId: string,
+  request: NextRequest,
+): Promise<{ disabled: PlatformCapability[]; unreadable: PlatformCapability[] }> {
+  try {
+    const effective = await resolveEffectiveWorkspaceControls(getNeonDb(), userId, request);
+    const featureAccess = effective?.controls.featureAccess;
+    return {
+      disabled: featureAccess
+        ? WORKSPACE_FEATURE_CAPABILITIES.filter(
+            ([feature]) => featureAccess[feature] === false,
+          ).map(([, capability]) => capability)
+        : [],
+      unreadable: [],
+    };
+  } catch (error) {
+    logger.error({ userId, error }, 'Workspace controls unreadable; their capabilities are closed');
+    return { disabled: [], unreadable: WORKSPACE_FEATURE_CAPABILITIES.map(([, c]) => c) };
+  }
 }
 
 async function userDisabledCapabilities(
@@ -241,14 +273,19 @@ async function handleGetMe(request: NextRequest) {
       generic_web_search: webSearchBackendConfigured(),
     };
 
+    const workspaceCapabilities = await workspaceCapabilityDecisions(userId, request);
     const capability_handshake = buildMeCapabilityHandshake({
       userId,
       tier: effectiveTier,
       catalogVersion: entitlement.catalogVersion,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
-      closedCapabilities: platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),
+      closedCapabilities: [
+        ...platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),
+        ...workspaceCapabilities.unreadable,
+      ],
       userDisabledCapabilities: await userDisabledCapabilities(db, userId),
+      workspaceDisabledCapabilities: workspaceCapabilities.disabled,
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });
 
