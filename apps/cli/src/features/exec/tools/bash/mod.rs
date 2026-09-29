@@ -426,7 +426,7 @@ pub(super) async fn approve_command(
                 }));
             }
             Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
-            Decision::Allow if evaluation.every_segment_matched_rule => {
+            Decision::Allow if policy_waives_confirmation(&evaluation, command) => {
                 require_confirmation = false
             }
             Decision::Prompt | Decision::Allow => {}
@@ -662,6 +662,13 @@ async fn sandbox_network_policy(
     } else {
         crate::sandbox::NetworkPolicy::Deny
     }
+}
+
+fn policy_waives_confirmation(
+    evaluation: &crate::features::exec::exec_policy::CommandEvaluation,
+    command: &str,
+) -> bool {
+    evaluation.every_segment_matched_rule && classify_command(command) != CommandSafety::Dangerous
 }
 
 fn saved_command_decision(
@@ -941,5 +948,22 @@ mod tests {
             saved_command_decision(&perms, dangerous, CommandSafety::Dangerous),
             Some(false)
         );
+    }
+
+    #[test]
+    fn an_exec_policy_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        use crate::features::exec::exec_policy::evaluate_command;
+        use agiworkforce_execpolicy::{Decision, Policy};
+        let mut policy = Policy::empty();
+        for prefix in [["rm", "-rf"], ["cargo", "build"]] {
+            policy
+                .add_prefix_rule(&prefix.map(str::to_string), Decision::Allow)
+                .expect("allow rule");
+        }
+        let dangerous = evaluate_command(&policy, "rm -rf build");
+        assert_eq!(dangerous.decision, Decision::Allow);
+        assert!(!policy_waives_confirmation(&dangerous, "rm -rf build"));
+        let routine = evaluate_command(&policy, "cargo build");
+        assert!(policy_waives_confirmation(&routine, "cargo build"));
     }
 }
