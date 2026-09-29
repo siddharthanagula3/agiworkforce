@@ -374,6 +374,10 @@ export async function sweepOrganizationRetention(
   }
 }
 
+// Only settled runs: a running or awaiting_approval run is live work, and a
+// status added later stays untouched until it is named here.
+const TERMINAL_ROUTINE_RUN_STATUSES = ['success', 'failed', 'timeout', 'cancelled'] as const;
+
 async function sweepRoutineRuns(
   db: DatabaseAdapter,
   organizationId: string,
@@ -387,12 +391,12 @@ async function sweepRoutineRuns(
           select run.id from public.scheduled_task_runs run
             join public.scheduled_tasks task on task.id = run.task_id
            where task.organization_id = $1
-             and run.status <> 'running'
+             and run.status = any ($4::text[])
              and coalesce(run.completed_at, run.started_at) < $2
            limit $3
         )
         returning id`,
-      [organizationId, cutoff, RETENTION_SWEEP_BATCH],
+      [organizationId, cutoff, RETENTION_SWEEP_BATCH, TERMINAL_ROUTINE_RUN_STATUSES],
     );
     deleted += rows.length;
     if (rows.length < RETENTION_SWEEP_BATCH) break;
