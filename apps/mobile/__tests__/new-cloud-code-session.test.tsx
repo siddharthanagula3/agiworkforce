@@ -1,7 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
-const mockCloudCodeApi = { listRepositories: jest.fn(), create: jest.fn() };
+const mockCloudCodeApi = {
+  listRepositories: jest.fn(),
+  listBranches: jest.fn(),
+  create: jest.fn(),
+};
 
 jest.mock('@/src/features/cloud-code/service', () => ({
   get cloudCodeApi() {
@@ -35,6 +39,7 @@ describe('new cloud code session', () => {
       truncated: false,
       unreachable: [],
     });
+    mockCloudCodeApi.listBranches.mockResolvedValue({ branches: [], truncated: false });
   });
 
   afterEach(() => {

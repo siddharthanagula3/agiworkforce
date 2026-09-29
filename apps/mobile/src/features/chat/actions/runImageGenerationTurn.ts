@@ -44,6 +44,8 @@ export interface RunImageGenerationTurnInput {
   transparentBackground?: boolean;
   operation?: ManagedMediaImageOperation;
   sourceImage?: MobileImageReferenceAttachment;
+  sourceImageBase64?: string;
+  maskImageBase64?: string;
   referenceImages?: MobileImageReferenceAttachment[];
   ownerId: string;
   onStarted?: () => void;
@@ -153,10 +155,12 @@ export async function runImageGenerationTurn(
 
   try {
     const referenceOperation =
-      input.sourceImage && input.operation && input.operation !== 'generate'
+      (input.sourceImage || input.sourceImageBase64) &&
+      input.operation &&
+      input.operation !== 'generate'
         ? input.operation
         : null;
-    let referenceBase64: string | null = null;
+    let referenceBase64: string | null = input.sourceImageBase64 ?? null;
     let guideImagesBase64: string[] = [];
     if (referenceOperation && input.sourceImage) {
       try {
@@ -189,6 +193,9 @@ export async function runImageGenerationTurn(
           ...(input.transparentBackground ? { transparent_background: true } : {}),
           ...(referenceOperation && referenceBase64
             ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
+            : {}),
+          ...(referenceOperation && referenceBase64 && input.maskImageBase64
+            ? { mask_image: { b64_json: input.maskImageBase64 } }
             : {}),
           ...(referenceOperation && referenceBase64 && guideImagesBase64.length > 0
             ? { reference_images: guideImagesBase64.map((b64_json) => ({ b64_json })) }
