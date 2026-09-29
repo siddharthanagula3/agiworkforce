@@ -105,7 +105,7 @@ keyring = "3"
 tokio-tungstenite = "0.29"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["signal", "process", "user", "fs", "term"] }
+nix = { version = "0.31", features = ["signal", "process", "user", "fs", "term", "resource"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 seccompiler = { version = "0.5", optional = true }

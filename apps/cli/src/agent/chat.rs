@@ -636,66 +636,28 @@ impl AgentSession {
         })
     }
 
-    async fn prepare_documents(&mut self) -> Result<()> {
-        use base64::Engine as _;
-
+    async fn prepare_documents(&mut self) {
         let privacy = self.privacy_mode;
-        let native_pdf =
-            crate::model_catalog::find(&self.model).is_some_and(|model| model.supports_pdf);
-        for block in &mut self.pending_image_blocks {
-            let ContentBlock::Document {
-                name,
-                mime,
-                data_b64,
-                asset_id,
-            } = block
-            else {
-                continue;
-            };
-            if asset_id.is_some()
-                || (privacy != super::PrivacyMode::Managed
-                    && native_pdf
-                    && mime == "application/pdf")
-            {
-                continue;
-            }
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(data_b64.as_bytes())
-                .with_context(|| format!("{name} could not be attached"))?;
-            if privacy == super::PrivacyMode::Managed {
-                let id = crate::cloud::attachments::upload_chat_attachment(
-                    privacy, name, mime, bytes, None,
-                )
-                .await
-                .map_err(|error| anyhow::anyhow!("{name} could not be uploaded: {error}"))?;
-                *asset_id = Some(id);
-                data_b64.clear();
-                continue;
-            }
-            let kind =
-                crate::documents::DocumentKind::for_path(std::path::Path::new(name.as_str()))
-                    .with_context(|| format!("{name} is not a PDF or Office document"))?;
-            let document = tokio::task::spawn_blocking(move || {
-                std::panic::catch_unwind(|| {
-                    crate::documents::extract_bytes(
-                        &bytes,
-                        kind,
-                        Some(1..=crate::documents::MAX_ATTACHED_PDF_PAGES),
-                    )
-                })
-                .unwrap_or_else(|_| Err(anyhow::anyhow!("the file could not be parsed")))
-            })
-            .await?
-            .with_context(|| format!("{name} could not be read"))?;
-            let text = match document.note {
-                Some(note) => format!("{}\n{note}", document.text),
-                None => document.text,
-            };
-            *block = ContentBlock::Text {
-                text: crate::documents::untrusted(name, &text),
-            };
+        let native_pdf = privacy != super::PrivacyMode::Managed
+            && crate::model_catalog::find(&self.model).is_some_and(|model| model.supports_pdf);
+        let mut notices = Vec::new();
+        let mut pending = std::mem::take(&mut self.pending_image_blocks);
+        for block in &mut pending {
+            notices.extend(settle_document(block, privacy, native_pdf, true).await);
         }
-        Ok(())
+        self.pending_image_blocks = pending;
+        let mut messages = std::mem::take(&mut self.messages);
+        for message in &mut messages {
+            if let models::MessageContent::Blocks(blocks) = &mut message.content {
+                for block in blocks {
+                    notices.extend(settle_document(block, privacy, native_pdf, false).await);
+                }
+            }
+        }
+        self.messages = messages;
+        for notice in notices {
+            self.emit_turn_notice(notice);
+        }
     }
 
     fn image_limit_refusal(&self) -> Option<String> {
@@ -780,6 +742,10 @@ impl AgentSession {
             && crate::tier_cache::capability_allowed(crate::tier_cache::WEB_SEARCH_CAPABILITY)
                 == Some(true)
             && crate::model_catalog::supports_web_search(&self.model)
+            && self
+                .effective_tool_definitions()
+                .iter()
+                .any(|tool| tool.name == models::WEB_SEARCH_TOOL)
     }
 
     async fn project_conversation(&self) -> Option<String> {
@@ -939,10 +905,7 @@ impl AgentSession {
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
 
-        if let Err(error) = self.prepare_documents().await {
-            self.pending_image_blocks.clear();
-            return Err(error);
-        }
+        self.prepare_documents().await;
         if let Some(refusal) = self.image_limit_refusal() {
             self.pending_image_blocks.clear();
             anyhow::bail!(refusal);
@@ -3244,6 +3207,97 @@ impl TurnHost for TurnHostAdapter<'_> {
             | TurnEvent::TurnComplete { .. } => {}
         }
     }
+}
+
+async fn settle_document(
+    block: &mut ContentBlock,
+    privacy: super::PrivacyMode,
+    native_pdf: bool,
+    upload: bool,
+) -> Option<String> {
+    use base64::Engine as _;
+
+    let ContentBlock::Document {
+        name,
+        mime,
+        data_b64,
+        asset_id,
+    } = block
+    else {
+        return None;
+    };
+    let managed = privacy == super::PrivacyMode::Managed;
+    if asset_id.is_some() {
+        if managed {
+            return None;
+        }
+        let text = crate::documents::untrusted(
+            name,
+            "[this file was uploaded to AGI Workforce Cloud and is not available in this mode]",
+        );
+        *block = ContentBlock::Text { text };
+        return None;
+    }
+    if data_b64.is_empty() || (native_pdf && mime == "application/pdf") {
+        return None;
+    }
+    let (name, mime) = (name.clone(), mime.clone());
+    let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data_b64.as_bytes()) else {
+        *block = ContentBlock::Text {
+            text: crate::documents::untrusted(&name, "[the attachment could not be decoded]"),
+        };
+        return Some(format!("{name} could not be attached."));
+    };
+    let mut notice = None;
+    if upload && managed && crate::cloud::attachments::managed_accepts(&name, &mime) {
+        match crate::cloud::attachments::upload_chat_attachment(
+            privacy,
+            &name,
+            &mime,
+            bytes.clone(),
+            None,
+        )
+        .await
+        {
+            Ok(id) => {
+                *block = ContentBlock::Document {
+                    name,
+                    mime,
+                    data_b64: String::new(),
+                    asset_id: Some(id),
+                };
+                return None;
+            }
+            Err(error) => {
+                notice = Some(format!(
+                    "{name} could not be uploaded ({error}), so its text is sent instead."
+                ))
+            }
+        }
+    }
+    let text = match crate::documents::DocumentKind::for_path(std::path::Path::new(&name)) {
+        Some(kind) => match crate::documents::extract_isolated(
+            bytes,
+            kind,
+            Some(1..=crate::documents::MAX_ATTACHED_PDF_PAGES),
+        )
+        .await
+        {
+            Ok(document) => match document.note {
+                Some(note) => format!("{}\n{note}", document.text),
+                None => document.text,
+            },
+            Err(error) => {
+                notice = Some(format!("{name}: {error:#}"));
+                format!("[{error:#}]")
+            }
+        },
+        None => "[this file type cannot be read]".to_string(),
+    };
+    *block = ContentBlock::Text {
+        text: crate::documents::untrusted(&name, &text),
+    };
+    notice
 }
 
 #[cfg(test)]

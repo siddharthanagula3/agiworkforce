@@ -7694,8 +7694,6 @@ pub fn load_image_attachment_with(
     })
 }
 
-pub const MAX_DOCUMENT_ATTACHMENT_BYTES: u64 = 12 * 1024 * 1024;
-
 /// Read a PDF or Office file as a document block. Whether it reaches the model
 /// natively or as extracted text is settled when the turn is sent.
 pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
@@ -7707,11 +7705,11 @@ pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
     let size = std::fs::metadata(file)
         .with_context(|| format!("Failed to read '{path}'"))?
         .len();
-    if size > MAX_DOCUMENT_ATTACHMENT_BYTES {
+    if size > documents::max_document_bytes() {
         anyhow::bail!(
             "'{path}' is {}; attachments are limited to {}",
             tools::format_size(size),
-            tools::format_size(MAX_DOCUMENT_ATTACHMENT_BYTES)
+            tools::format_size(documents::max_document_bytes())
         );
     }
     let bytes = std::fs::read(file).with_context(|| format!("Failed to read '{path}'"))?;
@@ -7850,6 +7848,10 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
+        return documents::run_extract_command(&args[1..]);
+    }
     broken_pipe::install_panic_hook();
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

@@ -335,9 +335,7 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
             ));
             continue;
         }
-        if crate::is_image_extension(&mention)
-            || crate::documents::DocumentKind::for_path(&resolved).is_some()
-        {
+        if crate::is_image_extension(&mention) {
             expansion.images.push(mention);
             continue;
         }
@@ -346,6 +344,10 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
                 mention,
                 "workspace is not trusted, only the path was sent".to_string(),
             ));
+            continue;
+        }
+        if crate::documents::DocumentKind::for_path(&resolved).is_some() {
+            expansion.images.push(mention);
             continue;
         }
         match std::fs::metadata(&resolved) {
