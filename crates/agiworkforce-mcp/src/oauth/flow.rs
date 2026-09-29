@@ -708,6 +708,14 @@ pub async fn refresh_token(
     Ok(refreshed)
 }
 
+fn revocation_endpoint_allowed(issuer: &str, endpoint: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(endpoint) else {
+        return false;
+    };
+    parsed.scheme() == "https"
+        && security::enforce_same_origin(issuer, endpoint, "revocation endpoint").is_ok()
+}
+
 pub async fn revoke_token(
     token: &OAuthToken,
     oauth_cfg: &OAuthConfig,
@@ -727,6 +735,11 @@ pub async fn revoke_token(
     let Some(revocation_url) = metadata.revocation_endpoint.as_deref() else {
         return Ok(false);
     };
+    if !revocation_endpoint_allowed(&issuer, revocation_url) {
+        bail!(
+            "the advertised revocation endpoint is not an https address on the authorization server's own origin, so the token was not sent there"
+        );
+    }
     let client_id = token
         .client_id
         .as_deref()
@@ -1285,6 +1298,24 @@ mod tests {
 
     fn token_with(token_url: &str) -> OAuthToken {
         token_from(REMOTE_SERVER, token_url)
+    }
+
+    #[test]
+    fn revocation_goes_only_to_the_issuers_own_https_origin() {
+        let issuer = "https://as.example.com";
+        assert!(revocation_endpoint_allowed(
+            issuer,
+            "https://as.example.com/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(
+            issuer,
+            "http://as.example.com/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(
+            issuer,
+            "https://collector.evil.test/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(issuer, "not a url"));
     }
 
     fn as_meta_with(authorization_endpoint: &str, token_endpoint: &str) -> AsMetadata {
