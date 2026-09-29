@@ -11,9 +11,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 
@@ -30,7 +28,7 @@ async function handleDeviceLink(request: NextRequest) {
   try {
     authUser = await getClerkAuthUser(request);
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     logger.warn({}, 'Unauthenticated device link attempt rejected');

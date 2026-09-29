@@ -494,8 +494,23 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         let policy = crate::platform::policy::PolicyEngine::load_layered(workspace_root)?;
         if policy.has_rules() {
             let primary_argument = policy_primary_argument(canonical_name, &call.args);
+            let resolution = policy.resolve(canonical_name, &primary_argument);
+            let denied_by = match resolution.layer {
+                Some(crate::platform::policy::PolicyLayer::Managed) => {
+                    "your organization's managed policy".to_string()
+                }
+                Some(crate::platform::policy::PolicyLayer::User) => {
+                    "the policy rules in your user config".to_string()
+                }
+                _ => format!("{}/.agiworkforce/policy.toml", workspace_root.display()),
+            };
+            let reason = resolution
+                .reason
+                .as_deref()
+                .map(|reason| format!(" {reason}"))
+                .unwrap_or_default();
             let decision = effective_workspace_policy_decision(
-                policy.resolve(canonical_name, &primary_argument),
+                resolution,
                 workspace_policy_is_trusted(workspace_root),
             );
             match decision {
@@ -504,8 +519,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                         tool_name: canonical_name.to_string(),
                         success: false,
                         output: format!(
-                            "Tool `{canonical_name}` is denied by {}/.agiworkforce/policy.toml and was not run.",
-                            workspace_root.display()
+                            "Tool `{canonical_name}` is denied by {denied_by} and was not run.{reason}"
                         ),
                     });
                 }

@@ -268,6 +268,36 @@ fn validate(field: &Field, value: &str) -> Result<Value, String> {
     }
 }
 
+const CAPABILITIES_NAMESPACE: &str = "capabilities";
+const MEMORY_SWITCH: &str = "memory";
+
+pub async fn memory_switch(enabled: Option<bool>) -> Result<String, CloudError> {
+    let client = CloudClient::connect_managed()?;
+    if let Some(enabled) = enabled {
+        let body =
+            json!({ "namespace": CAPABILITIES_NAMESPACE, "patch": { MEMORY_SWITCH: enabled } });
+        let _: Value = client.call(&save_route(), &[], Some(&body)).await?;
+    }
+    let preferences: Preferences = client
+        .call(
+            &preferences_route(),
+            &[("namespace", CAPABILITIES_NAMESPACE.to_string())],
+            None,
+        )
+        .await?;
+    let on = preferences
+        .settings
+        .get(MEMORY_SWITCH)
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Ok(if on {
+        "Memory is on: AGI remembers details across conversations on every surface.".to_string()
+    } else {
+        "Memory is off: nothing is carried from one conversation to the next on any surface."
+            .to_string()
+    })
+}
+
 const MEMORY_NAMESPACE: &str = "memory";
 const EXCLUDED_TERMS: &str = "excludedTerms";
 

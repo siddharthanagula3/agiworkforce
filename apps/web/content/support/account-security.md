@@ -40,22 +40,30 @@ hardware security key, then save your recovery keys. Turning it on requires a
 code we email to the address on your account and one of the passkeys or security
 keys you added. It cannot be turned on within 7 days of the email address on
 your account being set or changed. Every other device is signed out when you turn it
-on. We also email the address that got the code a link that turns it off, signs
-everyone out and resets your password, without a passkey, for 48 hours after it
-was turned on, in case it was not you.
+on. We also email the address that got the code a link that turns it off
+without a passkey, for 48 hours after it was turned on, in case it was not you.
+The link signs everyone out, resets your password and removes the passkeys,
+security keys and recovery keys added when it was turned on.
 
 Email account recovery no longer restores access. A recovery key starts
 recovery, and the account unlocks 48 hours later. Each recovery key works once,
 and replacing your recovery keys stops the old ones from working. Every new
-sign-in is emailed to you, and sessions end sooner, so you confirm with your
-passkey or security key more often. AGI support cannot turn this off or add a
-sign-in method for you.
+sign-in is emailed to you, and each session has to be confirmed with your
+passkey or security key again every 7 days. Your API keys keep working; review
+them under **API keys** when you turn it on.
 
 Turning it off asks you to confirm with one of your passkeys or security keys.
 Your passkeys and security keys stay on the account, and your recovery keys are
 removed. Advanced Account Security is not available for an account your
 organization manages or for an account on a domain an organization has
 verified.
+
+## What support can do with Advanced Account Security on
+
+AGI support cannot turn Advanced Account Security off, add a sign-in method,
+change the email address or restore access for you. A recovery request sent to
+support for such an account is not acted on; you are told that it was made,
+and a recovery key is the only way back in.
 
 ## Password
 
@@ -90,15 +98,18 @@ minutes, so a second change right after the first does not ask again.
   password?**.
 - **Lost the phone with your authenticator.** Enter one of your backup codes at
   the second-factor screen. Each backup code works once.
-- **Lost the authenticator and every backup code.** There is no self-serve way
-  back in, and there is no screen from which support can remove a second factor.
-  Email contact@agiworkforce.com from the address on the account, with your
-  **User ID** if you have it.
+- **Lost the authenticator and every backup code, or the email address.** Ask
+  for account recovery at /recover. A person checks that the account is yours
+  before removing the second factor or changing the sign-in email, the account
+  owner is told a recovery was requested, and every other session is signed
+  out when access is restored.
 - **Lost every passkey and security key with Advanced Account Security on.** On
   the screen that asks for your passkey, choose to use a recovery key. We email
   you that recovery started, and you finish it on the same device once the 48
   hours are up. Then add a new passkey or security key and replace your
-  recovery keys.
+  recovery keys. Support cannot do this for you, and the link that turns the
+  setting off works only for 48 hours after it was turned on; after that a
+  passkey, a security key or a recovery key is the only way in.
 
 ## Active sessions
 

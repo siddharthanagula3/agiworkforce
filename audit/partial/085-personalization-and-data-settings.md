@@ -38,24 +38,20 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Custom output styles exist only as hand-written markdown files in ~/.agiworkforce/output-styles/; the CLI cannot derive a style from a writing sample. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/output_styles.rs:1-20`, `apps/cli/src/agent/mod.rs:1264-1279`
 
 ## S85.05: Saved Memory.
 
 - Done when: The user can see, add, edit and delete saved memories on the surface and turn memory on or off, and saved memories are used in that surface's chats.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | In Cloud mode the "Memory" switch is only stored on the phone (never synced), so turning it off does not stop the server from reading or learning account memories; the "Search and reference chats" switch is what actually writes the account memory setting. | handler |
-| cli | partial | F1: the cited MemorySubcommand enum (lib.rs:1072-1089) has List, Add and Forget only; there is no edit and no way to turn account memory on or off in the CLI (no memory key in config.rs), while the criterion requires edit and an on/off switch. Memories are used (context_prompt injected into the system prompt), so partial. |  |
 
-Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`, `apps/cli/src/lib.rs:1072-1089`
+Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`
 
 ## S85.06: Past-chat reference.
 
