@@ -87,7 +87,10 @@ describe('Companion pairing requirements', () => {
   it('keeps the walkthrough aligned with the production pairing flow', () => {
     const screen = render(<CompanionDemoWalkthrough visible onDone={jest.fn()} />);
 
-    expect(screen.getByText(/Settings > Connections/)).toBeTruthy();
+    expect(
+      screen.getByText(/open Settings > Capabilities > Remote Control, and choose Pair a phone/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Cowork|Settings > Connections|Managed Cloud/)).toBeNull();
     expect(screen.getByText(/Account identities are not compared/)).toBeTruthy();
     expect(screen.getByText(/do not need the same Wi-Fi/)).toBeTruthy();
   });
