@@ -160,6 +160,11 @@ const capabilitiesSchema = z.object({
   savedPermissions: z.boolean().optional(),
   mcpInspect: z.boolean().optional(),
   pluginUpdates: z.boolean().optional(),
+  permissionRules: z.boolean().optional(),
+  trust: z.boolean().optional(),
+  turnToolFilters: z.boolean().optional(),
+  providerKeys: z.boolean().optional(),
+  questions: z.boolean().optional(),
   planDecisions: z.boolean().optional(),
   pullRequests: z.boolean().optional(),
 });
