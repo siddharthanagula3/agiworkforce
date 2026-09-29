@@ -6,7 +6,7 @@ import { createError } from '@/lib/errors';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   e2bEnabled: vi.fn(() => true),
-  assertCapability: vi.fn(async () => undefined),
+  assertCapability: vi.fn(async (..._args: unknown[]) => undefined),
   codePolicy: vi.fn(async () => ({ allowed: true }) as { allowed: boolean; reason?: string }),
   computeAccess: vi.fn(async () => ({
     allowed: true,
