@@ -278,6 +278,14 @@ pub struct ManagedSessionAutoRouting {
     pub trust_mode: TrustMode,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub speed_first: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_version: Option<u64>,
+}
+
+pub fn current_routing_policy_version() -> Option<u64> {
+    agiworkforce_model_registry::routing_policy_version()
+        .ok()
+        .flatten()
 }
 
 pub const MANAGED_SESSION_MAX_APPROVALS: usize = 1_000;
@@ -312,6 +320,7 @@ pub struct ManagedSessionApproval {
 pub enum ManagedSessionFileChangeKind {
     Created,
     Modified,
+    Deleted,
 }
 
 /// One file a tool on this session wrote. `Created` marks a generated file.
@@ -1284,6 +1293,7 @@ mod tests {
             task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
             speed_first: false,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         });
         session.model = Some("fixture-route-model".to_string());
         session.routing_authority = Some(ManagedSessionRoutingAuthority {

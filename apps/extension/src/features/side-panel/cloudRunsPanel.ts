@@ -17,6 +17,7 @@ import {
   AGENT_TASK_BOARD_STAGES,
   agentTaskBoardStage,
   agentTaskStateLabel,
+  messageKindForAgentEvent,
   type AgentTaskBoardStage,
 } from '@agiworkforce/types';
 import {
@@ -920,6 +921,7 @@ function runStateLabel(run: CloudAgentRun): string {
 
 function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
   const event = envelope.event;
+  if (messageKindForAgentEvent(event.type) === null) return null;
   switch (event.type) {
     case 'text-delta':
       return { kind: 'text', title: event.delta };

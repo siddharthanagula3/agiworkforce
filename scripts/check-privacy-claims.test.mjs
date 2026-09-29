@@ -10,9 +10,11 @@ import {
   CONSENT_SIGNALS,
   COOKIES_PAGE,
   COOKIE_CONSENT,
+  COMPLIANCE_ENTRYPOINT,
   DISCLOSURE,
   PRICING_PAGE,
   STORAGE_TABLE_TEST,
+  SHARED_DISCLOSURE,
   publishedCopy,
   readStringConstant,
   runPrivacyClaimsCheck,
@@ -53,8 +55,10 @@ export function readCookiePreferences() {
 `,
     [COOKIE_CONSENT_COMPONENT]: `<Switch disabled={optedOutBySignal} />`,
     [CONSENT_CENTRE]: `import { isNonEssentialConsentPurpose } from '@/lib/consent-signals';`,
-    [DISCLOSURE]: `export const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
+    [SHARED_DISCLOSURE]: `export const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 `,
+    [COMPLIANCE_ENTRYPOINT]: `export { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from './free-plan-training-disclosure';\n`,
+    [DISCLOSURE]: `export { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@agiworkforce/compliance';\n`,
     [PRICING_PAGE]: `const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 `,
     [CHAT_NOTICE]: `import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
@@ -168,11 +172,27 @@ test('the pricing sentence drifting from the shared constant fails', () => {
 
 test('the shared constant drifting from the pricing sentence fails', () => {
   const failures = failuresFor((files) => {
-    files[DISCLOSURE] =
+    files[SHARED_DISCLOSURE] =
       `export const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Nobody trains on anything.';\n`;
   });
   assert.equal(failures.length, 1);
   assert.match(failures[0], /one sentence changed without the other/);
+});
+
+test('the web re-export of the shared disclosure is required', () => {
+  const failures = failuresFor((files) => {
+    files[DISCLOSURE] = 'export const FREE_PLAN_TRAINING_DATA_DISCLOSURE = "No.";\n';
+  });
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /no longer re-exports/);
+});
+
+test('the shared package entrypoint must export the disclosure', () => {
+  const failures = failuresFor((files) => {
+    files[COMPLIANCE_ENTRYPOINT] = 'export const unrelated = true;\n';
+  });
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /no longer exports/);
 });
 
 test('an import of the shared constant satisfies the pricing page', () => {

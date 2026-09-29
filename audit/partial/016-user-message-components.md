@@ -178,32 +178,28 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 - Done when: A user message that came from speech is marked as a voice transcript (e.g. mic badge or "Transcribed").
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Mark voice turns in the TUI transcript; they are labelled "You said:" only inside the voice console, and back in the TUI the exchange is absent (only "Voice session ended."). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:213-213`, `apps/cli/src/tui/tui_app.rs:4659-4672`
 
 ## S16.20: Imported-message attribution.
 
 - Done when: Messages brought in from elsewhere (another product, a shared link, another device) are marked with where they came from.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Mark adopted turns in the transcript; `agi resume --cloud <id>` copies account messages into a local session and prints one stderr line before the TUI takes the screen. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1646-1670`, `apps/cli/src/lib.rs:1668-1669`
 
 ## S16.22: Message-level deep link.
 

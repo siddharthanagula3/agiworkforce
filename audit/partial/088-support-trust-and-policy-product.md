@@ -200,7 +200,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
-| desktop | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
+| web | partial | owner: commission SOC 2, ISO 27001 and a third-party penetration test and publish the reports on the trust page | owner |
+| desktop | partial | owner: commission SOC 2, ISO 27001 and a third-party penetration test and publish the reports on the trust page | owner |
 
 Code: `apps/web/app/trust/page.tsx:79-79`, `apps/web/app/trust/page.tsx:42-42`, `apps/web/content/support/enterprise-security.md:21-21`

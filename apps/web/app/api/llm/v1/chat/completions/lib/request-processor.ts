@@ -124,7 +124,7 @@ import {
   memoryCommandTurnNote,
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
-import { fileSearchToolDefinition, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import {
   asksForSchedule,
@@ -889,7 +889,7 @@ export function applyFileSearchToolCapability(
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
-    fileSearchToolDefinition(),
+    ...fileSearchToolDefinitions(),
   ];
 }
 

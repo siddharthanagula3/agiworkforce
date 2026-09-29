@@ -67,8 +67,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -77,7 +76,7 @@ import {
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-0000000000f4';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 
 function send(content: string): Promise<boolean> {
   return useChatExecutionStore.getState().sendMessage(CONV_ID, content, CLOUD_MODEL);
@@ -92,8 +91,7 @@ async function waitForStreamCalls(count: number): Promise<void> {
 
 function outgoingPromptAt(callIndex: number): string {
   const body = mockStreamChat.mock.calls[callIndex]?.[0] as
-    | { messages?: Array<{ role: string; content: unknown }> }
-    | undefined;
+    { messages?: Array<{ role: string; content: unknown }> } | undefined;
   return JSON.stringify(body?.messages?.at(-1) ?? null);
 }
 

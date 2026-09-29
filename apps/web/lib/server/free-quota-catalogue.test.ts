@@ -42,6 +42,22 @@ const NOW = Date.UTC(2026, 8, 21, 12);
 const API_KEY = 'fixture-provider-key';
 const inventory = loadFreePools().inventory!;
 const policy = loadFreeQuotaPolicy();
+const reviewedInventory = {
+  ...inventory,
+  termsReview: {
+    terms: {
+      commercialUseAllowed: true,
+      thirdPartyServingAllowed: true,
+      proxyingAllowed: true,
+      promptsExcludedFromTraining: true,
+    },
+    evidenceUrl: 'https://provider.example/terms',
+    reviewedBy: 'fixture-reviewer',
+    verifiedAtMs: NOW - 60_000,
+    expiresAtMs: Date.UTC(2027, 1, 1),
+    approvedOfferingKeys: inventory.entries.map((entry) => entry.offeringKey),
+  },
+};
 
 function context(patch: Partial<FreeQuotaContext> = {}): FreeQuotaContext {
   return {
@@ -66,7 +82,7 @@ function attestation(patch: Partial<QuotaAttestation> = {}): QuotaAttestation {
 }
 
 async function statuses(value: FreeQuotaContext) {
-  const decisions = await resolveFreeQuotaDecisions(value);
+  const decisions = await resolveFreeQuotaDecisions(value, { inventory: reviewedInventory });
   return new Map(decisions!.offerings.map((item) => [item.entry.offeringKey, item.decision]));
 }
 
@@ -135,6 +151,19 @@ describe('account quota observations', () => {
 });
 
 describe('a free quota model is offered only on current quota-only evidence', () => {
+  it('keeps the shipped inventory unavailable even after account attestation while terms review is absent', async () => {
+    const decisions = await resolveFreeQuotaDecisions(
+      context({ store: await attested(createMemoryKeyValueStore()) }),
+    );
+    expect(decisions!.offerings.some((item) => item.decision.status === 'ready')).toBe(false);
+    expect(
+      decisions!.offerings.some(
+        (item) =>
+          item.decision.status === 'unavailable' && item.decision.reason === 'terms_review_missing',
+      ),
+    ).toBe(true);
+  });
+
   it('offers nothing in the inventory until the account owner attests the setting', async () => {
     const result = await statuses(context());
     expect(result.size).toBe(inventory.entries.length);
@@ -281,6 +310,7 @@ describe('a free quota model is offered only on current quota-only evidence', ()
   it('publishes the issuer and one status per inventory row', async () => {
     const decisions = await resolveFreeQuotaDecisions(
       context({ store: await attested(createMemoryKeyValueStore()) }),
+      { inventory: reviewedInventory },
     );
     const catalogue = buildFreeQuotaCatalogue(decisions!);
     expect(catalogue.issuer).toBe(inventory.issuer);

@@ -3,7 +3,7 @@ import type {
   CloudAgentRun,
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
-import { AGENT_TASK_STATE_LABELS } from '@agiworkforce/types';
+import { AGENT_TASK_STATE_LABELS, messageKindForAgentEvent } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 export type CloudRunState = CloudAgentRun['state'];
@@ -168,7 +168,9 @@ export function readCloudRunSteps(events: readonly AgentEventEnvelope[]): CloudR
   const steps = new Map<string, CloudRunStep>();
   for (const envelope of events) {
     const event = envelope.event;
-    if (event.type !== 'progress-update') continue;
+    if (messageKindForAgentEvent(event.type) !== 'status' || event.type !== 'progress-update') {
+      continue;
+    }
     steps.set(event.progressId, {
       id: event.progressId,
       summary: event.summary,
@@ -187,7 +189,10 @@ export function cloudRunStepIcon(status: CloudRunStep['status']): string {
 export function cloudRunResultText(events: readonly AgentEventEnvelope[]): string {
   let text = '';
   for (const envelope of events) {
-    if (envelope.event.type === 'text-delta') text += envelope.event.delta;
+    const event = envelope.event;
+    if (messageKindForAgentEvent(event.type) === 'text' && event.type === 'text-delta') {
+      text += event.delta;
+    }
   }
   return text.trim();
 }
@@ -208,7 +213,9 @@ export function cloudRunOutcomeSummary(
 export function cloudRunLatestError(events: readonly AgentEventEnvelope[]): string | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]?.event;
-    if (event?.type === 'error') return event.message;
+    if (event && messageKindForAgentEvent(event.type) === 'error' && event.type === 'error') {
+      return event.message;
+    }
   }
   return undefined;
 }

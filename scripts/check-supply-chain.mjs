@@ -6,6 +6,7 @@
  * enumerated by check-security-gates against .github/security-gate-policy.json.
  */
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +35,15 @@ function walk(root, relative, out) {
 }
 
 export function containerFiles(root) {
-  return walk(root, '.', []).filter(
+  const files = fs.existsSync(path.join(root, '.git'))
+    ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+        cwd: root,
+        encoding: 'utf8',
+      })
+        .split('\0')
+        .filter(Boolean)
+    : walk(root, '.', []);
+  return files.filter(
     (relative) =>
       /(^|\/)Dockerfile[^/]*$/.test(relative) ||
       /(^|\/)(docker-)?compose[^/]*\.ya?ml$/.test(relative),

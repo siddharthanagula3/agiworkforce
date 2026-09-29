@@ -114,14 +114,13 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550
 
 - Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | codex: apply post-codex/w-connect-S57.26-S60.13-clarify-plan-held.patch (free part committed 9b36ba0b67) | handler |
-| vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 
-Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S60.17: Parallel-work indicator.
 

@@ -276,6 +276,112 @@ function healthSpaceDocuments(param: number): string {
     )`;
 }
 
+export interface IndexedSourceText {
+  sourceId: string;
+  sourceKind: SearchSourceKind;
+  title: string;
+  text: string;
+  truncated: boolean;
+}
+
+interface IndexedSourceChunkRow {
+  source_kind: string;
+  title: string;
+  content: string;
+  start_offset: number | null;
+  end_offset: number | null;
+  document_end: number | string | null;
+}
+
+/**
+ * One indexed source read whole, in order, from the current chunk version,
+ * under the same scope as search: the caller's own rows, never a deleted or
+ * temporary origin, and never another health space's documents. Overlapping
+ * chunk windows are joined once.
+ */
+export async function readIndexedSourceText(
+  scope: Pick<RetrievalSearchScope, 'db' | 'userId' | 'organizationId' | 'healthSpaceProjectId'>,
+  request: { sourceId: string; kinds: readonly SearchSourceKind[]; maxChars: number },
+): Promise<IndexedSourceText | null> {
+  let rows: IndexedSourceChunkRow[];
+  try {
+    // Only the chunks that start inside the cap leave the database. Windows
+    // overlap, so a chunk's place is its start offset, not the characters
+    // before it, and document_end says whether the file goes on past them.
+    rows = await scope.db.query<IndexedSourceChunkRow>(
+      `with ${healthSpaceDocuments(5)},
+      ordered as (
+        select c.chunk_index, c.source_kind, c.title, c.content, c.start_offset, c.end_offset,
+               coalesce(sum(char_length(c.content)) over (
+                 order by c.chunk_index rows between unbounded preceding and 1 preceding
+               ), 0) as chars_before,
+               char_length(c.content) as chars
+          from retrieval_chunks c
+          join retrieval_documents d on d.id = c.document_id and d.chunk_version = c.chunk_version
+          left join web_artifacts artifact on artifact.id = d.artifact_id
+          left join research_reports report on report.id = d.research_report_id
+          left join web_conversations origin
+            on origin.id = coalesce(d.conversation_id, artifact.conversation_id, report.conversation_id)
+          left join media_assets asset on asset.id = d.media_asset_id
+         where c.user_id = $1
+           and c.organization_id is not distinct from $2::uuid
+           and c.source_kind = any($3::text[])
+           and c.source_id = $4::uuid
+           and c.document_id not in (select id from health_space_documents)
+           and artifact.deleted_at is null
+           and origin.deleted_at is null
+           and coalesce(origin.is_temporary, false) = false
+           and asset.deleted_at is null
+           and coalesce(asset.temporary_chat, false) = false
+      ),
+      positioned as (
+        select ordered.*,
+               coalesce(start_offset, chars_before) as position,
+               max(coalesce(end_offset, chars_before + chars)) over () as document_end
+          from ordered
+      )
+      select source_kind, title, content, start_offset, end_offset, document_end
+        from positioned
+       where position <= $6
+       order by chunk_index`,
+      [
+        scope.userId,
+        scope.organizationId,
+        [...request.kinds],
+        request.sourceId,
+        scope.healthSpaceProjectId ?? null,
+        request.maxChars,
+      ],
+    );
+  } catch (error) {
+    if (isRetrievalSchemaMissing(error)) return null;
+    throw error;
+  }
+  const first = rows[0];
+  if (!first || !isSearchSourceKind(first.source_kind)) return null;
+
+  let text = '';
+  let covered = -1;
+  for (const row of rows) {
+    if (row.start_offset === null || covered < 0) {
+      text += (text ? '\n\n' : '') + row.content;
+    } else {
+      text += row.content.slice(Math.max(0, covered - row.start_offset));
+    }
+    covered = row.end_offset ?? -1;
+    if (text.length > request.maxChars) break;
+  }
+  const truncated =
+    text.length > request.maxChars || Number(first.document_end ?? 0) > request.maxChars;
+  return {
+    sourceId: request.sourceId,
+    sourceKind: first.source_kind,
+    title: first.title,
+    text: truncated ? text.slice(0, request.maxChars) : text,
+    truncated,
+  };
+}
+
 /**
  * Hybrid retrieval over the Postgres index: full text and vector candidates
  * fused by rank and re-scored, inside the caller's row-level-security scope.

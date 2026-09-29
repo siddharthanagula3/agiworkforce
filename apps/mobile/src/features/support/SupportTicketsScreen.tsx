@@ -18,10 +18,8 @@ import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
   TICKET_STATUS_LABEL,
-  listSupportTickets,
-  openSupportTicket,
-  type SupportTicket,
-} from './service';
+} from '@agiworkforce/cloud-contracts/support';
+import { listSupportTickets, openSupportTicket, type SupportTicketView } from './service';
 
 const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 
@@ -38,7 +36,7 @@ export function SupportTicketsScreen() {
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const appMode = useChatAppModeStore((state) => state.appMode);
-  const [tickets, setTickets] = useState<SupportTicket[] | null>(null);
+  const [tickets, setTickets] = useState<SupportTicketView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [subject, setSubject] = useState('');

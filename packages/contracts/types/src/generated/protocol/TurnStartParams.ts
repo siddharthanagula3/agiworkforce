@@ -28,4 +28,10 @@ export type TurnStartParams = {
   maxTurns?: number;
   routingProfile?: DeveloperRoutingProfile;
   cloudProjectId?: string;
+  /**
+   * Tools this thread may use from this turn on. `Some(empty)` clears the
+   * allow list; the host's own boundary rules still apply on top.
+   */
+  allowedTools?: Array<string>;
+  disallowedTools?: Array<string>;
 };

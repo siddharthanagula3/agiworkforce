@@ -60,6 +60,7 @@ pub(super) async fn execute_mcp_tool(
     privacy_mode: super::PrivacyMode,
     require_confirmation: bool,
     approval_callback: Option<tools::ApprovalCallback>,
+    workspace_root: Option<&std::path::Path>,
 ) -> Result<tools::ToolResult> {
     match mcp_manager {
         Some(ref mut mgr) => {
@@ -72,6 +73,29 @@ pub(super) async fn execute_mcp_tool(
                         output: format!("MCP tool error: {error:#}"),
                     });
                 }
+            };
+            let decision = match workspace_root {
+                Some(root) => {
+                    let policy = crate::platform::policy::PolicyEngine::load_layered(root)?;
+                    crate::features::exec::tools::effective_workspace_policy_decision(
+                        policy.resolve_mcp(&server_name, &tool_name),
+                        crate::features::exec::tools::workspace_policy_is_trusted(root),
+                    )
+                }
+                None => crate::platform::policy::PolicyDecision::Ask,
+            };
+            let require_confirmation = match decision {
+                crate::platform::policy::PolicyDecision::Deny => {
+                    return Ok(tools::ToolResult {
+                        tool_name: name.to_string(),
+                        success: false,
+                        output: format!(
+                            "MCP tool '{tool_name}' from server '{server_name}' is blocked by your permission rules and was not run."
+                        ),
+                    });
+                }
+                crate::platform::policy::PolicyDecision::Allow => false,
+                crate::platform::policy::PolicyDecision::Ask => require_confirmation,
             };
             if require_confirmation
                 && !request_mcp_tool_approval(
@@ -191,6 +215,7 @@ mod tests {
             crate::agent::PrivacyMode::Local,
             true,
             Some(callback),
+            None,
         )
         .await
         .expect("denial is a structured tool result");

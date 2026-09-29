@@ -596,6 +596,18 @@ const it = {
     'AGI chiederà di nuovo la prossima volta che vorrà fare questo: {label}',
   'savedApprovals.removeDenied':
     'AGI potrà chiedere di nuovo di fare questo invece di essere rifiutato: {label}',
+  'pullRequest.titlePrompt': 'Titolo della pull request',
+  'pullRequest.basePrompt': 'Branch in cui unire',
+  'pullRequest.confirmPush':
+    'Inviare {count} commit da {branch} a {remote} e aprire una pull request verso {base}?',
+  'pullRequest.confirmOpen': 'Aprire una pull request da {branch} verso {base}?',
+  'pullRequest.confirmAction': 'Invia e apri',
+  'pullRequest.openAction': 'Apri pull request',
+  'pullRequest.created': 'AGI Workforce: pull request aperta.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'Visualizza',
+  'pullRequest.blocked': 'AGI Workforce: impossibile aprire una pull request: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'approvazioni salvate',
   'webview.alwaysAllow': 'Consenti sempre',
   'webview.alwaysAllowHint':

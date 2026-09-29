@@ -20,6 +20,7 @@ pub mod image;
 pub mod image_provenance;
 pub mod knowledge;
 pub mod library;
+pub mod marketplaces;
 pub mod memory;
 pub mod personalization;
 pub mod projects;
@@ -30,6 +31,8 @@ pub mod workspace_policy;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use serde::Deserialize;
 
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
@@ -223,8 +226,6 @@ pub async fn sync_session(
     Ok(response.applied.messages.len())
 }
 
-/// Send a bug report or product feedback to the team's feedback store and say
-/// what happened, including why it could not be sent.
 pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
     let client = match CloudClient::connect_managed() {
         Ok(client) => client,
@@ -434,6 +435,40 @@ pub async fn delete_conversation(
         .call(&delete_conversation_route(conversation_id), &[], None)
         .await?;
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceListing {
+    #[serde(default)]
+    active_organization_id: Option<String>,
+    #[serde(default)]
+    workspaces: Vec<WorkspaceEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceEntry {
+    #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
+    name: String,
+}
+
+pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
+    let listing: WorkspaceListing = client.get("/api/settings/organization", &[]).await?;
+    let Some(active) = listing.active_organization_id else {
+        return Ok("your personal workspace".to_string());
+    };
+    Ok(listing
+        .workspaces
+        .into_iter()
+        .find(|workspace| workspace.organization_id.as_deref() == Some(active.as_str()))
+        .map(|workspace| workspace.name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .map(|name| format!("the {name} workspace"))
+        .unwrap_or_else(|| "your active workspace".to_string()))
 }
 
 /// Refresh the local memory cache from the account and return it.

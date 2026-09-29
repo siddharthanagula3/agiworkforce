@@ -43,14 +43,14 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on AGI_E2B_EXECUTION plus owner: build agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and set AGI_E2B_CHAT_TEMPLATE; then a live check. | flag-off |
-| desktop | partial | switch-on AGI_E2B_EXECUTION plus owner: build agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and set AGI_E2B_CHAT_TEMPLATE; then a live check. | flag-off |
+| web | partial | owner: run node apps/web/scripts/build-e2b-office-template.mjs with E2B credentials, set AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter and AGI_E2B_EXECUTION=1; live-check a PPTX converts to PDF | flag-off |
+| desktop | partial | owner: run node apps/web/scripts/build-e2b-office-template.mjs with E2B credentials, set AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter and AGI_E2B_EXECUTION=1; live-check a PPTX converts to PDF | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/e2b/chat-template.ts:3-3`
+Code: `apps/web/scripts/build-e2b-office-template.mjs:29-29`
 
 ## S31.04: PDF summarization.
 
@@ -137,14 +137,14 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: register the Docusign app and add its descriptor and client pair (unchanged). | config |
-| desktop | partial | owner: register the Docusign app and add its descriptor and client pair (unchanged). | config |
+| web | partial | owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248) | config |
+| desktop | partial | owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248) | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/first-party.json:499-499`, `apps/web/lib/connectors/mcp-endpoints.ts:127-127`, `apps/web/lib/connectors/catalog.ts:248-248`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:218-218`
+Code: `apps/web/lib/connectors/catalog.ts:248-248`
 
 ## S31.24: Export fidelity preview.
 

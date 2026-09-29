@@ -16,6 +16,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
@@ -80,7 +81,8 @@ export default function CreateScheduleScreen() {
         if (isEditing && existingSchedule) {
           await updateSchedule(existingSchedule.id, data);
         } else {
-          await createSchedule(data as Parameters<typeof createSchedule>[0]);
+          const created = await createSchedule(data as Parameters<typeof createSchedule>[0]);
+          if (!created) return;
         }
         router.back();
       } catch {
@@ -97,7 +99,7 @@ export default function CreateScheduleScreen() {
 
   const handleActivateCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-schedules'));
       return;
     }
     setAppMode('cloud');
@@ -115,8 +117,7 @@ export default function CreateScheduleScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteSchedule(existingSchedule.id);
-            router.back();
+            if (await deleteSchedule(existingSchedule.id)) router.back();
           },
         },
       ],

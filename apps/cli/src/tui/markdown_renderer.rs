@@ -104,8 +104,6 @@ fn ansi_color(color: ratatui::style::Color, foreground: bool) -> Option<String> 
     }
 }
 
-/// The same rendering as [`render_markdown`], written as ANSI for a plain
-/// terminal rather than drawn into the TUI.
 pub fn render_markdown_ansi(text: &str) -> String {
     let mut output = String::new();
     for line in render_markdown(text) {

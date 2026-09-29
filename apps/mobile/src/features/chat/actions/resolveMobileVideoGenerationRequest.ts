@@ -37,12 +37,14 @@ export type MobileVideoGenerationRequestDecision =
       model: string;
       aspectRatio: ManagedMediaVideoAspectRatio;
       resolution: ManagedMediaVideoResolution;
+      durationSecs?: number;
       ownerId: string;
     };
 
 export interface ResolveMobileVideoGenerationRequestInput {
   aspectRatio: string;
   resolution: string;
+  durationSecs?: number | null;
   executionMode: 'local' | 'cloud';
   text: string;
   mediaMode: 'text' | 'image' | 'video';
@@ -115,7 +117,12 @@ export function resolveMobileVideoGenerationRequest(
     return blocked('route_unavailable');
   }
 
-  const selection = resolveVideoOutputSelection(modelId, input.aspectRatio, input.resolution);
+  const selection = resolveVideoOutputSelection(
+    modelId,
+    input.aspectRatio,
+    input.resolution,
+    input.durationSecs,
+  );
 
   return {
     status: 'ready',
@@ -131,6 +138,7 @@ export function resolveMobileVideoGenerationRequest(
     )
       ? (selection.resolution as ManagedMediaVideoResolution)
       : '720p',
+    ...(selection.durationSecs === undefined ? {} : { durationSecs: selection.durationSecs }),
     ownerId: input.ownerId,
   };
 }

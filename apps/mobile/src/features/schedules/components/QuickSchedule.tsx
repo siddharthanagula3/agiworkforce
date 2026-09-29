@@ -7,10 +7,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Keyboard,
 } from 'react-native';
-import { Zap, X, ChevronRight } from 'lucide-react-native';
+import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
@@ -162,9 +165,14 @@ const SUGGESTIONS = [
 interface QuickScheduleProps {
   defaultPrompt?: string;
   onCreated?: () => void;
+  onDetailedCreate?: () => void;
 }
 
-export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickScheduleProps) {
+export function QuickSchedule({
+  defaultPrompt = '',
+  onCreated,
+  onDetailedCreate,
+}: QuickScheduleProps) {
   const colors = useThemeColors();
   const [visible, setVisible] = useState(false);
   const [input, setInput] = useState('');
@@ -177,11 +185,10 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
   const parsed = input.trim() ? parseNaturalLanguage(input) : null;
 
   const handleOpen = useCallback(() => {
-    setInput('');
-    setPrompt(defaultPrompt);
+    Keyboard.dismiss();
     setError('');
     setVisible(true);
-  }, [defaultPrompt]);
+  }, []);
 
   const handleClose = useCallback(() => {
     setVisible(false);
@@ -213,8 +220,14 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         isActive: true,
       };
-      await createSchedule(scheduleInput);
+      const created = await createSchedule(scheduleInput);
+      if (!created) {
+        setError('Cloud sign-in changed. Sign in again and retry this task.');
+        return;
+      }
       handleClose();
+      setInput('');
+      setPrompt('');
       onCreated?.();
     } catch {
       setError('Failed to create schedule. Please try again.');
@@ -228,28 +241,67 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
     setError('');
   }, []);
 
+  const handleTranscription = useCallback((text: string) => {
+    setPrompt((current) => (current.trim() ? `${current.trim()} ${text}` : text));
+    setError('');
+  }, []);
+
+  const handleVoiceError = useCallback((message: string, permissionDenied?: boolean) => {
+    if (permissionDenied) showVoicePermissionAlert(message);
+    else setError(message);
+  }, []);
+
   return (
     <>
-      {/* Trigger button */}
-      <Pressable
-        onPress={handleOpen}
-        className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl active:opacity-70"
+      <View
+        className="mx-4 mb-2 flex-row items-center rounded-2xl border px-2 py-1.5"
         style={{
-          backgroundColor: `${colors.teal}12`,
-          borderWidth: 1,
-          borderColor: `${colors.teal}25`,
+          backgroundColor: colors.surfaceOverlay,
+          borderColor: colors.border,
         }}
-        accessibilityLabel="Quick schedule"
-        accessibilityRole="button"
       >
-        <Zap size={16} color={colors.teal} />
-        <Text className="text-[13px] font-medium flex-1" style={{ color: colors.teal }}>
-          Quick Schedule
+        <Pressable
+          onPress={onDetailedCreate ?? handleOpen}
+          className="h-11 w-11 items-center justify-center"
+          accessibilityLabel="Open detailed schedule form"
+          accessibilityRole="button"
+        >
+          <Plus size={22} color={colors.textPrimary} />
+        </Pressable>
+        <TextInput
+          value={prompt}
+          onChangeText={(text) => {
+            setPrompt(text);
+            setError('');
+          }}
+          placeholder="Schedule a task"
+          placeholderTextColor={colors.textMuted}
+          style={{ flex: 1, minHeight: 44, color: colors.textPrimary, fontSize: 15 }}
+          accessibilityLabel="Schedule a task"
+          returnKeyType="done"
+          onSubmitEditing={handleOpen}
+        />
+        <View className="h-11 w-11 items-center justify-center">
+          <VoiceInputButton onTranscription={handleTranscription} onError={handleVoiceError} />
+        </View>
+        <Pressable
+          onPress={handleOpen}
+          disabled={!prompt.trim()}
+          className="h-11 w-11 items-center justify-center rounded-full"
+          style={{ backgroundColor: prompt.trim() ? colors.teal : colors.surfaceElevated }}
+          accessibilityLabel="Continue scheduling task"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !prompt.trim() }}
+        >
+          <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
+        </Pressable>
+      </View>
+      {error && !visible ? (
+        <Text className="mx-4 mb-2 text-xs" style={{ color: colors.agentError }}>
+          {error}
         </Text>
-        <ChevronRight size={14} color={`${colors.teal}70`} />
-      </Pressable>
+      ) : null}
 
-      {/* Modal */}
       <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

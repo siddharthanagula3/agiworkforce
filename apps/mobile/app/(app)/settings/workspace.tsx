@@ -17,9 +17,10 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import {
@@ -37,6 +38,7 @@ import {
 import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
 import { useChatStore } from '@/stores/chatStore';
+import { translatePlural } from '@/src/i18n/plural';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
@@ -79,11 +81,11 @@ export default function WorkspaceScreen() {
         : [];
       if (signal?.aborted) return;
       setState({ kind: 'ready', overview, members });
-    } catch (error) {
+    } catch {
       if (signal?.aborted) return;
       setState({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not load your workspace.',
+        message: 'Could not load your workspace. Retry.',
       });
     }
   }, []);
@@ -114,14 +116,18 @@ export default function WorkspaceScreen() {
       setSwitchingWorkspace(true);
       void (async () => {
         try {
-          await setActiveWorkspace(organizationId);
-          await useChatStore.getState().loadConversations();
+          try {
+            await setActiveWorkspace(organizationId);
+          } catch {
+            Alert.alert('Could not switch workspace', 'Your workspace was not changed. Try again.');
+            return;
+          }
+          try {
+            await useChatStore.getState().loadConversations();
+          } catch {
+            Alert.alert('Workspace changed', 'Refresh your chats to see this workspace’s history.');
+          }
           await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not switch workspace',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
         } finally {
           setSwitchingWorkspace(false);
         }
@@ -137,11 +143,8 @@ export default function WorkspaceScreen() {
         try {
           await updateWorkspaceMemberRole(member.id, role);
           await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not change role',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+        } catch {
+          Alert.alert('Could not change role', 'The member’s role was not changed. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -163,10 +166,7 @@ export default function WorkspaceScreen() {
           await load();
         } catch (error) {
           if (isStepUpCancelled(error)) return;
-          Alert.alert(
-            'Could not transfer ownership',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+          Alert.alert('Could not transfer ownership', 'Ownership was not transferred. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -207,11 +207,8 @@ export default function WorkspaceScreen() {
               try {
                 await removeWorkspaceMember(member.id);
                 await load();
-              } catch (error) {
-                Alert.alert(
-                  'Could not remove member',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
+              } catch {
+                Alert.alert('Could not remove member', 'Check the member list before retrying.');
               } finally {
                 setBusyMemberId(null);
               }
@@ -257,7 +254,7 @@ export default function WorkspaceScreen() {
         <View className="flex-1 px-4">
           <CloudAccountRequired
             isLoading={!isClerkLoaded}
-            onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+            onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-workspace'))}
           />
         </View>
       </SafeAreaView>
@@ -267,6 +264,8 @@ export default function WorkspaceScreen() {
   const overview = state.kind === 'ready' ? state.overview : null;
   const workspace = overview?.workspace ?? null;
   const canManage = overview?.access.canManageTeam ?? false;
+  const canManageMembers =
+    canManage && workspace !== null && isOrganizationAdminRole(workspace.currentUserRole);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -467,7 +466,10 @@ export default function WorkspaceScreen() {
                 <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 6 }}>
                   {planLabel(workspace.plan)} ·{' '}
                   {workspace.maxMembers === null
-                    ? `${workspace.memberCount} member${workspace.memberCount === 1 ? '' : 's'}`
+                    ? translatePlural('settings', 'counts.members', workspace.memberCount, {
+                        one: '{{count}} member',
+                        other: '{{count}} members',
+                      })
                     : `${workspace.memberCount} of ${workspace.maxMembers} seats used`}
                 </Text>
                 <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
@@ -507,7 +509,7 @@ export default function WorkspaceScreen() {
 
                   {/* The server refuses self-removal and blocks admins from
                       removing owners, so those controls are not offered. */}
-                  {canManage && !member.isCurrentUser && (
+                  {canManageMembers && !member.isCurrentUser && (
                     <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
                       <Pressable
                         onPress={() => handleChangeRole(member)}

@@ -335,11 +335,11 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
-| desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
+| web | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
+| desktop | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
 | mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
 
-Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
+Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mobile/src/features/settings/index.tsx:434-442`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:128-132`, `apps/mobile/lib/v1FeatureFlags.ts:1-10`
 
 ## S4.42: Workspace administration.
 

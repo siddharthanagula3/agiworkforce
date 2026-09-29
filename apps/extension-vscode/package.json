@@ -2,7 +2,7 @@
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
   "description": "Multi-provider AI coding assistant for VS Code",
-  "version": "0.3.0",
+  "version": "0.0.1",
   "publisher": "agiworkforce",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -213,6 +213,11 @@
         "command": "agi-workforce.showSavedApprovals",
         "title": "AGI Workforce: Saved Approvals",
         "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.createPullRequest",
+        "title": "AGI Workforce: Create Pull Request",
+        "icon": "$(git-pull-request-create)"
       },
       {
         "command": "agi-workforce.showArchivedSessions",

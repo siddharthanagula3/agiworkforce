@@ -50,3 +50,31 @@ export async function fetchSharedLinks(): Promise<SharedLink[]> {
 export async function revokeSharedLink(token: string): Promise<void> {
   await api.delete(`/api/share/${encodeURIComponent(token)}`);
 }
+
+export interface SharedLinkMessage {
+  role: string;
+  content: string;
+  createdAt?: string;
+}
+
+export async function createSharedLink(input: {
+  conversationId: string;
+  title: string;
+  modelId: string | null;
+  messages: SharedLinkMessage[];
+}): Promise<SharedLink> {
+  const created = toSharedLink(
+    await api.post<unknown>('/api/share', {
+      conversation_id: input.conversationId,
+      title: input.title || 'Shared Session',
+      model_id: input.modelId,
+      messages: input.messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        ...(message.createdAt ? { created_at: message.createdAt } : {}),
+      })),
+    }),
+  );
+  if (!created) throw new Error('The share link could not be read. Try again.');
+  return created;
+}

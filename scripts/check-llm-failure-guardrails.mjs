@@ -1,29 +1,10 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
-
-const SKIP_DIRS = new Set([
-  '.agent',
-  '.claude',
-  '.git',
-  '.next',
-  '.vercel',
-  '.vscode-test',
-  'build',
-  'coverage',
-  'dist',
-  'node_modules',
-  'out',
-  'target',
-  'Pods',
-  'dist-web',
-  'playwright-report',
-  'test-results',
-]);
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
@@ -149,36 +130,10 @@ const SKIP_CENSUS_PATTERNS = [
   },
 ];
 
-function walk(dir, files = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return files;
-  }
-  for (const entry of entries) {
-    if (SKIP_DIRS.has(entry)) continue;
-    const full = path.join(dir, entry);
-    let st;
-    try {
-      st = lstatSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isSymbolicLink()) continue;
-    if (st.isDirectory()) {
-      walk(full, files);
-    } else {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-function gitFiles(args) {
+export function gitFiles(args, cwd = root) {
   try {
     const out = execSync(`git ${args}`, {
-      cwd: root,
+      cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -186,7 +141,7 @@ function gitFiles(args) {
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
-      .map((file) => path.join(root, file))
+      .map((file) => path.join(cwd, file))
       .filter((file) => existsSync(file));
   } catch {
     return [];
@@ -496,7 +451,7 @@ export function main(argv = process.argv.slice(2)) {
     ? gitFiles('diff --cached --name-only --diff-filter=ACMRTUXB')
     : changedMode
       ? gitFiles('diff --name-only --diff-filter=ACMRTUXB HEAD')
-      : walk(root);
+      : gitFiles('ls-files -c -o --exclude-standard');
 
   const census = collectSkipCensus(files);
   const tally = summarizeSkipCensus(census);

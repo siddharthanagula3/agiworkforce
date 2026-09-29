@@ -56,11 +56,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner records the samples once from the repository root with OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs and commits apps/web/public/voice-samples; until then the committed manifest is empty and Play sample stays hidden (a7cb4c407, D-2026-09-28-04: marin via the speech endpoint, the 12 Live-only voices via one scripted Live session each, static files so a play costs nothing) | ui |
-| desktop | partial | Same as web: no live-voice sample. | ui |
+| web | partial | owner: run OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs from the repo root and commit apps/web/public/voice-samples (the manifest is empty, so Play sample stays hidden) | ui |
+| desktop | partial | owner: run OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs from the repo root and commit apps/web/public/voice-samples (the manifest is empty, so Play sample stays hidden) | ui |
 | mobile | partial | The live voice is now chosen on the phone (3f03dd5c19), but live voices have no preview: the Settings preview plays on-device voices only, and no sample clip or preview endpoint exists for the live voices (the web has none either). Claude previews each voice ('You'll hear a preview when you click each option', support.claude.com/en/articles/11101966). Needs one sample per live voice from the server. | handler |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:14-14`, `apps/web/features/chat/lib/voice-samples.ts:5-5`, `scripts/generate-voice-samples.mjs:95-95`
+Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:152-152`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:84-84`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:110-110`
 
 ## S48.18: Input-device selection.
 

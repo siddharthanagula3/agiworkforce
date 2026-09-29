@@ -15,26 +15,30 @@ use agiworkforce_protocol::developer_session::{
     DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
     DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
     DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
-    HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
-    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
-    HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
-    McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
-    PlanDecideParams, PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginSetEnabledParams, PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
-    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
-    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
-    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
-    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
-    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
+    GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams,
+    HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpAddParams, McpAuthRequiredNotification,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
+    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
+    WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -71,7 +75,7 @@ use crate::runtime::session_handoff::{
     developer_session_handoff, file_change_record, HandoffContext,
 };
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
-use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
@@ -360,6 +364,7 @@ impl CliDeveloperSessionHost {
         workspace_root: PathBuf,
     ) -> Result<Self, DeveloperSessionHostError> {
         let store = ManagedSessionStore::user_config().map_err(internal_error)?;
+        crate::tools::enable_interactive_questions();
         Self::new_with_store(config, workspace_root, store, true)
     }
 
@@ -440,7 +445,13 @@ impl CliDeveloperSessionHost {
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
             plugin_updates: true,
+            permission_rules: true,
+            trust: true,
+            turn_tool_filters: true,
+            provider_keys: true,
+            questions: true,
             plan_decisions: true,
+            pull_requests: true,
         }
     }
 
@@ -1243,6 +1254,7 @@ impl CliDeveloperSessionHost {
                 task_type,
                 trust_mode,
                 speed_first,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             }),
             fallback_model_ids,
         })
@@ -2391,6 +2403,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.set_managed_auto_routing(None);
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
+                if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
+                    let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
+                        .or_else(|| agent.allowed_tools.clone())
+                        .unwrap_or_default();
+                    let disallowed = validated_tool_filter(params.disallowed_tools.as_deref())?
+                        .unwrap_or_else(|| agent.disallowed_tools.clone());
+                    agent.apply_tool_filters(&allowed, &disallowed);
+                    self.apply_subagent_boundary_policy(&mut agent);
+                }
                 agent.max_turns = max_turns;
                 agent.cloud_project = params
                     .cloud_project_id
@@ -3542,6 +3563,24 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .map_err(internal_error)?
     }
 
+    async fn plan_pull_request(
+        &self,
+        params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::plan(&self.workspace_root).await
+    }
+
+    async fn create_pull_request(
+        &self,
+        params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::create(&self.workspace_root, params).await
+    }
+
     async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         if self
@@ -3615,6 +3654,77 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             );
         }
         Ok(())
+    }
+
+    async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_provider_keys)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn set_provider_key(
+        &self,
+        params: ProviderSetKeyParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::save_api_key(&params.provider, &params.api_key)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+    }
+
+    async fn remove_provider_key(
+        &self,
+        params: ProviderParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::remove_api_key(&params.provider)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+    }
+
+    async fn list_permission_rules(
+        &self,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_permission_rules)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn add_permission(
+        &self,
+        params: PermissionsAddParams,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::add_permission(params))
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_trusted_folders)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn revoke_trusted_folder(
+        &self,
+        params: TrustRevokeParams,
+    ) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::revoke_trusted_folder(&params.path))
+            .await
+            .map_err(internal_error)?
     }
 
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
@@ -3983,6 +4093,13 @@ fn approval_callback(
         Box::pin(async move {
             let request_id = request.id.to_string();
             let risk = request.kind.risk();
+            let question = match &request.kind {
+                ApprovalRequestKind::Question { question, options } => Some(serde_json::json!({
+                    "question": question,
+                    "options": options,
+                })),
+                _ => None,
+            };
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
@@ -4028,6 +4145,7 @@ fn approval_callback(
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
                     "alwaysAllowSaved": snapshot.always_allow_saved,
+                    "question": question,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -4346,6 +4464,7 @@ fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEv
             change: match change.kind {
                 ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
                 ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
+                ManagedSessionFileChangeKind::Deleted => AgentEventFileChangeKind::Deleted,
             },
             reason: change.reason.as_ref().map(ChangeReason::describe),
             notices: change
@@ -4568,6 +4687,32 @@ fn content_block_from_data_url(
             data_b64: data.to_string(),
         },
         decoded_bytes,
+    ))
+}
+
+const MAX_TURN_TOOL_FILTERS: usize = 200;
+const MAX_TOOL_FILTER_LENGTH: usize = 200;
+
+fn validated_tool_filter(
+    filter: Option<&[String]>,
+) -> Result<Option<Vec<String>>, DeveloperSessionHostError> {
+    let Some(filter) = filter else {
+        return Ok(None);
+    };
+    if filter.len() > MAX_TURN_TOOL_FILTERS
+        || filter.iter().any(|tool| {
+            let tool = tool.trim();
+            tool.is_empty()
+                || tool.len() > MAX_TOOL_FILTER_LENGTH
+                || tool.chars().any(char::is_control)
+        })
+    {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Tool filters name up to 200 tools, each a non-empty name or pattern",
+        ));
+    }
+    Ok(Some(
+        filter.iter().map(|tool| tool.trim().to_string()).collect(),
     ))
 }
 
@@ -5317,6 +5462,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -6254,6 +6401,7 @@ mod tests {
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
             speed_first: false,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         };
 
         let resolved = host
@@ -6370,6 +6518,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect("next Auto turn");
@@ -6538,6 +6688,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await;
         if result.is_ok() {
@@ -7526,6 +7678,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7758,6 +7912,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7875,6 +8031,8 @@ mod tests {
             max_turns: None,
             routing_profile: None,
             cloud_project_id: None,
+            allowed_tools: None,
+            disallowed_tools: None,
         };
 
         let replayed = host

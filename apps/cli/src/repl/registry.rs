@@ -443,7 +443,7 @@ pub async fn tasks_for_display(
         );
     }
     let tasks = match manager {
-        Some(manager) => manager.list().await,
+        Some(manager) => manager.list_with_roles().await,
         None => Vec::new(),
     };
     match (subcommand, id, manager) {
@@ -459,7 +459,8 @@ pub async fn tasks_for_display(
             "Name the task: /tasks {subcommand} <id>. /tasks lists them."
         )),
         ("show" | "output" | "stop" | "cancel", Some(id), Some(manager)) => {
-            let Some((_, description, status)) = tasks.iter().find(|(task, _, _)| task == id)
+            let Some((_, role, description, status)) =
+                tasks.iter().find(|(task, _, _, _)| task == id)
             else {
                 return CommandOutcome::Warn(format!(
                     "No task {id} in this session. /tasks lists them."
@@ -473,7 +474,7 @@ pub async fn tasks_for_display(
             }
             let detail = crate::subagent::format_task_detail(
                 id,
-                description,
+                &format!("{role}: {description}"),
                 status,
                 manager.get_result(id).await.as_ref(),
             );
@@ -712,6 +713,11 @@ fn permissions_tab(tab: &str) -> CommandOutcome {
 }
 
 fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
+    if scope != "deny" {
+        if let Some(message) = crate::permissions::open_ended_allow_error(rule) {
+            return CommandOutcome::Error(message);
+        }
+    }
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
         Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),

@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: Models are grouped by family (e.g. all versions of one model line together) so related models sit side by side.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Within each tier, the picker keeps a model family's versions together (getModelFamilySlotForModel). ModelPickerSheet is held: post-codex/w-chat-s15.03-s15.07-mobile-model-picker-families.patch. | codex |
-| cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
 
-Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
+Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`
 
 ## S15.04: Searchable model list.
 

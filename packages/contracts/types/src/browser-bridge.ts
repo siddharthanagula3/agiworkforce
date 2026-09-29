@@ -233,6 +233,9 @@ export const BROWSER_COMMANDS = [
   'browser_console',
   'browser_network',
   'browser_download',
+  'browser_find',
+  'browser_fill_form',
+  'browser_history',
 ] as const;
 
 export type BrowserCommand = (typeof BROWSER_COMMANDS)[number];

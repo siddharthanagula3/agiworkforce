@@ -610,6 +610,7 @@ impl AgentSession {
             task_type: crate::routing::classify::developer_task_type(task_type),
             trust_mode: previous.trust_mode,
             speed_first: previous.speed_first,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         }));
     }
 
@@ -2106,9 +2107,22 @@ impl TurnHostAdapter<'_> {
                     output: format!("tool error: {:#}", e),
                 },
             }
+        } else if call.name.starts_with("mcp_") && !self.session.mcp_server_permitted(&call.name) {
+            crate::tools::ToolResult {
+                tool_name: call.name.clone(),
+                success: false,
+                output: "This agent is not set up to use that MCP server, so the tool did not run."
+                    .to_string(),
+            }
         } else if call.name.starts_with("mcp_") {
             let approval_callback = self.session.recorded_approval_callback();
             let require_confirmation = !self.session.skips_approval();
+            let workspace_root = self
+                .session
+                .managed_session
+                .as_ref()
+                .and_then(|session| session.workspace_root.clone())
+                .or_else(|| std::env::current_dir().ok());
             match execute_mcp_tool(
                 &mut self.session.mcp_manager,
                 &call.name,
@@ -2116,6 +2130,7 @@ impl TurnHostAdapter<'_> {
                 self.session.privacy_mode,
                 require_confirmation,
                 approval_callback,
+                workspace_root.as_deref(),
             )
             .await
             {
@@ -3403,6 +3418,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         session

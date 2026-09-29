@@ -125,14 +125,20 @@ function ConversationMenuSheet({ menu }: { menu: ConversationMenuState }) {
 }
 
 /** Alert.prompt is iOS-only, so the rename field is its own modal. */
-export function RenameConversationModal({ rename }: { rename: ConversationRenameState }) {
+export function RenameConversationModal({
+  rename,
+  inline = false,
+}: {
+  rename: ConversationRenameState;
+  inline?: boolean;
+}) {
   const colors = useThemeColors();
 
   return (
     <>
       <ConversationMenuSheet menu={rename.menu} />
       <Modal
-        visible={rename.visible}
+        visible={rename.visible && !inline}
         transparent
         animationType="fade"
         onRequestClose={rename.cancel}
@@ -216,5 +222,33 @@ export function RenameConversationModal({ rename }: { rename: ConversationRename
         </KeyboardAvoidingView>
       </Modal>
     </>
+  );
+}
+
+export function InlineRenameField({ rename }: { rename: ConversationRenameState }) {
+  const colors = useThemeColors();
+  return (
+    <TextInput
+      style={{
+        flex: 1,
+        minHeight: 36,
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        fontSize: 15,
+        color: colors.textPrimary,
+        backgroundColor: colors.inputSurface,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+      value={rename.text}
+      onChangeText={rename.setText}
+      onSubmitEditing={rename.submit}
+      onBlur={rename.cancel}
+      autoFocus
+      selectTextOnFocus
+      returnKeyType="done"
+      accessibilityLabel="Chat title"
+      accessibilityHint="Done saves the new title; leaving the field keeps the old one"
+    />
   );
 }

@@ -167,9 +167,9 @@ Code: `apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx:41
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/mcp-web 7eb7ec7c1: an expired connection's detail now offers Reconnect beside Disconnect, with a note that reconnecting signs in again and keeps its settings and tool permissions; a connector that is only not responding is not offered it. Still owed: a browser pass against a real expired grant. | states |
+| web | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
 
-Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/features/directory/services/connectors-directory.ts:664-664`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1101-1101`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 
 ## S10.21: Install Plugin.
 
@@ -216,13 +216,13 @@ Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
-| desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:381-387`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1223-1238`, `apps/web/app/api/skills/route.ts:161-179`, `apps/web/lib/services/user-skill-service.ts:68-72`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S10.25: Skill edit.
 
@@ -231,14 +231,14 @@ Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:381-387`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
-| desktop | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `apps/web/lib/services/user-skill-authoring.ts:3-7`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/tui_app.rs:3687-3701`, `apps/cli/src/skills.rs:142-160`
 
 ## S10.26: Model incompatibility warning.
 
@@ -272,11 +272,11 @@ Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
+| web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/web/features/chat/components/InlinePaywallCard.tsx:237-241`, `apps/web/app/api/billing/top-up/route.ts:156-180`, `apps/web/app/api/billing/top-up/route.ts:128-137`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S10.30: Upgrade comparison.
 
@@ -360,16 +360,13 @@ Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 
 - Done when: When the same item was changed elsewhere, the user sees both versions and chooses which to keep (or merges).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi sync import` keeps the local file on a conflict and lists it in the report; the user cannot compare or pick the imported version. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 ## S10.43: Export options.
 

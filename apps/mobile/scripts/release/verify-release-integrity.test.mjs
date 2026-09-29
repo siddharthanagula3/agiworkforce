@@ -7,6 +7,7 @@ import {
   assertProductionHardening,
   assertShareExtensionAlignment,
   assertStableIdentifiers,
+  assertStoreMetadataAlignment,
   readReleaseNumbers,
 } from './verify-release-integrity.mjs';
 
@@ -21,7 +22,6 @@ function productionConfig(overrides = {}) {
       associatedDomains: ['applinks:agiworkforce.com'],
       entitlements: {
         'com.apple.developer.siri': true,
-        'com.apple.developer.natural-language.translation': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
       },
       ...overrides.ios,
@@ -267,4 +267,40 @@ test('the release numbers are read from the app config that ships', () => {
 
   assert.deepEqual(numbers, { version: '1.2.0', buildNumber: '2', versionCode: '1' });
   assert.throws(() => readReleaseNumbers('const config = {};'), /could not read expo\.version/u);
+});
+
+test('store listing metadata follows the binary version and store limits', () => {
+  const version = '0.0.1';
+  const ios = {
+    _meta: { version, char_limits: { name: 30 }, char_counts: { name: 13 } },
+    app_name: 'AGI Workforce',
+    whats_new: `AGI ${version}, Cloud public alpha.`,
+  };
+  const android = {
+    _meta: { version, char_limits: { app_name: 30 }, char_counts: { app_name: 3 } },
+    app_name: 'AGI',
+    release_notes_v0_0_1: `AGI ${version}, Cloud public alpha.`,
+  };
+
+  assertStoreMetadataAlignment(version, ios, android);
+  assert.throws(
+    () => assertStoreMetadataAlignment('0.0.2', ios, android),
+    /listing version must match app version/u,
+  );
+  assert.throws(
+    () => assertStoreMetadataAlignment(version, { ...ios, app_name: 'AGI' }, android),
+    /character count is stale/u,
+  );
+  assert.throws(
+    () =>
+      assertStoreMetadataAlignment(version, ios, {
+        ...android,
+        _meta: { ...android._meta, char_limits: { app_name: 2 } },
+      }),
+    /exceeds its store limit/u,
+  );
+  assert.throws(
+    () => assertStoreMetadataAlignment(version, ios, { ...android, release_notes_v0_0_1: '' }),
+    /Android release notes must name app version/u,
+  );
 });

@@ -2,7 +2,7 @@
 
 Status: Current standing guidance and dated research seed
 Owner: Founder + product/architecture leads
-Last updated: 2026-09-22
+Last updated: 2026-09-26
 
 **Repository location:** `docs/product/competitive-guidance.md`
 **Research baseline:** announcements dated on or before **September 21, 2026**.
@@ -54,8 +54,8 @@ workflows, GitHub releases/runs, and the live Web health route on 2026-09-22:
 | Web                    | `apps/web`; Next.js 16.3.5, React 19, TypeScript                                                                   | Public Account Cloud client plus API/control plane; Managed Cloud only                                                         | Browsers; Vercel production workflow                                              | `https://agiworkforce.com` and `/api/health` returned healthy; deployment run `35608313037` succeeded for `e353673c` on 2026-09-21 |
 | Mobile                 | `apps/mobile`; Expo 57, React Native 0.86, Expo Router                                                             | Consumer client with isolated on-device Local and Account Cloud; no Mobile BYOK in v1                                          | iOS and Android through EAS/App Store/Google Play workflows                       | Release workflow exists; GitHub showed no runs and no matching release, so store publication is not proven                         |
 | Electron Desktop       | `apps/desktop/electron` plus the `apps/desktop` package; Electron/Node host, remote hosted Web renderer by default | The public Desktop: Account Cloud plus permissioned device, voice, file, computer-use, and developer-session host capabilities | macOS arm64/x64 signed DMG through `release-desktop-cloud.yml`                    | Workflow exists but had no GitHub runs or `v-cloud-desktop-*` release; no current public installer is proven                       |
-| Retained Tauri Desktop | `apps/desktop/src` + `apps/desktop/src-tauri`; React/Vite renderer, Tauri 2.11/Rust host                           | Internal Local/BYOK/Managed implementation inventory; not a second public Desktop under the current founder decision           | Workflow can build macOS and Linux x64; manual workflow adds Windows x64          | Historical `v-desktop-1.2.0` release was published 2026-05-04; current public-product status remains internal/retained             |
-| CLI                    | `apps/cli`; Rust 2021 binary `agi`                                                                                 | Host Developer domain; Local, BYOK, and admitted Managed modes                                                                 | macOS arm64/x64, Linux arm64/x64, Windows arm64/x64; GitHub Release + npm wrapper | `v-cli-1.0.0` was published 2026-05-03; source is 1.7.1, so the current implementation is not the published binary                 |
+| Retained Tauri Desktop | `apps/desktop/src` + `apps/desktop/src-tauri`; React/Vite renderer, Tauri 2.11/Rust host                           | Internal Local/BYOK/Managed implementation inventory; not a second public Desktop under the current founder decision           | Workflow can build macOS and Linux x64; manual workflow adds Windows x64          | Source is 0.0.1. A historical GitHub release was observed 2026-09-22; founder reports removing all GitHub releases 2026-09-26.     |
+| CLI                    | `apps/cli`; Rust 2021 binary `agi`                                                                                 | Host Developer domain; Local, BYOK, and admitted Managed modes                                                                 | macOS arm64/x64, Linux arm64/x64, Windows arm64/x64; GitHub Release + npm wrapper | Source is 0.0.1. A historical GitHub release was observed 2026-09-22; founder reports removing all GitHub releases 2026-09-26.     |
 | Chrome extension       | `apps/extension`; Manifest V3 TypeScript/Vite service worker and side panel                                        | Eligible Account Cloud chat plus browser-scoped page/task state and an authenticated native bridge                             | Chrome Web Store workflow                                                         | Workflow exists but had no GitHub runs or matching release; store publication was not independently proven                         |
 | VS Code extension      | `apps/extension-vscode`; TypeScript/Node extension and webviews, VS Code `^1.100.0`                                | Host Developer domain through the shared CLI/app-server runtime, with editor-native adapters                                   | VS Code Marketplace workflow                                                      | Workflow exists but had no GitHub runs or matching release; marketplace publication was not independently proven                   |
 
@@ -66,11 +66,11 @@ manifests, `apps/cli/Cargo.toml`, `apps/desktop/src-tauri/Cargo.toml`,
 workflows define paths, runtimes, dependency edges, targets, and intended
 distribution. The [production deployment run](https://github.com/siddharthanagula3/agiworkforce/actions/runs/35608313037)
 completed successfully for `e353673c` on September 21, and the live Web health
-route returned HTTP 200 on September 22. The published
-[CLI v1.0.0](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v-cli-1.0.0)
-and [Tauri Desktop v1.2.0](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v-desktop-1.2.0)
-releases are historical binaries, not evidence that current source is
-distributed. The GitHub Actions API returned no runs for the Mobile, Electron
+route returned HTTP 200 on September 22. GitHub release pages for CLI v1.0.0
+and Tauri Desktop v1.2.0 were observed then. The founder reports deleting all
+GitHub releases on September 26; live GitHub availability could not be checked
+from this environment. Those historical releases are not evidence that current
+0.0.1 source is distributed. The GitHub Actions API returned no runs for the Mobile, Electron
 Desktop, Chrome, or VS Code release workflows at this check; app-store and
 marketplace availability remains unverified.
 

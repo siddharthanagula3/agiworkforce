@@ -1,5 +1,6 @@
 import {
   ManagedCloudAgentRunHttpError,
+  type CloudAgentRun,
   type CloudAgentRunSteerResponse,
 } from '@agiworkforce/cloud-contracts';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
@@ -13,6 +14,10 @@ export function steerCloudRun(
   signal?: AbortSignal,
 ): Promise<CloudAgentRunSteerResponse> {
   return createMobileCloudAgentRunClient().steerRun(runId, message, { signal });
+}
+
+export function withdrawCloudRunSteer(runId: string, steerId: string): Promise<CloudAgentRun> {
+  return createMobileCloudAgentRunClient().withdrawSteer(runId, steerId);
 }
 
 export function describeCloudRunSteerError(error: unknown): string {

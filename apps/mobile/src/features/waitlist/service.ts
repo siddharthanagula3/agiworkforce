@@ -1,5 +1,4 @@
 import { api } from '@/services/api';
-import type { InviteCodeError } from '@/src/features/cloud-bridge/types';
 
 export interface JoinWaitlistInput {
   email: string;
@@ -34,8 +33,6 @@ export class WaitlistNetworkError extends Error {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const LOCAL_ALPHA_INVITE_CODE = 'ALPHATESTER';
-const LOCAL_ALPHA_INVITE_ID = 'mobile-alpha-tester';
 
 function validateEmail(email: string): string {
   const trimmed = email.trim().toLowerCase();
@@ -80,16 +77,4 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
   } catch (err) {
     throw new WaitlistNetworkError(err);
   }
-}
-
-export async function redeemInviteCode(
-  code: string,
-  source: string = 'other',
-): Promise<{ success: boolean; inviteId?: string; error?: InviteCodeError }> {
-  void source;
-  const normalizedCode = code.trim().toUpperCase();
-  if (normalizedCode === LOCAL_ALPHA_INVITE_CODE) {
-    return { success: true, inviteId: LOCAL_ALPHA_INVITE_ID };
-  }
-  return { success: false, error: 'invalid_code' };
 }

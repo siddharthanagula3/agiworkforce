@@ -10,15 +10,13 @@ nothing is left.
 
 - Done when: One resolver combines model, plan, surface and operator switches to say whether each feature is available here, and the surface's controls read it.
 - Wave: 3
-- Already works on: mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/chat-gates c0f69eeee4, 578cf4cda1: the document now denies canUseDeepResearch, canUseAgiWork, canUseSkills and canUsePlugins with disabled_by_workspace when the member's workspace turns them off. If the controls cannot be read, all four are closed. The mobile row defers to the same decisions. Turn-level search, image and code switches fail closed and are applied after research mode. Voice and connectors are done on w-connect (599281ed8f, c633854983, d406416259). Left: the /skills and /plugins pages do not read canUseSkills or canUsePlugins yet (w-connect's pages). | ui |
-| desktop | partial | partials/chat-gates c0f69eeee4, 578cf4cda1: the document now denies canUseDeepResearch, canUseAgiWork, canUseSkills and canUsePlugins with disabled_by_workspace when the member's workspace turns them off. If the controls cannot be read, all four are closed. The mobile row defers to the same decisions. Turn-level search, image and code switches fail closed and are applied after research mode. Voice and connectors are done on w-connect (599281ed8f, c633854983, d406416259). Left: the /skills and /plugins pages do not read canUseSkills or canUsePlugins yet (w-connect's pages). | ui |
 | cli | partial | The CLI reads the capability document (034deed768) for cloud models, image generation and /search; voice, connectors, plugins and skills controls still decide locally | handler |
 
-Code: `apps/web/lib/services/capability-handshake-service.ts:137-137`, `apps/web/app/api/me/route.ts:92-92`, `apps/web/app/api/me/route.ts:288-288`, `packages/contracts/types/src/capabilities.ts:121-121`
+Code: `apps/cli/src/tier_cache.rs:240-240`, `apps/cli/src/models/provider_dispatch.rs:318-318`, `apps/cli/src/agent/mod.rs:822-822`, `apps/cli/src/agent/chat.rs:696-696`
 
 ## S78.03: Model-dependent accepted-file types.
 
@@ -38,14 +36,11 @@ Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 - Done when: Media generation settings (duration, size, aspect) offered depend on the selected media model.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:188-188`, `packages/contracts/cloud-contracts/src/managed-media.ts:211-211`, `packages/contracts/cloud-contracts/src/managed-media.ts:214-214`, `packages/contracts/cloud-contracts/src/managed-media.ts:215-215`
 
 ## S78.10: Role restrictions.
 
@@ -115,10 +110,9 @@ Code: `apps/cli/src/provider.rs:341-341`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone can pair with and drive the desktop app, but a blocked feature never offers to continue on the desktop. | ui |
 | cli | partial | The CLI can receive a selection handed off from Chrome, but never offers to continue its own work on another device. | ui |
 
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
+Code: `apps/cli/src/context_handoff.rs:1-5`
 
 ## S78.25: Attachment-preservation choice after model change.
 

@@ -1149,6 +1149,15 @@ fn parse_mcp_config_contents(
             return Ok(configs);
         };
         for (name, config) in servers {
+            if let Err(error) = registry::ensure_no_rule_separator(name) {
+                if strict {
+                    return Err(error).with_context(|| {
+                        format!("Invalid MCP server in explicit config {}", path.display())
+                    });
+                }
+                eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                continue;
+            }
             let config = normalize_nested_transport(config).unwrap_or_else(|| config.clone());
             match serde_json::from_value::<McpServerConfig>(config) {
                 Ok(server_config) => {
@@ -1182,7 +1191,20 @@ fn parse_mcp_config_contents(
             other => other,
         };
         match serde_json::from_value::<HashMap<String, McpServerConfig>>(normalized) {
-            Ok(parsed_configs) => configs.extend(parsed_configs),
+            Ok(parsed_configs) => {
+                for (name, config) in parsed_configs {
+                    if let Err(error) = registry::ensure_no_rule_separator(&name) {
+                        if strict {
+                            return Err(error).with_context(|| {
+                                format!("Invalid MCP server in explicit config {}", path.display())
+                            });
+                        }
+                        eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                        continue;
+                    }
+                    configs.insert(name, config);
+                }
+            }
             Err(err) if strict => {
                 return Err(err).with_context(|| {
                     format!(
@@ -1565,6 +1587,10 @@ impl McpManager {
 
     /// Every resource the connected servers allowed in `privacy_mode` list,
     /// paired with the server that owns it.
+    pub fn has_server(&self, server_name: &str) -> bool {
+        self.connections.contains_key(server_name)
+    }
+
     pub async fn list_resources(
         &mut self,
         privacy_mode: crate::agent::PrivacyMode,
@@ -2140,6 +2166,21 @@ mod tests {
         // Should not crash even if no config files exist.
         let configs = McpManager::load_configs().unwrap();
         let _ = configs;
+    }
+
+    #[test]
+    fn project_config_server_names_with_the_rule_separator_are_refused() {
+        let path = std::path::Path::new(".mcp.json");
+        let contents =
+            r#"{"mcpServers":{"github__x":{"command":"node"},"docs":{"command":"node"}}}"#;
+        let loaded = parse_mcp_config_contents(contents, path, false).expect("lenient load");
+        assert!(loaded.contains_key("docs"));
+        assert!(!loaded.contains_key("github__x"));
+        let flat = parse_mcp_config_contents(r#"{"a__b":{"command":"node"}}"#, path, false)
+            .expect("lenient flat load");
+        assert!(flat.is_empty());
+        let error = parse_mcp_config_contents(contents, path, true).expect_err("strict load");
+        assert!(format!("{error:#}").contains("must not contain '__'"));
     }
 
     #[test]

@@ -45,6 +45,8 @@ export interface PaywallSheetProps {
   recoveryAction?: PaywallRecoveryAction;
   onPrimaryAction?: () => void | Promise<void>;
   primaryActionUnavailableMessage?: string;
+  resetLabel?: string | null;
+  onChooseStandardModel?: () => void;
   onDismiss: () => void;
 }
 
@@ -57,6 +59,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       recoveryAction = 'upgrade',
       onPrimaryAction,
       primaryActionUnavailableMessage,
+      resetLabel,
+      onChooseStandardModel,
       onDismiss,
     },
     forwardedRef,
@@ -124,6 +128,11 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       }
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
     }, [onPrimaryAction, router, salesTier]);
+
+    const handleChooseStandardModel = useCallback(() => {
+      sheetRef.current?.close();
+      onChooseStandardModel?.();
+    }, [onChooseStandardModel]);
 
     const showPlanComparison = recoveryAction === 'upgrade' || recoveryAction === 'subscribe';
     const handleComparePlans = useCallback(() => {
@@ -224,24 +233,25 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               fontSize: 15,
               color: colors.textSecondary,
               lineHeight: 22,
-              marginBottom: reason ? 8 : 20,
+              marginBottom: reason || resetLabel ? 8 : 20,
             }}
           >
             {body}
           </Text>
 
-          {/* Server-supplied reason (e.g. "10/10 images used this month") */}
-          {reason ? (
-            <Text
-              style={{
-                fontSize: 13,
-                color: colors.textMuted,
-                lineHeight: 20,
-                marginBottom: 20,
-              }}
-            >
-              {reason}
-            </Text>
+          {reason || resetLabel ? (
+            <View style={{ gap: 4, marginBottom: 20 }}>
+              {reason ? (
+                <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 20 }}>
+                  {reason}
+                </Text>
+              ) : null}
+              {resetLabel ? (
+                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>
+                  {resetLabel}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
 
           {/* CTA follows the server-derived recovery action. */}
@@ -265,6 +275,23 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               {primaryActionUnavailableMessage}
             </Text>
           )}
+          {onChooseStandardModel ? (
+            <Pressable
+              onPress={handleChooseStandardModel}
+              style={{
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 8,
+              }}
+              accessibilityLabel="Choose a standard model"
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+                Choose a standard model
+              </Text>
+            </Pressable>
+          ) : null}
           {showPlanComparison ? (
             <Pressable
               onPress={handleComparePlans}

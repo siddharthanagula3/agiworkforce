@@ -287,6 +287,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/platform/utils/src/composerPaste.ts',
         ),
+        '@agiworkforce/utils/greeting': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/greeting.ts',
+        ),
         '@agiworkforce/utils/markdown-source': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/markdownSource.ts',

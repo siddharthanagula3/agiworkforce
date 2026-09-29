@@ -5,7 +5,7 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -46,11 +46,8 @@ export function GeneratedImage({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await shareGeneratedImage(imageUrl);
-    } catch (error) {
-      Alert.alert(
-        'Could not share image',
-        error instanceof Error ? error.message : 'Save the image and try again.',
-      );
+    } catch {
+      Alert.alert('Could not share image', 'Save the image and try again.');
     }
   }, [imageUrl]);
 
@@ -131,7 +128,7 @@ export function GeneratedImage({
               borderRadius: 12,
               overflow: 'hidden',
               position: 'absolute',
-              zIndex: 1,
+              zIndex: zIndex.content,
             }}
           >
             <Skeleton width={imageWidth} height={imageHeight} borderRadius={12} />

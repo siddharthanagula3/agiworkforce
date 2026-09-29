@@ -45,6 +45,7 @@ export function ContextDetailsSheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
+      accessibilityViewIsModal
       onRequestClose={onClose}
     >
       <View

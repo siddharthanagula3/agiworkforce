@@ -3102,6 +3102,7 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
 }
 
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
+const DESKTOP_HISTORY_SETTLE_MS = 5_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
 let desktopPollRunning = false;
@@ -3152,6 +3153,18 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         navigate: async (tabId, url) => {
           await chrome.tabs.update(tabId, { url });
         },
+        history: async (tabId, direction) => {
+          const before = (await chrome.tabs.get(tabId)).url;
+          if (direction === 'back') await chrome.tabs.goBack(tabId);
+          else await chrome.tabs.goForward(tabId);
+          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
+          while (Date.now() < deadline) {
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.url !== before && tab.status === 'complete') return;
+            await sleep(100);
+          }
+        },
+        tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url ?? '',
         capture: (tabId) => captureThroughDebugger(tabId),
       });
 
@@ -3639,6 +3652,8 @@ async function handleMessageAsync(
     }
 
     case 'SELECT_OPTION':
+    case 'FIND_ELEMENTS':
+    case 'FILL_FIELDS':
     case 'CHECK':
     case 'UNCHECK':
     case 'FOCUS':
