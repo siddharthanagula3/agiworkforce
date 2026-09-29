@@ -178,6 +178,26 @@ describe('remote control host in the desktop main process', () => {
     expect(host.stop()).toMatchObject({ status: 'idle', qrPayload: null });
     expect(close).toHaveBeenCalled();
   });
+  it('shows the phone name without control or direction-override characters', async () => {
+    const host = makeHost();
+    host.start(startRequest());
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT, deviceName: ' Pix\u202eel\u0007\u2066 ' },
+    });
+    await flush();
+    expect(states.at(-1)).toMatchObject({ status: 'connected', phoneName: 'Pixel' });
+
+    clientOptions?.onEvent({ type: 'peer_left', role: 'mobile' });
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT, deviceName: '\u202e\u0000' },
+    });
+    await flush();
+    expect(states.at(-1)).toMatchObject({ status: 'connected', phoneName: null });
+  });
   it('returns to waiting when the phone goes away, and forgets its session', async () => {
     const host = makeHost();
     const started = host.start(startRequest());
