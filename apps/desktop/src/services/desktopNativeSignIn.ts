@@ -128,6 +128,29 @@ function createDeviceAuthorizationPost(signal?: AbortSignal): DeviceAuthorizatio
   };
 }
 
+function readRefusal(body: string): { message?: string; acceptanceUrl?: string } {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const record = parsed as Record<string, unknown>;
+    const error = record['error'];
+    const message =
+      error &&
+      typeof error === 'object' &&
+      typeof (error as { message?: unknown }).message === 'string'
+        ? (error as { message: string }).message
+        : undefined;
+    const acceptanceUrl =
+      typeof record['acceptanceUrl'] === 'string' ? record['acceptanceUrl'] : undefined;
+    return {
+      ...(message ? { message } : {}),
+      ...(acceptanceUrl ? { acceptanceUrl } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 function approvalFailure(status: number, body: string): NativeSignInExchangeError {
   if (status >= 500) {
     return new NativeSignInExchangeError(
@@ -137,10 +160,23 @@ function approvalFailure(status: number, body: string): NativeSignInExchangeErro
       status,
     );
   }
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return new NativeSignInExchangeError(
       'unexpected',
       'AGI Cloud did not accept the sign-in session for this device. Sign in again.',
+      status,
+    );
+  }
+  if (status === 403) {
+    // A 403 names a condition the account can meet: device sign-in switched
+    // off, the terms to accept, a passkey to use, or a suspended account.
+    // Telling the user to sign in again would loop without ever saying which.
+    const refusal = readRefusal(body);
+    return new NativeSignInExchangeError(
+      'unexpected',
+      refusal.acceptanceUrl
+        ? `${refusal.message ?? 'Accept the updated Terms of Service first.'} Open ${refusal.acceptanceUrl} to accept them, then sign in again.`
+        : (refusal.message ?? 'AGI Cloud did not allow this device to sign in.'),
       status,
     );
   }
@@ -200,7 +236,7 @@ async function approveOwnDeviceCode(
         'X-Requested-With': 'XMLHttpRequest',
         ...desktopRequestHeaders(),
       },
-      body: JSON.stringify({ user_code: userCode, action: 'approve' }),
+      body: JSON.stringify({ user_code: userCode, action: 'approve', surface: 'desktop' }),
       ...(signal ? { signal } : {}),
     });
     response = { status: raw.status, body: await raw.text() };

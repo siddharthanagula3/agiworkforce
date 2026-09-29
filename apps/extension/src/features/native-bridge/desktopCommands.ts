@@ -5,8 +5,10 @@ import {
   type BrowserCommandResult,
   type BrowserTabSummary,
 } from '@agiworkforce/types';
+import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contracts';
 import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
+import { watchDownloadsStartedBy } from '../browser-tools/downloads';
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
@@ -209,11 +211,99 @@ async function execute(
     }
     case 'browser_download': {
       const response = requireSuccess(
-        await context.send(tabId, { type: 'START_DOWNLOAD', url: httpUrl(args['url']) }),
+        await context.send(tabId, {
+          type: 'START_DOWNLOAD',
+          url: httpUrl(args['url']),
+          ...(request.siteRules ? { siteRules: request.siteRules } : {}),
+        }),
       );
       return { download: response['download'] };
     }
   }
+}
+
+const OFF_LIMITS =
+  'is a site your workspace administrator does not allow the assistant to use, so nothing from it was read.';
+
+/** Commands that can leave the tab on a page the command did not name. */
+const MOVES_THE_TAB: ReadonlySet<string> = new Set([
+  'browser_navigate',
+  'browser_click',
+  'browser_type',
+  'browser_fill_form',
+  'browser_history',
+]);
+
+async function readTabUrl(tabId: number, context: DesktopCommandContext): Promise<string | null> {
+  try {
+    const url = await context.tabUrl(tabId);
+    return typeof url === 'string' && url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function siteRulesOf(value: unknown): WebDomainRules | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const list = (entry: unknown) =>
+    Array.isArray(entry) ? entry.filter((item): item is string => typeof item === 'string') : [];
+  const rules = { allow: list(record['allow']), deny: list(record['deny']) };
+  return rules.allow.length > 0 || rules.deny.length > 0 ? rules : null;
+}
+
+/**
+ * Before acting: the tab the command reads or acts on must be on an allowed
+ * site, and so must any address it opens or downloads. Opening or going back
+ * from a blocked page is how the user leaves it, so those are judged by where
+ * they land instead.
+ */
+async function refusalBeforeActing(
+  request: BrowserCommandRequest,
+  tabId: number,
+  rules: WebDomainRules,
+  context: DesktopCommandContext,
+): Promise<string | null> {
+  const target = request.args['url'];
+  if (typeof target === 'string' && !webDomainAllowed(rules, target)) {
+    return `${target} ${OFF_LIMITS}`;
+  }
+  if (request.command === 'browser_navigate' || request.command === 'browser_history') return null;
+  const current = await readTabUrl(tabId, context);
+  if (current === null) {
+    return rules.allow.length > 0
+      ? 'The address of the tab could not be read, so it could not be checked against your workspace website rules.'
+      : null;
+  }
+  return webDomainAllowed(rules, current) ? null : `The open tab, ${current}, ${OFF_LIMITS}`;
+}
+
+/**
+ * After acting: a redirect or a click can land somewhere nobody named. A tab
+ * that moved onto a blocked site goes back, and the result is withheld; an
+ * address that cannot be read counts as blocked under an allow list.
+ */
+async function refusalAfterActing(
+  command: string,
+  tabId: number,
+  landed: string | null,
+  rules: WebDomainRules,
+  context: DesktopCommandContext,
+): Promise<string | null> {
+  const allowed = landed === null ? rules.allow.length === 0 : webDomainAllowed(rules, landed);
+  if (allowed) return null;
+  if (MOVES_THE_TAB.has(command) && command !== 'browser_history') {
+    await context.history(tabId, 'back').catch(() => undefined);
+  }
+  return landed === null
+    ? 'The page the tab moved to could not be read, so its content was withheld under your workspace website rules.'
+    : `The tab moved to ${landed}, which ${OFF_LIMITS} It went back.`;
+}
+
+/** Every result names the page the tab is on, for the desktop to check again. */
+function withTabUrl(value: unknown, tabUrl: string | null): unknown {
+  if (tabUrl === null || !value || typeof value !== 'object' || Array.isArray(value)) return value;
+  return { ...(value as Record<string, unknown>), tabUrl };
 }
 
 export async function runDesktopBrowserCommand(
@@ -245,7 +335,17 @@ export async function runDesktopBrowserCommand(
       return failed(raw.id, 'No web page is open in Chrome for that action.');
     }
     await authorizeBrowserToolTab(tabId);
-    return succeeded(raw.id, await execute(raw, tabId, context));
+    const rules = siteRulesOf(raw.siteRules);
+    const refusal = rules ? await refusalBeforeActing(raw, tabId, rules, context) : null;
+    if (refusal) return failed(raw.id, refusal);
+    if (rules && MOVES_THE_TAB.has(raw.command)) watchDownloadsStartedBy(rules);
+    const value = await execute(raw, tabId, context);
+    const landed = await readTabUrl(tabId, context);
+    if (rules) {
+      const blocked = await refusalAfterActing(raw.command, tabId, landed, rules, context);
+      if (blocked) return failed(raw.id, blocked);
+    }
+    return succeeded(raw.id, withTabUrl(value, landed));
   } catch (error) {
     return failed(raw.id, error instanceof Error ? error.message : 'That action failed.');
   }

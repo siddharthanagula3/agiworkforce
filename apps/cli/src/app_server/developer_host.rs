@@ -114,6 +114,16 @@ const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
 
+/// Read the account's memory setting and memories before a session starts, so
+/// a user who turned memory off on the web is not remembered or read here.
+/// Only the terminal CLI refreshed this before, so a desktop session kept the
+/// last cached answer. Signed out or offline, the cached answer stands.
+async fn refresh_account_memory_setting() {
+    if let Err(error) = crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed).await {
+        tracing::debug!(%error, "account memory setting not refreshed");
+    }
+}
+
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
     AccountStatusResponse {
         signed_in: snapshot.signed_in,
@@ -576,6 +586,7 @@ impl CliDeveloperSessionHost {
             .require_routing_authority()
             .map_err(invalid_request)?;
         let system_context = context::gather_system_context();
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(
             model,
             &system_context,
@@ -1511,6 +1522,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 requested_provider,
             ),
         };
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
@@ -2709,6 +2721,38 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
             drop(pending);
 
+            // The account refused this machine's session mid-life (a passkey
+            // enrolled, the device unlinked). Renew once, or forget it so the
+            // account reads signed out and the desktop signs this machine in again.
+            if let Some(failure) = final_failure.as_mut() {
+                let managed = failure.provider.as_deref() == Some("managed_cloud");
+                let refused = matches!(
+                    failure.code,
+                    TurnFailureCode::ProviderAuthInvalid | TurnFailureCode::AccountSignedOut
+                );
+                if managed && refused {
+                    if let Some(jwt) = crate::tier_cache::load_jwt() {
+                        use account::RejectedSessionRecovery as Recovery;
+                        match account::recover_rejected_session(&jwt).await {
+                            Recovery::Renewed => {
+                                failure.message =
+                                    "Your AGI Workforce session was renewed. Send it again."
+                                        .to_string();
+                                failure.retryable = true;
+                                failure.action =
+                                    agiworkforce_protocol::developer_session::TurnFailureAction::Retry;
+                            }
+                            Recovery::Ended(message) | Recovery::Refused(message) => {
+                                failure.code = TurnFailureCode::AccountSignedOut;
+                                failure.message = message;
+                                failure.action = agiworkforce_protocol::developer_session::TurnFailureAction::SignInAccount;
+                            }
+                            Recovery::Unavailable => {}
+                        }
+                    }
+                }
+            }
+
             let method = if final_status == TurnStatus::Completed {
                 "turn/completed"
             } else {
@@ -3137,8 +3181,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .await
                 .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
             match poll {
-                crate::oauth::DeviceCodePoll::Pending
-                | crate::oauth::DeviceCodePoll::TermsRequired(_) => continue,
+                crate::oauth::DeviceCodePoll::Pending => continue,
+                // Waiting out the code's lifetime would only end in "expired";
+                // the account has to accept the terms on the web first.
+                crate::oauth::DeviceCodePoll::TermsRequired(url) => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some(format!(
+                            "Accept the updated Terms of Service at {url}, then sign in again."
+                        )),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
                 crate::oauth::DeviceCodePoll::SlowDown => {
                     pending.interval += std::time::Duration::from_secs(5);
                     continue;

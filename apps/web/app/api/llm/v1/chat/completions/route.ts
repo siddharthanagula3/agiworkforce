@@ -104,8 +104,7 @@ import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-t
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   loadConnectorToolPermissions,
-  withDisabledConnectorIds,
-  withoutStandingApprovals,
+  scopeConnectorPermissionsToTurn,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
 import { hostedToolRunsUnasked, loadTurnToolPermissions } from './lib/tool-approval-policy';
@@ -812,12 +811,10 @@ async function dispatchChatCompletions(
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
     // chat while its saved permission stays Allow everywhere else.
-    const turnConnectorPermissions = withDisabledConnectorIds(
-      processed.conversationIsTemporary
-        ? withoutStandingApprovals(connectorPermissions)
-        : connectorPermissions,
-      new Set(processed.chatRequest.disabled_connector_ids),
-    );
+    const turnConnectorPermissions = scopeConnectorPermissionsToTurn(connectorPermissions, {
+      temporary: processed.conversationIsTemporary === true,
+      disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+    });
     // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
     // flat 32 for everybody, and the truncation it causes is reported back
     // rather than only logged, a "Connected" connector whose tools were

@@ -145,6 +145,22 @@ describe('one local session', () => {
     expect(result.current.turn.reply).toBe('half a ');
   });
 
+  it('ends the turn when the host fails to interrupt it, so Stop is not stuck', async () => {
+    interruptDeveloperTurn.mockRejectedValue(new Error('The host could not stop the turn.'));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send('long job');
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    expect(result.current.turn.outcome).toBe('interrupted');
+    expect(result.current.error).not.toBeNull();
+  });
+
   it('carries an approval through and clears it once answered', async () => {
     const { result } = renderHook(() => useLocalSession(session));
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
@@ -178,6 +194,29 @@ describe('one local session', () => {
       approved: true,
     });
     expect(result.current.approval).toBeNull();
+  });
+
+  it('answers a question the agent asked with the option the user chose', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+
+    send({
+      type: 'approval-requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'ask-2',
+      summary: 'The agent has a question',
+      detail: '',
+      question: { question: 'Which suite?', options: ['unit', 'e2e'] },
+    });
+    expect(result.current.approval?.question?.options).toEqual(['unit', 'e2e']);
+
+    await act(async () => {
+      await result.current.decideApproval(true, 'e2e');
+    });
+    expect(answerDeveloperApproval).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'ask-2', approved: true, note: 'e2e' }),
+    );
   });
 
   it('ignores a turn that belongs to another session in the same folder', async () => {

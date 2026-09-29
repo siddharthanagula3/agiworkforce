@@ -265,6 +265,63 @@ describe('runToolLoop, device step boundary', () => {
     });
   });
 
+  it.each(['device_browser_navigate', 'device_browser_download'])(
+    'refuses %s to a site the workspace blocks, without pausing',
+    async (tool) => {
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        deviceCallStream({ url: 'https://docs.blocked.example/report.pdf' }, tool),
+      );
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'That site is not allowed.' }, 'stop')]),
+      );
+      const onDeviceCheckpoint = vi.fn(async () => undefined);
+      const processed = {
+        ...makeProcessed(true),
+        deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+        deviceWebDomainPolicy: { allow: [], deny: ['blocked.example'] },
+      } as unknown as ProcessedRequest;
+
+      const output = await drain(
+        runToolLoop(processed, {
+          onDeviceCheckpoint,
+          eventSessionId: 'session-1',
+          eventTurnId: 'turn-1',
+        }),
+      );
+
+      expect(onDeviceCheckpoint).not.toHaveBeenCalled();
+      expect(output).toContain('does not allow the assistant to open');
+    },
+  );
+
+  it('sends a browser step to a site the workspace allows', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream({ url: 'https://docs.allowed.example/' }, 'device_browser_navigate'),
+    );
+    const onDeviceCheckpoint = vi.fn(async () => undefined);
+    const processed = {
+      ...makeProcessed(true),
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+      deviceWebDomainPolicy: { allow: ['allowed.example'], deny: [] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(processed, {
+        onDeviceCheckpoint,
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    expect(onDeviceCheckpoint).toHaveBeenCalled();
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { siteRules: { allow: ['allowed.example'], deny: [] } },
+    });
+  });
+
   it('always asks on the phone before adding a calendar event, even with no untrusted content', async () => {
     mockBuildToolLoopStream.mockResolvedValueOnce(
       deviceCallStream(

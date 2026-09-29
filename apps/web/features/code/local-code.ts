@@ -23,6 +23,7 @@ import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud
 
 export const LOCAL_CODE_COPY = {
   heading: 'On this device',
+  skipQuestion: 'Skip the question',
   addFolder: 'Add a folder',
   addRepository: 'Add a repository',
   addingFolder: 'Choosing…',
@@ -193,9 +194,28 @@ export function localProviderLabel(providerId: string | null): string | null {
  * says it in its own words; where it does not, the CLI's line is still the best
  * description anyone has and is shown unchanged.
  */
+/** The route that bills the AGI Workforce account, which the app signs in. */
+function isManagedAccountRoute(provider: string | null): boolean {
+  return provider === 'managed_cloud';
+}
+
 export function localTurnFailureSentence(failure: DeveloperTurnFailure): string {
   const provider = localProviderLabel(failure.provider);
   const login = failure.provider ? `\`agi login ${failure.provider}\`` : null;
+
+  // The account's own route is signed in by this app, never from a terminal:
+  // a missing or expired managed session means the app's sign-in has to be
+  // renewed, and "agi login managed_cloud" is not something a desktop user runs.
+  if (
+    failure.code === 'account_signed_out' ||
+    (isManagedAccountRoute(failure.provider) &&
+      (failure.code === 'provider_auth_missing' || failure.code === 'provider_auth_invalid'))
+  ) {
+    return 'This session could not use your AGI Workforce account because its sign-in has ended. Sign out of AGI Workforce and sign back in, then start a new session.';
+  }
+  if (failure.code === 'plan_excludes_model') {
+    return 'Your plan does not include this model. Choose another model for the session, or change your plan in Billing.';
+  }
 
   if (failure.code === 'provider_auth_missing' && provider && login) {
     return `No ${provider} key on this computer. Run ${login} in a terminal, then start a new session.`;
@@ -256,7 +276,7 @@ export function localOfferFor(
   retryable: boolean,
 ): LocalFailureAction {
   if (action === 'retry' && retryable) return { kind: 'retry' };
-  if (action === 'sign_in_provider' && provider) {
+  if (action === 'sign_in_provider' && provider && !isManagedAccountRoute(provider)) {
     return { kind: 'copy', text: `agi login ${provider}` };
   }
   return null;

@@ -39,6 +39,10 @@ vi.stubGlobal('chrome', {
       Promise.resolve((permissions.origins ?? []).every((pattern) => grantedOrigins.has(pattern))),
     ),
   },
+  downloads: {
+    onCreated: { addListener: vi.fn(), removeListener: vi.fn() },
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
   tabs: {
     get: vi.fn((tabId: number) => {
       const tab = tabs.get(tabId);
@@ -247,7 +251,7 @@ describe('desktop-issued browser commands', () => {
     );
     expect(result.ok).toBe(true);
     expect(base.history).toHaveBeenCalledWith(TAB_ID, 'back');
-    expect(result.value).toEqual({ direction: 'back', url: `${SITE}/previous` });
+    expect(result.value).toMatchObject({ direction: 'back', url: `${SITE}/previous` });
   });
 
   it('undoes a history step that lands on a site that is not approved', async () => {
@@ -309,5 +313,49 @@ describe('desktop-issued browser commands', () => {
       expect.objectContaining({ type: 'READ_PAGE_CONSOLE', level: 'error', limit: 5 }),
     );
     expect((result.value as { console: unknown[] }).console).toHaveLength(1);
+  });
+
+  describe('under the workspace website rules', () => {
+    const blockSite = { allow: [], deny: ['allowed.example'] };
+
+    function ruled(command: string, args: Record<string, unknown> = {}) {
+      return { ...request(command, args), siteRules: blockSite };
+    }
+
+    it('acts on nothing in a tab already on a blocked site', async () => {
+      approveSite();
+      const send = vi.fn();
+      const result = await runDesktopBrowserCommand(
+        ruled('browser_click', { selector: '#go' }),
+        context(send),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/does not allow/);
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('goes back and withholds the result when a click lands on a blocked site', async () => {
+      approveSite();
+      const ctx = context(vi.fn(async () => ({ success: true })));
+      ctx.tabUrl
+        .mockResolvedValueOnce('https://fine.example/start')
+        .mockResolvedValueOnce('https://allowed.example/landing');
+      const result = await runDesktopBrowserCommand(
+        ruled('browser_click', { selector: '#go' }),
+        ctx,
+      );
+      expect(result.ok).toBe(false);
+      expect(ctx.history).toHaveBeenCalledWith(TAB_ID, 'back');
+    });
+
+    it('names the page the tab is on with every result', async () => {
+      approveSite();
+      const result = await runDesktopBrowserCommand(
+        request('browser_click', { selector: '#go' }),
+        context(vi.fn(async () => ({ success: true }))),
+      );
+      expect(result.ok).toBe(true);
+      expect(result.value).toMatchObject({ tabUrl: `${SITE}/page` });
+    });
   });
 });

@@ -3082,8 +3082,14 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
   }
 }
 
+/**
+ * The tabs, with `active` marking the one a page tool with no tab named acts
+ * on. That is resolveBrowserToolTabId's choice, not simply the focused window's
+ * tab, or the desktop would check one tab while the command acted on another.
+ */
 async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
   const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const target = await resolveBrowserToolTabId(undefined);
   const tabs = await chrome.tabs.query({});
   return tabs
     .filter((tab) => isWebTab(tab) && !tab.incognito)
@@ -3097,7 +3103,7 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
       tabId: tab.id as number,
       title: tab.title ?? '',
       url: tab.url as string,
-      active: tab.id === focused?.id,
+      active: tab.id === target,
     }));
 }
 
@@ -3152,6 +3158,14 @@ async function pollDesktopBrowserCommands(): Promise<void> {
           })) as unknown as Record<string, unknown>,
         navigate: async (tabId, url) => {
           await chrome.tabs.update(tabId, { url });
+          // The address after any redirect is only known once the load ends,
+          // and the website rules are checked against that address.
+          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
+          while (Date.now() < deadline) {
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.status === 'complete' && !tab.pendingUrl) return;
+            await sleep(100);
+          }
         },
         history: async (tabId, direction) => {
           const before = (await chrome.tabs.get(tabId)).url;
@@ -4445,7 +4459,11 @@ async function handleMessageAsync(
         return { success: false, error: 'START_DOWNLOAD: url is required' } as ExtensionResponse;
       }
       try {
-        const record = await startBrowserToolDownload(downloadTabId, downloadMsg.url);
+        const record = await startBrowserToolDownload(
+          downloadTabId,
+          downloadMsg.url,
+          (message as { siteRules?: { allow: string[]; deny: string[] } }).siteRules,
+        );
         return { success: true, download: record } as ExtensionResponse;
       } catch (error) {
         return { success: false, error: errorText(error) } as ExtensionResponse;

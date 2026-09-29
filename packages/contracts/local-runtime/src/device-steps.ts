@@ -496,15 +496,41 @@ export function declarationForHost(
   };
 }
 
+/**
+ * JSON with every character outside printable ASCII written as a \u escape.
+ * A header value is a byte string, so a granted folder named ~/文档 or a device
+ * named in another script made the browser refuse the whole chat request.
+ * JSON.parse reads the escapes back unchanged.
+ */
+function headerSafeJson(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[\u007f-\uffff]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/**
+ * The header a desktop-hosted page sends. It fits the length the server reads:
+ * granted folders are dropped from the end, never the whole declaration, so a
+ * long folder list costs the last folders rather than every device tool.
+ */
 export function encodeDesktopHostDeclaration(declaration: DesktopHostDeclaration): string {
-  return JSON.stringify({
-    deviceId: declaration.deviceId,
-    deviceName: declaration.deviceName,
-    platform: declaration.platform,
-    appVersion: declaration.appVersion,
-    capabilities: declaration.capabilities,
-    roots: declaration.roots.slice(0, MAX_DEVICE_STEP_ROOTS),
-  });
+  const encode = (roots: readonly DeviceStepRoot[]) =>
+    headerSafeJson({
+      deviceId: declaration.deviceId,
+      deviceName: declaration.deviceName,
+      platform: declaration.platform,
+      appVersion: declaration.appVersion,
+      capabilities: declaration.capabilities,
+      roots,
+    });
+  const roots = declaration.roots.slice(0, MAX_DEVICE_STEP_ROOTS);
+  let encoded = encode(roots);
+  while (encoded.length > MAX_DEVICE_HOST_HEADER_LENGTH && roots.length > 0) {
+    roots.pop();
+    encoded = encode(roots);
+  }
+  return encoded;
 }
 
 /**

@@ -1336,6 +1336,8 @@ export type ProcessedRequest = {
   };
   /** §24: the sources and site restriction this research run was given. */
   webSearchDomainPolicy?: ResearchDomainPolicy;
+  /** The workspace's website rules, for the pages a paired device browser opens. */
+  deviceWebDomainPolicy?: ResearchDomainPolicy;
   researchSources?: {
     files: boolean;
     allowDomains: string[];
@@ -4241,8 +4243,12 @@ export async function processRequest(
     chatRequest.web_search = false;
     chatRequest.web_fetch = false;
   }
+  // The paired browser on a desktop is bound by the same website rules as
+  // web search and fetch, so a turn that may drive it reads them too.
+  const drivesDeviceBrowser =
+    deviceHost?.capabilities.some((capability) => capability.startsWith('browser.')) === true;
   const workspaceWebDomainPolicy =
-    chatRequest.web_search || chatRequest.web_fetch || researchMode
+    chatRequest.web_search || chatRequest.web_fetch || researchMode || drivesDeviceBrowser
       ? await scopedDbPromise.then((scoped) =>
           readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
         )
@@ -5541,6 +5547,9 @@ export async function processRequest(
     requestId,
     chatSurface,
     ...(deviceHost ? { deviceHost } : {}),
+    ...(deviceHost && workspaceWebDomainPolicy
+      ? { deviceWebDomainPolicy: workspaceWebDomainPolicy }
+      : {}),
     organizationId,
     zeroDataRetentionOnly,
     decisionScope,

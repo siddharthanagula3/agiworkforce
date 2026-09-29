@@ -464,6 +464,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
       requestId,
       summary: readString(params, 'summary') ?? 'The agent needs approval to continue.',
       detail: readString(params, 'detail') ?? '',
+      ...readQuestion(params['question']),
     });
     return;
   }
@@ -647,6 +648,7 @@ function queueAccountSync(server: RunningServer): Promise<void> {
       const outcome = await reconcileDeveloperAccount(
         (method, params, timeoutMs) => request(server, method, params, timeoutMs),
         bridge,
+        shellSignedCliIn(),
       );
       accountSyncError = null;
       recordDesktopEvent({ domain: 'sync', outcome: 'ok' });
@@ -1148,6 +1150,17 @@ export async function interruptDeveloperTurn(
   return true;
 }
 
+/** A multiple-choice question the agent asked, carried to the page intact. */
+function readQuestion(value: unknown): { question?: { question: string; options: string[] } } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const question = typeof record['question'] === 'string' ? record['question'] : null;
+  const options = Array.isArray(record['options'])
+    ? record['options'].filter((option): option is string => typeof option === 'string')
+    : [];
+  return question ? { question: { question, options } } : {};
+}
+
 export async function answerDeveloperApproval(answer: DeveloperApprovalAnswer): Promise<boolean> {
   const root = requireRoot(answer.rootId);
   const server = await readyServer(root);
@@ -1156,6 +1169,7 @@ export async function answerDeveloperApproval(answer: DeveloperApprovalAnswer): 
     turnId: answer.turnId,
     requestId: answer.requestId,
     decision: answer.approved ? 'approved' : 'denied',
+    ...(answer.note ? { note: answer.note } : {}),
   });
   emit(answer.rootId, {
     type: 'approval-answered',

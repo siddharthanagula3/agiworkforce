@@ -12,6 +12,12 @@ const mocks = vi.hoisted(() => ({
   recordResearchReportSettledCost: vi.fn(),
   enqueueJob: vi.fn(),
   fireEventTriggerJob: vi.fn(),
+  sendRelayRevocation: vi.fn(),
+}));
+
+vi.mock('@/lib/device-steps/device-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/device-steps/device-registry')>()),
+  sendRelayRevocation: mocks.sendRelayRevocation,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -302,6 +308,52 @@ describe('file-processing and research settlement', () => {
 });
 
 describe('the registry', () => {
+  describe('the relay revoke retry', () => {
+    const handler = () => BACKGROUND_JOB_HANDLERS['webhooks.signaling-device-revoke']!;
+    const payload = {
+      deviceId: 'device-1',
+      reason: 'unlinked',
+      revokedAt: '2026-09-29T10:00:00.000Z',
+    };
+    const withRegistry = (rows: unknown[]) => ({
+      ...context(payload),
+      db: { query: vi.fn(async () => rows) } as unknown as DatabaseAdapter,
+    });
+
+    it('retries until the signaling relay takes it', async () => {
+      mocks.sendRelayRevocation.mockResolvedValueOnce({
+        configured: true,
+        reachable: false,
+        closed: null,
+      });
+      await expect(handler()(withRegistry([]))).rejects.toThrow(/did not take/);
+
+      mocks.sendRelayRevocation.mockResolvedValueOnce({
+        configured: true,
+        reachable: true,
+        closed: 2,
+      });
+      await expect(handler()(withRegistry([]))).resolves.toEqual({
+        deviceId: 'device-1',
+        closed: 2,
+      });
+      expect(mocks.sendRelayRevocation).toHaveBeenLastCalledWith('device-1', 'unlinked');
+    });
+
+    it('leaves a device re-paired since the revocation alone', async () => {
+      mocks.sendRelayRevocation.mockClear();
+      await expect(
+        handler()(
+          withRegistry([{ remote_enabled: false, last_seen_at: '2026-09-29T11:00:00.000Z' }]),
+        ),
+      ).resolves.toMatchObject({ skipped: expect.any(String) });
+      await expect(
+        handler()(withRegistry([{ remote_enabled: true, last_seen_at: null }])),
+      ).resolves.toMatchObject({ skipped: expect.any(String) });
+      expect(mocks.sendRelayRevocation).not.toHaveBeenCalled();
+    });
+  });
+
   it('registers a handler for every kind a producer can enqueue', () => {
     expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(
       [
@@ -317,6 +369,7 @@ describe('the registry', () => {
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',
         'webhooks.developer-delivery',
+        'webhooks.signaling-device-revoke',
       ].sort(),
     );
   });

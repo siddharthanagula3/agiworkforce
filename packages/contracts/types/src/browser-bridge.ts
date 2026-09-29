@@ -255,6 +255,12 @@ export interface BrowserCommandRequest {
   id: string;
   command: BrowserCommand;
   args: Record<string, unknown>;
+  /**
+   * The account's workspace website rules. The extension holds the tab the
+   * command acts on, before and after, and any download's final address to
+   * them, and answers with the tab's address so the desktop can check again.
+   */
+  siteRules?: { allow: string[]; deny: string[] };
 }
 
 export interface BrowserCommandResult {

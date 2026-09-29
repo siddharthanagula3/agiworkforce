@@ -28,6 +28,25 @@ function argValue(prefix: string): string {
   return match ? match.slice(prefix.length) : '';
 }
 
+/**
+ * A link that opened the app arrives when the page loads, often before the
+ * page has hydrated and subscribed. Delivered then, it was dropped and the app
+ * opened on its home page instead of the chat or session the link named, so
+ * links wait here for the first subscriber.
+ */
+const MAX_PENDING_DEEP_LINKS = 8;
+const pendingDeepLinks: string[] = [];
+const deepLinkListeners = new Set<(url: string) => void>();
+ipcRenderer.on(ELECTRON_IPC_CHANNELS.deepLink, (_event: unknown, url: unknown) => {
+  if (typeof url !== 'string') return;
+  if (deepLinkListeners.size === 0) {
+    pendingDeepLinks.push(url);
+    if (pendingDeepLinks.length > MAX_PENDING_DEEP_LINKS) pendingDeepLinks.shift();
+    return;
+  }
+  for (const listener of deepLinkListeners) listener(url);
+});
+
 const bridgeCommands = new Set<string>(ELECTRON_BRIDGE_COMMANDS);
 
 const agiHost: ElectronHostBridge = {
@@ -55,12 +74,10 @@ const agiHost: ElectronHostBridge = {
   },
 
   onDeepLink(callback: (url: string) => void): () => void {
-    const listener = (_event: unknown, url: unknown) => {
-      if (typeof url === 'string') callback(url);
-    };
-    ipcRenderer.on(ELECTRON_IPC_CHANNELS.deepLink, listener);
+    deepLinkListeners.add(callback);
+    for (const url of pendingDeepLinks.splice(0)) callback(url);
     return () => {
-      ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.deepLink, listener);
+      deepLinkListeners.delete(callback);
     };
   },
 

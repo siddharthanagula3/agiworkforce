@@ -103,6 +103,7 @@ export const JOB_KINDS = {
   'data-export.build-archive': 'data-export',
   'data-export.expire-archive': 'data-export',
   'email.data-export-ready': 'email',
+  'webhooks.signaling-device-revoke': 'webhooks',
 } as const satisfies Record<string, JobQueueName>;
 
 export type JobKind = keyof typeof JOB_KINDS;

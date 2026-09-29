@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  DEVICE_HEARTBEAT_INTERVAL_MS,
+  deviceHeartbeatIntervalMs,
   DeviceHeartbeatRequestSchema,
   type DeviceHeartbeatResponse,
 } from '@agiworkforce/cloud-contracts';
@@ -18,6 +18,9 @@ import { notifyNewDeviceRegistered } from '@/lib/services/account-activity-notif
 
 export const runtime = 'nodejs';
 
+// remote_enabled only ever falls here. "Stop remote work" turns it off, and a
+// heartbeat that reports the build can take remote work must not turn it back
+// on within minutes; pairing from the device again is what turns it on.
 const UPSERT = `
   insert into public.device_registrations
     (user_id, organization_id, surface, install_id, name, os, os_version, architecture,
@@ -37,7 +40,7 @@ const UPSERT = `
     computer_use_available = excluded.computer_use_available,
     local_models_available = excluded.local_models_available,
     local_mcp_available = excluded.local_mcp_available,
-    remote_enabled = excluded.remote_enabled,
+    remote_enabled = public.device_registrations.remote_enabled and excluded.remote_enabled,
     credential_family_id = coalesce(excluded.credential_family_id, public.device_registrations.credential_family_id),
     identity_session_id = coalesce(excluded.identity_session_id, public.device_registrations.identity_session_id),
     last_seen_at = now(),
@@ -94,7 +97,7 @@ async function handleHeartbeat(request: NextRequest): Promise<NextResponse> {
 
   const body: DeviceHeartbeatResponse = {
     deviceId,
-    nextHeartbeatInMs: DEVICE_HEARTBEAT_INTERVAL_MS,
+    nextHeartbeatInMs: deviceHeartbeatIntervalMs(heartbeat.surface),
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }

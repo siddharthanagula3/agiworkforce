@@ -130,6 +130,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
 
+  // The desktop starting a pairing is the user taking remote work back on for
+  // this device after a "Stop remote work"; nothing else re-enables it.
+  if (deviceId && initiator === 'desktop') {
+    await db.execute(
+      `update device_registrations
+          set remote_enabled = true, updated_at = now()
+        where id = $1 and user_id = $2 and not remote_enabled`,
+      [deviceId, userId],
+    );
+  }
+
   const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
 
   await recordWorkspaceAuditEvent(db, request, {

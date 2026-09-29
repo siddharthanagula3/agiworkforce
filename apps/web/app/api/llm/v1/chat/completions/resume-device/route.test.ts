@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   release: vi.fn(),
   providerStarted: vi.fn(),
   finalize: vi.fn(),
+  workspaceControls: vi.fn(),
 }));
 
 const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
@@ -44,6 +45,7 @@ vi.mock('../lib/turn-slot', async (importOriginal) => ({
 }));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  resolveWorkspaceControlsForRequest: mocks.workspaceControls,
   buildManagedComputeGateResponse: mocks.managedCompute,
   buildOrganizationPolicyGateResponse: mocks.orgPolicy,
   buildSpendLimitGateResponse: mocks.spendLimit,
@@ -241,6 +243,7 @@ beforeEach(() => {
   mocks.claim.mockResolvedValue(claimed());
   mocks.release.mockResolvedValue(undefined);
   mocks.processRequest.mockResolvedValue(processed());
+  mocks.workspaceControls.mockResolvedValue({ ok: true, controls: null });
   mocks.permissions.mockResolvedValue({ isConnectorToolDenied: () => false });
   mocks.operatorTools.mockResolvedValue([]);
   mocks.connectorTools.mockResolvedValue([]);
@@ -518,5 +521,72 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
     expect(response.status).toBe(401);
     expect(mocks.turnSlot).not.toHaveBeenCalled();
     expect(mocks.claim).not.toHaveBeenCalled();
+  });
+
+  describe('keeps the turn under the rules it started with', () => {
+    it('revalidates the resumed request under the workspace controls', async () => {
+      const controls = { featureAccess: { 'computer.use': false } };
+      mocks.workspaceControls.mockResolvedValue({ ok: true, controls });
+
+      const response = await POST(resume(resumeBody()));
+      await response.text();
+
+      expect(mocks.processRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+    });
+
+    it('releases the device step when the workspace controls refuse the resume', async () => {
+      mocks.workspaceControls.mockResolvedValue({
+        ok: false,
+        response: new Response(null, { status: 403 }),
+      });
+
+      const response = await POST(resume(resumeBody()));
+
+      expect(response.status).toBe(403);
+      expect(mocks.processRequest).not.toHaveBeenCalled();
+      expect(mocks.release).toHaveBeenCalled();
+    });
+
+    it('offers no connector tools when the chat switched connectors off', async () => {
+      mocks.processRequest.mockResolvedValue({
+        ...processed(),
+        chatRequest: { ...processed().chatRequest, connector_tools_enabled: false },
+      });
+
+      const response = await POST(resume(resumeBody()));
+      await response.text();
+
+      expect(mocks.connectorTools).not.toHaveBeenCalled();
+    });
+
+    it('denies a connector this chat turned off and asks for a saved allow in a temporary chat', async () => {
+      mocks.permissions.mockResolvedValue({
+        entries: [],
+        isConnectorToolDenied: () => false,
+        isDenied: () => false,
+        levelFor: () => 'allow',
+        levelForConnectorTool: () => 'allow',
+      });
+      mocks.processRequest.mockResolvedValue({
+        ...processed(),
+        conversationIsTemporary: true,
+        chatRequest: { ...processed().chatRequest, disabled_connector_ids: ['slack'] },
+      });
+
+      const response = await POST(resume(resumeBody()));
+      await response.text();
+
+      const permissions = (
+        mocks.runTurn.mock.calls[0]![0] as {
+          connectorPermissions: {
+            isConnectorToolDenied: (connector: string, tool: string) => boolean;
+            levelFor: (name: string) => string | undefined;
+          };
+        }
+      ).connectorPermissions;
+      expect(permissions.isConnectorToolDenied('slack', 'post_message')).toBe(true);
+      expect(permissions.isConnectorToolDenied('github', 'list_issues')).toBe(false);
+      expect(permissions.levelFor('mcp__github__list_issues')).toBe('ask');
+    });
   });
 });

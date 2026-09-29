@@ -22,6 +22,8 @@ const CLAIM_FAILURES: Readonly<Record<string, string>> = {
 const CLAIM_FAILED =
   'This browser could not connect to your computer. Make a new link and try again.';
 const CONNECTION_LOST = 'The connection to your computer ended. Make a new link to connect again.';
+const DEVICE_UNLINKED =
+  'That computer was unlinked from your account, so it no longer takes tasks. Link it again from the computer to send it work.';
 const RECEIPT_TIMEOUT_MS = 8_000;
 const MAX_SEND_ATTEMPTS = 3;
 const NOT_CONFIRMED =
@@ -158,6 +160,11 @@ export async function connectRemoteDispatch(
         return;
       case 'peer_left':
         handlers.onAway();
+        return;
+      case 'error':
+        // The relay names a revoked device before it closes the socket; the
+        // close that follows would otherwise say only that the link dropped.
+        if (event.error === 'device_revoked') end(DEVICE_UNLINKED);
         return;
       case 'session_expired':
       case 'terminated':
