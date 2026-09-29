@@ -4387,6 +4387,7 @@ fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEv
             change: match change.kind {
                 ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
                 ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
+                ManagedSessionFileChangeKind::Deleted => AgentEventFileChangeKind::Deleted,
             },
             reason: change.reason.as_ref().map(ChangeReason::describe),
             notices: change
