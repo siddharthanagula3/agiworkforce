@@ -108,6 +108,8 @@ jobs:
         # survive an upgrade plus rollback before publication; mobile releases
         # must reconcile the iOS privacy manifest with the Play data-safety
         # declaration and pass a device matrix before either store submission.
+        # Every tauri-action step in any workflow must follow a check-no-devtools
+        # step on the same build, and that build must not reach the inspector.
         #
         # Only the guard: check:script-tests, inside the operability chain
         # below, already runs check-release-gates.test.mjs, generate-sbom.test.mjs

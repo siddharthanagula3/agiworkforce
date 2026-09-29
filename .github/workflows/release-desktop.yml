@@ -457,6 +457,9 @@ jobs:
       - name: Build native messaging host sidecar
         run: pnpm --filter @agiworkforce/desktop run build:native-host
 
+      - name: Refuse a feature set that bundles the webview inspector
+        run: node apps/desktop/scripts/check-no-devtools.mjs
+
       - name: Build Tauri app
         # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
@@ -640,6 +643,9 @@ jobs:
             exit 1
           fi
           echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
+
+      - name: Refuse a feature set that bundles the webview inspector
+        run: node apps/desktop/scripts/check-no-devtools.mjs
 
       - name: Build, sign, notarize, and staple macOS bundles
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
