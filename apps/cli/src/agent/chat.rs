@@ -767,6 +767,13 @@ impl AgentSession {
         })
     }
 
+    pub(crate) fn offers_hosted_search(&self) -> bool {
+        self.privacy_mode == super::PrivacyMode::Managed
+            && crate::tier_cache::capability_allowed(crate::tier_cache::WEB_SEARCH_CAPABILITY)
+                == Some(true)
+            && crate::model_catalog::supports_web_search(&self.model)
+    }
+
     async fn project_conversation(&self) -> Option<String> {
         if self.privacy_mode != super::PrivacyMode::Managed {
             return None;
@@ -1133,7 +1140,9 @@ message -- revise and call `update_plan` again.\n\n",
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let mut tool_defs = self.effective_tool_definitions();
-        if search_turn && self.privacy_mode == super::PrivacyMode::Managed {
+        if self.privacy_mode == super::PrivacyMode::Managed
+            && (search_turn || self.offers_hosted_search())
+        {
             tool_defs.retain(|tool| tool.name != models::WEB_SEARCH_TOOL);
         }
         let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
@@ -2268,11 +2277,26 @@ impl TurnHost for TurnHostAdapter<'_> {
             );
         }
         let routing_profile = self.session.request_routing_profile();
+        let offer_search = self.session.offers_hosted_search();
         let completion = match phase {
             TurnPhase::First if self.search_turn => {
                 models::routed(routing_profile, models::searching(self.complete_first())).await
             }
+            TurnPhase::First if offer_search => {
+                models::routed(
+                    routing_profile,
+                    models::offering_search(self.complete_first()),
+                )
+                .await
+            }
             TurnPhase::First => models::routed(routing_profile, self.complete_first()).await,
+            TurnPhase::Continuation if offer_search => {
+                models::routed(
+                    routing_profile,
+                    models::offering_search(self.complete_continuation()),
+                )
+                .await
+            }
             TurnPhase::Continuation => {
                 models::routed(routing_profile, self.complete_continuation()).await
             }
