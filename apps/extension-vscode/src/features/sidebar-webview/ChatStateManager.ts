@@ -1,5 +1,11 @@
 import * as path from 'node:path';
-import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
+import {
+  applyAgentActivityEvent,
+  createMessageQueue,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type MessageQueue,
+} from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import {
   formatRelativeTime,
@@ -32,6 +38,7 @@ import {
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
+  type AgentEventEnvelope,
   type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
@@ -802,6 +809,7 @@ export class ChatStateManager {
     isUiSettled: () => boolean;
   };
   private _cancelRequested = false;
+  private _agentActivity?: AgentActivityState;
   private _conversationEpoch = 0;
 
   conversationEpoch(): number {
@@ -4072,6 +4080,26 @@ export class ChatStateManager {
     }
   }
 
+  private _foldAgentEvent(envelope: AgentEventEnvelope): boolean {
+    const previous = this._agentActivity;
+    const next = applyAgentActivityEvent(previous, envelope);
+    this._agentActivity = next;
+    return next !== previous;
+  }
+
+  private _activityEntry<K extends 'progress' | 'tool'>(
+    kind: K,
+    id: string,
+  ): Extract<AgentActivityEntry, { kind: K }> | undefined {
+    return this._agentActivity?.entries.find(
+      (entry): entry is Extract<AgentActivityEntry, { kind: K }> =>
+        entry.kind === kind &&
+        (entry.kind === 'tool'
+          ? entry.toolCallId === id
+          : entry.kind === 'progress' && entry.progressId === id),
+    );
+  }
+
   private async _handleRuntimeEvent(
     runtime: LocalRuntimeClient,
     event: LocalRuntimeEvent,
@@ -4097,6 +4125,17 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'agent_event') {
+      this._foldAgentEvent(event.envelope);
+      return;
+    }
+    if (
+      'envelope' in event &&
+      event.envelope !== undefined &&
+      !this._foldAgentEvent(event.envelope)
+    ) {
+      return;
+    }
     if (event.type === 'source_list') {
       this._post({
         type: 'sourceList',
@@ -4105,13 +4144,15 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'progress_update') {
+      const entry = this._activityEntry('progress', event.progressId);
+      const detail = entry?.detail ?? event.detail;
       this._post({
         type: 'progressUpdate',
         payload: {
           progressId: event.progressId,
-          summary: event.summary,
-          ...(event.detail === undefined ? {} : { detail: event.detail }),
-          status: event.status,
+          summary: entry?.summary ?? event.summary,
+          ...(detail === undefined ? {} : { detail }),
+          status: entry?.status === 'cancelled' ? 'failed' : (entry?.status ?? event.status),
         },
       });
       return;
@@ -4122,26 +4163,29 @@ export class ChatStateManager {
         this._post({ type: 'planUpdate', payload: plan });
         return;
       }
+      const entry = this._activityEntry('tool', event.toolCallId);
       this._post({
         type: 'toolCallStart',
         payload: {
           toolUseId: event.toolCallId,
-          name: event.name,
-          category: event.category,
-          summary: event.summary,
-          input: event.input,
+          name: entry?.name ?? event.name,
+          category: entry?.category ?? event.category,
+          summary: entry?.summary ?? event.summary,
+          input: entry?.input ?? event.input,
         },
       });
       return;
     }
     if (event.type === 'tool_execution_end') {
+      const entry = this._activityEntry('tool', event.toolCallId);
+      const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
-          output: event.output,
-          isError: event.isError,
-          ...(event.elapsedMs === undefined ? {} : { elapsedMs: event.elapsedMs }),
+          output: entry?.output ?? event.output,
+          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
       return;
