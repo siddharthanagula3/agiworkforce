@@ -33,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
 const { DELETE, GET } = await import('./route');
 
 const TOKEN = 'a'.repeat(24);
+const ORG = '11111111-1111-4111-8111-111111111111';
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 
 function context(token = TOKEN) {
@@ -109,6 +110,24 @@ describe('DELETE /api/share/[token], revocation', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]![5]).toBe('/api/share/[token]');
     expect(JSON.stringify(rows[0])).not.toContain(TOKEN);
+  });
+
+  it('records the revocation in the active workspace audit log, as creation does', async () => {
+    await writeAuditRowsForReal();
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('user_settings') ? [{ organization_id: ORG }] : [{ id: 'share-1' }],
+    );
+    mocks.execute.mockResolvedValue(1);
+
+    await del();
+
+    const workspaceRows = mocks.query.mock.calls
+      .filter(([sql]) => String(sql).includes('record_enterprise_audit_event'))
+      .map(([, params]) => params as unknown[]);
+    expect(workspaceRows).toHaveLength(1);
+    expect(workspaceRows[0]![0]).toBe(ORG);
+    expect(workspaceRows[0]![3]).toBe('share_link_revoked');
+    expect(JSON.stringify(workspaceRows[0])).not.toContain(TOKEN);
   });
 
   it('does not confirm a revocation to someone who only holds the link', async () => {
