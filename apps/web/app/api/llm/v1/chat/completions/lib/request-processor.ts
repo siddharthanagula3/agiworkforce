@@ -336,6 +336,9 @@ import {
   GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE,
   GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
   GOOGLE_USER_DATA_NO_MODEL_MESSAGE,
+  isGoogleUserDataConnector,
+  markConversationGoogleUserData,
+  mcpContextConnectorIds,
   resolveGoogleUserDataTurn,
   type GoogleUserDataTurnReason,
 } from '@/lib/connectors/google-user-data';
@@ -2862,6 +2865,9 @@ export async function processRequest(
           Boolean(getTierPolicy(subscription.plan_tier).allowMCP),
         disabledConnectorIds: chatRequest.disabled_connector_ids,
         researchConnectorIds: chatRequest.research_sources?.connectors,
+        contextConnectorIds: chatRequest.mcp_context
+          ? mcpContextConnectorIds(chatRequest.mcp_context)
+          : undefined,
       }),
     )
     .catch((error: unknown): GoogleUserDataTurnReason => {
@@ -3388,6 +3394,16 @@ export async function processRequest(
 
   if (chatRequest.mcp_context) {
     try {
+      if (
+        chatRequest.conversation_id &&
+        mcpContextConnectorIds(chatRequest.mcp_context).some(isGoogleUserDataConnector)
+      ) {
+        await markConversationGoogleUserData(
+          (await scopedDbPromise).db,
+          userId,
+          chatRequest.conversation_id,
+        );
+      }
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
       if (context) {
         chatRequest.messages.unshift({ role: 'system', content: context });

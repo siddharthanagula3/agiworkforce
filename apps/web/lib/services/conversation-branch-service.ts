@@ -220,7 +220,9 @@ export async function forkConversation(
     const existing = await findIdempotentBranch(tx, userId, input.requestId);
     if (existing) return existing;
 
-    const [source] = await tx.query<ManagedCloudConversationWire>(
+    const [source] = await tx.query<
+      ManagedCloudConversationWire & { google_user_data_at: string | Date | null }
+    >(
       `select id,
               title,
               model,
@@ -229,6 +231,7 @@ export async function forkConversation(
               starred,
               archived,
               is_temporary,
+              google_user_data_at,
               created_at,
               updated_at
          from public.web_conversations
@@ -275,10 +278,13 @@ export async function forkConversation(
       throw createError.validation('This conversation already has the maximum number of forks');
     }
 
+    // A branch carries the source's messages, so it carries the source's Google
+    // user data marker too: without it the copied Gmail or Drive text would
+    // route like a chat that never held any.
     const [target] = await tx.query<ManagedCloudConversationWire>(
       `insert into public.web_conversations
-         (id, user_id, title, model, project_id, is_temporary)
-       values ($1, $2, $3, $4, $5, $6)
+         (id, user_id, title, model, project_id, is_temporary, google_user_data_at)
+       values ($1, $2, $3, $4, $5, $6, $7::timestamptz)
        on conflict (id) do nothing
        returning id,
                  title,
@@ -297,6 +303,7 @@ export async function forkConversation(
         source.model,
         source.project_id,
         source.is_temporary,
+        source.google_user_data_at ?? null,
       ],
     );
 

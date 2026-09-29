@@ -15,6 +15,12 @@ const mocks = vi.hoisted(() => ({
   scopedQuery: vi.fn(),
   reserveManagedUsage: vi.fn(),
   managedProviderIds: vi.fn<() => Set<string> | null>(() => null),
+  loadMcpContext: vi.fn(),
+}));
+
+vi.mock('@/lib/connectors/mcp-context-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/mcp-context-service')>()),
+  loadSelectedMcpContext: mocks.loadMcpContext,
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
@@ -155,6 +161,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.managedProviderIds.mockReturnValue(null);
+  mocks.loadMcpContext.mockResolvedValue('Selected context');
   mocks.enforceSafety.mockResolvedValue({ enabled: false, allowed: true });
   mocks.hydrate.mockResolvedValue(undefined);
   mocks.loadPolicy.mockResolvedValue({
@@ -274,6 +281,31 @@ describe('Google user data only reaches providers that keep inputs out of traini
 
     expect(status).toBe(403);
     expect(body.error.code).toBe('model_may_train');
+  });
+
+  it('treats Google MCP context the user selected like a Google tool call', async () => {
+    const { status, body } = await errorOf(
+      await run('google-mcp-context-explicit', trainingModel!, {
+        connector_tools_enabled: false,
+        mcp_context: { resources: [{ connectorId: 'google-drive', uri: 'drive://file/1' }] },
+      }),
+    );
+    expect(status).toBe(403);
+    expect(body.error.code).toBe('model_may_train');
+
+    const result = await run('google-mcp-context-auto', 'auto', {
+      conversation_id: CONVERSATION_ID,
+      connector_tools_enabled: false,
+      mcp_context: { prompt: { connectorId: 'gmail', name: 'summarize_inbox' } },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.googleUserData).toBe(true);
+    expect(modelKeepsInputsOutOfTraining(result.chatRequest.model)).toBe(true);
+    const marked = mocks.scopedQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('set google_user_data_at = now()'),
+    );
+    expect(marked?.[1]).toEqual([CONVERSATION_ID, 'user-pro']);
   });
 
   it('refuses with curated copy when no provider that keeps inputs out of training is available', async () => {

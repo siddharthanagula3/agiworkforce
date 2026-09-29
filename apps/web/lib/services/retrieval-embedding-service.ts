@@ -182,6 +182,12 @@ export interface MeteredEmbeddingInput {
    */
   operationKey: string;
   attribution?: UsageAttribution;
+  /**
+   * The texts carry, or may carry, Google user data, so only a provider that
+   * keeps inputs out of training may embed them, whatever the account's own
+   * training preference says.
+   */
+  forceNoTraining?: boolean;
 }
 
 export interface MeteredEmbeddingResult {
@@ -208,7 +214,7 @@ export async function embedTextsMetered(
 
   const managedProviders = listAvailableManagedProviderIds();
   const route = resolveRetrievalEmbeddingRoute(
-    (await sideCallTrainingOptOut(input.db, input.userId))
+    input.forceNoTraining === true || (await sideCallTrainingOptOut(input.db, input.userId))
       ? noTrainingProviderIds(managedProviders)
       : managedProviders,
   );

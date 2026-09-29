@@ -25,6 +25,7 @@ import {
 } from '@agiworkforce/data-layer/search';
 import { DEFAULT_DATA_REGION, normaliseDataRegion } from '@agiworkforce/compliance';
 
+import { retrievalQueryMayCarryGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { logger } from '@/lib/logger';
 import { readOrganizationRegion } from '@/lib/server/data-region';
 import {
@@ -162,6 +163,7 @@ async function queryEmbedding(
       texts: [request.text.slice(0, MAX_QUERY_CHARS)],
       purpose: 'query',
       operationKey: `${scope.userId}:${kinds.join(',')}`,
+      forceNoTraining: await retrievalQueryMayCarryGoogleUserData(scope.db, scope.userId),
     });
     const vector = result.vectors[0];
     return vector

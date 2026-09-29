@@ -233,6 +233,36 @@ describe('Experiential Labs free-only chat route', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it('refuses when the account keeps its chats out of provider training', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('opted_out')
+        ? [{ opted_out: true }]
+        : [{ id: 'conversation', data_region: null }],
+    );
+
+    const response = await request();
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'model_may_train',
+        message: expect.stringContaining('Settings > Privacy'),
+      },
+    });
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the training setting cannot be read', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('opted_out')) throw new Error('connection reset');
+      return [{ id: 'conversation', data_region: null }];
+    });
+
+    expect((await request()).status).toBe(403);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it('refuses a retention policy this provider route cannot satisfy', async () => {
     mocks.retention.mockResolvedValue({ required: true });
     expect((await request()).status).toBe(403);

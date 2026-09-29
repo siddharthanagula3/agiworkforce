@@ -3,23 +3,44 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { GMAIL_CONNECTOR_ID } from '@/lib/connectors/gmail-actions';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
+import { directoryServerId } from '@/lib/connectors/mcp-directory-targets';
 import { logger } from '@/lib/logger';
 import { CONNECTOR_RECONNECT_TOOL_NAME, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 
 type GoogleUserDataDb = Pick<DatabaseAdapter, 'query'>;
 
 // Google API Services User Data Policy, Limited Use: data these connectors read
-// may only reach a model whose provider keeps inputs out of training.
+// may only reach a model whose provider keeps inputs out of training. Every
+// Google-owned connector belongs here; google-user-data.test.ts fails when the
+// directory, catalog or OAuth registry gains one that is missing.
 export const GOOGLE_USER_DATA_CONNECTOR_IDS: readonly string[] = [
   GMAIL_CONNECTOR_ID,
   'google-calendar',
   GOOGLE_DRIVE_CONNECTOR_ID,
   'google-contacts',
+  'google-sheets',
+  'google-analytics',
+  'youtube',
+  'bigquery',
+  'gcp',
+  'google-compute-engine',
 ];
 
-const GOOGLE_USER_DATA_CONNECTOR_ID_SET: ReadonlySet<string> = new Set(
-  GOOGLE_USER_DATA_CONNECTOR_IDS,
-);
+const GOOGLE_USER_DATA_CONNECTOR_ID_SET: ReadonlySet<string> = new Set([
+  ...GOOGLE_USER_DATA_CONNECTOR_IDS,
+  ...GOOGLE_USER_DATA_CONNECTOR_IDS.map(directoryServerId),
+]);
+
+const GOOGLE_API_HOST_SUFFIXES = ['.googleapis.com', '.google.com', '.youtube.com'];
+
+export function isGoogleApiUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return GOOGLE_API_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  } catch {
+    return false;
+  }
+}
 
 export const GOOGLE_USER_DATA_TRIGGER_SOURCES: ReadonlySet<string> = new Set([
   'gmail',
@@ -34,6 +55,9 @@ export const GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE =
 
 export const GOOGLE_USER_DATA_NO_MODEL_MESSAGE =
   'This chat includes data from your Google account, and no model on your plan that keeps it out of training is available right now. Try again later.';
+
+export const GOOGLE_USER_DATA_MEMORY_REFUSAL =
+  'Not saved. This chat includes data from your Google account, and Memory does not keep facts drawn from Google data.';
 
 export const GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE =
   'This Google connector did not run because the chat could not be marked as holding Google data. Try again.';
@@ -91,31 +115,6 @@ export async function connectedGoogleUserDataConnectorIds(
       'Google connector state unreadable; treating every Google connector as connected',
     );
     return [...GOOGLE_USER_DATA_CONNECTOR_IDS];
-  }
-}
-
-export async function userHoldsGoogleUserDataConversation(
-  db: GoogleUserDataDb,
-  userId: string,
-): Promise<boolean> {
-  try {
-    const [row] = await db.query<{ holds: boolean }>(
-      `select exists (
-         select 1
-           from public.web_conversations
-          where user_id = $1
-            and google_user_data_at is not null
-            and deleted_at is null
-       ) as holds`,
-      [userId],
-    );
-    return row?.holds === true;
-  } catch (error) {
-    logger.warn(
-      { error, userId },
-      'Google data markers unreadable; treating past chats as holding Google data',
-    );
-    return true;
   }
 }
 
@@ -201,6 +200,7 @@ export interface GoogleUserDataTurnInput {
   connectorToolsEnabled: boolean;
   disabledConnectorIds: readonly string[] | undefined;
   researchConnectorIds: readonly string[] | undefined;
+  contextConnectorIds?: readonly string[] | undefined;
 }
 
 export type GoogleUserDataTurnReason = 'conversation' | 'connectors' | null;
@@ -224,8 +224,53 @@ export async function resolveGoogleUserDataTurn(
     return 'conversation';
   }
   if (input.researchConnectorIds?.some(isGoogleUserDataConnector)) return 'connectors';
+  if (input.contextConnectorIds?.some(isGoogleUserDataConnector)) return 'connectors';
   if (!input.connectorToolsEnabled) return null;
   const disabled = new Set(input.disabledConnectorIds ?? []);
   const connected = await connectedGoogleUserDataConnectorIds(db, userId);
   return connected.some((connectorId) => !disabled.has(connectorId)) ? 'connectors' : null;
+}
+
+/**
+ * SQL that is true when a memory row was not learned in a conversation holding
+ * Google user data. `sourceConversationId` is a text expression naming the
+ * row's source conversation; a memory with no recorded source stays eligible
+ * because nothing links it to one.
+ */
+export function memoryFreeOfGoogleUserDataSql(sourceConversationId: string): string {
+  return `not exists (
+    select 1
+      from public.web_conversations google_source
+     where google_source.id::text = ${sourceConversationId}
+       and google_source.google_user_data_at is not null
+  )`;
+}
+
+/**
+ * Whether a finished turn carried Google user data, for deciding if what it
+ * taught may be kept in Memory. Unreadable state counts as carrying it.
+ */
+export async function turnHoldsGoogleUserData(
+  db: GoogleUserDataDb,
+  userId: string,
+  turn: {
+    conversationId: string | null | undefined;
+    messages: readonly unknown[];
+    googleToolRan: boolean;
+  },
+): Promise<boolean> {
+  if (turn.googleToolRan || messagesCarryGoogleToolUse(turn.messages)) return true;
+  return turn.conversationId
+    ? conversationHoldsGoogleUserData(db, userId, turn.conversationId)
+    : false;
+}
+
+export function mcpContextConnectorIds(selection: {
+  prompt?: { connectorId: string } | undefined;
+  resources?: ReadonlyArray<{ connectorId: string }> | undefined;
+}): string[] {
+  return [
+    ...(selection.prompt ? [selection.prompt.connectorId] : []),
+    ...(selection.resources ?? []).map((resource) => resource.connectorId),
+  ];
 }
