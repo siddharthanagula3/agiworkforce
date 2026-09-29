@@ -26,6 +26,8 @@ jest.mock('expo-haptics', () => ({
 }));
 
 jest.mock('lucide-react-native', () => ({
+  Check: jest.fn().mockReturnValue(null),
+  Copy: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
   Share2: jest.fn().mockReturnValue(null),
 }));

@@ -171,7 +171,7 @@ describe('AgentActivityTimeline', () => {
     fireEvent.press(view.getByLabelText('Allow Install the document library'));
     fireEvent.press(view.getByLabelText('Deny Install the document library'));
 
-    expect(onResolveApproval).toHaveBeenNthCalledWith(1, 'shell-1', 'approved');
-    expect(onResolveApproval).toHaveBeenNthCalledWith(2, 'shell-1', 'rejected');
+    expect(onResolveApproval).toHaveBeenNthCalledWith(1, 'shell-1', 'approved', undefined);
+    expect(onResolveApproval).toHaveBeenNthCalledWith(2, 'shell-1', 'rejected', undefined);
   });
 });

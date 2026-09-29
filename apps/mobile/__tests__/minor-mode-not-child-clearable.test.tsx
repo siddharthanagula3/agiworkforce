@@ -33,9 +33,12 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: (props: Record<string, unknown>) => <View {...props} />,
+  };
+});
 
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
