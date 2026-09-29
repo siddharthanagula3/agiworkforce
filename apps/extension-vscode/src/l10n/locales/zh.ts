@@ -336,6 +336,8 @@ const zh = {
   'webview.resendMessage': '重新发送',
   'webview.resendMessageLabel': '重新发送这条消息',
   'webview.branchFromMessage': '分支',
+  'webview.branchFromAnswer': '从这里分支',
+  'webview.branchFromAnswerLabel': '开始一个新会话，保留到这条回答为止的对话',
   'webview.branchFromMessageLabel': '从这里开始一个新会话，并把这条消息放进输入框以便编辑',
   'localServers.running_other': '{provider} 正在运行 · {count} 个模型',
   'localServers.runningEmpty': '{provider} 正在运行，但未加载模型',

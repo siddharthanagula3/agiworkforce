@@ -200,18 +200,6 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S57.21: Memory tool.
-
-- Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`
-
 ## S57.22: Calendar tool.
 
 - Done when: The assistant can call a calendar tool to read or create events in the user's calendar.

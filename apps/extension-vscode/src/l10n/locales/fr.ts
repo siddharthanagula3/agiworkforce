@@ -565,6 +565,9 @@ const fr = {
   'webview.resendMessage': 'Renvoyer',
   'webview.resendMessageLabel': 'Renvoyer ce message',
   'webview.branchFromMessage': 'Créer une branche',
+  'webview.branchFromAnswer': 'Créer une branche ici',
+  'webview.branchFromAnswerLabel':
+    'Démarrer une nouvelle session qui garde la conversation jusqu’à cette réponse',
   'webview.branchFromMessageLabel':
     "Démarrer une nouvelle session à partir d'ici avec ce message prêt à modifier",
   'localServers.running_one': '{provider} est lancé · {count} modèle',
