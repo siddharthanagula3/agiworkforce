@@ -291,11 +291,8 @@ Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /agents create writes a markdown template (name, description, model, tools, maxTurns); there is no guided builder or preview, the user fills the file by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
 
 ## S4.35: Skills manager.
 
@@ -357,15 +354,3 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
-
-## S4.44: Help and feedback.
-
-- Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | surface-only |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`

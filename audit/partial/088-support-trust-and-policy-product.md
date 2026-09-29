@@ -37,43 +37,25 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S88.04: Report-a-bug flow.
-
-- Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
-
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S88.06: Feature request.
 
 - Done when: Users can submit a feature request from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S88.10: Service-status integration.
 
