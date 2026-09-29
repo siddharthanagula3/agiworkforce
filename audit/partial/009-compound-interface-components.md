@@ -55,7 +55,6 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 | web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The extension has no branch choice of its own; it works on whatever VS Code has checked out and can only switch to a cloud task's branch ("Bring the branch in"). | ui |
 
 Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
 
@@ -166,18 +165,6 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S9.23: Multi-step setup wizard.
-
-- Done when: A guided setup runs as ordered steps that collect the user's choices (name, model, sign-in) and saves them when it finishes.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The intro and the Get Started walkthrough explain steps and link to commands but collect no choices; add steps that sign in, pick a model and set autonomy inside the flow. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`
 
 ## S9.24: Split-pane container.
 
