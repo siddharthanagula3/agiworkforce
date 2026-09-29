@@ -257,8 +257,6 @@ pub fn validate_server_name(name: &str) -> Result<&str> {
     Ok(name)
 }
 
-/// Permission rules name a tool as `mcp__<server>__<tool>`, so a server name
-/// containing `__` would read as a different server and tool.
 pub fn ensure_no_rule_separator(name: &str) -> Result<()> {
     if name.contains("__") {
         bail!(
