@@ -6,40 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S59.04: Per-application permission.
-
-- Done when: The user can set allow/ask/deny per connected app (and per tool within it), and the runtime enforces it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Session approvals are scoped per MCP server tool, but VS Code has no standing per-app permission setting. | ui |
-
-Code: `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`
-
-## S59.05: Per-folder permission.
-
-- Done when: The agent can touch only folders the user granted, and the user grants or revokes each folder.
-- Wave: 3
-- Already works on: desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The criterion needs grant AND revoke. VS Code only relays the runtime's TrustDirectory/untrusted-workspace approval (a grant, approvalScope.ts:18; exec/tools/mod.rs:930-972); no VS Code control lists or revokes trusted folders. trust::revoke is reached only from the REPL /trust revoke\|/untrust (repl/registry.rs:494). remaining: 'Folders can be trusted from the approval prompt but not revoked from VS Code; add a trusted-folders setting with remove.' |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:18-18`
-
 ## S59.06: Per-domain permission.
 
 - Done when: The user can allow or block specific websites/domains the agent may act on or fetch, and it is enforced.
 - Wave: 3
-- Already works on: web, cli, chrome
+- Already works on: web, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Desktop cloud chats send web_search and web_fetch to the server, so the workspace site rules bind them. BYOK and local desktop turns attach the provider's hosted web_search and web_fetch in the Tauri client (server_tools.rs), which does not read the workspace lists; the client would have to withhold hosted search or pass the lists as allowed_domains or blocked_domains. The native browser gate still asks per command and reads no site rule. | local |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The runtime asks only for internal fetch destinations; no per-domain setting. | ui |
 
-Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
+Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`
