@@ -160,6 +160,15 @@ describe('POST /api/devices/heartbeat', () => {
     expect(values[16]).toBe('sess_shell');
   });
 
+  it('never turns remote work back on after the user stopped it', async () => {
+    await POST(heartbeat(CLI_BODY, 'Bearer developer-token-value'));
+
+    const sql = mocks.query.mock.calls[0]?.[0] as string;
+    expect(sql).toContain(
+      'remote_enabled = public.device_registrations.remote_enabled and excluded.remote_enabled',
+    );
+  });
+
   it('keeps a name the user chose over the one the client reports', async () => {
     await POST(heartbeat(CLI_BODY, 'Bearer developer-token-value'));
     const sql = mocks.query.mock.calls[0]?.[0] as string;
