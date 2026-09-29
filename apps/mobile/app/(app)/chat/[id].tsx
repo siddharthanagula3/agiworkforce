@@ -780,8 +780,6 @@ export default function ChatScreen() {
   );
 
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
 
   useEffect(() => {
     if (!conversation) return;
@@ -1691,9 +1689,7 @@ export default function ChatScreen() {
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
               mode={currentAppMode}
-              cloudJoined={waitlistJoined}
               cloudUnlocked={cloudUnlocked}
-              waitlistRank={waitlistRank}
               compact
               onTapLocal={conversationExecutionMode === 'cloud' ? handleTapLocalMode : undefined}
               onTapCloud={handleTapCloudMode}
