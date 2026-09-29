@@ -6,6 +6,12 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   recordWorkspaceAuditEvent: vi.fn(),
   featureGate: vi.fn(),
+  execute: vi.fn(),
+  requestingDevice: vi.fn(async () => null as string | null),
+}));
+
+vi.mock('@/lib/device-steps/requesting-device', () => ({
+  readRequestingDeviceId: mocks.requestingDevice,
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
@@ -23,7 +29,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: vi.fn(), execute: vi.fn() },
+    db: { query: vi.fn(), execute: mocks.execute },
     userId: 'user-1',
     organizationId: null,
   })),
@@ -126,4 +132,27 @@ describe('POST /api/pair/initiate audit trail', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['desktop', 1],
+    ['mobile', 0],
+  ] as const)(
+    'turns remote work back on for the device only when the %s starts the pairing',
+    async (initiator, updates) => {
+      mocks.requestingDevice.mockResolvedValueOnce('device-1');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify(signalingPayload()), { status: 200 })),
+      );
+
+      const response = await POST(pairRequest({ desktopId: DESKTOP_ID, initiator }));
+
+      expect(response.status).toBe(200);
+      const enables = mocks.execute.mock.calls.filter(([sql]) =>
+        String(sql).includes('set remote_enabled = true'),
+      );
+      expect(enables).toHaveLength(updates);
+      if (updates) expect(enables[0]![1]).toEqual(['device-1', 'user-1']);
+    },
+  );
 });
