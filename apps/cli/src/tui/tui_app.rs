@@ -3921,6 +3921,10 @@ enum SlashResult {
     RunCompact(String),
     RunLogin,
     RunLogout,
+    SendFeedback {
+        kind: crate::feedback::FeedbackKind,
+        text: String,
+    },
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
     RunDictate(String),
@@ -4332,9 +4336,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/logout" => SlashResult::RunLogout,
 
-        "/feedback" | "/bug" => {
-            SlashResult::SystemMessage("Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string())
-        }
+        "/feedback" | "/bug" => match crate::feedback::parse_feedback_command(cmd.as_str(), arg) {
+            Ok((kind, text)) => SlashResult::SendFeedback { kind, text },
+            Err(usage) => SlashResult::SystemMessage(usage),
+        },
 
         "/help" | "/h" | "/?" => {
             SlashResult::SystemMessage(crate::command_registry::format_command_help(
@@ -5021,6 +5026,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             crate::agent::PrivacyMode::Local => "Local",
                         }
                     ))
+                }
+                crate::claude_parity::ParityCommandResult::SendFeedback { kind, text } => {
+                    SlashResult::SendFeedback { kind, text }
                 }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
@@ -5852,13 +5860,26 @@ async fn run_event_loop(
                                     ),
                                 });
                             }
+                            SlashResult::SendFeedback { kind, text } => {
+                                let reply = crate::feedback::send_feedback(kind, &text).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: reply,
+                                });
+                            }
                             SlashResult::RunLogout => {
+                                let revoked =
+                                    crate::app_server::account::revoke_managed_sessions().await;
                                 let mut store = crate::auth::load_auth().unwrap_or_default();
                                 store.entries.clear();
                                 let _ = crate::auth::save_auth(&store);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: "Logged out from all providers.".to_string(),
+                                    text: if revoked {
+                                        "Logged out from all providers.".to_string()
+                                    } else {
+                                        "Logged out from all providers. AGI Cloud did not confirm the sign-out; the device session ends when it expires, or unlink it in Settings, Account, Linked devices.".to_string()
+                                    },
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {

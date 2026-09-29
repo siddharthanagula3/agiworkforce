@@ -27,6 +27,10 @@ pub enum ParityCommandResult {
         destination: PrivacyMode,
         provider: String,
     },
+    SendFeedback {
+        kind: crate::feedback::FeedbackKind,
+        text: String,
+    },
 }
 
 #[cfg(test)]
@@ -142,9 +146,10 @@ pub fn handle_shared_command(
         "/route" => ParityCommandResult::SystemMessage(session.routing_profile(arg)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
-        "/feedback" | "/bug" => ParityCommandResult::SystemMessage(
-            "Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string(),
-        ),
+        "/feedback" | "/bug" => match crate::feedback::parse_feedback_command(&command, arg) {
+            Ok((kind, text)) => ParityCommandResult::SendFeedback { kind, text },
+            Err(usage) => ParityCommandResult::SystemMessage(usage),
+        },
         "/focus" => ParityCommandResult::SystemMessage(
             "Focus mode is not implemented. Use /statusline to choose which status fields render."
                 .to_string(),

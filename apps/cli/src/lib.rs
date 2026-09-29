@@ -32,6 +32,7 @@ pub mod diagnostics_bundle;
 pub mod diff_model;
 pub mod doctor;
 pub mod errors;
+pub mod feedback;
 pub mod hex;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
