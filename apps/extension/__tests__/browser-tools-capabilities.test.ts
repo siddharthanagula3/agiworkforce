@@ -60,6 +60,7 @@ vi.stubGlobal('chrome', {
     search: vi.fn(() => Promise.resolve([])),
     show: vi.fn(),
     onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+    onCreated: { addListener: vi.fn(), removeListener: vi.fn() },
     cancel: vi.fn(() => Promise.resolve()),
     removeFile: vi.fn(() => Promise.resolve()),
     erase: vi.fn(() => Promise.resolve([])),
@@ -94,8 +95,13 @@ vi.stubGlobal('chrome', {
 });
 
 const { authorizeBrowserToolTab } = await import('../src/features/browser-tools/tabAuthority');
-const { resolveDownloadUrl, startBrowserToolDownload, listSessionDownloads, revealDownload } =
-  await import('../src/features/browser-tools/downloads');
+const {
+  resolveDownloadUrl,
+  startBrowserToolDownload,
+  listSessionDownloads,
+  revealDownload,
+  watchDownloadsStartedBy,
+} = await import('../src/features/browser-tools/downloads');
 const { recordConsoleEvent, readConsoleEntries, clearConsoleEntries } =
   await import('../src/features/browser-tools/consoleCapture');
 const { recordNetworkEvent, readNetworkEntries, clearNetworkEntries, summarizeRequestUrl } =
@@ -246,6 +252,20 @@ describe('downloads', () => {
       }),
     ).rejects.toThrow(/does not allow/);
     expect(chrome.downloads.download).not.toHaveBeenCalled();
+  });
+
+  it('holds a download a click started to the rules, and stops watching after', async () => {
+    vi.mocked(chrome.downloads.search).mockResolvedValue([
+      { id: 901, finalUrl: 'https://blocked.example/x.exe', state: 'in_progress' },
+    ] as never);
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] });
+    const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
+    (onCreated as (item: { id: number }) => void)({ id: 901 });
+
+    await vi.waitFor(() => expect(chrome.downloads.cancel).toHaveBeenCalledWith(901));
+    stop();
+    expect(chrome.downloads.onCreated.removeListener).toHaveBeenCalledWith(onCreated);
+    vi.mocked(chrome.downloads.search).mockResolvedValue([]);
   });
 
   it('refuses to reveal a download AGI did not start', async () => {
