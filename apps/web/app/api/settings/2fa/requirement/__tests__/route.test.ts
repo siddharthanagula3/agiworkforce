@@ -10,12 +10,43 @@ const mocks = vi.hoisted(() => ({
   isBlockedByMfaPolicy: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
-vi.mock('@/lib/mfa-policy-gate', () => ({ isBlockedByMfaPolicy: mocks.isBlockedByMfaPolicy }));
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
+vi.mock('@/lib/mfa-policy-gate', () => ({
+  MfaRequiredError: class MfaRequiredError extends Error {},
+  assertMfaPolicy: vi.fn(),
+  isMfaRequiredError: vi.fn(),
+  rememberMfaEnrollment: vi.fn(),
+  resolveMfaEnrolled: vi.fn(),
+  isBlockedByMfaPolicy: mocks.isBlockedByMfaPolicy,
+}));
 
 import { GET } from '../route';
 

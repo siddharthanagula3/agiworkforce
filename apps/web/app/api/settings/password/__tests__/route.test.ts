@@ -18,28 +18,83 @@ const mocks = vi.hoisted(() => ({
   logAuthFailure: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/app/api/settings/sessions/session-principal', () => ({
   resolveSessionsPrincipal: mocks.principal,
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityUser: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
   getIdentityProvider: () => ({
     getUser: mocks.getUser,
     verifyPassword: mocks.verifyPassword,
     setPassword: mocks.setPassword,
   }),
 }));
-vi.mock('@/lib/server/step-up-auth', () => ({ requireStepUp: mocks.requireStepUp }));
-vi.mock('@/lib/server/step-up/second-factor', () => ({ readSecondFactorStatus: mocks.factors }));
-vi.mock('@/lib/server/session-revocation', () => ({ revokeEveryOtherSession: mocks.revoke }));
+vi.mock('@/lib/server/step-up-auth', () => ({
+  STEP_UP_TOKEN_HEADER: 'x-step-up-token',
+  StepUpRequiredError: class StepUpRequiredError extends Error {},
+  isStepUpRequiredError: vi.fn(),
+  requireStepUp: mocks.requireStepUp,
+}));
+vi.mock('@/lib/server/step-up/second-factor', () => ({
+  stepUpLevelFor: vi.fn(),
+  readSecondFactorStatus: mocks.factors,
+}));
+vi.mock('@/lib/server/session-revocation', () => ({
+  listActiveIdentitySessions: vi.fn(),
+  revokeInBatches: vi.fn(),
+  revokeEveryOtherSession: mocks.revoke,
+}));
 vi.mock('@/lib/server/two-factor-security-events', () => ({
   announceTwoFactorChange: mocks.announce,
 }));
 vi.mock('@/lib/security-audit', () => ({
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  recordAuditEvent: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
   logAuthFailure: mocks.logAuthFailure,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),

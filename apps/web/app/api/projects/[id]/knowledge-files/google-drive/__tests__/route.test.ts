@@ -27,18 +27,79 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/server/object-storage', () => ({
+  ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
+  copyPrivateObjectIfUnchanged: vi.fn(),
+  deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
+  getObject: vi.fn(),
+  getObjectStream: vi.fn(),
+  getPresignedPrivateDownloadUrl: vi.fn(),
+  getPresignedPrivateUploadUrl: vi.fn(),
+  getPresignedUploadUrl: vi.fn(),
+  getPrivateObject: vi.fn(),
+  getPrivateObjectStream: vi.fn(),
+  headPrivateObject: vi.fn(),
+  isObjectStorageConfigured: vi.fn(),
+  objectKeyFromPublicUrl: vi.fn(),
+  objectKeyFromStorageUri: vi.fn(),
+  publicUrlForKey: vi.fn(),
+  putObject: vi.fn(),
   isPrivateObjectStorageConfigured: mocks.isPrivateObjectStorageConfigured,
   putPrivateObject: mocks.putPrivateObject,
 }));
-vi.mock('@/lib/secure-random', () => ({ secureFilenameSegment: () => 'abcdefghijklm' }));
+vi.mock('@/lib/secure-random', () => ({
+  SecureRandomUnavailableError: class SecureRandomUnavailableError extends Error {},
+  isSecureRandomAvailable: vi.fn(),
+  secureRandomFloat: vi.fn(),
+  secureRandomInt: vi.fn(),
+  secureToken: vi.fn(),
+  secureTokenHex: vi.fn(),
+  secureFilenameSegment: () => 'abcdefghijklm',
+}));
 vi.mock('@/lib/connectors/oauth-access', () => ({
+  disconnectConnectorOAuthGrant: vi.fn(),
   resolveConnectorAccessToken: mocks.resolveConnectorAccessToken,
 }));
 vi.mock('@/lib/connectors/google-drive-files', () => ({
@@ -47,9 +108,25 @@ vi.mock('@/lib/connectors/google-drive-files', () => ({
   downloadGoogleDriveFile: mocks.downloadGoogleDriveFile,
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
+  checkProjectKnowledgeCapacity: vi.fn(),
+  findOwnedProjectKnowledgeFile: vi.fn(),
+  findProjectKnowledgeFileByChecksum: vi.fn(),
+  isSchemaNotReady: vi.fn(),
+  projectKnowledgeResponse: vi.fn(),
+  readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: mocks.registerProjectKnowledgeFile,
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  assertUploadMatchesAuthorization: vi.fn(),
+  createLocalProjectKnowledgeUploadUrl: vi.fn(),
+  createProjectKnowledgeUploadAuthorization: vi.fn(),
+  getProjectKnowledgeObject: vi.fn(),
+  isProjectKnowledgeObjectStorageConfigured: vi.fn(),
+  isSealedProjectKnowledgeKey: vi.fn(),
+  sealProjectKnowledgeObject: vi.fn(),
+  sealedProjectKnowledgeKey: vi.fn(),
+  storeLocalProjectKnowledgeUpload: vi.fn(),
+  verifyProjectKnowledgeUploadAuthorization: vi.fn(),
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
 }));
 

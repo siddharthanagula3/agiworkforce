@@ -18,14 +18,66 @@ const mocks = vi.hoisted(() => ({
   neonDb: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.neonDb }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.neonDb,
+}));
 vi.mock('@/lib/services/organization-plugin-service', () => ({
+  isMissingOrganizationPluginSchema: vi.fn(),
+  listMemberOrganizationPlugins: vi.fn(),
+  listOrganizationPluginSkillFiles: vi.fn(),
+  listOrganizationSkillCompanions: vi.fn(),
+  readOrganizationPluginFile: vi.fn(),
+  updateMemberOrganizationPlugin: vi.fn(),
   listOrganizationPlugins: mocks.listOrganizationPlugins,
   listOrganizationPluginGroups: mocks.listOrganizationPluginGroups,
   publishOrganizationPlugins: mocks.publishOrganizationPlugins,
@@ -34,6 +86,7 @@ vi.mock('@/lib/services/organization-plugin-service', () => ({
 vi.mock('@/features/plugins/server/directory/archive-upload', async () => {
   const { NextResponse: Response } = await import('next/server');
   return {
+    invalidUploadResponse: vi.fn(),
     readArchiveUpload: mocks.readArchiveUpload,
     rejectedUploadResponse: (message: string) =>
       Response.json({ error: { code: 'PLUGIN_UPLOAD_REJECTED', message } }, { status: 422 }),

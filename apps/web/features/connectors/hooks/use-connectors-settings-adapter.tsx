@@ -2,6 +2,7 @@
 
 import { translateUiPlural } from '@agiworkforce/ui';
 import { useCapability } from '@agiworkforce/unified-chat';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import {
@@ -344,6 +345,7 @@ export function useConnectorsSettingsAdapter({
   onOpenCustomConnector,
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
+  const router = useRouter();
   const connectorsAllowed = useCapability('canUseConnectors');
   const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
   const [customConnectorPreset, setCustomConnectorPreset] = useState<CustomConnectorPreset | null>(
@@ -662,7 +664,7 @@ export function useConnectorsSettingsAdapter({
               ...prev.filter((c) => c.connectorId !== id),
               { connectorId: id, connectedAt },
             ]);
-            announceBankConnected();
+            announceBankConnected((href) => router.push(href));
           }
           return;
         }
@@ -708,7 +710,7 @@ export function useConnectorsSettingsAdapter({
         { connectorId: saved.connectorId, connectedAt: saved.connectedAt },
       ]);
     },
-    [authedHeaders, customConnectors, onOpenCustomConnector, startCustomConnectorSignIn],
+    [authedHeaders, customConnectors, onOpenCustomConnector, router, startCustomConnectorSignIn],
   );
 
   const setGithubPrReview = useCallback(

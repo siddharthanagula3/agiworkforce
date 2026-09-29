@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Gauge, X } from 'lucide-react-native';
 import {
   normalizeUsagePercentage,
@@ -85,7 +86,7 @@ export function UsageLimitBanner({
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{warning.resetLabel}</Text>
         ) : null}
       </View>
-      <Pressable
+      <PressableBox
         onPress={onGetMoreUsage}
         accessibilityRole="button"
         accessibilityLabel="Get more usage"
@@ -94,15 +95,15 @@ export function UsageLimitBanner({
         <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
           Get more usage
         </Text>
-      </Pressable>
-      <Pressable
+      </PressableBox>
+      <PressableBox
         onPress={onDismiss}
         accessibilityRole="button"
         accessibilityLabel="Dismiss usage warning"
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <X size={16} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

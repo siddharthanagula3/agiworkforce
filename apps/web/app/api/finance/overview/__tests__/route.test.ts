@@ -11,16 +11,54 @@ const mocks = vi.hoisted(() => ({
   readFinanceOverview: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: mocks.assertAccountActive }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  assertAccountActive: mocks.assertAccountActive,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/connectors/bank-accounts', () => ({
+  bankAccountsToolDefs: vi.fn(),
+  connectBankAccounts: vi.fn(),
+  createBankAccountsLinkToken: vi.fn(),
+  executeBankAccountsTool: vi.fn(),
+  isBankAccountsTool: vi.fn(),
+  readBankAccountOverview: vi.fn(),
+  removeBankAccountsItem: vi.fn(),
   bankAccountsUnavailableReason: mocks.bankAccountsUnavailableReason,
 }));
 vi.mock('@/lib/services/finance-overview-service', () => ({
+  financePeriodRange: vi.fn(),
+  summarizeFinanceTransactions: vi.fn(),
   readFinanceOverview: mocks.readFinanceOverview,
 }));
 

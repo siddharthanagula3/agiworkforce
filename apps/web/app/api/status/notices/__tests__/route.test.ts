@@ -5,6 +5,10 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({ readServiceNotices: vi.fn() }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/service-notices', () => ({

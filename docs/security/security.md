@@ -82,59 +82,68 @@ Every declared platform tool, and what each policy does with it. The rows are
 `PLATFORM_TOOL_METADATA` in `tool-metadata.ts` and the answers are
 `policyAutoApprovesTool`:
 
-| Tool                        | Under `ask_every_time` | Under `auto_approve_read_only` | Declared metadata (`tool-metadata.ts`)                                           |
-| --------------------------- | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| `web_search`                | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
-| `search_maps`               | asks                   | runs                           | read, reversible                                                                 |
-| `plan_itinerary`            | asks                   | runs                           | read, reversible                                                                 |
-| `compare_products`          | asks                   | runs                           | read, reversible                                                                 |
-| `url_fetch`                 | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
-| `execute_code`              | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
-| `write_file`                | asks                   | asks                           | write, not reversible                                                            |
-| `create_folder`             | asks                   | asks                           | write, reversible                                                                |
-| `list_files`                | asks                   | runs                           | read, reversible                                                                 |
-| `read_file`                 | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
-| `edit_file`                 | asks                   | asks                           | write, not reversible                                                            |
-| `create_office_file`        | asks                   | asks                           | write, reversible                                                                |
-| `generate_image`            | asks                   | asks                           | write, reversible                                                                |
-| `edit_image`                | asks                   | asks                           | write, reversible                                                                |
-| `skill`                     | asks                   | runs                           | read, reversible                                                                 |
-| `read_tool_result`          | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
-| `save_memory`               | asks                   | asks                           | write, reversible                                                                |
-| `search_memory`             | asks                   | runs                           | read, reversible                                                                 |
-| `forget_memory`             | asks                   | asks                           | delete, not reversible                                                           |
-| `search_files`              | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
-| `open_file`                 | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
-| `create_schedule`           | asks                   | asks                           | write, reversible                                                                |
-| `draft_plugin`              | asks                   | runs                           | read, reversible                                                                 |
-| `agi_work`                  | asks                   | asks                           | write, reversible                                                                |
-| `device_read_file`          | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_list_folder`        | asks                   | asks                           | read, reversible                                                                 |
-| `device_find_files`         | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_search_text`        | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_write_file`         | asks                   | asks                           | write, not reversible                                                            |
-| `device_edit_file`          | asks                   | asks                           | write, not reversible                                                            |
-| `device_run_command`        | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
-| `device_start_command`      | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
-| `device_command_output`     | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_command_stop`       | asks                   | asks                           | write, reversible                                                                |
-| `device_screenshot`         | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_zoom`               | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_move`               | asks                   | asks                           | write, reversible                                                                |
-| `device_scroll`             | asks                   | asks                           | write, reversible                                                                |
-| `device_wait`               | asks                   | asks                           | write, reversible                                                                |
-| `device_click`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_drag`               | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_type`               | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_key`                | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_browser_read_page`  | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_browser_screenshot` | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_browser_console`    | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_browser_network`    | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
-| `device_browser_navigate`   | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_browser_click`      | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_browser_type`       | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
-| `device_browser_download`   | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| Tool                           | Under `ask_every_time` | Under `auto_approve_read_only` | Declared metadata (`tool-metadata.ts`)                                           |
+| ------------------------------ | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `web_search`                   | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `search_maps`                  | asks                   | runs                           | read, reversible                                                                 |
+| `plan_itinerary`               | asks                   | runs                           | read, reversible                                                                 |
+| `compare_products`             | asks                   | runs                           | read, reversible                                                                 |
+| `url_fetch`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `execute_code`                 | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
+| `write_file`                   | asks                   | asks                           | write, not reversible                                                            |
+| `create_folder`                | asks                   | asks                           | write, reversible                                                                |
+| `list_files`                   | asks                   | runs                           | read, reversible                                                                 |
+| `read_file`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `edit_file`                    | asks                   | asks                           | write, not reversible                                                            |
+| `create_office_file`           | asks                   | asks                           | write, reversible                                                                |
+| `generate_image`               | asks                   | asks                           | write, reversible                                                                |
+| `edit_image`                   | asks                   | asks                           | write, reversible                                                                |
+| `skill`                        | asks                   | runs                           | read, reversible                                                                 |
+| `read_tool_result`             | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `save_memory`                  | asks                   | asks                           | write, reversible                                                                |
+| `search_memory`                | asks                   | runs                           | read, reversible                                                                 |
+| `forget_memory`                | asks                   | asks                           | delete, not reversible                                                           |
+| `search_files`                 | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `open_file`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `create_schedule`              | asks                   | asks                           | write, reversible                                                                |
+| `draft_plugin`                 | asks                   | runs                           | read, reversible                                                                 |
+| `agi_work`                     | asks                   | asks                           | write, reversible                                                                |
+| `device_read_file`             | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_list_folder`           | asks                   | asks                           | read, reversible                                                                 |
+| `device_find_files`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_search_text`           | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_write_file`            | asks                   | asks                           | write, not reversible                                                            |
+| `device_edit_file`             | asks                   | asks                           | write, not reversible                                                            |
+| `device_run_command`           | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
+| `device_start_command`         | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
+| `device_command_output`        | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_command_stop`          | asks                   | asks                           | write, reversible                                                                |
+| `device_screenshot`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_zoom`                  | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_move`                  | asks                   | asks                           | write, reversible                                                                |
+| `device_scroll`                | asks                   | asks                           | write, reversible                                                                |
+| `device_wait`                  | asks                   | asks                           | write, reversible                                                                |
+| `device_click`                 | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_drag`                  | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_type`                  | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_key`                   | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_browser_read_page`     | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_browser_screenshot`    | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_browser_console`       | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_browser_network`       | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_browser_navigate`      | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_browser_click`         | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_browser_type`          | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `device_browser_download`      | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_find`                 | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_fill_form`            | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_history`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_list_tabs`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `agi_reconnect`                | asks                   | runs                           | read, reversible                                                                 |
+| `device_calendar_events`       | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `device_calendar_availability` | asks                   | asks                           | read, reversible                                                                 |
+| `device_calendar_create_event` | asks                   | asks                           | write, reversible                                                                |
+| `device_reminder_create`       | asks                   | asks                           | write, reversible                                                                |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with

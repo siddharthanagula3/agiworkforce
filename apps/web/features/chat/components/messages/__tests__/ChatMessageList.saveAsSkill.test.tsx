@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 
 vi.mock('@/features/skills/services/skills-catalog', () => ({
+  SkillsCatalogError: class SkillsCatalogError extends Error {},
+  invalidateSkillsCatalog: vi.fn(),
   loadSkillsCatalog: vi.fn(async () => []),
   skillAuthoringCapability: () => true,
 }));

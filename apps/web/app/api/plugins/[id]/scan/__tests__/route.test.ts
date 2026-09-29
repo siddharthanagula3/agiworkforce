@@ -10,12 +10,66 @@ const mocks = vi.hoisted(() => ({
   findPluginScanForUser: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
+  PLUGIN_SIGNING_PUBLIC_KEYS_ENV: 'PLUGIN_SIGNING_PUBLIC_KEYS',
+  PluginMarketplaceFetchError: class PluginMarketplaceFetchError extends Error {},
+  PluginMarketplaceValidationError: class PluginMarketplaceValidationError extends Error {},
+  PluginPackageRefusedError: class PluginPackageRefusedError extends Error {},
+  approveMarketplaceInstallationPermissions: vi.fn(),
+  assertMarketplaceEntryInstallable: vi.fn(),
+  assertPluginPackageInstallable: vi.fn(),
+  buildManifestRawUrl: vi.fn(),
+  canonicalRepositoryUrl: vi.fn(),
+  declaredPluginCount: vi.fn(),
+  deleteMarketplaceSource: vi.fn(),
+  fetchMarketplaceManifest: vi.fn(),
+  findMarketplaceSourceEntry: vi.fn(),
+  getMarketplaceEntryForUser: vi.fn(),
+  getMarketplaceSource: vi.fn(),
+  getMarketplaceSourceEntry: vi.fn(),
+  hasMarketplaceSourceNamed: vi.fn(),
+  isMissingPluginMarketplaceSchema: vi.fn(),
+  listMarketplaceEntriesForUser: vi.fn(),
+  listMarketplaceSources: vi.fn(),
+  manifestPluginDependencies: vi.fn(),
+  marketplacePermissionReview: vi.fn(),
+  parseGithubRepositoryUrl: vi.fn(),
+  readPluginPackageScan: vi.fn(),
+  refreshMarketplaceSource: vi.fn(),
+  registerMarketplaceSource: vi.fn(),
+  scanAndRecordPluginPackage: vi.fn(),
+  sha256OfText: vi.fn(),
+  standardManifestToInternal: vi.fn(),
+  trustedPluginPublisherKeys: vi.fn(),
+  validateManifestAgainstCatalog: vi.fn(),
+  verifyPluginPackage: vi.fn(),
   findPluginScanForUser: mocks.findPluginScanForUser,
 }));
 

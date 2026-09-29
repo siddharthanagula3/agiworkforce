@@ -21,6 +21,7 @@ import {
   type WorkspaceInvitations,
   type WorkspacePosture,
 } from './administration';
+import { toUserMessage } from '@/services/userMessage';
 
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -163,9 +164,7 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
         setPosture(nextPosture);
       } catch (error) {
         if (signal?.aborted) return;
-        setLoadError(
-          error instanceof Error ? error.message : 'Workspace administration could not load.',
-        );
+        setLoadError(toUserMessage(error, 'Workspace administration could not load.'));
       }
     },
     [organizationId],
@@ -184,10 +183,7 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
         setInviting(false);
         await load();
       } catch (error) {
-        Alert.alert(
-          'The invitation was not sent',
-          error instanceof Error ? error.message : 'Please try again.',
-        );
+        Alert.alert('The invitation was not sent', toUserMessage(error, 'Please try again.'));
       }
     },
     [load, organizationId],
@@ -206,7 +202,7 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
             action === 'resend'
               ? 'The invitation was not resent'
               : 'The invitation was not revoked',
-            error instanceof Error ? error.message : 'Please try again.',
+            toUserMessage(error, 'Please try again.'),
           );
         } finally {
           setBusyInvitationId(null);

@@ -27,6 +27,10 @@ vi.mock('@/lib/connectors/connector-capability', () => ({
   connectorsAllowedWithoutRequest: connectorsAllowed,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  resolveEffectiveSubscription: vi.fn(),
+  resolveEntitlementBundle: vi.fn(),
   resolveEntitledPlanTier: vi.fn(async () => 'pro'),
 }));
 

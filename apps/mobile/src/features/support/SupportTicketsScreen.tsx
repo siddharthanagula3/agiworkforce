@@ -20,6 +20,7 @@ import {
   TICKET_STATUS_LABEL,
 } from '@agiworkforce/cloud-contracts/support';
 import { listSupportTickets, openSupportTicket, type SupportTicketView } from './service';
+import { toUserMessage } from '@/services/userMessage';
 
 const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 
@@ -50,7 +51,7 @@ export function SupportTicketsScreen() {
       setTickets(await listSupportTickets(signal));
     } catch (error) {
       if (signal?.aborted) return;
-      setLoadError(error instanceof Error ? error.message : 'Your tickets could not be loaded.');
+      setLoadError(toUserMessage(error, 'Your tickets could not be loaded.'));
     }
   }, []);
 
@@ -87,10 +88,7 @@ export function SupportTicketsScreen() {
             : `The ticket is saved, but the email that tells the support team about it was not sent. If this is urgent, also write to ${SUPPORT_EMAIL}.`,
         );
       } catch (error) {
-        Alert.alert(
-          'That ticket was not raised',
-          error instanceof Error ? error.message : 'Please try again.',
-        );
+        Alert.alert('That ticket was not raised', toUserMessage(error, 'Please try again.'));
       } finally {
         setSubmitting(false);
       }

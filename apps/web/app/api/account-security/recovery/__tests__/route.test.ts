@@ -12,13 +12,60 @@ const mocks = vi.hoisted(() => ({
   cancelPendingRecovery: vi.fn(),
 }));
 
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/server/account-security/service', () => ({
+  beginCredentialRegistration: vi.fn(),
+  beginVerification: vi.fn(),
+  callerIsEnrolled: vi.fn(),
+  completeHandoff: vi.fn(),
+  completeVerification: vi.fn(),
+  confirmReplacementRecoveryKeys: vi.fn(),
+  disableAccountSecurity: vi.fn(),
+  enrollAccountSecurity: vi.fn(),
+  finishCredentialRegistration: vi.fn(),
+  openHandoff: vi.fn(),
+  prepareRecoveryKeys: vi.fn(),
+  readAccountSecurityStatus: vi.fn(),
+  removeCredential: vi.fn(),
+  sendEnrollmentCode: vi.fn(),
+  unavailableReason: vi.fn(),
   ACCOUNT_SECURITY_SCOPE: { resolveOrganization: false },
   ACCOUNT_SECURITY_VERIFYING_SCOPE: {
     resolveOrganization: false,
