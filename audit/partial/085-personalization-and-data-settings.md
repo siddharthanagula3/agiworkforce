@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | lands with the Codex mobile commit | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
 
 ## S85.03: Communication style.
 
@@ -100,15 +97,12 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
 
 - Done when: One action deletes every chat in the user's history (active and archived) after confirmation, and the copy states truthfully whether they can be restored.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply the patch after Codex commits data-controls/index.tsx | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/data-controls/index.tsx:167-195`, `apps/mobile/src/features/archived-chats/service.ts:92-97`, `apps/web/app/api/chat/conversations/bulk/route.ts:53-66`
 
 ## S85.19: Shared-link management.
 

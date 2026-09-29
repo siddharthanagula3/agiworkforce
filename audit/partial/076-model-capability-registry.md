@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S76.04: Multiple-image input.
-
-- Done when: The registry records whether (and how many) images a model accepts in one request, and requests are checked against it.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The client-side check is written as the post-codex patch chat-gates-s76.04-mobile-image-limit.patch (applies after chat-gates-s79.05-mobile-speed-first.patch): after cloud dispatch resolves the model, chatExecutionStore refuses a send with more images than that model reads in one message (model override, else its default managed route's harness limit), naming the model, the limit and how many to remove, before anything uploads. ChatInput.tsx itself could not be patched: the three-way merge of integration and Codex's copy conflicts. Mobile still gets the server's 400 until the patch lands. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4058-4058`
-
 ## S76.06: Native PDF/document input.
 
 - Done when: The registry records native PDF input per model and PDFs go natively to models that accept them.
@@ -71,17 +59,14 @@ Code: `apps/cli/src/provider.rs:16-19`
 
 - Done when: The registry records which models produce speech and spoken output uses a registry-chosen model.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-chat-s76.10-mobile-server-read-aloud.patch: in Cloud mode Read aloud posts the answer to /api/voice/speech (registry speech model, credit billed, Idempotency-Key per chunk of 3800 chars, the next chunk prefetched), plays the mp3 with expo-audio and falls back to the device voice for whatever the server could not speak. Local Mode stays on the device. Adds expo-audio ~57.0.5 to the held package.json and apiFetchBinary to the held services/api.ts; jest maps expo-audio to a mock, so its test passes today. Typechecks once the lead installs expo-audio. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/services/voiceOutput.ts:1-1`
 
 ## S76.11: Realtime speech-to-speech.
 

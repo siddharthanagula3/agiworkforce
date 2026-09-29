@@ -21,31 +21,25 @@ nothing is left.
 
 - Done when: A view shows only the files the user uploaded.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Uploads chip (origin=uploaded), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.03: Generated-files view.
 
 - Done when: A view shows only files the assistant generated.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same patch: Generated files chip (kind=file, origin=generated), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.05: Image collection.
 
@@ -75,16 +69,13 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 - Done when: A recent-files view surfaces the files used or added most recently.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Cloud: Add to chat already lists the account library newest-first with a picker limit (fetchLibraryPage), matching web ComposerFilesMenu recent files. Local: 761f654106 orders chat-attachment picks newest first (recentMobileFiles). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/app/(app)/library/index.tsx:1-8`
 
 ## S24.10: Shared-with-me view.
 
@@ -190,16 +181,13 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 - Done when: Users can attach a Library file to a conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Library rows (cloud, non-video) offer Add to chat, which stages the saved file into a new chat as web's Library does; the composer sheet already attaches recent Library files. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:171-182`
 
 ## S24.29: Open originating conversation.
 
@@ -230,31 +218,25 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 
 - Done when: The product shows how much storage the user's files consume against their allowance.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same patch: 'X of Y file storage used' under the Library header from the list response, as on web. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/storage.tsx:260-300`
 
 ## S24.34: Trash and restore.
 
 - Done when: Deleted files go to a trash from which they can be restored.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same patch: Recently deleted view (deleted=true) with Restore (POST /api/media) and Delete permanently (DELETE ...&permanent=true, confirmed), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:155-175`
 
 ## S24.35: Expired-resource display.
 

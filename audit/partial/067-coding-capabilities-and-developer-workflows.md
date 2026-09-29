@@ -15,7 +15,7 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -28,7 +28,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -41,7 +41,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -54,7 +54,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -67,7 +67,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -80,7 +80,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -93,7 +93,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -106,7 +106,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -119,7 +119,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -132,7 +132,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -145,7 +145,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -158,7 +158,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -171,7 +171,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -184,7 +184,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -208,7 +208,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | cli | partial | The CLI's browser_* tools do not drive a browser themselves: execute_browser_command (tools/mod.rs:1236-1249) forwards every call to crate::browser_bridge::run_command, which talks to AGI Desktop's loopback bridge (desktop-bridge.json, 127.0.0.1) and 'the shell owns the pairing; the CLI never speaks to the extension' (browser_bridge.rs:1-2). Without the Electron app running with a Chrome extension paired there, every browser tool returns 'No browser is paired with AGI Desktop' (l.149). The CLI has no pairing of its own (no /browser command, 0 hits). Partial, miss ['surface-only'], remaining: 'browser_* tools only work while AGI Desktop is running with the Chrome extension paired; add a CLI-side pairing or note the dependency.' |  |
 | vscode | partial | Same runtime as the CLI: the app-server's browser_* tools reach a browser only through AGI Desktop's loopback bridge (browser_bridge.rs:1-2, tools/mod.rs:1247); the extension has no browser pairing of its own, so with VS Code and the CLI alone the tools fail 'No browser is paired with AGI Desktop'. Partial, miss ['surface-only'], remaining: 'browser inspection needs AGI Desktop running with the Chrome extension paired; VS Code cannot pair a browser itself.' |  |
 
@@ -249,7 +249,7 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -272,7 +272,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -284,7 +284,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -297,7 +297,7 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | The phone renders diffs (CodeSessionView.tsx:334-340) relayed by the Electron remote-control host (remoteControlHost.ts:104 -> codeRemoteController diffsFor) from a desktop session it can only steer; no patch is proposed or applied by the mobile surface. Every other mobile cell in this section is partial for exactly that dependency ('only by steering an existing desktop AGI Code session'), and the desktop cell for the same relayed data was rated partial, so done here is inconsistent. Partial, miss ['surface-only'], remaining: 'diffs and approvals are relayed from a paired desktop session; the phone cannot run the agent or produce a patch itself.' |  |
+| mobile | partial | Diffs and approvals are relayed from a paired desktop session; the phone cannot run the agent or produce a patch itself. |  |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:334-340`, `apps/desktop/electron/remote/codeRemoteController.ts:158-168`
 
@@ -310,7 +310,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Approve/deny each pending desktop tool call from the phone; no patch-level selection. | handler |
+| mobile | partial | Approve or deny each pending desktop tool call from the phone; there is no patch-level selection. | handler |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
 
@@ -323,7 +323,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -336,7 +336,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -349,7 +349,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -362,7 +362,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -375,7 +375,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -388,7 +388,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/cli/src/tui/tui_app.rs:4747-4749`
@@ -445,7 +445,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -458,7 +458,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/companion/comp
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -471,7 +471,7 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
@@ -484,6 +484,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| mobile | partial | Only by steering an existing desktop AGI Code session; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`

@@ -20,6 +20,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
+import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
@@ -528,8 +530,12 @@ async function handlePush(request: NextRequest) {
 
   try {
     if (conversations.length > 0) {
-      const rows = await db.query<BatchRow<ConversationDelta>>(
-        `
+      const deletedIds = new Set(
+        conversations.filter((conversation) => conversation.isDeleted).map(({ id }) => id),
+      );
+      const pushConversations = async (tx: typeof db) => {
+        const pushed = await tx.query<BatchRow<ConversationDelta>>(
+          `
           with input as materialized (
             select (item ->> 'id')::uuid as id,
                    item ->> 'title' as title,
@@ -610,8 +616,19 @@ async function handlePush(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(conversations), organizationId],
-      );
+          [userId, JSON.stringify(conversations), organizationId],
+        );
+        const deletedNow = pushed
+          .filter((row) => row.kind === 'applied' && deletedIds.has(row.id))
+          .map((row) => row.id);
+        if (deletedNow.length > 0) {
+          await unpublishArtifactsForConversations(tx, { userId, conversationIds: deletedNow });
+          await revokeSharesOfDeletedConversations(tx, { userId, organizationId });
+        }
+        return pushed;
+      };
+      const rows =
+        deletedIds.size > 0 ? await db.transaction(pushConversations) : await pushConversations(db);
       collectBatchRows(rows, applied.conversations, conflicts.conversations);
     }
 

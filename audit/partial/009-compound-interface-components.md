@@ -181,15 +181,12 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: A panel lists a resource's saved versions (when, what) and lets the user open or restore one.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 279d031081 records when each version was saved and adds a history sheet listing every version newest first with what changed, open and restore. post-codex/w-chat-s9.26-mobile-artifact-version-history.patch makes the vN/M label in the held ArtifactFullScreen open it. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx:21-21`, `apps/mobile/src/features/artifacts/versionSummary.ts:73-73`, `apps/mobile/src/features/artifacts/store.ts:49-49`
 
 ## S9.27: Diff viewer.
 
@@ -238,30 +235,24 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 - Done when: Before sending, a visible notice warns when the chosen model cannot handle something in the request (images, tools, attachments, context size).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Before sending, the composer warns when the chosen model cannot read attached images (vision false; Auto excluded), in post-codex/w-chat-s9.34-s78.03-mobile-image-capability-warning.patch. Tool and context-size warnings remain. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 ## S9.36: Interactive result widget.
 
 - Done when: An answer can embed a widget the user operates in place (choices, map, app card), and the choice or state feeds back into the conversation.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the map-search card renders; clarify choices and MCP app widgets fall back to text. Add renderers that let the user answer in place. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:988-988`
 
 ## S9.37: Notification inbox.
 
@@ -283,6 +274,6 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Destination search is built (e8552caa7c plus post-codex/w-chat-s9.38-mobile-search-destinations.patch). The hardware-keyboard part is declined for now under D-2026-09-28-26 because it needs a native key-command module in the Codex-held package.json. | codex |
+| mobile | partial | Destination search exists, but no hardware-keyboard shortcut opens a command palette (declined for now, needs a native key-command module). | codex |
 
 Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`

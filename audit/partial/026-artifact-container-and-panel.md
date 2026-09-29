@@ -25,7 +25,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only generated-file cards show a status label (e.g. running, completed); code and document artifacts appear only after the reply finishes and never show writing, stopped or failed. | states |
+| mobile | partial | Only generated-file cards show a status label; a streaming code card shows Writing, but a stopped or failed artifact leaves no status on the card and code/document artifacts never show finished/failed. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -50,18 +50,6 @@ Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S26.12: Multiple-artifact switching.
-
-- Done when: When a conversation has several artifacts, the user can switch between them without leaving the viewer.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26.12-mobile-artifact-switcher.patch (apply after w-work-s26-mobile-artifact-versions-edit-publish-state): the artifact viewer shows a tab strip of the conversation artifacts when there is more than one; tapping switches in place, as web ArtifactsPanel tabs. Waits on the Codex hold. | ui |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `apps/mobile/src/features/artifacts/index.tsx:206-217`
 
 ## S26.13: Artifact tabs.
 
@@ -101,43 +89,34 @@ Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 - Done when: The viewer shows which version of the artifact is displayed and lets the user pick any other version directly.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): tapping vN/M opens a Versions sheet, newest first, each with its line-change summary, and jumps to the chosen version, as web's version history. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
 
 ## S26.21: Previous/next version.
 
 - Done when: The user can step to the previous and next version of an artifact and see which version is shown.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): Edit source on the latest version saves the edited text into the artifact store, which keeps the old text as the previous version, so the chip, previous/next and Restore now have versions to act on, as web's source edit. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:536-568`, `apps/mobile/src/features/artifacts/store.ts:47-49`
 
 ## S26.23: Restore version.
 
 - Done when: The user can restore an earlier version so it becomes the current one, without losing the versions in between.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): same: Restore acts on versions created by Edit source. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`, `apps/mobile/src/features/artifacts/store.ts:153-162`
 
 ## S26.24: Duplicate artifact.
 
@@ -193,14 +172,13 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 - Done when: The artifact viewer offers a menu of export formats and each choice saves a file in that format.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: Download in the artifact viewer opens a Download as sheet with the formats the artifact supports: Markdown, PDF and plain text for prose, and the raw source file for code. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 | cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
+Code: `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
 ## S26.32: Public/private state.
 
@@ -210,21 +188,9 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): opening the viewer reads GET /api/artifacts/publish for this artifact and shows its link with the audience (Anyone with the link / Everyone in this workspace), as web. Waits on the Codex hold. | ui |
+| mobile | partial | The viewer shows the link and audience only once published; inline artifact cards and the gallery show no private/published/workspace state. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
-
-## S26.35: Runtime error panel.
-
-- Done when: When an artifact fails while rendering or running, the viewer replaces it with an error panel that explains the failure and offers source/retry.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | 7d2553d889: a runtime error replaces the preview with an error panel and Retry. View source needs the viewer to pass onViewSource: post-codex/w-work-s28-mobile-preview-view-source.patch (ArtifactFullScreen.tsx is Codex-held; apply after no-yearly-s32-34-mobile-show-changes.patch). | ui |
-
-Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:96-96`
 
 ## S26.36: Dependency-loading state.
 
@@ -246,15 +212,3 @@ Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`, 
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S26.39: Live updates from ongoing work.
-
-- Done when: While a reply or run is still producing an artifact, the artifact view updates live as content arrives.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26.39-mobile-streaming-artifact.patch: while a reply streams, an unclosed code fence of 4+ lines shows a "Generating artifact · TYPE" card with "Writing…"; the opened viewer updates live and hands off to the saved artifact under the same derived id (or "Stopped artifact"), as web StreamingArtifactView. Waits on the Codex hold. | states |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`

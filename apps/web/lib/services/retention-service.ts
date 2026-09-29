@@ -309,15 +309,28 @@ export async function sweepOrganizationRetention(
     let remaining = false;
     for (let batch = 0; batch < RETENTION_SWEEP_MAX_BATCHES; batch++) {
       const deleted = await db.query<{ id: string }>(
-        `delete from public.web_conversations
-          where id in (
-            select candidate.id from public.web_conversations candidate
-             where candidate.organization_id = $1
-               and candidate.updated_at < $2
-               and ${exclusion.sql}
-             limit $4
-          )
-          returning id`,
+        `with swept as (
+           delete from public.web_conversations
+            where id in (
+              select candidate.id from public.web_conversations candidate
+               where candidate.organization_id = $1
+                 and candidate.updated_at < $2
+                 and ${exclusion.sql}
+               limit $4
+            )
+            returning id
+         ), revoked_shares as (
+           delete from public.shared_sessions share
+            using swept
+            where share.conversation_id = swept.id
+            returning share.id
+         ), revoked_artifacts as (
+           delete from public.published_artifacts artifact
+            using swept
+            where artifact.conversation_id = swept.id
+            returning artifact.id
+         )
+         select id from swept`,
         [...dueParams, ...exclusion.params, RETENTION_SWEEP_BATCH],
       );
       totalDeleted += deleted.length;
