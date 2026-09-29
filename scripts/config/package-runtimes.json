@@ -246,6 +246,7 @@
       "./button": "universal",
       "./cn": "universal",
       "./dialog": "universal",
+      "./dom": "browser",
       "./i18n": "universal",
       "./label": "universal",
       "./sheet": "universal",
