@@ -175,6 +175,44 @@ pub async fn ensure_hosted_conversation(
     Ok(conversation_id)
 }
 
+pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> String {
+    if session.privacy_mode != PrivacyMode::Managed {
+        return format!(
+            "This conversation runs in {} mode, so it stays on this device. Switch it to your account with /continue-with-cloud, then continue it on another device.",
+            session.privacy_mode.label()
+        );
+    }
+    let Some(snapshot) = session.cloud_snapshot() else {
+        return "This conversation is not being saved, so it cannot continue on another device."
+            .to_string();
+    };
+    let cloud = match CloudSession::open(session.privacy_mode) {
+        Ok(cloud) => cloud,
+        Err(error) => return format!("Could not reach your account: {error}"),
+    };
+    let conversation_id = chat::conversation_id_for(&snapshot.session_id);
+    if !cloud
+        .state
+        .conversations
+        .versions
+        .contains_key(&conversation_id)
+    {
+        return "This conversation reaches your account after its next reply. Send a message, then run /continue-elsewhere again.".to_string();
+    }
+    let url = format!(
+        "{}/chat/{}",
+        cloud.client.base().trim_end_matches('/'),
+        conversation_id
+    );
+    let opened = arg.trim() == "open"
+        && crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
+    format!(
+        "This conversation is in your account's chat history. Continue it on the web{} at {url}, or open it from the chat list in the desktop or mobile app.{}",
+        if opened { " (opened in your browser)" } else { "" },
+        if opened { "" } else { " /continue-elsewhere open opens it in your browser." }
+    )
+}
+
 pub(crate) fn forget_hosted_conversation(conversation_id: &str) {
     if let Ok(mut session) = CloudSession::open(PrivacyMode::Managed) {
         if session

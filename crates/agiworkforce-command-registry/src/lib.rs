@@ -212,6 +212,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "continue-elsewhere",
+            "Continue this conversation on the web, desktop or mobile app",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "thread",
             "Start a parallel thread on a copy of this conversation (/thread <instruction>)",
             true,

@@ -45,6 +45,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "thread",
         "threads",
         "gather",
+        "continue-elsewhere",
         "new",
         "mcp",
         "output-style",
@@ -137,6 +138,9 @@ pub fn handle_shared_command(
     match command.as_str() {
         "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
+        "/continue-elsewhere" => {
+            ParityCommandResult::SystemMessage(crate::cloud::continue_elsewhere(session, arg))
+        }
         "/thread" => ParityCommandResult::SystemMessage(
             match crate::background::spawn_thread(session, arg) {
                 Ok(message) | Err(message) => message,
