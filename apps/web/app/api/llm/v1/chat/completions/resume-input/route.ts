@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { ToolInputResumeRequestSchema } from '@agiworkforce/cloud-contracts';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -19,10 +19,11 @@ import { resolveAuthenticatedSurface } from '../lib/request-surface';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
-import { withManagedTurnSlot } from '../lib/turn-slot';
+import { withManagedTurnSlot, type ManagedTurnSlotHold } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   ManagedUsageRequestError,
@@ -131,7 +132,11 @@ function checkpointError(error: unknown): NextResponse | null {
   return null;
 }
 
-async function handleToolInputResume(request: NextRequest, authResult: AuthGateSuccess) {
+async function handleToolInputResume(
+  request: NextRequest,
+  authResult: AuthGateSuccess,
+  slotHold: ManagedTurnSlotHold,
+) {
   const { userId, subscription } = authResult;
 
   const isFreeTierRequest =
@@ -243,13 +248,17 @@ async function handleToolInputResume(request: NextRequest, authResult: AuthGateS
           userId,
           processed.organizationId ?? null,
         );
+        const connectorsAllowed = await connectorsAllowedForTurn(request, userId, processed);
         const [operatorTools, connectorTools] = await Promise.all([
           loadMcpToolDefs(),
-          loadUserConnectorToolDefs(userId, {
-            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-            planTier: processed.subscriptionTier,
-            isToolDenied: permissions.isConnectorToolDenied,
-          }),
+          connectorsAllowed
+            ? loadUserConnectorToolDefs(userId, {
+                customConnectorLimit:
+                  getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+                planTier: processed.subscriptionTier,
+                isToolDenied: permissions.isConnectorToolDenied,
+              })
+            : Promise.resolve([]),
         ]);
         return { mcpTools: [...operatorTools, ...connectorTools], permissions };
       } catch (error) {
@@ -357,7 +366,7 @@ async function handleToolInputResume(request: NextRequest, authResult: AuthGateS
       toolApprovalPolicy,
       connectorPermissions,
       onDurableUnavailable: 'inline',
-      signal: request.signal,
+      signal: resumeFields.detached ? new AbortController().signal : request.signal,
       completionReason: 'tool_loop_input_resume_completed',
       cancellationReason: 'client_cancelled_tool_loop_input_resume',
       hasConnectorTools: mcpTools.some((tool) => tool.origin === 'connector'),
@@ -445,6 +454,18 @@ async function handleToolInputResume(request: NextRequest, authResult: AuthGateS
         })
       : turn.readable;
 
+  if (resumeFields.detached && turn.transport === 'inline') {
+    const [clientBranch, serverBranch] = body.tee();
+    const drained = serverBranch.pipeTo(new WritableStream()).catch((error: unknown) => {
+      logger.warn(
+        { error, userId, runId: claim.checkpoint.runId },
+        'Detached input resume stream ended with an error',
+      );
+    });
+    slotHold.holdUntil(drained);
+    after(() => drained);
+    return new NextResponse(withSseHeartbeat(clientBranch), { headers: streamHeaders });
+  }
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }
 
@@ -454,7 +475,7 @@ async function admitAndDispatchResume(request: NextRequest): Promise<NextRespons
 
   return withManagedTurnSlot(
     { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
-    () => handleToolInputResume(request, authResult),
+    (slotHold) => handleToolInputResume(request, authResult, slotHold),
   );
 }
 

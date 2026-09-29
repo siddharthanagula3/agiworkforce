@@ -233,18 +233,6 @@ Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 
 Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 
-## S82.29: Extra-usage purchase.
-
-- Done when: Users can buy extra usage (credits) when they run out, from where they hit the limit.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
 ## S82.33: Billing discrepancy report.
 
 - Done when: Users can report a billing or usage discrepancy and have it tracked.
