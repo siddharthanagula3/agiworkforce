@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FolderOpen, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -29,7 +30,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
 
   return (
     <>
-      <Pressable
+      <PressableBox
         onPress={() => setOpen(true)}
         hitSlop={6}
         style={({ pressed }) => ({
@@ -44,7 +45,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
         accessibilityRole="button"
       >
         <FolderOpen size={18} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <Modal
         visible={open}
         animationType="slide"
@@ -61,7 +62,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
               gap: 8,
             }}
           >
-            <Pressable
+            <PressableBox
               onPress={close}
               accessibilityRole="button"
               accessibilityLabel="Close project sources"
@@ -69,7 +70,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
               style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
             <View style={{ flex: 1 }}>
               <Text variant="subheading" style={{ color: colors.textPrimary }} numberOfLines={1}>
                 {`${projectName} sources`}

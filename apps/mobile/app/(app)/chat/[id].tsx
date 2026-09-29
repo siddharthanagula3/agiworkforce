@@ -166,6 +166,7 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { toUserMessage } from '@/services/userMessage';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
@@ -1448,7 +1449,7 @@ export default function ChatScreen() {
                 .catch((error: unknown) => {
                   Alert.alert(
                     'Could not create the link',
-                    error instanceof Error ? error.message : 'Try again in a moment.',
+                    toUserMessage(error, 'Try again in a moment.'),
                   );
                 });
             },

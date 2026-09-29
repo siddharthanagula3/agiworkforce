@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Alert, Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Fingerprint } from 'lucide-react-native';
 import { usePathname } from 'expo-router';
@@ -143,7 +144,7 @@ export function AppLockOffer() {
             Use Face ID, Touch ID, or your device passcode when opening AGI. You can change this
             later in Safety &amp; Security.
           </Text>
-          <Pressable
+          <PressableBox
             accessibilityRole="button"
             accessibilityLabel="Turn on App Lock"
             disabled={busy}
@@ -161,8 +162,8 @@ export function AppLockOffer() {
             <Text style={{ color: colors.surfaceBase, fontWeight: '700' }}>
               {busy ? 'Confirming…' : 'Turn on App Lock'}
             </Text>
-          </Pressable>
-          <Pressable
+          </PressableBox>
+          <PressableBox
             accessibilityRole="button"
             accessibilityLabel="Skip App Lock"
             disabled={busy}
@@ -170,7 +171,7 @@ export function AppLockOffer() {
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
             <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Skip for now</Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </View>
     </Modal>

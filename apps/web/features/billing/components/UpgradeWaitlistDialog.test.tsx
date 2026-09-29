@@ -32,6 +32,7 @@ vi.mock('@agiworkforce/ui', () => {
 });
 
 vi.mock('@features/billing/services/upgrade-waitlist', () => ({
+  isUpgradeWaitlistRequired: vi.fn(),
   joinUpgradeWaitlist: waitlistMocks.join,
   redeemUpgradeAccessCode: waitlistMocks.redeem,
 }));

@@ -17,13 +17,58 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: mocks.assertAccountActive }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  assertAccountActive: mocks.assertAccountActive,
+}));
 vi.mock('@/lib/services/artifact-runtime-service', () => ({
+  ARTIFACT_STORAGE_LIST_LIMIT: 1_000,
+  ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
+  buildArtifactConnectorPlan: vi.fn(),
+  completeArtifactPrompt: vi.fn(),
+  describeArtifactConnectors: vi.fn(),
+  selectArtifactRuntimeRoute: vi.fn(),
   ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES: 20 * 1024 * 1024,
   ARTIFACT_STORAGE_VALUE_LIMIT_BYTES: 4 * 1024 * 1024,
   readRunnableArtifact: mocks.readRunnableArtifact,
@@ -33,6 +78,27 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   listArtifactStorageKeys: mocks.listArtifactStorageKeys,
 }));
 vi.mock('@/lib/services/published-artifact-service', () => ({
+  MAX_CONTENT_CHARS: 1_000_000,
+  MAX_PUBLISHED_PER_USER: vi.fn(),
+  PUBLISHABLE_KINDS: vi.fn(),
+  PUBLISHED_ARTIFACT_VISIBILITIES: vi.fn(),
+  PublishedArtifactOwnershipError: class PublishedArtifactOwnershipError extends Error {},
+  PublishedArtifactQuotaError: class PublishedArtifactQuotaError extends Error {},
+  PublishedArtifactValidationError: class PublishedArtifactValidationError extends Error {},
+  buildPublishedArtifactUrl: vi.fn(),
+  getPublishedArtifactByToken: vi.fn(),
+  isPublishableKind: vi.fn(),
+  isPublishedArtifactVisibility: vi.fn(),
+  listPublishedArtifactVersions: vi.fn(),
+  listPublishedArtifacts: vi.fn(),
+  mintPublishToken: vi.fn(),
+  publishArtifactRecord: vi.fn(),
+  readPublishedArtifactVersion: vi.fn(),
+  recordPublishedVersion: vi.fn(),
+  requiresSandboxedRender: vi.fn(),
+  setPublishedArtifactVisibility: vi.fn(),
+  unpublishArtifactRecord: vi.fn(),
+  unpublishArtifactsForConversations: vi.fn(),
   PUBLISHED_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,
 }));
 

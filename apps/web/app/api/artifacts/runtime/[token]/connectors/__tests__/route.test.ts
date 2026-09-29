@@ -31,6 +31,10 @@ vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
   describeArtifactConnectors: mocks.describeArtifactConnectors,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  resolveEffectiveSubscription: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(),
   resolveEntitlementBundle: mocks.resolveEntitlementBundle,
 }));
 vi.mock('@/lib/services/artifact-connector-gate', () => ({

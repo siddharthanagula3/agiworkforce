@@ -2010,6 +2010,10 @@ export async function* runResearchLoop(
     const deadline = AbortSignal.timeout(remaining);
     return options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
   }
+  function toolCallSignalOption(): { signal?: AbortSignal } {
+    const signal = toolCallSignal();
+    return signal ? { signal } : {};
+  }
   const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
   let sensitiveSourceAvailable =
     resume?.sensitiveSourceAvailable ??
@@ -2416,10 +2420,9 @@ export async function* runResearchLoop(
                 outcome: 'refused',
               };
             }
-            const signal = toolCallSignal();
             const outcome = await executeWebSearch(call.args, {
               domainPolicy,
-              ...(signal ? { signal } : {}),
+              ...toolCallSignalOption(),
             });
             await settlePerplexitySearchCall({
               userId: _billing.userId,
@@ -2505,11 +2508,10 @@ export async function* runResearchLoop(
         roundCounts.fetches += 1;
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
         const record = await runToolOperation('fetch', call, async (sourceAdds) => {
-          const signal = toolCallSignal();
           const outcome = await executeUrlFetch(call.args, {
             maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
             domainPolicy,
-            ...(signal ? { signal } : {}),
+            ...toolCallSignalOption(),
           });
           if (outcome.ok) {
             recordingAggregator(sources, sourceAdds).add({

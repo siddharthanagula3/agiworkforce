@@ -190,7 +190,7 @@ export function RequestPlayground() {
   });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
-  const [error, setError] = useState<PlaygroundError | null>(null);
+  const [failure, setFailure] = useState<PlaygroundError | null>(null);
   const [showCode, setShowCode] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -202,7 +202,7 @@ export function RequestPlayground() {
   const send = async () => {
     if (!canSend) return;
     setSending(true);
-    setError(null);
+    setFailure(null);
     const started = performance.now();
     try {
       const response = await sendAuthorizedJson(
@@ -220,7 +220,10 @@ export function RequestPlayground() {
       const payload = (await response.json().catch(() => null)) as CompletionPayload | null;
       if (!response.ok) {
         setResult(null);
-        setError({ status: response.status, message: gatewayErrorCopy(payload, response.status) });
+        setFailure({
+          status: response.status,
+          message: gatewayErrorCopy(payload, response.status),
+        });
         return;
       }
       setResult({
@@ -235,7 +238,7 @@ export function RequestPlayground() {
       });
     } catch (reason) {
       setResult(null);
-      setError({
+      setFailure({
         status: null,
         message: toUserMessage(reason, 'The request could not be sent. Try again.'),
       });
@@ -395,9 +398,9 @@ export function RequestPlayground() {
         ) : null}
 
         <div aria-live="polite" className="mt-4">
-          {error ? (
+          {failure ? (
             <p role="alert" className="text-sm text-danger">
-              {error.status ? `${error.status}: ${error.message}` : error.message}
+              {failure.status ? `${failure.status}: ${failure.message}` : failure.message}
             </p>
           ) : null}
           {result ? (

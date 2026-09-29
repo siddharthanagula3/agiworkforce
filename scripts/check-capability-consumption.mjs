@@ -188,9 +188,9 @@ function clientFiles(repoRoot) {
     .sort();
 }
 
-function checkReaders({ repoRoot, surfaces, fail }) {
+function checkReaders({ repoRoot, surfaces, readers, fail }) {
   for (const surface of surfaces) {
-    const entry = CAPABILITY_READERS[surface];
+    const entry = readers[surface];
     if (entry === undefined) {
       fail(
         `${surface} is a product surface with no recorded way of reading the capability document`,
@@ -198,7 +198,7 @@ function checkReaders({ repoRoot, surfaces, fail }) {
       continue;
     }
     if (entry.hostedBy !== undefined) {
-      if (CAPABILITY_READERS[entry.hostedBy]?.reads === undefined) {
+      if (readers[entry.hostedBy]?.reads === undefined) {
         fail(`${surface} is hosted by ${entry.hostedBy}, which does not read the document itself`);
       }
       continue;
@@ -233,7 +233,7 @@ function checkReaders({ repoRoot, surfaces, fail }) {
       }
     }
   }
-  for (const surface of Object.keys(CAPABILITY_READERS)) {
+  for (const surface of Object.keys(readers)) {
     if (!surfaces.includes(surface)) {
       fail(`${surface} is recorded here but ${SURFACE_VOCABULARY_PATH} no longer names it`);
     }
@@ -289,7 +289,7 @@ function checkClients({ repoRoot, exceptions, fail }) {
 
 export function checkCapabilityConsumption(
   repoRoot = REPO_ROOT,
-  { exceptions = RECORDED_EXCEPTIONS } = {},
+  { exceptions = RECORDED_EXCEPTIONS, readers = CAPABILITY_READERS } = {},
 ) {
   const failures = [];
   const fail = (message) => failures.push(message);
@@ -298,7 +298,7 @@ export function checkCapabilityConsumption(
     fail(`${SURFACE_VOCABULARY_PATH} no longer declares SourceSurface, so no surface is measured`);
     return failures;
   }
-  checkReaders({ repoRoot, surfaces, fail });
+  checkReaders({ repoRoot, surfaces, readers, fail });
   checkClients({ repoRoot, exceptions, fail });
   return failures;
 }

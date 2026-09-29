@@ -26,13 +26,60 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: mocks.assertAccountActive }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  assertAccountActive: mocks.assertAccountActive,
+}));
 vi.mock('@/lib/services/artifact-runtime-service', () => ({
+  ARTIFACT_STORAGE_LIST_LIMIT: 1_000,
+  ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES: vi.fn(),
+  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES: vi.fn(),
+  deleteArtifactStorageValue: vi.fn(),
+  describeArtifactConnectors: vi.fn(),
+  listArtifactStorageKeys: vi.fn(),
+  readArtifactStorageValue: vi.fn(),
+  writeArtifactStorageValue: vi.fn(),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   readRunnableArtifact: mocks.readRunnableArtifact,
   selectArtifactRuntimeRoute: mocks.selectArtifactRuntimeRoute,
@@ -40,16 +87,49 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   completeArtifactPrompt: mocks.completeArtifactPrompt,
 }));
 vi.mock('@/lib/services/published-artifact-service', () => ({
+  MAX_CONTENT_CHARS: 1_000_000,
+  MAX_PUBLISHED_PER_USER: vi.fn(),
+  PUBLISHABLE_KINDS: vi.fn(),
+  PUBLISHED_ARTIFACT_VISIBILITIES: vi.fn(),
+  PublishedArtifactOwnershipError: class PublishedArtifactOwnershipError extends Error {},
+  PublishedArtifactQuotaError: class PublishedArtifactQuotaError extends Error {},
+  PublishedArtifactValidationError: class PublishedArtifactValidationError extends Error {},
+  buildPublishedArtifactUrl: vi.fn(),
+  getPublishedArtifactByToken: vi.fn(),
+  isPublishableKind: vi.fn(),
+  isPublishedArtifactVisibility: vi.fn(),
+  listPublishedArtifactVersions: vi.fn(),
+  listPublishedArtifacts: vi.fn(),
+  mintPublishToken: vi.fn(),
+  publishArtifactRecord: vi.fn(),
+  readPublishedArtifactVersion: vi.fn(),
+  recordPublishedVersion: vi.fn(),
+  requiresSandboxedRender: vi.fn(),
+  setPublishedArtifactVisibility: vi.fn(),
+  unpublishArtifactRecord: vi.fn(),
+  unpublishArtifactsForConversations: vi.fn(),
   PUBLISHED_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
+  diagnoseMemberPolicy: vi.fn(),
+  readOrganizationIpAllowList: vi.fn(),
+  resolveEffectiveWorkspaceControls: vi.fn(),
+  resolveIpAllowListPolicy: vi.fn(),
+  resolveMfaPolicy: vi.fn(),
+  resolveSecretHandlingPolicy: vi.fn(),
   evaluateActiveWorkspacePolicy: mocks.evaluateActiveWorkspacePolicy,
   resolveZeroDataRetentionPolicy: mocks.resolveZeroDataRetentionPolicy,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  resolveEffectiveSubscription: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(),
   resolveEntitlementBundle: mocks.resolveEntitlementBundle,
 }));
 vi.mock('@/lib/services/managed-compute-access', () => ({
+  evaluateManagedComputeSubscriptionAccess: vi.fn(),
+  evaluateManagedComputeWorkspaceAccess: vi.fn(),
   evaluateManagedComputeAccess: mocks.evaluateManagedComputeAccess,
   buildManagedComputeAccessGateResponse: mocks.buildManagedComputeAccessGateResponse,
 }));
@@ -57,11 +137,45 @@ vi.mock('@/lib/services/managed-compute-access', () => ({
 vi.mock('@/lib/services/artifact-connector-gate', () => ({
   artifactConnectorsGateResponse: vi.fn(async () => null),
 }));
-vi.mock('@/lib/moderation', () => ({ moderateManagedPrompt: mocks.moderateManagedPrompt }));
+vi.mock('@/lib/moderation', () => ({
+  GENERATED_OUTPUT_REFUSAL: vi.fn(),
+  GeneratedMediaModeration: vi.fn(),
+  ImageStructureRejection: vi.fn(),
+  OutputModerationReason: vi.fn(),
+  PLATFORM_POLICY_REFUSAL:
+    'This request was refused because it violates the AGI Workforce usage policy. No model request was sent.',
+  UPLOADED_IMAGE_REFUSAL: vi.fn(),
+  inspectImageBytes: vi.fn(),
+  matchDenylistedUpload: vi.fn(),
+  moderateGeneratedMedia: vi.fn(),
+  moderateUploadedImage: vi.fn(),
+  recordGeneratedMediaProviderRefusal: vi.fn(),
+  recordModerationEvent: vi.fn(),
+  moderateManagedPrompt: mocks.moderateManagedPrompt,
+}));
 vi.mock('@/lib/services/managed-content-safety-service', () => ({
+  ManagedContentSafetyPolicyError: class ManagedContentSafetyPolicyError extends Error {},
+  REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL:
+    'This content is unavailable while Reduce sensitive content is on. You can change this in Settings > Safety.',
+  loadManagedContentSafetyPreference: vi.fn(),
   enforceManagedContentSafetyPreference: mocks.enforceManagedContentSafetyPreference,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  MANAGED_CHAT_CONTRACT_VERSION: vi.fn(),
+  TOP_UP_HREF: '/settings/billing',
+  UPGRADE_HREF: '/pricing',
+  USAGE_HREF: '/settings/usage',
+  createManagedUsageErrorBody: vi.fn(),
+  estimateMicrousdOf: vi.fn(),
+  finalizeManagedUsageRequest: vi.fn(),
+  fingerprintManagedUsageRequest: vi.fn(),
+  getServedRouteFromUsage: vi.fn(),
+  markManagedUsageClientDelivered: vi.fn(),
+  markManagedUsageProviderStarted: vi.fn(),
+  parseManagedUsageIdempotencyKey: vi.fn(),
+  reserveManagedUsageProviderStep: vi.fn(),
+  reserveManagedUsageRequest: vi.fn(),
+  resolveManagedQuotaRecovery: vi.fn(),
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
     constructor(
       message: string,
@@ -73,9 +187,21 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   },
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', () => ({
+  applySecretHandlingToRequest: vi.fn(),
+  buildSecretRedactionNotice: vi.fn(),
   applySecretHandlingToTexts: mocks.applySecretHandlingToTexts,
 }));
 vi.mock('@/lib/managed-compute-gate', () => ({
+  MANAGED_COMPUTE_BETA_HEADER: 'x-agi-managed-compute-beta',
+  MANAGED_COMPUTE_ORG_HEADER: vi.fn(),
+  MANAGED_COMPUTE_PRIVATE_BETA_ENV: 'AGI_MANAGED_COMPUTE_PRIVATE_BETA',
+  buildExternalSharingGateResponse: vi.fn(),
+  buildManagedComputeGateResponse: vi.fn(),
+  buildOrganizationPolicyGateResponse: vi.fn(),
+  buildSpendLimitGateResponse: vi.fn(),
+  buildWorkspaceFeatureGateResponse: vi.fn(),
+  isManagedComputePrivateBetaEnabled: vi.fn(),
+  resolveWorkspaceControlsForRequest: vi.fn(),
   buildModelPolicyGateResponse: mocks.buildModelPolicyGateResponse,
   buildProviderEgressGateResponse: mocks.buildProviderEgressGateResponse,
 }));
