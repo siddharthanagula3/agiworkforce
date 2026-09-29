@@ -777,7 +777,6 @@ const approvalRequestedEventSchema = z.object({
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
   alwaysAllowSaved: z.boolean().optional().catch(undefined),
-  questionOptions: z.array(z.string().max(2_000)).max(50).nullish().catch(undefined),
 });
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
