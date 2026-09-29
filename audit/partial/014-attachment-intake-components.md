@@ -145,7 +145,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The truncation header and its copy moved into cloud-contracts (b9343c110f, with a fallback where Intl.ListFormat is missing, as on Hermes). What remains is the mobile stream reading X-AGI-Attachments-Truncated and showing describeAttachmentTruncation. | ui |
+| mobile | partial | The stream reads X-AGI-Attachments-Truncated, the store records it on the sent message, and the bubble shows describeAttachmentTruncation under it, in post-codex/w-chat-s14.23-mobile-attachment-truncation-notice.patch (streaming, store and bubble are held). | codex |
 
 Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-50`
 
@@ -157,11 +157,11 @@ Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-5
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Warn or skip when the same file is added twice; the composer accepts it twice, and only the server quietly reuses the stored copy. | ui |
+| mobile | partial | A file already attached (same name, type and size) is skipped with an Already attached notice, in the same post-codex patch as S13.39. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:1-1`
 
 ## S14.33: Batch-upload summary.
 
