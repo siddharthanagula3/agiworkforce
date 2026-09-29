@@ -161,6 +161,11 @@ struct TierCacheEnvelope {
 pub const CLOUD_MODELS_CAPABILITY: &str = "canUseCloudModels";
 pub const IMAGES_CAPABILITY: &str = "canUseImages";
 pub const WEB_SEARCH_CAPABILITY: &str = "canUseWebSearch";
+pub const VOICE_CAPABILITY: &str = "canUseVoice";
+pub const CONNECTORS_CAPABILITY: &str = "canUseConnectors";
+pub const PLUGINS_CAPABILITY: &str = "canUsePlugins";
+pub const SKILLS_CAPABILITY: &str = "canUseSkills";
+pub const MARKETPLACE_CAPABILITY: &str = "canUseMarketplace";
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityDocumentWire {
@@ -235,6 +240,24 @@ pub fn read_tier_cache() -> Option<CachedTier> {
 
 pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
     read_fresh_envelope()?.capability_handshake
+}
+
+pub fn capability_refusal(capability: &str, feature: &str) -> Option<String> {
+    let document = cached_capabilities()?;
+    let layer = document
+        .denied_by
+        .get(capability)
+        .and_then(|layers| layers.first())?;
+    let why = match layer.as_str() {
+        "tier" => " on your plan",
+        "settings" => {
+            ", because it is switched off in your account or workspace settings, or paused for now"
+        }
+        "surface" => " on this kind of device",
+        "model" => " with the current model",
+        _ => " on this account right now",
+    };
+    Some(format!("{feature} is not available{why}."))
 }
 
 pub fn capability_allowed(capability: &str) -> Option<bool> {

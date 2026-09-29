@@ -138,6 +138,11 @@ pub fn save_disabled_skills(disabled: &std::collections::HashSet<String>) -> std
 /// set is empty by default, so this is identical to `discover_skills_all` until a
 /// skill is turned off.
 pub fn discover_skills() -> Vec<Skill> {
+    if crate::tier_cache::capability_refusal(crate::tier_cache::SKILLS_CAPABILITY, "Skills")
+        .is_some()
+    {
+        return Vec::new();
+    }
     let mut disabled = load_disabled_skills();
     if let Ok(cwd) = std::env::current_dir() {
         disabled.extend(project_disabled_skills(&cwd));
