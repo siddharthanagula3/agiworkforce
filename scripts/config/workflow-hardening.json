@@ -1,6 +1,5 @@
 {
   "$comment": "Measured from .github/workflows by scripts/check-workflow-hardening.mjs. The workflows themselves are changed only through a reviewed deploy change, so a gap this file records is a gap the guard refuses to let grow, not a gap it forgives.",
-  "trustedActionPrefixes": ["actions", "github", "microsoft"],
   "productionEnvironments": [
     "production-web",
     "production-railway",
