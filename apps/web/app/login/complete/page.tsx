@@ -11,6 +11,7 @@ import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
+import { TermsReviewSignOut } from './TermsReviewSignOut';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -62,6 +63,7 @@ export default async function LoginCompletePage({
         detail={
           <p className="text-center">Review and accept our terms to continue to your account.</p>
         }
+        footer={<TermsReviewSignOut />}
       >
         <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
           <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />

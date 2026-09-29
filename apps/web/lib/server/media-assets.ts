@@ -428,6 +428,8 @@ const DELETED_ORDER_CLAUSE = 'deleted_at desc';
 
 const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
   modified: 'created_at desc',
+  oldest: 'created_at asc',
+  type: 'kind asc, mime_type asc, created_at desc',
   name: "coalesce(metadata->>'filename', kind) asc",
   size: 'byte_size desc nulls last',
 };

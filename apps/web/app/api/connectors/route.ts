@@ -39,6 +39,7 @@ import {
   type ConnectorHealth,
 } from '@/lib/connectors/catalog';
 import { readConnectorsNotResponding } from '@/lib/services/connector-call-log-service';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import {
@@ -485,6 +486,15 @@ async function handleCreateConnector(request: NextRequest) {
   if (!isCuratedOrConfiguredId(body.connectorId)) {
     const target = await resolveDirectoryTarget(body.connectorId);
     if (!target) throw createError.validation('Invalid connector ID');
+    const policy = await evaluateConnectorPolicyForUser({
+      db,
+      userId,
+      connectorId: target.connectorId,
+      isCustom: true,
+      url: target.mcpUrl,
+      request,
+    });
+    if (!policy.allowed) throw createError.forbidden(policy.reason);
     return connectDirectoryTarget(request, db, userId, target);
   }
 
@@ -498,6 +508,14 @@ async function handleCreateConnector(request: NextRequest) {
       { status: 501 },
     );
   }
+
+  const policy = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    connectorId: body.connectorId,
+    request,
+  });
+  if (!policy.allowed) throw createError.forbidden(policy.reason);
 
   const authType = body.authType ?? OAUTH_AUTH_TYPE;
   if (!(AUTH_TYPES as readonly string[]).includes(authType)) {

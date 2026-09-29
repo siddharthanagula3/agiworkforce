@@ -203,7 +203,9 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
       {selectWorkspace.isError ? (
         <>
           <p role="alert" className="px-2 py-1 text-sm text-danger">
-            {selectWorkspace.error.message}
+            {t('navWorkspaceSwitchFailed', {
+              defaultValue: 'We could not switch workspaces. Check your connection and try again.',
+            })}
           </p>
           <DropdownMenuItem
             onSelect={(event) => {

@@ -3,8 +3,9 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { createError } from '@/lib/errors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
-import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
+import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
 import {
   evaluateConnectorAccess,
   evaluatePluginAccess,
@@ -28,12 +29,8 @@ import {
  * three routes each re-deriving the organization, reading the policy and
  * interpreting the decision is three places for the interpretation to drift.
  *
- * FAIL-OPEN, and deliberately. `readConnectorPolicySafely` already carries the
- * reasoning: connector governance is a deployment control over which approved
- * integrations staff use, not a containment barrier. Tenancy is what stops
- * cross-workspace access and that fails closed. Denying every connection
- * because the policy table blipped would break every member for an outage that
- * granted nobody anything.
+ * A policy read failure must not turn an administrator's restriction into an
+ * unrestricted connection or credential exchange.
  */
 export interface ConnectorPolicyGateResult extends ConnectorAccessDecision {
   organizationId: string | null;
@@ -71,19 +68,15 @@ async function evaluateWorkspacePolicy(
   decide: (policy: ConnectorAccessPolicy) => ConnectorAccessDecision,
 ): Promise<ConnectorPolicyGateResult> {
   const { db, userId } = params;
-  if (!userId) return UNGOVERNED;
+  if (!userId) throw createError.unauthorized('Sign in to use connectors.');
   if (params.organizationId === null) return UNGOVERNED;
 
-  // Total, not merely fail-open at each await. A gate added to live routes
-  // must not be able to turn any of them into a 500: whatever goes wrong here,
-  // the answer is the same one an ungoverned workspace gets, and the reason is
-  // logged.
   let organizationId: string | null = params.organizationId ?? null;
   try {
     organizationId ??= await resolveActiveOrganizationId(db, userId, params.request);
     if (!organizationId) return UNGOVERNED;
 
-    const policy = await readConnectorPolicySafely(db, organizationId);
+    const policy = await readConnectorPolicy(db, organizationId);
     if (!policy) return { ...UNGOVERNED, organizationId };
 
     const decision = decide(policy);
@@ -94,9 +87,9 @@ async function evaluateWorkspacePolicy(
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error), userId, organizationId },
-      '[connector-policy] unavailable at connection time; connection ungoverned',
+      '[connector-policy] unavailable at connection time; connection refused',
     );
-    return { ...UNGOVERNED, organizationId };
+    throw createError.serviceUnavailable('Workspace connector policy is unavailable. Try again.');
   }
 }
 
