@@ -69,4 +69,22 @@ describe('Calendar and reminders permission registry', () => {
     expect(mockRequestRemindersPermissions).toHaveBeenCalledTimes(1);
     expect(mockGetCalendarPermissions).not.toHaveBeenCalled();
   });
+
+  it('lists no Photos row on Android, where the system photo picker needs no permission', () => {
+    jest.isolateModules(() => {
+      const { Platform } = jest.requireActual<typeof import('react-native')>('react-native');
+      const original = Platform.OS;
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+      try {
+        const registry = jest.requireActual<
+          typeof import('../src/features/settings/permissions/registry')
+        >('../src/features/settings/permissions/registry');
+        expect(registry.PERMISSION_KINDS).not.toContain('photos');
+        expect(registry.PERMISSION_KINDS).not.toContain('reminders');
+      } finally {
+        Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
+      }
+    });
+    expect(PERMISSION_KINDS).toContain('photos');
+  });
 });
