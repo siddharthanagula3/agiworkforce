@@ -80,7 +80,7 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Chats screen can filter to Unread, but rows carry no unread marker in the list or drawer. | ui |
+| mobile | partial | apply after Codex commits ChatsListScreen.tsx and DrawerContent.tsx | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -95,7 +95,7 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited row has no overflow control: actions open only on long-press (DrawerContent.tsx:496-504, hint "Long press to pin or delete"; ChatsListScreen.tsx:331-333 likewise) and the sheet offers rename, pin, archive (cloud only) and delete (useConversationActions.ts:115-133), with no share or move. partial, miss ui; remaining: add a visible more-options control and share/move actions. |  |
+| mobile | partial | apply after Codex commits ChatsListScreen.tsx; share and move stay out until leader research (founder file) |  |
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
@@ -137,18 +137,6 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S5.30: Help menu.
-
-- Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Help & About (about.tsx) has a Support section with Contact Support (mailto) and Send Feedback only; no help-centre or docs link exists in the file, so two of the criterion's four parts are missing (shortcuts do not apply on a phone). partial, miss ui; remaining: add a help-centre link to Help & About. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`
 
 ## S5.31: Upgrade entry.
 

@@ -48,11 +48,13 @@ jest.mock('lucide-react-native', () => {
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 describe('VoiceInputButton long-press handoff', () => {
   beforeEach(async () => {
     await VoiceInput.cancelCapture();
     jest.clearAllMocks();
+    useSettingsStore.setState({ dictationOnboardingSeen: true });
   });
 
   it('cancels an in-flight PTT recording instead of orphaning it when long-press fires', async () => {

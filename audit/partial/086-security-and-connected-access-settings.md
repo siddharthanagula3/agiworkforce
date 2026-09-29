@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Account Security still does not list passkeys or linked sign-in identities; left for after the Codex mobile release | ui |
+| mobile | partial | apply the patch after Codex commits account-security/index.tsx | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/settings/identities/route.ts:42-42`
+Code: `apps/mobile/src/features/settings/account-security/service.ts:261-261`
 
 ## S86.03: Passkeys.
 

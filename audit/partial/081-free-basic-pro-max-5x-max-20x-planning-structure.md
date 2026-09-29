@@ -88,18 +88,6 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
-## S81.20: Purchased credit balances.
-
-- Done when: Users can buy credit top-ups that form a separate purchased balance, which carries over and is shown apart from the plan allowance.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Native top-up products exist but are gated off (MOBILE_IAP_ENABLED unset) and the app never shows the purchased balance. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off, ui |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.

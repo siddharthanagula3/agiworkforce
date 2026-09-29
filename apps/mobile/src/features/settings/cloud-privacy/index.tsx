@@ -11,13 +11,14 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
+import { ProviderTrainingOptOutGroup } from './ProviderTrainingOptOutGroup';
 import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
 const PRIVACY_ITEMS = [
   {
     key: 'no-training',
     label: 'Model training',
-    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings on the web.',
+    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats below.',
   },
   {
     key: 'telemetry',
@@ -157,6 +158,8 @@ export default function CloudPrivacyScreen() {
           receives, is at agiworkforce.com/subprocessors.
         </Text>
       </View>
+
+      <ProviderTrainingOptOutGroup />
 
       <UsOnlyRoutingGroup />
 
