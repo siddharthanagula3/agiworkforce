@@ -40,6 +40,8 @@ export const CLI_CAPABILITY_METHODS = {
   worktreeCreate: 'createWorktree',
   worktreeList: 'listWorktrees',
   worktreeRemove: 'removeWorktree',
+  pullRequestPlan: 'planPullRequest',
+  pullRequestCreate: 'createPullRequest',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
@@ -61,6 +63,7 @@ export type CliFamily = keyof Pick<
   | 'pluginUpdates'
   | 'memory'
   | 'worktrees'
+  | 'pullRequests'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -99,6 +102,8 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   worktreeCreate: 'worktrees',
   worktreeList: 'worktrees',
   worktreeRemove: 'worktrees',
+  pullRequestPlan: 'pullRequests',
+  pullRequestCreate: 'pullRequests',
 };
 
 const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
@@ -117,6 +122,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   pluginUpdates: 'updating plugins',
   memory: 'repository memory',
   worktrees: 'session worktrees',
+  pullRequests: 'opening pull requests',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

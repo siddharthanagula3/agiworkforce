@@ -15,28 +15,30 @@ use agiworkforce_protocol::developer_session::{
     DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
     DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
     DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
-    HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
-    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
-    HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
-    McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PermissionRulesResponse, PermissionsAddParams,
-    PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PlanDecision,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
-    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
-    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
+    GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams,
+    HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpAddParams, McpAuthRequiredNotification,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
+    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
+    WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -449,6 +451,7 @@ impl CliDeveloperSessionHost {
             provider_keys: true,
             questions: true,
             plan_decisions: true,
+            pull_requests: true,
         }
     }
 
@@ -3558,6 +3561,24 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
             .await
             .map_err(internal_error)?
+    }
+
+    async fn plan_pull_request(
+        &self,
+        params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::plan(&self.workspace_root).await
+    }
+
+    async fn create_pull_request(
+        &self,
+        params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::create(&self.workspace_root, params).await
     }
 
     async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {

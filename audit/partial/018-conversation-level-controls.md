@@ -224,11 +224,8 @@ Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Task chips pick a tool mode for the next message only; add per-conversation tool toggles. | ui |
 | cli | partial | L2/R-k: --allowedTools/--disallowedTools (lib.rs:392-402) are passed into the session for every turn (4626-4630, and the TUI branch below it), which is per-conversation tool enablement that persists across the session's turns; there is no mid-session control, so partial. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
 ## S18.26: Conversation-level connected accounts.
 

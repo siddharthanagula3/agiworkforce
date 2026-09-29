@@ -123,6 +123,8 @@ import {
   openCapabilitySurface,
   manageHooks,
   manageSavedApprovals,
+  createPullRequest,
+  CREATE_PULL_REQUEST_COMMAND,
   manageMcpServers,
   managePlugins,
   manageSkills,
@@ -2550,6 +2552,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     ),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
     register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
+    register(CREATE_PULL_REQUEST_COMMAND, () => createPullRequest(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),

@@ -286,6 +286,6 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates e8552caa7c adds a catalogue of 32 destinations and settings matched by title and by purpose ('dark mode' finds Appearance, 'password' finds Account security), with a test that every route exists. post-codex/w-chat-s9.38-mobile-search-destinations.patch shows them as a 'Go to' section in the held chat search. Still open: a hardware-keyboard shortcut. React Native has no global key command, so it needs a native module in the held package.json; proposed as a decline of the keyboard part. | codex, ui |
+| mobile | partial | Destination search is built (e8552caa7c plus post-codex/w-chat-s9.38-mobile-search-destinations.patch). The hardware-keyboard part is declined for now under D-2026-09-28-26 because it needs a native key-command module in the Codex-held package.json. | codex |
 
 Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`

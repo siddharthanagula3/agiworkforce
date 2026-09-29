@@ -32,6 +32,9 @@ describe('browser bridge contract', () => {
       'browser_console',
       'browser_network',
       'browser_download',
+      'browser_find',
+      'browser_fill_form',
+      'browser_history',
     ]);
     expect(BROWSER_COMMANDS.every(isBrowserCommand)).toBe(true);
     expect(isBrowserCommand('shell_run')).toBe(false);
