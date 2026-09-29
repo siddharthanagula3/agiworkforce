@@ -31,7 +31,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useAgentStore } from '@/stores/agentStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { isTerminalToolStatus } from '@agiworkforce/types';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import type { ToolCall } from '@/types/chat';
@@ -123,7 +123,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(250)}
+      entering={FadeIn.duration(motion.moved)}
       layout={LinearTransition.springify()}
       className="flex-row items-start gap-2.5 mb-2.5"
     >
@@ -195,7 +195,7 @@ function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-row items-center gap-2.5 px-3 py-2.5 rounded-xl mt-1"
       style={{ backgroundColor: bgColor, borderWidth: 1, borderColor }}
     >
@@ -285,8 +285,8 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
       {/* Current action pill */}
       {agent.currentAction && agent.status === 'running' && (
         <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
           layout={LinearTransition.springify()}
           className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3"
           style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}

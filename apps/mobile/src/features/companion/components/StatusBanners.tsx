@@ -2,7 +2,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { View, Pressable } from 'react-native';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 const STALE_THRESHOLD_MS = 90_000;
 
@@ -19,7 +19,7 @@ export function StaleApprovalBanner({ lastHeartbeatAt }: StaleApprovalBannerProp
   const ageLabel = ageSeconds >= 60 ? `${Math.floor(ageSeconds / 60)}m ago` : `${ageSeconds}s ago`;
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="mx-4 mb-3">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="mx-4 mb-3">
       <View className="flex-row items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
         <AlertTriangle size={14} color={colors.agentWarning} style={{ marginTop: 1 }} />
         <View className="flex-1">
@@ -42,7 +42,7 @@ interface DisconnectedDesktopBannerProps {
 export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBannerProps) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={FadeIn.duration(300)}>
+    <Animated.View entering={FadeIn.duration(motion.moved)}>
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
         <SignalZero size={14} color={colors.agentError} />
         <View className="flex-1">
@@ -70,7 +70,7 @@ interface ReconnectingBannerProps {
 export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBannerProps) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={FadeIn.duration(300)}>
+    <Animated.View entering={FadeIn.duration(motion.moved)}>
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
         <Clock size={14} color={colors.agentWarning} />
         <View className="flex-1">
