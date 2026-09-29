@@ -64,6 +64,9 @@ export const GOOGLE_USER_DATA_NO_MODEL_MESSAGE =
 export const GOOGLE_USER_DATA_MEMORY_REFUSAL =
   'Not saved. This chat includes data from your Google account, and Memory does not keep facts drawn from Google data.';
 
+export const GOOGLE_USER_DATA_FILE_HELD_MESSAGE =
+  'This file holds data from your Google account, and this turn may reach a model whose provider trains on what it is sent, so it was not opened. The chat now keeps to models that do not train on Google data; ask again to read it.';
+
 export const GOOGLE_USER_DATA_UNROUTED_MESSAGE =
   'This Google connector did not run because this run is not limited to models that keep Google data out of training.';
 
@@ -420,4 +423,42 @@ export async function markSyncedConversationsGoogleUserData(
         and google_user_data_at is null`,
     [marked, userId],
   );
+}
+
+export function googleUserDataConnectorRefs(): string[] {
+  return [...GOOGLE_USER_DATA_CONNECTOR_ID_SET];
+}
+
+/**
+ * SQL that is true when an indexed retrieval document holds Google user data:
+ * it came from a conversation, artifact, report or library file whose chat is
+ * marked, or it is a project file imported from a Google connector. Each alias
+ * names the joined row; `connectorRefsParam` binds googleUserDataConnectorRefs().
+ */
+export function retrievalDocumentGoogleUserDataSql(aliases: {
+  document: string;
+  artifact: string;
+  report: string;
+  asset: string;
+  connectorRefsParam: number;
+}): string {
+  const { document, artifact, report, asset, connectorRefsParam } = aliases;
+  return `(exists (
+      select 1
+        from public.web_conversations google_origin
+       where google_origin.id in (
+               ${document}.conversation_id,
+               ${artifact}.conversation_id,
+               ${report}.conversation_id,
+               ${asset}.conversation_id
+             )
+         and google_origin.google_user_data_at is not null
+    ) or exists (
+      select 1
+        from public.project_knowledge_files google_file
+        join public.external_resource_references google_ref
+          on google_ref.id = google_file.external_reference_id
+       where google_file.id = ${document}.project_knowledge_file_id
+         and google_ref.connector_id = any($${connectorRefsParam}::text[])
+    ))`;
 }

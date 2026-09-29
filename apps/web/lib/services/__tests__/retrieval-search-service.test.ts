@@ -73,7 +73,7 @@ const ROWS = [
 function scopedDb(options: { embeddingsPresent: boolean; googleMarked?: boolean | 'unreadable' }) {
   const query = vi.fn(async (sql: string, _params?: unknown[]): Promise<unknown[]> => {
     if (sql.includes('as present')) return [{ present: options.embeddingsPresent }];
-    if (sql.includes('google_user_data_at')) {
+    if (sql.includes('google_user_data_at') && sql.includes('as holds')) {
       if (options.googleMarked === 'unreadable') throw new Error('connection reset');
       return [{ holds: options.googleMarked === true }];
     }
@@ -188,7 +188,7 @@ describe('createPostgresSearchProvider', () => {
     expect(response.semantic).toBe('unavailable');
     const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
     expect(sql).not.toContain('semantic as (');
-    expect(params).toHaveLength(7);
+    expect(params).toHaveLength(8);
   });
 
   it('never pays for a query embedding when nothing in scope is embedded', async () => {
@@ -385,5 +385,37 @@ describe('passagesFromIndexedHits', () => {
         budgetChars: 500,
       }),
     ).toBeNull();
+  });
+});
+
+describe('documents holding Google user data', () => {
+  function run(googleUserData?: 'include' | 'exclude') {
+    mocks.embed.mockRejectedValue(new RetrievalEmbeddingError('no embedding', 'billing_refused'));
+    const { query, adapter } = scopedDb({ embeddingsPresent: false });
+    return createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: null,
+      semantic: false,
+      ...(googleUserData ? { googleUserData } : {}),
+    })
+      .search({ text: 'pricing', limit: 5 })
+      .then((response) => ({ response, query }));
+  }
+
+  it('are left out by default: a marked origin chat or a Google-imported project file', async () => {
+    const { query } = await run();
+    const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
+    expect(sql).toContain('and not (exists (');
+    expect(sql).toContain('google_origin.google_user_data_at is not null');
+    expect(sql).toContain('google_file.id = d.project_knowledge_file_id');
+    expect(params.at(-1)).toEqual(expect.arrayContaining(['google-drive', 'gmail']));
+  });
+
+  it('are searched and tagged when the caller serves only models that do not train', async () => {
+    const { query } = await run('include');
+    const [sql] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
+    expect(sql).not.toContain('and not (exists (');
+    expect(sql).toContain('as google_user_data');
   });
 });

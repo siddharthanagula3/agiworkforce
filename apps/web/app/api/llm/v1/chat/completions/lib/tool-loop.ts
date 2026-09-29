@@ -2200,6 +2200,8 @@ async function runMcpTool(
       organizationId: executionContext.organizationId,
       temporaryChat: executionContext.temporaryChat === true,
       healthSpaceProjectId: executionContext.healthSpaceProjectId ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      googleUserDataRouted: executionContext.googleUserDataRouted === true,
     });
   }
 
