@@ -1236,6 +1236,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::GIT_PULL_REQUEST => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "git/pullRequest is refused on this connection: push and open a pull request only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<GitPullRequestParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
