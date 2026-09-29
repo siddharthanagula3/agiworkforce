@@ -15,11 +15,10 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile Account Security still does not list passkeys or linked sign-in identities; left for after the Codex mobile release | ui |
-| cli | partial | agi auth-status and agi logout list and remove the CLI's own stored credentials (device-code sign-in, provider keys); the account's sign-in methods are not visible. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/settings/identities/route.ts:42-42`, `apps/cli/src/lib.rs:3957-3975`, `apps/cli/src/auth.rs:518-535`
+Code: `apps/web/app/api/settings/identities/route.ts:42-42`
 
 ## S86.03: Passkeys.
 

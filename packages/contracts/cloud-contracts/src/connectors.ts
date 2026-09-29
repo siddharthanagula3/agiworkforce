@@ -583,6 +583,15 @@ const WORKSPACE_MEMBER_ROLES = [
   'viewer',
 ] as const satisfies readonly OrganizationRole[];
 
+export const WorkspaceConnectorToolRuleSchema = z
+  .object({
+    connectorId: z.string().trim().min(1).max(200),
+    toolName: z.string().trim().min(1).max(200),
+    level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
+  })
+  .strict();
+export type WorkspaceConnectorToolRule = z.infer<typeof WorkspaceConnectorToolRuleSchema>;
+
 export const ConnectorPolicyListsSchema = z.object({
   allowedConnectors: z.array(z.string()),
   blockedConnectors: z.array(z.string()),
@@ -592,6 +601,7 @@ export const ConnectorPolicyListsSchema = z.object({
   allowedMcpHosts: z.array(z.string()),
   allowedWebDomains: z.array(z.string()),
   blockedWebDomains: z.array(z.string()),
+  toolRules: z.array(WorkspaceConnectorToolRuleSchema).default([]),
 });
 export type ConnectorPolicyLists = z.infer<typeof ConnectorPolicyListsSchema>;
 
@@ -634,6 +644,10 @@ export const UpdateConnectorPolicyRequestSchema = z
       .max(CONNECTOR_POLICY_LIST_LIMIT),
     allowedWebDomains: WebDomainListSchema,
     blockedWebDomains: WebDomainListSchema,
+    toolRules: z
+      .array(WorkspaceConnectorToolRuleSchema)
+      .max(CONNECTOR_POLICY_LIST_LIMIT)
+      .optional(),
   })
   .strict();
 export type UpdateConnectorPolicyRequest = z.infer<typeof UpdateConnectorPolicyRequestSchema>;

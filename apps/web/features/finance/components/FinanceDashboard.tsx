@@ -11,6 +11,7 @@ import {
   type FinanceOverviewResponse,
 } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type ReadyOverview = Extract<FinanceOverviewResponse, { status: 'ready' }>;
 
@@ -344,7 +345,7 @@ export function FinanceDashboard() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setState({ kind: 'error', message: error instanceof Error ? error.message : LOAD_FAILED });
+        setState({ kind: 'error', message: toUserMessage(error, LOAD_FAILED) });
       });
     return () => controller.abort();
   }, [period]);

@@ -28,8 +28,7 @@ folder you start `agi` in and only applies once you trust that workspace.
   `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,
   `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,
   `bell` and `crash-reports`. Other settings are edited in the file itself.
-- The VS Code extension's Settings saves the default model, effort and
-  permission mode to the same file.
+- The VS Code extension runs the same CLI, so it reads the same file.
 
 ## Useful settings
 
@@ -56,6 +55,5 @@ privacy modes and can turn repository settings off.
 
 MCP servers are listed in JSON, not in `config.toml`: `.mcp.json` or
 `mcp.json` in the repository, and `~/.agiworkforce/mcp.json` for your own.
-A repository's servers start only in a trusted workspace, and its entries win
-over yours with the same name. `agi mcp` manages your list. Hooks live in
+A repository's servers start only in a trusted workspace. `agi mcp` manages your list. Hooks live in
 `~/.agiworkforce/hooks.json` and `agi hooks` manages them.

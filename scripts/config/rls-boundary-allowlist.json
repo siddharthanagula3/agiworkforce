@@ -14,6 +14,10 @@
       "reason": "RFC 8628 device flow, the pending row is resolved and expired by user_code before any account is attached, user_id is null until approval"
     },
     {
+      "path": "apps/web/app/api/auth/logout/route.ts",
+      "reason": "token revocation by refresh token: the credential is the subject, so the family is found by its hash before any caller is known, and only that family is revoked"
+    },
+    {
       "path": "apps/web/app/api/auth/device/refresh/route.ts",
       "reason": "refresh-token reuse detection revokes the whole family_id, the credential is the subject and constraining by user would defeat the revocation"
     },

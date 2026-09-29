@@ -9,6 +9,7 @@ const MESSAGE_LIMIT: usize = 10_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeedbackKind {
     Bug,
+    Feature,
     Feedback,
 }
 
@@ -33,11 +34,12 @@ struct FeedbackResponse {
     success: bool,
 }
 
-pub const USAGE: &str = "Describe it after the command, for example `/bug the diff view hangs on large files` or `/feedback I would like a dark theme`. It goes to the AGI Workforce team with this CLI's version and platform.";
+pub const USAGE: &str = "Describe it after the command, for example `/bug the diff view hangs on large files` or `/feedback I would like a dark theme`; start with `/feedback feature` for a feature request. It goes to the AGI Workforce team with this CLI's version and platform.";
 
 fn subject(kind: FeedbackKind, message: &str) -> String {
     let prefix = match kind {
         FeedbackKind::Bug => "Bug report",
+        FeedbackKind::Feature => "Feature request",
         FeedbackKind::Feedback => "Feedback",
     };
     let line = message.lines().next().unwrap_or_default().trim();
@@ -70,6 +72,7 @@ pub async fn submit(
     Ok(if response.success {
         match kind {
             FeedbackKind::Bug => "Bug report sent to the AGI Workforce team. Thank you.",
+            FeedbackKind::Feature => "Feature request sent to the AGI Workforce team. Thank you.",
             FeedbackKind::Feedback => "Feedback sent to the AGI Workforce team. Thank you.",
         }
         .to_string()

@@ -207,6 +207,12 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Continue with one of your passkeys or security keys.',
     icon: 'auth',
   },
+  [ErrorCode.ACCOUNT_UNAVAILABLE]: {
+    title: 'Account Unavailable',
+    message: 'This account cannot be used right now.',
+    suggestion: 'Sign in on the web to see why and what to do next.',
+    icon: 'auth',
+  },
   [ErrorCode.VALIDATION_ERROR]: {
     title: 'Invalid Input',
     message: 'Some of the information provided is incorrect.',
