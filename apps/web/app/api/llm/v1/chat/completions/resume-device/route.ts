@@ -23,6 +23,7 @@ import { withManagedTurnSlot } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   ManagedUsageRequestError,
@@ -228,13 +229,17 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
     await (async () => {
       try {
         const permissions = await loadConnectorToolPermissions(db, userId);
+        const connectorsAllowed = await connectorsAllowedForTurn(request, userId, processed);
         const [operatorTools, connectorTools] = await Promise.all([
           loadMcpToolDefs(),
-          loadUserConnectorToolDefs(userId, {
-            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-            planTier: processed.subscriptionTier,
-            isToolDenied: permissions.isConnectorToolDenied,
-          }),
+          connectorsAllowed
+            ? loadUserConnectorToolDefs(userId, {
+                customConnectorLimit:
+                  getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+                planTier: processed.subscriptionTier,
+                isToolDenied: permissions.isConnectorToolDenied,
+              })
+            : Promise.resolve([]),
         ]);
         return { mcpTools: [...operatorTools, ...connectorTools], permissions };
       } catch (error) {
