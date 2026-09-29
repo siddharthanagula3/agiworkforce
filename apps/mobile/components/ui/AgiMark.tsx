@@ -8,7 +8,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import Svg, { Line } from 'react-native-svg';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 const SPOKE_COUNT = 12;
 const INNER_R = 4.6;
@@ -40,7 +40,7 @@ export function AgiMark({ size = 24, mono = false, spinning = false, accentColor
   useEffect(() => {
     if (spinning) {
       rotation.value = withRepeat(
-        withTiming(360, { duration: 3000, easing: Easing.linear }),
+        withTiming(360, { duration: motion.orbit, easing: Easing.linear }),
         -1,
         false,
       );

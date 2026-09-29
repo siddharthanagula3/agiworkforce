@@ -42,7 +42,12 @@ export function SettingsScreenShell({
         >
           <ArrowLeft size={21} color={colors.textPrimary} />
         </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>{title}</Text>
+        <Text
+          accessibilityRole="header"
+          style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}
+        >
+          {title}
+        </Text>
       </View>
       <ScrollView
         className="flex-1"

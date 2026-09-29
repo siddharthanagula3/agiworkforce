@@ -141,11 +141,11 @@ function formatCreditAmount(value: number): string {
 }
 
 function formatCount(value: number, one: string, many: string): string {
-  return `${value.toLocaleString('en-US')} ${value === 1 ? one : many}`;
+  return `${value.toLocaleString()} ${value === 1 ? one : many}`;
 }
 
 function formatLongDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+  return new Date(iso).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -155,9 +155,13 @@ function formatLongDate(iso: string): string {
 function formatHistoryPeriod(start: string, granularity: AccountUsageHistoryGranularity): string {
   const date = new Date(start);
   if (granularity === 'month') {
-    return date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+    return date.toLocaleDateString(undefined, { timeZone: 'UTC', month: 'long', year: 'numeric' });
   }
-  const day = date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+  const day = date.toLocaleDateString(undefined, {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+  });
   return granularity === 'week' ? `Week of ${day}` : day;
 }
 
@@ -377,7 +381,7 @@ function AllowancesCard({ resource }: { resource: UsageResource<AccountUsageAllo
                 value={
                   unit.hardLimit === null
                     ? `${formatCount(unit.consumed, copy.one, copy.many)}, no monthly cap`
-                    : `${unit.consumed.toLocaleString('en-US')} of ${formatCount(unit.hardLimit, copy.one, copy.many)}`
+                    : `${unit.consumed.toLocaleString()} of ${formatCount(unit.hardLimit, copy.one, copy.many)}`
                 }
               />
             );

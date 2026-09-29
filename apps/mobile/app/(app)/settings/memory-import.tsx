@@ -14,6 +14,7 @@ import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
 
@@ -127,7 +128,16 @@ export default function MemoryImportScreen() {
 
     Alert.alert(
       'Import Preview',
-      `Found ${facts.length} fact${facts.length !== 1 ? 's' : ''} from ${SOURCE_LABELS[source]}.\n\nPreview:\n• ${facts
+      `${translatePlural(
+        'settings',
+        'counts.factsFound',
+        facts.length,
+        {
+          one: 'Found {{count}} fact from {{source}}.',
+          other: 'Found {{count}} facts from {{source}}.',
+        },
+        { source: SOURCE_LABELS[source] },
+      )}\n\nPreview:\n• ${facts
         .slice(0, 3)
         .map((f) => f.fact.slice(0, 80))
         .join('\n• ')}${facts.length > 3 ? `\n… and ${facts.length - 3} more` : ''}`,
@@ -273,7 +283,10 @@ export default function MemoryImportScreen() {
                 </Text>
               )}
               <Text className="text-sm mt-3 text-center" style={{ color: colors.textSecondary }}>
-                Added {state.inserted} {state.inserted === 1 ? 'memory' : 'memories'}
+                {translatePlural('settings', 'counts.memoriesAdded', state.inserted, {
+                  one: 'Added {{count}} memory',
+                  other: 'Added {{count}} memories',
+                })}
                 {state.skipped > 0 ? `, ${state.skipped} skipped` : ''}
               </Text>
             </View>

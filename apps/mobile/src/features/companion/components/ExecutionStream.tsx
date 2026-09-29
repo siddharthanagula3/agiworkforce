@@ -50,7 +50,7 @@ function SpinningLoader({ size = 14, color }: { size?: number; color: string }) 
 
   useEffect(() => {
     rotation.value = withRepeat(
-      withTiming(360, { duration: 900, easing: Easing.linear }),
+      withTiming(360, { duration: motion.pulse, easing: Easing.linear }),
       -1,
       false,
     );

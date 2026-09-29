@@ -633,6 +633,7 @@ export default function CloudAccountScreen() {
       >
         <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.dangerBorder }}>
           <Text
+            accessibilityRole="header"
             style={{
               color: colors.agentError,
               fontSize: 12,
