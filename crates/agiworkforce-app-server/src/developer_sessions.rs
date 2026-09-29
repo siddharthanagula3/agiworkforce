@@ -1247,6 +1247,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_REMOVE_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/removeKey is refused on this connection: remove a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<ProviderParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1266,6 +1273,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::TRUST_REVOKE => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "trust/revoke is refused on this connection: revoke a folder only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<TrustRevokeParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,

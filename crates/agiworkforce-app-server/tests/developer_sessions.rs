@@ -1571,7 +1571,7 @@ async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth
 }
 
 #[tokio::test]
-async fn rules_and_keys_are_not_saved_over_a_connection_that_did_not_prove_header_auth() {
+async fn rules_keys_and_trust_are_not_changed_over_a_connection_that_did_not_prove_header_auth() {
     let mut processor = DeveloperSessionProcessor::new_with_trust(
         Arc::new(SurfaceHost::new()),
         capabilities(),
@@ -1584,6 +1584,16 @@ async fn rules_and_keys_are_not_saved_over_a_connection_that_did_not_prove_heade
             2,
             method::PERMISSIONS_ADD,
             serde_json::json!({ "kind": "command", "target": "git status", "decision": "allow" }),
+        ),
+        (
+            4,
+            method::PROVIDERS_REMOVE_KEY,
+            serde_json::json!({ "provider": "openai" }),
+        ),
+        (
+            5,
+            method::TRUST_REVOKE,
+            serde_json::json!({ "path": "/tmp/project" }),
         ),
         (
             3,
