@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 41,
-  "chunkCount": 230,
+  "documentCount": 43,
+  "chunkCount": 238,
   "documents": [
     {
       "id": "account-security",
@@ -573,6 +573,68 @@
       ]
     },
     {
+      "id": "configuration",
+      "title": "Configure the CLI and the VS Code extension",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "configuration",
+        "config.toml",
+        "cli config",
+        "agiworkforce_home",
+        "managed policy",
+        "managed-settings.json",
+        "environment variables",
+        "vscode settings"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/configuration.md",
+      "chunks": [
+        {
+          "id": "configuration#0",
+          "ordinal": 0,
+          "heading": "Where the settings live",
+          "headingPath": "Configure the CLI and the VS Code extension › Where the settings live",
+          "text": "The CLI reads your settings from `~/.agiworkforce/config.toml`. Set\n`AGIWORKFORCE_HOME` to an absolute path to keep that folder somewhere else. A\nrepository can add its own `.agiworkforce/config.toml`, which applies when you\nrun the CLI in that folder.\n\nThe VS Code extension runs the same CLI for its local sessions, so it uses the\nsame file. The extension's Settings panel shows the path, with buttons to open\n`config.toml` and to restart the local runtime; a session that is already\nrunning keeps its settings until you restart it."
+        },
+        {
+          "id": "configuration#1",
+          "ordinal": 1,
+          "heading": "Which setting wins",
+          "headingPath": "Configure the CLI and the VS Code extension › Which setting wins",
+          "text": "Your own file is read first, then the repository's, then environment variables,\nthen any policy your organization manages. A repository's file is only applied\nonce you trust that folder, and an organization can switch repository files off\naltogether. A repository file that points a provider at its own server asks you\nfirst."
+        },
+        {
+          "id": "configuration#2",
+          "ordinal": 2,
+          "heading": "Common settings",
+          "headingPath": "Configure the CLI and the VS Code extension › Common settings",
+          "text": "- `[default]` holds `model`, `provider`, `max_tokens` (8192 unless you set it),\n  `temperature`, `reasoning_effort` (low, medium, high or max) and\n  `sandbox_mode` (off, read-only, workspace or full-auto).\n- `permission_mode` takes `default`, `plan`, `acceptEdits` or `dontAsk`.\n  Bypassing permissions cannot be saved in the file; pass it for one run\n  instead.\n- `ui.privacy_mode` sets where new sessions run: local, byok or managed.\n\n`AGIWORKFORCE_MODEL`, `AGIWORKFORCE_PROVIDER` and `AGIWORKFORCE_MAX_TOKENS`\noverride the file for one run, and an empty value is ignored."
+        },
+        {
+          "id": "configuration#3",
+          "ordinal": 3,
+          "heading": "Organization policy",
+          "headingPath": "Configure the CLI and the VS Code extension › Organization policy",
+          "text": "An administrator can install `managed-settings.json` in\n`/Library/Application Support/AGIWorkforce` on macOS, `/etc/agiworkforce` on\nLinux or `ProgramData\\AGIWorkforce` on Windows. It can pin the permission mode,\nthe privacy mode and whether repository files apply, and add tool rules that\nallow, ask about or deny a tool. A policy file that exists but cannot be read\nstops the CLI rather than being skipped. When a tool is denied, the message\nnames the policy that denied it."
+        },
+        {
+          "id": "configuration#4",
+          "ordinal": 4,
+          "heading": "VS Code settings",
+          "headingPath": "Configure the CLI and the VS Code extension › VS Code settings",
+          "text": "The extension's own settings are under `agiWorkforce` in VS Code's Settings,\nfor example `agiWorkforce.model` (Auto by default), `agiWorkforce.cliPath` (the\n`agi` command by default) and `agiWorkforce.memory.enabled`."
+        }
+      ]
+    },
+    {
       "id": "connectors-and-mcp",
       "title": "Connectors and MCP",
       "path": "/connectors",
@@ -626,6 +688,53 @@
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
           "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "custom-instructions",
+      "title": "Custom instructions for the CLI and VS Code",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "custom instructions",
+        "agents.md",
+        "claude.md",
+        "instructions.md",
+        "project instructions",
+        "vscode instructions",
+        "personalize"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/custom-instructions.md",
+      "chunks": [
+        {
+          "id": "custom-instructions#0",
+          "ordinal": 0,
+          "heading": "Instruction files",
+          "headingPath": "Custom instructions for the CLI and VS Code › Instruction files",
+          "text": "The CLI and the VS Code extension's local sessions read instructions from\nfiles. In each folder from the top of the drive down to the one you work in,\nthey read `AGENTS.md`, `CLAUDE.md` and `.agiworkforce/instructions.md`. Your own\n`~/.agiworkforce/instructions.md` is read first, and a deeper folder's file\ncomes after a shallower one, so the closest instructions are read last.\n\nTogether the files can use about 10,000 tokens, and files past that are left\nout. The same file is never\nread twice. An edited, added or removed file reaches the next turn, and so does\nmoving to another worktree."
+        },
+        {
+          "id": "custom-instructions#1",
+          "ordinal": 1,
+          "heading": "Instructions set in VS Code",
+          "headingPath": "Custom instructions for the CLI and VS Code › Instructions set in VS Code",
+          "text": "Settings, Custom instructions in the extension holds instructions of up to\n8,000 characters, either for every workspace on this computer or for the open\nworkspace only. A workspace's own instructions replace the computer-wide ones\nwhile it is open. They are kept in VS Code's workspace storage, not in a project\nfile, and the instruction files above are read separately."
+        },
+        {
+          "id": "custom-instructions#2",
+          "ordinal": 2,
+          "heading": "Your account's instructions",
+          "headingPath": "Custom instructions for the CLI and VS Code › Your account's instructions",
+          "text": "`/personalize` in the CLI shows and changes your account's personalization,\nsuch as what to call you, your work and how answers are written; the same\nsettings are in Settings, General on the web. In a Managed session, your\naccount's memories and the instructions of the account project you linked are\nadded to the turn as well."
         }
       ]
     },
