@@ -21,15 +21,12 @@ nothing is left.
 
 - Done when: Hovering/tapping a citation shows a preview card (title, site, snippet/date) before opening it.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The source list shows each result's title, site and snippet before it opens, and the citation chip preview shows title and site; the chip shows the snippet once post-codex/chat-gates-s22.02-mobile-citation-snippet.patch is applied (MessageBubble is held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`, `apps/mobile/src/features/chat/components/CitationChip.tsx:39-39`
 
 ## S22.03: Search-result lists.
 

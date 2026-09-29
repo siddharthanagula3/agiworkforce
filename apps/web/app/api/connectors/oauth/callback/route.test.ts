@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
     }
   }
   return {
-    appReturnOwner: vi.fn(async () => null),
+    appReturnOwner: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
     authUser: vi.fn(),
     consumePending: vi.fn(),
     upsertGrant: vi.fn(),

@@ -28,6 +28,7 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -335,7 +336,10 @@ export default function ScanScreen() {
                 <ScanText size={14} color={c.teal} />
                 <Text style={styles.topBadgeText}>
                   {regions.length > 0
-                    ? `${regions.length} text block${regions.length !== 1 ? 's' : ''}`
+                    ? translatePlural('common', 'counts.textBlocks', regions.length, {
+                        one: '{{count}} text block',
+                        other: '{{count}} text blocks',
+                      })
                     : ocrError
                       ? 'No text found'
                       : 'No text detected'}

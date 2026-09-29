@@ -113,6 +113,7 @@ export default function CloudPrivacyScreen() {
 
       <View style={{ marginBottom: 18 }}>
         <Text
+          accessibilityRole="header"
           style={{
             color: colors.textMuted,
             fontSize: 12,

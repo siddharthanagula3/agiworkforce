@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The composer reacts to images the chosen model cannot read with a visible warning, in the S9.34 post-codex patch. Document types are not yet checked against the model. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 ## S78.06: Model-dependent media settings.
 
@@ -29,18 +26,6 @@ Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S78.10: Role restrictions.
-
-- Done when: Controls restricted to workspace roles (owner/admin) are withheld from other members and refused server-side.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Gating member controls on the current user's owner/admin role is in post-codex/chat-gates-s78.10-mobile-role-controls.patch (workspace.tsx is Codex-held). | ui |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 ## S78.11: Regional restrictions.
 

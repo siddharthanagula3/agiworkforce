@@ -266,7 +266,13 @@
     "unreadNotifications_two": "إشعاران غير مقروءين",
     "unreadNotifications_few": "{{count}} إشعارات غير مقروءة",
     "unreadNotifications_many": "{{count}} إشعاراً غير مقروء",
-    "unreadNotifications_other": "{{count}} إشعار غير مقروء"
+    "unreadNotifications_other": "{{count}} إشعار غير مقروء",
+    "textBlocks_zero": "لا كتل نصية",
+    "textBlocks_one": "كتلة نصية واحدة",
+    "textBlocks_two": "كتلتان نصيتان",
+    "textBlocks_few": "{{count}} كتل نصية",
+    "textBlocks_many": "{{count}} كتلة نصية",
+    "textBlocks_other": "{{count}} كتلة نصية"
   },
   "relative": {
     "minutesAgo_zero": "الآن",

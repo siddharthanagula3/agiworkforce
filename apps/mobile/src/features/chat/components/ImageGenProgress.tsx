@@ -37,9 +37,9 @@ export function ImageGenProgress({
 
   useEffect(() => {
     if (status === 'pending') {
-      pulseOpacity.value = withRepeat(withTiming(0.4, { duration: 1000 }), -1, true);
+      pulseOpacity.value = withRepeat(withTiming(0.4, { duration: motion.pulse }), -1, true);
     } else {
-      pulseOpacity.value = withTiming(1, { duration: 200 });
+      pulseOpacity.value = withTiming(1, { duration: motion.quick });
     }
   }, [status, pulseOpacity]);
 
@@ -52,7 +52,7 @@ export function ImageGenProgress({
   useEffect(() => {
     if (typeof progress === 'number' && Number.isFinite(progress)) {
       barWidth.value = withTiming(Math.min(100, Math.max(0, progress)), {
-        duration: 400,
+        duration: motion.moved,
       });
     }
   }, [progress, barWidth]);

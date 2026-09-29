@@ -839,6 +839,7 @@ export default function PerformanceScreen() {
         {/* ---------------------------------------------------------------- */}
         <Card>
           <Text
+            accessibilityRole="header"
             style={{
               fontSize: 11,
               textTransform: 'uppercase',

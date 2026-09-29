@@ -63,15 +63,12 @@ nothing is left.
 
 - Done when: Video files play in an in-product player.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Generated videos already play in-app. c405859870 extracts that player into VideoPlayerModal. post-codex/w-work-s24-s25.07-mobile-library.patch (now also carries S24): tapping a Library video plays it in the same in-app player instead of the share sheet. Waits on the Codex hold. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/mobile/src/features/library/index.tsx:140-152`
 
 ## S25.08: Spreadsheet preview.
 

@@ -93,7 +93,7 @@ export function MemoryItem({
   const toggleExpand = useCallback(() => {
     const next = !expanded;
     setExpanded(next);
-    animOpacity.value = withTiming(next ? 1 : 0, { duration: 200 });
+    animOpacity.value = withTiming(next ? 1 : 0, { duration: motion.quick });
   }, [expanded, animOpacity]);
 
   const expandStyle = useAnimatedStyle(() => ({

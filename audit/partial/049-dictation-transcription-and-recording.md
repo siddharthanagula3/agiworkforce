@@ -30,14 +30,11 @@ nothing is left.
 
 - Done when: The user can choose the dictation language, and recognition uses it.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S53.01-S49.03-skills-speech-held.patch together with w-connect-S49.03-speech-language-free.patch (integration base); both must land together | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S49.05: Final transcript.
 
@@ -53,14 +50,11 @@ Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 - Done when: After a failed transcription the user can retry without starting over.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S49.07: Discard recording.
 
@@ -114,15 +108,12 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 - Done when: Before audio is captured, the user sees a notice of what is recorded and where it goes, and must agree.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S49.19: Recording-duration display.
 

@@ -147,7 +147,7 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A CSV exists only if the assistant creates one with the office-file tool; no Download-as-CSV action on tables. | ui |
+| mobile | partial | No Download-as-CSV action on tables; a CSV exists only when the assistant creates one with the office-file tool. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 

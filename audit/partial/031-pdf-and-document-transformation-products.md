@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
+| mobile | partial | No convert-this-file action; Word/Excel files cannot be attached on mobile, only message export as PDF and office-tool rewrite of text/CSV. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -29,7 +29,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
+| mobile | partial | No convert-this-file action for spreadsheets; only message export as PDF and office-tool rewrite of CSV. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -92,16 +92,13 @@ Code: `apps/web/scripts/build-e2b-office-template.mjs:29-29`
 
 - Done when: The user can get the plain text of a PDF.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Parity by prompt, accepted by lead. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`
 
 ## S31.08: Scanned-document OCR.
 
@@ -123,7 +120,7 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | PDF text is flattened (cell text joined by spaces), so table structure is guessed by the model; it can then write CSV or XLSX with the office-file tool. No table extractor exists. | handler |
+| mobile | partial | PDF text is flattened, so table structure is guessed by the model; no table extractor exists. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

@@ -46,18 +46,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S58.08: Tool discovery.
-
-- Done when: Connecting an MCP server discovers its tools and the user can see them.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
-
 ## S58.09: Resource discovery.
 
 - Done when: The product discovers an MCP server's resources and lets the user browse or attach them.
@@ -99,7 +87,7 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S55-S58-connectors-held.patch (Codex base) together with w-connect-S55-S58-connectors-free.patch (integration base); they cannot land separately; supersedes p-mcp-web-S56.12-S56.36-S56.46-mobile-connectors.patch | ui |
+| mobile | partial | Detail screen shows health (Not responding, needs reauthorization) but no recent logs or call history. | ui |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 

@@ -5,7 +5,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
 import { ArrowLeft, Menu } from 'lucide-react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { formatRelativeTime } from '@/src/lib/time';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
 import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSourcesTab';
 import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
@@ -51,12 +53,25 @@ function LocalOnlyFallback({
 }
 
 function CloudProjectHeader({
-  name,
+  project,
   colors,
 }: {
-  name: string;
+  project: CloudProject | undefined;
   colors: ReturnType<typeof useThemeColors>;
 }) {
+  const projectId = project?.id;
+  const lastChatAt = useChatCloudMessageStore((s) =>
+    s.conversations.reduce<string | null>(
+      (latest, c) =>
+        c.projectId === projectId && (!latest || c.updatedAt > latest) ? c.updatedAt : latest,
+      null,
+    ),
+  );
+  const description = project?.description?.trim();
+  const instructions = project?.instructions?.trim();
+  const lastUsedAt =
+    project && lastChatAt && lastChatAt > project.updatedAt ? lastChatAt : project?.updatedAt;
+
   return (
     <View
       style={{
@@ -66,13 +81,35 @@ function CloudProjectHeader({
         borderWidth: 1,
         backgroundColor: colors.surfaceElevated,
         borderColor: colors.border,
-        gap: 12,
+        gap: 8,
       }}
       testID="project-detail-cloud-header"
     >
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{name}</Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-        Cloud project · synced across your devices.
+      <Text
+        accessibilityRole="header"
+        style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+      >
+        {project?.name ?? 'Project'}
+      </Text>
+      {description ? (
+        <Text style={{ fontSize: 14, color: colors.textSecondary }}>{description}</Text>
+      ) : null}
+      {instructions ? (
+        <Text
+          testID="project-detail-instructions"
+          numberOfLines={2}
+          style={{ fontSize: 13, color: colors.textSecondary }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+            Instructions:{' '}
+          </Text>
+          {instructions}
+        </Text>
+      ) : null}
+      <Text style={{ fontSize: 13, color: colors.textMuted }}>
+        {lastUsedAt
+          ? `Last used ${formatRelativeTime(lastUsedAt)}. Synced across your devices.`
+          : 'Cloud project. Synced across your devices.'}
       </Text>
     </View>
   );
@@ -252,7 +289,7 @@ export default function ProjectDetailScreen() {
 
   const renderHeader = () => {
     if (isCloudProject) {
-      return <CloudProjectHeader name={cloudProject?.name ?? 'Project'} colors={colors} />;
+      return <CloudProjectHeader project={cloudProject} colors={colors} />;
     }
     return target === 'local' ? (
       <LocalOnlyFallback projectId={id} localProject={localProject} colors={colors} />

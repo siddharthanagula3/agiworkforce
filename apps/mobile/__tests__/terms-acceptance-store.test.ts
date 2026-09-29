@@ -105,6 +105,15 @@ describe('native Terms acceptance', () => {
     });
   });
 
+  it('says a passkey is needed when Advanced Account Security stops the check', async () => {
+    mockGet.mockRejectedValue(new ApiHttpError('Verify with a passkey.', 403, 'PASSKEY_REQUIRED'));
+
+    await useTermsAcceptanceStore.getState().verify('person-a');
+
+    expect(useTermsAcceptanceStore.getState()).toMatchObject({ status: 'error' });
+    expect(useTermsAcceptanceStore.getState().error).toContain('passkeys');
+  });
+
   it('does not mistake a missing bound mobile credential for a service outage', async () => {
     mockGet.mockRejectedValue(new CloudCredentialUnavailableError());
 

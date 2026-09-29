@@ -50,7 +50,7 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiwork
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Cloud projects in the drawer are ordered most recently updated first in post-codex/chat-gates-s12.06-mobile-recent-projects.patch (DrawerContent is held), matching the web sidebar's project shortcuts. | ui |
+| mobile | partial | Proposed n/a at parity: the web new-chat screen has no recent-project shortcuts (NewChatStarters) and no leader page documents one; mobile reaches projects from the + sheet and the drawer. | ui |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`
 
@@ -71,27 +71,23 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 - Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; the connector catalogue and names live in that screen. | codex |
 | cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
 
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:247-247`
 
 ## S12.10: Search entry.
 
 - Done when: From the new-chat screen the user can explicitly start a web search for the next message.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Search the web chip now sends search_requested with web_search, the flag the web's /search sends, so the next message requests a search; in post-codex/chat-gates-s12.10-mobile-requested-search.patch (TaskChips and the store are held). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`
 
 ## S12.11: Research entry.
 
@@ -138,18 +134,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S12.15: Agentic-work entry.
-
-- Done when: From the new-chat screen the user can start agentic (multi-step, tool-using) work rather than a plain chat.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Codex's held chat.tsx already adds a Chat and Work switch to the new-chat screen (working copy lines 844-876); the cell is done once that file merges. Nothing to add here. | ui |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
-
 ## S12.17: Temporary-chat control.
 
 - Done when: Before or during a new chat the user can switch it to a temporary chat that is not kept in history.
@@ -165,27 +149,12 @@ Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 - Done when: The new-chat screen shows which workspace (personal or organization) the new chat will belong to.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The new-chat screen shows 'Workspace: <name>' (or Personal) for accounts in an organization, with the web's shared i18n string, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/team/service.ts:62-62`
-
-## S12.21: Mode explanation and examples.
-
-- Done when: The new-chat screen explains the available modes and gives examples of what each is for.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | In AGI Work mode the new-chat screen shows the web's AGI Work intro and four examples (shared i18n) that fill the composer, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`
 
 ## S12.23: Resumption of an unsent draft.
 

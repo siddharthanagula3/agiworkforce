@@ -13,6 +13,11 @@ import { useFocusEffect, useNavigation } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  Code2,
+  Compass,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
   MessageSquare,
   Pin,
   ChevronRight,
@@ -21,6 +26,7 @@ import {
   SlidersHorizontal,
   SquarePen,
   X,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
@@ -68,6 +74,15 @@ import { TIME_GROUPS } from '@/lib/constants';
 
 type ChatListFilter = 'all' | 'pinned' | 'unread';
 type SearchKind = 'chat' | 'destination' | 'project' | 'file' | 'library' | 'artifact';
+
+const SEARCH_KIND_ICONS: Record<SearchKind, LucideIcon> = {
+  chat: MessageSquare,
+  destination: Compass,
+  project: FolderOpen,
+  file: FileText,
+  library: ImageIcon,
+  artifact: Code2,
+};
 
 interface ChatsListItem extends MobileGlobalSearchResult {
   kind: SearchKind;
@@ -133,6 +148,11 @@ function searchSection(
     title,
     data: results.map((result) => ({ ...result, kind })),
   };
+}
+
+function SearchKindIcon({ kind, color }: { kind: SearchKind; color: string }) {
+  const Icon = SEARCH_KIND_ICONS[kind];
+  return <Icon size={18} color={color} />;
 }
 
 export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }) {
@@ -366,7 +386,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         }
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
-        accessibilityHint={item.kind === 'chat' ? 'Long press to rename, pin or delete' : undefined}
+        accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
         style={({ pressed }) => ({
           minHeight: 66,
           borderRadius: 14,
@@ -388,6 +408,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           />
         ) : null}
         {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
+        {isSearching ? <SearchKindIcon kind={item.kind} color={colors.textMuted} /> : null}
         {item.kind === 'chat' && rename.conversationId === item.id ? (
           <InlineRenameField rename={rename} />
         ) : (
@@ -404,19 +425,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           </View>
         )}
         {isSearching ? (
-          <View
-            style={{
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ color: colors.textMuted, fontSize: 10, textTransform: 'capitalize' }}>
-              {item.kind}
-            </Text>
-          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
         ) : item.kind === 'chat' ? (
           <PressableBox
             onPress={() => openActions(item.id, item.title, item.pinned === true)}

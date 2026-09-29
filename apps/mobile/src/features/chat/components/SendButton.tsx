@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Send, Square, Clock } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { useThemeColors, radii, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, radii, type ColorScheme, motion } from '@/src/ui/theme';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 
@@ -46,7 +46,7 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
 
   useEffect(() => {
     progress.value = withTiming(state === 'idle' ? 0 : state === 'streaming' ? 1 : 2, {
-      duration: 200,
+      duration: motion.quick,
       easing: Easing.out(Easing.ease),
     });
   }, [state, progress]);

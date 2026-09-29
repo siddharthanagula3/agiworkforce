@@ -117,6 +117,19 @@ function signedEnvelopeFrom(payload: unknown): unknown {
   return payload;
 }
 
+/**
+ * The phone names itself, so its name is text from the other end of the pairing.
+ * Control characters and bidirectional overrides could make it display as a
+ * different name, so they are removed before it is shown.
+ */
+function displayableName(raw: string): string | null {
+  const cleaned = raw
+    .replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '')
+    .trim()
+    .slice(0, 120);
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let state: RemoteControlState = { ...IDLE_REMOTE_CONTROL_STATE };
   let client: Pick<SignalingClient, 'sendSignal' | 'close'> | null = null;
@@ -354,7 +367,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     publish({
       status: 'connected',
       error: null,
-      phoneName: typeof phoneName === 'string' ? phoneName.slice(0, 120) : null,
+      phoneName: typeof phoneName === 'string' ? displayableName(phoneName) : null,
     });
     enqueue(flushPageTasks);
     void controller
@@ -467,7 +480,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         deviceName: options.deviceName(),
         app: 'agiworkforce-desktop',
         version: options.appVersion(),
-        capabilities: ['code-sessions'],
+        capabilities: ['code-sessions', 'code-session-start'],
       },
       heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
       createSocket: options.createSocket,

@@ -6,12 +6,38 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({}));
 vi.mock('../runtime/permissionManager', () => ({
+  authorizeRemoteCommand: vi.fn(),
+  clearSessionPermissions: vi.fn(),
+  describePermissionDecision: vi.fn(),
+  isDeviceRevoked: vi.fn(),
+  listPermissions: vi.fn(),
+  listRevokedDevices: vi.fn(),
+  recordDecision: vi.fn(),
+  reinstateDevice: vi.fn(),
+  reviewPermissions: vi.fn(),
+  revokeDevice: vi.fn(),
+  revokePermission: vi.fn(),
+  revokeScope: vi.fn(),
   getPermissionState: () => 'granted',
   requestPermission: vi.fn(),
   consumeSingleUse: vi.fn(),
 }));
-vi.mock('../runtime/devicePrompts', () => ({ showDevicePrompt: vi.fn() }));
+vi.mock('../runtime/devicePrompts', () => ({
+  configureDevicePrompts: vi.fn(),
+  showDevicePrompt: vi.fn(),
+}));
 vi.mock('../browser/bridgeServer', () => ({
+  BrowserBridgeError: class BrowserBridgeError extends Error {},
+  installHostForPairedExtension: vi.fn(),
+  isLoopbackAddress: vi.fn(),
+  listBrowserActivity: vi.fn(),
+  listLocalClientActivity: vi.fn(),
+  pairingState: vi.fn(),
+  protocolMismatch: vi.fn(),
+  removeHostAndPairing: vi.fn(),
+  resetBridgeForTests: vi.fn(),
+  startBrowserBridge: vi.fn(),
+  stopBrowserBridge: vi.fn(),
   sendBrowserCommand: (...args: unknown[]) => mocks.send(...args),
   recordBrowserActivity: vi.fn(() => 'activity-1'),
   settleBrowserActivity: vi.fn(),

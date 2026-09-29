@@ -115,12 +115,15 @@ export function ConnectorLogo({
   id,
   name,
   iconUrl,
+  size = 40,
 }: {
   id: string;
   name: string;
   iconUrl?: string | null;
+  size?: number;
 }) {
   const colors = useThemeColors();
+  const radius = Math.round(size / 4);
   const [urlFailed, setUrlFailed] = useState(false);
 
   const normalId = id.toLowerCase();
@@ -136,9 +139,9 @@ export function ConnectorLogo({
     return (
       <View
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
+          width: size,
+          height: size,
+          borderRadius: radius,
           backgroundColor: colors.neutralSurface,
           borderWidth: 1,
           borderColor: colors.border,
@@ -146,7 +149,7 @@ export function ConnectorLogo({
           justifyContent: 'center',
         }}
       >
-        <Svg width={20} height={20} viewBox="0 0 24 24">
+        <Svg width={size / 2} height={size / 2} viewBox="0 0 24 24">
           <Path d={siEntry.path} fill={fill} />
         </Svg>
       </View>
@@ -157,9 +160,9 @@ export function ConnectorLogo({
     return (
       <View
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
+          width: size,
+          height: size,
+          borderRadius: radius,
           backgroundColor: colors.neutralSurface,
           borderWidth: 1,
           borderColor: colors.border,
@@ -170,7 +173,7 @@ export function ConnectorLogo({
       >
         <Image
           source={{ uri: logoUrl }}
-          style={{ width: 26, height: 26 }}
+          style={{ width: size * 0.65, height: size * 0.65 }}
           resizeMode="contain"
           onError={() => setUrlFailed(true)}
           accessibilityLabel={`${name} logo`}
@@ -182,15 +185,17 @@ export function ConnectorLogo({
   return (
     <View
       style={{
-        width: 40,
-        height: 40,
-        borderRadius: 10,
+        width: size,
+        height: size,
+        borderRadius: radius,
         backgroundColor: colors.neutralSurface,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>
+      <Text
+        style={{ color: colors.textPrimary, fontSize: Math.max(12, size / 3), fontWeight: '700' }}
+      >
         {name.slice(0, 2).toUpperCase()}
       </Text>
     </View>

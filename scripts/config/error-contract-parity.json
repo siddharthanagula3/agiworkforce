@@ -22,8 +22,6 @@
           "file": "apps/web/features/code/local-code.ts",
           "region": "export function localTurnFailureSentence[\\s\\S]*?\\n\\}",
           "uncovered": {
-            "account_signed_out": "The desktop surface signs the account in itself, so the CLI's line about a terminal command is replaced by the surface's own sign-in affordance rather than by a sentence here.",
-            "plan_excludes_model": "The plan is shown by the surface's own upgrade affordance; a sentence here would say it a second time.",
             "interrupted": "A turn the user stopped needs no explanation, and the CLI's line is already the plain one.",
             "invalid_request": "Nothing this surface can tell the reader to do differs from the CLI's own line, which names the request that was refused.",
             "unknown": "The fallback sentence is exactly what an unclassified failure is owed."

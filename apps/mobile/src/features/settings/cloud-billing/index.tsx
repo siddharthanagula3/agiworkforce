@@ -301,6 +301,7 @@ export default function CloudBillingScreen() {
           }}
         >
           <Text
+            accessibilityRole="header"
             style={{
               color: colors.textMuted,
               fontSize: 11,

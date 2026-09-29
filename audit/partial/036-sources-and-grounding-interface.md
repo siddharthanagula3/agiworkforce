@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: Claims in an answer carry an inline citation marker that identifies the source.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: an answer's [n] markers become tappable citations that open the source preview once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.02: Source title.
 
@@ -47,31 +44,25 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-1
 
 - Done when: Cited sources show their publication date when known.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Live search cards and report chips show a source's publication date. Left: the report screen forwards it in post-codex/p-slack-mobile-research-citations-outline.patch, which replaces p-slack-s36.05-mobile-report-published-date.patch; the source list under an answer shows no date because message citations are AgentEventSource, which carries none. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:29-29`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.06: Retrieval date.
 
 - Done when: Cited sources show when they were retrieved/accessed.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The report screen's "Sources retrieved <date>" line is folded into post-codex/p-slack-mobile-research-citations-outline.patch with the report's other changes, superseding p-privacy-s36.06-mobile-report-retrieved.patch; ReportsScreen.tsx is held by Codex. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/research/service.ts:52-52`
 
 ## S36.07: Source-type icon.
 
@@ -134,16 +125,13 @@ Code: `apps/mobile/src/features/research/service.ts:52-52`
 
 - Done when: Each citation sits at the claim it supports so the user can tell which source backs which claim.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: each [n] marker sits at the claim it backs and opens that source, so a claim can be traced once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.17: Multiple sources per claim.
 
