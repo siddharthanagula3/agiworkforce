@@ -87,6 +87,13 @@ async function imageJobs(
           select 1 from public.web_conversations c
            where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
         )
+        and (
+          not jobs.temporary_chat
+          or exists (
+            select 1 from public.web_conversations c
+             where c.id = jobs.conversation_id and not coalesce(c.is_temporary, false)
+          )
+        )
       group by jobs.id
       order by jobs.created_at desc
       limit $3`,
@@ -127,6 +134,13 @@ async function videoJobs(
         and not exists (
           select 1 from public.web_conversations c
            where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
+        )
+        and (
+          not jobs.temporary_chat
+          or exists (
+            select 1 from public.web_conversations c
+             where c.id = jobs.conversation_id and not coalesce(c.is_temporary, false)
+          )
         )
       order by jobs.created_at desc
       limit $3`,
