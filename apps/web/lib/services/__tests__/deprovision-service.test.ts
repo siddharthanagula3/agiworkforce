@@ -247,7 +247,7 @@ describe('deprovisionMember', () => {
     expect(calls[0]![1]).toEqual([USER, ORG]);
   });
 
-  it('revokes every Ask from Siri token when the member’s sessions end with this workspace', async () => {
+  it('revokes every Ask from Siri token when the sessions end and no other workspace remains', async () => {
     const db = dbStub();
 
     await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
@@ -257,13 +257,14 @@ describe('deprovisionMember', () => {
     expect(calls[0]![1]).toEqual([USER, null]);
   });
 
-  it('revokes every Ask from Siri token when this was the member’s only workspace', async () => {
-    const db = dbStub({ activeWorkspace: OTHER_ORG });
+  it('keeps personal Ask from Siri tokens when the sessions end but another workspace remains', async () => {
+    const db = dbStub({ otherMembership: true });
 
     await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
 
     const calls = db.intentCalls();
-    expect(calls[0]![1]).toEqual([USER, null]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1]).toEqual([USER, ORG]);
   });
 
   describe('credentials outside the workspace being left', () => {
@@ -277,7 +278,7 @@ describe('deprovisionMember', () => {
      */
     it('leaves the member’s personal and other-tenant credentials live', async () => {
       const identity = identityStub();
-      const db = dbStub();
+      const db = dbStub({ otherMembership: true });
 
       const result = await deprovisionMember(db.db, identity.identity, {
         userId: USER,
@@ -286,8 +287,7 @@ describe('deprovisionMember', () => {
 
       expect(result.deviceTokensRevoked).toBe(1);
       expect(result.apiKeysRevoked).toBe(1);
-      const updates = db.statements.filter((text) => /^\s*update/i.test(text));
-      for (const sql of updates.filter((text) => !/mobile_intent_tokens/.test(text))) {
+      for (const sql of db.statements.filter((text) => /^\s*update/i.test(text))) {
         expect(sql, 'a revocation with no organization bound revokes the whole account').toMatch(
           /organization_id = \$2/,
         );
@@ -397,7 +397,7 @@ describe('deprovisionMember', () => {
 
   it('only touches credentials that are still live', async () => {
     const identity = identityStub();
-    const db = dbStub();
+    const db = dbStub({ otherMembership: true });
     await deprovisionMember(db.db, identity.identity, { userId: USER, organizationId: ORG });
 
     // Scoped to the credential-revocation writes this policed from the start.
@@ -409,7 +409,7 @@ describe('deprovisionMember', () => {
     for (const sql of revocations) {
       expect(sql).toMatch(/revoked_at is null/);
       expect(sql).toMatch(/user_id = \$1/);
-      if (!/mobile_intent_tokens/.test(sql)) expect(sql).toMatch(/organization_id = \$2/);
+      expect(sql).toMatch(/organization_id = \$2/);
     }
   });
 

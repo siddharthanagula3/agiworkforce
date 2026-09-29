@@ -192,7 +192,7 @@ export async function deprovisionMember(
   }
 
   try {
-    if (sessionsEnd || !(await belongsToAnotherOrganization(db, userId, organizationId))) {
+    if (sessionsEnd && !(await belongsToAnotherOrganization(db, userId, organizationId))) {
       await revokeMobileIntentTokens(db, userId, null);
     } else {
       await revokeOrganizationMobileIntentTokens(db, userId, organizationId);
