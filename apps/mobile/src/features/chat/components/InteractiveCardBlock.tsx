@@ -18,6 +18,7 @@ import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageFullScreen } from './ImageFullScreen';
+import { translatePlural } from '@/src/i18n/plural';
 
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 200;
@@ -156,7 +157,10 @@ function MapTiles({
 
   return (
     <View
-      accessibilityLabel={`Map preview with ${mapPlaces.length} place${mapPlaces.length === 1 ? '' : 's'}`}
+      accessibilityLabel={translatePlural('chat', 'counts.mapPreviewPlaces', mapPlaces.length, {
+        one: 'Map preview with {{count}} place',
+        other: 'Map preview with {{count}} places',
+      })}
       style={{ height: FRAME_HEIGHT, overflow: 'hidden', backgroundColor: colors.surfaceOverlay }}
     >
       {/* Origin pinned to the frame's centre; children carry signed offsets. */}

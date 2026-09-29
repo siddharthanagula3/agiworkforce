@@ -36,6 +36,7 @@ import {
 } from '@agiworkforce/types';
 import type { ToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
+import { translatePlural } from '@/src/i18n/plural';
 
 const STATUS_GLYPH: Record<Exclude<ToolStatus, 'succeeded'>, typeof CircleCheck> = {
   pending: Clock,
@@ -132,7 +133,10 @@ function trailingChipLabel(tool: ToolCall): string | null {
   }
   if (tool.duration !== undefined) return formatToolDuration(tool.duration);
   if (tool.searchResults?.length) {
-    return `${tool.searchResults.length} result${tool.searchResults.length === 1 ? '' : 's'}`;
+    return translatePlural('common', 'counts.results', tool.searchResults.length, {
+      one: '{{count}} result',
+      other: '{{count}} results',
+    });
   }
   if (tool.command) return 'Script';
   if (tool.filePath) {

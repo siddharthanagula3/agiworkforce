@@ -217,15 +217,12 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`,
 
 - Done when: The user can open an answer's sources and see each one's title, origin and the excerpt it contributed, then open it.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources expand to a list of titles and domains that open in the browser; show the excerpt each source contributed. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`
 
 ## S9.30: Credit-balance card.
 
@@ -257,12 +254,12 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Warns only about plan tier (premium model on Free) and reference images for image models; add warnings when the model cannot read an attachment or use tools. | handler |
+| mobile | partial | Before sending, the composer warns when the chosen model cannot read attached images (vision false; Auto excluded), in post-codex/w-chat-s9.34-s78.03-mobile-image-capability-warning.patch. Tool and context-size warnings remain. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ModelTierWarningBanner.tsx:33-33`, `apps/mobile/app/(app)/chat/[id].tsx:1467-1467`
+Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 ## S9.36: Interactive result widget.
 
