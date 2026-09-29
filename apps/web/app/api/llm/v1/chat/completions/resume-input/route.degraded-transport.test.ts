@@ -25,6 +25,7 @@ const gateMocks = vi.hoisted(() => ({
 
 vi.mock('../lib/auth-gate', () => ({ runAuthGate: gateMocks.authGate }));
 vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: gateMocks.managedCompute,
   buildOrganizationPolicyGateResponse: gateMocks.organizationPolicy,
   buildModelPolicyGateResponse: async () => null,

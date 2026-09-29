@@ -31,6 +31,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => undefined) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => undefined) }));
 vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => ({
+  indexMessageArtifacts: vi.fn(),
   scheduleArtifactIndexing: vi.fn(),
 }));
 

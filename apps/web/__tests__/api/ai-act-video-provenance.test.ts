@@ -32,6 +32,7 @@ vi.mock('@/lib/api-auth', () => ({
 
 const taskStoreMocks = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('@/lib/video-task-store', () => ({
+  storeVideoTask: vi.fn(),
   getVideoTask: taskStoreMocks.get,
 }));
 

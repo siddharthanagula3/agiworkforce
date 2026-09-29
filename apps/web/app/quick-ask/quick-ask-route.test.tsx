@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/headers', () => ({ headers: () => mocks.headers() }));
 vi.mock('next/navigation', () => ({ redirect: (url: string) => mocks.redirect(url) }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityProvider: vi.fn(),
+  getIdentityUser: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
   getRequestIdentity: () => mocks.getRequestIdentity(),
 }));
 vi.mock('@/lib/server/require-current-terms', () => ({
@@ -20,6 +24,7 @@ vi.mock('@/lib/server/require-current-terms', () => ({
     mocks.requireCurrentTermsAcceptance(...args),
 }));
 vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
+  useChatStreamRuntime: vi.fn(),
   ChatStreamRuntimeProvider: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
 vi.mock('@/features/chat/components/WebChatRoot', () => ({
