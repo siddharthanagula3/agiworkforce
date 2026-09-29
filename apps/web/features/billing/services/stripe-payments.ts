@@ -11,6 +11,26 @@ import {
   apiErrorMessage as extractErrorMessage,
 } from '../lib/api-error';
 import { rememberPendingCheckout } from '../lib/pending-checkout';
+import { getHostBridge } from '@agiworkforce/local-runtime-contract';
+
+export type PaymentPageOpening = 'window' | 'browser';
+
+/**
+ * Stripe's hosted pages open in this tab on the web. The desktop window sends
+ * any page off the product to the system browser, which left the button
+ * spinning and the plan stale; it now opens them there on purpose and reads the
+ * account again when the user comes back.
+ */
+function openPaymentPage(url: string, onReturn?: () => void): PaymentPageOpening {
+  const host = getHostBridge();
+  if (host?.shell !== 'electron') {
+    window.location.href = url;
+    return 'window';
+  }
+  void host.openExternal(url);
+  if (onReturn) window.addEventListener('focus', () => onReturn(), { once: true });
+  return 'browser';
+}
 
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
@@ -116,7 +136,11 @@ export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> 
   });
 }
 
-export async function openBillingPortal(returnPath?: string, flow?: 'cancel'): Promise<void> {
+export async function openBillingPortal(
+  returnPath?: string,
+  flow?: 'cancel',
+  onReturn?: () => void,
+): Promise<PaymentPageOpening> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
@@ -139,7 +163,7 @@ export async function openBillingPortal(returnPath?: string, flow?: 'cancel'): P
 
   const { url } = await response.json();
 
-  window.location.href = url;
+  return openPaymentPage(url, onReturn);
 }
 
 export function isStripeConfigured(): boolean {
@@ -219,7 +243,7 @@ async function upgradeToPlan(data: {
 
   if (url) {
     if (typeof sessionId === 'string') rememberPendingCheckout(sessionId, data.plan);
-    window.location.href = url;
+    openPaymentPage(url);
   } else {
     throw new Error('No checkout URL received from server');
   }
