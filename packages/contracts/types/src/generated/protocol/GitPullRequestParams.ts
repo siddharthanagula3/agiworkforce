@@ -6,6 +6,8 @@ export type GitPullRequestParams = {
   body?: string;
   base?: string;
   draft?: boolean;
+  confirmedRemote: string;
+  confirmedBranch: string;
   confirmedHead: string;
   confirmedCommits: number;
 };

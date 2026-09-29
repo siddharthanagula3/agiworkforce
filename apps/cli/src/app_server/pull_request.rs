@@ -87,6 +87,7 @@ pub async fn plan(root: &Path) -> Result<GitPullRequestPlanResponse, DeveloperSe
 }
 
 struct ConfirmedPush {
+    remote: String,
     branch: String,
     head: String,
     commits: usize,
@@ -95,7 +96,8 @@ struct ConfirmedPush {
 #[async_trait]
 impl PushApprover for ConfirmedPush {
     async fn ask(&self, prompt: &PushApprovalPrompt) -> ApprovalDecision {
-        if prompt.branch() == self.branch
+        if prompt.remote() == self.remote
+            && prompt.branch() == self.branch
             && prompt.head() == self.head
             && prompt.commits() == self.commits
             && prompt.force() == PushForce::Never
@@ -222,7 +224,9 @@ pub async fn create(
             "{base} is the branch to merge into; switch to the branch with your changes first"
         )));
     }
-    if plan.head != params.confirmed_head
+    if plan.remote != params.confirmed_remote
+        || plan.branch != params.confirmed_branch
+        || plan.head != params.confirmed_head
         || u32::try_from(plan.commits.len()).ok() != Some(params.confirmed_commits)
     {
         return Err(DeveloperSessionHostError::conflict(
@@ -233,7 +237,8 @@ pub async fn create(
     let mut pushed = false;
     if !plan.commits.is_empty() {
         let approver = ConfirmedPush {
-            branch: plan.branch.clone(),
+            remote: params.confirmed_remote.clone(),
+            branch: params.confirmed_branch.clone(),
             head: params.confirmed_head.clone(),
             commits: plan.commits.len(),
         };
@@ -311,4 +316,68 @@ pub async fn create(
             "The GitHub CLI could not open it ({gh_failure}), so finish it on GitHub"
         )),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::runtime::git::test_support::push_plan_fixture;
+
+    fn confirmed(remote: &str, branch: &str, head: &str, commits: usize) -> ConfirmedPush {
+        ConfirmedPush {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+            head: head.to_string(),
+            commits,
+        }
+    }
+
+    #[tokio::test]
+    async fn consent_covers_only_the_push_the_user_reviewed() {
+        let plan = push_plan_fixture("origin", "feature", "aaaaaaa", 2);
+
+        let reviewed = confirmed("origin", "feature", "aaaaaaa", 2);
+        let consent = request_push_consent(&reviewed, &plan)
+            .await
+            .expect("the reviewed push is allowed");
+        assert!(consent.covers(&plan));
+
+        for other in [
+            confirmed("upstream", "feature", "aaaaaaa", 2),
+            confirmed("origin", "main", "aaaaaaa", 2),
+            confirmed("origin", "feature", "bbbbbbb", 2),
+            confirmed("origin", "feature", "aaaaaaa", 3),
+        ] {
+            assert!(request_push_consent(&other, &plan).await.is_none());
+        }
+    }
+
+    #[test]
+    fn only_a_github_remote_gets_a_compare_page() {
+        assert_eq!(
+            github_repository("git@github.com:acme/app.git"),
+            Some(("acme".to_string(), "app".to_string()))
+        );
+        assert_eq!(
+            github_repository("https://github.com/acme/app"),
+            Some(("acme".to_string(), "app".to_string()))
+        );
+        assert_eq!(github_repository("https://gitlab.com/acme/app.git"), None);
+        assert_eq!(github_repository("https://github.com/acme/a b"), None);
+
+        let url = compare_url("acme", "app", "main", "feature/x", "Fix it", "Body text")
+            .expect("compare url");
+        assert!(url.starts_with("https://github.com/acme/app/compare/"));
+        assert!(url.contains("title=Fix+it"));
+        assert!(url.contains("body=Body+text"));
+    }
+
+    #[test]
+    fn a_base_that_git_would_read_as_an_option_is_refused() {
+        assert!(valid_ref("main"));
+        assert!(valid_ref("release/2026.09"));
+        assert!(!valid_ref("--upload-pack=evil"));
+        assert!(!valid_ref("main..other"));
+        assert!(!valid_ref("has space"));
+    }
 }

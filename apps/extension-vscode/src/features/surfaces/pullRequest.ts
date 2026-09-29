@@ -86,6 +86,8 @@ export async function createPullRequest(adapter: CliCapabilityAdapter): Promise<
       adapter.call<PullRequestResult>('pullRequestCreate', {
         title: title.trim(),
         base: base.trim(),
+        confirmedRemote: plan.remote,
+        confirmedBranch: plan.branch,
         confirmedHead: plan.head,
         confirmedCommits: plan.commits.length,
       }),
