@@ -38,6 +38,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
     &[
         "review",
         "copy",
+        "links",
+        "table",
         "new",
         "mcp",
         "output-style",
@@ -129,6 +131,24 @@ pub fn handle_shared_command(
     match command.as_str() {
         "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
+        "/table" => {
+            let reply = session
+                .messages
+                .iter()
+                .rev()
+                .find(|message| message.role == "assistant")
+                .map(|message| message.text_content());
+            ParityCommandResult::SystemMessage(table_command(reply.as_deref(), arg))
+        }
+        "/links" => {
+            let reply = session
+                .messages
+                .iter()
+                .rev()
+                .find(|message| message.role == "assistant")
+                .map(|message| message.text_content());
+            ParityCommandResult::SystemMessage(links_command(reply.as_deref(), arg))
+        }
         "/new" => {
             session.clear();
             ParityCommandResult::SystemMessage("Started new conversation.".to_string())
@@ -805,6 +825,193 @@ pub fn save_routine_prompt(arg: &str) -> String {
     format!(
         "Turn the task we just finished in this conversation into a routine that runs on its own. Write a prompt that repeats the task without relying on this conversation, then create the routine with cron_create. {schedule} Tell me the schedule and what each run will do."
     )
+}
+
+const TABLE_USAGE: &str = "Use /table <column> [desc] to sort, where the column is its name or number. With several tables, put the table number first: /table 2 <column> [desc].";
+
+pub fn table_command(reply: Option<&str>, arg: &str) -> String {
+    let Some(reply) = reply else {
+        return "No assistant response to take a table from.".to_string();
+    };
+    let tables = crate::markdown::tables_in(reply);
+    if tables.is_empty() {
+        return "The last response has no table.".to_string();
+    }
+    let mut words: Vec<&str> = arg.split_whitespace().collect();
+    if words.is_empty() {
+        let mut out = String::from("Tables in the last response:\n");
+        for (index, table) in tables.iter().enumerate() {
+            out.push_str(&format!(
+                "  {}. {} rows: {}\n",
+                index + 1,
+                table.rows.len(),
+                crate::terminal_text::sanitize_terminal_text(&table.header.join(", "))
+            ));
+        }
+        out.push_str(TABLE_USAGE);
+        return out;
+    }
+    let mut table_index = 0;
+    if tables.len() > 1 && words.len() > 1 {
+        if let Ok(number) = words[0].parse::<usize>() {
+            if number == 0 || number > tables.len() {
+                return format!("There are {} tables. {TABLE_USAGE}", tables.len());
+            }
+            table_index = number - 1;
+            words.remove(0);
+        }
+    }
+    let descending = match words.last().map(|word| word.to_ascii_lowercase()) {
+        Some(word) if word == "desc" => {
+            words.pop();
+            true
+        }
+        Some(word) if word == "asc" => {
+            words.pop();
+            false
+        }
+        _ => false,
+    };
+    let table = &tables[table_index];
+    let wanted = words.join(" ");
+    let column = wanted
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .filter(|index| *index < table.header.len())
+        .or_else(|| {
+            table
+                .header
+                .iter()
+                .position(|name| name.eq_ignore_ascii_case(&wanted))
+        });
+    let Some(column) = column else {
+        return format!(
+            "No column named {}. The columns are {}. {TABLE_USAGE}",
+            crate::terminal_text::sanitize_terminal_text(&wanted),
+            crate::terminal_text::sanitize_terminal_text(&table.header.join(", "))
+        );
+    };
+    let mut rows = table.rows.clone();
+    rows.sort_by(|a, b| {
+        let ordering = compare_cells(&a[column], &b[column]);
+        if descending {
+            ordering.reverse()
+        } else {
+            ordering
+        }
+    });
+    let mut out = format!(
+        "Sorted by {} ({}):\n",
+        crate::terminal_text::sanitize_terminal_text(&table.header[column]),
+        if descending {
+            "descending"
+        } else {
+            "ascending"
+        }
+    );
+    out.push_str(&aligned_table(&table.header, &rows));
+    out
+}
+
+fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
+    match (cell_number(a), cell_number(b)) {
+        (Some(x), Some(y)) => x.total_cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_lowercase().cmp(&b.to_lowercase()),
+    }
+}
+
+fn cell_number(cell: &str) -> Option<f64> {
+    let cleaned: String = cell
+        .trim()
+        .chars()
+        .filter(|c| !matches!(c, ',' | '$' | '%' | '*' | '_' | ' '))
+        .collect();
+    cleaned
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+fn aligned_table(header: &[String], rows: &[Vec<String>]) -> String {
+    let clean = |cell: &str| crate::terminal_text::sanitize_terminal_text(cell).replace('\n', " ");
+    let header: Vec<String> = header.iter().map(|cell| clean(cell)).collect();
+    let rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| row.iter().map(|cell| clean(cell)).collect())
+        .collect();
+    let mut widths: Vec<usize> = header.iter().map(|cell| cell.chars().count()).collect();
+    for row in &rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+    let line = |cells: &[String]| {
+        let padded: Vec<String> = cells
+            .iter()
+            .enumerate()
+            .map(|(index, cell)| {
+                let pad = widths[index].saturating_sub(cell.chars().count());
+                format!("{cell}{}", " ".repeat(pad))
+            })
+            .collect();
+        format!("  {}", padded.join(" | ").trim_end())
+    };
+    let mut out = line(&header);
+    out.push('\n');
+    let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
+    out.push_str(&format!("  {}", rule.join("-+-")));
+    for row in &rows {
+        out.push('\n');
+        out.push_str(&line(row));
+    }
+    out
+}
+
+pub fn links_command(reply: Option<&str>, arg: &str) -> String {
+    let Some(reply) = reply else {
+        return "No assistant response to take links from.".to_string();
+    };
+    let links = crate::markdown::web_links(reply);
+    if links.is_empty() {
+        return "The last response has no web links.".to_string();
+    }
+    let arg = arg.trim();
+    if arg.is_empty() {
+        let mut out = String::from("Links in the last response:\n");
+        for (index, (label, url)) in links.iter().enumerate() {
+            let url = crate::terminal_text::sanitize_terminal_text(url);
+            match label {
+                Some(label) => out.push_str(&format!(
+                    "  {}. {} {url}\n",
+                    index + 1,
+                    crate::terminal_text::sanitize_terminal_text(label)
+                )),
+                None => out.push_str(&format!("  {}. {url}\n", index + 1)),
+            }
+        }
+        out.push_str("Open one in your browser with /links <number>.");
+        return out;
+    }
+    let Some((_, url)) = arg
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .and_then(|index| links.get(index))
+    else {
+        return format!(
+            "Use /links to list them, or /links <number> between 1 and {} to open one.",
+            links.len()
+        );
+    };
+    let shown = crate::terminal_text::sanitize_terminal_text(url);
+    if crate::oauth::open_external_url(url, crate::oauth::UserActionContext::user_initiated()) {
+        format!("Opened {shown} in your browser.")
+    } else {
+        format!("Could not open a browser here. The link is {shown}")
+    }
 }
 
 pub fn render_copy() -> String {

@@ -4350,6 +4350,26 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Clipboard not available on this platform.".to_string())
         }
 
+        "/table" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::table_command(reply, arg))
+        }
+
+        "/links" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::links_command(reply, arg))
+        }
+
         "/login" => SlashResult::RunLogin,
 
         "/logout" => SlashResult::RunLogout,

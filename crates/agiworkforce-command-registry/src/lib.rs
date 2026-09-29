@@ -212,6 +212,20 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "table",
+            "Sort a table from the last response (/table <column> [desc])",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "links",
+            "List the last response's links, or open one (/links <number>)",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "init",
             "Create AGENTS.md for this project",
             false,
