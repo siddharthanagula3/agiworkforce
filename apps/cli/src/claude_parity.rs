@@ -287,11 +287,19 @@ pub fn handle_shared_command(
         "/mobile" | "/ios" | "/android" => {
             ParityCommandResult::SystemMessage(render_companion("Mobile"))
         }
-        "/connectors" => ParityCommandResult::SystemMessage(format!(
-            "{}\n\n{}",
-            connectors::availability(session.privacy_mode),
-            connectors::render_policy()
-        )),
+        "/connectors" => ParityCommandResult::SystemMessage(
+            match crate::tier_cache::capability_refusal(
+                crate::tier_cache::CONNECTORS_CAPABILITY,
+                "Connectors",
+            ) {
+                Some(refusal) => refusal,
+                None => format!(
+                    "{}\n\n{}",
+                    connectors::availability(session.privacy_mode),
+                    connectors::render_policy()
+                ),
+            },
+        ),
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }

@@ -6342,6 +6342,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 Ok(())
             }
             Command::Connectors { action } => {
+                if let Some(refusal) =
+                    tier_cache::capability_refusal(tier_cache::CONNECTORS_CAPABILITY, "Connectors")
+                {
+                    anyhow::bail!(refusal);
+                }
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 match action {
@@ -6498,6 +6503,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         Ok(())
                     }
                     MarketplaceSubcommand::Browse { source } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
                         let client = cloud::CloudClient::connect(account_privacy_mode())
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
                         let sources = cloud::marketplaces::list(&client)
@@ -6536,6 +6547,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         Ok(())
                     }
                     MarketplaceSubcommand::Get { reference } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
                         let (plugin, marketplace_name) =
                             reference.rsplit_once('@').ok_or_else(|| {
                                 anyhow::anyhow!(
