@@ -5917,7 +5917,14 @@ async fn run_event_loop(
                 role: ChatRole::System,
                 text: "From your phone:".to_string(),
             });
-            send_message(terminal, app, &text).await?;
+            let staged = std::mem::take(&mut app.session.pending_image_blocks);
+            let labels = std::mem::take(&mut app.staged_images);
+            let context = std::mem::take(&mut app.turn_context);
+            let sent = send_message(terminal, app, &text).await;
+            app.session.pending_image_blocks = staged;
+            app.staged_images = labels;
+            app.turn_context = context;
+            sent?;
             continue;
         }
         let queued = (!app.is_loading && !app.queued_prompts.is_empty())

@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use calamine::Reader;
 use roxmltree::Document as XmlDocument;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zip::read::ZipArchive;
 
 const WORD_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -21,7 +21,10 @@ const MAX_UNPACKED_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 10_000;
 const MAX_COMPRESSION_RATIO: u64 = 100;
 const MAX_TEXT_CHARS: usize = 400_000;
+const MAX_OUTPUT_BYTES: u64 = (MAX_TEXT_CHARS as u64) * 6 + 64 * 1024;
+const CHILD_ENVIRONMENT: [&str; 5] = ["PATH", "HOME", "TMPDIR", "LANG", "SYSTEMROOT"];
 const EXTRACT_TIMEOUT: Duration = Duration::from_secs(20);
+#[cfg(target_os = "linux")]
 const EXTRACT_MEMORY_BYTES: u64 = 1024 * 1024 * 1024;
 const UNREADABLE: &str = "couldn't read this document";
 
@@ -142,6 +145,12 @@ async fn run_extractor(
     input: Vec<u8>,
     timeout: Duration,
 ) -> Result<ExtractedDocument> {
+    command.env_clear();
+    for name in CHILD_ENVIRONMENT {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -149,24 +158,41 @@ async fn run_extractor(
         .kill_on_drop(true);
     let mut child = command.spawn().context(UNREADABLE)?;
     let mut stdin = child.stdin.take().context(UNREADABLE)?;
+    let mut stdout = child.stdout.take().context(UNREADABLE)?;
     let feed = async move {
         let _ = stdin.write_all(&input).await;
     };
-    let run = async {
-        let (_, output) = tokio::join!(feed, child.wait_with_output());
-        output
+    let read = async move {
+        let mut reply = Vec::new();
+        (&mut stdout)
+            .take(MAX_OUTPUT_BYTES + 1)
+            .read_to_end(&mut reply)
+            .await
+            .map(|_| reply)
     };
-    let output = match tokio::time::timeout(timeout, run).await {
-        Ok(output) => output.context(UNREADABLE)?,
+    let (_, reply) = match tokio::time::timeout(timeout, async { tokio::join!(feed, read) }).await {
+        Ok(done) => done,
         Err(_) => bail!(
             "{UNREADABLE}: reading it took longer than {} seconds",
             timeout.as_secs()
         ),
     };
-    if !output.status.success() {
+    let reply = reply.context(UNREADABLE)?;
+    if reply.len() as u64 > MAX_OUTPUT_BYTES {
+        let _ = child.kill().await;
+        bail!("{UNREADABLE}: the reader returned more text than can be used");
+    }
+    let status = match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(status) => status.context(UNREADABLE)?,
+        Err(_) => bail!(
+            "{UNREADABLE}: reading it took longer than {} seconds",
+            timeout.as_secs()
+        ),
+    };
+    if !status.success() {
         bail!("{UNREADABLE}: the reader stopped on this file");
     }
-    match serde_json::from_slice::<ExtractReply>(&output.stdout) {
+    match serde_json::from_slice::<ExtractReply>(&reply) {
         Ok(ExtractReply::Document(document)) => Ok(document),
         Ok(ExtractReply::Error(message)) => bail!("{UNREADABLE}: {message}"),
         Err(_) => bail!("{UNREADABLE}: the reader returned nothing usable"),
@@ -174,12 +200,14 @@ async fn run_extractor(
 }
 
 pub fn run_extract_command(args: &[String]) -> std::process::ExitCode {
-    #[cfg(unix)]
-    let _ = nix::sys::resource::setrlimit(
+    #[cfg(target_os = "linux")]
+    if let Err(error) = nix::sys::resource::setrlimit(
         nix::sys::resource::Resource::RLIMIT_AS,
         EXTRACT_MEMORY_BYTES,
         EXTRACT_MEMORY_BYTES,
-    );
+    ) {
+        tracing::warn!("[documents] the reader's memory limit could not be set: {error}");
+    }
     let reply = extract_from_stdin(args)
         .map(ExtractReply::Document)
         .unwrap_or_else(|error| ExtractReply::Error(format!("{error:#}")));
@@ -219,11 +247,12 @@ fn extract_bytes(
     if bytes.starts_with(b"PK") {
         check_archive(bytes)?;
     }
+    let budget = Budget(std::cell::Cell::new(MAX_UNPACKED_BYTES));
     let mut document = match kind {
         DocumentKind::Pdf => pdf_text(bytes, pages)?,
-        DocumentKind::Word => whole(docx_text(bytes)?),
-        DocumentKind::Slides => whole(pptx_text(bytes)?),
-        DocumentKind::Spreadsheet => whole(spreadsheet_text(bytes)?),
+        DocumentKind::Word => whole(docx_text(bytes, &budget)?),
+        DocumentKind::Slides => whole(pptx_text(bytes, &budget)?),
+        DocumentKind::Spreadsheet => whole(spreadsheet_text(bytes, &budget)?),
     };
     if let Some((cut, _)) = document.text.char_indices().nth(MAX_TEXT_CHARS) {
         document.text.truncate(cut);
@@ -236,6 +265,32 @@ fn extract_bytes(
         ));
     }
     Ok(document)
+}
+
+struct Budget(std::cell::Cell<u64>);
+
+struct Bounded<'a, R> {
+    inner: R,
+    budget: &'a Budget,
+}
+
+impl<R: Read> Read for Bounded<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        let left = self.budget.0.get();
+        if read as u64 > left {
+            return Err(std::io::Error::other(format!(
+                "the document unpacks to more than {} MB",
+                MAX_UNPACKED_BYTES / (1024 * 1024)
+            )));
+        }
+        self.budget.0.set(left - read as u64);
+        Ok(read)
+    }
+}
+
+fn bounded<'a, R: Read>(inner: R, budget: &'a Budget) -> Bounded<'a, R> {
+    Bounded { inner, budget }
 }
 
 fn whole(text: String) -> ExtractedDocument {
@@ -353,8 +408,8 @@ fn pdf_text(bytes: &[u8], pages: Option<RangeInclusive<usize>>) -> Result<Extrac
     })
 }
 
-fn docx_text(bytes: &[u8]) -> Result<String> {
-    let xml = archive_entry(bytes, "word/document.xml")?;
+fn docx_text(bytes: &[u8], budget: &Budget) -> Result<String> {
+    let xml = archive_entry(bytes, "word/document.xml", budget)?;
     let document = XmlDocument::parse(&xml).context("the Word document is not valid")?;
     let mut output = String::new();
     for paragraph in document
@@ -375,7 +430,7 @@ fn docx_text(bytes: &[u8]) -> Result<String> {
     Ok(output.trim_end().to_string())
 }
 
-fn pptx_text(bytes: &[u8]) -> Result<String> {
+fn pptx_text(bytes: &[u8], budget: &Budget) -> Result<String> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).context("the presentation is not valid")?;
     let mut slides: Vec<(usize, String)> = archive
@@ -394,10 +449,7 @@ fn pptx_text(bytes: &[u8]) -> Result<String> {
     let mut output = String::new();
     for (number, name) in slides {
         let mut xml = String::new();
-        archive
-            .by_name(&name)?
-            .take(MAX_UNPACKED_BYTES)
-            .read_to_string(&mut xml)?;
+        bounded(archive.by_name(&name)?, budget).read_to_string(&mut xml)?;
         let document = XmlDocument::parse(&xml).context("the presentation is not valid")?;
         let lines: Vec<String> = document
             .descendants()
@@ -420,7 +472,34 @@ fn pptx_text(bytes: &[u8]) -> Result<String> {
     Ok(output.trim_end().to_string())
 }
 
-fn spreadsheet_text(bytes: &[u8]) -> Result<String> {
+fn unpacked_copy(bytes: &[u8], budget: &Budget) -> Result<Vec<u8>> {
+    let mut archive =
+        ZipArchive::new(Cursor::new(bytes)).context("the spreadsheet is not valid")?;
+    let mut copy = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let stored =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        if entry.is_dir() {
+            continue;
+        }
+        let name = entry.name().to_string();
+        let mut contents = Vec::new();
+        bounded(&mut entry, budget).read_to_end(&mut contents)?;
+        copy.start_file(name, stored)?;
+        copy.write_all(&contents)?;
+    }
+    Ok(copy.finish()?.into_inner())
+}
+
+fn spreadsheet_text(bytes: &[u8], budget: &Budget) -> Result<String> {
+    let unpacked;
+    let bytes = if bytes.starts_with(b"PK") {
+        unpacked = unpacked_copy(bytes, budget)?;
+        unpacked.as_slice()
+    } else {
+        bytes
+    };
     let mut workbook = calamine::open_workbook_auto_from_rs(Cursor::new(bytes))
         .map_err(|error| anyhow!("the spreadsheet could not be opened: {error}"))?;
     let mut output = String::new();
@@ -445,15 +524,14 @@ fn spreadsheet_text(bytes: &[u8]) -> Result<String> {
     Ok(output.trim_end().to_string())
 }
 
-fn archive_entry(bytes: &[u8], entry: &str) -> Result<String> {
+fn archive_entry(bytes: &[u8], entry: &str, budget: &Budget) -> Result<String> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).context("the file is not a valid Office document")?;
     let mut contents = String::new();
-    archive
+    let reader = archive
         .by_name(entry)
-        .with_context(|| format!("the file is missing {entry}"))?
-        .take(MAX_UNPACKED_BYTES)
-        .read_to_string(&mut contents)?;
+        .with_context(|| format!("the file is missing {entry}"))?;
+    bounded(reader, budget).read_to_string(&mut contents)?;
     Ok(contents)
 }
 
@@ -530,6 +608,42 @@ mod tests {
         }
         let error = extract_bytes(&packed, DocumentKind::Word, None).expect_err("refused");
         assert!(error.to_string().contains("compressed too far"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_reader_that_floods_its_output_is_stopped() {
+        let error = run_extractor(
+            shell("cat >/dev/null; head -c 5000000 /dev/zero"),
+            Vec::new(),
+            EXTRACT_TIMEOUT,
+        )
+        .await
+        .expect_err("an oversized reply is an error");
+        assert!(format!("{error:#}").contains("more text than can be used"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_reader_does_not_inherit_secrets() {
+        let mut command = shell(
+            "cat >/dev/null; printf '{\"document\":{\"text\":\"%s\",\"note\":null}}' \"$AGI_TEST_SECRET\"",
+        );
+        command.env("AGI_TEST_SECRET", "token-value");
+        let document = run_extractor(command, Vec::new(), EXTRACT_TIMEOUT)
+            .await
+            .expect("document");
+        assert_eq!(document.text, "");
+    }
+
+    #[test]
+    fn decompressed_bytes_are_counted_whatever_the_archive_claims() {
+        let budget = Budget(std::cell::Cell::new(10));
+        let mut text = String::new();
+        let error = bounded(Cursor::new(vec![b'a'; 11]), &budget)
+            .read_to_string(&mut text)
+            .expect_err("over budget");
+        assert!(error.to_string().contains("unpacks to more than"));
     }
 
     #[test]
