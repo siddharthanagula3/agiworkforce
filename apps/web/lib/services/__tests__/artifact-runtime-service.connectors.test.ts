@@ -40,6 +40,7 @@ const input = {
   planTier: 'pro',
   modelKey: 'tool-model',
   connectors: ['linear'],
+  disabledTools: [],
 };
 
 describe('buildArtifactConnectorPlan connector decision', () => {
