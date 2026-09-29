@@ -22,20 +22,20 @@ use agiworkforce_protocol::developer_session::{
     McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
     McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
     ModelListParams, PendingApprovalSnapshot, PermissionRulesResponse, PermissionsAddParams,
-    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
-    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
-    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
-    WorktreeRemoveParams, WorktreeSummary,
+    PermissionsListResponse, PermissionsRemoveParams, PlanDecision, PlanDecisionParams,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
+    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -442,6 +442,8 @@ impl CliDeveloperSessionHost {
             plugin_updates: true,
             permission_rules: true,
             trust: true,
+            turn_tool_filters: true,
+            plan_decision: true,
         }
     }
 
@@ -2393,6 +2395,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.set_managed_auto_routing(None);
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
+                if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
+                    let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
+                        .or_else(|| agent.allowed_tools.clone())
+                        .unwrap_or_default();
+                    let disallowed = validated_tool_filter(params.disallowed_tools.as_deref())?
+                        .unwrap_or_else(|| agent.disallowed_tools.clone());
+                    agent.apply_tool_filters(&allowed, &disallowed);
+                    self.apply_subagent_boundary_policy(&mut agent);
+                }
                 agent.max_turns = max_turns;
                 agent.cloud_project = params
                     .cloud_project_id
@@ -3544,6 +3555,26 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .map_err(internal_error)?
     }
 
+    async fn decide_plan(
+        &self,
+        params: PlanDecisionParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let session = self.load_agent(&params.thread_id).await?;
+        let mut agent = session.try_lock().map_err(|_| {
+            DeveloperSessionHostError::invalid_request(
+                "A turn is running on this thread; decide on the plan when it ends",
+            )
+        })?;
+        let decided = match params.decision {
+            PlanDecision::Approve => agent.approve_plan(),
+            PlanDecision::Reject => {
+                agent.reject_plan(params.feedback.as_deref().unwrap_or_default())
+            }
+        };
+        decided.map_err(DeveloperSessionHostError::invalid_request)
+    }
+
     async fn list_permission_rules(
         &self,
     ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
@@ -4534,14 +4565,43 @@ fn content_block_from_data_url(
     ))
 }
 
+const MAX_TURN_TOOL_FILTERS: usize = 200;
+const MAX_TOOL_FILTER_LENGTH: usize = 200;
+
+fn validated_tool_filter(
+    filter: Option<&[String]>,
+) -> Result<Option<Vec<String>>, DeveloperSessionHostError> {
+    let Some(filter) = filter else {
+        return Ok(None);
+    };
+    if filter.len() > MAX_TURN_TOOL_FILTERS
+        || filter.iter().any(|tool| {
+            let tool = tool.trim();
+            tool.is_empty()
+                || tool.len() > MAX_TOOL_FILTER_LENGTH
+                || tool.chars().any(char::is_control)
+        })
+    {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Tool filters name up to 200 tools, each a non-empty name or pattern",
+        ));
+    }
+    Ok(Some(
+        filter.iter().map(|tool| tool.trim().to_string()).collect(),
+    ))
+}
+
 fn apply_agent_controls(
     agent: &mut AgentSession,
     mode: Option<DeveloperAgentMode>,
     effort: Option<DeveloperReasoningEffort>,
 ) {
     if let Some(mode) = mode {
+        let stays_in_plan = agent.plan_mode && matches!(mode, DeveloperAgentMode::Plan);
         agent.plan_mode = matches!(mode, DeveloperAgentMode::Plan);
-        agent.plan_approved = false;
+        if !stays_in_plan {
+            agent.plan_approved = false;
+        }
         agent.permission_mode = match mode {
             DeveloperAgentMode::Ask => crate::cli_options::PermissionMode::Default,
             DeveloperAgentMode::Auto => crate::cli_options::PermissionMode::AcceptEdits,
@@ -5277,6 +5337,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -6331,6 +6393,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect("next Auto turn");
@@ -6499,6 +6563,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await;
         if result.is_ok() {
@@ -7487,6 +7553,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7719,6 +7787,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7836,6 +7906,8 @@ mod tests {
             max_turns: None,
             routing_profile: None,
             cloud_project_id: None,
+            allowed_tools: None,
+            disallowed_tools: None,
         };
 
         let replayed = host

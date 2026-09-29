@@ -51,4 +51,6 @@ export type AppServerCapabilities = {
   pluginUpdates?: boolean;
   permissionRules?: boolean;
   trust?: boolean;
+  turnToolFilters?: boolean;
+  planDecision?: boolean;
 };
