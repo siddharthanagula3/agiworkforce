@@ -310,7 +310,8 @@ run checks that production is serving the current `main` commit.
 - **CLI**: `release-cli.yml` publishes a GitHub Release whose checksum
   manifest is signed with the pinned release key, from a git tag matching
   `apps/cli/Cargo.toml`; not every commit to `apps/cli` has one.
-  `curl -fsSL https://agiworkforce.com/install.sh | bash` installs it.
+  `curl -fsSL https://agiworkforce.com/install.sh | bash` installs it once the
+  first signed release is published, and refuses anything it cannot verify.
 - **Mobile**: built with EAS. Release scripts for App Store and Play
   submission live in `apps/mobile/scripts/release/`, but no EAS build has
   been submitted to either store yet.

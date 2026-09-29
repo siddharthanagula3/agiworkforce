@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createPublicKey } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +12,11 @@ import {
   permissionDiff,
   permissionDiffViolations,
 } from './chrome-manifest.mjs';
+import {
+  pinnedReleaseKeyFailures,
+  pinnedReleaseKeys,
+  releaseSigningKeyAssignment,
+} from './pinned-release-keys.mjs';
 import {
   appIdentifierFrom,
   appVersionFrom,
@@ -285,4 +291,70 @@ test('claiming purchases the build cannot make, or hiding ones it can, both fail
     storeListingFailures(listingInputs({ ios: claiming, billingEnabled: true })),
     [],
   );
+});
+
+function publicKeyPem(jwk) {
+  return createPublicKey({ format: 'jwk', key: jwk })
+    .export({ type: 'spki', format: 'pem' })
+    .trim();
+}
+
+const hexToBase64Url = (hex) => Buffer.from(hex, 'hex').toString('base64url');
+
+const P256_PUBLIC_KEY = publicKeyPem({
+  kty: 'EC',
+  crv: 'P-256',
+  x: hexToBase64Url('6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
+  y: hexToBase64Url('4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
+});
+const P384_PUBLIC_KEY = publicKeyPem({
+  kty: 'EC',
+  crv: 'P-384',
+  x: hexToBase64Url(
+    'aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7',
+  ),
+  y: hexToBase64Url(
+    '3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f',
+  ),
+});
+const RSA_PUBLIC_KEY = publicKeyPem({
+  kty: 'RSA',
+  n: Buffer.alloc(256, 0xff).toString('base64url'),
+  e: 'AQAB',
+});
+
+function installer(pinned) {
+  return `#!/bin/bash\nTAG_PREFIX="v-cli-"\nRELEASE_SIGNING_KEY='${pinned}'\n\nVERSION=""\n`;
+}
+
+test('the committed installer still carries the assignment the key guard reads', () => {
+  const committed = readFileSync(`${REPO_ROOT}apps/web/public/install.sh`, 'utf8');
+  assert.notEqual(releaseSigningKeyAssignment(committed), null);
+});
+
+test('an installer with no pinned release key fails the key guard', () => {
+  const failures = pinnedReleaseKeyFailures(installer(''));
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /pins no public key/u);
+  assert.equal(pinnedReleaseKeyFailures('#!/bin/bash\n').length, 1);
+});
+
+test('a pinned key the release job cannot sign for fails the key guard', () => {
+  assert.match(pinnedReleaseKeyFailures(installer(RSA_PUBLIC_KEY)).join('\n'), /is rsa/u);
+  assert.match(pinnedReleaseKeyFailures(installer(P384_PUBLIC_KEY)).join('\n'), /secp384r1/u);
+  const garbled = P256_PUBLIC_KEY.replace(/\n[A-Za-z0-9+/]{8}/u, '\n!!!!!!!!');
+  assert.match(pinnedReleaseKeyFailures(installer(garbled)).join('\n'), /not a readable/u);
+});
+
+test('a key outside the assignment is refused because the installer never reads it', () => {
+  const source = `# ${P256_PUBLIC_KEY}\n${installer('')}`;
+  assert.equal(pinnedReleaseKeys(source).length, 0);
+  assert.ok(pinnedReleaseKeyFailures(source).some((failure) => /outside/u.test(failure)));
+});
+
+test('one or more pinned P-256 keys pass the key guard', () => {
+  assert.deepEqual(pinnedReleaseKeyFailures(installer(P256_PUBLIC_KEY)), []);
+  const rotation = installer(`${P256_PUBLIC_KEY}\n${P256_PUBLIC_KEY}`);
+  assert.equal(pinnedReleaseKeys(rotation).length, 2);
+  assert.deepEqual(pinnedReleaseKeyFailures(rotation), []);
 });
