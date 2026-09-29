@@ -2602,6 +2602,12 @@ async fn handle_image_command(
                     ""
                 }
             );
+            if !model.aspect_ratios.is_empty() {
+                println!("    aspect ratios: {}", model.aspect_ratios.join(", "));
+            }
+            if let Some(max) = model.max_images {
+                println!("    up to {max} per request");
+            }
         }
         return Ok(());
     }
