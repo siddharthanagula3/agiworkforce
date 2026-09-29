@@ -4,7 +4,8 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -16,17 +17,31 @@ const MIGRATION = readdirSync(dir).find((name) =>
   name.endsWith('_conversation_google_user_data.sql'),
 );
 if (!MIGRATION) throw new Error('the Google user data mark migration is missing');
-const sql = readFileSync(path.join(dir, MIGRATION), 'utf8');
+const sql = readFileSync(path.join(dir, MIGRATION), 'utf8').replace(/--.*$/gm, '');
 
-function namedIds(): Set<string> {
-  const lists = [...sql.matchAll(/any \(array\[([^\]]+)\]\)/g)].map((match) => match[1] ?? '');
-  expect(lists.length).toBeGreaterThan(0);
-  const sets = lists.map(
-    (list) => new Set([...list.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '')),
-  );
-  for (const set of sets) expect([...set].sort()).toEqual([...sets[0]!].sort());
-  return sets[0]!;
+const script = readFileSync(
+  path.join(process.cwd(), '../../scripts/backfill-google-user-data-mark.mjs'),
+  'utf8',
+);
+
+function scriptIds(): Set<string> {
+  const block = /GOOGLE_CONNECTOR_SERVER_IDS = Object\.freeze\(\[([^\]]+)\]\)/.exec(script);
+  expect(block).not.toBeNull();
+  return new Set([...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map((match) => match[1] ?? ''));
 }
+
+describe('Google user data mark migration', () => {
+  it('only adds a nullable column, so the table lock lasts milliseconds', () => {
+    expect(sql).toMatch(/add column if not exists google_user_data_at timestamptz;/);
+    expect(sql).not.toMatch(/\bdefault\b/i);
+    expect(sql).not.toMatch(/^\s*update\b/im);
+  });
+
+  it('fails fast instead of queueing chats behind a contended lock', () => {
+    expect(sql).toMatch(/set local lock_timeout = '5s'/);
+    expect(sql.indexOf('set local lock_timeout')).toBeLessThan(sql.indexOf('alter table'));
+  });
+});
 
 describe('Google user data mark backfill', () => {
   it('names every Google connector and its directory server id', () => {
@@ -34,23 +49,7 @@ describe('Google user data mark backfill', () => {
       ...GOOGLE_USER_DATA_CONNECTOR_IDS,
       ...GOOGLE_USER_DATA_CONNECTOR_IDS.map(directoryServerId),
     ];
-    const named = namedIds();
+    const named = scriptIds();
     for (const id of expected) expect(named, `${id} is not backfilled`).toContain(id);
-  });
-
-  it('is safe to run twice: it only touches unmarked conversations', () => {
-    expect(sql).toMatch(/where c\.google_user_data_at is null/);
-    expect(sql).toMatch(/add column if not exists google_user_data_at/);
-  });
-
-  it('is bounded by a statement timeout inside its transaction', () => {
-    expect(sql).toMatch(/set local statement_timeout = '\d+min'/);
-    expect(sql.indexOf('set local statement_timeout')).toBeLessThan(sql.indexOf('update '));
-  });
-
-  it('reads tool evidence from both transcript shapes and from Google-imported project sources', () => {
-    expect(sql).toMatch(/m\.metadata -> 'tools'/);
-    expect(sql).toMatch(/'toolInvocations' -> 'offered'/);
-    expect(sql).toMatch(/external_resource_references/);
   });
 });
