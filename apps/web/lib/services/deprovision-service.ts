@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { readRecordedActiveWorkspaceId } from '@/lib/services/active-workspace-service';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
+import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
 
 /**
  * Cuts off a member's live access when they leave a workspace.
@@ -61,6 +62,7 @@ async function revokeProviderSessions(
 ): Promise<{ revoked: number; failed: number; errors: string[] }> {
   const ids: string[] = [];
   const errors: string[] = [];
+  await revokeEveryMobileIntentToken(userId);
 
   try {
     for (let page = 0; page < MAX_SESSION_PAGES; page++) {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
-import { rotateAskIntentTokenOnLaunch } from '@/src/features/siri/askIntentToken';
+import { settleAskIntentOnLaunch } from '@/src/features/siri/askIntentToken';
 import { deviceStatusMetrics, heartbeatRetryDelayMs, sendMobileHeartbeat } from './heartbeat';
 
 export function useDeviceRegistryHeartbeat(): void {
@@ -23,7 +23,7 @@ export function useDeviceRegistryHeartbeat(): void {
         .catch(() => false)
         .then((accepted) => {
           if (accepted) {
-            rotateAskIntentTokenOnLaunch().catch((error: unknown) => {
+            settleAskIntentOnLaunch().catch((error: unknown) => {
               console.warn('[siri] the Ask from Siri token was not rotated', error);
             });
           }

@@ -8,8 +8,8 @@ import {
   MOBILE_INTENT_SIGN_IN_MESSAGE,
   MobileIntentRefusal,
   answerMobileIntentAsk,
-  resolveMobileIntentToken,
 } from '@/lib/server/mobile-intent';
+import { resolveMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;

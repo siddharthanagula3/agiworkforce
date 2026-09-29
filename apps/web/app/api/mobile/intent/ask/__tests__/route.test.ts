@@ -20,10 +20,13 @@ vi.mock('@/lib/server/mobile-intent', () => {
   return {
     MOBILE_INTENT_SIGN_IN_MESSAGE: 'Open AGI Workforce to sign in.',
     MobileIntentRefusal,
-    resolveMobileIntentToken: (...args: unknown[]) => mockResolve(...args),
     answerMobileIntentAsk: (...args: unknown[]) => mockAnswer(...args),
   };
 });
+
+vi.mock('@/lib/server/mobile-intent-tokens', () => ({
+  resolveMobileIntentToken: (...args: unknown[]) => mockResolve(...args),
+}));
 
 import { POST } from '../route';
 

@@ -16,7 +16,7 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
-vi.mock('@/lib/server/mobile-intent', () => ({
+vi.mock('@/lib/server/mobile-intent-tokens', () => ({
   issueMobileIntentToken: (...args: unknown[]) => mockIssue(...args),
   revokeMobileIntentTokens: (...args: unknown[]) => mockRevoke(...args),
 }));
@@ -47,6 +47,7 @@ describe('/api/mobile/intent-token', () => {
       userId: 'user-1',
       organizationId: null,
       installId: INSTALL_ID,
+      defaultModelId: null,
     });
   });
 

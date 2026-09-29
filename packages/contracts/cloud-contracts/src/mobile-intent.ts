@@ -7,7 +7,10 @@ export const MOBILE_INTENT_PROMPT_MAX_CHARS = 2_000;
 const InstallIdSchema = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/);
 
 export const MobileIntentTokenIssueRequestSchema = z
-  .object({ installId: InstallIdSchema })
+  .object({
+    installId: InstallIdSchema,
+    defaultModelId: z.string().trim().min(1).max(200).optional(),
+  })
   .strict();
 
 export const MobileIntentTokenIssueResponseSchema = z.object({
