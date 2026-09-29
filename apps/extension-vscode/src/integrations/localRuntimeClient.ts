@@ -9,6 +9,7 @@ import type {
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 import type {
+  AgentEventSource,
   AppServerCapabilities,
   AppServerNotification,
   ApprovalResponseParams,
@@ -945,19 +946,16 @@ const progressUpdateSchema = z.object({
   detail: z.string().optional(),
   status: z.enum(['running', 'completed', 'failed']),
 });
+const agentEventSourceSchema: z.ZodType<AgentEventSource> = z.object({
+  url: z.string().min(1).max(8_192),
+  title: z.string().max(2_000),
+  snippet: z.string().max(8_000).optional(),
+});
 const sourceListSchema = z.object({
   type: z.literal('source-list'),
   toolCallId: z.string().max(200).optional(),
   query: z.string().max(2_000).optional(),
-  sources: z
-    .array(
-      z.object({
-        url: z.string().min(1).max(8_192),
-        title: z.string().max(2_000),
-        snippet: z.string().max(8_000).optional(),
-      }),
-    )
-    .max(500),
+  sources: z.array(agentEventSourceSchema).max(500),
 });
 
 const agentEventEnvelopeSchema = z.object({

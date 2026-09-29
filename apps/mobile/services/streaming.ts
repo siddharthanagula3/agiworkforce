@@ -16,7 +16,7 @@ import {
   type ResearchStep,
   type RoutingProfileChoice,
 } from '@agiworkforce/types';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentEventSource } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
@@ -272,7 +272,7 @@ interface InitialStreamRequest {
   web_fetch?: boolean;
   research?: boolean;
   research_resume?: {
-    sources?: Array<{ url: string; title?: string; snippet?: string }>;
+    sources?: Array<Omit<AgentEventSource, 'title'> & { title?: string }>;
     steps?: ResearchStep[];
     approved_steps?: ResearchStep[];
   };

@@ -485,24 +485,6 @@
       "symbol": "CONTROL_LAYERS",
       "why": "The unavailable screen restates entitlement, permission and policy to choose its copy, so a fourth control layer added to the registry renders the wrong sentence on mobile.",
       "fix": "Import CONTROL_LAYERS and key the copy off it."
-    },
-    {
-      "file": "apps/desktop/src/stores/chat/types.ts",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "The Tauri app's chat store keeps its own citation row (index, timestamp) with the url, title and snippet fields; extend AgentEventSource when that store next changes."
-    },
-    {
-      "file": "apps/mobile/services/streaming.ts",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "Held by the Codex mobile release; the stream's sources field becomes AgentEventSource[] in the post-codex pass."
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "The chip's props spell out index, title, url and snippet one by one; take an AgentEventSource prop plus the index instead."
     }
   ]
 }
