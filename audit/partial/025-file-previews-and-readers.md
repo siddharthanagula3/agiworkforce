@@ -32,27 +32,21 @@ nothing is left.
 
 - Done when: Markdown files render formatted in the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi library show prints Markdown as plain text; render it formatted, for example through tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.04: Source-code reader.
 
 - Done when: Source-code files open with syntax-aware display.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi library show prints code as plain text; add syntax highlighting, for example the syntect path in tui/markdown_renderer.rs (section 25 cli now p-privacy's) (progress: partials/desktop-cli da57426f65) | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:5511-5511`
 
 ## S25.05: Image viewer.
 
@@ -73,7 +67,7 @@ Code: `apps/cli/src/lib.rs:5511-5511`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Generated videos open in the in-app browser; Library videos go to the OS share sheet; no in-app player. | ui |
+| mobile | partial | Generated videos already play in-app. c405859870 extracts that player into VideoPlayerModal. post-codex/w-work-s24-s25.07-mobile-library.patch (now also carries S24): tapping a Library video plays it in the same in-app player instead of the share sheet. Waits on the Codex hold. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

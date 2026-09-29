@@ -46,18 +46,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S58.07: Connection test.
-
-- Done when: The user can test the connection to an MCP server and see whether it succeeded.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The server is probed only when it is added; there is no on-demand test afterwards. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`
-
 ## S58.08: Tool discovery.
 
 - Done when: Connecting an MCP server discovers its tools and the user can see them.

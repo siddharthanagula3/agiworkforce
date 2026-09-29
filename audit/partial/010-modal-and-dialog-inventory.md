@@ -62,12 +62,12 @@ Code: `apps/mobile/src/features/archived-chats/service.ts:69-69`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Share' exports the chat as a file through the OS share sheet; creating a share link is only possible on web. | ui |
+| mobile | partial | post-codex/chat-gates-s18.19-mobile-share-link.patch (in the ordered series) creates the link after saying who can open it ('Anyone with the link can read the messages in this chat until the link expires') and hands it to the share sheet to copy or send. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1604`
+Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 
 ## S10.09: Share file or folder.
 
@@ -89,9 +89,9 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
+| mobile | partial | partials/chat-gates 1228dfd07d: who can open it (anyone with the link, or the workspace with its member count) and Unpublish, each confirmed with the web's copy, over PATCH and DELETE /api/artifacts/publish/[token]. post-codex/w-chat-s10.10-mobile-artifact-audience-and-unpublish.patch loads the artifact's publication in the held ArtifactFullScreen and mounts the controls under the link. | codex |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
+Code: `apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx:41-41`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:93-93`
 
 ## S10.11: Publish generated application.
 
@@ -119,27 +119,21 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: An invite dialog takes an email and role, sends the invitation, and lists pending invites to revoke or renew.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile cannot send, list, renew or revoke invitations: on iOS "Add" attaches an existing AGI account directly ("There is no invitation email") and on Android it opens web team settings. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:129-160`, `apps/mobile/src/features/team/service.ts:149-155`
 
 ## S10.14: Change member role.
 
 - Done when: A role dialog changes a member's role after confirmation, and the server enforces the new role.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile changes a member between the built-in roles only and shows no role permissions; it also offers "Owner", which the server always refuses (ownership moves only by transfer). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/features/team/service.ts:5-5`, `apps/mobile/src/features/team/service.ts:161-161`
 
 ## S10.15: Transfer ownership.
 
@@ -266,10 +260,10 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
+| mobile | partial | Codex's held chat screen mounts ContextWarningChip above the composer (chat/[id].tsx:1497 in the Codex copy). For every model it warns before sending once the thread nears the model's context window, and offers New chat. Done once Codex commits. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
+Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -404,14 +398,11 @@ Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 - Done when: A feedback dialog, reachable product-wide, sends the user's message to the team's feedback store.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`
 
 ## S10.46: Diagnostic-sharing consent.
 

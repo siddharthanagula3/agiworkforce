@@ -99,11 +99,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule dates are typed into a text field (YYYY-MM-DD) and validated; add a native date picker. | ui |
+| mobile | partial | post-codex/w-chat-s8.25-s8.26-mobile-native-date-time-pickers.patch adds @react-native-community/datetimepicker 9.1.0 (Expo SDK 57's bundled version) to the held apps/mobile/package.json and replaces the typed date with the native date picker (Android dialog, iOS inline). Lead installs after Codex commits; the patch is typechecked once the module is installed. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:55-56`
+Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.26: Time pickers.
 
@@ -113,23 +113,11 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:55-56`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule times are typed as HH:MM text and validated; add a native time picker. | ui |
+| mobile | partial | Same post-codex patch as S8.25: the hour and minute lists become the native time picker. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:83-83`
-
-## S8.27: Timezone pickers.
-
-- Done when: A time zone picker (searchable list of zones, defaulting to the device zone) is used where schedules take a zone.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The time zone defaults to the device zone but is edited as free text validated against Intl; add a zone picker. | ui |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:29-29`
+Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.28: Color pickers.
 

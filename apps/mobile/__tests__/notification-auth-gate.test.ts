@@ -312,6 +312,17 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });
 
+  for (const type of ['agent_approval_needed', 'task_completed', 'agent_failed']) {
+    it(`opens the cloud run a ${type} push names, where it can be answered`, () => {
+      signIn();
+      fireNotification({ type, priority: 'high', route: '/(app)/tasks', runId: 'run-1' });
+      expect(mockRouterPush).toHaveBeenCalledWith({
+        pathname: '/(app)/tasks',
+        params: { runId: 'run-1' },
+      });
+    });
+  }
+
   it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {
     signIn();
     fireNotification({ type: 'schedule_run', taskId: 'task-1' });

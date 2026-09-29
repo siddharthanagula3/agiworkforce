@@ -583,7 +583,7 @@
       "minClientVersion": null,
       "minBackendVersion": null,
       "gates": {
-        "entitlement": "skills_connectors",
+        "entitlement": "artifact_connectors",
         "policy": "artifact_connectors",
         "permission": null,
         "trustBoundary": "managed-cloud",

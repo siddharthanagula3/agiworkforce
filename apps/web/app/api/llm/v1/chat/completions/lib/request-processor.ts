@@ -43,9 +43,10 @@ import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
+  declarationForHost,
   parseDesktopHostDeclaration,
-  type DesktopCapability,
   type DesktopHostDeclaration,
+  type DeviceStepCapability,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
 import { URL_FETCH_TOOL, urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
@@ -2641,12 +2642,23 @@ export function applyFreePlanDefaultModel(
   chatRequest.model = getDefaultModelFor(planTier, 'chat');
 }
 
+export function declaredDeviceHost(
+  header: string | null,
+  surface: CloudChatSurface,
+): DesktopHostDeclaration | null {
+  const kind = surface === 'desktop' ? 'desktop' : surface === 'mobile' ? 'phone' : null;
+  const declaration = kind ? parseDesktopHostDeclaration(header) : null;
+  if (!kind || !declaration) return null;
+  const scoped = declarationForHost(declaration, kind);
+  return scoped.capabilities.length > 0 ? scoped : null;
+}
+
 export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
 ): DesktopHostDeclaration | null {
   if (!deviceHost || !controls) return deviceHost;
-  const withheld = new Set<DesktopCapability>([
+  const withheld = new Set<DeviceStepCapability>([
     ...(controls.featureAccess.computer_use ? [] : ['computer.use' as const]),
     ...(controls.featureAccess.browser ? [] : ['browser.site' as const, 'browser.cdp' as const]),
   ]);
@@ -2854,14 +2866,13 @@ export async function processRequest(
   creditBalancePromise?.catch(() => {});
 
   const chatSurface = resolveAuthenticatedSurface(request, auth);
-  // A declaration is a claim about the caller's own machine, never an
+  // A declaration is a claim about the caller's own device, never an
   // authorization: it decides which device tools are offered, and the device
-  // refuses or prompts for every step it produces. Only the desktop surface is
-  // believed, so a browser tab cannot obtain the tools by sending the header.
+  // refuses or prompts for every step it produces. Only the desktop and mobile
+  // surfaces are believed, each for its own steps, so a browser tab cannot
+  // obtain the tools by sending the header and a phone cannot claim a desktop's.
   const deviceHost = withoutWorkspaceDisabledDeviceCapabilities(
-    chatSurface === 'desktop'
-      ? parseDesktopHostDeclaration(request.headers.get(DEVICE_HOST_HEADER))
-      : null,
+    declaredDeviceHost(request.headers.get(DEVICE_HOST_HEADER), chatSurface),
     workspaceControls,
   );
   const disabledFeature = workspaceControls

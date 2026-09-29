@@ -118,7 +118,7 @@ export const CLIENT_ROOTS = Object.freeze([
  * holds it. Naming capabilities is fine; deciding them locally is not.
  */
 const HANDSHAKE_CONSUMER_RE =
-  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities)/;
+  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities|resolveCapabilityDocumentDecision|from\s+['"][^'"]*cloud-bridge\/capabilityDocument['"])/;
 
 const MIN_DISTINCT_CAPABILITIES = 3;
 
@@ -180,6 +180,10 @@ export const PROVIDER_ADAPTER_PATHS = new Map([
     'the image-generation adapter itself',
   ],
   [
+    'apps/web/app/api/voice/speech/route.ts',
+    'the read-aloud route is the speech adapter: it calls the OpenAI audio/speech endpoint itself',
+  ],
+  [
     'apps/web/lib/e2b/hosted-code-execution.ts',
     "prices each vendor's hosted code-execution container in that vendor's published billing unit",
   ],
@@ -213,7 +217,7 @@ export const PROVIDER_BRANCH_ALLOWLIST = new Map([
     'the transcription route refuses a non-OpenAI default model instead of asking whether the adapter transcribes',
   ],
   [
-    'apps/web/app/api/media/image/generate/route.ts',
+    'apps/web/app/api/media/image/lib/managed-image-generation.ts',
     'narrows the request to two vendors by name rather than by declared image capability',
   ],
   [

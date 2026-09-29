@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import {
+  GitHubInstallationUnverifiedError,
   assertRepositoryIsVerified,
   getInstallationAccessToken,
   listGitHubRepositoryBranches,
@@ -76,8 +77,11 @@ async function handleList(request: NextRequest) {
       repository.fullName,
     );
   } catch (error) {
+    logger.info({ error, installationId }, 'Branch listing refused an unverified repository');
     throw createError.validation(
-      error instanceof Error ? error.message : 'That repository is not one this account proved',
+      error instanceof GitHubInstallationUnverifiedError
+        ? 'This GitHub connection was made before repository access was checked. Reconnect GitHub to list its branches.'
+        : 'That repository is not one this GitHub connection proved access to. Choose a repository from the list.',
     );
   }
 

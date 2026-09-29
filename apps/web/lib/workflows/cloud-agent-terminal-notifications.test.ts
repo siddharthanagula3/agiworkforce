@@ -78,6 +78,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   resolveManagedQuotaRecovery: vi.fn(() => null),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
+  FREE_BUDGET_REACHED_ERROR_CLASS: 'free_trial_token_budget_reached',
   isEventPromotedRequest: () => false,
   settleFreeTrialRequest: vi.fn(async () => undefined),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',

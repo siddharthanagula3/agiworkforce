@@ -388,7 +388,6 @@ Code: `apps/web/lib/connectors/directory/sources/first-party.json:538-538`
 | --- | --- | --- | --- |
 | web | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
 | desktop | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
-| mobile | partial | Mobile can add a custom connector by URL in AddCustomConnectorModal, which the new URL check also governs, but the modal is held by Codex and has no Snowflake or Databricks preset. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
@@ -464,12 +463,9 @@ Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/c
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Only hands a drafted SMS to the OS composer (sms: link, confirmed first); the assistant cannot read or send iMessage, WhatsApp or Telegram messages. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/utils/externalUrls.ts:3-3`, `apps/mobile/src/features/chat/utils/externalUrls.ts:40-40`
 
 ## S56.45: Local notes and calendars.
 
@@ -479,11 +475,11 @@ Code: `apps/mobile/src/features/chat/utils/externalUrls.ts:3-3`, `apps/mobile/sr
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | The assistant cannot read the device calendar or notes (getUpcomingEvents has no caller); it can only add a reviewed item to Apple Reminders via the iOS remind link. | handler |
+| mobile | partial | codex: apply post-codex/w-connect-S56.45-phone-calendar-held.patch (protocol and server committed 7cab88169d) | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/settings/integrations.tsx:182-182`, `apps/mobile/src/features/integrations/services/deviceIntegrations.ts:27-42`, `apps/mobile/app/_layout.tsx:557-565`, `apps/mobile/src/features/reminders/index.tsx:50-50`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S56.46: Health-record connections.
 

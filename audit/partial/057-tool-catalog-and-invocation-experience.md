@@ -222,31 +222,7 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The clarify tool is offered only when the client declares clarify.v1 cards; this client sends only map-search.v1, so the model never gets it. | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S57.26-S60.13-clarify-plan-held.patch (free part committed 9b36ba0b67) | handler |
 | vscode | partial | The runtime's ask_user reads the runtime process's stdin, which VS Code uses for JSON-RPC; the AskUser approval kind the webview labels is never raised outside tests. | handler |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:713-713`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
-
-## S57.30: Tool descriptions and schemas.
-
-- Done when: Each tool carries a readable description and typed parameter schema that the model uses and the user can inspect.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
-
-## S57.37: Tool receipt.
-
-- Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`

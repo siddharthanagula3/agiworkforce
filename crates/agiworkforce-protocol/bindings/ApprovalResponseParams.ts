@@ -6,4 +6,6 @@ export type ApprovalResponseParams = {
   turnId: string;
   requestId: string;
   decision: ReviewDecision;
+  note?: string;
+  editedContent?: string;
 };

@@ -1125,6 +1125,46 @@
       }
     },
     {
+      "id": "artifact_connectors",
+      "label": "Connected apps in artifacts",
+      "group": "integrations",
+      "featureId": "artifact_connectors",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/shared-artifact/[token]/page.tsx",
+          "mount": "apps/web/app/layout.tsx"
+        },
+        "desktop": {
+          "state": "absent",
+          "why": "The desktop window keeps only product and sign-in paths; a published app opens in the system browser, where the web page serves it."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile hosts a published app's runtime; a published link opens in the browser."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "The CLI does not render published apps."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "The VS Code extension does not render published apps."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "The extension does not render published apps."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/artifacts/runtime/[token]/connectors/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
       "id": "code-sessions",
       "label": "Code sessions",
       "group": "developer",

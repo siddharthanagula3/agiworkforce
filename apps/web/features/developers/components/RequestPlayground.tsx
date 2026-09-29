@@ -17,6 +17,7 @@ import {
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 
 const CHAT_COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
 const MODELS_PATH = '/api/llm/v1/models';
@@ -207,7 +208,13 @@ export function RequestPlayground() {
       const response = await sendAuthorizedJson(
         CHAT_COMPLETIONS_PATH,
         { method: 'POST', body: { ...buildRequestBody(draft), personalization: false } },
-        { 'Idempotency-Key': crypto.randomUUID() },
+        {
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: 'web',
+            purpose: 'send',
+            operationId: crypto.randomUUID(),
+          }),
+        },
       );
       const latencyMs = Math.round(performance.now() - started);
       const payload = (await response.json().catch(() => null)) as CompletionPayload | null;

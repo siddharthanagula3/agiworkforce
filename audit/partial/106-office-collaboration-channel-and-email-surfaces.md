@@ -85,9 +85,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Selected text can be shared from a host app into AGI through the share sheet, then sent as a draft; the assistant never reads the live host selection or ranges. | ui, handler |
-
-Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`
 
 ## S106.12: Shared conversation context across supported host applications.
 
@@ -166,7 +163,4 @@ Code: `apps/web/lib/slack/slack-api.ts:108-108`, `apps/web/lib/slack/slack-api.t
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Host apps can share text, links or files into AGI through the share sheet (review, then a new-chat draft); there is no session handoff back to the host. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`

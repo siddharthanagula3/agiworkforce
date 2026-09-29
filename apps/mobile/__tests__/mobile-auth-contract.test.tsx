@@ -14,6 +14,7 @@ const WEBVIEW_IMPORT = /from 'react-native-webview'/;
 const WEBVIEW_SURFACES = [
   'src/features/chat/components/MathBlock.tsx',
   'src/features/chat/components/SafeArtifactPreview.tsx',
+  'src/features/chat/components/VideoPlayerModal.tsx',
 ];
 
 // Every keychain write names when the item may be read. Without it iOS

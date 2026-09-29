@@ -18,18 +18,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S12.03: Neutral greeting when personalization is disabled.
-
-- Done when: When personalization is off (or no name is known), the new-chat greeting is neutral and shows no personal details.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | greetingHeadline without a name gives the neutral greeting and is now importable from @agiworkforce/utils/greeting. What remains is ChatEmptyState passing no name when personalization is off. | ui |
-
-Code: `packages/platform/utils/src/greeting.ts:88-88`
-
 ## S12.04: Suggested prompts.
 
 - Done when: The new-chat screen offers clickable suggested prompts that fill or send a message.
@@ -143,15 +131,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531
 ## S12.14: Voice entry.
 
 - Done when: From the new-chat screen the user can start a spoken (voice-mode) conversation.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:354-354`
 
 ## S12.15: Agentic-work entry.
 
@@ -164,18 +149,6 @@ Code: `apps/cli/src/voice.rs:354-354`
 | mobile | partial | Codex's held chat.tsx already adds a Chat and Work switch to the new-chat screen (working copy lines 844-876); the cell is done once that file merges. Nothing to add here. | ui |
 
 Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
-
-## S12.16: Coding entry.
-
-- Done when: From the new-chat surface the user can start a coding session (a repository/workspace-aware coding agent).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add a way to start coding work from the phone; today mobile can only follow a paired desktop's code sessions from "Remote" in the drawer. | ui |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 
 ## S12.17: Temporary-chat control.
 

@@ -55,18 +55,6 @@ Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:407-411`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
-## S83.07: Coupon entry.
-
-- Done when: Users can enter a coupon/promotion code when buying.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no coupon entry: its invite-code modal is never mounted and its redeem is a local stub, and store offer codes are not wired. | mount, handler |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
-
 ## S83.08: Trial terms.
 
 - Done when: When a plan starts as a trial, the user sees the trial terms: length, end date, what is charged after and how to cancel.
@@ -79,54 +67,6 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/features/billing/store.ts:26-26`
 
-## S83.09: Payment-method entry.
-
-- Done when: Users can add a payment method.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot add a card: the portal action is behind FEATURES.billing and Stripe-billed users are sent to web billing; store payment methods live with Apple/Google. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.10: Payment-method management.
-
-- Done when: Users can see and manage saved payment methods (default card, update, remove).
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows no card; management is behind FEATURES.billing and otherwise opens web billing. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.11: Billing address.
-
-- Done when: Users can enter and update a billing address.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot collect or edit an address; Stripe-billed users are sent to web billing and the portal action is flag-gated. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.12: Tax identifier.
-
-- Done when: Business buyers can enter a tax identifier (VAT/GST) that is applied to their invoices.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no tax-ID entry; store purchases handle tax themselves and are gated off. | flag-off, surface-only |
-
-Code: `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
-
 ## S83.13: Purchase confirmation.
 
 - Done when: After paying, the user sees a confirmation of what was bought and that it is active.
@@ -138,30 +78,6 @@ Code: `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 | mobile | partial | Native purchases show 'Purchase verified' after server verification, but native purchase is gated off. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:506-514`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S83.15: Retry payment.
-
-- Done when: After a failed payment the user can retry it (pay the open invoice or update the card) from the product.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile only links a past-due Stripe user to web billing. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
-
-## S83.21: Cancel subscription.
-
-- Done when: Users can cancel their subscription themselves.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
 
 ## S83.24: End-of-term access explanation.
 

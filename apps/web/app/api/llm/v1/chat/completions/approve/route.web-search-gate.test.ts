@@ -12,6 +12,7 @@ vi.mock('../lib/auth-gate', () => ({
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: async () => null,
