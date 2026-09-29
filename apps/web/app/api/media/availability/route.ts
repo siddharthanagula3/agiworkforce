@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedMediaModelAvailabilityReply } from '@agiworkforce/cloud-contracts';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getSecurityHeaders, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -18,7 +19,9 @@ async function handleGetAvailability(request: NextRequest): Promise<NextResponse
 
   await getClerkAuthUser(request);
 
-  return NextResponse.json(await resolveDeploymentMediaModelAvailability());
+  const availability: ManagedMediaModelAvailabilityReply =
+    await resolveDeploymentMediaModelAvailability();
+  return NextResponse.json(availability);
 }
 
 const getWithErrors = withErrorHandler(handleGetAvailability);

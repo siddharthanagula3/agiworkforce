@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { MANAGED_MEDIA_KEEP_PATH } from '@agiworkforce/cloud-contracts';
 import {
   X,
   Download,
@@ -43,7 +44,7 @@ function mediaAssetIdFromUrl(url: string | undefined): string | null {
 }
 
 async function keepTemporaryChatMedia(assetId: string): Promise<void> {
-  const response = await fetch('/api/media/keep', {
+  const response = await fetch(MANAGED_MEDIA_KEEP_PATH, {
     method: 'POST',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id: assetId }),
