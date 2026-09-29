@@ -1693,6 +1693,8 @@ enum PluginSubcommand {
         #[arg(long)]
         unsafe_allow_unsigned: bool,
     },
+    /// Show one installed plugin's publisher, signature, version, links and source.
+    Info { name: String },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -5312,6 +5314,29 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 p.root.display()
                             );
                         }
+                        Ok(())
+                    }
+                    PluginSubcommand::Info { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let signature_policy = plugins::PluginSignaturePolicy {
+                            publishers:
+                                features::plugins::signature::TrustedPublishers::configured()
+                                    .unwrap_or_default(),
+                            ..plugins::PluginSignaturePolicy::default()
+                        };
+                        println!("{}", plugins::describe_plugin(plugin, &signature_policy));
                         Ok(())
                     }
                     PluginSubcommand::Install {
