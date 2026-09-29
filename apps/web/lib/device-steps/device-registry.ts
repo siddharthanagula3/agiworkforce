@@ -191,19 +191,45 @@ export async function propagateDeviceRevocation(
     };
   }
   if (relay.configured) {
+    const revokedAt = new Date().toISOString();
     // A relay that is down keeps the device's live socket open, so the revoke
     // is queued and retried until the relay takes it.
     await enqueueJob(db, {
       kind: DEVICE_REVOCATION_JOB_KIND,
       userId: revocation.userId,
-      payload: { deviceId: revocation.deviceId, reason: revocation.reason },
-      idempotencyKey: `device-revoke:${revocation.deviceId}:${revocation.reason}`,
+      payload: { deviceId: revocation.deviceId, reason: revocation.reason, revokedAt },
+      // One job per revocation: a device re-paired and revoked again later is a
+      // new revocation, and its revoke must not dedupe into the finished one.
+      idempotencyKey: `device-revoke:${revocation.deviceId}:${revocation.reason}:${revokedAt}`,
     }).catch(() => undefined);
   }
   return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
 }
 
 export const DEVICE_REVOCATION_JOB_KIND = 'webhooks.signaling-device-revoke';
+
+export interface RegistrationSinceRevocation {
+  readonly remote_enabled: boolean;
+  readonly last_seen_at: string | null;
+}
+
+/**
+ * Whether a queued revoke still describes the device. It is stale once the user
+ * took remote work back on, and, for an unlinked or lost device, once the
+ * device reported in again after the revocation, which only a fresh sign-in
+ * can do. A device whose remote work was stopped keeps reporting in while it
+ * stays signed in, so for that reason only a re-enable makes the revoke stale.
+ */
+export function revocationIsStale(
+  reason: DeviceRevocationReason,
+  revokedAt: string,
+  registration: RegistrationSinceRevocation | null,
+): boolean {
+  if (!registration) return false;
+  if (registration.remote_enabled) return true;
+  if (reason === 'remote_work_stopped' || !registration.last_seen_at) return false;
+  return Date.parse(registration.last_seen_at) > Date.parse(revokedAt);
+}
 
 export interface RelayRevocation {
   readonly configured: boolean;

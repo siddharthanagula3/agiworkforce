@@ -27,8 +27,10 @@ import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
 import {
   DEVICE_REVOCATION_REASONS,
+  revocationIsStale,
   sendRelayRevocation,
   type DeviceRevocationReason,
+  type RegistrationSinceRevocation,
 } from '@/lib/device-steps/device-registry';
 
 import type { JobHandlerContext, JobHandlerRegistry } from './job-drain';
@@ -229,6 +231,26 @@ async function retryRelayRevocation(context: JobHandlerContext): Promise<Record<
   const reason = readString(context.job.payload, 'reason');
   if (!(DEVICE_REVOCATION_REASONS as readonly string[]).includes(reason)) {
     throw new PermanentJobError('Device revocation job names no known reason');
+  }
+  const userId = requireAccount(context);
+  const revokedAt =
+    typeof context.job.payload['revokedAt'] === 'string'
+      ? context.job.payload['revokedAt']
+      : context.job.createdAt;
+  // A retry can run hours later. A device re-paired since then must not be
+  // revoked by the stale job, so the registry is read again first.
+  const [registration] = await createClaimedUserScopedDb(context.db, {
+    userId,
+    organizationId: context.job.organizationId,
+  }).query<RegistrationSinceRevocation>(
+    `select remote_enabled, last_seen_at::text as last_seen_at
+       from device_registrations
+      where id = $1 and user_id = $2
+      limit 1`,
+    [deviceId, userId],
+  );
+  if (revocationIsStale(reason as DeviceRevocationReason, revokedAt, registration ?? null)) {
+    return { deviceId, skipped: 'device re-paired since the revocation' };
   }
   const relay = await sendRelayRevocation(deviceId, reason as DeviceRevocationReason);
   if (!relay.configured) throw new PermanentJobError('The signaling relay is not configured');
