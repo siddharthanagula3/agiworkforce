@@ -15,6 +15,8 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface VideoTurnCompletion {
   videoUrl: string;
   thumbnailUrl?: string;
@@ -113,6 +115,9 @@ export async function runVideoGenerationTurn(
       {
         prompt: input.prompt,
         model: input.model,
+        ...(CLOUD_CONVERSATION_ID.test(input.conversationId)
+          ? { conversation_id: input.conversationId }
+          : {}),
         ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
         ...(input.durationSecs ? { duration_secs: input.durationSecs } : {}),
