@@ -83,7 +83,7 @@ export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 export const LIBRARY_DEFAULT_PAGE_SIZE = 24;
 export const LIBRARY_MAX_PAGE_SIZE = 100;
 
-export const LIBRARY_SORTS = ['modified', 'name', 'size', 'type'] as const;
+export const LIBRARY_SORTS = ['modified', 'oldest', 'type', 'name', 'size'] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 export const LIBRARY_DEFAULT_SORT: LibrarySort = 'modified';
 
@@ -158,3 +158,7 @@ export const MediaJobListResponseSchema = z.object({
   jobs: z.array(MediaJobEntrySchema).max(MEDIA_JOB_HISTORY_MAX),
 });
 export type MediaJobListResponse = z.infer<typeof MediaJobListResponseSchema>;
+
+export const LibraryMediaDeleteResponseSchema = z.object({
+  success: z.boolean(),
+});

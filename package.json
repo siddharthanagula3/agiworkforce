@@ -1,7 +1,7 @@
 {
   "name": "agiworkforce",
   "private": true,
-  "//version": "Intentionally no version field. This is a private workspace manifest, not a shippable product. Each app owns its own version and the release workflows read those directly (e.g. release-desktop.yml reads apps/desktop/package.json). A root version drifted to 1.1.7 while desktop/mobile/extension shipped 1.2.0, which read as a product version and was wrong everywhere. Founder decision 2026-08-04.",
+  "//version": "Intentionally no version field. This is a private workspace manifest, not a shippable product. Each app owns its own version and the release workflows read those directly. Founder decision 2026-08-04.",
   "description": "AGI Workforce monorepo (Tauri + React + Rust)",
   "homepage": "https://agiworkforce.com",
   "repository": {
@@ -16,7 +16,9 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "sharp"
+      "sharp",
+      "llama.rn",
+      "react-native-executorch"
     ],
     "peerDependencyRules": {
       "ignoreMissing": []
@@ -84,7 +86,7 @@
       "fflate": ">=0.8.3",
       "@opentelemetry/propagator-jaeger": ">=2.9.0",
       "@clerk/nextjs>@clerk/react": "6.16.1",
-      "react-native": "0.86.2",
+      "react-native": "0.86.3",
       "pptxgenjs>image-size": "2.0.4",
       "@wdio/utils>@puppeteer/browsers": "3.2.2",
       "jayson@<5": "5.0.0",

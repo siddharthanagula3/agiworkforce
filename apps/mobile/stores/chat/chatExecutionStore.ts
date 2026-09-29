@@ -47,6 +47,8 @@ import {
   ManagedCloudAgentRunReferenceSchema,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
+  type FreeQuotaMessageContent,
+  normalizePromotionalChatHistory,
 } from '@agiworkforce/cloud-contracts';
 import {
   createToolCallAccumulator,
@@ -72,7 +74,10 @@ import {
   isCloudManagedModelId,
   isSelectableModelId,
 } from '@/src/features/model-picker/service';
-import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
+import {
+  cloudDispatchUnavailableMessage,
+  resolveMobileCloudDispatch,
+} from '@/src/features/chat/utils/cloudDispatchRouting';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
@@ -148,6 +153,12 @@ import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { managedCloudChat } from '@/services/managedCloudChat';
+import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
+import { getProviderOffering } from '@agiworkforce/types';
+import {
+  ensureReadyFreeQuotaChatOffering,
+  useFreeQuotaCatalogueStore,
+} from '@/src/features/model-picker/freeQuotaCatalogue';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
@@ -348,6 +359,7 @@ export function clearCloudExecutionState(): void {
   pendingApprovalTurns.clear();
   useChatExecutionStore.setState({
     ...streamingFlags(),
+    isEditing: false,
     ...(streamingConversations.size === 0
       ? { streamingContent: '', streamingReasoning: '', paywallError: null, error: null }
       : {}),
@@ -990,6 +1002,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
+    const promotionalOffering = getProviderOffering(requestedModel);
+    const isFreeQuotaChat =
+      promotionalOffering?.category === 'chat' && promotionalOffering.quotaProbeProtocol === 'chat';
     const isCloudModel = isCloudManagedModelId(requestedModel);
     const isAutoSelection = isAutoModeModelId(requestedModel);
     const executionMode = conversation
@@ -1086,42 +1101,70 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       await ensureCloudEntitlementsReadyForRequest();
       if (!isTurnAccountCurrent()) return false;
 
-      const route = resolveMobileCloudDispatch({
-        selection: requestedModel,
-        message: content,
-        subscriptionTier: useTierStore.getState().tier,
-        history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        attachments: attachments?.map((attachment) => ({
-          mime: attachment.mimeType,
-          type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
-        })),
-        currentModelKey:
-          conversation?.model && !isAutoModeModelId(conversation.model)
-            ? conversation.model
-            : undefined,
-      });
+      if (isFreeQuotaChat) {
+        const freeOffering = await ensureReadyFreeQuotaChatOffering(requestedModel);
+        if (!isTurnAccountCurrent()) return false;
+        if (!freeOffering) {
+          set({
+            error:
+              useFreeQuotaCatalogueStore.getState().error ??
+              'This provider-funded Free model is unavailable right now. Choose another available Free model.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        if (
+          attachments?.some((attachment) => !attachment.mimeType.startsWith('image/')) ||
+          (attachments?.length && promotionalOffering?.quotaChatImageInput !== true)
+        ) {
+          set({
+            error:
+              'This Free model cannot read the attached file. Choose an image-capable Free model or remove the attachment.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        executionModel = requestedModel;
+      } else {
+        const route = resolveMobileCloudDispatch({
+          selection: requestedModel,
+          message: content,
+          subscriptionTier: useTierStore.getState().tier,
+          history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+          attachments: attachments?.map((attachment) => ({
+            mime: attachment.mimeType,
+            type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
+          })),
+          currentModelKey:
+            conversation?.model && !isAutoModeModelId(conversation.model)
+              ? conversation.model
+              : undefined,
+        });
 
-      if (route.status === 'unavailable') {
-        set({
-          error: `No AGI Cloud route is available for this request: ${route.reasons.join('; ')}`,
-          paywallError: null,
-          ...streamingFlags(),
-        });
-        return false;
+        if (route.status === 'unavailable') {
+          set({
+            error: cloudDispatchUnavailableMessage(route),
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        if (route.dispatch !== 'chat') {
+          set({
+            error: 'This request requires the AGI Cloud media workflow.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        executionModel = route.modelKey;
+        routingReason = route.reason;
       }
-      if (route.dispatch !== 'chat') {
-        set({
-          error: 'This request requires the AGI Cloud media workflow.',
-          paywallError: null,
-          ...streamingFlags(),
-        });
-        return false;
-      }
-      executionModel = route.modelKey;
-      routingReason = route.reason;
     }
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
@@ -1209,6 +1252,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ];
           }
         } catch (err) {
+          if (!isTurnAccountCurrent()) return false;
           const error = err instanceof Error ? err : new Error(String(err));
           if (error.message.includes('session expired') || error.message.includes('401')) {
             set({
@@ -1226,6 +1270,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           return false;
         }
       }
+    }
+
+    if (isFreeQuotaChat && uploadedAttachments?.some((attachment) => !attachment.assetId)) {
+      set({
+        error: 'The attached image could not be uploaded. Try again.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return false;
     }
 
     const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
@@ -1335,6 +1388,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           return { role: m.role, content: m.content };
         }),
     ];
+
+    if (
+      isFreeQuotaChat &&
+      historyMessages.some((message) => !['system', 'user', 'assistant'].includes(message.role))
+    ) {
+      set({
+        error: 'This Free model cannot continue this conversation. Start a new Free chat.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return false;
+    }
 
     const imageUploads = uploadedAttachments?.filter((a) => a.mimeType.startsWith('image/'));
     const fileUploads = uploadedAttachments?.filter((a) => !a.mimeType.startsWith('image/'));
@@ -1464,12 +1529,49 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           regenerateAnchor ? (regenerateAnchor.parentId ?? null) : (branchParentId ?? null),
         );
       } catch {
+        if (!isTurnAccountCurrent()) return false;
         set({
           error: 'Could not start a new version of this message. Check your connection and retry.',
           paywallError: null,
           ...streamingFlags(),
         });
         return false;
+      }
+      if (!isTurnAccountCurrent()) return false;
+    }
+
+    if (isFreeQuotaChat) {
+      try {
+        await managedCloudChat.getConversation(conversationId);
+      } catch (error) {
+        if (!isTurnAccountCurrent()) return false;
+        if (!(error instanceof ManagedCloudChatHttpError) || error.status !== 404) {
+          set({
+            error: 'Could not verify this Free conversation. Check your connection and retry.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
+        try {
+          await managedCloudChat.createConversation({
+            id: conversationId,
+            title: conversation?.title ?? 'New conversation',
+            model: requestedModel,
+            isTemporary: conversation?.temporary ?? false,
+          });
+        } catch (error) {
+          if (!isTurnAccountCurrent()) return false;
+          set({
+            error:
+              error instanceof ManagedCloudChatHttpError && error.status === 409
+                ? 'This Free conversation is no longer available in AGI Cloud. Start a new chat and send again.'
+                : 'Could not start this Free conversation. Check your connection and retry.',
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
+        }
       }
       if (!isTurnAccountCurrent()) return false;
     }
@@ -1507,9 +1609,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // A branch point is already on the server, written with the parent the
       // sync push cannot express. Queueing it would make a second writer for a
       // row that is done.
-      if (userMessage && !branchPoint) {
+      if (userMessage && !branchPoint && !isFreeQuotaChat) {
         queueCloudTurnForSync(conversationId, [userMessage]);
-      } else {
+      } else if (!isFreeQuotaChat) {
         markConversationForSync(conversationId);
       }
     }
@@ -1787,35 +1889,55 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
 
       await streamChat(
-        {
-          model: executionModel,
-          messages: historyMessages,
-          stream: true,
-          operationId: assistantMessageId,
-          thinking: thinkingEnabled,
-          ...(turnEffort ? { effort: turnEffort } : {}),
-          ...(webSearchEnabled ? { web_search: true } : {}),
-          ...(researchEnabled ? { research: true } : {}),
-          ...(researchEnabled && options?.researchResume
-            ? {
-                research_resume: {
-                  sources: options.researchResume.sources,
-                  steps: options.researchResume.steps,
-                  ...(options.researchResume.approvedSteps.length > 0
-                    ? { approved_steps: options.researchResume.approvedSteps }
-                    : {}),
-                },
-              }
-            : {}),
-          ...(codeExecutionEnabled ? { code_execution: true } : {}),
-          ...(officeCreationEnabled ? { office_creation: true } : {}),
-          x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
-          ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
-          ...(workMode === 'agiwork' && options?.agiWorkGoal
-            ? { agi_work_goal: options.agiWorkGoal }
-            : {}),
-          ...(options?.skillName ? { skill_name: options.skillName } : {}),
-        },
+        isFreeQuotaChat
+          ? {
+              model: executionModel,
+              conversation_id: conversationId,
+              assistant_message_id: assistantMessageId,
+              operationId: assistantMessageId,
+              ...(userMessage
+                ? {
+                    user_message: {
+                      id: userMessage.id,
+                      metadata: userMessage.metadata ?? {},
+                      ...(userMessage.parentId ? { parent_id: userMessage.parentId } : {}),
+                    },
+                  }
+                : {}),
+              messages: normalizePromotionalChatHistory(historyMessages).map((message) => ({
+                role: message.role as 'system' | 'user' | 'assistant',
+                content: message.content as FreeQuotaMessageContent,
+              })),
+            }
+          : {
+              model: executionModel,
+              messages: historyMessages,
+              stream: true,
+              operationId: assistantMessageId,
+              thinking: thinkingEnabled,
+              ...(turnEffort ? { effort: turnEffort } : {}),
+              ...(webSearchEnabled ? { web_search: true } : {}),
+              ...(researchEnabled ? { research: true } : {}),
+              ...(researchEnabled && options?.researchResume
+                ? {
+                    research_resume: {
+                      sources: options.researchResume.sources,
+                      steps: options.researchResume.steps,
+                      ...(options.researchResume.approvedSteps.length > 0
+                        ? { approved_steps: options.researchResume.approvedSteps }
+                        : {}),
+                    },
+                  }
+                : {}),
+              ...(codeExecutionEnabled ? { code_execution: true } : {}),
+              ...(officeCreationEnabled ? { office_creation: true } : {}),
+              x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
+              ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
+              ...(workMode === 'agiwork' && options?.agiWorkGoal
+                ? { agi_work_goal: options.agiWorkGoal }
+                : {}),
+              ...(options?.skillName ? { skill_name: options.skillName } : {}),
+            },
         {
           onRunReference: (reference) => {
             if (!isTurnAccountCurrent() || controller.signal.aborted) return;
@@ -2004,6 +2126,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ) {
               turnStreamError = EMPTY_RESPONSE_FAILURE;
             }
+            if (isFreeQuotaChat && turnStreamError !== undefined) {
+              useFreeQuotaCatalogueStore.getState().clear();
+            }
             const completedAt = new Date().toISOString();
             const convTitle =
               currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
@@ -2110,6 +2235,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
           onError: (error: Error) => {
             if (!isTurnAccountCurrent()) return;
+            if (isFreeQuotaChat) useFreeQuotaCatalogueStore.getState().clear();
             thinkingStartTimes.delete(conversationId);
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
@@ -2297,6 +2423,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         set({ ...streamingFlags() });
         return true;
       }
+      if (isFreeQuotaChat) useFreeQuotaCatalogueStore.getState().clear();
 
       const currentMsgStore = getConversationMessageStore(conversationId);
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -3044,6 +3171,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // assets are reused rather than sent again.
     const userAttachments = restoreComposerAttachments(userMsg.attachments);
     const userModel = userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
+    const isCloudRetry =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const retryAccountEpoch = isCloudRetry ? captureCloudAccountEpoch() : null;
+    const isRetryCurrent = () => !isCloudRetry || isCloudAccountEpochCurrent(retryAccountEpoch);
+    if (!isRetryCurrent()) return;
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
@@ -3052,6 +3184,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const countedRemoved = target.role === 'assistant' ? removedCount : 0;
     const trimmedMsgs = rows.slice(0, userIndex);
     const replaceAndRetry = async () => {
+      if (!isRetryCurrent()) return;
       if (branches) {
         await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
           regenerateParentMessageId: anchorMessageId,
@@ -3059,17 +3192,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+      if (isCloudRetry) {
         try {
           await deleteCloudMessagesRemote(
             conversationId,
             rows.slice(userIndex).map((message) => message.id),
+            retryAccountEpoch,
           );
         } catch {
-          set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+          if (isRetryCurrent()) {
+            set({
+              error: 'Could not replace the Cloud response. Check your connection and retry.',
+            });
+          }
           return;
         }
       }
+
+      if (!isRetryCurrent()) return;
 
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
@@ -3151,6 +3291,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (userIndex < 0) return;
 
     const userModel = userMsg.model ?? assistantMsg.model ?? DEFAULT_AUTO_MODE_ID;
+    const isCloudResume =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const resumeAccountEpoch = isCloudResume ? captureCloudAccountEpoch() : null;
+    const isResumeCurrent = () => !isCloudResume || isCloudAccountEpochCurrent(resumeAccountEpoch);
+    if (!isResumeCurrent()) return;
 
     if (branches) {
       await get().sendMessage(conversationId, userMsg.content, userModel, undefined, {
@@ -3160,17 +3305,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return;
     }
 
-    if (conversation && executionModeForConversation(conversation) === 'cloud') {
+    if (isCloudResume) {
       try {
         await deleteCloudMessagesRemote(
           conversationId,
           rows.slice(userIndex).map((message) => message.id),
+          resumeAccountEpoch,
         );
       } catch {
-        set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+        if (isResumeCurrent()) {
+          set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+        }
         return;
       }
     }
+
+    if (!isResumeCurrent()) return;
 
     const trimmedMsgs = rows.slice(0, userIndex);
     const removedCount = rows.length - userIndex;
@@ -3230,6 +3380,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
     const editedParentId = targetMsg.parentId ?? null;
     const editedAttachments = restoreComposerAttachments(targetMsg.attachments);
+    const isCloudEdit =
+      conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+    const accountEpoch = isCloudEdit ? captureCloudAccountEpoch() : null;
+    const isEditCurrent = () => !isCloudEdit || isCloudAccountEpochCurrent(accountEpoch);
+
+    if (!isEditCurrent()) return;
 
     set({ isEditing: true });
 
@@ -3242,29 +3398,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+      if (isCloudEdit) {
         await deleteCloudMessagesRemote(
           conversationId,
           msgs.slice(msgIndex).map((message) => message.id),
+          accountEpoch,
         );
       }
+      if (!isEditCurrent()) return;
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
       }));
       await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
     })()
       .catch((err) => {
+        if (!isEditCurrent()) return;
         set({
-          error:
-            conversation && executionModeForConversation(conversation) === 'cloud'
-              ? 'Could not replace the Cloud message. Check your connection and retry.'
-              : err instanceof Error
-                ? err.message
-                : 'Failed to re-send edited message',
+          error: isCloudEdit
+            ? 'Could not replace the Cloud message. Check your connection and retry.'
+            : 'Could not replace the Local message. Please try again.',
         });
       })
       .finally(() => {
-        set({ isEditing: false });
+        if (isEditCurrent()) set({ isEditing: false });
       });
   },
 }));

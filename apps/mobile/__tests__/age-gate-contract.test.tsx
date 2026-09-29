@@ -8,6 +8,10 @@ import {
   type AgeGateRecord,
 } from '@/src/features/auth/services/ageGate';
 import AgeGateScreen, { resolveReturnPath } from '@/app/(public)/age-gate';
+import {
+  beginCloudPostAuthIntent,
+  clearPostAuthIntent,
+} from '@/src/features/auth/services/postAuthIntent';
 import ParentalControlsScreen from '@/src/features/settings/parental-controls';
 
 const mockStore = new Map<string, string>();
@@ -29,6 +33,7 @@ const FIXTURE_TIME_ZONE = 'America/New_York';
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
+let mockSearchParams: { returnTo?: string } = {};
 
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router');
@@ -40,7 +45,7 @@ jest.mock('expo-router', () => {
       back: jest.fn(),
       navigate: jest.fn(),
     }),
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => mockSearchParams,
   };
 });
 
@@ -98,6 +103,7 @@ const FILES = sourceFiles();
 describe('what the age gate keeps about a person', () => {
   beforeEach(() => {
     clearAgeGate();
+    clearPostAuthIntent();
   });
 
   it('keeps the answer to the only question it asked and nothing finer', () => {
@@ -134,6 +140,39 @@ describe('the age screen when the answer does not work', () => {
   beforeEach(() => {
     clearAgeGate();
     mockReplace.mockClear();
+    mockSearchParams = {};
+  });
+
+  it('returns to Local chat when Cloud sign-in needs age verification', () => {
+    mockSearchParams = { returnTo: '/(auth)/login' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)');
+  });
+
+  it('returns to the requested Cloud sign-in after an adult confirms age', () => {
+    beginCloudPostAuthIntent('cloud-schedules');
+    mockSearchParams = { returnTo: '/(auth)/login' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '21');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-schedules' },
+    });
+  });
+
+  it('returns to parental controls when reviewing device age settings', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
   });
 
   it('says what went wrong instead of ignoring the button', () => {

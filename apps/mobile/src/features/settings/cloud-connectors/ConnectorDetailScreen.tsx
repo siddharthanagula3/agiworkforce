@@ -34,6 +34,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import {
@@ -45,6 +46,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
+import { connectorFailureMessage } from './connectorFailureMessage';
 
 const PERMISSION_OPTIONS: {
   level: ConnectorToolPermissionLevel;
@@ -246,9 +248,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         savedPermissions.filter((permission) => permission.connectorId === validConnectorId),
       );
       setLoaded(true);
-    } catch (loadError) {
+    } catch {
       if (!isActionCurrent(account)) return;
-      setError(loadError instanceof Error ? loadError.message : 'Could not load this connector.');
+      setError('Could not load this connector. Retry.');
       setLoaded(true);
     } finally {
       if (isActionCurrent(account)) setLoading(false);
@@ -339,9 +341,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         if (!isActionCurrent(account)) return;
         Alert.alert(
           'Could not reauthorize',
-          reconnectError instanceof Error
-            ? reconnectError.message
-            : 'The connector was not reauthorized.',
+          connectorFailureMessage(reconnectError, 'reauthorize'),
         );
       } finally {
         if (isActionCurrent(account)) setReconnecting(false);
@@ -393,7 +393,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
   );
 
   const signIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-connectors'));
   }, [router]);
 
   if (!isClerkLoaded || !isClerkSignedIn) {

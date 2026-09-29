@@ -20,6 +20,7 @@ import { useTheme } from '@/src/ui/theme';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import {
@@ -79,11 +80,11 @@ export default function WorkspaceScreen() {
         : [];
       if (signal?.aborted) return;
       setState({ kind: 'ready', overview, members });
-    } catch (error) {
+    } catch {
       if (signal?.aborted) return;
       setState({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not load your workspace.',
+        message: 'Could not load your workspace. Retry.',
       });
     }
   }, []);
@@ -114,14 +115,18 @@ export default function WorkspaceScreen() {
       setSwitchingWorkspace(true);
       void (async () => {
         try {
-          await setActiveWorkspace(organizationId);
-          await useChatStore.getState().loadConversations();
+          try {
+            await setActiveWorkspace(organizationId);
+          } catch {
+            Alert.alert('Could not switch workspace', 'Your workspace was not changed. Try again.');
+            return;
+          }
+          try {
+            await useChatStore.getState().loadConversations();
+          } catch {
+            Alert.alert('Workspace changed', 'Refresh your chats to see this workspace’s history.');
+          }
           await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not switch workspace',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
         } finally {
           setSwitchingWorkspace(false);
         }
@@ -137,11 +142,8 @@ export default function WorkspaceScreen() {
         try {
           await updateWorkspaceMemberRole(member.id, role);
           await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not change role',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+        } catch {
+          Alert.alert('Could not change role', 'The member’s role was not changed. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -163,10 +165,7 @@ export default function WorkspaceScreen() {
           await load();
         } catch (error) {
           if (isStepUpCancelled(error)) return;
-          Alert.alert(
-            'Could not transfer ownership',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+          Alert.alert('Could not transfer ownership', 'Ownership was not transferred. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -207,11 +206,8 @@ export default function WorkspaceScreen() {
               try {
                 await removeWorkspaceMember(member.id);
                 await load();
-              } catch (error) {
-                Alert.alert(
-                  'Could not remove member',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
+              } catch {
+                Alert.alert('Could not remove member', 'Check the member list before retrying.');
               } finally {
                 setBusyMemberId(null);
               }
@@ -257,7 +253,7 @@ export default function WorkspaceScreen() {
         <View className="flex-1 px-4">
           <CloudAccountRequired
             isLoading={!isClerkLoaded}
-            onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+            onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-workspace'))}
           />
         </View>
       </SafeAreaView>

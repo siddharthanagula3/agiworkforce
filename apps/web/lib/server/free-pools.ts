@@ -63,6 +63,16 @@ export const FreeQuotaInventorySchema = z
     reportedUnavailable: z.number().int().nonnegative(),
     sources: z.array(z.string().min(1)).min(1),
     entries: z.array(FreeQuotaObservationSchema),
+    termsReview: z
+      .object({
+        terms: FreePoolTermsSchema,
+        evidenceUrl: z.string().url(),
+        reviewedBy: z.string().min(1),
+        verifiedAtMs: z.number().int().positive(),
+        expiresAtMs: z.number().int().positive(),
+        approvedOfferingKeys: z.array(z.string().min(1)).min(1),
+      })
+      .nullable(),
   })
   .superRefine((inventory, context) => {
     const seen = new Set<string>();
@@ -89,10 +99,39 @@ export const FreeQuotaInventorySchema = z
         message: 'Quota inventory does not account for the source total',
       });
     }
+    if (inventory.termsReview) {
+      const approved = new Set<string>();
+      for (const key of inventory.termsReview.approvedOfferingKeys) {
+        if (!seen.has(key) || approved.has(key)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['termsReview', 'approvedOfferingKeys'],
+            message: 'Terms review must name distinct observed offerings',
+          });
+        }
+        approved.add(key);
+      }
+    }
   });
 
 export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
 export type FreeQuotaObservation = z.infer<typeof FreeQuotaObservationSchema>;
+
+export function reviewedQuotaOfferingKeys(
+  inventory: FreeQuotaInventory,
+  nowMs: number,
+): ReadonlySet<string> {
+  const review = inventory.termsReview;
+  if (
+    !review ||
+    review.verifiedAtMs > nowMs ||
+    review.expiresAtMs <= nowMs ||
+    !Object.values(review.terms).every(Boolean)
+  ) {
+    return new Set();
+  }
+  return new Set(review.approvedOfferingKeys);
+}
 
 export const FreePoolsDocumentSchema = z.object({
   schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),

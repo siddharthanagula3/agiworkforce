@@ -1,4 +1,3 @@
-
 import type { CommandCapability } from '@agiworkforce/types';
 
 function getApiBaseUrl(): string {
@@ -9,7 +8,7 @@ function getApiBaseUrl(): string {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="api-base-url"]');
     if (meta?.content) return meta.content;
   }
-  return 'http://localhost:3001/api';
+  throw new Error('Cloud API base URL is not configured for this surface.');
 }
 
 export type CloudAuthTokenProvider = () => string | null | Promise<string | null>;

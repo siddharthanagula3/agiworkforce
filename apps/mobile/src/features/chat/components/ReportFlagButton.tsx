@@ -112,8 +112,8 @@ export function ReportFlagButton({
         sendEmail,
       });
       setSaved(result);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Report could not be saved.');
+    } catch {
+      setErrorMessage('Report could not be saved on this device. Free up space and try again.');
     } finally {
       setLoading(false);
     }

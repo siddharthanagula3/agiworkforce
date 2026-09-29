@@ -6,6 +6,13 @@ import {
 
 export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
 
+export class CloudCredentialUnavailableError extends Error {
+  constructor() {
+    super('The mobile Cloud credential is unavailable.');
+    this.name = 'CloudCredentialUnavailableError';
+  }
+}
+
 const PAYWALL_BODY_KIND = 'paywall';
 const PAYWALL_DEFAULT_FEATURE = 'token_cap';
 const PAYWALL_DEFAULT_TIER = 'basic';

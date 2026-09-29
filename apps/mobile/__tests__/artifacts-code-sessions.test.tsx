@@ -93,15 +93,6 @@ jest.mock('@/src/features/waitlist', () => {
   };
 });
 
-jest.mock('@/src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
-
 jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: jest.fn().mockResolvedValue(true),
 }));

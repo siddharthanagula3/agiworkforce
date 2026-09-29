@@ -10,16 +10,12 @@ interface WaitlistState {
   rank?: number;
   joinedAt?: string;
   cloudUnlocked: boolean;
-  inviteId?: string;
-  inviteCode?: string;
   cloudUnlockedAt?: string;
 
   markJoined: (
     submission: Pick<JoinWaitlistInput, 'email' | 'country'>,
     result: JoinWaitlistResult,
   ) => void;
-
-  markInviteRedeemed: (redemption: { code: string; inviteId?: string }) => void;
 
   setCloudAccess: (unlocked: boolean) => void;
 
@@ -41,14 +37,6 @@ export const useWaitlistStore = create<WaitlistState>()(
           joinedAt: new Date().toISOString(),
         }),
 
-      markInviteRedeemed: (redemption) =>
-        set({
-          cloudUnlocked: true,
-          inviteId: redemption.inviteId,
-          inviteCode: redemption.code.trim().toUpperCase(),
-          cloudUnlockedAt: new Date().toISOString(),
-        }),
-
       setCloudAccess: (unlocked) =>
         set((state) =>
           state.cloudUnlocked === unlocked
@@ -67,8 +55,6 @@ export const useWaitlistStore = create<WaitlistState>()(
           rank: undefined,
           joinedAt: undefined,
           cloudUnlocked: false,
-          inviteId: undefined,
-          inviteCode: undefined,
           cloudUnlockedAt: undefined,
         }),
     }),

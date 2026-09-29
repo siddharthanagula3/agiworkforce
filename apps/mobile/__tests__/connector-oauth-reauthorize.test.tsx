@@ -2,6 +2,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ApiHttpError } from '../services/apiErrors';
 
 const mockFetchDirectory = jest.fn();
 const mockFetchPermissions = jest.fn();
@@ -175,7 +176,7 @@ describe('Connector detail, OAuth reauthorization', () => {
 
   it('surfaces a start failure as an error and opens no browser', async () => {
     mockStartOAuth.mockRejectedValue(
-      new Error('This connector has no OAuth application configured in this deployment.'),
+      new ApiHttpError('Private connector configuration detail', 501),
     );
 
     const screen = render(<ConnectorDetailScreen connectorId="linear" />);
@@ -186,8 +187,21 @@ describe('Connector detail, OAuth reauthorization', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
     expect(alertSpy.mock.calls[0]?.[0]).toBe('Could not reauthorize');
     expect(alertSpy.mock.calls[0]?.[1]).toBe(
-      'This connector has no OAuth application configured in this deployment.',
+      'This connector is unavailable in this deployment. Try another connector.',
     );
+    expect(mockOpenUntrusted).not.toHaveBeenCalled();
+  });
+
+  it('does not show unclassified provider error details', async () => {
+    mockStartOAuth.mockRejectedValue(new Error('client_secret at /internal/oauth/linear'));
+
+    const screen = render(<ConnectorDetailScreen connectorId="linear" />);
+    await waitFor(() => expect(screen.getByLabelText('Reauthorize Linear')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Reauthorize Linear'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    expect(alertSpy.mock.calls[0]?.[1]).toBe('The connector was not reauthorized. Try again.');
     expect(mockOpenUntrusted).not.toHaveBeenCalled();
   });
 

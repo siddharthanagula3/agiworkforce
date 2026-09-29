@@ -114,9 +114,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           className="mb-8"
           steps={[
             'Install AGI Workforce on your computer, then open it in Managed Cloud',
-            accountEmail
-              ? `Sign in on that computer as ${accountEmail}`
-              : 'Sign in on that computer with the account you use here',
+            'Sign in on Desktop; the short-lived pairing code authorizes this phone',
             'Turn on Dispatch in Settings → Connections, then generate a pairing code',
           ]}
         />

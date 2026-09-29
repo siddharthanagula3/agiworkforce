@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-sandbox-policy"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 license = "Proprietary"
 description = "Shared sandbox policy model for AGI Workforce surfaces"

@@ -32,12 +32,7 @@ import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 
 export type ReportCategory =
-  | 'harmful'
-  | 'inaccurate'
-  | 'offensive'
-  | 'misinformation'
-  | 'privacy'
-  | 'other';
+  'harmful' | 'inaccurate' | 'offensive' | 'misinformation' | 'privacy' | 'other';
 
 export type ContentReport = {
   id: string;
@@ -125,7 +120,11 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
     return false;
   }
 
-  markHandoffOpened(report.id);
+  try {
+    markHandoffOpened(report.id);
+  } catch {
+    return true;
+  }
   return true;
 }
 
@@ -187,7 +186,11 @@ export async function saveContentReport(params: {
   const submitted = await submitReportToServer(report);
   if (submitted) {
     report.serverAcknowledged = true;
-    markServerAcknowledged(report.id);
+    try {
+      markServerAcknowledged(report.id);
+    } catch {
+      // Server acceptance remains authoritative if the local status write fails.
+    }
   }
 
   if (!params.sendEmail) {

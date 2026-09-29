@@ -63,8 +63,8 @@ describe('waitlist store, managed-cloud entitlement is session-only', () => {
     expect(state.rank).toBe(9);
     expect(state.cloudUnlocked).toBe(false);
     expect(state.cloudUnlockedAt).toBeUndefined();
-    expect(state.inviteId).toBeUndefined();
-    expect(state.inviteCode).toBeUndefined();
+    expect(state).not.toHaveProperty('inviteId');
+    expect(state).not.toHaveProperty('inviteCode');
   });
 
   it('still unlocks cloud for the authenticated session in memory', () => {

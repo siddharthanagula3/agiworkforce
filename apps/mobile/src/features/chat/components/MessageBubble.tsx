@@ -315,6 +315,9 @@ export const MessageBubble = memo(function MessageBubble({
     (message.metadata?.reaction as ReactionType) ?? null,
     [message.id],
   );
+  useEffect(() => {
+    setReaction((message.metadata?.reaction as ReactionType) ?? null);
+  }, [message.metadata?.reaction, setReaction]);
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();
@@ -460,17 +463,13 @@ export const MessageBubble = memo(function MessageBubble({
         if (hapticsEnabled) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
-        setReaction((prev) => {
-          let next: ReactionType;
-          if (prev === null) next = 'thumbsUp';
-          else if (prev === 'thumbsUp') next = 'thumbsDown';
-          else next = null;
-          onReaction?.(message.id, next);
-          return next;
-        });
+        const next: ReactionType =
+          reaction === null ? 'thumbsUp' : reaction === 'thumbsUp' ? 'thumbsDown' : null;
+        setReaction(next);
+        onReaction?.(message.id, next);
       }
     },
-    [isAssistant, hapticsEnabled, message.id, onReaction, setReaction],
+    [isAssistant, hapticsEnabled, message.id, onReaction, reaction, setReaction],
   );
 
   const applyReaction = useCallback(
@@ -478,13 +477,11 @@ export const MessageBubble = memo(function MessageBubble({
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      setReaction((prev) => {
-        const next: ReactionType = prev === target ? null : target;
-        onReaction?.(message.id, next);
-        return next;
-      });
+      const next: ReactionType = reaction === target ? null : target;
+      setReaction(next);
+      onReaction?.(message.id, next);
     },
-    [hapticsEnabled, message.id, onReaction, setReaction],
+    [hapticsEnabled, message.id, onReaction, reaction, setReaction],
   );
 
   const handleOpenEditModal = useCallback(() => {

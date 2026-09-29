@@ -2,9 +2,22 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useNavigation } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { BookImage, FileText, ImageIcon, Sparkles, Video } from 'lucide-react-native';
+import {
+  BookImage,
+  Check,
+  FileText,
+  ImageIcon,
+  MoreHorizontal,
+  Sparkles,
+  Video,
+} from 'lucide-react-native';
+import {
+  LIBRARY_DEFAULT_SORT,
+  LIBRARY_SORTS,
+  type LibrarySort,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
@@ -38,6 +51,13 @@ import { useLibraryAssets } from './useLibraryAssets';
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 const SEARCH_DEBOUNCE_MS = 350;
+const SORT_LABELS: Record<LibrarySort, string> = {
+  modified: 'Recently added',
+  oldest: 'Oldest first',
+  type: 'Type',
+  name: 'Name',
+  size: 'Size',
+};
 
 type LibraryFilter = 'all' | 'images' | 'videos' | 'documents' | 'artifacts';
 
@@ -51,13 +71,18 @@ function absoluteAssetUrl(uri: string): string {
 
 export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { contentWidth, gridColumns } = useResponsiveLayout();
   const [filter, setFilter] = useState<LibraryFilter>('all');
+  const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [previewImage, setPreviewImage] = useState<LibraryAsset | null>(null);
   const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
+  const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const openedInitialImageRef = useRef<string | null>(null);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -71,7 +96,45 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const library = useLibraryAssets(search);
+  const library = useLibraryAssets(search, sort);
+
+  const selectionActive =
+    selectedIds !== null && isAccountScopedUiStateOwned(selectionScopeRef.current);
+
+  const openSortOptions = useCallback(() => {
+    const sortOption = (value: LibrarySort) => ({
+      text: `${sort === value ? '✓ ' : ''}${SORT_LABELS[value]}`,
+      onPress: () => setSort(value),
+    });
+    Alert.alert('Sort saved files', 'Artifacts keep their own order.', [
+      ...LIBRARY_SORTS.map(sortOption),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [sort]);
+
+  const beginSelection = useCallback(() => {
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope || library.signedOut) return;
+    selectionScopeRef.current = scope;
+    setSelectedIds(new Set());
+    setFilter('all');
+    setQuery('');
+    setSearch('');
+  }, [library.signedOut]);
+
+  const endSelection = useCallback(() => {
+    selectionScopeRef.current = null;
+    setSelectedIds(null);
+    setDeletingSelected(false);
+  }, []);
+
+  const openLibraryOptions = useCallback(() => {
+    Alert.alert('Library', undefined, [
+      ...(library.signedOut ? [] : [{ text: 'Select saved files', onPress: beginSelection }]),
+      { text: 'Sort saved files', onPress: openSortOptions },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [beginSelection, library.signedOut, openSortOptions]);
 
   useLayoutEffect(() => {
     if (!previewImage) return;
@@ -79,6 +142,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, [clerkUserId, previewImage]);
+
+  useLayoutEffect(() => {
+    if (selectedIds === null || isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
+    endSelection();
+  }, [clerkUserId, endSelection, selectedIds]);
 
   const artifacts = useMemo(
     () =>
@@ -103,7 +171,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             })
             .map((asset) => ({ row: 'asset' as const, id: asset.id, asset }));
     const artifactRows: LibraryRow[] =
-      filter === 'images' || filter === 'videos' || filter === 'documents'
+      selectionActive || filter === 'images' || filter === 'videos' || filter === 'documents'
         ? []
         : artifacts
             .filter(
@@ -115,7 +183,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             )
             .map((artifact) => ({ row: 'artifact' as const, id: artifact.id, artifact }));
     return [...assetRows, ...artifactRows];
-  }, [artifacts, filter, library.assets, search]);
+  }, [artifacts, filter, library.assets, search, selectionActive]);
 
   const openDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -145,11 +213,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
       await shareFile(localUri);
-    } catch (error) {
-      Alert.alert(
-        'Could not open this file',
-        error instanceof Error ? error.message : 'The file could not be downloaded.',
-      );
+    } catch {
+      Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
     }
   }, []);
 
@@ -161,11 +226,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            void library.removeAsset(asset.id).catch((error: unknown) => {
-              Alert.alert(
-                'Delete failed',
-                error instanceof Error ? error.message : 'The file could not be deleted.',
-              );
+            void library.removeAsset(asset.id).catch(() => {
+              Alert.alert('Delete failed', 'The file could not be deleted. Try again.');
             });
           },
         },
@@ -185,6 +247,70 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     [handleDeleteAsset, handleShareAsset],
   );
 
+  const toggleSelected = useCallback((id: string) => {
+    if (!isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
+    setSelectedIds((current) => {
+      if (current === null) return null;
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAllShown = useCallback(() => {
+    if (!isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
+    setSelectedIds(new Set(rows.filter((row) => row.row === 'asset').map((row) => row.id)));
+  }, [rows]);
+
+  const shareSelected = useCallback(() => {
+    if (!isAccountScopedUiStateOwned(selectionScopeRef.current) || selectedIds?.size !== 1) return;
+    const asset = library.assets.find((candidate) => selectedIds.has(candidate.id));
+    if (asset) void handleShareAsset(asset);
+  }, [handleShareAsset, library.assets, selectedIds]);
+
+  const deleteSelected = useCallback(() => {
+    const scope = selectionScopeRef.current;
+    if (!isAccountScopedUiStateOwned(scope) || !selectedIds?.size) return;
+    const assets = library.assets.filter((asset) => selectedIds.has(asset.id));
+    if (!assets.length) return;
+    Alert.alert('Delete saved files?', `${assets.length} saved files move to deleted items.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          if (selectionScopeRef.current !== scope || !isAccountScopedUiStateOwned(scope)) return;
+          void (async () => {
+            setDeletingSelected(true);
+            let failures = 0;
+            for (const asset of assets) {
+              if (selectionScopeRef.current !== scope || !isAccountScopedUiStateOwned(scope)) break;
+              try {
+                await library.removeAsset(asset.id);
+                if (selectionScopeRef.current !== scope || !isAccountScopedUiStateOwned(scope))
+                  break;
+                setSelectedIds((current) => {
+                  if (current === null) return null;
+                  const next = new Set(current);
+                  next.delete(asset.id);
+                  return next;
+                });
+              } catch {
+                failures += 1;
+              }
+            }
+            if (selectionScopeRef.current === scope && isAccountScopedUiStateOwned(scope)) {
+              setDeletingSelected(false);
+              if (failures) Alert.alert('Some files could not be deleted', 'Try again.');
+              else endSelection();
+            }
+          })();
+        },
+      },
+    ]);
+  }, [endSelection, library, selectedIds]);
+
   useEffect(() => {
     if (!initialImageId || openedInitialImageRef.current === initialImageId) return;
     const asset = library.assets.find(
@@ -202,14 +328,18 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
       }
       const asset = item.asset;
-      const onLongPress = () => handleAssetActions(asset);
+      const onLongPress = () =>
+        selectionActive ? toggleSelected(asset.id) : handleAssetActions(asset);
+      const onPress = () => toggleSelected(asset.id);
       if (asset.kind === 'image') {
         return (
           <LibraryImageCard
             asset={asset}
             width={cardWidth}
             style={style}
-            onPress={() => handleOpenImage(asset)}
+            selectionMode={selectionActive}
+            selected={selectedIds?.has(asset.id) ?? false}
+            onPress={selectionActive ? onPress : () => handleOpenImage(asset)}
             onLongPress={onLongPress}
           />
         );
@@ -219,12 +349,23 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           asset={asset}
           width={cardWidth}
           style={style}
-          onPress={() => void handleShareAsset(asset)}
+          selectionMode={selectionActive}
+          selected={selectedIds?.has(asset.id) ?? false}
+          onPress={selectionActive ? onPress : () => void handleShareAsset(asset)}
           onLongPress={onLongPress}
         />
       );
     },
-    [cardWidth, gridColumns, handleAssetActions, handleOpenImage, handleShareAsset],
+    [
+      cardWidth,
+      gridColumns,
+      handleAssetActions,
+      handleOpenImage,
+      handleShareAsset,
+      selectedIds,
+      selectionActive,
+      toggleSelected,
+    ],
   );
 
   return (
@@ -234,40 +375,55 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         <Text style={{ flex: 1, color: c.textPrimary, fontSize: 17, fontWeight: '700' }}>
           Library
         </Text>
+        <Pressable
+          onPress={selectionActive ? endSelection : openLibraryOptions}
+          accessibilityRole="button"
+          accessibilityLabel={selectionActive ? 'Done selecting files' : 'Library options'}
+          accessibilityHint={selectionActive ? undefined : 'Select or sort saved files'}
+          style={{ minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {selectionActive ? (
+            <Text style={{ color: c.teal, fontWeight: '600' }}>Done</Text>
+          ) : (
+            <MoreHorizontal size={22} color={c.textPrimary} />
+          )}
+        </Pressable>
       </View>
 
       {/* Horizontally scrollable, not a fixed row. The labels already overflow
           a 375pt screen at the default text size, and at any accessibility
           size the last filter was pushed off-screen with no way to reach it. */}
-      <ScrollView
-        testID="library-filter-row"
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, paddingBottom: 16 }}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
-      >
-        <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
-        <FilterChip
-          label="Images"
-          active={filter === 'images'}
-          onPress={() => setFilter('images')}
-        />
-        <FilterChip
-          label="Videos"
-          active={filter === 'videos'}
-          onPress={() => setFilter('videos')}
-        />
-        <FilterChip
-          label="Documents"
-          active={filter === 'documents'}
-          onPress={() => setFilter('documents')}
-        />
-        <FilterChip
-          label="Artifacts"
-          active={filter === 'artifacts'}
-          onPress={() => setFilter('artifacts')}
-        />
-      </ScrollView>
+      {!selectionActive ? (
+        <ScrollView
+          testID="library-filter-row"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, paddingBottom: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
+        >
+          <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <FilterChip
+            label="Images"
+            active={filter === 'images'}
+            onPress={() => setFilter('images')}
+          />
+          <FilterChip
+            label="Videos"
+            active={filter === 'videos'}
+            onPress={() => setFilter('videos')}
+          />
+          <FilterChip
+            label="Documents"
+            active={filter === 'documents'}
+            onPress={() => setFilter('documents')}
+          />
+          <FilterChip
+            label="Artifacts"
+            active={filter === 'artifacts'}
+            onPress={() => setFilter('artifacts')}
+          />
+        </ScrollView>
+      ) : null}
 
       <FlatList
         key={`library-${gridColumns}`}
@@ -328,14 +484,71 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       {/* Bottom-anchored, not between the chips and the grid. Both references
           float search as a pill under the thumb and the chats list already
           shipped that treatment. */}
-      <BottomSearchBar
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search library"
-        accessibilityLabel="Search library"
-        clearAccessibilityLabel="Clear library search"
-        testID="library-search"
-      />
+      {selectionActive ? (
+        <View
+          testID="library-selection-actions"
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 12,
+            gap: 12,
+            borderTopWidth: 1,
+            borderTopColor: c.border,
+          }}
+        >
+          <Text style={{ color: c.textPrimary, fontWeight: '600' }}>
+            {selectedIds?.size ?? 0} selected
+          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <Pressable
+              testID="library-select-all-shown"
+              accessibilityRole="button"
+              onPress={selectAllShown}
+              disabled={deletingSelected}
+            >
+              <Text style={{ color: c.teal }}>Select all shown</Text>
+            </Pressable>
+            <Pressable
+              testID="library-share-selected"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: deletingSelected || selectedIds?.size !== 1 }}
+              disabled={deletingSelected || selectedIds?.size !== 1}
+              onPress={shareSelected}
+            >
+              <Text style={{ color: c.teal, opacity: selectedIds?.size === 1 ? 1 : 0.5 }}>
+                Share
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="library-delete-selected"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: deletingSelected || !selectedIds?.size }}
+              disabled={deletingSelected || !selectedIds?.size}
+              onPress={deleteSelected}
+            >
+              <Text style={{ color: c.agentError, opacity: selectedIds?.size ? 1 : 0.5 }}>
+                Delete
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <BottomSearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search library"
+          accessibilityLabel="Search library"
+          clearAccessibilityLabel="Clear library search"
+          testID="library-search"
+        />
+      )}
 
       <ImageFullScreen
         imageUrl={previewImage?.uri ?? null}
@@ -447,12 +660,16 @@ function LibraryFileCard({
   asset,
   width,
   style,
+  selectionMode,
+  selected,
   onPress,
   onLongPress,
 }: {
   asset: LibraryAsset;
   width: number;
   style?: object;
+  selectionMode: boolean;
+  selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) {
@@ -467,8 +684,13 @@ function LibraryFileCard({
       onLongPress={onLongPress}
       style={[{ width, marginBottom: 20 }, style]}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${asset.fileName}`}
-      accessibilityHint="Long press for share and delete"
+      accessibilityLabel={
+        selectionMode
+          ? `${selected ? 'Deselect' : 'Select'} ${asset.fileName}`
+          : `Open ${asset.fileName}`
+      }
+      accessibilityHint={selectionMode ? undefined : 'Long press for share and delete'}
+      accessibilityState={{ selected }}
     >
       <View
         style={{
@@ -477,13 +699,32 @@ function LibraryFileCard({
           borderCurve: 'continuous',
           backgroundColor: c.surfaceElevated,
           borderWidth: 1,
-          borderColor: c.border,
+          borderColor: selected ? c.teal : c.border,
           alignItems: 'center',
           justifyContent: 'center',
           gap: 10,
           padding: 16,
         }}
       >
+        {selectionMode ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: selected ? c.teal : c.textMuted,
+              backgroundColor: selected ? c.teal : c.surfaceElevated,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {selected ? <Check size={15} color={c.accentText} /> : null}
+          </View>
+        ) : null}
         <View
           style={{
             width: 46,
@@ -528,12 +769,16 @@ function LibraryImageCard({
   asset,
   width,
   style,
+  selectionMode,
+  selected,
   onPress,
   onLongPress,
 }: {
   asset: LibraryAsset;
   width: number;
   style?: object;
+  selectionMode: boolean;
+  selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) {
@@ -547,14 +792,44 @@ function LibraryImageCard({
       onLongPress={onLongPress}
       className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Open image ${asset.prompt ?? asset.fileName}`.trim()}
-      accessibilityHint="Long press for share and delete"
+      accessibilityLabel={
+        selectionMode
+          ? `${selected ? 'Deselect' : 'Select'} ${asset.fileName}`
+          : `Open image ${asset.prompt ?? asset.fileName}`.trim()
+      }
+      accessibilityHint={selectionMode ? undefined : 'Long press for share and delete'}
+      accessibilityState={{ selected }}
       accessibilityRole="button"
     >
       <View
         className="rounded-2xl border overflow-hidden"
-        style={{ width, height, backgroundColor: c.surfaceElevated, borderColor: c.border }}
+        style={{
+          width,
+          height,
+          backgroundColor: c.surfaceElevated,
+          borderColor: selected ? c.teal : c.border,
+        }}
       >
+        {selectionMode ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              zIndex: 20,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: selected ? c.teal : c.textMuted,
+              backgroundColor: selected ? c.teal : c.surfaceElevated,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {selected ? <Check size={15} color={c.accentText} /> : null}
+          </View>
+        ) : null}
         <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
           <ImageIcon size={12} color={c.terraCotta} />
           <Badge label="Image" color="terra-cotta" />

@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react-native';
-import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
@@ -45,7 +44,13 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   );
 }
 
-export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
+export function DisconnectedView({
+  onScanPress,
+  onShowSetupSteps,
+}: {
+  onScanPress: () => void;
+  onShowSetupSteps?: () => void;
+}) {
   const colors = useThemeColors();
   return (
     <Animated.View entering={FadeIn.duration(300)} className="flex-1">
@@ -111,6 +116,17 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
           className="w-full"
         />
 
+        {onShowSetupSteps ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Show desktop setup steps again"
+            onPress={onShowSetupSteps}
+            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.teal }}>Show desktop setup steps again</Text>
+          </Pressable>
+        ) : null}
+
         <PairingRiskDisclosure className="mt-4" />
       </ScrollView>
     </Animated.View>
@@ -171,8 +187,6 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
 export function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   const colors = useThemeColors();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const { user } = useUser();
-  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 
   return (
     <Animated.View
@@ -193,9 +207,8 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
       <PairingChecklist
         steps={[
           'Dispatch is turned on in Desktop → Settings → Connections',
-          accountEmail
-            ? `You're signed in as ${accountEmail}`
-            : "You're signed in on Desktop with the account you use here",
+          'Desktop is signed in and in Managed Cloud',
+          'Use a new pairing code from Desktop; phone and Desktop accounts do not need to match',
           'Desktop is open and up to date',
         ]}
       />
