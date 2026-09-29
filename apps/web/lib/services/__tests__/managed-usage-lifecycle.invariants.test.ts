@@ -238,15 +238,7 @@ class LedgerDatabase {
   }
 
   private dispatch(sql: string, params: unknown[]): Record<string, unknown>[] {
-    if (sql.includes('headroom_microusd')) {
-      const account = this.accountFor(String(params[0]), false);
-      if (!account || !this.overageEnabled.has(String(params[0]))) return [];
-      const headroom = Math.max(
-        0,
-        Math.min(account.allocatedMicrousd - account.usedMicrousd, account.topUpAllocatedMicrousd),
-      );
-      return [{ headroom_microusd: headroom }];
-    }
+    if (sql.includes('select credits.plan_catalog_version')) return [];
     if (sql.includes('reserve_managed_usage_request_with_limits_microusd')) {
       return [this.reserveWithLimits(params)];
     }
@@ -689,6 +681,16 @@ class LedgerDatabase {
     };
   }
 
+  /** 0347: the reservation reads purchased headroom itself, under the per-user lock. */
+  private headroomFor(userId: string): number {
+    const account = this.accountFor(userId, false);
+    if (!account || !this.overageEnabled.has(userId)) return 0;
+    return Math.max(
+      0,
+      Math.min(account.allocatedMicrousd - account.usedMicrousd, account.topUpAllocatedMicrousd),
+    );
+  }
+
   private reserveWithLimits(params: unknown[]): Record<string, unknown> {
     const [userId, idempotencyKey] = params as [string, string];
     const estimated = Number(params[5]);
@@ -696,7 +698,7 @@ class LedgerDatabase {
     const weeklyCap = params[9] as number | null;
     const flagshipCap = params[10] as number | null;
     const isFlagship = Boolean(params[11]);
-    const headroom = Math.max(0, Number(params[12] ?? 0));
+    const headroom = this.headroomFor(userId);
 
     if (estimated < 0) {
       throw Object.assign(new Error('invalid managed usage limits'), { code: '22023' });
@@ -1985,7 +1987,15 @@ describe('spending past the plan allowance', () => {
       .map((name) => readFileSync(join(migrationsDir, name), 'utf8'))
       .find((sql) => sql.includes('function public.prepaid_credit_balances_microusd('));
 
-    expect(source).toContain('from public.prepaid_credit_balances_microusd($1::text) balances');
+    const reservations = readFileSync(
+      join(migrationsDir, '0347_managed_usage_headroom_under_lock.sql'),
+      'utf8',
+    );
+
+    expect(source).not.toContain('prepaid_credit_balances_microusd');
+    expect(reservations).toContain(
+      'from public.prepaid_credit_balances_microusd(p_user_id) balances',
+    );
     expect(definition).toBeDefined();
     expect(definition).toContain('top_up_allocated_microusd as purchased_allocated');
     expect(definition).toContain('bool_or(subscription_row.overage_enabled)');
