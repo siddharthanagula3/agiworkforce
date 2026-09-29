@@ -158,7 +158,7 @@ describe('host messages the phone accepts', () => {
   };
 
   it('reads a snapshot and refuses one with a role the transcript does not show', () => {
-    expect(parseRemoteCodeSnapshot(snapshot)).toEqual(snapshot);
+    expect(parseRemoteCodeSnapshot(snapshot)).toEqual({ ...snapshot, tools: [] });
     expect(
       parseRemoteCodeSnapshot({ ...snapshot, messages: [{ role: 'system', text: 'x' }] }),
     ).toBeNull();
@@ -183,7 +183,7 @@ describe('host messages the phone accepts', () => {
       unavailable: [{ folder: 'web', message: 'CLI missing' }],
       syncedAt: SENT_AT,
     };
-    expect(parseRemoteCodeSessions(sessions)).toEqual(sessions);
+    expect(parseRemoteCodeSessions(sessions)).toEqual({ ...sessions, roots: [] });
     expect(parseRemoteCodeSessions({ ...sessions, version: 2 })).toBeNull();
   });
 
