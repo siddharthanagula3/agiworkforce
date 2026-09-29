@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type {
+  ManagedCloudEventTriggerDeletedResponse,
+  ManagedCloudEventTriggerResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -50,7 +54,10 @@ async function handleGetTrigger(
 
   const triggerId = triggerIdFrom((await context.params).triggerId);
   try {
-    return NextResponse.json({ trigger: await getTrigger(db, userId, triggerId) });
+    const payload: ManagedCloudEventTriggerResponse = {
+      trigger: await getTrigger(db, userId, triggerId),
+    };
+    return NextResponse.json(payload);
   } catch (error) {
     rethrowTriggerError(error);
   }
@@ -91,7 +98,8 @@ async function handleUpdateTrigger(
         changedKeys: Object.keys(body),
       },
     });
-    return NextResponse.json({ trigger });
+    const payload: ManagedCloudEventTriggerResponse = { trigger };
+    return NextResponse.json(payload);
   } catch (error) {
     rethrowTriggerError(error);
   }
@@ -120,7 +128,8 @@ async function handleDeleteTrigger(
       request,
       detail: { resourceType: 'event_trigger', resourceId: triggerId },
     });
-    return NextResponse.json({ success: true });
+    const payload: ManagedCloudEventTriggerDeletedResponse = { success: true };
+    return NextResponse.json(payload);
   } catch (error) {
     rethrowTriggerError(error);
   }
