@@ -133,7 +133,7 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:30-30`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack c7c9fefbe1: Save on a chat video downloads it and opens the share sheet, whose Save Video puts it in Photos. Left: a direct Save to Photos action needs expo-media-library and a photo-library add permission in app.config.js, both in files Codex holds (apps/mobile/package.json, apps/mobile/app.config.js). ChatGPT parity waits on founder research entry 2 in founder-research-needed-to-proceed.md (help.openai.com returned 403). | ui |
+| mobile | partial | Share sheet matches web download, accepted by lead. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:56-56`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:138-138`
