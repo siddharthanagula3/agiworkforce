@@ -70,7 +70,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'the browser PUTs to the signed url this issues',
   },
   { url: '/api/uploads/knowledge-file/put', why: 'the browser PUTs to the signed url this issues' },
-  { url: '/api/interactive-cards/respond', why: 'an interactive card posts its response here' },
   {
     url: '/api/download-beta',
     why: 'subscriber beta installer, reached by a link sent outside the product',
@@ -127,18 +126,12 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
 
   // Built this wave by another executor; their surfaces are still landing.
+  {
+    url: '/api/code/sessions/handoff',
+    why: 'agi code handoff in the CLI posts here; that caller lands with the CLI lane',
+  },
   { url: '/api/plugins/installations', why: 'plugins directory work in flight' },
   { url: '/api/plugins/installations/[id]', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/marketplace-installations', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/marketplace-installations/[id]', why: 'plugins directory work in flight' },
-  {
-    url: '/api/plugins/marketplace-installations/[id]/settings',
-    why: 'plugins directory work in flight',
-  },
-  { url: '/api/plugins/marketplaces', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/marketplaces/[id]', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/marketplaces/[id]/refresh', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/marketplaces/entries', why: 'plugins directory work in flight' },
   { url: '/api/plugins/uploads', why: 'plugins directory work in flight' },
   {
     url: '/api/plugins/updates',
