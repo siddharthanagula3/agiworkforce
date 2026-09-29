@@ -4283,6 +4283,9 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
+            if let Some(message) = permissions::open_ended_allow_error(rule) {
+                anyhow::bail!(message);
+            }
             store.allow_always(rule);
             store.save()?;
             println!("Always allow: {}", rule.trim());
