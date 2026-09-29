@@ -113,29 +113,23 @@ Code: `apps/web/lib/services/plugin-owned-source-service.ts:516-516`, `apps/web/
 
 - Done when: A skill can bundle reference files that the model reads when the skill runs.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Runs through the local CLI runtime, which has the same gap: package files are hashed but their location is not given to the model. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.11: Script bundle.
 
 - Done when: A skill can bundle scripts that run when the skill is used.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Same CLI-runtime gap as the CLI cell. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.14: Required tools.
 
@@ -172,18 +166,6 @@ Code: `apps/cli/src/skills.rs:944-962`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
-
-## S53.18: Automatic relevance-based invocation.
-
-- Done when: Without being asked, the product loads a skill whose description matches the user's request.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Works only when chatting through the local CLI runtime; cloud chats from VS Code are excluded from skill offers. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639`, `apps/cli/src/agent/prompt.rs:411-412`
 
 ## S53.20: Enable/disable.
 
