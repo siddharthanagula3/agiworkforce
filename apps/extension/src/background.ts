@@ -150,12 +150,14 @@ import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPor
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
+  MAX_LISTED_BROWSER_TABS,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_PAGE_CAPTURE_MESSAGE,
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
+  type BrowserTabSummary,
   type SitePolicyAdminState,
 } from '@agiworkforce/types';
 import {
@@ -2842,14 +2844,6 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
-  if (lease.windowId !== undefined) {
-    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
-    computerUseRuns.assertCurrent(lease);
-    if (activeTabs[0]?.id !== lease.tabId) {
-      rejectComputerUseOwnership(lease, 'tab_intent_changed');
-    }
-  }
-
   return context.token;
 }
 
@@ -3088,6 +3082,25 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
   }
 }
 
+async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
+  const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabs = await chrome.tabs.query({});
+  return tabs
+    .filter((tab) => isWebTab(tab) && !tab.incognito)
+    .sort(
+      (a, b) =>
+        Number(b.windowId === focused?.windowId) - Number(a.windowId === focused?.windowId) ||
+        a.index - b.index,
+    )
+    .slice(0, MAX_LISTED_BROWSER_TABS)
+    .map((tab) => ({
+      tabId: tab.id as number,
+      title: tab.title ?? '',
+      url: tab.url as string,
+      active: tab.id === focused?.id,
+    }));
+}
+
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
@@ -3128,7 +3141,8 @@ async function pollDesktopBrowserCommands(): Promise<void> {
       if (!command) continue;
 
       const result = await runDesktopBrowserCommand(command, {
-        resolveTabId: () => resolveBrowserToolTabId(undefined),
+        resolveTabId: (explicitTabId) => resolveBrowserToolTabId(explicitTabId),
+        listTabs: listDesktopBrowserTabs,
         send: async (tabId, message) =>
           (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
             id: chrome.runtime.id,
@@ -4976,20 +4990,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   invalidateWebMCPToolsForNavigation(tabId);
 });
 
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  const lease = computerUseRuns.getActive();
-  if (!lease || lease.takeover) return;
-  if (
-    lease.windowId === undefined ||
-    activeInfo.windowId !== lease.windowId ||
-    activeInfo.tabId === lease.tabId
-  ) {
-    return;
-  }
-  computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
-});
-
 chrome.commands.onCommand.addListener((command) => {
   logger.debug('Command received', { command });
 
@@ -5669,6 +5669,8 @@ function mapInPagePromptFailure(
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
       return inPagePromptFailure('account_unavailable', result.message, true);
+    case 'account_suspended':
+      return inPagePromptFailure('account_unavailable', result.message);
     case 'rate_limited':
       return inPagePromptFailure('rate_limited', result.message, true);
     case 'cancelled':

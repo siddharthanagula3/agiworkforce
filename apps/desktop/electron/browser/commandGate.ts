@@ -79,12 +79,22 @@ export function planBrowserCommand(
   });
 
   switch (command) {
-    case 'browser_read_page':
+    case 'browser_list_tabs':
       return plan(
         {},
-        'Read the page open in the paired browser?',
-        'The address, title and visible text of the active tab are copied into this conversation.',
+        'List the tabs open in the paired browser?',
+        'The titles and addresses of every open web tab are shown in AGI Cloud so you can choose one. Nothing is added to the conversation until you read a tab.',
       );
+    case 'browser_read_page': {
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ tabId }),
+        'Read the page open in the paired browser?',
+        tabId === undefined
+          ? 'The address, title and visible text of the active tab are copied into this conversation.'
+          : 'The address, title and visible text of the tab you chose are copied into this conversation.',
+      );
+    }
     case 'browser_click': {
       const selector = requireString(rawArgs, 'selector');
       return plan(

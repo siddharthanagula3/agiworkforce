@@ -95,9 +95,6 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Only generated artifacts are listed in the drawer; uploaded and library files cannot be browsed from the side panel. | ui |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
 
 ## S9.14: Folder tree.
 
