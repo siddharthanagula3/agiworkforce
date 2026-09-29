@@ -10,6 +10,10 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import {
+  requestPermissionsAsync as requestPhotoPermissionsAsync,
+  saveToLibraryAsync,
+} from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
@@ -450,6 +454,34 @@ export async function shareGeneratedImage(
     mimeType: imageType.mimeType,
     dialogTitle: 'Share generated image',
   });
+}
+
+export async function saveGeneratedImageToPhotos(
+  imagePath: string,
+  fileName = 'generated-image',
+): Promise<void> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) throw new Error('Only saved AGI Cloud images can be saved.');
+  const permission = await requestPhotoPermissionsAsync(true);
+  if (!permission.granted) {
+    throw new Error('Allow AGI Workforce to add photos in Settings to save images.');
+  }
+  const downloaded = await fetchGeneratedFileBytes(url);
+  const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
+  if (!imageType) throw new Error('The saved image format cannot be added to Photos.');
+  const localUri = await writeGeneratedFileBytes(
+    `${fileName}.${imageType.extension}`,
+    downloaded.base64,
+  );
+  await saveToLibraryAsync(localUri);
+}
+
+export async function readGeneratedImageBase64(
+  imagePath: string,
+): Promise<{ base64: string; contentType: string | null }> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) throw new Error('Only saved AGI Cloud images can be edited.');
+  return fetchGeneratedFileBytes(url);
 }
 
 export async function copyGeneratedImage(imagePath: string): Promise<void> {

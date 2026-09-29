@@ -2,6 +2,7 @@ import { View, Pressable } from 'react-native';
 import { CloudOff, HardDrive, PackageOpen, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { spacing, radii } from '@/src/ui/theme';
 import { EDGE_COPY } from './copy';
 
@@ -54,12 +55,24 @@ function ErrorScreen({
       </View>
 
       <Text
-        style={{ fontSize: 18, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' }}
+        style={{
+          fontSize: typeScale.headline,
+          fontWeight: '700',
+          color: colors.textPrimary,
+          textAlign: 'center',
+        }}
       >
         {title}
       </Text>
 
-      <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 }}>
+      <Text
+        style={{
+          fontSize: typeScale.subhead,
+          color: colors.textMuted,
+          textAlign: 'center',
+          lineHeight: 20,
+        }}
+      >
         {body}
       </Text>
 
@@ -76,7 +89,7 @@ function ErrorScreen({
           accessibilityRole="button"
           accessibilityLabel={retryLabel}
         >
-          <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
+          <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: typeScale.body }}>
             {retryLabel}
           </Text>
         </Pressable>
@@ -89,7 +102,9 @@ function ErrorScreen({
           accessibilityRole="button"
           accessibilityLabel={cancelLabel}
         >
-          <Text style={{ color: colors.textMuted, fontSize: 14 }}>{cancelLabel}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+            {cancelLabel}
+          </Text>
         </Pressable>
       )}
     </View>

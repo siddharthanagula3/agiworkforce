@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CODE_RUN_FAILED, runCodeAgain } from '../services/codeRun';
 
 const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -74,7 +75,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
               style={buttonStyle}
             >
               <Square size={14} color={colors.textPrimary} />
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>Stop</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>Stop</Text>
             </Pressable>
             <ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Running" />
           </>
@@ -86,12 +87,17 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
             style={buttonStyle}
           >
             <RotateCcw size={14} color={colors.textPrimary} />
-            <Text style={{ color: colors.textPrimary, fontSize: 13 }}>Run again</Text>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+              Run again
+            </Text>
           </Pressable>
         )}
       </View>
       {error ? (
-        <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+        <Text
+          accessibilityRole="alert"
+          style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+        >
           {error}
         </Text>
       ) : null}
@@ -101,7 +107,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
             selectable
             style={{
               color: colors.textPrimary,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               fontFamily: 'Menlo',
               backgroundColor: colors.surfaceElevated,
               padding: 8,
@@ -113,7 +119,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
           {result.error ? (
             <Text
               selectable
-              style={{ color: colors.agentError, fontSize: 12, fontFamily: 'Menlo' }}
+              style={{ color: colors.agentError, fontSize: typeScale.caption, fontFamily: 'Menlo' }}
             >
               {result.error}
             </Text>

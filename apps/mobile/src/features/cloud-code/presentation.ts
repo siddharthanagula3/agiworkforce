@@ -24,7 +24,6 @@ export const CLOUD_CODE_STATE_BADGE_COLORS: Readonly<
 
 export const CLOUD_CODE_COMMIT_MESSAGE_LIMIT = 500;
 export const CLOUD_CODE_COMMAND_LIMIT = 2000;
-export const CLOUD_CODE_BRANCH_LIMIT = 255;
 
 export const CLOUD_CODE_CHANGE_STATE_LABELS: Readonly<Record<CloudCodeChangeState, string>> = {
   added: 'Added',

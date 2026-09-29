@@ -51,6 +51,12 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
   },
 ];
 
+const MOBILE_TYPE_SCALE_RULE = {
+  selector: "Property[key.name='fontSize'] > Literal",
+  message:
+    'Literal font sizes bypass the mobile type scale. Use typeScale from @/src/ui/theme (caption 12 is the floor; footnote, subhead, body, callout, headline, title3, title2, title1, largeTitle, display).',
+};
+
 export default [
   {
     ignores: [
@@ -655,6 +661,28 @@ export default [
 
   {
     files: [
+      'apps/mobile/app/**/*.tsx',
+      'apps/mobile/components/**/*.tsx',
+      'apps/mobile/src/**/*.tsx',
+    ],
+    ignores: [
+      'apps/mobile/src/features/**',
+      'apps/mobile/src/shared/**',
+      'apps/mobile/**/*.test.tsx',
+      'apps/mobile/**/__tests__/**',
+      'apps/mobile/**/__mocks__/**',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        MOBILE_TYPE_SCALE_RULE,
+      ],
+    },
+  },
+
+  {
+    files: [
       'apps/mobile/src/features/**/*.ts',
       'apps/mobile/src/features/**/*.tsx',
       'apps/mobile/src/shared/**/*.ts',
@@ -670,6 +698,7 @@ export default [
       'no-restricted-syntax': [
         'error',
         ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        MOBILE_TYPE_SCALE_RULE,
         {
           selector:
             ':matches(Literal[value=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/], TemplateElement[value.raw=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/])',

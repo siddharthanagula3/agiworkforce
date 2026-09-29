@@ -12,6 +12,7 @@ import { api } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
 const LABEL = 'Only use AI providers based in the US';
@@ -72,7 +73,7 @@ export function UsOnlyRoutingGroup() {
         accessibilityRole="header"
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           marginBottom: 8,
@@ -94,7 +95,7 @@ export function UsOnlyRoutingGroup() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           lineHeight: 17,
           marginTop: 8,
           paddingHorizontal: 2,
@@ -107,7 +108,12 @@ export function UsOnlyRoutingGroup() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          style={{ color: colors.agentError, fontSize: 12, lineHeight: 17, marginTop: 4 }}
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            marginTop: 4,
+          }}
         >
           {error}
         </Text>

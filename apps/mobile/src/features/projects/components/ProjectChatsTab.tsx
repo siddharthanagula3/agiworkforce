@@ -1,4 +1,3 @@
-
 import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -159,7 +158,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
                 ) : null}
                 <View className="flex-row items-center gap-1 mt-1">
                   <Clock size={10} color={colors.textMuted} />
-                  <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+                  <Text className="text-xs" style={{ color: colors.textMuted }}>
                     {formatRelativeTime(convo.updatedAt)}
                   </Text>
                 </View>

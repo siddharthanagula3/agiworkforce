@@ -8,7 +8,8 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import Svg, { Line } from 'react-native-svg';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 const SPOKE_COUNT = 12;
 const INNER_R = 4.6;

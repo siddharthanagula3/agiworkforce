@@ -34,6 +34,7 @@ export function DispatchTaskComposer() {
   const [prompt, setPrompt] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [expandedResult, setExpandedResult] = useState<string | null>(null);
   const tasks = useDispatchTaskStore((state) => state.tasks);
   const visibleTasks = useMemo(() => tasks.slice(0, 4), [tasks]);
   const canSend = !isSending && prompt.trim().length > 0 && prompt.trim().length <= 20_000;
@@ -76,7 +77,7 @@ export function DispatchTaskComposer() {
             editable={!isSending}
           />
           <View className="flex-row items-center justify-between pt-2">
-            <Text className="text-[10px] text-white/30">{prompt.trim().length}/20,000</Text>
+            <Text className="text-xs text-white/30">{prompt.trim().length}/20,000</Text>
             <Pressable
               onPress={() => void handleSend()}
               disabled={!canSend}
@@ -115,7 +116,7 @@ export function DispatchTaskComposer() {
 
         {visibleTasks.length > 0 && (
           <View className="mt-4 gap-2">
-            <Text className="text-[10px] uppercase tracking-wider text-white/40">
+            <Text className="text-xs uppercase tracking-wider text-white/40">
               Recent Dispatch tasks
             </Text>
             {visibleTasks.map((task) => {
@@ -135,7 +136,7 @@ export function DispatchTaskComposer() {
                     <Text className="flex-1 text-xs font-medium text-white" numberOfLines={1}>
                       {task.title}
                     </Text>
-                    <Text className="text-[10px] text-white/45">
+                    <Text className="text-xs text-white/45">
                       {STATUS_LABELS[task.status] ?? task.status}
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
@@ -151,12 +152,36 @@ export function DispatchTaskComposer() {
                   </View>
                   {(task.error || task.message) && (
                     <Text
-                      className={`mt-1 text-[10px] ${isError ? 'text-red-300' : 'text-white/40'}`}
+                      className={`mt-1 text-xs ${isError ? 'text-red-300' : 'text-white/40'}`}
                       numberOfLines={2}
                     >
                       {task.error ?? task.message}
                     </Text>
                   )}
+                  {task.result ? (
+                    <Pressable
+                      onPress={() =>
+                        setExpandedResult((current) =>
+                          current === task.requestId ? null : task.requestId,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        expandedResult === task.requestId
+                          ? 'Show less of the result'
+                          : 'Show the full result'
+                      }
+                      className="mt-2 rounded-md bg-white/[0.04] px-2 py-2"
+                    >
+                      <Text
+                        selectable
+                        className="text-xs leading-[18px] text-white/80"
+                        numberOfLines={expandedResult === task.requestId ? undefined : 4}
+                      >
+                        {task.result}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               );
             })}

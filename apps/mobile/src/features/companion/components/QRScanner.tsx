@@ -12,7 +12,8 @@ import Animated, {
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
@@ -182,7 +183,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               paddingHorizontal: 16,
               paddingVertical: 14,
               color: colors.textPrimary,
-              fontSize: 18,
+              fontSize: typeScale.headline,
               fontFamily: 'Menlo',
               letterSpacing: 2,
               textAlign: 'center',

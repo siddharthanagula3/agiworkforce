@@ -10,7 +10,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { colors, motion } from '@/src/ui/theme';
+import { colors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 

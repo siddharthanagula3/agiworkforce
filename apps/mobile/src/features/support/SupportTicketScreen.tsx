@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   TICKET_STATUS_LABEL,
@@ -179,11 +180,11 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
 }
 
 const styles = StyleSheet.create({
-  subject: { fontSize: 18, fontWeight: '600', marginBottom: 4 },
-  meta: { fontSize: 13, lineHeight: 18, marginBottom: 16 },
+  subject: { fontSize: typeScale.headline, fontWeight: '600', marginBottom: 4 },
+  meta: { fontSize: typeScale.footnote, lineHeight: 18, marginBottom: 16 },
   message: { borderRadius: 12, padding: 12, gap: 4, marginBottom: 10 },
-  author: { fontSize: 12 },
-  body: { fontSize: 15, lineHeight: 21 },
+  author: { fontSize: typeScale.caption },
+  body: { fontSize: typeScale.body, lineHeight: 21 },
   composer: { gap: 8, marginTop: 8 },
   input: {
     minHeight: 96,
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     borderWidth: 1,
-    fontSize: 15,
+    fontSize: typeScale.body,
   },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
 });

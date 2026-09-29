@@ -235,13 +235,13 @@ export default function AgentDetailScreen() {
                 <ProgressBar progress={agent.progress} />
                 <View className="flex-row items-center justify-between mt-1.5">
                   {agent.totalSteps != null && agent.stepsCompleted != null ? (
-                    <Text className="text-[10px] text-white/40">
+                    <Text className="text-xs text-white/40">
                       Step {agent.stepsCompleted} of {agent.totalSteps}
                     </Text>
                   ) : (
                     <View />
                   )}
-                  <Text className="text-[10px] text-white/40">{agent.progress}%</Text>
+                  <Text className="text-xs text-white/40">{agent.progress}%</Text>
                 </View>
               </View>
             )}
@@ -250,7 +250,7 @@ export default function AgentDetailScreen() {
             {agent.currentAction ? (
               <View className="flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/8">
                 <Zap size={11} color={colors.agentActive} />
-                <Text className="text-[11px] text-blue-400 flex-1" numberOfLines={2}>
+                <Text className="text-xs text-blue-400 flex-1" numberOfLines={2}>
                   {agent.currentAction}
                 </Text>
               </View>
@@ -324,11 +324,11 @@ export default function AgentDetailScreen() {
                           {artifact.label}
                         </Text>
                         {artifact.detail && (
-                          <Text className="text-[10px] text-white/40 mt-0.5" numberOfLines={2}>
+                          <Text className="text-xs text-white/40 mt-0.5" numberOfLines={2}>
                             {artifact.detail}
                           </Text>
                         )}
-                        <Text className="text-[10px] text-white/30 mt-0.5">
+                        <Text className="text-xs text-white/30 mt-0.5">
                           {formatArtifactTime(artifact.timestamp)}
                         </Text>
                       </View>
@@ -379,7 +379,7 @@ export default function AgentDetailScreen() {
                       <View className="flex-1">
                         <Text className="text-xs text-white/80">{step.message}</Text>
                         {step.detail && (
-                          <Text className="text-[11px] text-white/50 mt-0.5" numberOfLines={2}>
+                          <Text className="text-xs text-white/50 mt-0.5" numberOfLines={2}>
                             {step.detail}
                           </Text>
                         )}
@@ -396,7 +396,7 @@ export default function AgentDetailScreen() {
                         }}
                       >
                         <Text
-                          className="text-[9px] uppercase"
+                          className="text-xs uppercase"
                           style={{
                             color:
                               step.status === 'completed'

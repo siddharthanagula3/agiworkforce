@@ -1,6 +1,6 @@
 import { Alert } from 'react-native';
 import { useChatStore } from '@/stores/chatStore';
-import { setActiveWorkspace } from './service';
+import { setActiveWorkspace } from '@/src/features/team';
 
 export async function switchWorkspace(organizationId: string | null): Promise<boolean> {
   try {

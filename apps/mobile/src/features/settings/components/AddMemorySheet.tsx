@@ -3,6 +3,7 @@ import { Alert, KeyboardAvoidingView, Modal, Platform, TextInput, View } from 'r
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 
@@ -136,7 +137,7 @@ export function AddMemorySheet({
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 16,
+              fontSize: typeScale.callout,
               fontWeight: '700',
               marginBottom: 10,
             }}
@@ -163,7 +164,7 @@ export function AddMemorySheet({
               borderRadius: 12,
               borderWidth: 1,
               color: colors.textPrimary,
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               letterSpacing: 0,
               minHeight: 118,
               paddingHorizontal: 12,
@@ -189,7 +190,9 @@ export function AddMemorySheet({
                 minHeight: 44,
               })}
             >
-              <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.agentError, fontSize: typeScale.subhead, fontWeight: '600' }}
+              >
                 Delete Memory
               </Text>
             </Pressable>
@@ -211,7 +214,13 @@ export function AddMemorySheet({
                 minHeight: 44,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 Cancel
               </Text>
             </Pressable>
@@ -236,7 +245,7 @@ export function AddMemorySheet({
               <Text
                 style={{
                   color: canSave ? colors.surfaceElevated : colors.textMuted,
-                  fontSize: 14,
+                  fontSize: typeScale.subhead,
                   fontWeight: '600',
                 }}
               >

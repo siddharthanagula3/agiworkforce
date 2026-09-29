@@ -3,6 +3,7 @@ import { Alert, View } from 'react-native';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import {
   CHINESE_HQ_PROVIDER_IDS,
@@ -53,11 +54,23 @@ export function ChineseHqProviderConsentGroup() {
     <View testID="settings-provider-consent-section" style={{ marginBottom: 18 }}>
       <Text
         accessibilityRole="header"
-        style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginBottom: 6 }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.subhead,
+          fontWeight: '600',
+          marginBottom: 6,
+        }}
       >
         {SECTION_TITLE}
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 10 }}>
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontSize: typeScale.footnote,
+          lineHeight: 18,
+          marginBottom: 10,
+        }}
+      >
         {SECTION_BODY}
       </Text>
       <SettingsGroup>

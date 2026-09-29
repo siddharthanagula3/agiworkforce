@@ -71,6 +71,7 @@ export interface UseLiveVoiceSessionOptions {
   model: string;
   ensureConversation: () => Promise<string | null>;
   onEnded: (message: string | null) => void;
+  onStartWorkTask?: (goal: string) => boolean;
 }
 
 export function useLiveVoiceSession({
@@ -79,6 +80,7 @@ export function useLiveVoiceSession({
   model,
   ensureConversation,
   onEnded,
+  onStartWorkTask,
 }: UseLiveVoiceSessionOptions): LiveVoiceController {
   const appendVoiceTurn = useChatStore((s) => s.appendVoiceTurn);
   const [status, setStatus] = useState<LiveVoiceStatus>('idle');
@@ -106,6 +108,9 @@ export function useLiveVoiceSession({
   conversationRef.current = conversationId ?? conversationRef.current;
   ensureRef.current = ensureConversation;
   endedRef.current = onEnded;
+  const startWorkTaskRef = useRef(onStartWorkTask);
+  startWorkTaskRef.current = onStartWorkTask;
+  const offersWorkTask = onStartWorkTask !== undefined;
   appendRef.current = appendVoiceTurn;
   modelRef.current = model;
 
@@ -197,6 +202,12 @@ export function useLiveVoiceSession({
             if (!cancelled) setInterrupted(true);
           },
           onUsage: () => undefined,
+          ...(offersWorkTask
+            ? {
+                onStartWorkTask: (goal: string) =>
+                  !cancelled && (startWorkTaskRef.current?.(goal) ?? false),
+              }
+            : {}),
           onClosed: (closed) => {
             const session = sessionRef.current;
             sessionRef.current = null;
@@ -291,7 +302,7 @@ export function useLiveVoiceSession({
       setToolActivity([]);
       if (session) void session.close().then((closed) => finish(session, closed));
     };
-  }, [active, attempt, recordTurn]);
+  }, [active, attempt, offersWorkTask, recordTurn]);
 
   const toggleMute = useCallback(() => {
     setMuted((previous) => {

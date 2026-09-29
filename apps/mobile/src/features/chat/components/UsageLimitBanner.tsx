@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { UsageSnapshot } from '@/services/usage';
 
 function inCredits(window: ManagedUsageCreditWindow | null | undefined) {
@@ -78,12 +79,14 @@ export function UsageLimitBanner({
       <View style={{ flex: 1, minWidth: 0, paddingVertical: 8 }}>
         <Text
           numberOfLines={2}
-          style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '500' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '500' }}
         >
           {warning.headline}
         </Text>
         {warning.resetLabel ? (
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{warning.resetLabel}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+            {warning.resetLabel}
+          </Text>
         ) : null}
       </View>
       <PressableBox
@@ -92,7 +95,9 @@ export function UsageLimitBanner({
         accessibilityLabel="Get more usage"
         style={{ minHeight: 44, justifyContent: 'center' }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+        >
           Get more usage
         </Text>
       </PressableBox>

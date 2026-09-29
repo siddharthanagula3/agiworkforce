@@ -14,6 +14,7 @@ import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import type {
   ConversationMenuAction,
   ConversationMenuState,
@@ -78,9 +79,9 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
           >
             <Text
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 color: colors.textMuted,
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 paddingBottom: 8,
               }}
               numberOfLines={1}
@@ -102,7 +103,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 12,
-                    paddingHorizontal: 20,
+                    paddingHorizontal: dialogPadding,
                     borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
                     borderBottomColor: colors.border,
                   }}
@@ -111,7 +112,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
                     numberOfLines={1}
                     style={{
                       flexShrink: 1,
-                      fontSize: 16,
+                      fontSize: typeScale.callout,
                       color: action.destructive ? colors.agentError : colors.textPrimary,
                     }}
                   >
@@ -129,12 +130,18 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
               style={{
                 minHeight: 52,
                 justifyContent: 'center',
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                }}
+              >
                 Cancel
               </Text>
             </Pressable>
@@ -183,7 +190,7 @@ export function RenameConversationModal({
                 width: '100%',
                 backgroundColor: colors.surfaceElevated,
                 borderRadius: 14,
-                padding: 20,
+                padding: dialogPadding,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}
@@ -191,7 +198,7 @@ export function RenameConversationModal({
             >
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   marginBottom: 12,
@@ -204,7 +211,7 @@ export function RenameConversationModal({
                   backgroundColor: colors.inputSurface,
                   borderRadius: 8,
                   padding: 12,
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: colors.textPrimary,
                   borderWidth: 1,
                   borderColor: colors.border,
@@ -226,7 +233,9 @@ export function RenameConversationModal({
                   accessibilityRole="button"
                   accessibilityLabel="Cancel rename"
                 >
-                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
+                    Cancel
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
@@ -234,7 +243,7 @@ export function RenameConversationModal({
                   accessibilityRole="button"
                   accessibilityLabel="Submit rename"
                 >
-                  <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>
+                  <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                     Rename
                   </Text>
                 </Pressable>
@@ -256,7 +265,7 @@ export function InlineRenameField({ rename }: { rename: ConversationRenameState 
         minHeight: 36,
         borderRadius: 8,
         paddingHorizontal: 8,
-        fontSize: 15,
+        fontSize: typeScale.body,
         color: colors.textPrimary,
         backgroundColor: colors.inputSurface,
         borderWidth: 1,

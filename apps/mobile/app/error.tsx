@@ -2,6 +2,7 @@ import { View, Pressable, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ErrorBoundaryProps {
   error: Error;
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emoji: {
-    fontSize: 48,
+    fontSize: typeScale.display,
     fontWeight: '700',
     width: 80,
     height: 80,
@@ -76,13 +77,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   heading: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
   },
   description: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 8,
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   retryText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   errorSpacer: {
@@ -111,6 +112,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   backText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 });

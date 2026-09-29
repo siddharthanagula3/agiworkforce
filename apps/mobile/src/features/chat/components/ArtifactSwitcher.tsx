@@ -3,6 +3,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { FileCode } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 
 interface ArtifactSwitcherProps {
@@ -51,7 +52,7 @@ export function ArtifactSwitcher({ artifacts, activeId, onSelect }: ArtifactSwit
               numberOfLines={1}
               style={{
                 flexShrink: 1,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: selected ? '600' : '500',
                 color: selected ? colors.textPrimary : colors.textSecondary,
               }}

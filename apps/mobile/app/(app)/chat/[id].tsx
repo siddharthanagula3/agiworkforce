@@ -44,6 +44,8 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
+import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
@@ -108,7 +110,7 @@ import {
   isSelectableModelIdForAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
-import { useTierStore } from '@/src/features/billing/store';
+import { isCapabilityRequestable, useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   executionModeForSelection,
@@ -143,7 +145,7 @@ import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import {
@@ -155,6 +157,7 @@ import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -166,6 +169,7 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { toUserMessage } from '@/services/userMessage';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
@@ -778,6 +782,13 @@ export default function ChatScreen() {
     [conversationExecutionMode],
   );
 
+  useEffect(() => {
+    if (conversationExecutionMode !== 'cloud' || !isClerkSignedIn) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ChatScreen] publication states unavailable', error);
+    });
+  }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
+
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
 
   useEffect(() => {
@@ -1046,7 +1057,7 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(conversationExecutionMode),
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -1064,7 +1075,7 @@ export default function ChatScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(
     (messageId: string) => {
@@ -1224,6 +1235,16 @@ export default function ChatScreen() {
   }, []);
 
   const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
+
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const agiWorkGoal = buildAgiWorkGoalInput(goal);
+      if (!id || !agiWorkGoal || !isCapabilityRequestable('canUseAgiWork')) return false;
+      void sendMessage(id, goal, selectedModel, undefined, { workMode: 'agiwork', agiWorkGoal });
+      return true;
+    },
+    [id, selectedModel, sendMessage],
+  );
 
   useEffect(() => {
     if (requestedVoiceMode !== 'live') return;
@@ -1412,6 +1433,51 @@ export default function ChatScreen() {
     },
     [deleteConversation, handleBack, id, isConversationActionCurrent],
   );
+
+  const canEditImages =
+    conversationExecutionMode === 'cloud' &&
+    isClerkSignedIn &&
+    FEATURES.imageGen &&
+    imageGenerationEnabled;
+
+  const handleEditImageArea = useCallback(
+    (message: ChatMessage, edit: ImageAreaEdit) => {
+      if (!id || !clerkUserId || !message.model) return;
+      void runImageGenerationTurn({
+        conversationId: id,
+        displayText: edit.prompt,
+        prompt: edit.prompt,
+        model: message.model,
+        operation: 'inpaint',
+        sourceImageBase64: edit.sourceBase64,
+        maskImageBase64: edit.maskBase64,
+        ownerId: clerkUserId,
+        begin: beginImageGeneration,
+        complete: completeImageGeneration,
+        fail: failImageGeneration,
+        remove: deleteMessage,
+        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+      });
+    },
+    [
+      beginImageGeneration,
+      clerkUserId,
+      completeImageGeneration,
+      deleteMessage,
+      failImageGeneration,
+      id,
+      setPaywallError,
+      setSendError,
+    ],
+  );
+
+  const handleDeleteImageConversation = useCallback(() => {
+    const actionScope = captureConversationAction();
+    if (!id || !actionScope || !isConversationActionCurrent(actionScope)) return;
+    deleteConversation(id);
+    handleBack();
+  }, [captureConversationAction, deleteConversation, handleBack, id, isConversationActionCurrent]);
 
   const shareConversationLink = useCallback(
     (actionScope: ConversationUiActionScope) => {
@@ -1659,7 +1725,7 @@ export default function ChatScreen() {
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 12, color: colors.teal, fontWeight: '500' }}
+                style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '500' }}
               >
                 {activeProject.name}
               </Text>
@@ -1730,7 +1796,7 @@ export default function ChatScreen() {
             }}
           >
             <WifiOff size={12} color={colors.agentError} />
-            <Text style={{ fontSize: 12, color: colors.agentError }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.agentError }}>
               You're offline, viewing cached conversations
             </Text>
           </View>
@@ -1751,6 +1817,8 @@ export default function ChatScreen() {
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
             onRetryWithModel={handleRetryWithModel}
+            onEditImageArea={canEditImages ? handleEditImageArea : undefined}
+            onDeleteImageConversation={handleDeleteImageConversation}
             variantInfoByMessageId={variantInfo}
             onSelectVariant={handleSelectVariant}
             onSwitchModel={handleOpenModelPicker}
@@ -1792,7 +1860,7 @@ export default function ChatScreen() {
             <Text
               style={{
                 flex: 1,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 color: inFlightTurn === 'stalled' ? colors.agentError : colors.textSecondary,
               }}
             >
@@ -1909,7 +1977,18 @@ export default function ChatScreen() {
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
         {/* Picker modal only -- the trigger lives in the "+" sheet. */}
-        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
+        <ProjectSelectorBar
+          openSignal={projectPickerOpenSignal}
+          {...(conversation && id
+            ? {
+                conversation: {
+                  id,
+                  ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+                  executionMode: conversationExecutionMode,
+                },
+              }
+            : {})}
+        />
 
         {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
@@ -1961,6 +2040,7 @@ export default function ChatScreen() {
           ensureConversation={handleEnsureVoiceConversation}
           onSwitchToText={handleSwitchLiveVoiceToText}
           onEnded={handleLiveVoiceEnded}
+          onStartWorkTask={handleVoiceStartWorkTask}
         />
 
         {/* Conversation export bottom sheet */}
@@ -2033,7 +2113,7 @@ export default function ChatScreen() {
             >
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   marginBottom: 12,
@@ -2046,7 +2126,7 @@ export default function ChatScreen() {
                   backgroundColor: colors.inputSurface,
                   borderRadius: 8,
                   padding: 12,
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: colors.textPrimary,
                   borderWidth: 1,
                   borderColor: colors.border,
@@ -2066,7 +2146,9 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Cancel rename"
                 >
-                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
+                    Cancel
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={{ padding: 8 }}
@@ -2085,7 +2167,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Submit rename"
                 >
-                  <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>
+                  <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                     Rename
                   </Text>
                 </Pressable>

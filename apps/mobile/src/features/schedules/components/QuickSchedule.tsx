@@ -12,6 +12,7 @@ import {
 import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
@@ -276,7 +277,7 @@ export function QuickSchedule({
           }}
           placeholder="Schedule a task"
           placeholderTextColor={colors.textMuted}
-          style={{ flex: 1, minHeight: 44, color: colors.textPrimary, fontSize: 15 }}
+          style={{ flex: 1, minHeight: 44, color: colors.textPrimary, fontSize: typeScale.body }}
           accessibilityLabel="Schedule a task"
           returnKeyType="done"
           onSubmitEditing={handleOpen}
@@ -346,7 +347,7 @@ export function QuickSchedule({
                     }}
                     placeholder='e.g. "Every day at 9am"'
                     placeholderTextColor={colors.textMuted}
-                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}
                     autoFocus
                     returnKeyType="next"
                   />
@@ -409,7 +410,7 @@ export function QuickSchedule({
                     placeholderTextColor={colors.textMuted}
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 14,
+                      fontSize: typeScale.subhead,
                       minHeight: 60,
                       textAlignVertical: 'top',
                     }}

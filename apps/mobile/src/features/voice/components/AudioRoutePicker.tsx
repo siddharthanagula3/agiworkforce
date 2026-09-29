@@ -3,6 +3,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { Bluetooth, Check, Headphones, Volume2, Waves } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   AUDIO_ROUTES,
@@ -61,7 +62,9 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
       >
         <ActiveIcon size={20} color={colors.textSecondary} />
         {compact ? null : (
-          <Text style={{ color: colors.textMuted, fontSize: 16 }}>{AUDIO_ROUTE_LABELS[route]}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.callout }}>
+            {AUDIO_ROUTE_LABELS[route]}
+          </Text>
         )}
       </Pressable>
 
@@ -95,7 +98,7 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 letterSpacing: 0.6,
                 paddingHorizontal: 12,
                 paddingBottom: 6,
@@ -126,10 +129,10 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
                 >
                   <Icon size={20} color={selected ? colors.textPrimary : colors.textSecondary} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.textPrimary, fontSize: 16 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: typeScale.callout }}>
                       {AUDIO_ROUTE_LABELS[candidate]}
                     </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                       {AUDIO_ROUTE_HINTS[candidate]}
                     </Text>
                   </View>

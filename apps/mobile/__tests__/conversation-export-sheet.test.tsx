@@ -30,7 +30,15 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return { FileText: Icon, File: Icon, Hash: Icon, Copy: Icon, CheckCircle2: Icon, X: Icon };
+  return {
+    FileText: Icon,
+    File: Icon,
+    Hash: Icon,
+    Copy: Icon,
+    CheckCircle2: Icon,
+    Printer: Icon,
+    X: Icon,
+  };
 });
 
 const mockExportConversationToPDF = jest.fn();

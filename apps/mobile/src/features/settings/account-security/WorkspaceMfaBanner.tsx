@@ -8,6 +8,7 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { WEB_SECURITY_URL, fetchWorkspaceMfaRequirement } from './service';
 
 export function WorkspaceMfaBanner() {
@@ -76,5 +77,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  message: { flex: 1, fontSize: 14, lineHeight: 20 },
+  message: { flex: 1, fontSize: typeScale.subhead, lineHeight: 20 },
 });

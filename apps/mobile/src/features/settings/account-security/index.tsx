@@ -36,6 +36,7 @@ import {
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { TwoFactorSection } from './TwoFactorSection';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
@@ -420,20 +421,13 @@ export default function AccountSecurityScreen() {
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : null}
 
-      <SettingsInfo
-        title="Account factors"
-        body="Authenticator status is read from AGI Cloud. Mobile does not enroll or disable account factors."
-        icon={ShieldCheck}
+      <TwoFactorSection
+        status={appMode === 'cloud' ? status : null}
+        statusLabel={twoFactorValue}
+        withStepUp={withStepUp}
+        onChanged={() => void loadStatus()}
       />
       <SettingsGroup>
-        <SettingsRow label="Authenticator app" icon={KeyRound} value={twoFactorValue} />
-        {status?.twoFactorEnabled ? (
-          <SettingsRow
-            label="Backup codes"
-            icon={KeyRound}
-            value={status.backupCodesReady ? 'Ready' : 'Not set'}
-          />
-        ) : null}
         <SettingsRow
           label="Advanced Account Security"
           icon={ShieldCheck}

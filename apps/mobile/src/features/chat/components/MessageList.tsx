@@ -15,10 +15,12 @@ import { MessageBubble } from './MessageBubble';
 import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { ChatMessage } from '@/types/chat';
 import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
 
@@ -29,6 +31,8 @@ interface MessageListProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
+  onDeleteImageConversation?: () => void;
   variantInfoByMessageId?: VariantInfoByMessageId;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
@@ -69,6 +73,8 @@ export function MessageList({
   onDeleteMessage,
   onRetryMessage,
   onRetryWithModel,
+  onEditImageArea,
+  onDeleteImageConversation,
   variantInfoByMessageId,
   onSelectVariant,
   onSwitchModel,
@@ -137,6 +143,8 @@ export function MessageList({
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={onRetryMessage}
             onRetryWithModel={onRetryWithModel}
+            onEditImageArea={onEditImageArea}
+            onDeleteImageConversation={onDeleteImageConversation}
             variant={variantInfoByMessageId?.[item.id]}
             onSelectVariant={onSelectVariant}
             onSwitchModel={onSwitchModel}
@@ -161,6 +169,8 @@ export function MessageList({
       onDeleteMessage,
       onRetryMessage,
       onRetryWithModel,
+      onEditImageArea,
+      onDeleteImageConversation,
       variantInfoByMessageId,
       onSelectVariant,
       onSwitchModel,

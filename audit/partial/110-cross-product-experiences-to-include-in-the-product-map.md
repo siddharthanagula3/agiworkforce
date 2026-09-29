@@ -29,11 +29,11 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 | --- | --- | --- | --- |
 | web | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
 | desktop | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
-| mobile | partial | Make the .pptx built by the office-file tool appear as a downloadable, shareable file card in the mobile chat; no deck editor required. | ui |
+| mobile | partial | mobile now attaches documents (incl. pptx) and the office tool builds decks as on web; same owner gate as web: provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`, `apps/web/lib/services/managed-office-file-service.ts:513-513`
+Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/docParser.ts:110-110`, `apps/web/lib/security/upload-scan.ts:38-38`
 
 ## S110.03: Spreadsheet → chart → report.
 
@@ -44,12 +44,12 @@ Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/stores/chat/c
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
-| mobile | partial | Chart artifacts render as text in the artifact viewer and the report tool cannot embed a chart. | ui |
+| mobile | partial | chart artifacts now draw as charts on the phone (shared parser in @agiworkforce/types); the chart-in-report part is the web switch-on: AGI_E2B_EXECUTION=1 with E2B keys | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:1012-1012`
 
 ## S110.05: Research → interactive page.
 
@@ -68,15 +68,12 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 
 - Done when: A request made in voice mode becomes a durable AGI Work task (runs in background, tracked in Tasks) without the user retyping it.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | agi_work is unreachable from live voice; a task must be started from the Tasks screen without voice context. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`
 
 ## S110.08: Voice → generated document.
 
@@ -98,12 +95,11 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The share extension drafts an ordinary chat, never an AGI Work task from an email thread. | flag-off, handler |
 | cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
 | vscode | partial | Turns run through the local CLI and inherit its limits: operator-gated Gmail, Always-allow tools only, no email intake. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:93-93`, `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
+Code: `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
 
 ## S110.11: Team mention → coding session.
 
@@ -128,10 +124,9 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | ui, flag-off |
-| mobile | partial | No design-to-code handoff from the phone; only steering an existing desktop Code session and downloading design source. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -167,14 +162,11 @@ Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/
 
 - Done when: From the phone the user sends a new request that runs on their paired computer under that computer's approvals, and sees the result on the phone.
 - Wave: 3
-- Already works on: desktop, vscode
+- Already works on: desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Dispatch tasks show status only in DispatchTaskComposer; the result text stored in dispatchTaskStore is never rendered and the task always runs in the first approved folder. | handler |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:41-41`, `apps/mobile/services/companion.ts:115-115`, `apps/mobile/services/companionNotifications.ts:26-26`
 
 ## S110.22: Local work → explicit cloud handoff.
 
@@ -208,14 +200,13 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/features/clou
 
 - Done when: From the main chat, the user brings an existing notebook (project) into the conversation so its instructions and sources ground the answers.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A selected project adds only its instructions locally (chatExecutionStore); the stream request carries no project id so the server never loads the project sources. | handler |
 | cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
+Code: `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`, `apps/cli/src/cloud/mod.rs:590-591`
 
 ## S110.25: Main conversation → persistent notebook sources.
 
@@ -238,10 +229,9 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Chat never recognises an authorization-required tool result and there is no resume after reconnect. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`, `apps/cli/src/cloud/connectors.rs:53-53`, `apps/cli/src/models/streaming.rs:619-619`, `crates/agiworkforce-llm/src/stream.rs:845-845`
+Code: `apps/cli/src/cloud/connectors.rs:53-53`, `apps/cli/src/models/streaming.rs:619-619`, `crates/agiworkforce-llm/src/stream.rs:845-845`, `apps/cli/src/app_server/developer_host.rs:2589-2589`
 
 ## S110.28: Published output → versioned update.
 

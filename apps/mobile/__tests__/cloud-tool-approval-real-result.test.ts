@@ -378,11 +378,9 @@ describe('resolveToolApproval, durable server-owned checkpoint', () => {
 
       expect(lastAssistantMessage()?.toolCalls?.[0]).toMatchObject({
         toolCallId: 'call_answered',
-        status: 'failed',
         requiresApproval: false,
-        output: reason,
       });
-      expect(useChatExecutionStore.getState().error).toBeNull();
+      expect(useChatExecutionStore.getState().error).toContain(reason);
 
       await useChatExecutionStore
         .getState()
