@@ -8,12 +8,14 @@ const APP_DIR = path.join(__dirname, '..', 'app');
  * A segment that renders on the server, or that gates on the signed-in session
  * before it can show anything, suspends on navigation. Without a boundary the
  * reader is held on the previous page with no sign that anything is happening.
- * A purely static marketing page never suspends, so it is not in scope.
+ * A purely static marketing page never suspends, so it is not in scope, and
+ * neither is one that declares `dynamic = 'force-static'`, which is rendered
+ * once at build time.
  */
 function suspendsOnNavigation(pagePath: string): boolean {
   const source = readFileSync(pagePath, 'utf8');
   return (
-    /export const dynamic\b/.test(source) ||
+    /export const dynamic = '(?!force-static')/.test(source) ||
     /export default async function/.test(source) ||
     /\bawait auth\(/.test(source) ||
     /\bcurrentUser\(/.test(source) ||
