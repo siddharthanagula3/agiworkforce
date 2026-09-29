@@ -223,7 +223,11 @@ describe('the Cargo version reader is scoped to the [package] table', () => {
     expect(cargoPackageVersion(missingPackageVersion)).toBeUndefined();
   });
 
-  it('matches what the real crate file reports today', () => {
-    expect(cargoPackageVersion(readRepoFile('apps/cli/Cargo.toml'))).toBe('1.7.1');
+  it('matches the version Cargo.lock records for the real crate', () => {
+    const locked = /^name = "agiworkforce-cli"\nversion = "([^"]+)"$/mu.exec(
+      readRepoFile('Cargo.lock'),
+    )?.[1];
+    expect(locked).toBeDefined();
+    expect(cargoPackageVersion(readRepoFile('apps/cli/Cargo.toml'))).toBe(locked);
   });
 });

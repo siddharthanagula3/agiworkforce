@@ -35,9 +35,9 @@ Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:945-945`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 26d3c444c8: the web media service types image and video providers from cloud-contracts and the company hub store from Provider in @agiworkforce/types; both left the check-client-inference baseline (97 to 95). Still baselined: RouteEconomicsPanel restates capability sources (web admin), LandingSections.tsx and RouteFlow.tsx restate provider identity (web marketing), apps/mobile/lib/providerStreamClient.ts (mobile, post-codex), and apps/desktop OnboardingWizard.tsx, types/media.ts and types/provider.ts (p-electron). | surface-only |
+| platform | partial | partials/platform-final 7eba315679: the web marketing marquee, route diagram and admin route economics panel read the catalogue (PROVIDERS_IN_ORDER, COMPAT_CAPABILITY_SOURCES); three web entries left the check-client-inference baseline. Left: the Tauri renderer's types/provider.ts (its union carries mistral, together, fireworks, cerebras, deepinfra, cohere, ai21, sambanova, azure, llamacpp, vllm, which the shared Provider lacks), types/media.ts and OnboardingWizard key-prefix detection, and mobile providerStreamClient.ts. | surface-only |
 
-Code: `apps/web/features/media/services/media-api-service.ts:18-18`, `apps/web/features/media/services/media-api-service.ts:41-41`, `apps/web/shared/stores/company-hub-store.ts:10-10`
+Code: `apps/web/features/marketing/components/RouteFlow.tsx:6-6`, `apps/web/features/marketing/components/LandingSections.tsx:3-3`, `apps/web/features/admin/components/RouteEconomicsPanel.tsx:85-85`
 
 ## S101.07: Shared capability resolution.
 
@@ -145,9 +145,9 @@ Code: `apps/web/shared/types/common.ts:203-203`, `apps/web/features/chat/utils/r
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | ToolDefinition is Rust-owned and generated, but web tools are described in a separate tool-metadata module and search_places, ask_clarifying_questions, 13 device-step and the browser tools remain undeclared (baselined). | handler |
+| platform | partial | partials/platform-final 25b9a0802f, 064c76deea: search_places, ask_clarifying_questions and the eight paired-Chrome commands are declared (undeclared baseline 11 to 1). Left: run_command stays with the Cloud Code agent loop's own definitions and approval store, and web tool metadata is still a TS table beside the Rust-generated ToolDefinition wire shape. | handler |
 
-Code: `packages/contracts/types/src/tool-primitive.ts:4-7`, `scripts/check-tool-registry.mjs:50-60`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:142-142`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:546-546`, `scripts/check-tool-registry.mjs:44-44`
 
 ## S101.21: Shared approval contracts.
 
@@ -178,9 +178,9 @@ Code: `apps/cli/src/ecosystem.rs:1155-1159`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform df36f1085b: every web module that restated lifecycle names now types them from LifecycleStatus (8 files) and the dispatch runner reads TERMINAL_LIFECYCLE_STATUSES; baseline 101 to 89. Left: mobile and Chrome files in the baseline (surface phases). | mobile, chrome |
+| platform | partial | partials/platform-final 7eba315679: Chrome scheduled-run cancellation reads the shared task board stages (it also missed partial and timed_out as terminal). Left: Chrome schedulesSection.ts switches on the schedule-run status contract-typed from cloud-contracts, which the guard reads as lifecycle names; 42 Tauri renderer files under apps/desktop/src; mobile baseline files. | mobile, chrome |
 
-Code: `apps/web/features/media/services/media-api-service.ts:51-51`, `apps/web/features/desktop-host/hooks/use-dispatch-task-runner.ts:52-52`, `scripts/check-client-inference.baseline.json:1-2`
+Code: `apps/extension/src/features/background/scheduled-task-cancellation.ts:136-136`
 
 ## S101.27: Shared notifications.
 
