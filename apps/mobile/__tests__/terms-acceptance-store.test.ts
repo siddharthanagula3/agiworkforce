@@ -115,4 +115,61 @@ describe('native Terms acceptance', () => {
       error: expect.stringContaining('device session'),
     });
   });
+
+  it('rechecks an accepted account without dropping it while the answer is pending', async () => {
+    mockGet.mockResolvedValueOnce({ currentVersion: 'v1', accepted: true });
+    await useTermsAcceptanceStore.getState().verify('person-a');
+
+    let resolveCheck: (value: unknown) => void = () => undefined;
+    mockGet.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = resolve;
+        }),
+    );
+    const pending = useTermsAcceptanceStore.getState().recheck('person-a');
+    expect(useTermsAcceptanceStore.getState().status).toBe('accepted');
+
+    resolveCheck({ currentVersion: 'v2', accepted: false });
+    await pending;
+    expect(useTermsAcceptanceStore.getState()).toMatchObject({
+      status: 'required',
+      currentVersion: 'v2',
+    });
+  });
+
+  it('keeps an accepted account when the recheck cannot reach the server', async () => {
+    mockGet.mockResolvedValueOnce({ currentVersion: 'v1', accepted: true });
+    await useTermsAcceptanceStore.getState().verify('person-a');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockGet.mockRejectedValueOnce(new Error('offline'));
+
+    await useTermsAcceptanceStore.getState().recheck('person-a');
+
+    expect(useTermsAcceptanceStore.getState().status).toBe('accepted');
+    warn.mockRestore();
+  });
+
+  it('re-prompts with the newer version when the Terms changed mid-review', async () => {
+    mockGet.mockResolvedValueOnce({ currentVersion: 'v1', accepted: false });
+    await useTermsAcceptanceStore.getState().verify('person-a');
+    mockPost.mockRejectedValueOnce(
+      new ApiHttpError(
+        'The Terms of Service changed after this page loaded.',
+        409,
+        'TERMS_VERSION_OUTDATED',
+        {
+          body: { currentVersion: 'v2' },
+        },
+      ),
+    );
+
+    await useTermsAcceptanceStore.getState().accept('person-a');
+
+    expect(useTermsAcceptanceStore.getState()).toMatchObject({
+      status: 'required',
+      currentVersion: 'v2',
+      error: 'The Terms changed. Review the current version before continuing.',
+    });
+  });
 });
