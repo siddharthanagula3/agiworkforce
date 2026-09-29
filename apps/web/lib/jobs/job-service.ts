@@ -549,6 +549,18 @@ export async function pruneFinishedJobs(db: DatabaseAdapter): Promise<number> {
         )`,
       [queue, JOB_QUEUE_POLICIES[queue].retainFinishedDays, MAX_PRUNE_BATCH],
     );
+    pruned += await db.execute(
+      `delete from public.background_jobs
+        where id in (
+          select id from public.background_jobs
+           where queue = $1
+             and status = 'dead'
+             and dead_lettered_at < now() - make_interval(days => $2)
+           order by dead_lettered_at asc
+           limit $3
+        )`,
+      [queue, JOB_QUEUE_POLICIES[queue].retainDeadDays, MAX_PRUNE_BATCH],
+    );
   }
   return pruned;
 }

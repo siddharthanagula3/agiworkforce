@@ -213,7 +213,10 @@ describe('sweepOrganizationRetention', () => {
       /delete from public\.scheduled_task_runs/i.test(String(sql)),
     );
     expect(String(runDelete?.[0])).toMatch(/task\.organization_id = \$1/);
-    expect(String(runDelete?.[0])).toMatch(/run\.status <> 'running'/);
+    expect(String(runDelete?.[0])).toMatch(/run\.status = any \(\$4::text\[\]\)/);
+    expect(runDelete?.[1]?.[3]).toEqual(['success', 'failed', 'timeout', 'cancelled']);
+    expect(runDelete?.[1]?.[3]).not.toContain('awaiting_approval');
+    expect(runDelete?.[1]?.[3]).not.toContain('running');
     expect(runDelete?.[1]?.[0]).toBe(ORG);
     expect(runDelete?.[1]?.[1]).toBe(isSwept(result) && result.cutoff);
   });
