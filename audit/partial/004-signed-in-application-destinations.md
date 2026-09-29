@@ -194,11 +194,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Needs lead ruling. Mobile creates images in chat image mode (model picker in the + sheet), and the Library now has Images, Remix and Generations. The web's standalone Image Studio (apps/web/app/chat/images) has no mobile screen. help.openai.com and openai.com returned 403, and Claude has no image generation. A dedicated screen would repeat chat image mode; build it only if the lead wants web parity. | ui |
+| mobile | partial | : Edit with brush selection (size slider, undo/redo, inpaint mask), copy, share and delete (source chat) are done in chat and Library viewers. Save to Photos waits on approval to add expo-media-library (manifest, lockfile, config plugin). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
+Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:219-219`, `apps/mobile/src/features/image/components/ImageAreaEditor.tsx:284-284`, `apps/mobile/src/features/image/services/imageMask.ts:187-187`, `apps/mobile/app/(app)/chat/[id].tsx:1434-1436`
 
 ## S4.28: Image collection.
 

@@ -218,14 +218,11 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/
 
 - Done when: Sources chosen for the next message (e.g. web search, connector resources, a page) are shown as chips before sending.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Proposed done at parity: mobile shows media, skill and research chips (ChatInput.tsx:826, 218); web shows no web-search chip either; connector prompt/resource picking is not offered on mobile. Needs lead ruling. | codex |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 ## S13.33: Selected-tool chips.
 
