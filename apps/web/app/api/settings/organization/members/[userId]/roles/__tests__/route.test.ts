@@ -1,0 +1,137 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { createError } from '@/lib/errors';
+
+vi.mock('server-only', () => ({}));
+
+const mocks = vi.hoisted(() => ({
+  withRateLimit: vi.fn(),
+  requireCsrfToken: vi.fn(),
+  recordAuditEvent: vi.fn(),
+  requireWorkspaceConsolePermission: vi.fn(),
+  setMemberRoles: vi.fn(),
+  invalidateActiveOrganizationCache: vi.fn(),
+  neonDb: { query: vi.fn() },
+}));
+
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.neonDb }));
+vi.mock('@/lib/server/request-context-cache', () => ({
+  invalidateActiveOrganizationCache: mocks.invalidateActiveOrganizationCache,
+}));
+vi.mock('@/lib/services/organization-role-service', () => ({
+  setMemberRoles: mocks.setMemberRoles,
+}));
+vi.mock('@/app/api/settings/organization/workspace-access', () => ({
+  requireWorkspaceConsolePermission: mocks.requireWorkspaceConsolePermission,
+}));
+
+import { PUT } from '../route';
+
+const ORG = '11111111-1111-4111-8111-111111111111';
+const ROLE = '33333333-3333-4333-8333-333333333333';
+const permissions = new Set(['roles.manage']);
+
+function put(body: unknown, userId = 'user_target') {
+  return PUT(
+    new NextRequest(`http://localhost/api/settings/organization/members/${userId}/roles`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ userId }) },
+  );
+}
+
+describe('PUT /api/settings/organization/members/[userId]/roles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.requireCsrfToken.mockResolvedValue(null);
+    mocks.requireWorkspaceConsolePermission.mockResolvedValue({
+      userId: 'admin-1',
+      organizationId: ORG,
+      access: { role: 'admin', permissions },
+    });
+    mocks.setMemberRoles.mockResolvedValue({ added: [ROLE], removed: [] });
+  });
+
+  it('returns the csrf refusal', async () => {
+    mocks.requireCsrfToken.mockResolvedValue(new Response(null, { status: 403 }));
+
+    const response = await put({ roleIds: [ROLE] });
+
+    expect(response.status).toBe(403);
+    expect(mocks.requireWorkspaceConsolePermission).not.toHaveBeenCalled();
+  });
+
+  it.each(['%20%20', 'x'.repeat(256)])('rejects a blank or oversized target id', async (userId) => {
+    const response = await put({ roleIds: [ROLE] }, userId);
+
+    expect(response.status).toBe(400);
+    expect(mocks.requireWorkspaceConsolePermission).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller without roles.manage', async () => {
+    mocks.requireWorkspaceConsolePermission.mockRejectedValue(createError.forbidden('no'));
+
+    const response = await put({ roleIds: [ROLE] });
+
+    expect(response.status).toBe(403);
+    expect(mocks.requireWorkspaceConsolePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      'roles.manage',
+      expect.any(String),
+    );
+    expect(mocks.setMemberRoles).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid body', async () => {
+    const response = await put({ roleIds: [ROLE], extra: 1 });
+
+    expect(response.status).toBe(400);
+    expect(mocks.setMemberRoles).not.toHaveBeenCalled();
+  });
+
+  it('assigns the roles, drops the target cached org context and records it', async () => {
+    const response = await put({ roleIds: [ROLE] }, 'user%5Ftarget');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      userId: 'user_target',
+      roleIds: [ROLE],
+      added: [ROLE],
+      removed: [],
+    });
+    expect(mocks.setMemberRoles).toHaveBeenCalledWith(mocks.neonDb, {
+      organizationId: ORG,
+      userId: 'user_target',
+      roleIds: [ROLE],
+      actorUserId: 'admin-1',
+      actorPermissions: permissions,
+    });
+    expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user_target');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'admin-1',
+        organizationId: ORG,
+        eventType: 'member_role_changed',
+        detail: expect.objectContaining({ targetUserId: 'user_target', scopes: [ROLE] }),
+      }),
+    );
+  });
+
+  it('still invalidates the cache but records nothing when roles did not change', async () => {
+    mocks.setMemberRoles.mockResolvedValue({ added: [], removed: [] });
+
+    await put({ roleIds: [ROLE] });
+
+    expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user_target');
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
