@@ -29,14 +29,20 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   if (state && GITHUB_STATE_PATTERN.test(state)) {
-    const oauthState = await recordAppInstallation(state, installationId);
-    if (oauthState) {
+    const appAuthorization = await recordAppInstallation(state, installationId);
+    if (appAuthorization) {
       if (!isGitHubInstallationLinkingAvailable()) {
         return NextResponse.redirect(appInstallReturnUrl({ error: 'unavailable' }));
       }
       try {
         const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
-        return NextResponse.redirect(getGitHubUserAuthorizationUrl(oauthState, callbackUrl));
+        return NextResponse.redirect(
+          getGitHubUserAuthorizationUrl(
+            appAuthorization.oauthState,
+            callbackUrl,
+            appAuthorization.codeChallenge,
+          ),
+        );
       } catch (error) {
         logger.error({ error }, 'Failed to start GitHub user authorization for an app install');
         return NextResponse.redirect(appInstallReturnUrl({ error: 'failed' }));

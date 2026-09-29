@@ -38,17 +38,18 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
   const { state, code, error } = parsed.data;
 
-  const installationId = await consumeAppInstall(userId, state);
-  if (installationId === null) {
+  const consumed = await consumeAppInstall(userId, state);
+  if (consumed === null) {
     logger.warn('[github-install] app completion rejected: no open app install for this state');
     return respond('invalid_state');
   }
+  const { installationId, codeVerifier } = consumed;
   if (error) return respond('denied');
   if (!code) return respond('failed');
 
   try {
     const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
-    const userAccessToken = await exchangeGitHubOAuthCode(code, callbackUrl);
+    const userAccessToken = await exchangeGitHubOAuthCode(code, callbackUrl, codeVerifier);
     const verified = await findGitHubInstallationForUser(userAccessToken, installationId);
     if (!verified) {
       logger.warn(

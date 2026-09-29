@@ -14,8 +14,11 @@
 --          account that started the install can finish it, after GitHub
 --          confirms the installation is reachable by the authorizing user. A
 --          link handed to someone else therefore cannot attach their
---          installation to the starter's account. Rows are single-use
---          (consumed_at) and expire.
+--          installation to the starter's account. The user authorization leg
+--          uses PKCE: each row holds its own code_verifier, AES-256-GCM sealed
+--          like the connector broker's (0097), so a code intercepted on its way
+--          back to the app can only be exchanged with the verifier of the row it
+--          was minted for. Rows are single-use (consumed_at) and expire.
 --
 -- Depends: 0037_rls_user_isolation (current_app_user_id, app_rls role)
 -- =============================================================================
@@ -28,13 +31,16 @@ create table if not exists public.github_install_authorizations (
   install_state_hash text not null check (install_state_hash ~ '^[0-9a-f]{64}$'),
   oauth_state_hash text check (oauth_state_hash ~ '^[0-9a-f]{64}$'),
   installation_id bigint check (installation_id > 0),
+  code_verifier_enc text,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   consumed_at timestamptz,
   constraint github_install_authorizations_install_state_unique unique (install_state_hash),
   constraint github_install_authorizations_oauth_state_unique unique (oauth_state_hash),
   constraint github_install_authorizations_oauth_needs_installation
-    check (oauth_state_hash is null or installation_id is not null)
+    check (oauth_state_hash is null or installation_id is not null),
+  constraint github_install_authorizations_oauth_needs_verifier
+    check (oauth_state_hash is null or code_verifier_enc is not null)
 );
 
 create index if not exists idx_github_install_authorizations_user
