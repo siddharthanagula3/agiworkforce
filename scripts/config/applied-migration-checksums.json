@@ -338,5 +338,7 @@
   "0337_health_space.sql": "2ff40daf00119803fbce10a4060b6bf98a42c613c22a6dae1867768a3e962ba1",
   "0338_account_security.sql": "64a23aeda3d9334b75a13487486d75f4f369ed5047fa3a6de9b4bdbf4f4d8480",
   "0339_temporary_chat_media_jobs.sql": "8b51a2fa4370e8a4a17e24705d70fa66fe9b52fc2c64858fa763a17cdda1d8bc",
-  "0340_workspace_connector_tool_rules.sql": "e35630488871ac9ec70aa0fcac13e50bb95fa040ef0dcb7ff0263bf7d808cfd2"
+  "0340_workspace_connector_tool_rules.sql": "e35630488871ac9ec70aa0fcac13e50bb95fa040ef0dcb7ff0263bf7d808cfd2",
+  "0341_push_preferences_and_share_conversation.sql": "350b1b4263f6cb0874fc183f2c6118a4e47b55fe15fa7fa1b9f402a3cdad95fd",
+  "0342_connector_oauth_app_return.sql": "69eea74f0a2acf9e84b1d1f0e99d97ca2af252ed45a899528984b2666d6fe907"
 }
