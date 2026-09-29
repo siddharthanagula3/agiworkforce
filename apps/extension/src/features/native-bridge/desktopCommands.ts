@@ -28,6 +28,7 @@ export interface DesktopCommandContext {
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
   history: (tabId: number, direction: 'back' | 'forward') => Promise<void>;
+  tabUrl: (tabId: number) => Promise<string>;
   capture: (tabId: number) => Promise<string>;
 }
 
@@ -197,7 +198,14 @@ async function execute(
         throw new Error('Say whether to go back or forward.');
       }
       await context.history(tabId, direction);
-      return { direction };
+      const url = await context.tabUrl(tabId);
+      try {
+        await authorizeBrowserToolUrl(url);
+      } catch (error) {
+        await context.history(tabId, direction === 'back' ? 'forward' : 'back');
+        throw error;
+      }
+      return { direction, url };
     }
     case 'browser_download': {
       const response = requireSuccess(

@@ -41,7 +41,11 @@ import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import { isDomSmallEnoughToRead } from './dom-helpers';
-import { fillPageFields, findPageElements } from './features/content/pageElements';
+import {
+  fillPageFields,
+  findPageElements,
+  watchPasswordFields,
+} from './features/content/pageElements';
 import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
@@ -115,6 +119,7 @@ function initialize(): void {
   }
   scope.__agiWorkforceContentScriptReady = true;
 
+  watchPasswordFields();
   void setupInPagePanel(originApproved, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);

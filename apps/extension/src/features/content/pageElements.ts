@@ -20,7 +20,7 @@ const INTERACTIVE_SELECTOR = [
   '[contenteditable="true"]',
 ].join(',');
 
-const SENSITIVE_AUTOCOMPLETE = /^(cc-|current-password$|new-password$|one-time-code$)/u;
+const SENSITIVE_AUTOCOMPLETE = /^(cc-.+|current-password|new-password|one-time-code)$/u;
 
 export interface FoundPageElement {
   selector: string;
@@ -96,6 +96,22 @@ export function uniqueSelector(el: Element): string {
   return path.join(' > ');
 }
 
+function isEditableText(el: Element): boolean {
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
+  const editable = el.getAttribute('contenteditable');
+  return editable === '' || editable === 'true' || editable === 'plaintext-only';
+}
+
+function isTextEntry(el: Element): boolean {
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
+  if (el instanceof HTMLInputElement) {
+    return !['submit', 'button', 'reset', 'image'].includes(el.type);
+  }
+  if (isEditableText(el)) return true;
+  const role = el.getAttribute('role');
+  return role === 'textbox' || role === 'searchbox' || role === 'combobox';
+}
+
 function labelFor(el: Element): string {
   const aria = el.getAttribute('aria-label');
   if (aria) return aria;
@@ -103,7 +119,12 @@ function labelFor(el: Element): string {
   if (labelledBy) {
     const text = labelledBy
       .split(/\s+/u)
-      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .map((id) => document.getElementById(id))
+      .filter(
+        (labelEl): labelEl is HTMLElement =>
+          labelEl !== null && labelEl !== el && !labelEl.contains(el),
+      )
+      .map((labelEl) => labelEl.textContent ?? '')
       .join(' ');
     if (text.trim()) return text;
   }
@@ -112,14 +133,21 @@ function labelFor(el: Element): string {
     el instanceof HTMLTextAreaElement ||
     el instanceof HTMLSelectElement
   ) {
-    const label = el.labels?.[0]?.textContent;
-    if (label && label.trim()) return label;
+    const label = el.labels?.[0];
+    if (label) {
+      const clone = label.cloneNode(true) as HTMLElement;
+      clone
+        .querySelectorAll('input, textarea, select, [contenteditable]')
+        .forEach((field) => field.remove());
+      if (clone.textContent?.trim()) return clone.textContent;
+    }
   }
   const title = el.getAttribute('title');
   if (title) return title;
-  if (el instanceof HTMLInputElement && (el.type === 'submit' || el.type === 'button')) {
-    return el.value;
+  if (isTextEntry(el)) {
+    return el.getAttribute('placeholder') ?? el.getAttribute('name') ?? '';
   }
+  if (el instanceof HTMLInputElement) return el.value;
   return el.textContent ?? '';
 }
 
@@ -159,6 +187,7 @@ function looksLikeSearch(el: Element, name: string, placeholder: string | undefi
 }
 
 export function findPageElements(query?: string): FoundPageElement[] {
+  rememberPasswordFields();
   const needle = query?.trim().toLowerCase() ?? '';
   const found: FoundPageElement[] = [];
   for (const el of Array.from(document.querySelectorAll(INTERACTIVE_SELECTOR))) {
@@ -199,10 +228,65 @@ export function findPageElements(query?: string): FoundPageElement[] {
   return found;
 }
 
+const SENSITIVE_NAME_TOKENS = new Set([
+  'card',
+  'cc',
+  'ccnum',
+  'cardnumber',
+  'cvv',
+  'cvc',
+  'csc',
+  'otp',
+  'ssn',
+  'password',
+  'passwd',
+  'pwd',
+  'pin',
+  'passcode',
+]);
+
+const passwordFields = new WeakSet<Element>();
+
+export function rememberPasswordFields(): void {
+  document.querySelectorAll('input[type="password"]').forEach((field) => passwordFields.add(field));
+}
+
+export function watchPasswordFields(): void {
+  rememberPasswordFields();
+  new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.oldValue?.toLowerCase() === 'password')
+        passwordFields.add(record.target as Element);
+    }
+  }).observe(document.documentElement, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['type'],
+    attributeOldValue: true,
+  });
+}
+
+function autocompleteIsSensitive(el: Element): boolean {
+  return (el.getAttribute('autocomplete') ?? '')
+    .toLowerCase()
+    .split(/\s+/u)
+    .some((token) => SENSITIVE_AUTOCOMPLETE.test(token));
+}
+
+function nameIsSensitive(el: Element): boolean {
+  const text = ['name', 'id', 'aria-label', 'placeholder', 'data-testid']
+    .map((attribute) => el.getAttribute(attribute) ?? '')
+    .join(' ')
+    .replace(/([a-z])([A-Z])/gu, '$1 $2')
+    .toLowerCase();
+  return text
+    .split(/[^a-z0-9]+/u)
+    .some((token) => token !== '' && SENSITIVE_NAME_TOKENS.has(token));
+}
+
 function isSensitiveField(el: Element): boolean {
   if (el instanceof HTMLInputElement && el.type === 'password') return true;
-  const autocomplete = (el.getAttribute('autocomplete') ?? '').toLowerCase();
-  return SENSITIVE_AUTOCOMPLETE.test(autocomplete);
+  return passwordFields.has(el) || autocompleteIsSensitive(el) || nameIsSensitive(el);
 }
 
 function dispatchValueEvents(el: Element): void {
@@ -212,7 +296,22 @@ function dispatchValueEvents(el: Element): void {
 
 function fillOne(el: Element, value: string): string | null {
   if (isSensitiveField(el)) {
-    return 'This is a password or payment field; the user has to fill it in themselves.';
+    return 'This is a password, payment or one-time code field; the user has to fill it in themselves.';
+  }
+  if (!isVisible(el)) return 'This field is hidden, so it is not filled.';
+  if (
+    (el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement) &&
+    el.disabled
+  ) {
+    return 'This field cannot be edited.';
+  }
+  if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly) {
+    return 'This field cannot be edited.';
+  }
+  if (el.getAttribute('aria-disabled') === 'true' || el.getAttribute('aria-readonly') === 'true') {
+    return 'This field cannot be edited.';
   }
   if (el instanceof HTMLSelectElement) {
     const wanted = value.trim().toLowerCase();
@@ -232,13 +331,12 @@ function fillOne(el: Element, value: string): string | null {
     return null;
   }
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    if (el.disabled || el.readOnly) return 'This field cannot be edited.';
     el.focus();
     el.value = value;
     dispatchValueEvents(el);
     return null;
   }
-  if (el instanceof HTMLElement && el.isContentEditable) {
+  if (el instanceof HTMLElement && isEditableText(el)) {
     el.focus();
     el.textContent = value;
     dispatchValueEvents(el);
@@ -248,6 +346,7 @@ function fillOne(el: Element, value: string): string | null {
 }
 
 export function fillPageFields(fields: readonly FillFieldRequest[]): FillFieldsOutcome {
+  rememberPasswordFields();
   const outcome: FillFieldsOutcome = { filled: [], failed: [] };
   for (const field of fields.slice(MAX_FILL_FIELDS)) {
     outcome.failed.push({

@@ -603,12 +603,31 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
+    let pinned_browser_args;
+    let browser_args: &HashMap<String, String> = if canonical_name == "browser_fill_form" {
+        match pin_active_browser_tab(&call.args).await {
+            Ok(args) => {
+                pinned_browser_args = args;
+                &pinned_browser_args
+            }
+            Err(output) => {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.to_string(),
+                    success: false,
+                    output,
+                });
+            }
+        }
+    } else {
+        &call.args
+    };
+
     let boundary_gated = match canonical_name {
         "web_fetch" => opts.require_confirmation,
         _ => require_confirm,
     };
     if boundary_gated {
-        if let Some(request) = trust_boundary_approval(canonical_name, &call.args) {
+        if let Some(request) = trust_boundary_approval(canonical_name, browser_args) {
             let allowed =
                 match request_approval(opts.approval_callback.as_ref(), request.clone()).await {
                     Some(decision) => approval_allows(decision),
@@ -651,7 +670,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             .await
         }
         browser if crate::platform::runtime::tool_catalog::is_browser_tool(browser) => {
-            execute_browser_command(browser, &call.args).await
+            execute_browser_command(browser, browser_args).await
         }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
@@ -847,6 +866,86 @@ fn domain_rule_refusal(tool_name: &str, args: &HashMap<String, String>) -> Optio
     }
 }
 
+const MAX_APPROVAL_FIELD_VALUE_CHARS: usize = 300;
+
+fn fill_form_fields(args: &HashMap<String, String>) -> Vec<(String, String)> {
+    let Some(Value::Array(fields)) = args
+        .get("fields")
+        .and_then(|fields| serde_json::from_str::<Value>(fields).ok())
+    else {
+        return Vec::new();
+    };
+    fields
+        .iter()
+        .map(|field| {
+            let text = |key: &str| {
+                field
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let value = text("value");
+            let shown = if value.chars().count() > MAX_APPROVAL_FIELD_VALUE_CHARS {
+                format!(
+                    "{}…",
+                    value
+                        .chars()
+                        .take(MAX_APPROVAL_FIELD_VALUE_CHARS)
+                        .collect::<String>()
+                )
+            } else {
+                value
+            };
+            (text("selector"), shown)
+        })
+        .collect()
+}
+
+async fn pin_active_browser_tab(
+    args: &HashMap<String, String>,
+) -> std::result::Result<HashMap<String, String>, String> {
+    let identity =
+        crate::browser_bridge::ClientIdentity::for_cli(std::env::current_dir().ok(), None);
+    let tabs = crate::browser_bridge::run_command(
+        "browser_list_tabs",
+        Value::Object(serde_json::Map::new()),
+        identity,
+    )
+    .await
+    .map_err(|failure| failure.user_message())?;
+    let active = tabs
+        .as_array()
+        .and_then(|tabs| {
+            tabs.iter()
+                .find(|tab| tab.get("active").and_then(Value::as_bool) == Some(true))
+        })
+        .ok_or_else(|| {
+            "No active tab is open in the paired Chrome, so no fields were filled.".to_string()
+        })?;
+    let tab_id = active
+        .get("tabId")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "The paired Chrome did not name its active tab.".to_string())?;
+    let text = |key: &str| {
+        active
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    if let Some(reason) = crate::permissions::url_blocked_by_domain_rule(&text("url")) {
+        return Err(format!(
+            "The active tab is on a blocked site, so no fields were filled. {reason}"
+        ));
+    }
+    let mut pinned = args.clone();
+    pinned.insert("tabId".to_string(), tab_id.to_string());
+    pinned.insert("tabTitle".to_string(), text("title"));
+    pinned.insert("tabUrl".to_string(), text("url"));
+    Ok(pinned)
+}
+
 fn trust_boundary_approval(
     tool_name: &str,
     args: &HashMap<String, String>,
@@ -891,10 +990,26 @@ fn trust_boundary_approval(
             "active tab".to_string(),
             "The agent wants to list the buttons, links and fields of the page open in your signed-in Chrome.",
         ),
-        "browser_fill_form" => computer_use(
-            "active tab".to_string(),
-            "The agent wants to fill in fields in your signed-in Chrome.",
-        ),
+        "browser_fill_form" => {
+            let tab = argument("tabUrl").unwrap_or_else(|| "active tab".to_string());
+            let mut detail = vec![format!(
+                "tab: {} ({tab})",
+                argument("tabTitle").unwrap_or_default()
+            )];
+            detail.extend(
+                fill_form_fields(args)
+                    .into_iter()
+                    .map(|(selector, value)| format!("{selector}: {value}")),
+            );
+            Some(ApprovalRequest::new(
+                ApprovalRequestKind::ComputerUse {
+                    action: tool_name.to_string(),
+                    target: tab,
+                },
+                "The agent wants to fill in these fields in your signed-in Chrome.",
+                detail,
+            ))
+        }
         "browser_history" => computer_use(
             argument("direction").unwrap_or_default(),
             "The agent wants to go back or forward in your signed-in Chrome.",
@@ -1490,6 +1605,12 @@ fn browser_command_args(
         "browser_find" => copy_string("query"),
         "browser_history" => copy_string("direction"),
         "browser_fill_form" => {
+            if let Some(tab_id) = args
+                .get("tabId")
+                .and_then(|value| value.trim().parse::<i64>().ok())
+            {
+                out.insert("tabId".to_string(), Value::from(tab_id));
+            }
             if let Some(fields) = args.get("fields") {
                 out.insert(
                     "fields".to_string(),
@@ -2145,6 +2266,31 @@ mod tests {
             result.output,
             "`web_fetch` was not approved and did not run."
         );
+    }
+
+    #[test]
+    fn a_fill_form_approval_names_the_tab_and_every_field_it_will_write() {
+        let args: HashMap<String, String> = [
+            (
+                "fields",
+                r##"[{"selector":"#city","value":"Paris"},{"selector":"#zip","value":"75001"}]"##,
+            ),
+            ("tabId", "7"),
+            ("tabTitle", "Checkout"),
+            ("tabUrl", "https://shop.example/"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+
+        let request =
+            trust_boundary_approval("browser_fill_form", &args).expect("filling asks first");
+        assert_eq!(request.detail[0], "tab: Checkout (https://shop.example/)");
+        assert_eq!(&request.detail[1..], ["#city: Paris", "#zip: 75001"]);
+
+        let sent = browser_command_args("browser_fill_form", &args);
+        assert_eq!(sent.get("tabId"), Some(&Value::from(7)));
+        assert!(sent.get("tabTitle").is_none());
     }
 
     #[test]
