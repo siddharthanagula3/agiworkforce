@@ -694,7 +694,9 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Retention:</strong> kept until you delete them or delete your account, unless your
-        organisation has switched on a retention window, in which case that window also applies.
+        organisation has switched on a retention window, in which case that window also applies. A
+        deleted conversation can be restored for 30 days, then a daily job permanently deletes it
+        with its messages and search index.
         <br />
         <strong>Enforced by:</strong> nothing expires a personal conversation automatically. A
         conversation that belongs to an organisation workspace is different:{' '}
@@ -902,7 +904,7 @@ const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
   {
     label: 'AI training',
     value:
-      'We do not use Google user data to develop, improve or train generalized AI or machine learning models.',
+      'We do not use Google user data to develop, improve or train generalized AI or machine learning models. Once a chat or routine can reach Google data, we send it only to AI providers whose terms bar training on it. If the model you picked cannot run that way, we tell you and send nothing.',
   },
   {
     label: 'Transfer',
@@ -919,8 +921,8 @@ const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         The tokens that connect your account are encrypted at rest with AES-256-GCM. When you
-        disconnect, we ask Google to revoke them and erase our copy. Deleting your account erases
-        them too; to end access at Google as well, disconnect first or remove AGI at{' '}
+        disconnect or delete your account, we ask Google to revoke them and erase our copy. You can
+        also remove AGI at{' '}
         <a href="https://myaccount.google.com/permissions" className="agi-ds-link">
           myaccount.google.com/permissions
         </a>
@@ -931,7 +933,7 @@ const GOOGLE_DATA_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Retention',
     value:
-      "We keep no separate copy of what a connector retrieves. It persists only where it lands: in a chat reply and that chat's search index, in a routine's run history, or as a Drive file you import into a project. Each is kept on that record's schedule in section 05.",
+      "We keep no separate copy of what a connector retrieves. It persists only where it lands: in a chat reply and that chat's search index, in a routine's run history, or as a Drive file you import into a project. A deleted chat or project can be restored for 30 days and is then permanently deleted. Deleting a routine deletes its run history at once. Workspace retention settings also apply, and deleting your account erases all of it.",
   },
 ];
 
