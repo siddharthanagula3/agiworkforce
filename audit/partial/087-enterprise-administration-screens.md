@@ -136,18 +136,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S87.15: Tool policy.
-
-- Done when: An administrator decides which individual tools members and agents may use (allow, block or require approval) and the tool loop enforces it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Workspace connector tool rules apply to Managed CLI turns on the server and show in /connectors, and a managed deny now names the managed policy; rules for local CLI tools still come only from a machine managed-settings.json, not from the console (Claude Code's server-managed settings are the reference). | states |
-
-Code: `apps/cli/src/claude_parity.rs:2021-2021`, `apps/cli/src/features/exec/tools/mod.rs:498-498`, `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:177-178`
-
 ## S87.18: Private marketplace.
 
 - Done when: A workspace curates its own private catalogue of plugins, skills or servers that members browse and install, separate from the public directory.

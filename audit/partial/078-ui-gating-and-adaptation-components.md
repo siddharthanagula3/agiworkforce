@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S78.01: Feature-availability resolver.
-
-- Done when: One resolver combines model, plan, surface and operator switches to say whether each feature is available here, and the surface's controls read it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI reads the capability document (034deed768) for cloud models, image generation and /search; voice, connectors, plugins and skills controls still decide locally | handler |
-
-Code: `apps/cli/src/tier_cache.rs:240-240`, `apps/cli/src/models/provider_dispatch.rs:318-318`, `apps/cli/src/agent/mod.rs:822-822`, `apps/cli/src/agent/chat.rs:696-696`
-
 ## S78.03: Model-dependent accepted-file types.
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
@@ -101,18 +89,6 @@ Code: `apps/cli/src/provider.rs:341-341`
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S78.23: Continue-on-another-device action.
-
-- Done when: When work fits another device or app better, the surface offers an action that continues it there.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI can receive a selection handed off from Chrome, but never offers to continue its own work on another device. | ui |
-
-Code: `apps/cli/src/context_handoff.rs:1-5`
 
 ## S78.25: Attachment-preservation choice after model change.
 

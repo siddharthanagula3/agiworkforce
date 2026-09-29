@@ -67,15 +67,3 @@ Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/
 | mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
 
 Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
-
-## S59.26: Approval from another device.
-
-- Done when: An approval raised on one device can be answered from another signed-in device, and the first device sees the result.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A CLI session's approvals can be answered from the phone companion, but the CLI cannot answer approvals raised by cloud runs on other devices. | ui |
-
-Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
