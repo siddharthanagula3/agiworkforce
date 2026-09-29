@@ -596,6 +596,7 @@ export type InPagePromptOutcome =
   | 'plan_required'
   | 'quota_exceeded'
   | 'account_unavailable'
+  | 'terms_required'
   | 'rate_limited'
   | 'cancelled'
   | 'request_rejected'

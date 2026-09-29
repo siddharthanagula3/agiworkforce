@@ -14,6 +14,7 @@ import {
   isSandboxedPublishedKind,
   type PublishedArtifactKind,
 } from '@/features/chat/components/artifacts/publishedArtifactRender';
+import { ArtifactConnectorConsent } from './ArtifactConnectorConsent';
 import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
 import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifact';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -175,33 +176,25 @@ export function PublishedArtifactView({
       ) : null}
 
       {runtime.askingForAi ? (
-        <section
-          aria-label={t('artifactPublish.runtimeConsentLabel', 'AI permission')}
-          aria-live="polite"
-          className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-muted/40 px-4 py-3 text-sm text-foreground"
-          data-testid="artifact-runtime-consent"
-        >
-          <p className="min-w-0 flex-1">
-            {runtime.askingForAi.connectors.length > 0
-              ? t(
-                  'artifactPublish.runtimeConsentConnectors',
-                  "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
-                  { apps: connectorList(runtime.askingForAi.connectors) },
-                )
-              : t(
-                  'artifactPublish.runtimeConsent',
-                  "This app wants to use AI with your account. Each request counts toward your plan's usage.",
-                )}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button size="sm" onClick={() => runtime.answerAiRequest(true)}>
-              {t('artifactPublish.runtimeAllow', 'Allow')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => runtime.answerAiRequest(false)}>
-              {t('artifactPublish.runtimeDecline', "Don't allow")}
-            </Button>
-          </div>
-        </section>
+        <ArtifactConnectorConsent
+          request={runtime.askingForAi}
+          appNames={connectorList(runtime.askingForAi.connectorIds)}
+          onAnswer={runtime.answerAiRequest}
+        />
+      ) : runtime.grantedConnectorSets.length > 0 ? (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const latest = runtime.grantedConnectorSets[runtime.grantedConnectorSets.length - 1];
+              if (latest) runtime.reviewConnectors(latest);
+            }}
+            data-testid="artifact-runtime-manage-connectors"
+          >
+            {t('artifactPublish.runtimeManageConnectors', 'Connected apps')}
+          </Button>
+        </div>
       ) : null}
 
       {sandboxed ? (

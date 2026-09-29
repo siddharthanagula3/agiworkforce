@@ -27,6 +27,13 @@ const tierMocks = vi.hoisted(() => ({
 vi.mock('@/lib/model-tiers', () => ({
   canAccessModel: (model: string, tier: string) => tierMocks.canAccessModel(model, tier),
 }));
+// Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
+// turns run for an account that accepted the current version.
+vi.mock('@/lib/server/terms', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  readTermsStanding: async () => ({ kind: 'current' }),
+}));
+
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
@@ -166,6 +173,7 @@ vi.mock('@agiworkforce/providers-perplexity', () => inertCompatAdapter('Perplexi
 
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 vi.mock('@/services/neon-db', () => ({ createNeonServerClient: vi.fn().mockResolvedValue({}) }));

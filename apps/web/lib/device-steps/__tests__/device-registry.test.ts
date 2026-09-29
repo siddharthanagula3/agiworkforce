@@ -4,7 +4,11 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { DesktopHostDeclaration } from '@agiworkforce/local-runtime-contract';
-import { DEVICE_STEP_TOOLS, deviceStepCapability } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVICE_STEP_TOOLS,
+  deviceStepCapability,
+  deviceStepScope,
+} from '@agiworkforce/local-runtime-contract';
 import {
   STEP_CAPABILITY_ADVERTISEMENTS,
   clearDeviceForRemoteSteps,
@@ -187,6 +191,33 @@ describe('clearing a device for remote steps', () => {
     ).toBe('withdrawn');
   });
 
+  it('clears a phone for its own calendar steps without remote work switched on', () => {
+    const phone = {
+      ...declaration(['calendar.read', 'calendar.write']),
+      platform: 'ios',
+      roots: [],
+    };
+    const device = registration({
+      surface: 'mobile',
+      remoteEnabled: false,
+      capabilities: {
+        browser: false,
+        computerUse: false,
+        localModels: false,
+        localMcp: false,
+        remoteControl: false,
+      },
+    });
+
+    expect(clearDeviceForRemoteSteps(phone, device).decision).toBe('ready');
+    expect(clearDeviceForRemoteSteps(phone, { ...device, presence: 'sleeping' }).decision).toBe(
+      'wait',
+    );
+    expect(clearDeviceForRemoteSteps(phone, { ...device, authenticated: false }).decision).toBe(
+      'withdrawn',
+    );
+  });
+
   it('withdraws a screen step from a device that no longer reports computer use', () => {
     const device = registration({
       capabilities: {
@@ -265,8 +296,14 @@ describe('clearing a device for remote steps', () => {
     });
   });
 
-  it('names an advertisement for every permission a device step can require', () => {
-    const required = [...new Set(DEVICE_STEP_TOOLS.map((tool) => deviceStepCapability(tool)))];
+  it('names an advertisement for every permission a desktop step can require', () => {
+    const required = [
+      ...new Set(
+        DEVICE_STEP_TOOLS.filter((tool) => deviceStepScope(tool) !== 'phone').map((tool) =>
+          deviceStepCapability(tool),
+        ),
+      ),
+    ];
     const unmapped = required.filter(
       (capability) => STEP_CAPABILITY_ADVERTISEMENTS[capability] === undefined,
     );

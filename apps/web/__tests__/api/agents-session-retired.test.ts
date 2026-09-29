@@ -11,10 +11,12 @@ const { mockAuth, mockQuery, mockExecute, mockRateLimitHandler } = vi.hoisted(()
 }));
 
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockAuth(...args),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: () => ({ query: mockQuery, execute: mockExecute }),
 }));
 

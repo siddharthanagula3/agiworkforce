@@ -89,9 +89,9 @@ Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
+| mobile | partial | partials/chat-gates 1228dfd07d: who can open it (anyone with the link, or the workspace with its member count) and Unpublish, each confirmed with the web's copy, over PATCH and DELETE /api/artifacts/publish/[token]. post-codex/w-chat-s10.10-mobile-artifact-audience-and-unpublish.patch loads the artifact's publication in the held ArtifactFullScreen and mounts the controls under the link. | codex |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
+Code: `apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx:41-41`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:93-93`
 
 ## S10.11: Publish generated application.
 
@@ -119,27 +119,21 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: An invite dialog takes an email and role, sends the invitation, and lists pending invites to revoke or renew.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile cannot send, list, renew or revoke invitations: on iOS "Add" attaches an existing AGI account directly ("There is no invitation email") and on Android it opens web team settings. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:129-160`, `apps/mobile/src/features/team/service.ts:149-155`
 
 ## S10.14: Change member role.
 
 - Done when: A role dialog changes a member's role after confirmation, and the server enforces the new role.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile changes a member between the built-in roles only and shows no role permissions; it also offers "Owner", which the server always refuses (ownership moves only by transfer). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/features/team/service.ts:5-5`, `apps/mobile/src/features/team/service.ts:161-161`
 
 ## S10.15: Transfer ownership.
 

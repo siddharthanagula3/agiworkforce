@@ -57,18 +57,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596
 
 Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
 
-## S59.09: Read-only mode.
-
-- Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
-
-Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`
-
 ## S59.22: Ask for an alternative.
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.

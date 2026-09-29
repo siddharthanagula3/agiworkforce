@@ -67,7 +67,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Generated videos open in the in-app browser; Library videos go to the OS share sheet; no in-app player. | ui |
+| mobile | partial | Generated videos already play in-app. c405859870 extracts that player into VideoPlayerModal. post-codex/w-work-s24-s25.07-mobile-library.patch (now also carries S24): tapping a Library video plays it in the same in-app player instead of the share sheet. Waits on the Codex hold. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

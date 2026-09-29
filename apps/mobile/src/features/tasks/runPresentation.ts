@@ -207,6 +207,30 @@ const APPROVAL_DECISION_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
+export type CloudRunProducedFile = Omit<
+  Extract<AgentEventEnvelope['event'], { type: 'artifact-produced' }>,
+  'type'
+>;
+
+export function collectCloudRunFile(
+  files: CloudRunProducedFile[],
+  envelope: AgentEventEnvelope,
+): CloudRunProducedFile[] {
+  const event = envelope.event;
+  if (event.type !== 'artifact-produced') return files;
+  if (files.some((file) => file.artifactId === event.artifactId)) return files;
+  return [
+    ...files,
+    {
+      artifactId: event.artifactId,
+      name: event.name,
+      mimeType: event.mimeType,
+      uri: event.uri,
+      ...(event.sizeBytes === undefined ? {} : { sizeBytes: event.sizeBytes }),
+    },
+  ];
+}
+
 export function cloudRunTextDelta(envelope: AgentEventEnvelope): string {
   return envelope.event.type === 'text-delta' ? envelope.event.delta : '';
 }

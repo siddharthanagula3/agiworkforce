@@ -4,6 +4,7 @@ import {
   DEVICE_STEP_TOOLS,
   DeviceStepRefused,
   MAX_DEVICE_COORDINATE,
+  declarationForHost,
   describeDeviceDisplays,
   describeDeviceStep,
   offeredDeviceStepTools,
@@ -158,5 +159,84 @@ describe('screenshots across displays', () => {
     const text = describeDeviceDisplays([main, side], 4);
     expect(text).toContain('display 4 "Studio" 2560x1440 at 1x, captured');
     expect(text).toContain('primary');
+  });
+});
+
+describe('phone steps', () => {
+  const PHONE_TOOLS = DEVICE_STEP_TOOLS.filter(
+    (tool) => DEVICE_STEP_DEFINITIONS[tool].scope === 'phone',
+  );
+
+  it('offers only the phone steps a phone declares, with no folder', () => {
+    const offered = offeredDeviceStepTools(
+      declaration({ platform: 'ios', capabilities: ['calendar.read', 'calendar.write'] }),
+    );
+    expect([...offered].sort()).toEqual([
+      'device_calendar_availability',
+      'device_calendar_create_event',
+      'device_calendar_events',
+    ]);
+    expect(PHONE_TOOLS).toContain('device_reminder_create');
+  });
+
+  it('keeps each host to its own capabilities', () => {
+    const mixed = declaration({
+      capabilities: ['shell.execute', 'calendar.read', 'reminders.write'],
+      roots: [{ id: 'root-1', name: 'Notes', path: '/Users/sid/Notes' }],
+    });
+    expect(declarationForHost(mixed, 'phone')).toMatchObject({
+      capabilities: ['calendar.read', 'reminders.write'],
+      roots: [],
+    });
+    expect(declarationForHost(mixed, 'desktop').capabilities).toEqual(['shell.execute']);
+  });
+
+  it('plans an event and refuses one with no end or an end before its start', () => {
+    expect(
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: ' Dentist ', start: '2026-10-02T15:00', end: '2026-10-02T16:00' },
+        [],
+      ),
+    ).toEqual({
+      tool: 'device_calendar_create_event',
+      title: 'Dentist',
+      start: '2026-10-02T15:00',
+      end: '2026-10-02T16:00',
+    });
+    expect(() =>
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: 'Dentist', start: '2026-10-02T15:00' },
+        [],
+      ),
+    ).toThrow(DeviceStepRefused);
+    expect(() =>
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: 'Dentist', start: '2026-10-02T15:00', end: '2026-10-02T14:00' },
+        [],
+      ),
+    ).toThrow('"end" must be after "start".');
+  });
+
+  it('refuses a calendar read over too long a range or with a time it cannot read', () => {
+    expect(() =>
+      planDeviceStep('device_calendar_events', { start: '2026-01-01', end: '2026-12-31' }, []),
+    ).toThrow(DeviceStepRefused);
+    expect(() =>
+      planDeviceStep('device_calendar_events', { start: 'tomorrow', end: '2026-10-03' }, []),
+    ).toThrow(DeviceStepRefused);
+  });
+
+  it('describes a reminder with its due time', () => {
+    const step = planDeviceStep(
+      'device_reminder_create',
+      { title: 'Call the bank', due: '2026-10-02T09:30' },
+      [],
+    );
+    expect(describeDeviceStep(step, [])).toBe(
+      'Add the reminder "Call the bank" due 2026-10-02 09:30',
+    );
   });
 });

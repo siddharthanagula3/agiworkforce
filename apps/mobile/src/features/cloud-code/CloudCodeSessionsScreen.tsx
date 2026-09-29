@@ -2,11 +2,12 @@ import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowLeft, Code2, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Code2, Plus, RefreshCw } from 'lucide-react-native';
 import {
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
   MOBILE_REMOTE_SCREEN_LABEL,
+  type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
 } from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { CloudCodeGate } from './components/CloudCodeGate';
 import { CloudCodeSessionRow } from './components/CloudCodeSessionRow';
+import { NewCloudCodeSessionSheet } from './components/NewCloudCodeSessionSheet';
 import { useCloudCodeAccess } from './useCloudCodeAccess';
 import { useCloudCodeSessions } from './useCloudCodeSessions';
 import { CLOUD_CODE_SCREEN_TITLE } from './presentation';
@@ -21,7 +23,7 @@ import { CLOUD_CODE_SCREEN_TITLE } from './presentation';
 const DEFAULT_FILTER: CloudCodeSessionStatusFilter = 'open';
 const REMOTE_NOTE = `Sessions running on your computer are in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
   const colors = useThemeColors();
 
   return (
@@ -50,6 +52,18 @@ function Header({ onBack }: { onBack: () => void }) {
       >
         {CLOUD_CODE_SCREEN_TITLE}
       </Text>
+      {onNew ? (
+        <Pressable
+          onPress={onNew}
+          accessibilityRole="button"
+          accessibilityLabel="New cloud session"
+          hitSlop={8}
+          testID="cloud-code-new-session"
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Plus size={20} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -67,7 +81,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         {filtered ? 'No sessions match this filter' : 'No cloud sessions yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        Start a session in AGI Code on the web or in the desktop app. It shows up here, where you
+        Start one with the + button, on the web or in the desktop app. It shows up here, where you
         can follow it, answer its approvals and send the next task.
       </Text>
     </View>
@@ -126,13 +140,32 @@ function SessionList({ onBack }: { onBack: () => void }) {
     [router],
   );
 
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+
+  const handleCreated = useCallback(
+    (session: CloudCodeSession, goal: string) => {
+      setNewSessionOpen(false);
+      void load('background');
+      router.push({
+        pathname: '/(app)/cloud-code/[sessionId]',
+        params: { sessionId: session.id, goal },
+      } as Parameters<typeof router.push>[0]);
+    },
+    [load, router],
+  );
+
   const handleOpenRemote = useCallback(() => {
     router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <Header onBack={onBack} />
+      <Header onBack={onBack} onNew={() => setNewSessionOpen(true)} />
+      <NewCloudCodeSessionSheet
+        visible={newSessionOpen}
+        onClose={() => setNewSessionOpen(false)}
+        onCreated={handleCreated}
+      />
 
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}>
         {CLOUD_CODE_SESSION_STATUS_FILTERS.map((key) => {

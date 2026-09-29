@@ -26,8 +26,10 @@ async function handleSetRoles(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
+  // Next decodes dynamic segments before handing them over (route-matcher.ts), so a
+  // second decodeURIComponent would turn an id containing % into a 500.
   const { userId: rawTargetUserId } = await context.params;
-  const targetUserId = decodeURIComponent(rawTargetUserId).trim();
+  const targetUserId = rawTargetUserId.trim();
   if (!targetUserId || targetUserId.length > 255) {
     throw createError.validation('userId is required');
   }

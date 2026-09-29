@@ -26,10 +26,10 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
 
   const ensurePlayer = useCallback(async (): Promise<LocalVideoPlayer> => {
     if (player) return player;
-    const prepared = await prepareLocalVideoPlayer(videoUrl);
+    const prepared = await prepareLocalVideoPlayer(videoUrl, colors.black);
     setPlayer(prepared);
     return prepared;
-  }, [player, videoUrl]);
+  }, [colors.black, player, videoUrl]);
 
   const play = useCallback(async () => {
     if (loading) return;
