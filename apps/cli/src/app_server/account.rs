@@ -303,6 +303,112 @@ pub async fn renew_managed_session_if_expiring() -> Option<String> {
     }
 }
 
+/// What became of a session the server refused (401) before its access token
+/// was due to expire, as happens when the account enrolls a passkey or the
+/// device is unlinked on the web.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RejectedSessionRecovery {
+    /// A fresh access token is stored; the call can be made again once.
+    Renewed,
+    /// The credential is gone and was forgotten here: sign in again.
+    Ended(String),
+    /// The account has to act on the web first; the credential is kept.
+    Refused(String),
+    /// Nothing could be decided now; the refusal stands for this call.
+    Unavailable,
+}
+
+pub const SESSION_ENDED_MESSAGE: &str =
+    "Your AGI Workforce session ended. Sign in again to continue.";
+
+fn stored_managed_grant(store: &AuthStore) -> Option<(String, String)> {
+    match store.entries.get("agiworkforce") {
+        Some(AuthEntry::OAuth {
+            access, refresh, ..
+        }) => Some((access.clone(), refresh.clone())),
+        _ => None,
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RecoveryStep {
+    AlreadyRenewed,
+    NothingStored,
+    Forget,
+    Refresh(String),
+}
+
+/// A stored token other than the refused one was renewed by another process;
+/// a grant with no refresh credential cannot be renewed and is forgotten.
+fn next_recovery_step(stored: Option<(String, String)>, rejected_access: &str) -> RecoveryStep {
+    match stored {
+        None => RecoveryStep::NothingStored,
+        Some((access, _)) if !access.is_empty() && access != rejected_access => {
+            RecoveryStep::AlreadyRenewed
+        }
+        Some((_, refresh)) if refresh.is_empty() => RecoveryStep::Forget,
+        Some((_, refresh)) => RecoveryStep::Refresh(refresh),
+    }
+}
+
+fn forget_session() -> RejectedSessionRecovery {
+    RejectedSessionRecovery::Ended(match logout() {
+        Ok(()) => SESSION_ENDED_MESSAGE.to_string(),
+        Err(error) => format!(
+            "{SESSION_ENDED_MESSAGE} The saved credential could not be removed: {error:#}. Run agi logout."
+        ),
+    })
+}
+
+/// Try one refresh after a 401, under the same lock renewal takes. A token
+/// another process already replaced counts as renewed. A refresh credential the
+/// server also refuses (invalid_grant), or none at all, is forgotten so the
+/// account reads as signed out and the desktop signs this machine in again.
+pub async fn recover_rejected_session(rejected_access: &str) -> RejectedSessionRecovery {
+    // A token given in the environment is not this store's to renew or forget.
+    if std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty()) {
+        return RejectedSessionRecovery::Unavailable;
+    }
+    let Some(_lock) = lock_device_session().await else {
+        return RejectedSessionRecovery::Unavailable;
+    };
+    let stored = AuthStore::load()
+        .ok()
+        .as_ref()
+        .and_then(stored_managed_grant);
+    let refresh = match next_recovery_step(stored, rejected_access) {
+        RecoveryStep::AlreadyRenewed => return RejectedSessionRecovery::Renewed,
+        RecoveryStep::NothingStored => return RejectedSessionRecovery::Unavailable,
+        RecoveryStep::Forget => return forget_session(),
+        RecoveryStep::Refresh(refresh) => refresh,
+    };
+    match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
+        crate::oauth::DeviceSessionRenewal::Renewed(entry) => match save_device_grant(entry) {
+            Ok(()) => RejectedSessionRecovery::Renewed,
+            Err(error) => RejectedSessionRecovery::Refused(format!(
+                "The renewed AGI Workforce session could not be saved: {error:#}. Run agi login."
+            )),
+        },
+        crate::oauth::DeviceSessionRenewal::Revoked => forget_session(),
+        crate::oauth::DeviceSessionRenewal::Refused(reason) => {
+            RejectedSessionRecovery::Refused(reason.unwrap_or_else(|| {
+                "AGI Workforce did not renew this session. Sign in again on agiworkforce.com."
+                    .to_string()
+            }))
+        }
+        crate::oauth::DeviceSessionRenewal::Unavailable => RejectedSessionRecovery::Unavailable,
+    }
+}
+
+/// A second 401 right after a renewal means the account itself refuses this
+/// device, so the credential is forgotten rather than retried for ever.
+pub fn forget_refused_session() -> String {
+    match forget_session() {
+        RejectedSessionRecovery::Ended(message) => message,
+        _ => SESSION_ENDED_MESSAGE.to_string(),
+    }
+}
+
 pub async fn revoke_managed_sessions() -> bool {
     let Ok(store) = AuthStore::load() else {
         return true;
@@ -344,6 +450,27 @@ pub fn logout() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_session_is_renewed_once_or_forgotten() {
+        let grant = |access: &str, refresh: &str| Some((access.to_string(), refresh.to_string()));
+        assert_eq!(
+            next_recovery_step(grant("refused", "r-1"), "refused"),
+            RecoveryStep::Refresh("r-1".to_string())
+        );
+        assert_eq!(
+            next_recovery_step(grant("newer", "r-2"), "refused"),
+            RecoveryStep::AlreadyRenewed
+        );
+        assert_eq!(
+            next_recovery_step(grant("refused", ""), "refused"),
+            RecoveryStep::Forget
+        );
+        assert_eq!(
+            next_recovery_step(None, "refused"),
+            RecoveryStep::NothingStored
+        );
+    }
 
     /// Signing out has to reach every key a sign-in wrote, and the caches the
     /// signed-in answer was kept in, or the next run reports the account of

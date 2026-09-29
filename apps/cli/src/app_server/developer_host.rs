@@ -2721,6 +2721,38 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
             drop(pending);
 
+            // The account refused this machine's session mid-life (a passkey
+            // enrolled, the device unlinked). Renew once, or forget it so the
+            // account reads signed out and the desktop signs this machine in again.
+            if let Some(failure) = final_failure.as_mut() {
+                let managed = failure.provider.as_deref() == Some("managed_cloud");
+                let refused = matches!(
+                    failure.code,
+                    TurnFailureCode::ProviderAuthInvalid | TurnFailureCode::AccountSignedOut
+                );
+                if managed && refused {
+                    if let Some(jwt) = crate::tier_cache::load_jwt() {
+                        use account::RejectedSessionRecovery as Recovery;
+                        match account::recover_rejected_session(&jwt).await {
+                            Recovery::Renewed => {
+                                failure.message =
+                                    "Your AGI Workforce session was renewed. Send it again."
+                                        .to_string();
+                                failure.retryable = true;
+                                failure.action =
+                                    agiworkforce_protocol::developer_session::TurnFailureAction::Retry;
+                            }
+                            Recovery::Ended(message) | Recovery::Refused(message) => {
+                                failure.code = TurnFailureCode::AccountSignedOut;
+                                failure.message = message;
+                                failure.action = agiworkforce_protocol::developer_session::TurnFailureAction::SignInAccount;
+                            }
+                            Recovery::Unavailable => {}
+                        }
+                    }
+                }
+            }
+
             let method = if final_status == TurnStatus::Completed {
                 "turn/completed"
             } else {
