@@ -7,7 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
   CURRENT_TERMS_VERSION,
-  hasAcceptedCurrentTerms,
+  readTermsStanding,
   recordTermsAcceptance,
 } from '@/lib/server/terms';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -62,9 +62,9 @@ export const POST = withErrorHandler(handleAcceptTerms);
 
 async function handleGetTerms(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
-  const accepted = await hasAcceptedCurrentTerms(userId);
+  const standing = await readTermsStanding(userId);
   return NextResponse.json(
-    { currentVersion: CURRENT_TERMS_VERSION, accepted },
+    { currentVersion: CURRENT_TERMS_VERSION, accepted: standing.kind !== 'required' },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
