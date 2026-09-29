@@ -4,8 +4,9 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookAddParams,
-    HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
+    ContextInstructionsResponse, DeveloperSessionHandoff, GitPullRequestParams,
+    GitPullRequestPlanParams, GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission,
+    HookAddParams, HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
@@ -431,6 +432,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PlanDecideParams,
     ) -> Result<(), DeveloperSessionHostError> {
         Err(unsupported(method::PLAN_DECIDE))
+    }
+
+    async fn plan_pull_request(
+        &self,
+        _params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST_PLAN))
+    }
+
+    async fn create_pull_request(
+        &self,
+        _params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1137,6 +1152,26 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST_PLAN => {
+                let params = match parse_optional_params::<GitPullRequestPlanParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .plan_pull_request(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST => {
+                let params = match parse_params::<GitPullRequestParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .create_pull_request(params)
                     .await
                     .map(serde_json::to_value)
             }

@@ -597,6 +597,18 @@ const pt = {
     'O AGI vai perguntar de novo na próxima vez que quiser fazer isto: {label}',
   'savedApprovals.removeDenied':
     'O AGI poderá pedir para fazer isto de novo em vez de ser recusado: {label}',
+  'pullRequest.titlePrompt': 'Título do pull request',
+  'pullRequest.basePrompt': 'Branch de destino do merge',
+  'pullRequest.confirmPush':
+    'Enviar {count} commit(s) de {branch} para {remote} e abrir um pull request para {base}?',
+  'pullRequest.confirmOpen': 'Abrir um pull request de {branch} para {base}?',
+  'pullRequest.confirmAction': 'Enviar e abrir',
+  'pullRequest.openAction': 'Abrir pull request',
+  'pullRequest.created': 'AGI Workforce: pull request aberto.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'Ver',
+  'pullRequest.blocked': 'AGI Workforce: não é possível abrir um pull request: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'aprovações salvas',
   'webview.alwaysAllow': 'Sempre permitir',
   'webview.alwaysAllowHint':
