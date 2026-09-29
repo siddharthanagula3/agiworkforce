@@ -49,7 +49,8 @@ export type DeviceSessionRefreshResult =
   | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
   | { kind: 'unavailable' }
   | { kind: 'revoked' }
-  | { kind: 'terms-required'; acceptanceUrl: string | null };
+  | { kind: 'terms-required'; acceptanceUrl: string | null }
+  | { kind: 'account-unavailable'; message: string };
 
 /**
  * A remote window forwards openExternal to the local client, so the round trip
@@ -242,6 +243,16 @@ export async function refreshDeviceSession(
     return { kind: 'terms-required', acceptanceUrl: typeof url === 'string' ? url : null };
   }
   if (error === 'invalid_grant') return { kind: 'revoked' };
+  if (error === 'account_unavailable') {
+    const description = body['error_description'];
+    return {
+      kind: 'account-unavailable',
+      message:
+        typeof description === 'string' && description.trim() !== ''
+          ? description
+          : 'This AGI Cloud account cannot be used right now. Sign in on the web to see why.',
+    };
+  }
   if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
 
   try {
