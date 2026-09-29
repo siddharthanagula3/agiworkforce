@@ -611,6 +611,15 @@ const ru = {
   'webview.resendMessage': 'Отправить повторно',
   'webview.resendMessageLabel': 'Отправить это сообщение повторно',
   'webview.branchFromMessage': 'Ответвить',
+  'plan.needsUpdate':
+    'AGI Workforce: обновите AGI CLI, чтобы одобрять или дорабатывать план из VS Code.',
+  'plan.approvedMessage': 'Выполняйте план.',
+  'plan.revisedMessage': 'Доработайте план: {feedback}',
+  'webview.approvePlan': 'Одобрить план',
+  'webview.revisePlan': 'Доработать',
+  'webview.revisePlanPlaceholder': 'Что изменить в плане?',
+  'webview.sendRevision': 'Отправить',
+  'webview.cancelRevision': 'Отмена',
   'webview.branchFromAnswer': 'Ответвить отсюда',
   'webview.branchFromAnswerLabel': 'Начать новый сеанс, сохранив разговор до этого ответа',
   'webview.branchFromMessageLabel':

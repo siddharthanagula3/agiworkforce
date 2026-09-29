@@ -68,7 +68,7 @@ describe('the approval route enforces it', () => {
     // Enforced before terms and before the row is marked approved: an approval
     // recorded and then refused would leave a device believing it is pending.
     expect(source.indexOf('isDeviceCodeSignInEnabled')).toBeLessThan(
-      source.indexOf('hasAcceptedCurrentTerms(authUser.userId)'),
+      source.indexOf('mustAcceptTerms(authUser.userId'),
     );
   });
 });

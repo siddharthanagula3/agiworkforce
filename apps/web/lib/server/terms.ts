@@ -3,6 +3,8 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { logger } from '@/lib/logger';
+import { recordFailure } from '@/lib/observability/metrics';
 
 export const CURRENT_TERMS_VERSION: string = POLICY_LAST_UPDATED.terms;
 
@@ -134,6 +136,26 @@ export async function readTermsStanding(userId: string): Promise<TermsStanding> 
     standingCache.set(userId, { standing, expiresAt: now + STANDING_CACHE_TTL_MS });
   }
   return standing;
+}
+
+/**
+ * The page and device-sign-in gates' question: must this account accept before
+ * it continues? Only with no acceptance on record or past a material
+ * revision's effective date; an older valid version continues and is told
+ * about the new one. A failed read lets the account through, logged and
+ * counted, because this is a notice requirement, not a safety switch.
+ */
+export async function mustAcceptTerms(userId: string, gate: string): Promise<boolean> {
+  try {
+    return (await readTermsStanding(userId)).kind === 'required';
+  } catch (error) {
+    logger.error(
+      { error, userId, gate },
+      '[terms] acceptance unreadable; letting the account through',
+    );
+    recordFailure('database', 'terms_acceptance_unreadable');
+    return false;
+  }
 }
 
 export function forgetTermsStanding(userId?: string): void {

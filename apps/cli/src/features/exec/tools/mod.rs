@@ -602,6 +602,20 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             output: reason,
         });
     }
+    // The workspace's website rules bind the signed-in browser as they bind
+    // web_fetch; web_fetch and web_search apply them where they run.
+    if canonical_name == "browser_navigate" {
+        if let Some(reason) = match call.args.get("url") {
+            Some(url) => web::workspace_site_refusal(url).await,
+            None => None,
+        } {
+            return Ok(ToolResult {
+                tool_name: canonical_name.to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    }
 
     let boundary_gated = match canonical_name {
         "web_fetch" => opts.require_confirmation,
@@ -1536,6 +1550,22 @@ async fn execute_browser_command(
                     success: false,
                     output: format!("The active tab is on a blocked site, so its content was not read. {reason}"),
                 });
+            }
+            // The page a command ends on, after any redirect or navigation the
+            // click or load caused, is held to the workspace's website rules too.
+            for landed in ["url", "origin"]
+                .into_iter()
+                .filter_map(|key| value.get(key).and_then(Value::as_str))
+            {
+                if let Some(reason) = web::workspace_site_refusal(landed).await {
+                    return Ok(ToolResult {
+                        tool_name: command.to_string(),
+                        success: false,
+                        output: format!(
+                            "The active tab is on a site your workspace does not allow, so its content was not read. {reason}"
+                        ),
+                    });
+                }
             }
             let mut output = match &value {
                 Value::String(text) => text.clone(),

@@ -95,7 +95,7 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET, SLACK_SIGNING_SECRET with Event Subscriptions app_mention and message.im (docs/runbooks/connector-oauth-apps.md). | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/app/api/github/webhook/route.ts:253-253`
 

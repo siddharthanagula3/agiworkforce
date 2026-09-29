@@ -52,7 +52,10 @@ export type AppServerCapabilities = {
   permissionRules?: boolean;
   trust?: boolean;
   turnToolFilters?: boolean;
-  planDecision?: boolean;
   providerKeys?: boolean;
   questions?: boolean;
+  /**
+   * `plan/decide` approves or rejects the plan a plan-mode turn proposed.
+   */
+  planDecisions?: boolean;
 };

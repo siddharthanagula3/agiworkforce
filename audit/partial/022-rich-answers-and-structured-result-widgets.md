@@ -49,8 +49,8 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner decision. The only configured search backend, the Perplexity Search API, returns no images (docs.perplexity.ai/api-reference/search-post, read 2026-09-28: results carry title, url, snippet and dates only). An answer image carousel needs an image-search provider and its key chosen, for example Sonar return_images or a dedicated image-search API. The web UI already has the lightbox (MessageBubble lightboxImages). | handler |
-| desktop | partial | Owner decision. The only configured search backend, the Perplexity Search API, returns no images (docs.perplexity.ai/api-reference/search-post, read 2026-09-28: results carry title, url, snippet and dates only). An answer image carousel needs an image-search provider and its key chosen, for example Sonar return_images or a dedicated image-search API. The web UI already has the lightbox (MessageBubble lightboxImages). | handler |
+| web | partial | owner (lead ruling 2026-09-28): choose an image-search provider and key; the carousel code follows the choice | handler |
+| desktop | partial | owner (lead ruling 2026-09-28): choose an image-search provider and key; the carousel code follows the choice | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -90,12 +90,12 @@ Code: `apps/web/lib/web-search/web-search-providers.json:4-4`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
-| desktop | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
+| web | partial | owner: choose a map tile provider and set AGI_MAP_TILE_URL_TEMPLATE (apps/web/lib/maps/map-tile-provider.ts:93); live-check a map renders on web and in Electron (CSP img-src allows the tile host) | config |
+| desktop | partial | owner: choose a map tile provider and set AGI_MAP_TILE_URL_TEMPLATE (apps/web/lib/maps/map-tile-provider.ts:93); live-check a map renders on web and in Electron (CSP img-src allows the tile host) | config |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`, `apps/web/lib/maps/map-tile-provider.ts:5-5`
+Code: `apps/web/lib/maps/map-tile-provider.ts:93-93`
 
 ## S22.11: Place and business cards.
 
@@ -104,14 +104,14 @@ Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
-| desktop | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
+| web | partial | owner: create a Google Places API key with billing and set GOOGLE_PLACES_API_KEY (apps/web/lib/config/optional-features.ts:118); live-check a place query | config |
+| desktop | partial | owner: create a Google Places API key with billing and set GOOGLE_PLACES_API_KEY (apps/web/lib/config/optional-features.ts:118); live-check a place query | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/cards/map/PlaceDetailPopup.tsx:94-94`, `apps/web/lib/config/optional-features.ts:118-118`
+Code: `apps/web/lib/config/optional-features.ts:118-118`
 
 ## S22.17: Product comparison cards.
 

@@ -302,14 +302,14 @@ Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Installed plugins are local folders a user can edit by hand; the CLI offers no customization command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/app/api/plugins/customize/route.ts:25-25`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:557-557`, `packages/ui/ui/src/directory/PluginDetailView.tsx:694-694`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/lib.rs:3613-3652`
 
 ## S54.28: Fork plugin.
 
@@ -318,14 +318,14 @@ Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/features/plugins/server/directory/customize.ts:198-198`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.29: Uninstall.
 
@@ -397,14 +397,14 @@ Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:101-101`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4332-4332`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:492-492`, `apps/web/features/chat/components/PluginDraftCard.tsx:35-35`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.36: Submission and review workflow.
 

@@ -20,10 +20,21 @@ interface BillingHistoryRow {
   current_period_end?: string | Date | null;
 }
 
+/**
+ * Paid upgrades open in stages behind an access code. The owner opens them to
+ * everyone at launch by setting AGI_BILLING_WAITLIST_OPEN=1; until then only
+ * an account that redeemed a code may start checkout, the portal or a store
+ * purchase.
+ */
+export function billingWaitlistOpen(): boolean {
+  return process.env['AGI_BILLING_WAITLIST_OPEN'] === '1';
+}
+
 export async function hasBillingWaitlistAccess(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<boolean> {
+  if (billingWaitlistOpen()) return true;
   const [row] = await db.query<{ granted: boolean }>(
     `select exists(
        select 1 from beta_redemptions where user_id = $1
