@@ -49,7 +49,9 @@ export default async function LoginCompletePage({
   // instead of handing over a product whose every call answers 403.
   const access = await accountAccessForSignIn(userId);
   if (!access.allowed) {
-    const loginHref = `/login?redirectTo=${encodeURIComponent(redirectTo)}`;
+    const loginHref = `/login?redirectTo=${encodeURIComponent(redirectTo)}${
+      isDesktopSurface ? '&surface=desktop' : ''
+    }`;
     return (
       <AuthLayout embedded={isDesktopSurface}>
         <AccountAccessNotice denial={access} signInHref={loginHref} />
@@ -69,7 +71,7 @@ export default async function LoginCompletePage({
   const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
 
   return (
-    <AuthLayout>
+    <AuthLayout embedded={isDesktopSurface}>
       <AuthStepFrame
         heading="Finish signing in"
         detail={
