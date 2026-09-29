@@ -864,19 +864,22 @@ function declareDeviceHost(): DesktopHostDeclaration {
   const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.filter((tool) => {
+      DEVICE_STEP_TOOLS.flatMap((tool) => {
         const scope = deviceStepScope(tool);
+        const capability = deviceStepCapability(tool);
+        if (!isDesktopCapability(capability)) return [];
         if (scope === 'workspace') {
           return roots.some(
-            (root) =>
-              getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
-          );
+            (root) => getPermissionState(capability, workspaceScope(root)) !== 'denied',
+          )
+            ? [capability]
+            : [];
         }
         const usable = scope === 'screen' ? screenUsable : pairingState().paired;
-        return (
-          usable && getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
-        );
-      }).map(deviceStepCapability),
+        return usable && getPermissionState(capability, { kind: 'global' }) !== 'denied'
+          ? [capability]
+          : [];
+      }),
     ),
   ];
   return {

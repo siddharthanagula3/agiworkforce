@@ -45,6 +45,7 @@ export * from './routing-profile-choice';
 export * from './auto-route-explanation';
 export * from './tool-request-diff';
 export * from './tool-approval-stakes';
+export * from './phone-steps';
 export * from './surface-binding';
 
 export * from './content-safety';

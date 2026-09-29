@@ -80,10 +80,10 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
-function awaitingDeviceSummary(activity: AgentActivityState): string | undefined {
+function awaitingDeviceEntry(activity: AgentActivityState): AgentActivityToolEntry | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
-    if (entry?.kind === 'tool' && entry.status === 'awaiting-device') return entry.summary;
+    if (entry?.kind === 'tool' && entry.status === 'awaiting-device') return entry;
   }
   return undefined;
 }
@@ -125,8 +125,9 @@ export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: n
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
   if (activity.status === 'awaiting-device') {
-    const deviceStep = awaitingDeviceSummary(activity);
-    return deviceStep ? `Waiting for your desktop · ${deviceStep}` : 'Waiting for your desktop';
+    const entry = awaitingDeviceEntry(activity);
+    const device = entry?.deviceStep?.deviceName ?? 'your device';
+    return entry?.summary ? `Waiting for ${device} · ${entry.summary}` : `Waiting for ${device}`;
   }
   const elapsed = formatDuration(
     Math.max(0, (activity.completedAtMs ?? activity.updatedAtMs ?? nowMs) - activity.startedAtMs),
@@ -187,7 +188,7 @@ function ToolRow({
     rerunCode.trim() !== '' &&
     TOOL_STATUS_PRESENTATION[toolStatus].terminal;
   const statusLabel = awaitingDevice
-    ? `Waiting for ${entry.deviceStep?.deviceName ?? 'your desktop'}`
+    ? `Waiting for ${entry.deviceStep?.deviceName ?? 'your device'}`
     : TOOL_STATUS_PRESENTATION[toolStatus].label;
 
   return (
