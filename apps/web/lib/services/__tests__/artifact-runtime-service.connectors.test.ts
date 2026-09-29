@@ -1,0 +1,76 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  connectorsAllowed: vi.fn(),
+  loadCatalog: vi.fn(),
+  loadPolicy: vi.fn(),
+  loadPermissions: vi.fn(),
+}));
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/connectors/connector-capability', () => ({
+  connectorsAllowedWithoutRequest: (...args: unknown[]) => mocks.connectorsAllowed(...args),
+}));
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  loadUserConnectorToolCatalog: (...args: unknown[]) => mocks.loadCatalog(...args),
+  makeUserConnectorExecutor: vi.fn(() => vi.fn()),
+}));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', () => ({
+  loadToolApprovalPolicy: (...args: unknown[]) => mocks.loadPolicy(...args),
+}));
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    loadConnectorToolPermissions: (...args: unknown[]) => mocks.loadPermissions(...args),
+  }),
+);
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getModelMetadataById: () => ({ capabilities: { tools: true } }),
+}));
+
+const { buildArtifactConnectorPlan } = await import('../artifact-runtime-service');
+
+const input = {
+  db: {} as never,
+  userId: 'user-1',
+  organizationId: null,
+  planTier: 'pro',
+  modelKey: 'tool-model',
+  connectors: ['linear'],
+};
+
+describe('buildArtifactConnectorPlan connector decision', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.loadCatalog.mockResolvedValue({ tools: [], dropped: [], limit: null });
+    mocks.loadPolicy.mockResolvedValue({ mode: 'autonomous' });
+    mocks.loadPermissions.mockResolvedValue({
+      isDenied: () => false,
+      isConnectorToolDenied: () => false,
+    });
+  });
+
+  it('offers no connectors when the connector decision is closed', async () => {
+    mocks.connectorsAllowed.mockResolvedValue(false);
+
+    await expect(buildArtifactConnectorPlan(input)).resolves.toBeNull();
+    expect(mocks.loadCatalog).not.toHaveBeenCalled();
+  });
+
+  it('reads the catalog when the connector decision is open', async () => {
+    mocks.connectorsAllowed.mockResolvedValue(true);
+
+    const plan = await buildArtifactConnectorPlan(input);
+
+    expect(mocks.connectorsAllowed).toHaveBeenCalledWith({
+      userId: 'user-1',
+      organizationId: null,
+      planTier: 'pro',
+    });
+    expect(mocks.loadCatalog).toHaveBeenCalled();
+    expect(plan?.unusable).toEqual(['linear']);
+  });
+});

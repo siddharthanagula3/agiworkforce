@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   canUseBillingPlanCapability,
@@ -374,6 +373,7 @@ export async function resolveLiveVoiceFunctionTools(input: {
   organizationId: string | null;
   planTier: string | null;
   backendModel: ModelMetadata;
+  connectorsAllowed: boolean;
   clientHandoffs: readonly LiveVoiceClientHandoff[];
 }): Promise<LiveVoiceFunctionTools> {
   const tierPolicy = getTierPolicy(input.planTier);
@@ -381,12 +381,7 @@ export async function resolveLiveVoiceFunctionTools(input: {
     return { tools: [], names: [] };
   }
   const permissions = await loadConnectorToolPermissions(input.db, input.userId);
-  const connectorsAllowed = await connectorsAllowedWithoutRequest({
-    userId: input.userId,
-    organizationId: input.organizationId,
-    planTier: input.planTier,
-  });
-  const [operatorTools, connectorCatalog] = !connectorsAllowed
+  const [operatorTools, connectorCatalog] = !input.connectorsAllowed
     ? [[], { tools: [] }]
     : await Promise.all([
         loadMcpToolDefs(),
