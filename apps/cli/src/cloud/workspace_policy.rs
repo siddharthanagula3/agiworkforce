@@ -297,6 +297,16 @@ pub async fn refresh_when_due() {
     let Some(first) = claim_refresh() else {
         return;
     };
+    // Until the first read lands, a workspace-plan account's switches are
+    // unknown, so they count as off rather than defaulting open while the
+    // read is still in flight.
+    if closes_on_failed_read(
+        signed_in_owner().is_some(),
+        policy_known(),
+        on_workspace_plan(),
+    ) {
+        UNREADABLE_FOR_WORKSPACE.store(true, Ordering::Relaxed);
+    }
     let fetching = tokio::spawn(async {
         match fetch(PrivacyMode::Managed).await {
             Ok(()) => UNREADABLE_FOR_WORKSPACE.store(false, Ordering::Relaxed),
