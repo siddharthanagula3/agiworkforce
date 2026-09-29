@@ -2,7 +2,12 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
-import { isRelayPairingCode, type CompanionApprovalResponse } from '@agiworkforce/types';
+import {
+  isRelayPairingCode,
+  parseDispatchTaskReplies,
+  type CompanionApprovalResponse,
+  type DispatchTaskStepReply,
+} from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { normalizePairingInput } from '@/services/manualPairing';
@@ -177,6 +182,23 @@ export async function cancelDispatchTask(requestId: string, taskId?: string): Pr
       );
   }
   return acceptedByTransport;
+}
+
+export async function replyToDispatchTask(
+  taskRequestId: string,
+  replies: DispatchTaskStepReply[],
+): Promise<boolean> {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected' || !FEATURES.companion || !FEATURES.dispatch) return false;
+  const requestId = createDispatchRequestId();
+  if (!requestId || !parseDispatchTaskReplies(replies)) return false;
+  return sendControl('dispatch.task.reply', {
+    version: 1,
+    requestId,
+    taskRequestId,
+    replies,
+    sentAt: new Date().toISOString(),
+  });
 }
 
 export function sendHeartbeatPing(): void {
