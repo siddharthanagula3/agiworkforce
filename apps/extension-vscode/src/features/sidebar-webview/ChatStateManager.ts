@@ -129,6 +129,7 @@ import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/web
 import {
   approvalFilePath,
   approvalToolIdentity,
+  QUESTION_APPROVAL_IDENTITY,
   approvalToolLabel,
 } from '../permissions/approvalScope';
 import {
@@ -327,6 +328,7 @@ export type WebviewToExtMessage =
       type: 'messageAction';
       payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
     }
+  | { type: 'answerQuestion'; payload: { requestId: string; answer: string } }
   | {
       type: 'planDecision';
       payload: { decision: 'approve' } | { decision: 'reject'; feedback: string };
@@ -544,6 +546,7 @@ export type ExtToWebviewMessage =
         reversible?: boolean;
         reviewable?: true;
         alwaysAllow?: true;
+        question?: { options: string[] };
       };
     }
   | {
@@ -1313,6 +1316,18 @@ export class ChatStateManager {
         if (decision === 'deny' && guidance !== undefined && !noted) {
           await this._handleSendMessage(guidance);
         }
+        break;
+      }
+
+      case 'answerQuestion': {
+        const pending = this._pendingApprovals.get(msg.payload.requestId);
+        if (pending === undefined) break;
+        if (!(await pending.runtime.offers('approvalNotes'))) {
+          await this._resolveApproval(msg.payload.requestId, 'deny', false);
+          await this._handleSendMessage(msg.payload.answer);
+          break;
+        }
+        await this._resolveApproval(msg.payload.requestId, 'once', false, msg.payload.answer);
         break;
       }
 
@@ -4085,7 +4100,18 @@ export class ChatStateManager {
         label,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      if (this._sessionApprovals.has(identity)) {
+      const question =
+        identity === QUESTION_APPROVAL_IDENTITY
+          ? {
+              options:
+                event.questionOptions ??
+                event.detail
+                  .split('\n')
+                  .map((option) => option.trim())
+                  .filter((option) => option !== ''),
+            }
+          : undefined;
+      if (question === undefined && this._sessionApprovals.has(identity)) {
         await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
@@ -4100,7 +4126,8 @@ export class ChatStateManager {
           ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
           ...(proposed === undefined ? {} : { reviewable: true as const }),
-          ...(alwaysAllow ? { alwaysAllow: true as const } : {}),
+          ...(alwaysAllow && question === undefined ? { alwaysAllow: true as const } : {}),
+          ...(question === undefined ? {} : { question }),
         },
       });
       return;
