@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   seal: vi.fn(),
   audit: vi.fn(),
   evictCustomCaches: vi.fn(),
-  activeOrganization: vi.fn(async (): Promise<string | null> => null),
+  activeOrganization: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
