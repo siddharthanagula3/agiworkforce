@@ -26,12 +26,17 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-09-27",
+      "current": "2026-09-29",
       "versions": [
+        {
+          "date": "2026-09-29",
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements.",
+          "status": "current"
+        },
         {
           "date": "2026-09-27",
           "summary": "Adds the checks the referral program runs and their lawful basis, and states how many user-scoped tables account erasure covers.",
-          "status": "current"
+          "status": "archived"
         },
         {
           "date": "2026-09-22",
