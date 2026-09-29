@@ -2,30 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { RotateCcw, Square } from 'lucide-react-native';
-import {
-  ChatCodeRunResponseSchema,
-  chatCodeRunPath,
-  type ChatCodeRunResponse,
-} from '@agiworkforce/cloud-contracts';
+import type { ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { apiFetch } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { CODE_RUN_FAILED, runCodeAgain } from '../services/codeRun';
 
-const RUN_FAILED = 'The code did not run. Try again.';
 const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;
 
 interface CodeRunAgainProps {
   conversationId: string;
   language: string;
   code: string;
-}
-
-function serverMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object' || !('error' in payload)) return null;
-  const message = (payload as { error?: { message?: unknown } }).error?.message;
-  return typeof message === 'string' && message.trim() ? message : null;
 }
 
 export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainProps) {
@@ -46,20 +35,11 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
     setError(null);
     setResult(null);
     try {
-      const response = await apiFetch(chatCodeRunPath(conversationId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, code }),
-        signal: run.signal,
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        setError(serverMessage(payload) ?? RUN_FAILED);
-        return;
-      }
-      setResult(ChatCodeRunResponseSchema.parse(payload));
+      const outcome = await runCodeAgain({ conversationId, language, code, signal: run.signal });
+      if (outcome.ok) setResult(outcome.result);
+      else setError(outcome.message);
     } catch {
-      if (!run.signal.aborted) setError(RUN_FAILED);
+      if (!run.signal.aborted) setError(CODE_RUN_FAILED);
     } finally {
       if (controller.current === run) controller.current = null;
       setRunning(false);

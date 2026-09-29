@@ -170,9 +170,17 @@ function checkStatusDocuments(files) {
 
 const APP_ROUTER_ACTION_FILE = /\/app\/.*\/(archive)\/(route|page|layout)(\.[^/]+)?\.tsx?$/i;
 
+// A route segment named archive is a live URL, not retired source: the public
+// policy archive at /legal/archive serves dated versions, as Anthropic's
+// /legal/archive does. Its pages, nested dynamic segments and their tests are
+// product code.
+const APP_ROUTER_ARCHIVE_SEGMENT =
+  /^apps\/web\/app\/legal\/archive\/(?:(?:\[[^/]+\]|__tests__)\/)*[^/]+\.tsx?$/;
+
 function checkArchiveDirectories(files) {
   for (const file of files) {
     if (APP_ROUTER_ACTION_FILE.test(file)) continue;
+    if (APP_ROUTER_ARCHIVE_SEGMENT.test(file)) continue;
     if (/(^|\/)(archive|_archive|legacy|deprecated)\//i.test(file)) {
       errors.push(
         `${file} sits in an archive directory. Git is the archive, delete the tree instead of keeping a second copy of retired source.`,

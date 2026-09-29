@@ -22,6 +22,13 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/model-tiers', () => ({ canAccessModel: vi.fn(() => true) }));
+// Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
+// turns run for an account that accepted the current version.
+vi.mock('@/lib/server/terms', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  readTermsStanding: async () => ({ kind: 'current' }),
+}));
+
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
