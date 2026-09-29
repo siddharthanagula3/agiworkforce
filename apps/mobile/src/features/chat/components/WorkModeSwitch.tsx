@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
@@ -30,7 +31,7 @@ export function WorkModeSwitch() {
       {(['chat', 'agiwork'] as const).map((mode) => {
         const selected = mode === activeMode;
         return (
-          <Pressable
+          <PressableBox
             key={mode}
             accessibilityRole="tab"
             accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
@@ -61,7 +62,7 @@ export function WorkModeSwitch() {
             >
               {mode === 'chat' ? 'Chat' : 'Work'}
             </Text>
-          </Pressable>
+          </PressableBox>
         );
       })}
     </View>

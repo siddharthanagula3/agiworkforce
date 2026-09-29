@@ -12,16 +12,66 @@ const mocks = vi.hoisted(() => ({
   appendHandoffMessage: vi.fn(),
 }));
 
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/auth-guards', () => ({
+  requireAdmin: vi.fn(),
+  requireRole: vi.fn(),
+  requirePlatformAdmin: mocks.requirePlatformAdmin,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/support/handoff/handoff-service', () => ({
+  MissingContactEmailError: class MissingContactEmailError extends Error {},
+  cancelHandoffForOwner: vi.fn(),
+  escalateToHuman: vi.fn(),
+  getHandoffStatusForOwner: vi.fn(),
+  getWaitingQueue: vi.fn(),
+  sweepExpiredHandoffs: vi.fn(),
   claimHandoffForAgent: mocks.claimHandoffForAgent,
 }));
 vi.mock('@/lib/support/handoff/store', () => ({
+  cancelSessionForOwner: vi.fn(),
+  claimExpiredWaitingBatch: vi.fn(),
+  claimExpiredWaitingSession: vi.fn(),
+  claimSessionForAgent: vi.fn(),
+  closeIdleConnectedSessions: vi.fn(),
+  getSessionForOwner: vi.fn(),
+  insertHandoffSession: vi.fn(),
+  listFreshOnlineAgents: vi.fn(),
+  listHandoffMessages: vi.fn(),
+  listWaitingQueue: vi.fn(),
+  purgeOldHandoffSessions: vi.fn(),
+  recordEmailOutcome: vi.fn(),
+  upsertAgentPresence: vi.fn(),
   getSessionById: mocks.getSessionById,
   appendHandoffMessage: mocks.appendHandoffMessage,
 }));

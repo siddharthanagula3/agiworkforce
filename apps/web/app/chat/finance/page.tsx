@@ -8,11 +8,7 @@ export default function FinancePage() {
     <WebAppShell>
       <section
         data-design="agi"
-        className="min-h-full px-gutter-compact py-8 sm:px-gutter-regular sm:py-12 lg:px-gutter-wide"
-        style={{
-          background: 'hsl(var(--background))',
-          color: 'hsl(var(--foreground))',
-        }}
+        className="min-h-full bg-background px-gutter-compact py-8 text-foreground sm:px-gutter-regular sm:py-12 lg:px-gutter-wide"
       >
         <FinanceDashboard />
       </section>

@@ -50,6 +50,7 @@ import {
 } from '@/lib/connectors/catalog';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import {
+  isBrowserCommand,
   isDestructiveTool,
   isParallelSafeTool as isParallelSafeContractTool,
   type ToolActionClass as ContractToolActionClass,
@@ -527,6 +528,28 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: true,
     declared: true,
   },
+  browser_find: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+    readsPrivateData: true,
+  },
+  browser_fill_form: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
+  browser_history: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
 });
 
 const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
@@ -878,7 +901,13 @@ export function toContractToolDefinition(
  * before this predicate is reached.
  */
 export function policyAutoApprovesTool(policy: ToolApprovalPolicy, qualifiedName: string): boolean {
-  if (policy === 'ask_every_time' || isDeviceStepTool(qualifiedName)) return false;
+  if (
+    policy === 'ask_every_time' ||
+    isDeviceStepTool(qualifiedName) ||
+    isBrowserCommand(qualifiedName)
+  ) {
+    return false;
+  }
   const metadata = resolveToolMetadata(qualifiedName);
   if (metadata.declared && metadata.autoInReadOnlyMode === true) return true;
   if (policy === 'autonomous') return !isDestructiveToolMetadata(metadata);

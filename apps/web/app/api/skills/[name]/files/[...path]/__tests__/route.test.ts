@@ -12,19 +12,86 @@ const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/skill-catalog-service', () => ({
+  SKILL_REQUIREMENTS_UNMET_CODE: 'skill_requirements_unmet',
+  SkillCatalogUnavailableError: class SkillCatalogUnavailableError extends Error {},
+  dedupeByFirstClaimedName: vi.fn(),
+  executeManagedSkillTool: vi.fn(),
+  executeManagedSkillToolForPlugins: vi.fn(),
+  filterSkillsByInstallOverrides: vi.fn(),
+  findManagedDirectorySkillByName: vi.fn(),
+  findManagedSkillByName: vi.fn(),
+  findManagedSkillWithFiles: vi.fn(),
+  findSelectableSkillByName: vi.fn(),
+  getBundledSkillDownload: vi.fn(),
+  getBundledSkillDownloadForPlugins: vi.fn(),
+  getManagedSkillCatalog: vi.fn(),
+  getManagedSkillCatalogForPlugins: vi.fn(),
+  getManagedSkillDirectory: vi.fn(),
+  getManagedSkillDirectoryForPlugins: vi.fn(),
+  getManagedSkillLayers: vi.fn(),
+  getManagedSkillPluginOwners: vi.fn(),
+  invalidateManagedSkillCatalogCache: vi.fn(),
+  isDraftSkill: vi.fn(),
+  isPluginOwnedSkill: vi.fn(),
+  listManagedPluginSkillsWithFiles: vi.fn(),
+  listManagedSkillFiles: vi.fn(),
+  loadSelectableSkillCatalog: vi.fn(),
+  memoizeAsync: vi.fn(),
+  parseSkillLayersConfig: vi.fn(),
+  readManagedSkillFile: vi.fn(),
+  resetManagedSkillCatalogCacheForTests: vi.fn(),
+  selectedSkillRequirementFailure: vi.fn(),
+  skillRequiredTools: vi.fn(),
+  withoutDraftSkills: vi.fn(),
   findSelectableSkillWithFiles: mocks.find,
   readManagedSkillFileBytes: mocks.readManaged,
 }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
+  PluginPackageRefusedError: class PluginPackageRefusedError extends Error {},
+  PluginPermissionReviewRequiredError: class PluginPermissionReviewRequiredError extends Error {},
+  PluginVersionSuspendedError: class PluginVersionSuspendedError extends Error {},
+  approvePendingPluginPermissions: vi.fn(),
+  countPluginInstallations: vi.fn(),
+  getPluginInstallationSettings: vi.fn(),
+  installWebPlugin: vi.fn(),
+  listPluginInstallations: vi.fn(),
+  listPluginPermissionReviews: vi.fn(),
+  planWebPluginInstall: vi.fn(),
+  setWebPluginEnabled: vi.fn(),
+  uninstallWebPlugin: vi.fn(),
+  updatePluginInstallationSettings: vi.fn(),
   listEnabledPluginIds: mocks.listEnabled,
 }));
 vi.mock('@/lib/services/workspace-plugin-access', () => ({
+  listPermittedPluginIds: vi.fn(),
   workspaceAllowsPlugins: mocks.allowsPlugins,
 }));
 

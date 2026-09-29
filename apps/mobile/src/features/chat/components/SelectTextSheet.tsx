@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Modal, Platform, ScrollView, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
@@ -63,14 +64,14 @@ export function SelectTextSheet({
           >
             Select Text
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
         {onQuoteSelection ? (
           <>

@@ -62,8 +62,8 @@ export function SafeArtifactPreview({
   );
   const handleLoadError = useCallback(() => onDiagramFailed?.(''), [onDiagramFailed]);
   const handleRuntimeMessage = useCallback((event: WebViewMessageEvent) => {
-    const error = parseArtifactPreviewError(event.nativeEvent.data);
-    if (error) setRuntimeError(error.message);
+    const report = parseArtifactPreviewError(event.nativeEvent.data);
+    if (report) setRuntimeError(report.message);
   }, []);
 
   if (runtimeError !== null) {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { View, Pressable, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Code2 } from 'lucide-react-native';
 import {
   computeDerivedArtifactId,
@@ -81,7 +82,7 @@ export function StreamingArtifactCard({
 
   return (
     <>
-      <Pressable
+      <PressableBox
         onPress={() => setOpened({ id: artifact.id, ordinal: artifact.ordinal })}
         accessibilityRole="button"
         accessibilityLabel={`${STREAMING_ARTIFACT_TITLE}, ${typeLabel}, writing`}
@@ -125,7 +126,7 @@ export function StreamingArtifactCard({
         >
           {tail}
         </Text>
-      </Pressable>
+      </PressableBox>
       {viewer}
     </>
   );

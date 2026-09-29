@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { Bot } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
@@ -83,7 +84,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
         >
           {state.error}
         </Text>
-        <Pressable
+        <PressableBox
           onPress={() => setAttempt((value) => value + 1)}
           className="px-5 py-2.5 rounded-xl"
           style={{
@@ -97,7 +98,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
           <Text className="text-[13px] font-semibold" style={{ color: colors.teal }}>
             Try again
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
     );
   }
@@ -139,7 +140,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
         const timeLabel = cloudRunTimeLabel(run);
         const conversationId = run.conversationId;
         return (
-          <Pressable
+          <PressableBox
             key={run.id}
             disabled={!conversationId}
             onPress={() => {
@@ -174,7 +175,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
             <Text className="text-[12px]" style={{ color: cloudRunStateColor(runState, colors) }}>
               {CLOUD_RUN_STATE_LABELS[runState]}
             </Text>
-          </Pressable>
+          </PressableBox>
         );
       })}
     </ScrollView>
