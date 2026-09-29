@@ -11,9 +11,10 @@
  * visible here rather than hidden in four files; consolidating two of them
  * changes an output and belongs in its own change with its fixture.
  *
- * Every quantifier in the detection rules is bounded where a second run follows
- * a required literal, which is what keeps them linear on hostile input; the
- * web ReDoS test measures them.
+ * Every quantifier in the detection rules and in the rules the redaction
+ * policies apply is bounded where a second run follows a required literal,
+ * which is what keeps them linear on hostile input; the web ReDoS test measures
+ * the detection rules and the policy timing test measures every policy.
  */
 
 export type SecretRuleSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -271,7 +272,7 @@ export const SECRET_PATTERN_RULES = Object.freeze({
     label: 'Credential assignment',
     severity: 'high',
     pattern:
-      /((?:password|passwd|secret|token|api[_-]?key|apikey|credential)[A-Za-z0-9_-]*["']?\s*[:=]\s*)(["']?)[^\s"',;)\]}]{6,}\2/gi,
+      /((?:password|passwd|secret|token|api[_-]?key|apikey|credential)[A-Za-z0-9_-]{0,64}["']?\s{0,16}[:=]\s{0,16})(["']?)[^\s"',;)\]}]{6,}\2/gi,
   },
   'generic-api-key-assignment': {
     label: 'Generic API Key',
@@ -302,12 +303,12 @@ export const SECRET_PATTERN_RULES = Object.freeze({
   'database-url-credentials': {
     label: 'Database URL credentials',
     severity: 'critical',
-    pattern: /(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s/:@]+:[^\s]+@/gi,
+    pattern: /(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s/:@]{1,256}:[^\s]{1,512}@/gi,
   },
   'url-credentials': {
     label: 'Credentials in a URL',
     severity: 'critical',
-    pattern: /\b([a-z][a-z0-9+.-]*):\/\/[^\s:@/]+:[^\s@/]+@/gi,
+    pattern: /\b([a-z][a-z0-9+.-]{0,31}):\/\/[^\s:@/]{1,256}:[^\s@/]{1,256}@/gi,
   },
   'postgres-url-credentials': {
     label: 'Database URL with Credentials',
