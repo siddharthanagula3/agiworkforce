@@ -56,6 +56,7 @@ import {
   useDirectoryAdapter,
 } from '@/features/directory';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
+import { openConnectorAuthorization } from '../lib/open-connector-authorization';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -594,7 +595,7 @@ export function useConnectorsSettingsAdapter({
       const parsed = OAuthStartSchema.safeParse(await res.json().catch(() => null));
       const body = parsed.success ? parsed.data : null;
       if (res.ok && body?.authorizeUrl) {
-        window.location.href = body.authorizeUrl;
+        openConnectorAuthorization(body.authorizeUrl, () => void loadConnectors());
         return;
       }
       throw new Error(
@@ -603,7 +604,7 @@ export function useConnectorsSettingsAdapter({
           `Could not connect ${name}.`,
       );
     },
-    [authedHeaders],
+    [authedHeaders, loadConnectors],
   );
 
   const connectConnector = useCallback(
@@ -683,7 +684,7 @@ export function useConnectorsSettingsAdapter({
               );
               const probeBody = probeParsed.success ? probeParsed.data : null;
               if (probeRes.ok && probeBody?.authorizeUrl) {
-                window.location.href = probeBody.authorizeUrl;
+                openConnectorAuthorization(probeBody.authorizeUrl, () => void loadConnectors());
                 return;
               }
               throw new Error(
@@ -694,7 +695,7 @@ export function useConnectorsSettingsAdapter({
             }
           }
           if (body?.installStartPath) {
-            window.location.href = body.installStartPath;
+            openConnectorAuthorization(body.installStartPath, () => void loadConnectors());
             return;
           }
         }
@@ -708,7 +709,13 @@ export function useConnectorsSettingsAdapter({
         { connectorId: saved.connectorId, connectedAt: saved.connectedAt },
       ]);
     },
-    [authedHeaders, customConnectors, onOpenCustomConnector, startCustomConnectorSignIn],
+    [
+      authedHeaders,
+      customConnectors,
+      onOpenCustomConnector,
+      startCustomConnectorSignIn,
+      loadConnectors,
+    ],
   );
 
   const setGithubPrReview = useCallback(
