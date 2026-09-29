@@ -266,9 +266,6 @@ Code: `apps/web/lib/services/cloud-code-commands.ts:21-21`, `packages/contracts/
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | On a GitHub PR page the in-page panel sends the visible page text with an explain/review/summary prompt; no diff fetch and nothing is posted back. | handler |
-
-Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 
 ## S67.22: Scan for security problems.
 
@@ -292,9 +289,8 @@ Code: `apps/web/lib/services/cloud-code-commands.ts:21-21`, `packages/contracts/
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| chrome | partial | Explain diff / Review comments page actions explain a PR from its page text only. | handler |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.24: Propose patches.
 

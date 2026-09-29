@@ -44,7 +44,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 | mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | projects drawer lists a project's chats; the recents list is not grouped. Parity check pending (lead decision list). | ui |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
@@ -116,18 +115,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `a
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
-
-## S5.25: Back and forward navigation.
-
-- Done when: Back and forward navigation move through the user's in-app history.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only drawer sub-pages have a Back button; switching tabs, chats and runs keeps no back/forward history. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6639-6640`, `apps/extension/src/side_panel.ts:6686-6686`
 
 ## S5.26: Global command palette.
 

@@ -159,6 +159,139 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Offered in a voice session: hands the goal you spoke to the chat as an AGI Work task, which runs in the background and is tracked in Tasks, where you can stop it. Reversible, no egress path.',
   },
+  device_read_file: {
+    label: 'Read a file on your computer',
+    description:
+      'Reads a text file in a folder you granted to the desktop app. The contents come back to the chat.',
+  },
+  device_list_folder: {
+    label: 'List a folder on your computer',
+    description: 'Lists the files and folders inside a folder you granted to the desktop app.',
+  },
+  device_find_files: {
+    label: 'Find files on your computer',
+    description:
+      'Finds files by name inside a folder you granted to the desktop app and returns their paths.',
+  },
+  device_search_text: {
+    label: 'Search files on your computer',
+    description:
+      'Searches the text of files inside a folder you granted to the desktop app and returns matching lines.',
+  },
+  device_write_file: {
+    label: 'Write a file on your computer',
+    description:
+      'Creates or replaces a text file inside a folder you granted to the desktop app. Not reversible from the chat.',
+  },
+  device_edit_file: {
+    label: 'Edit a file on your computer',
+    description:
+      'Replaces one exact passage in a text file inside a folder you granted to the desktop app. Not reversible from the chat.',
+  },
+  device_run_command: {
+    label: 'Run a command on your computer',
+    description:
+      'Runs a terminal command in a folder you granted and returns its output once it exits. The desktop app asks for the exact command first.',
+  },
+  device_start_command: {
+    label: 'Start a command on your computer',
+    description:
+      'Starts a command that keeps running, such as a dev server, in a folder you granted. The desktop app asks for the exact command first.',
+  },
+  device_command_output: {
+    label: 'Read a running command',
+    description:
+      'Reads what a command started on your computer printed since the last read, and can type into it after you approve the input.',
+  },
+  device_command_stop: {
+    label: 'Stop a running command',
+    description:
+      'Stops a command the assistant started on your computer, together with everything it started.',
+  },
+  device_screenshot: {
+    label: 'Take a screenshot',
+    description:
+      'Captures your screen through the desktop app so the assistant can see what is open. The picture comes back to the chat.',
+  },
+  device_zoom: {
+    label: 'Look closely at the screen',
+    description:
+      'Captures one region of your screen at full detail through the desktop app. The picture comes back to the chat.',
+  },
+  device_move: {
+    label: 'Move the pointer',
+    description:
+      'Moves the mouse pointer on your computer without clicking. Used between steps while controlling the screen.',
+  },
+  device_scroll: {
+    label: 'Scroll on your computer',
+    description: 'Scrolls the window or area under a point on your screen through the desktop app.',
+  },
+  device_wait: {
+    label: 'Wait on your computer',
+    description:
+      'Pauses before the next step so a window can open or a page can load. It does nothing on its own.',
+  },
+  device_click: {
+    label: 'Click on your computer',
+    description:
+      'Clicks at a point on your screen through the desktop app. A click can send, buy or delete in whatever app is open.',
+  },
+  device_drag: {
+    label: 'Drag on your computer',
+    description:
+      'Presses, moves and releases the mouse on your screen, to drag a file, a selection or a slider.',
+  },
+  device_type: {
+    label: 'Type on your computer',
+    description:
+      'Types text into whatever has keyboard focus on your computer. Typed text can be sent by the app that receives it.',
+  },
+  device_key: {
+    label: 'Press a key on your computer',
+    description:
+      'Presses a key or shortcut on your computer, such as Enter or a menu shortcut, in whatever app is in front.',
+  },
+  device_browser_read_page: {
+    label: 'Read your Chrome tab',
+    description:
+      'Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_screenshot: {
+    label: 'Capture your Chrome tab',
+    description:
+      'Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_console: {
+    label: 'Read the Chrome console',
+    description:
+      'Reads the console messages the active tab in your paired Chrome logged. The desktop app always asks first.',
+  },
+  device_browser_network: {
+    label: 'Read Chrome network activity',
+    description:
+      'Reads the requests the active tab in your paired Chrome made, with addresses and status. The desktop app always asks first.',
+  },
+  device_browser_navigate: {
+    label: 'Open a page in Chrome',
+    description:
+      'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
+  },
+  device_browser_click: {
+    label: 'Click in Chrome',
+    description:
+      'Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved.',
+  },
+  device_browser_type: {
+    label: 'Type in Chrome',
+    description:
+      'Types into a field on the active tab of your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_download: {
+    label: 'Download through Chrome',
+    description:
+      'Downloads a file through your paired Chrome into your downloads folder. The desktop app always asks first.',
+  },
 };
 
 export function buildToolApprovalToolRows(

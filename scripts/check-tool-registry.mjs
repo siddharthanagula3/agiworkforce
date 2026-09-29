@@ -41,9 +41,6 @@ const TOOL_NAME_VALUE = /^[a-z][a-z0-9_]*$/u;
  * Tools offered today with no declaration. Each entry states why it is here;
  * the list may only shrink, and a name not on it fails the guard.
  */
-const DEVICE_STEP_REASON =
-  "a device step runs on the user's own machine under the desktop runtime's own permission prompt, and the gate allows it at rank 2 before any metadata is read; declaring one changes the approval surface";
-
 const BROWSER_COMMAND_REASON =
   "a browser command runs in the user's own paired browser through the extension bridge, which holds its own allowlist and consent gate; declaring one here changes which policy auto-approves it";
 
@@ -56,19 +53,6 @@ export const UNDECLARED_BASELINE = new Map([
     'ask_clarifying_questions',
     'asks the user a question and returns their answer; declaring it read-class changes which policy auto-approves it, which is a founder-frozen decision',
   ],
-  ['device_read_file', DEVICE_STEP_REASON],
-  ['device_list_folder', DEVICE_STEP_REASON],
-  ['device_write_file', DEVICE_STEP_REASON],
-  ['device_run_command', DEVICE_STEP_REASON],
-  ['device_screenshot', DEVICE_STEP_REASON],
-  ['device_zoom', DEVICE_STEP_REASON],
-  ['device_move', DEVICE_STEP_REASON],
-  ['device_click', DEVICE_STEP_REASON],
-  ['device_drag', DEVICE_STEP_REASON],
-  ['device_scroll', DEVICE_STEP_REASON],
-  ['device_type', DEVICE_STEP_REASON],
-  ['device_key', DEVICE_STEP_REASON],
-  ['device_wait', DEVICE_STEP_REASON],
   ['browser_read_page', BROWSER_COMMAND_REASON],
   ['browser_click', BROWSER_COMMAND_REASON],
   ['browser_type', BROWSER_COMMAND_REASON],

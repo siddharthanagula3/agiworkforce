@@ -89,9 +89,8 @@ nothing is left.
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | Selecting text in any file, including .md/.txt, shows AGI actions in the editor right-click menu (Explain, Fix, Refactor, Send Selection to a New Chat) via the code-edit flow; no document editor, floating toolbar or writing-specific actions. | ui |
-| chrome | partial | Selecting text on a web page offers right-click Ask / Explain / Translate that open the side panel chat; there is no floating selection toolbar and nothing is written back into the page. | ui |
 
-Code: `apps/extension-vscode/package.json:813-860`, `apps/extension-vscode/src/core/commandSetup.ts:964-975`, `apps/extension/src/background.ts:4526-4530`, `apps/extension/src/side_panel.ts:10950-10958`
+Code: `apps/extension-vscode/package.json:813-860`, `apps/extension-vscode/src/core/commandSetup.ts:964-975`
 
 ## S27.16: Rewrite selection.
 
