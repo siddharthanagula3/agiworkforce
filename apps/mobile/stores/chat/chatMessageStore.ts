@@ -124,6 +124,7 @@ interface MessageState {
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
+  setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   keepTemporaryConversation: (id: string) => Promise<void>;
@@ -677,6 +678,36 @@ export const useChatMessageStore = create<MessageState>()(
           }
         }
         return true;
+      },
+
+      setConversationProject: async (id, projectId) => {
+        const nextProjectId = projectId ?? undefined;
+        if (get().conversations.some((c) => c.id === id)) {
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === id ? { ...c, projectId: nextProjectId } : c,
+            ),
+          }));
+          return true;
+        }
+        const cloudStore = getCloudStore();
+        const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
+        if (!cloudConversation) return false;
+        const previousProjectId = cloudConversation.projectId;
+        cloudStore.getState().patchCloudConversation(id, { projectId: nextProjectId });
+        if (!shouldSyncConversationRemote(cloudConversation)) return true;
+        try {
+          await managedCloudChat.updateConversation(id, { projectId });
+          markConversationForSync(id);
+          return true;
+        } catch {
+          cloudStore.getState().patchCloudConversation(id, { projectId: previousProjectId });
+          Alert.alert(
+            projectId ? 'Could not move chat to project' : 'Could not remove chat from project',
+            'The change has been undone. Check your connection and try again.',
+          );
+          return false;
+        }
       },
 
       pinConversation: async (id) => {

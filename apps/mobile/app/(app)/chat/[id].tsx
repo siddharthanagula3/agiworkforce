@@ -1932,7 +1932,18 @@ export default function ChatScreen() {
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
         {/* Picker modal only -- the trigger lives in the "+" sheet. */}
-        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
+        <ProjectSelectorBar
+          openSignal={projectPickerOpenSignal}
+          {...(conversation && id
+            ? {
+                conversation: {
+                  id,
+                  ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+                  executionMode: conversationExecutionMode,
+                },
+              }
+            : {})}
+        />
 
         {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
