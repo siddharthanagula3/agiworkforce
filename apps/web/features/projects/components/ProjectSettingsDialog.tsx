@@ -68,7 +68,6 @@ export function ProjectSettingsDialog({
     setUsesAccountStyle(project.usesAccountStyle !== false);
     setDefaultModelId(project.defaultModelId ?? null);
   }, [
-    project.id,
     project.name,
     project.description,
     project.instructions,
