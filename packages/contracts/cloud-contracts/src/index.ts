@@ -63,3 +63,4 @@ export * from './free-quota';
 export * from './account-deletion';
 export * from './terms-acceptance';
 export * from './mobile-push';
+export * from './bank-accounts';
