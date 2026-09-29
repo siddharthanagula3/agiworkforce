@@ -5647,6 +5647,8 @@ function mapInPagePromptFailure(
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
       return inPagePromptFailure('account_unavailable', result.message, true);
+    case 'account_suspended':
+      return inPagePromptFailure('account_unavailable', result.message);
     case 'rate_limited':
       return inPagePromptFailure('rate_limited', result.message, true);
     case 'cancelled':
