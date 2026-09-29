@@ -324,6 +324,9 @@ export type ManagedCloudScheduleShare = z.infer<typeof ManagedCloudScheduleShare
 export const ManagedCloudScheduleShareResponseSchema = z.object({
   share: ManagedCloudScheduleShareSchema,
 });
+export type ManagedCloudScheduleShareResponse = z.input<
+  typeof ManagedCloudScheduleShareResponseSchema
+>;
 
 export const MANAGED_CLOUD_SCHEDULE_SHARES_PATH = '/api/schedule-shares';
 

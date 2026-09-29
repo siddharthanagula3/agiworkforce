@@ -324,3 +324,4 @@ export type CloudCodePullRequestStatusReply = z.input<typeof CloudCodePullReques
 export type CloudCodeTurnCancellationReply = z.input<typeof CloudCodeTurnCancellationSchema>;
 export type CloudCodeAgentTurnReply = z.input<typeof CloudCodeAgentTurnSchema>;
 export type CloudCodeAgentApprovalsReply = z.input<typeof CloudCodeAgentApprovalsSchema>;
+export type CloudCodeSharedSessionReply = z.input<typeof CloudCodeSharedSessionSchema>;
