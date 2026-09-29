@@ -88,6 +88,10 @@ const it = {
     'Questo modello non è disponibile con il tuo piano attuale o con la configurazione del provider.',
   'chatNotice.trustBeforeResume':
     "Considera attendibile quest'area di lavoro prima di riprendere una sessione di sviluppo.",
+  'chatNotice.cloudSessionReadOnly':
+    'Questa sessione Code nel cloud si apre qui in sola lettura. Continuala sul web oppure esegui `agi code teleport` per portarla su questo computer.',
+  'chatNotice.openOnWeb': 'Apri sul web',
+  'conversationTree.cloudLabel': 'Cloud',
   'chatNotice.stopBeforeOpening':
     "Interrompi la risposta corrente prima di aprire un'altra sessione di sviluppo.",
   'chatNotice.historyUnavailable':

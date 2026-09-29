@@ -2,6 +2,7 @@
 import type { DeveloperSessionSource } from './DeveloperSessionSource';
 import type { DeveloperSessionTrustMode } from './DeveloperSessionTrustMode';
 import type { DeveloperSessionWriter } from './DeveloperSessionWriter';
+import type { ThreadLocation } from './ThreadLocation';
 import type { ThreadStatus } from './ThreadStatus';
 
 export type ThreadSummary = {
@@ -45,4 +46,9 @@ export type ThreadSummary = {
    * no writer has claimed it.
    */
   writer?: DeveloperSessionWriter;
+  /**
+   * Where the thread runs. Absent for a thread on this machine; `cloud`
+   * for a cloud Code session listed beside the local ones.
+   */
+  location?: ThreadLocation;
 };

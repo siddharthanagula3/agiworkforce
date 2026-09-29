@@ -74,6 +74,10 @@ const en = {
   'chatNotice.modelNotOnPlan':
     'This model is not available for your current plan or provider setup.',
   'chatNotice.trustBeforeResume': 'Trust this workspace before resuming a developer session.',
+  'chatNotice.cloudSessionReadOnly':
+    'This cloud Code session opens read-only here. Continue it on the web, or run `agi code teleport` to bring it to this machine.',
+  'chatNotice.openOnWeb': 'Open on the web',
+  'conversationTree.cloudLabel': 'Cloud',
   'chatNotice.stopBeforeOpening':
     'Stop the current response before opening another developer session.',
   'chatNotice.historyUnavailable': 'Developer session history is unavailable in this chat surface.',

@@ -94,6 +94,7 @@ fn thread(id: &str) -> ThreadSummary {
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
         status: ThreadStatus::Idle,
+        location: None,
     }
 }
 

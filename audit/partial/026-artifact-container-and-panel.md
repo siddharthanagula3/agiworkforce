@@ -58,18 +58,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S26.14: Source/preview toggle.
-
-- Done when: For a renderable artifact the user can switch between the rendered preview and its source.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Source prints in the terminal, but a rendered preview exists only by opening the published page in the browser; for an unpublished artifact `agi artifacts open` opens its conversation instead. | surface-only |
-
-Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
-
 ## S26.15: Direct-edit mode.
 
 - Done when: The user can edit an artifact's content directly in the viewer and save it as a new version.
@@ -148,10 +136,7 @@ Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No command attaches an artifact to a project; `agi artifacts list --project` only filters by the project its conversation already sits in. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 ## S26.28: Continue from another chat.
 
@@ -164,18 +149,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S26.29: Export menu.
-
-- Done when: The artifact viewer offers a menu of export formats and each choice saves a file in that format.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
-
-Code: `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
 ## S26.36: Dependency-loading state.
 

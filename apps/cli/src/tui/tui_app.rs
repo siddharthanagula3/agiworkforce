@@ -442,6 +442,17 @@ struct TuiApp {
         tokio::sync::mpsc::UnboundedSender<String>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
     ),
+    remote: Option<RemoteLink>,
+    remote_prompts: Vec<String>,
+    remote_label: Option<String>,
+}
+
+struct RemoteLink {
+    host: Arc<crate::tui::remote_host::TuiRemoteHost>,
+    inbox: tokio::sync::mpsc::UnboundedReceiver<crate::tui::remote_host::RemoteInput>,
+    stop: tokio::sync::watch::Sender<bool>,
+    status: Arc<std::sync::Mutex<Option<crate::remote_control::RemoteControlStatus>>>,
+    task: tokio::task::JoinHandle<()>,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -628,6 +639,9 @@ impl TuiApp {
             pasted_texts: Default::default(),
             queued_prompts: Vec::new(),
             side_answers: tokio::sync::mpsc::unbounded_channel(),
+            remote: None,
+            remote_prompts: Vec::new(),
+            remote_label: None,
         }
     }
 
@@ -652,8 +666,11 @@ impl TuiApp {
         if !resolved.is_file() {
             return Err(format!("{path} is not a file"));
         }
+        if crate::documents::DocumentKind::for_path(&resolved).is_some() {
+            return self.stage_document(&resolved, &root);
+        }
         if !crate::is_image_extension(path) {
-            return Err(format!("{path} is not an image"));
+            return Err(format!("{path} is not an image, PDF or Office document"));
         }
         if crate::model_catalog::find(&self.session.model)
             .is_some_and(|model| !model.supports_vision)
@@ -688,6 +705,32 @@ impl TuiApp {
         self.session
             .pending_image_blocks
             .push(attachment.into_image_block());
+        self.staged_images.push(label.clone());
+        Ok(label)
+    }
+
+    fn stage_document(
+        &mut self,
+        resolved: &std::path::Path,
+        root: &std::path::Path,
+    ) -> Result<String, String> {
+        let block = crate::load_document_attachment(&resolved.to_string_lossy())
+            .map_err(|error| format!("{error:#}"))?;
+        let size = std::fs::metadata(resolved)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        let label = format!(
+            "{} ({})",
+            resolved
+                .strip_prefix(root)
+                .unwrap_or(resolved)
+                .to_string_lossy(),
+            crate::tools::format_size(size)
+        );
+        if self.staged_images.contains(&label) {
+            return Err(format!("{label} is already attached"));
+        }
+        self.session.pending_image_blocks.push(block);
         self.staged_images.push(label.clone());
         Ok(label)
     }
@@ -1247,6 +1290,7 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
+    settled_elsewhere: &dyn Fn() -> bool,
 ) -> Result<
     Option<(
         crate::tui::widgets::approval_overlay::ApprovalChoice,
@@ -1260,7 +1304,7 @@ fn run_tui_approval_modal(
     let expires_at = Instant::now() + APPROVAL_EXPIRY;
 
     loop {
-        if Instant::now() >= expires_at {
+        if Instant::now() >= expires_at || settled_elsewhere() {
             terminal.draw(|frame| {
                 draw_turn_chrome(frame, ctx);
             })?;
@@ -1795,6 +1839,7 @@ impl TuiApp {
             .as_ref()
             .filter(|(_, at)| at.elapsed() <= STATUS_NOTICE_TTL)
             .map(|(text, _)| text.as_str())
+            .or(self.remote_label.as_deref())
     }
 }
 
@@ -3467,7 +3512,14 @@ fn open_command_popup(app: &mut TuiApp) {
     // would reject them). They are still dispatched by `handle_slash_command`
     // below, so surface them here so `/` makes them discoverable in the TUI.
     for (name, desc) in [
-        ("attach", "Attach an image to the next message"),
+        (
+            "attach",
+            "Attach an image, PDF or Office file to the next message",
+        ),
+        (
+            "remote-control",
+            "Continue this session from the AGI Workforce phone app",
+        ),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
@@ -3685,6 +3737,144 @@ fn drain_side_answers(app: &mut TuiApp) {
             role: ChatRole::System,
             text,
         });
+    }
+}
+
+fn remote_status_label(status: &crate::remote_control::RemoteControlStatus) -> Option<String> {
+    use crate::remote_control::RemoteControlStatus;
+    match status {
+        RemoteControlStatus::Waiting { .. } => {
+            Some("Remote Control: waiting for your phone".to_string())
+        }
+        RemoteControlStatus::Connected { phone } => {
+            Some(format!("Remote Control: {}", sanitize_terminal_text(phone)))
+        }
+        RemoteControlStatus::PhoneLeft => Some("Remote Control: phone disconnected".to_string()),
+        RemoteControlStatus::PhoneNeedsUpdate => {
+            Some("Remote Control: update the phone app".to_string())
+        }
+        RemoteControlStatus::Reconnecting => Some("Remote Control: reconnecting".to_string()),
+        RemoteControlStatus::Off => None,
+    }
+}
+
+fn start_remote_control(app: &mut TuiApp) -> String {
+    if app.remote.is_some() {
+        return "Remote Control is already on. /remote-control off stops it.".to_string();
+    }
+    let Some(thread_id) = app.session.managed_session_id().map(str::to_string) else {
+        return "Remote Control needs a saved session, and this one is not being saved."
+            .to_string();
+    };
+    if let Err(error) = app.session.persist_managed_session() {
+        return format!(
+            "Remote Control could not save this session first: {}",
+            sanitize_terminal_text(&format!("{error:#}"))
+        );
+    }
+    let workspace = app.workspace_root();
+    let inner = match crate::runtime::session_control::ManagedSessionStore::user_config()
+        .map_err(|error| error.to_string())
+        .and_then(|store| {
+            crate::app_server::CliDeveloperSessionHost::new_with_store(
+                app.config.clone(),
+                workspace.clone(),
+                store,
+                false,
+            )
+            .map_err(|error| error.to_string())
+        }) {
+        Ok(inner) => inner,
+        Err(error) => {
+            return format!(
+                "Remote Control could not start: {}",
+                sanitize_terminal_text(&error)
+            )
+        }
+    };
+    let (host, inbox) = crate::tui::remote_host::TuiRemoteHost::new(inner, thread_id);
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let status = Arc::new(std::sync::Mutex::new(None));
+    let sink = Arc::clone(&status);
+    let relay_host = Arc::clone(&host);
+    let task = tokio::spawn(async move {
+        let result = crate::remote_control::run_with(
+            relay_host,
+            &workspace,
+            stopped,
+            move |update: crate::remote_control::RemoteControlStatus| {
+                use crate::remote_control::RemoteControlStatus;
+                match &update {
+                    RemoteControlStatus::Waiting { folder, pairing_line } => {
+                        crate::tui::push_tui_notice(format!(
+                            "Remote Control is on for {folder}. Open AGI Workforce on your phone to continue this session there.\n{pairing_line}"
+                        ))
+                    }
+                    RemoteControlStatus::Connected { phone } => crate::tui::push_tui_notice(
+                        format!("Remote Control: {} is connected. It sees this session's messages, tool activity and approvals, and can answer them.", sanitize_terminal_text(phone)),
+                    ),
+                    RemoteControlStatus::PhoneLeft => crate::tui::push_tui_notice(
+                        "Remote Control: the phone disconnected. It can reconnect while Remote Control stays on.".to_string(),
+                    ),
+                    RemoteControlStatus::PhoneNeedsUpdate => crate::tui::push_tui_notice(
+                        "Remote Control: the phone app needs an update to connect.".to_string(),
+                    ),
+                    RemoteControlStatus::Reconnecting | RemoteControlStatus::Off => {}
+                }
+                if let Ok(mut current) = sink.lock() {
+                    *current = Some(update);
+                }
+            },
+        )
+        .await;
+        crate::tui::push_tui_notice(match result {
+            Ok(()) => "Remote Control is off.".to_string(),
+            Err(error) => format!("Remote Control stopped: {error:#}"),
+        });
+    });
+    app.remote = Some(RemoteLink {
+        host,
+        inbox,
+        stop,
+        status,
+        task,
+    });
+    app.remote_label = Some("Remote Control: starting".to_string());
+    "Starting Remote Control for this session. /remote-control off stops it.".to_string()
+}
+
+fn stop_remote_control(app: &mut TuiApp) -> String {
+    app.remote_label = None;
+    match app.remote.take() {
+        Some(link) => {
+            let _ = link.stop.send(true);
+            "Stopping Remote Control; the phone can no longer reach this session.".to_string()
+        }
+        None => "Remote Control is not on.".to_string(),
+    }
+}
+
+fn drain_remote_control(app: &mut TuiApp) {
+    let Some(link) = app.remote.as_mut() else {
+        return;
+    };
+    if link.task.is_finished() {
+        app.remote = None;
+        app.remote_label = None;
+        return;
+    }
+    while let Ok(input) = link.inbox.try_recv() {
+        if let crate::tui::remote_host::RemoteInput::Message(text) = input {
+            app.remote_prompts.push(text);
+        }
+    }
+    if let Some(label) = link
+        .status
+        .lock()
+        .ok()
+        .and_then(|status| status.as_ref().map(remote_status_label))
+    {
+        app.remote_label = label;
     }
 }
 
@@ -4088,13 +4278,14 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunRemoteControl(String),
     RunFeedback(crate::cloud::feedback::FeedbackKind, String),
 }
 
 const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
-  /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <file>   Attach an image, PDF or Office file
   /attach --full <image>  Attach it without scaling it down, for fine detail
   /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
@@ -4413,16 +4604,24 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Started new conversation.".to_string())
         }
 
+        "/models" if !arg.is_empty() => SlashResult::SystemMessage(
+            crate::provider::find_model(arg)
+                .map(|model| crate::provider::format_model_detail(&model))
+                .unwrap_or_else(|| format!("No model named {arg} in the catalog.")),
+        ),
+
         "/models" | "/providers" => {
             let models_output = crate::model_catalog::catalog()
                 .all()
                 .iter()
                 .map(|m| {
                     let flags = format!(
-                        "{}{}{}",
+                        "{}{}{}{}{}",
                         if m.supports_tools { "T" } else { " " },
                         if m.supports_vision { "V" } else { " " },
                         if m.supports_reasoning { "R" } else { " " },
+                        if m.supports_pdf { "P" } else { " " },
+                        if m.supports_audio_input { "A" } else { " " },
                     );
                     format!(
                         "  {} [{}] {:>6}K ctx  {} {}",
@@ -4443,7 +4642,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .collect::<Vec<_>>()
                 .join("\n");
             SlashResult::SystemMessage(format!(
-                "Available models:\n{models_output}\n\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
+                "Available models:\n{models_output}\n\nFlags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input. /models <id> shows one model.\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
             ))
         }
 
@@ -4772,7 +4971,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     SlashResult::RunAttachUrl(url.to_string())
                 }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
-                    "No images staged for the next turn.".to_string()
+                    "Nothing staged for the next turn.".to_string()
                 } else {
                     let rows: Vec<String> = app
                         .staged_images
@@ -4933,6 +5132,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Side query ──
+        "/remote-control" | "/rc" => SlashResult::RunRemoteControl(arg.to_string()),
+
         "/btw" => {
             if arg.is_empty() {
                 SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
@@ -5597,6 +5798,10 @@ pub async fn run(
     if let Some(handle) = mcp_attach_join.take() {
         handle.abort();
     }
+    if let Some(link) = app.remote.take() {
+        let _ = link.stop.send(true);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(3), link.task).await;
+    }
 
     // A turn cancelled with Esc/Ctrl-C reconciles history in memory but never
     // reaches the end-of-turn persist, so quitting straight after a cancel
@@ -5705,6 +5910,23 @@ async fn run_event_loop(
         }
 
         drain_side_answers(app);
+        drain_remote_control(app);
+        if !app.is_loading && !app.remote_prompts.is_empty() {
+            let text = std::mem::take(&mut app.remote_prompts).join("\n\n");
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "From your phone:".to_string(),
+            });
+            let staged = std::mem::take(&mut app.session.pending_image_blocks);
+            let labels = std::mem::take(&mut app.staged_images);
+            let context = std::mem::take(&mut app.turn_context);
+            let sent = send_message(terminal, app, &text).await;
+            app.session.pending_image_blocks = staged;
+            app.staged_images = labels;
+            app.turn_context = context;
+            sent?;
+            continue;
+        }
         let queued = (!app.is_loading && !app.queued_prompts.is_empty())
             .then(|| std::mem::take(&mut app.queued_prompts).join("\n\n"));
         if queued.is_some() || event::poll(super::motion::FRAME_INTERVAL)? {
@@ -6014,6 +6236,19 @@ async fn run_event_loop(
                                     &argument,
                                 )
                                 .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunRemoteControl(action) => {
+                                let text = match action.trim() {
+                                    "off" | "stop" => stop_remote_control(app),
+                                    "" | "on" | "start" => start_remote_control(app),
+                                    other => {
+                                        format!("Usage: /remote-control [on|off], not {other}")
+                                    }
+                                };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -6491,6 +6726,10 @@ async fn send_message_with_prompt(
         });
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
+    let remote_host = app.remote.as_ref().map(|link| Arc::clone(&link.host));
+    if let Some(host) = &remote_host {
+        host.begin_turn(broker.clone());
+    }
 
     // Stream tool lifecycle events into a local cell list during the turn, then
     // surface them in the transcript after it ends. Drained in the select! loop
@@ -6607,8 +6846,36 @@ async fn send_message_with_prompt(
                             broker.complete_with_note(req.id, decision, answer).await;
                             continue;
                         }
-                        let Some((choice, note)) =
-                            run_tui_approval_modal(terminal, &approval_ctx, &req)?
+                        if let Some(host) = &remote_host {
+                            host.approval_requested(&req);
+                        }
+                        let answered_remotely = || {
+                            remote_host
+                                .as_ref()
+                                .and_then(|host| host.answered_remotely(req.id))
+                        };
+                        let modal = run_tui_approval_modal(
+                            terminal,
+                            &approval_ctx,
+                            &req,
+                            &|| answered_remotely().is_some(),
+                        )?;
+                        if let Some(host) = &remote_host {
+                            host.approval_settled(req.id);
+                        }
+                        if let Some(allowed) = answered_remotely() {
+                            terminal.clear()?;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "{} on your phone: {}",
+                                    if allowed { "Allowed" } else { "Denied" },
+                                    sanitize_terminal_text(&req.summary)
+                                ),
+                            });
+                            continue;
+                        }
+                        let Some((choice, note)) = modal
                         else {
                             terminal.clear()?;
                             broker
@@ -6645,6 +6912,9 @@ async fn send_message_with_prompt(
                 Some(ev) = tool_rx.recv() => {
                     if ev == crate::tui::app_event::TuiAppEvent::ModelRequested {
                         preparing = false;
+                    }
+                    if let Some(host) = &remote_host {
+                        host.tool_event(&ev);
                     }
                     apply_tool_event(&mut tool_cells, ev);
                 }
@@ -6702,6 +6972,16 @@ async fn send_message_with_prompt(
                             _ => {}
                         }
                     }
+                    if let Some(link) = app.remote.as_mut() {
+                        while let Ok(input) = link.inbox.try_recv() {
+                            match input {
+                                crate::tui::remote_host::RemoteInput::Interrupt => cancelled = true,
+                                crate::tui::remote_host::RemoteInput::Message(text) => {
+                                    app.remote_prompts.push(text)
+                                }
+                            }
+                        }
+                    }
                     if cancelled {
                         app.status_notice =
                             Some(("stopping the turn…".to_string(), Instant::now()));
@@ -6720,6 +7000,9 @@ async fn send_message_with_prompt(
                     // `app.session` (still borrowed by `send_fut`).
                     if let Ok(b) = buf_for_display.lock() {
                         app.stream_buffer = b.clone();
+                    }
+                    if let Some(host) = &remote_host {
+                        host.output(&app.stream_buffer);
                     }
                     app.spinner_tick = app.spinner_tick.wrapping_add(1);
                     let ctx = FrameCtx {
@@ -6806,6 +7089,28 @@ async fn send_message_with_prompt(
 
     app.is_loading = false;
     app.stream_start = None;
+
+    if let Some(host) = &remote_host {
+        host.output(&app.stream_buffer);
+        match &result {
+            Some(Ok(turn)) => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Completed,
+                if app.stream_buffer.is_empty() {
+                    &turn.response
+                } else {
+                    &app.stream_buffer
+                },
+            ),
+            Some(Err(error)) => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Failed,
+                &format!("{error:#}"),
+            ),
+            None => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Interrupted,
+                &app.stream_buffer,
+            ),
+        }
+    }
 
     match result {
         Some(Ok(turn)) => {
@@ -8493,6 +8798,8 @@ mod tests {
             "extra-usage",
             "pricing",
             "remote-env",
+            "remote-control",
+            "rc",
         ]);
         names
     }

@@ -41,7 +41,9 @@ const iosEntitlements = shouldUseProductionEntitlements
     }
   : {};
 
-const associatedDomains = shouldUseProductionEntitlements ? ['applinks:agiworkforce.com'] : [];
+const associatedDomains = shouldUseProductionEntitlements
+  ? ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com']
+  : [];
 
 const conditionalPlugins = [
   ...(shouldUseProductionEntitlements
@@ -214,6 +216,7 @@ const config = {
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
           { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/open/' },
+          { scheme: 'https', host: 'agiworkforce.com', path: '/github/installed' },
         ],
       },
     ],

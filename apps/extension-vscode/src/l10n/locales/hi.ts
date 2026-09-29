@@ -77,6 +77,10 @@ const hi = {
   'chatNotice.modelNotOnPlan': 'यह मॉडल आपके मौजूदा प्लान या प्रदाता सेटअप के लिए उपलब्ध नहीं है।',
   'chatNotice.trustBeforeResume':
     'डेवलपर सत्र फिर से शुरू करने से पहले इस कार्यस्थान पर विश्वास करें।',
+  'chatNotice.cloudSessionReadOnly':
+    'यह क्लाउड Code सत्र यहाँ केवल पढ़ने के लिए खुलता है। इसे वेब पर जारी रखें, या इसे इस मशीन पर लाने के लिए `agi code teleport` चलाएँ।',
+  'chatNotice.openOnWeb': 'वेब पर खोलें',
+  'conversationTree.cloudLabel': 'क्लाउड',
   'chatNotice.stopBeforeOpening': 'दूसरा डेवलपर सत्र खोलने से पहले मौजूदा प्रतिक्रिया रोकें।',
   'chatNotice.historyUnavailable': 'इस चैट इंटरफ़ेस में डेवलपर सत्र का इतिहास उपलब्ध नहीं है।',
   'chatNotice.sessionNotFound': 'खुले कार्यस्थान में डेवलपर सत्र नहीं मिला।',

@@ -190,18 +190,6 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S13.29: Browser-tab mention.
-
-- Done when: The user can reference an open browser tab (choosing which one) as context for the message.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
-
 ## S13.30: Connected-app mention.
 
 - Done when: The user can reference a connected app (connector/MCP server) or one of its resources inline in the composer.

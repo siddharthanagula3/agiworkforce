@@ -59,6 +59,8 @@ export interface RemoteCodeSessionSummary {
   updatedAt: string;
   /** The tool that started the session, so the phone can tell VS Code from the CLI. */
   origin?: RemoteCodeSessionOrigin;
+  /** A cloud Code session listed beside the local ones; it is read-only from the phone. */
+  location?: 'cloud';
 }
 
 export const REMOTE_CODE_SESSION_ORIGINS = ['cli', 'vscode', 'desktop'] as const;
@@ -637,6 +639,7 @@ export function parseRemoteCodeSessions(payload: unknown): RemoteCodeSessionsEve
       model,
       updatedAt,
       ...(origin ? { origin } : {}),
+      ...(entry['location'] === 'cloud' ? { location: 'cloud' as const } : {}),
     };
   });
   const unavailable = list(base['unavailable'], 50, (entry) => {

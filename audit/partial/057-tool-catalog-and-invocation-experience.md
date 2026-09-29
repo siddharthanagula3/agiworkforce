@@ -6,34 +6,22 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S57.01: Search tool.
-
-- Done when: The assistant can call a web-search tool during a turn and the searches and their sources are shown to the user.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
-
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
-
 ## S57.03: Source-reader tool.
 
 - Done when: The assistant can call a tool that opens a cited source or document (PDF, Office file or page) by reference and reads its text.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | desktop | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | mobile | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval signal; server-only, the phone uses the same completions path | handler |
-| cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Needs the CLI read_file PDF/Office reader (pdf-extract/lopdf/calamine approved for w-desktop/c-cli); VS Code inherits it with no extension change. | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
 | api | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 
-Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
+Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`
 
 ## S57.05: File-read tool.
 

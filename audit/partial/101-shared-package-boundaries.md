@@ -116,17 +116,6 @@ Code: `packages/client/client-runtime/src/index.ts:29-38`, `apps/extension/src/f
 
 Code: `packages/contracts/cloud-contracts/src/sync.ts:110-110`, `apps/web/app/api/chat/sync/route.ts:89-89`, `apps/web/app/api/chat/sync/route.ts:597-597`, `packages/client/sync/src/conversations.ts:66-66`
 
-## S101.17: Shared artifact models.
-
-- Done when: Artifacts share one model across server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Chrome now derives artifacts through @agiworkforce/artifacts (ledger stale). Left: the CLI hand-writes ArtifactIndexEntry in Rust; needs a wire-parity entry (CLI phase). | cli |
-
-Code: `apps/extension/src/features/cloud-bridge/artifactsClient.ts:1-1`, `apps/cli/src/cloud/artifacts.rs:50-50`
-
 ## S101.18: Shared source/citation models.
 
 - Done when: Sources and citations use one shared model on every surface that shows them.
@@ -159,17 +148,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:142-142`, `
 | platform | partial | Chrome and VS Code now use the shared resume contracts (ToolApprovalResumeRequestSchema; ManagedCloudAgentRunClient.resumeRun and the protocol ApprovalResponseParams). Left: neither reads the shared approval policy (TOOL_APPROVAL_POLICIES) from packages/contracts/types/src/tool-approval-policy.ts. | chrome, vscode |
 
 Code: `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:1203-1203`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:6-6`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1448-1448`
-
-## S101.23: Shared Skill/Plugin manifests.
-
-- Done when: Skill and plugin manifests are parsed by one shared implementation everywhere.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | @agiworkforce/skills parses manifests for web only; the CLI scans SKILL.md files with its own Rust code. | surface-only |
-
-Code: `apps/cli/src/ecosystem.rs:1155-1159`
 
 ## S101.24: Shared agent/task models.
 
@@ -258,17 +236,6 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:16-19
 | platform | partial | The analytics vocabulary is imported only by web; Chrome and VS Code share the error scrubber, while mobile telemetry and the CLI use neither. | surface-only |
 
 Code: `packages/contracts/types/src/product-analytics.ts:7-15`, `apps/extension-vscode/src/core/errorReporting.ts:2-3`
-
-## S101.35: Shared test data and schema conformance fixtures.
-
-- Done when: Wire contracts have shared golden fixtures that every implementation (server, TS clients, Rust) is tested against.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Golden fixtures exist for me, sync, projects and media and drive the TS contract tests, but the CLI Rust client and most contracts have none. | surface-only |
-
-Code: `scripts/check-cloud-contract-ownership.mjs:51-57`
 
 ## S101.36: Shared configuration validation.
 

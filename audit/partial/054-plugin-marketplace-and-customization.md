@@ -293,11 +293,10 @@ nothing is left.
 | web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Installed plugins are local folders a user can edit by hand; the CLI offers no customization command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/lib.rs:3613-3652`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.28: Fork plugin.
 

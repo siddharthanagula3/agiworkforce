@@ -16,7 +16,7 @@ pub const SYNC_PROTOCOL_VERSION: u8 = 2;
 const CONTENT_MAX_CHARS: usize = 20_000;
 const CATEGORY_MAX_CHARS: usize = 200;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPushItem {
     pub id: String,
@@ -31,7 +31,7 @@ pub struct MemoryPushItem {
     pub pinned: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPushRequest {
     pub protocol_version: u8,

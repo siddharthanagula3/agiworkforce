@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S42.01: Daily briefing setup.
-
-- Done when: The user sets up a recurring daily briefing that is generated and delivered to them.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | No briefing setup: the user can only write a cron schedule with their own prompt (agi schedules create). | ui |
-
-Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
-
 ## S42.10: Follow-up questions on a briefing item.
 
 - Done when: The user can ask a follow-up question about a briefing item.
@@ -110,7 +98,4 @@ Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1140-1140`
