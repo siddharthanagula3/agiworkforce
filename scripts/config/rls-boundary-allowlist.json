@@ -30,8 +30,12 @@
       "reason": "bank tools and account erasure run with no request scope, so the Plaid items are read and changed on the owner connection, and every statement is constrained by the caller's user_id"
     },
     {
+      "path": "apps/web/lib/server/mobile-intent-tokens.ts",
+      "reason": "the Ask from Siri token is the subject: it is resolved by its hash before any caller is known, and every revoke is constrained by the owner's user_id"
+    },
+    {
       "path": "apps/web/lib/server/mobile-intent.ts",
-      "reason": "the Ask from Siri token is the subject: it is resolved by its hash before any caller is known, and every statement after that runs on a claimed-user connection bound to the token's owner"
+      "reason": "the claimed-user connection bound to the Ask token's owner is built on the owner pool; every statement runs as that owner"
     },
     {
       "path": "apps/web/app/api/billing/top-up/route.ts",

@@ -14,6 +14,7 @@ import {
 import { rememberEnrollment } from './gate';
 import { hashUndoToken, newUnusablePassword } from './secrets';
 import { readEnrollmentUndo, undoEnrollment } from './store';
+import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
 
 const LINK_EXPIRED =
   'This link expired or was already used. If you still cannot get into your account, sign in with a passkey, a security key or a recovery key.';
@@ -29,6 +30,7 @@ export async function turnOffFromEmailLink(
     throw createError.notFound(LINK_EXPIRED).asUserSafe();
   }
   await rememberEnrollment(open.userId, null);
+  await revokeEveryMobileIntentToken(open.userId);
 
   const identity = getIdentityProvider();
   let enrollingSessionEnded = false;

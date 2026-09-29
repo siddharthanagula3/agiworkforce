@@ -8,9 +8,11 @@
 --
 -- Shape  : only the SHA-256 of the opaque token is stored. A token is bound to
 --          its user, workspace and install, carries one capability, and stays
---          valid until it is revoked: on the next app launch (rotation), on
---          sign-out, when the setting is turned off, or when the device is
---          removed in Settings, Devices. One live token per install.
+--          valid for 30 days or until it is revoked: on the next app launch
+--          (rotation, which issues a fresh 30 days), on sign-out, whenever the
+--          account's sessions or refresh credentials are swept, when the
+--          setting is turned off, or when the device is removed in Settings,
+--          Devices. One live token per install.
 --
 -- Erasure: the profile foreign key cascades, and account-erasure names the
 --          table so the export inventory has to answer for it.
@@ -25,7 +27,9 @@ create table if not exists public.mobile_intent_tokens (
   install_id text not null check (install_id ~ '^[A-Za-z0-9_-]{8,128}$'),
   token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
   capability text not null default 'chat_completion' check (capability = 'chat_completion'),
+  default_model_id text check (default_model_id is null or char_length(default_model_id) between 1 and 200),
   created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '30 days',
   last_used_at timestamptz,
   revoked_at timestamptz
 );

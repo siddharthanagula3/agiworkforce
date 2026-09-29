@@ -8,7 +8,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { issueMobileIntentToken, revokeMobileIntentTokens } from '@/lib/server/mobile-intent';
+import {
+  issueMobileIntentToken,
+  revokeMobileIntentTokens,
+} from '@/lib/server/mobile-intent-tokens';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
@@ -24,7 +27,7 @@ async function handleIssue(request: NextRequest) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) throw createError.badRequest('Invalid Ask from Siri request');
-  const { installId } = parsed.data;
+  const { installId, defaultModelId } = parsed.data;
 
   const registered = await db.query<{ id: string }>(
     `select id from public.device_registrations
@@ -42,6 +45,7 @@ async function handleIssue(request: NextRequest) {
     userId,
     organizationId: organizationId ?? null,
     installId,
+    defaultModelId: defaultModelId ?? null,
   });
   await recordAuditEvent({
     userId,

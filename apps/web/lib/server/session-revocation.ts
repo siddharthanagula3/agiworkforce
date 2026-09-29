@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { IdentityProvider, IdentitySession } from '@agiworkforce/identity';
 
+import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
 import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
 export type IdentitySessionOperations = Pick<
@@ -145,6 +146,7 @@ export async function revokeEveryOtherSession(
   const attempted = new Set<string>();
   let currentSession: IdentitySession | undefined;
   let targetCount = 0;
+  await revokeEveryMobileIntentToken(userId);
 
   // A revoked session leaves the active list, so the first page always holds
   // the next batch of work and the whole account never has to be in memory.

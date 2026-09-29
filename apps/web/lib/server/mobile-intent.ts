@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { getSlotForModel, isFlagshipRoutingSlot } from '@agiworkforce/types';
@@ -12,6 +12,7 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { logger } from '@/lib/logger';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { MobileIntentTokenOwner } from '@/lib/server/mobile-intent-tokens';
 import { mustAcceptTerms } from '@/lib/server/terms';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -28,21 +29,11 @@ import {
   selectUnattendedRoute,
 } from '@/lib/services/scheduled-agent-executor';
 
-const TOKEN_PREFIX = 'agi_it_';
-const TOKEN_BYTES = 32;
-const TOKEN_PATTERN = /^agi_it_[A-Za-z0-9_-]{43}$/;
 const TITLE_MAX_CHARS = 60;
 const ASK_DIRECTIVE =
   'The person asked this through Siri and will hear the answer spoken. Answer in plain sentences without markdown, lists, tables, links or code, in at most a few short paragraphs.';
 
 export const MOBILE_INTENT_SIGN_IN_MESSAGE = 'Open AGI Workforce to sign in.';
-
-export interface MobileIntentTokenOwner {
-  tokenId: string;
-  userId: string;
-  organizationId: string | null;
-  installId: string;
-}
 
 export class MobileIntentRefusal extends Error {
   constructor(
@@ -53,73 +44,6 @@ export class MobileIntentRefusal extends Error {
     super(message);
     this.name = 'MobileIntentRefusal';
   }
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-export async function issueMobileIntentToken(
-  db: DatabaseAdapter,
-  owner: { userId: string; organizationId: string | null; installId: string },
-): Promise<string> {
-  const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString('base64url')}`;
-  await db.transaction(async (tx) => {
-    await tx.execute(
-      `update public.mobile_intent_tokens
-          set revoked_at = now()
-        where user_id = $1 and install_id = $2 and revoked_at is null`,
-      [owner.userId, owner.installId],
-    );
-    await tx.execute(
-      `insert into public.mobile_intent_tokens (user_id, organization_id, install_id, token_hash)
-       values ($1, $2, $3, $4)`,
-      [owner.userId, owner.organizationId, owner.installId, hashToken(token)],
-    );
-  });
-  return token;
-}
-
-export async function revokeMobileIntentTokens(
-  db: DatabaseAdapter,
-  userId: string,
-  installId: string | null,
-): Promise<void> {
-  await db.execute(
-    `update public.mobile_intent_tokens
-        set revoked_at = now()
-      where user_id = $1
-        and revoked_at is null
-        and ($2::text is null or install_id = $2)`,
-    [userId, installId],
-  );
-}
-
-export async function resolveMobileIntentToken(
-  token: string,
-): Promise<MobileIntentTokenOwner | null> {
-  if (!TOKEN_PATTERN.test(token)) return null;
-  const rows = await getNeonDb().query<{
-    id: string;
-    user_id: string;
-    organization_id: string | null;
-    install_id: string;
-  }>(
-    `update public.mobile_intent_tokens
-        set last_used_at = now()
-      where token_hash = $1 and revoked_at is null and capability = 'chat_completion'
-      returning id, user_id, organization_id, install_id`,
-    [hashToken(token)],
-  );
-  const row = rows[0];
-  return row
-    ? {
-        tokenId: row.id,
-        userId: row.user_id,
-        organizationId: row.organization_id,
-        installId: row.install_id,
-      }
-    : null;
 }
 
 async function saveAskConversation(
@@ -202,12 +126,16 @@ export async function answerMobileIntentAsk(input: {
   );
   if (!decision.allowed) throw new MobileIntentRefusal(403, decision.code, decision.reason);
 
-  const route = await selectUnattendedRoute(
-    { db, userId: owner.userId },
-    'auto',
-    classifyTaskLocally(prompt, []).type,
-    entitlement.plan,
-  );
+  const taskType = classifyTaskLocally(prompt, []).type;
+  const routeScope = { db, userId: owner.userId };
+  const route = owner.defaultModelId
+    ? await selectUnattendedRoute(
+        routeScope,
+        owner.defaultModelId,
+        taskType,
+        entitlement.plan,
+      ).catch(() => selectUnattendedRoute(routeScope, 'auto', taskType, entitlement.plan))
+    : await selectUnattendedRoute(routeScope, 'auto', taskType, entitlement.plan);
   const messages = [
     { role: 'system' as const, content: ASK_DIRECTIVE },
     { role: 'user' as const, content: prompt },

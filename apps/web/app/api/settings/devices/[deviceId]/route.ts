@@ -14,7 +14,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { notifyDeviceDisconnected } from '@/lib/services/account-activity-notifications';
 import { revokeDeviceRefreshCredentials } from '@/lib/server/refresh-token-family';
-import { revokeMobileIntentTokens } from '@/lib/server/mobile-intent';
+import { revokeMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import {
   propagateDeviceRevocation,
