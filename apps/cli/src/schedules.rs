@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::tier_cache;
 
+pub mod triggers;
+
 const SCHEDULES_TIMEOUT: Duration = Duration::from_secs(15);
 const SCHEDULES_PATH: &str = "/api/schedules";
 
