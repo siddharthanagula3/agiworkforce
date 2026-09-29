@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 41,
-  "chunkCount": 229,
+  "documentCount": 43,
+  "chunkCount": 237,
   "documents": [
     {
       "id": "account-security",
@@ -566,6 +566,71 @@
       ]
     },
     {
+      "id": "configuration",
+      "title": "Configure the CLI",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "configuration",
+        "config",
+        "config.toml",
+        "settings",
+        "default model",
+        "permission mode",
+        "agi init",
+        "agiworkforce_home",
+        "project config",
+        "mcp.json",
+        "hooks.json"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/configuration.md",
+      "chunks": [
+        {
+          "id": "configuration#0",
+          "ordinal": 0,
+          "heading": "Where the settings live",
+          "headingPath": "Configure the CLI › Where the settings live",
+          "text": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an existing absolute path.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
+        },
+        {
+          "id": "configuration#1",
+          "ordinal": 1,
+          "heading": "Viewing and changing settings",
+          "headingPath": "Configure the CLI › Viewing and changing settings",
+          "text": "- `agi --config` prints the settings in effect and where each one came from.\n- In a session, `/config` shows them, `/config get <key>` reads one and\n  `/config set <key> <value>` saves one to your own `config.toml`.\n- `/config set` accepts `model`, `provider`, `max-tokens`, `temperature`,\n  `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,\n  `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,\n  `bell` and `crash-reports`. Other settings are edited in the file itself.\n- The VS Code extension's Settings saves the default model, effort and\n  permission mode to the same file."
+        },
+        {
+          "id": "configuration#2",
+          "ordinal": 2,
+          "heading": "Useful settings",
+          "headingPath": "Configure the CLI › Useful settings",
+          "text": "- `[default] model` and `provider` choose the default route; both start from\n  the model catalog.\n- `[default] permission_mode` is `default`, `plan`, `acceptEdits` or\n  `dontAsk`. Skipping every approval cannot be saved as a default; it is only\n  available for one run with a command-line flag.\n- `[default] reasoning_effort` is `low`, `medium`, `high` or `max`.\n- `max_tokens` is between 1 and 200000 (8192 by default) and `temperature`\n  between 0 and 1.\n- `[providers.<name>]` takes `api_key_env`, the name of the environment\n  variable that holds that provider's key, and an optional `base_url`."
+        },
+        {
+          "id": "configuration#3",
+          "ordinal": 3,
+          "heading": "Which setting wins",
+          "headingPath": "Configure the CLI › Which setting wins",
+          "text": "Your organization's managed policy wins first, then the environment variables\n`AGIWORKFORCE_MODEL`, `AGIWORKFORCE_PROVIDER` and `AGIWORKFORCE_MAX_TOKENS`,\nthen the repository's `.agiworkforce/config.toml`, then your own\n`config.toml`, then the defaults. A managed policy can fix the permission and\nprivacy modes and can turn repository settings off."
+        },
+        {
+          "id": "configuration#4",
+          "ordinal": 4,
+          "heading": "MCP servers and hooks",
+          "headingPath": "Configure the CLI › MCP servers and hooks",
+          "text": "MCP servers are listed in JSON, not in `config.toml`: `.mcp.json` or\n`mcp.json` in the repository, and `~/.agiworkforce/mcp.json` for your own.\nA repository's servers start only in a trusted workspace, and its entries win\nover yours with the same name. `agi mcp` manages your list. Hooks live in\n`~/.agiworkforce/hooks.json` and `agi hooks` manages them."
+        }
+      ]
+    },
+    {
       "id": "connectors-and-mcp",
       "title": "Connectors and MCP",
       "path": "/connectors",
@@ -619,6 +684,55 @@
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
           "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "custom-instructions",
+      "title": "Custom instructions for the CLI and VS Code",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "custom instructions",
+        "instructions",
+        "agents.md",
+        "claude.md",
+        "instructions.md",
+        "rules",
+        "repository memory",
+        "remember for this repository",
+        "project instructions"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/custom-instructions.md",
+      "chunks": [
+        {
+          "id": "custom-instructions#0",
+          "ordinal": 0,
+          "heading": "Files every session reads",
+          "headingPath": "Custom instructions for the CLI and VS Code › Files every session reads",
+          "text": "Before a session starts, `agi` reads your own instructions from\n`~/.agiworkforce/instructions.md`, then walks from the folder you are in up to\nthe top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and\n`.agiworkforce/instructions.md`. Your own file comes first and the folder you\nare in comes last, so the closest file has the final word. Together they may\nuse about 10,000 tokens; files past that are left out and the session says so.\n\nRules in `.agiworkforce/rules/*.md` in the repository and in\n`~/.agiworkforce/rules/*.md` are added too, some only for matching files."
+        },
+        {
+          "id": "custom-instructions#1",
+          "ordinal": 1,
+          "heading": "Repository memory",
+          "headingPath": "Custom instructions for the CLI and VS Code › Repository memory",
+          "text": "Notes the agent should keep for a repository are saved in `CLAUDE.md` at the\nrepository root. In VS Code, run **Remember for This Repository** to add one;\nit tells you which file it saved to. Notes for every repository go in\n`~/.agiworkforce/CLAUDE.md`. Each note can be up to 4,000 characters."
+        },
+        {
+          "id": "custom-instructions#2",
+          "ordinal": 2,
+          "heading": "Instructions set in VS Code",
+          "headingPath": "Custom instructions for the CLI and VS Code › Instructions set in VS Code",
+          "text": "VS Code Settings also has instruction boxes for all workspaces and for the\ncurrent one, up to 8,000 characters each. The workspace box replaces the\ngeneral one when it has text, and whichever applies is sent with every\nmessage. The Settings panel lists the instruction files it found in the\nworkspace folder."
         }
       ]
     },
@@ -1849,7 +1963,7 @@
         "citations",
         "help search"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-28",
       "source": "content/support/search.md",
       "chunks": [
         {
@@ -1857,7 +1971,7 @@
           "ordinal": 0,
           "heading": "Searching the web from a chat",
           "headingPath": "Search: the web, your chats and the help centre › Searching the web from a chat",
-          "text": "There is no search switch to find. Managed web search is ambient: it stays on\nwhenever the selected model and deployment have a real search path, and turns\noff only when no such path exists. The composer states whether search is on for\nthe model you picked. `/search` in the composer states the intent explicitly for\na single message.\n\nManaged cloud search follows the chat and usage policy for your plan. In Local\nand BYOK the behaviour depends on the runtime and provider you selected."
+          "text": "There is no search switch to find. Managed web search is ambient: it stays on\nwhenever the selected model and deployment have a real search path, and turns\noff only when no such path exists. The composer states whether search is on for\nthe model you picked. `/search` in the composer states the intent explicitly for\na single message.\n\nManaged cloud search follows the chat and usage policy for your plan. In Local\nand BYOK the behaviour depends on the runtime and provider you selected.\n\nIn a Team or Enterprise workspace, an owner or admin can limit which websites\nweb search and page fetching read, on the workspace Connectors page. Results\nfrom other sites are left out, and a page outside the allowed sites is not\nfetched."
         },
         {
           "id": "search#1",

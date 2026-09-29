@@ -49,6 +49,8 @@ export function webviewStrings() {
     mcpReconnected: t('webview.mcpReconnected'),
     resendMessage: t('webview.resendMessage'),
     resendMessageLabel: t('webview.resendMessageLabel'),
+    branchFromAnswer: t('webview.branchFromAnswer'),
+    branchFromAnswerLabel: t('webview.branchFromAnswerLabel'),
     branchFromMessage: t('webview.branchFromMessage'),
     branchFromMessageLabel: t('webview.branchFromMessageLabel'),
     actions: pluralForms('webview.actions'),

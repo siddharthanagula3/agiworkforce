@@ -383,6 +383,8 @@ const ko = {
   'webview.resendMessage': '다시 보내기',
   'webview.resendMessageLabel': '이 메시지 다시 보내기',
   'webview.branchFromMessage': '분기',
+  'webview.branchFromAnswer': '여기서 분기',
+  'webview.branchFromAnswerLabel': '이 답변까지의 대화를 이어받아 새 세션을 시작합니다',
   'webview.branchFromMessageLabel': '여기서 새 세션을 시작하고 이 메시지를 편집할 수 있게 둡니다',
   'localServers.running_other': '{provider} 실행 중 · 모델 {count}개',
   'localServers.runningEmpty': '{provider} 실행 중 · 로드된 모델 없음',
