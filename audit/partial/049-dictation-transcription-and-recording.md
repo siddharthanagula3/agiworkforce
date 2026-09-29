@@ -9,55 +9,45 @@ nothing is left.
 ## S49.01: Composer dictation.
 
 - Done when: A microphone control in the composer turns speech into text in the message field.
-- Wave: 2
-- Already works on: web, desktop, mobile, chrome
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:5010-5011`, `apps/cli/src/voice.rs:299-299`
 
 ## S49.02: Editable transcription before send.
 
 - Done when: The dictated transcript lands in the message field where the user can edit it before sending.
-- Wave: 2
-- Already works on: web, desktop, mobile, chrome
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:229-229`
 
 ## S49.03: Dictation language selection.
 
 - Done when: The user can choose the dictation language, and recognition uses it.
-- Wave: 2
-- Already works on: web, desktop, chrome, api
+- Wave: 3
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The Speech language setting reaches the voice companion, but composer dictation starts capture without it and always uses the device locale. | handler |
-| cli | partial | `/voice <lang>` sets the transcription language. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:183-183`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1134-1134`, `apps/mobile/src/features/voice/services/voice.ts:45-45`, `apps/cli/Cargo.toml:118-118`
+Code: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:183-183`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1134-1134`, `apps/mobile/src/features/voice/services/voice.ts:45-45`
 
 ## S49.05: Final transcript.
 
 - Done when: When dictation ends, the final transcript is produced and delivered.
-- Wave: 2
-- Already works on: web, desktop, mobile, chrome, api
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:213-213`
 
 ## S49.06: Retry failed transcription.
 
@@ -76,16 +66,13 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, 
 ## S49.07: Discard recording.
 
 - Done when: The user can discard a recording without inserting or sending anything.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | ESC after transcription discards it. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:216-216`
 
 ## S49.08: Audio-file upload.
 
@@ -107,15 +94,12 @@ Code: `apps/mobile/native/ios/AGIAppIntents/TranscribeIntent.swift:5-5`, `apps/m
 ## S49.09: Batch transcription.
 
 - Done when: A whole recording or file can be transcribed in one non-streaming (batch) request.
-- Wave: 2
-- Already works on: web, desktop, mobile, api
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Each recording is transcribed as one WAV after it ends. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:804-804`
 
 ## S49.10: Streaming transcription.
 
@@ -149,17 +133,17 @@ Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`, 
 
 - Done when: While recording, the elapsed duration is shown.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | A RecordingOverlay with a duration readout exists but is not mounted anywhere; the composer shows only a waveform while recording. | mount |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`, `apps/cli/src/voice.rs:718-718`
+Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1024-1024`
 
 ## S49.25: Transcript export.
 

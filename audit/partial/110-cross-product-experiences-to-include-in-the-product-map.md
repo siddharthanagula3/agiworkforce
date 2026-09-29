@@ -67,32 +67,28 @@ Code: `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/
 ## S110.07: Voice → durable work task.
 
 - Done when: A request made in voice mode becomes a durable AGI Work task (runs in background, tracked in Tasks) without the user retyping it.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | agi_work is unreachable from live voice; the user must switch to text and start a task from the Tasks screen, carrying no voice context. | handler |
-| cli | partial | A /voice turn is an ordinary agent turn, but voice ships only in builds with the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`, `apps/cli/Cargo.toml:111-111`, `apps/cli/src/tui/tui_app.rs:4451-4451`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`
 
 ## S110.08: Voice → generated document.
 
 - Done when: A spoken request in voice mode produces a document (docx/pdf/markdown artifact) the user can open from the voice session.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Files a /voice turn writes land in the workspace, but voice is behind the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/Cargo.toml:111-111`, `apps/cli/src/voice.rs:255-255`
 
 ## S110.10: Email thread → agent task.
 
