@@ -327,7 +327,7 @@ const threadReadResponseSchema = z.object({
     .array(
       z.object({
         path: z.string(),
-        kind: z.enum(['created', 'modified', 'deleted']),
+        kind: z.enum(['created', 'modified']),
         tool: z.string(),
         toolCallId: z.string(),
         changedAt: z.string(),

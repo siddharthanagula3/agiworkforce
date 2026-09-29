@@ -312,7 +312,6 @@ pub struct ManagedSessionApproval {
 pub enum ManagedSessionFileChangeKind {
     Created,
     Modified,
-    Deleted,
 }
 
 /// One file a tool on this session wrote. `Created` marks a generated file.
