@@ -12,6 +12,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { replyToDispatchTask } from '@/services/companion';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const SEND_FAILED = 'Your answer was not sent. Check the Desktop connection and try again.';
 
@@ -83,7 +84,9 @@ function ActionButton({
       })}
     >
       {approve ? <Check size={14} color={foreground} /> : <X size={14} color={foreground} />}
-      <Text style={{ color: foreground, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: foreground, fontSize: typeScale.footnote, fontWeight: '600' }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -112,12 +115,15 @@ function InputStepForm({
 
   return (
     <View style={{ gap: 8 }}>
-      <Text selectable style={{ color: colors.textPrimary, fontSize: 13, lineHeight: 19 }}>
+      <Text
+        selectable
+        style={{ color: colors.textPrimary, fontSize: typeScale.footnote, lineHeight: 19 }}
+      >
         {step.message}
       </Text>
       {step.fields.map((field) => (
         <View key={field.key} style={{ gap: 4 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
             {field.required ? `${field.title} (required)` : field.title}
           </Text>
           {field.kind === 'text' ? (
@@ -160,7 +166,9 @@ function InputStepForm({
                     accessibilityLabel={option.label}
                     style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}
                   >
-                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 13 }}>
+                    <Text
+                      style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.footnote }}
+                    >
                       {option.label}
                     </Text>
                     {selected ? <Check size={14} color={colors.textPrimary} /> : null}
@@ -170,7 +178,10 @@ function InputStepForm({
             </View>
           )}
           {touched && errors[field.key] ? (
-            <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 12 }}>
+            <Text
+              accessibilityRole="alert"
+              style={{ color: colors.agentError, fontSize: typeScale.caption }}
+            >
               {errors[field.key]}
             </Text>
           ) : null}
@@ -229,7 +240,10 @@ export function DispatchTaskReply({
       {open.map((step) =>
         step.kind === 'approval' ? (
           <View key={step.toolCallId} style={{ gap: 8 }}>
-            <Text selectable style={{ color: colors.textPrimary, fontSize: 13, lineHeight: 19 }}>
+            <Text
+              selectable
+              style={{ color: colors.textPrimary, fontSize: typeScale.footnote, lineHeight: 19 }}
+            >
               {step.summary}
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -270,7 +284,10 @@ export function DispatchTaskReply({
         ),
       )}
       {error ? (
-        <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 12 }}>
+        <Text
+          accessibilityRole="alert"
+          style={{ color: colors.agentError, fontSize: typeScale.caption }}
+        >
           {error}
         </Text>
       ) : null}
