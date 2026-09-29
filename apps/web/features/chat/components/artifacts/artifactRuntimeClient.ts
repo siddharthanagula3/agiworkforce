@@ -35,11 +35,15 @@ function storageBody(
   }
 }
 
-async function post(path: string, body: ArtifactRuntimeCompleteRequest | ArtifactStorageRequest) {
+async function post(
+  path: string,
+  body: ArtifactRuntimeCompleteRequest | ArtifactStorageRequest,
+  extraHeaders: Record<string, string> = {},
+) {
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json', ...extraHeaders }),
     body: JSON.stringify(body),
   });
   if (response.status === 401) throw new ArtifactRuntimeSignInRequiredError();
@@ -62,10 +66,11 @@ export async function callArtifactRuntime(
   request: ArtifactRuntimeRequest,
 ): Promise<unknown> {
   if (request.op === 'complete') {
-    const payload = await post(artifactRuntimeCompletePath(token), {
-      prompt: request.prompt,
-      connectors: request.connectors,
-    });
+    const payload = await post(
+      artifactRuntimeCompletePath(token),
+      { prompt: request.prompt, connectors: request.connectors },
+      { 'Idempotency-Key': `artifact-runtime.${crypto.randomUUID()}` },
+    );
     const parsed = ArtifactRuntimeCompleteResponseSchema.safeParse(payload);
     if (!parsed.success) throw new Error(REQUEST_FAILED);
     return parsed.data.text;
