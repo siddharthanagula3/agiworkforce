@@ -23,7 +23,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
@@ -172,7 +172,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   }, []);
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).springify()}>
+    <Animated.View
+      entering={reducedMotion ? undefined : FadeInDown.duration(motion.moved).springify()}
+    >
       <View
         className="rounded-xl overflow-hidden my-1"
         style={{

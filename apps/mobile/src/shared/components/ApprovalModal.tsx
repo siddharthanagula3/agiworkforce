@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
@@ -120,7 +120,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
           <Pressable accessible={false} className="flex-1" onPress={handleDismiss} />
 
           <Animated.View
-            entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
+            entering={reducedMotion ? undefined : SlideInDown.duration(motion.moved).springify()}
             className="rounded-t-3xl overflow-hidden"
             style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
           >
@@ -179,7 +179,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
 
               {/* Reject reason input */}
               {showRejectInput && (
-                <Animated.View entering={FadeIn.duration(200)} className="mb-4">
+                <Animated.View entering={FadeIn.duration(motion.quick)} className="mb-4">
                   <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
                     Rejection reason (optional)
                   </Text>

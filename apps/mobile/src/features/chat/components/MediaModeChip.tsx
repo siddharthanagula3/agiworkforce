@@ -1,9 +1,8 @@
-
 import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Film, Paintbrush, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import type { MediaMode } from '@/stores/chat/chatViewStore';
 
 export interface MediaModeChipProps {
@@ -20,8 +19,8 @@ export function MediaModeChip({ mode, modelName, onExit }: MediaModeChipProps) {
 
   return (
     <Animated.View
-      entering={reducedMotion ? undefined : FadeIn.duration(180)}
-      exiting={reducedMotion ? undefined : FadeOut.duration(120)}
+      entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}
+      exiting={reducedMotion ? undefined : FadeOut.duration(motion.quick)}
       style={{ flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 6 }}
     >
       <View

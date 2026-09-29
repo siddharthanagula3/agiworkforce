@@ -1,7 +1,7 @@
 import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   dialog: {
     width: '100%',
     borderRadius: 14,
-    padding: 20,
+    padding: dialogPadding,
     borderWidth: 1,
   },
   dialogTitle: {

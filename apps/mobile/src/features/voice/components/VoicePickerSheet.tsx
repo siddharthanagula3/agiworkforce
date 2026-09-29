@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -128,7 +128,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
       accessibilityViewIsModal
     >
       <Animated.View
-        entering={FadeIn.duration(160)}
+        entering={FadeIn.duration(motion.quick)}
         style={{ flex: 1, backgroundColor: colors.scrim }}
       >
         <Animated.View
