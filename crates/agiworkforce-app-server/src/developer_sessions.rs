@@ -1194,6 +1194,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PERMISSIONS_ADD => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "permissions/add is refused on this connection: save a rule only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<PermissionsAddParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1223,6 +1230,13 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_SET_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/setKey is refused on this connection: save a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
                 let params = match parse_params::<ProviderSetKeyParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
