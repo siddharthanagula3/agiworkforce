@@ -36,6 +36,7 @@ import {
   readAttachmentTruncationHeader,
   ATTACHMENTS_TRUNCATED_HEADER,
   TOOL_APPROVAL_RESUME_PATH,
+  TOOL_INPUT_RESUME_PATH,
   DEVICE_STEP_RESUME_PATH,
   FREE_QUOTA_COMPLETIONS_PATH,
   type DeviceStepResultWire,
@@ -193,8 +194,17 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
       'Content-Type': 'application/json',
       ...platformRequestHeaders(),
     }),
-    fetchImpl: (input, init) => guardedFetch(input, init),
+    fetchImpl: (input, init) =>
+      isDetachedResume(input)
+        ? guardedFetch(input, init, { stream: true })
+        : guardedFetch(input, init),
   });
+}
+
+function isDetachedResume(input: RequestInfo | URL): boolean {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '').split(/[?#]/, 1)[0];
+  return path === TOOL_APPROVAL_RESUME_PATH || path === TOOL_INPUT_RESUME_PATH;
 }
 
 const TERMS_REVIEW_MESSAGE =
