@@ -20,16 +20,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { API_URL } from '@/lib/constants';
-import { openExternalUrl } from '@/lib/safeOpenURL';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from '../service';
+import { connectGitHubInApp, describeGitHubInstallOutcome } from '../githubInstall';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
 const TITLE_WORDS = 6;
 const SEARCH_DEBOUNCE_MS = 300;
-const GITHUB_INSTALL_PATH = '/api/github/install/start';
 const GIGABYTE_MB = 1024;
 
 const NETWORK_OPTIONS: ReadonlyArray<{
@@ -239,6 +237,8 @@ export function NewCloudCodeSessionSheet({
   const [extraHosts, setExtraHosts] = useState('');
   const [runtimeId, setRuntimeId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [connectingGitHub, setConnectingGitHub] = useState(false);
+  const [gitHubNotice, setGitHubNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const searchRequest = useRef(0);
   const creatingRef = useRef(false);
@@ -338,6 +338,20 @@ export function NewCloudCodeSessionSheet({
     blocked === null &&
     (networkAccess !== 'full' || fullAccepted) &&
     !(clonesRepository && networkAccess === 'none');
+
+  const handleConnectGitHub = useCallback(async () => {
+    setConnectingGitHub(true);
+    setGitHubNotice(null);
+    try {
+      const outcome = await connectGitHubInApp();
+      setGitHubNotice(describeGitHubInstallOutcome(outcome));
+      if (outcome === 'connected') setRepositoryAttempt((attempt) => attempt + 1);
+    } catch (connectError: unknown) {
+      setGitHubNotice(describeCloudCodeError(connectError, 'GitHub could not be connected'));
+    } finally {
+      setConnectingGitHub(false);
+    }
+  }, []);
 
   const handleCreate = useCallback(async () => {
     if (!canCreate || creatingRef.current) return;
@@ -495,8 +509,11 @@ export function NewCloudCodeSessionSheet({
                   <Button
                     title={COPY.firstRunAction}
                     variant="outline"
-                    onPress={() => void openExternalUrl(`${API_URL}${GITHUB_INSTALL_PATH}`)}
+                    loading={connectingGitHub}
+                    disabled={connectingGitHub}
+                    onPress={() => void handleConnectGitHub()}
                   />
+                  {gitHubNotice ? <Note tone="error">{gitHubNotice}</Note> : null}
                 </View>
               ) : repositoryState.status === 'error' ? (
                 <View style={{ gap: 6 }}>
