@@ -7,6 +7,9 @@ export const ARTIFACT_RUNTIME_MAX_ALLOWED_TOOLS = 200;
 export const ARTIFACT_RUNTIME_TOOL_NAME_MAX_CHARS = 200;
 export const ARTIFACT_STORAGE_KEY_PATTERN = /^[^\s/\\'"]{1,200}$/u;
 export const ARTIFACT_STORAGE_PREFIX_MAX_CHARS = 200;
+export const ARTIFACT_STORAGE_VALUE_LIMIT_BYTES = 4 * 1024 * 1024;
+export const ARTIFACT_RUNTIME_BODY_CEILING_BYTES =
+  2 * ARTIFACT_STORAGE_VALUE_LIMIT_BYTES + 64 * 1024;
 
 export function artifactRuntimeCompletePath(token: string): string {
   return `/api/artifacts/runtime/${encodeURIComponent(token)}/complete`;
