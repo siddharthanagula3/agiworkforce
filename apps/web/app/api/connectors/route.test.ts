@@ -16,7 +16,7 @@ interface DirectoryTargetFixture {
 }
 
 const mocks = vi.hoisted(() => ({
-  connectorPolicy: vi.fn(async () => ({
+  connectorPolicy: vi.fn(async (..._args: unknown[]) => ({
     allowed: true,
     code: 'ungoverned',
     reason: '',
@@ -236,7 +236,12 @@ function resetMocks(): void {
   mocks.deleteCustom.mockResolvedValue([]);
   mocks.clearPermissions.mockResolvedValue(undefined);
   mocks.cacheToolNames.mockResolvedValue(undefined);
-  mocks.connectorPolicy.mockResolvedValue({ allowed: true, code: 'ungoverned', reason: 'allowed' });
+  mocks.connectorPolicy.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: 'allowed',
+    organizationId: null,
+  });
 }
 
 describe('/api/connectors managed-cloud capability boundary', () => {
@@ -247,6 +252,7 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       allowed: false,
       code: 'connector_blocked',
       reason: 'Blocked by workspace policy.',
+      organizationId: null,
     });
 
     const response = await POST(postRequest('slack'));
@@ -618,6 +624,7 @@ describe('/api/connectors directory records', () => {
       allowed: false,
       code: 'custom_connectors_disabled',
       reason: 'Custom connectors are disabled.',
+      organizationId: null,
     });
 
     const response = await POST(postRequest(OPEN_RECORD_ID));

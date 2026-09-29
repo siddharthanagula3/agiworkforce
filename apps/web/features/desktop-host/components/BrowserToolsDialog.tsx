@@ -53,8 +53,13 @@ const FIELD_CLASS =
 
 type Field = 'selector' | 'text' | 'url';
 
+type DialogCommand = Exclude<
+  BrowserCommand,
+  'browser_find' | 'browser_fill_form' | 'browser_history'
+>;
+
 interface BrowserAction {
-  command: BrowserCommand;
+  command: DialogCommand;
   label: string;
   fields: readonly Field[];
 }
@@ -111,7 +116,7 @@ function tabLabel(tab: BrowserTabSummary): string {
 }
 
 async function runAction(
-  command: BrowserCommand,
+  command: DialogCommand,
   values: Record<Field, string>,
   tabId: number | null,
 ): Promise<{ transcript: string; files: File[] }> {
@@ -190,7 +195,7 @@ async function runAction(
 export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDialogProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [pairing, setPairing] = useState<BrowserPairingState | null>(null);
-  const [action, setAction] = useState<BrowserCommand>('browser_read_page');
+  const [action, setAction] = useState<DialogCommand>('browser_read_page');
   const [values, setValues] = useState<Record<Field, string>>({ selector: '', text: '', url: '' });
   const [result, setResult] = useState<{ transcript: string; files: File[] } | null>(null);
   const [running, setRunning] = useState(false);
