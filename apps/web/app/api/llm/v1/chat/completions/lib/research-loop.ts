@@ -45,6 +45,8 @@
 
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import type {
   Citation,
   ResearchDeliverableSpec,
@@ -78,6 +80,7 @@ import {
 import { classifyToolLoopInputs } from './tool-loop-routing';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import {
@@ -321,6 +324,7 @@ export interface ResearchLoopOptions {
   operations?: ResearchOperationExecutor;
   resumeFrom?: ResearchLoopCheckpoint;
   invocation?: ResearchInvocationLimits;
+  reloadConnectorPermissions?: () => Promise<ConnectorToolPermissions>;
 }
 
 export interface ResearchLoopCheckpoint {
@@ -379,15 +383,31 @@ export interface ResearchOperation<T> {
   execute: () => Promise<T>;
 }
 
+export interface ResearchSteerRecord {
+  steers: ToolLoopSteerMessage[];
+}
+
 export interface ResearchOperationExecutor {
   turn(operation: ResearchOperation<ResearchTurnRecord>): Promise<ResearchTurnRecord>;
   tool(operation: ResearchOperation<ResearchToolRecord>): Promise<ResearchToolRecord>;
+  steers(operation: ResearchOperation<ResearchSteerRecord>): Promise<ResearchSteerRecord>;
 }
 
 const DIRECT_RESEARCH_OPERATIONS: ResearchOperationExecutor = {
   turn: (operation) => operation.execute(),
   tool: (operation) => operation.execute(),
+  steers: (operation) => operation.execute(),
 };
+
+const failedTurnUsage = new WeakMap<object, ObservedProviderUsage>();
+
+export function usageOfFailedResearchTurn(error: unknown): ObservedProviderUsage | null {
+  return typeof error === 'object' && error !== null ? (failedTurnUsage.get(error) ?? null) : null;
+}
+
+function contextDigest(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
 
 export const RESEARCH_STATUS_PROGRESS_ID = 'research';
 export const RESEARCH_STEP_PROGRESS_PREFIX = 'research-step:';
@@ -1882,9 +1902,17 @@ export async function* runResearchLoop(
   }
 
   async function takeSteers(): Promise<readonly ToolLoopSteerMessage[]> {
-    if (!options.takeSteerMessages) return [];
+    const takeSteerMessages = options.takeSteerMessages;
+    if (!takeSteerMessages) return [];
     try {
-      return await options.takeSteerMessages();
+      const record = await operations.steers({
+        operationKey: nextOperationKey('steers'),
+        payload: { kind: 'steers' },
+        execute: async () => ({
+          steers: (await takeSteerMessages()).map((steer) => ({ id: steer.id, text: steer.text })),
+        }),
+      });
+      return record.steers;
     } catch (error) {
       logger.warn(
         { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
@@ -1948,7 +1976,28 @@ export async function* runResearchLoop(
   }
 
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
-  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  let connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+
+  async function refreshConnectorPermissions(): Promise<void> {
+    if (!options.reloadConnectorPermissions) return;
+    try {
+      connectorPermissions = await options.reloadConnectorPermissions();
+    } catch (error) {
+      logger.warn(
+        { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
+        '[research-loop] tool permissions could not be read mid-run; refusing tool calls',
+      );
+      connectorPermissions = LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS;
+    }
+  }
+
+  function toolCallSignal(): AbortSignal | undefined {
+    const invocation = options.invocation;
+    if (!invocation) return options.signal;
+    const remaining = Math.max(1, invocation.deadlineMs - (now() - invocation.startedAtMs));
+    const deadline = AbortSignal.timeout(remaining);
+    return options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+  }
   const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
   let sensitiveSourceAvailable =
     resume?.sensitiveSourceAvailable ??
@@ -2042,16 +2091,27 @@ export async function* runResearchLoop(
       : { ...baseRequest, messages: turnMessages };
     const operationKey = nextOperationKey(kind);
     let executed = false;
-    const record = yield* streamWhile((emit) =>
-      operations.turn({
-        operationKey,
-        payload: { kind, withoutTools: turnOptions.withoutTools === true },
-        execute: async () => {
-          executed = true;
-          return executeTurn(stepRequest, forwardContent, emit);
-        },
-      }),
-    );
+    let record: ResearchTurnRecord;
+    try {
+      record = yield* streamWhile((emit) =>
+        operations.turn({
+          operationKey,
+          payload: {
+            kind,
+            withoutTools: turnOptions.withoutTools === true,
+            context: contextDigest(stepRequest.messages),
+          },
+          execute: async () => {
+            executed = true;
+            return executeTurn(stepRequest, forwardContent, emit);
+          },
+        }),
+      );
+    } catch (error) {
+      const failedUsage = usageOfFailedResearchTurn(error);
+      if (failedUsage) mergeObservedProviderUsage(observedUsage, failedUsage);
+      throw error;
+    }
     if (!executed) {
       for (const added of record.sourceAdds) sources.add(added, true);
     }
@@ -2067,6 +2127,20 @@ export async function* runResearchLoop(
     emit: (chunk: Uint8Array) => void,
   ): Promise<ResearchTurnRecord> {
     const turnUsage = createObservedProviderUsage();
+    try {
+      return await streamTurn(stepRequest, forwardContent, emit, turnUsage);
+    } catch (error) {
+      if (typeof error === 'object' && error !== null) failedTurnUsage.set(error, turnUsage);
+      throw error;
+    }
+  }
+
+  async function streamTurn(
+    stepRequest: typeof baseRequest,
+    forwardContent: boolean,
+    emit: (chunk: Uint8Array) => void,
+    turnUsage: ObservedProviderUsage,
+  ): Promise<ResearchTurnRecord> {
     const sourceAdds: ResearchSourceEntry[] = [];
     const stepSink: ToolLoopStepSink = {
       thinkingBlocks: [],
@@ -2242,6 +2316,7 @@ export async function* runResearchLoop(
     }
     turnMessages.push(assistantMessage);
 
+    await refreshConnectorPermissions();
     const refusals = new Map(
       calls
         .filter(
@@ -2329,9 +2404,10 @@ export async function* runResearchLoop(
                 outcome: 'refused',
               };
             }
+            const signal = toolCallSignal();
             const outcome = await executeWebSearch(call.args, {
               domainPolicy,
-              ...(options.signal ? { signal: options.signal } : {}),
+              ...(signal ? { signal } : {}),
             });
             await settlePerplexitySearchCall({
               userId: _billing.userId,
@@ -2417,10 +2493,11 @@ export async function* runResearchLoop(
         roundCounts.fetches += 1;
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
         const record = await runToolOperation('fetch', call, async (sourceAdds) => {
+          const signal = toolCallSignal();
           const outcome = await executeUrlFetch(call.args, {
             maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
             domainPolicy,
-            ...(options.signal ? { signal: options.signal } : {}),
+            ...(signal ? { signal } : {}),
           });
           if (outcome.ok) {
             recordingAggregator(sources, sourceAdds).add({

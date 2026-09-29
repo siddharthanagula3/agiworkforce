@@ -12,11 +12,15 @@ import type { ProviderStreamShape } from '@/app/api/llm/v1/chat/completions/lib/
 import {
   connectorToolPermissionsFromEntries,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  loadConnectorToolPermissions,
+  withoutStandingApprovals,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import {
   runResearchLoop,
+  usageOfFailedResearchTurn,
   type ResearchLoopCheckpoint,
   type ResearchOperationExecutor,
+  type ResearchSteerRecord,
   type ResearchToolRecord,
   type ResearchTurnRecord,
 } from '@/app/api/llm/v1/chat/completions/lib/research-loop';
@@ -46,8 +50,8 @@ import {
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
 import {
-  CHAT_TOOL_LOOP_BUDGET_MS,
   CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
+  CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
   CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
   CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
 } from '@/lib/deadline-policy';
@@ -400,6 +404,17 @@ const researchToolRecordSchemaCoversRecord: SameKeys<
 > = true;
 void researchToolRecordSchemaCoversRecord;
 
+const ResearchSteerRecordSchema = z
+  .object({
+    steers: z.array(z.object({ id: z.string().min(1), text: z.string() }).strict()),
+  })
+  .strict();
+const researchSteerRecordSchemaCoversRecord: SameKeys<
+  z.infer<typeof ResearchSteerRecordSchema>,
+  ResearchSteerRecord
+> = true;
+void researchSteerRecordSchemaCoversRecord;
+
 function researchOperations(
   db: ReturnType<typeof getNeonDb>,
   input: CloudAgentWorkflowInput,
@@ -418,6 +433,10 @@ function researchOperations(
         resultSchema: ResearchTurnRecordSchema,
         execute,
         usage: (result) => ({ ...result.usage }),
+        failureUsage: (error) => {
+          const spent = usageOfFailedResearchTurn(error);
+          return spent ? { ...spent } : null;
+        },
       }),
     tool: ({ operationKey, payload, execute }) =>
       executeCloudAgentOperation<ResearchToolRecord>(db, {
@@ -429,6 +448,18 @@ function researchOperations(
         retrySafety: 'unsafe',
         payload,
         resultSchema: ResearchToolRecordSchema,
+        execute,
+      }),
+    steers: ({ operationKey, payload, execute }) =>
+      executeCloudAgentOperation<ResearchSteerRecord>(db, {
+        userId: input.userId,
+        runId: input.runId,
+        billingIdempotencyKey,
+        operationKey,
+        operationKind: 'tool',
+        retrySafety: 'unsafe',
+        payload,
+        resultSchema: ResearchSteerRecordSchema,
         execute,
       }),
   };
@@ -564,12 +595,22 @@ export async function executeCloudAgentWorkflowInvocation(
             onReportStored: () => undefined,
           }),
           operations: researchOperations(db, input, billingLedgerKey),
+          reloadConnectorPermissions: async () => {
+            const permissions = await loadConnectorToolPermissions(
+              managedUsageDb,
+              input.userId,
+              input.processed.organizationId ?? null,
+            );
+            return processed.conversationIsTemporary
+              ? withoutStandingApprovals(permissions)
+              : permissions;
+          },
           ...(research.checkpoint ? { resumeFrom: research.checkpoint } : {}),
           invocation: {
             startedAtMs: invocationStartedAt,
             handOffAfterMs: CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
             synthesisStartsWithinMs: CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
-            deadlineMs: CHAT_TOOL_LOOP_BUDGET_MS,
+            deadlineMs: CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
             onCheckpoint: async (checkpoint) => {
               nextInput = researchContinuation(input, serving, checkpoint);
             },
