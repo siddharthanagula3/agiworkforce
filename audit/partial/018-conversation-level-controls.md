@@ -184,10 +184,10 @@ Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a warning chip appears when the thread nears the model's context limit; add a view of what is in context. | ui |
+| mobile | partial | partials/chat-gates 80e2426e74: a context sheet shows estimated tokens against the model window and messages and attachments by kind; the long-chat warning opens it. post-codex/w-chat-s18.22-mobile-context-menu-entry.patch adds 'What is in context' to the held chat screen's conversation menu so it is reachable at any length. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
+Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:46-46`
 
 ## S18.23: Usage summary.
 

@@ -188,11 +188,11 @@ Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
+| mobile | partial | partials/chat-gates 279d031081 records when each version was saved and adds a history sheet listing every version newest first with what changed, open and restore. post-codex/w-chat-s9.26-mobile-artifact-version-history.patch makes the vN/M label in the held ArtifactFullScreen open it. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`
+Code: `apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx:21-21`, `apps/mobile/src/features/artifacts/versionSummary.ts:73-73`, `apps/mobile/src/features/artifacts/store.ts:49-49`
 
 ## S9.27: Diff viewer.
 
