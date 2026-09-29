@@ -451,12 +451,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/src/features/video/services/videogen.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/mobile/stores/agentStore.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -487,24 +481,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/web/features/chat/components/ToolCallCard.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/features/chat/utils/agiwork-plan.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/features/code/hooks/use-local-tests.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/web/features/marketing/components/FeatureScenes.tsx",
       "symbol": "ADMIN_PERMISSION_AREAS",
       "family": "policy",
@@ -521,36 +497,6 @@
       "symbol": "Provider",
       "family": "provider identity",
       "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/features/media/services/media-api-service.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/stores/agent-metrics-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/stores/media-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/stores/mission-control-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/types/multi-agent-chat.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
       "file": "apps/desktop/src/utils/ipc.ts",
@@ -587,24 +533,6 @@
       "symbol": "AgentEventSource",
       "family": "source records",
       "why": "The chip's props spell out index, title, url and snippet one by one; take an AgentEventSource prop plus the index instead."
-    },
-    {
-      "file": "apps/web/features/chat/utils/research-plan.ts",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "Research resume sources may arrive without a title, where the URL stands in, so ResumeSource keeps title optional; extend AgentEventSource once the server always sends one."
-    },
-    {
-      "file": "apps/web/features/support/lib/contract.ts",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "SupportCitation is a help-center passage the support assistant cites (id, title, url, snippet); give it AgentEventSource's fields by extension when the support contract next changes."
-    },
-    {
-      "file": "apps/web/shared/types/common.ts",
-      "symbol": "AgentEventSource",
-      "family": "source records",
-      "why": "The legacy shared Citation type carries id, description, favicon and timestamp beside the source fields; extend AgentEventSource where it is still read."
     }
   ]
 }
