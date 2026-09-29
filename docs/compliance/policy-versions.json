@@ -84,6 +84,11 @@
           "digest": "85f1c06b4c989919",
           "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
           "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "e301293a3ab8f014",
+          "note": "Same-day revision before release: account deletion now revokes connector tokens at Google, Google data routes only to no-training providers, workspace retention covers routine runs, and deleted chats state the 30-day purge. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
