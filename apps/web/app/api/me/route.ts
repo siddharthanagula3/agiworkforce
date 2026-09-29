@@ -190,7 +190,7 @@ async function handleGetMe(request: NextRequest) {
 
     const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
     const [entitlement, identity] = await Promise.all([
-      resolveEntitlementBundle(db, userId),
+      resolveEntitlementBundle(db, userId, { throwOnSeatLookupError: true }),
       readUserIdentity(db, userId),
     ]);
     const subscription = entitlement.subscription;
