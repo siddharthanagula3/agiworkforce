@@ -8,6 +8,7 @@ import type { ConnectorToolPermissionLevel } from './connector-tool-permissions'
 import {
   isSensitiveSourceTool,
   policyAutoApprovesTool,
+  resolveToolMetadata,
   toolAcceptsUntrustedContent,
   toolCreatesEgressPath,
 } from './tool-metadata';
@@ -171,6 +172,10 @@ export function batchIntroducesUntrustedContent(
 // The U leg's tool half: a call already in the transcript that returned third-party content.
 export function untrustedToolContentInContext(priorToolCallNames: readonly string[]): boolean {
   return priorToolCallNames.some((name) => toolAcceptsUntrustedContent(name));
+}
+
+export function privateToolContentInContext(priorToolCallNames: readonly string[]): boolean {
+  return priorToolCallNames.some((name) => resolveToolMetadata(name).readsPrivateData === true);
 }
 
 // The S leg: derived from the offered catalog, so it over-triggers rather than under-triggers.
