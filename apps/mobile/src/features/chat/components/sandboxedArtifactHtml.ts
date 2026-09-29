@@ -1,8 +1,10 @@
 /**
  * Pure builder for the hardened artifact-preview document. Kept free of any
  * native (WebView) import so it is unit-testable in isolation. Rendered by
- * {@link SafeArtifactPreview} in a JS-disabled WebView.
+ * {@link SafeArtifactPreview}; HTML runs its scripts under the canonical
+ * artifact policy, SVG and the fallback stay script-free.
  */
+import { ARTIFACT_CSP_CONTENT } from '@agiworkforce/types';
 import { lightColors } from '@/src/ui/theme/tokens';
 
 export type PreviewableKind = 'html' | 'svg' | 'mermaid';
@@ -14,6 +16,11 @@ export interface MermaidAppearance {
 
 export type MermaidPreviewMessage =
   { type: 'rendered'; height: number } | { type: 'failed'; reason: string };
+
+export interface ArtifactPreviewError {
+  type: 'error';
+  message: string;
+}
 
 const MAX_FAILURE_REASON_LENGTH = 200;
 
@@ -71,17 +78,47 @@ export function parseMermaidPreviewMessage(data: string): MermaidPreviewMessage 
   return null;
 }
 
-const CONTENT_SECURITY_POLICY =
+const STATIC_CONTENT_SECURITY_POLICY =
   "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:;";
 
+const ERROR_REPORTER = [
+  '<script>',
+  '(function(){',
+  'var sent=false;',
+  'function report(m){ if (sent || !window.ReactNativeWebView) return; sent=true;',
+  "window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(m || 'Script error') })); }",
+  "window.addEventListener('error', function(e){ report(e && (e.message || (e.error && e.error.message))); });",
+  "window.addEventListener('unhandledrejection', function(e){ var r = e && e.reason; report((r && r.message) || r); });",
+  '})();',
+  '</script>',
+].join('');
+
+export function parseArtifactPreviewError(data: string): ArtifactPreviewError | null {
+  let message: unknown;
+  try {
+    message = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (!message || typeof message !== 'object') return null;
+  const record = message as Record<string, unknown>;
+  const text = record['message'];
+  if (record['type'] !== 'error' || typeof text !== 'string') return null;
+  const firstLine = (text.split('\n')[0] ?? '').trim();
+  return { type: 'error', message: firstLine.slice(0, MAX_FAILURE_REASON_LENGTH) };
+}
+
 export function buildSandboxedArtifactHtml(content: string, kind: PreviewableKind): string {
+  const runsScripts = kind === 'html';
   const body = kind === 'svg' ? `<div>${content}</div>` : content;
+  const csp = runsScripts ? ARTIFACT_CSP_CONTENT : STATIC_CONTENT_SECURITY_POLICY;
   return [
     '<!DOCTYPE html>',
     '<html><head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}">`,
+    `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
+    runsScripts ? ERROR_REPORTER : '',
     '<style>',
     `html,body{margin:0;padding:12px;background:${PREVIEW_SURFACE};color:${PREVIEW_TEXT};`,
     'font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;}',
