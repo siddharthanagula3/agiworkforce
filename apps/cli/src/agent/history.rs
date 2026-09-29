@@ -253,7 +253,8 @@ fn close_open_tool_calls(messages: &mut Vec<Message>, note: &str) -> usize {
                     }
                     ContentBlock::Text { .. }
                     | ContentBlock::Image { .. }
-                    | ContentBlock::Document { .. } => {}
+                    | ContentBlock::Document { .. }
+                    | ContentBlock::Unknown => {}
                 }
             }
         }

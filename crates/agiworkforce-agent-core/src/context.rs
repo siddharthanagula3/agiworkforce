@@ -148,6 +148,7 @@ fn estimate_block_tokens(block: &ContentBlock) -> usize {
             estimate_text_tokens(name) + estimate_text_tokens(&input.to_string())
         }
         ContentBlock::ToolResult { content, .. } => estimate_text_tokens(content),
+        ContentBlock::Unknown => 0,
     }
 }
 
@@ -433,6 +434,7 @@ fn summary_content(message: &Message) -> String {
                 ContentBlock::Text { text } => text.clone(),
                 ContentBlock::Image { mime, .. } => format!("[image: {mime}]"),
                 ContentBlock::Document { name, .. } => format!("[document: {name}]"),
+                ContentBlock::Unknown => "[unknown content]".to_string(),
                 ContentBlock::ToolUse { name, input, .. } => {
                     format!("[tool call: {name} {input}]")
                 }

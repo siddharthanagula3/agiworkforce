@@ -332,6 +332,7 @@ fn render_message_content(content: &MessageContent, md: &mut String) {
                     ContentBlock::Document { name, .. } => {
                         md.push_str(&format!("> [file: {name}]\n\n"));
                     }
+                    ContentBlock::Unknown => {}
                     ContentBlock::ToolUse { name, input, .. } => {
                         let args_preview = format_tool_args(input);
                         md.push_str(&format!("> **Tool: {}** (`{}`)\n\n", name, args_preview));

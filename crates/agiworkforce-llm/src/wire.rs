@@ -45,6 +45,8 @@ pub enum ContentBlock {
         #[serde(default)]
         is_error: bool,
     },
+    #[serde(other, rename = "unknown")]
+    Unknown,
 }
 
 /// A tool definition to send to the API.
@@ -181,11 +183,46 @@ impl Message {
                     ContentBlock::Text { text } => Some(text.as_str()),
                     ContentBlock::Image { .. }
                     | ContentBlock::Document { .. }
+                    | ContentBlock::Unknown
                     | ContentBlock::ToolUse { .. }
                     | ContentBlock::ToolResult { .. } => None,
                 })
                 .collect::<Vec<_>>()
                 .join(""),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_saved_message_with_a_block_this_version_does_not_know_still_loads() {
+        let saved = r#"{"role":"user","content":[{"type":"hologram","frames":3},{"type":"text","text":"hi"}]}"#;
+        let message: Message = serde_json::from_str(saved).expect("loads");
+        let MessageContent::Blocks(blocks) = &message.content else {
+            panic!("blocks");
+        };
+        assert!(matches!(blocks[0], ContentBlock::Unknown));
+        assert_eq!(message.text_content(), "hi");
+    }
+
+    #[test]
+    fn a_document_block_round_trips() {
+        let block = ContentBlock::Document {
+            name: "brief.pdf".to_string(),
+            mime: "application/pdf".to_string(),
+            data_b64: String::new(),
+            asset_id: Some("asset".to_string()),
+        };
+        let json = serde_json::to_string(&block).expect("serialize");
+        assert!(matches!(
+            serde_json::from_str::<ContentBlock>(&json).expect("load"),
+            ContentBlock::Document {
+                asset_id: Some(_),
+                ..
+            }
+        ));
     }
 }
