@@ -104,6 +104,11 @@
           "date": "2026-09-29",
           "digest": "a5112f1e720aea66",
           "note": "Same-day revision before release, and material: product analytics now discloses per-account product usage events from web, desktop, mobile, Chrome, VS Code and the CLI (stop, regenerate, suggestion accepted or dismissed; no content), the Settings control on every surface and the workspace switch that turns it off. Because it widens what the product_analytics consent covers, a product_analytics consent is now recorded under the analytics notice identifier PRODUCT_ANALYTICS_NOTICE_VERSION rather than the privacy date, and every client and the server honour only consents carrying that exact identifier; earlier consents, including any recorded under this 2026-09-29 date, keep covering page views only. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "2b51974c784151d6",
+          "note": "Same-day revision before release: the analytics basis names the notice revision product-analytics-v1 instead of a date as the point before which analytics consent covered page views only. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
