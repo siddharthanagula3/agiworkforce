@@ -99,7 +99,6 @@
     "portal",
     "projects/[id]/duplicate",
     "projects/[id]/export",
-    "projects/[id]/knowledge-files/[fileId]/reindex",
     "releases/[target]/[version]",
     "releases/cli/latest",
     "releases/desktop-cloud/latest",
