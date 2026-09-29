@@ -95,7 +95,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
-| vscode | partial | Turns run through the local CLI and inherit its limits: operator-gated Gmail, Always-allow tools only, no email intake. | flag-off, ui, states |
+| vscode | partial | Inherits CLI limits (operator-gated Gmail, no email intake command); fix belongs to c-cli. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`

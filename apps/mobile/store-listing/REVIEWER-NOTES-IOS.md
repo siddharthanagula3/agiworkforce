@@ -214,8 +214,9 @@ non-`http(s)` scheme requires a confirmation alert first.
 App install flow at `${API_URL}/api/github/install/start`
 (`src/features/settings/cloud-connectors/index.tsx:690`, URL from
 `services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
-button in the new cloud code session sheet opens the same flow
-(`src/features/cloud-code/components/NewCloudCodeSessionSheet.tsx:498`). The legal screen
+button in the new cloud code session sheet runs the same install in an in-app
+authentication session that returns to `agiworkforce://github/installed`
+(`src/features/cloud-code/githubInstall.ts`), not the external browser. The legal screen
 `app/legal/article-50.tsx:34` opens the EU AI Act text at
 `artificialintelligenceact.eu`. A map result card opens Maps
 (`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to

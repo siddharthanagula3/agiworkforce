@@ -219,18 +219,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S9.31: Permission summary.
-
-- Done when: One view states in plain language what the assistant or a connected app is allowed to do (scopes, autonomy, allowed sites or tools).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The header pill names the trust boundary and the mode picker sets autonomy, but nothing lists what a session may do (tools, folders, commands) in one place. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
-
 ## S9.34: Capability-warning card.
 
 - Done when: Before sending, a visible notice warns when the chosen model cannot handle something in the request (images, tools, attachments, context size).

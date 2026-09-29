@@ -15,6 +15,14 @@ jest.mock('@/src/features/cloud-code/service', () => ({
   describeCloudCodeError: (_error: unknown, fallback: string) => fallback,
 }));
 
+const mockConnectGitHubInApp = jest.fn();
+
+jest.mock('@/src/features/cloud-code/githubInstall', () => ({
+  connectGitHubInApp: () => mockConnectGitHubInApp(),
+  describeGitHubInstallOutcome: (outcome: string) =>
+    outcome === 'connected' || outcome === 'dismissed' ? null : `outcome:${outcome}`,
+}));
+
 import {
   NewCloudCodeSessionSheet,
   titleFromTask,
@@ -88,5 +96,57 @@ describe('new cloud code session', () => {
       fireEvent.press(getByTestId('new-cloud-code-start'));
     });
     expect(mockCloudCodeApi.create).not.toHaveBeenCalled();
+  });
+
+  it('connects GitHub in the app and reloads the repositories when it links', async () => {
+    mockCloudCodeApi.listRepositories.mockResolvedValueOnce({
+      repositories: [],
+      installationCount: 0,
+      truncated: false,
+      unreachable: [],
+    });
+    mockConnectGitHubInApp.mockResolvedValue('connected');
+    const { getByText, getByTestId } = render(
+      <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await waitFor(() => getByText('Connect GitHub'));
+
+    await act(async () => {
+      fireEvent.press(getByText('Connect GitHub'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    expect(mockConnectGitHubInApp).toHaveBeenCalledTimes(1);
+    await waitFor(() => getByTestId('new-cloud-code-repo-acme/app'));
+  });
+
+  it('says why GitHub did not link and keeps the connect action', async () => {
+    mockCloudCodeApi.listRepositories.mockResolvedValue({
+      repositories: [],
+      installationCount: 0,
+      truncated: false,
+      unreachable: [],
+    });
+    mockConnectGitHubInApp.mockResolvedValue('ownership_failed');
+    const { getByText } = render(
+      <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await waitFor(() => getByText('Connect GitHub'));
+    await act(async () => {
+      fireEvent.press(getByText('Connect GitHub'));
+    });
+
+    expect(getByText('outcome:ownership_failed')).toBeTruthy();
+    expect(getByText('Connect GitHub')).toBeTruthy();
   });
 });

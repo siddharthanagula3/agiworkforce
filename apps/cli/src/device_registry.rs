@@ -146,6 +146,12 @@ fn os_version() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+static REMOTE_CONTROL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_remote_control(active: bool) {
+    REMOTE_CONTROL.store(active, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub async fn send_heartbeat() -> bool {
     let Some(jwt) = crate::tier_cache::load_jwt() else {
         return false;
@@ -164,12 +170,14 @@ pub async fn send_heartbeat() -> bool {
     let facts = tokio::task::spawn_blocking(|| (hostname(), os_version()))
         .await
         .unwrap_or((None, None));
-    let heartbeat = build_heartbeat(
+    let mut heartbeat = build_heartbeat(
         install_id,
         facts.0.as_deref(),
         facts.1.as_deref(),
         local_mcp,
     );
+    heartbeat.capabilities.remote_control =
+        REMOTE_CONTROL.load(std::sync::atomic::Ordering::Relaxed);
 
     let Ok(client) = reqwest::Client::builder()
         .timeout(HEARTBEAT_TIMEOUT)
