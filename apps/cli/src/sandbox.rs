@@ -748,6 +748,7 @@ pub(crate) fn background_command(
             }
         }
     };
+    crate::interactive::mark_agent_spawned(&mut command);
     command.current_dir(cwd);
     Ok(command.into_std())
 }
@@ -770,6 +771,7 @@ async fn execute_sandboxed_in_environment(
                 command
             }
         };
+        crate::interactive::mark_agent_spawned(&mut cmd);
         if let Some(dir) = cwd {
             cmd.current_dir(dir);
         }
@@ -795,6 +797,7 @@ async fn execute_sandboxed_in_environment(
                 .canonicalize()
                 .unwrap_or_else(|_| scratch_dir.path().to_path_buf());
             scmd.env("TMPDIR", scratch_path);
+            crate::interactive::mark_agent_spawned(&mut scmd);
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
@@ -808,6 +811,7 @@ async fn execute_sandboxed_in_environment(
             apply_environment_policy(&mut bcmd, scrub_environment);
             let bwrap_args = bubblewrap_args(manager, &invocation)?;
             bcmd.args(&bwrap_args);
+            crate::interactive::mark_agent_spawned(&mut bcmd);
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
             }
@@ -1082,6 +1086,16 @@ mod tests {
         assert_eq!(joined, "cmd '' 'two words'");
     }
     use super::*;
+
+    #[test]
+    fn a_background_command_carries_the_agent_marker() {
+        let cwd = std::env::temp_dir();
+        let command =
+            background_command(None, Invocation::Shell("true"), &cwd, None).expect("builds");
+        assert!(command.get_envs().any(|(name, value)| {
+            name == crate::interactive::AGENT_SPAWNED_ENV && value == Some("1".as_ref())
+        }));
+    }
     use std::path::PathBuf;
 
     /// `/status` and the footer must describe the same backend with the same

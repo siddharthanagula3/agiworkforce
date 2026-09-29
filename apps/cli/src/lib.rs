@@ -3751,7 +3751,7 @@ async fn handle_schedule_triggers_command(
             );
             let created = client.create_trigger(&request).await.map_err(failed)?;
             let endpoint = client.api_url(&created.webhook_path);
-            let show_secrets = io::stdout().is_terminal();
+            let show_secrets = interactive::person_at_terminal(io::stdout().is_terminal());
             let mut value = if show_secrets {
                 serde_json::to_value(&created)?
             } else {
@@ -3793,7 +3793,10 @@ async fn handle_schedule_triggers_command(
             )
         }
         ScheduleTriggersSubcommand::Remove { trigger, yes, json } => {
-            if let Some(refusal) = triggers::removal_refusal(trigger, interactive::can_prompt()) {
+            if let Some(refusal) = triggers::removal_refusal(
+                trigger,
+                interactive::can_prompt() && !interactive::spawned_by_agent(),
+            ) {
                 anyhow::bail!(refusal);
             }
             if !confirm_destructive(
