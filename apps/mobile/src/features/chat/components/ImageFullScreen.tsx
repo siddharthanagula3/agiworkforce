@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, Copy, X, Share2 } from 'lucide-react-native';
+import { Check, Copy, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -14,6 +14,10 @@ import { useGeneratedImageSource } from '@/src/features/image/hooks/useGenerated
 import { shareGeneratedImage } from '@/services/fileCreation';
 
 import { imageSettingsCaption } from '@/src/features/image/imageSettingsCaption';
+import {
+  ImageAreaEditor,
+  type ImageAreaEdit,
+} from '@/src/features/image/components/ImageAreaEditor';
 
 interface ImageFullScreenProps {
   imageUrl: string | null;
@@ -23,6 +27,9 @@ interface ImageFullScreenProps {
   visible: boolean;
   onClose: () => void;
   allowEphemeral?: boolean;
+  onEditArea?: (edit: ImageAreaEdit) => void;
+  onDelete?: () => void;
+  deleteMessage?: string;
 }
 
 const DIRECTLY_DISPLAYABLE_URI = /^(file|ph|content|assets-library|data|https?):/i;
@@ -40,7 +47,11 @@ export function ImageFullScreen({
   visible,
   onClose,
   allowEphemeral = false,
+  onEditArea,
+  onDelete,
+  deleteMessage,
 }: ImageFullScreenProps) {
+  const [editing, setEditing] = useState(false);
   const settingsCaption = imageSettingsCaption(model, aspectRatio);
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -146,6 +157,22 @@ export function ImageFullScreen({
     }
   }, [imageUrl]);
 
+  const handleDelete = useCallback(() => {
+    if (!onDelete) return;
+    Alert.alert('Delete this image?', deleteMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onDelete },
+    ]);
+  }, [deleteMessage, onDelete]);
+
+  const handleSubmitEdit = useCallback(
+    (edit: ImageAreaEdit) => {
+      setEditing(false);
+      onEditArea?.(edit);
+    },
+    [onEditArea],
+  );
+
   const handleClose = useCallback(() => {
     scale.value = 1;
     savedScale.value = 1;
@@ -189,6 +216,36 @@ export function ImageFullScreen({
               zIndex: zIndex.control,
             }}
           >
+            {onEditArea && !directUri ? (
+              <Pressable
+                onPress={() => setEditing(true)}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel="Edit an area of this image"
+                accessibilityRole="button"
+              >
+                <Paintbrush size={18} color={colors.cameraOverlayText} />
+              </Pressable>
+            ) : null}
+
+            {onDelete ? (
+              <Pressable
+                onPress={handleDelete}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel="Delete image"
+                accessibilityRole="button"
+              >
+                <Trash2 size={18} color={colors.cameraOverlayText} />
+              </Pressable>
+            ) : null}
+
             {/* Share button */}
             <Pressable
               onPress={handleShare}
@@ -322,6 +379,14 @@ export function ImageFullScreen({
           )}
         </View>
       </GestureHandlerRootView>
+      {onEditArea ? (
+        <ImageAreaEditor
+          imagePath={imageUrl}
+          visible={editing}
+          onCancel={() => setEditing(false)}
+          onSubmit={handleSubmitEdit}
+        />
+      ) : null}
     </Modal>
   );
 }
