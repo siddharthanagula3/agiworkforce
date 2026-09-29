@@ -1223,7 +1223,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
-    const temporaryConversation = conversation?.temporary === true;
+    const temporaryConversation = conversation
+      ? conversation.temporary === true
+      : useSettingsStore.getState().isTemporaryChat;
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
@@ -1453,8 +1455,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         try {
           const uploadContext = {
             conversationId,
-            temporary:
-              useSettingsStore.getState().isTemporaryChat || conversation?.temporary === true,
+            temporary: temporaryConversation,
           };
           const uploadResults = await Promise.all(
             attachmentsNeedingUpload.map((a) =>
@@ -1730,7 +1731,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       executionMode === 'cloud'
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
-    const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
+    const isTemporaryChat = temporaryConversation;
     const accountMemoryAllowed =
       executionMode !== 'cloud' ||
       useMemorySyncStateStore.getState().accountMemoryEnabled !== false;
