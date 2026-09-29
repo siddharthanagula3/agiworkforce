@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../FilePreviewModal', () => ({ FilePreviewModal: () => null }));
 

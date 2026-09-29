@@ -21,6 +21,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getInstallationAccessToken: vi.fn(),
   getPrDiff: vi.fn(),
   isGitHubAppConfigured: () => false,

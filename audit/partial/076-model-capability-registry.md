@@ -75,13 +75,13 @@ Code: `apps/cli/src/provider.rs:16-19`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Read-aloud uses expo-speech (OS voices); registry TTS models unused. Live voice speaks through the registry voice_live model. | handler |
+| mobile | partial | post-codex/w-chat-s76.10-mobile-server-read-aloud.patch: in Cloud mode Read aloud posts the answer to /api/voice/speech (registry speech model, credit billed, Idempotency-Key per chunk of 3800 chars, the next chunk prefetched), plays the mp3 with expo-audio and falls back to the device voice for whatever the server could not speak. Local Mode stays on the device. Adds expo-audio ~57.0.5 to the held package.json and apiFetchBinary to the held services/api.ts; jest maps expo-audio to a mock, so its test passes today. Typechecks once the lead installs expo-audio. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `apps/mobile/src/features/voice/services/liveVoiceSession.ts:11-11`, `apps/mobile/src/features/voice/services/tts.ts:1-1`
+Code: `apps/mobile/src/features/voice/services/voiceOutput.ts:1-1`
 
 ## S76.11: Realtime speech-to-speech.
 

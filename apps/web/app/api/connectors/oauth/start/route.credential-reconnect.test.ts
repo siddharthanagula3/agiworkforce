@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: async (...a: unknown[]) => {
     const { userId } = (await mocks.authUser(...a)) as { userId: string };

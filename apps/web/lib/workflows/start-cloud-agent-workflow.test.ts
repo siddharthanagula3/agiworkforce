@@ -54,6 +54,12 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request', () 
   buildApprovalCheckpointRequest: (request: unknown) => request,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  readCloudAgentRunAssistantText: vi.fn(async () => ({
+    text: '',
+    interactiveCards: [],
+    lastSequence: 0,
+  })),
+  takeCloudAgentRunSteers: vi.fn(async () => []),
   APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvent: vi.fn(),
   completeCloudAgentApprovalCheckpoint: workflowMocks.completeCheckpoint,
