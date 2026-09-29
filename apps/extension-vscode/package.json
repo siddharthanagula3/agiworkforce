@@ -722,6 +722,11 @@
         "icon": "$(lightbulb)"
       },
       {
+        "command": "agi-workforce.rememberForRepository",
+        "title": "AGI Workforce: Remember for This Repository",
+        "icon": "$(bookmark)"
+      },
+      {
         "command": "agi-workforce.showPlugins",
         "title": "AGI Workforce: Show Plugins",
         "icon": "$(extensions)"

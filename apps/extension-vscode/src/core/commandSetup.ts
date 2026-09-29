@@ -137,6 +137,7 @@ import {
   openWorkSurface,
 } from '../features/surfaces';
 import { signIn as signInPreferringCli } from '../features/surfaces/accountAccess';
+import { rememberForRepository } from '../features/surfaces/repositoryMemory';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
@@ -2536,6 +2537,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
     register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
+    register('agi-workforce.rememberForRepository', () => rememberForRepository(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () =>
       manageMcpServers(cliCapabilities, mcpServerDetails),

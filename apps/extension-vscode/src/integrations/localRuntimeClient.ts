@@ -161,6 +161,13 @@ const capabilitiesSchema = z.object({
   pluginUpdates: z.boolean().optional(),
 });
 
+const memoryAddResponseSchema = z.object({
+  scope: z.enum(['user', 'project', 'local']),
+  path: z.string().min(1),
+});
+
+export type MemoryAddResult = z.infer<typeof memoryAddResponseSchema>;
+
 const initializeResponseSchema = z.object({
   serverInfo: z.object({ name: z.string(), title: z.string(), version: z.string() }),
   protocolVersion: z.number().int().positive(),
@@ -1606,6 +1613,13 @@ export class LocalRuntimeClient {
     return slashCommandListResponseSchema.parse(
       await connection.request('commands/list', {}),
     ) as SlashCommandListResponse;
+  }
+
+  async addMemory(text: string): Promise<MemoryAddResult> {
+    const connection = await this.readyConnection();
+    return memoryAddResponseSchema.parse(
+      await connection.request('memory/add', { text, scope: 'project' }),
+    );
   }
 
   async runCommand(name: string, args?: string): Promise<SlashCommandRunResponse> {
