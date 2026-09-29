@@ -31,7 +31,24 @@ const ENDS_PAIRING: [&str; 3] = ["device_revoked", "pairing_not_found", "pairing
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const END_PAIRING_TIMEOUT: Duration = Duration::from_secs(3);
 
-type Stop = tokio::sync::watch::Receiver<bool>;
+pub type Stop = tokio::sync::watch::Receiver<bool>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteControlStatus {
+    Waiting {
+        folder: String,
+        pairing_line: String,
+    },
+    Connected {
+        phone: String,
+    },
+    PhoneLeft,
+    PhoneNeedsUpdate,
+    Reconnecting,
+    Off,
+}
+
+type StatusSink = Arc<dyn Fn(RemoteControlStatus) + Send + Sync>;
 
 enum Step<T> {
     Stopped,
@@ -255,6 +272,7 @@ struct Relay<H: DeveloperSessionHost> {
     receipts: VecDeque<String>,
     receipt_keys: HashSet<String>,
     phone: Option<String>,
+    status: StatusSink,
 }
 
 impl<H: DeveloperSessionHost> Relay<H> {
@@ -311,9 +329,7 @@ impl<H: DeveloperSessionHost> Relay<H> {
         let (kind, inner) = match session.verify(candidate, now_ms()) {
             Ok(verified) => verified,
             Err(VerifyError::UpdateRequired) => {
-                eprintln!(
-                    "The phone runs an older AGI Workforce build. Update the app, then pair again."
-                );
+                (self.status)(RemoteControlStatus::PhoneNeedsUpdate);
                 return Vec::new();
             }
             Err(_) => return Vec::new(),
@@ -362,7 +378,7 @@ impl<H: DeveloperSessionHost> Relay<H> {
             "peer_ready" => {
                 let metadata = frame.get("metadata").cloned().unwrap_or(Value::Null);
                 let Some(salt) = metadata.get("dispatchSalt").and_then(Value::as_str) else {
-                    eprintln!("The phone did not offer a secure session. Update the app, then pair again.");
+                    (self.status)(RemoteControlStatus::PhoneNeedsUpdate);
                     return Ok((Vec::new(), None));
                 };
                 let Some(key) = envelope::derive_key(&self.pairing.code, salt, &self.secret) else {
@@ -374,16 +390,16 @@ impl<H: DeveloperSessionHost> Relay<H> {
                     .and_then(Value::as_str)
                     .unwrap_or("your phone")
                     .to_string();
-                println!("Remote Control: connected to {phone}.");
+                (self.status)(RemoteControlStatus::Connected {
+                    phone: phone.clone(),
+                });
                 self.phone = Some(phone);
                 let sessions = self.code_host.sessions().await;
                 Ok((self.signals(sessions), None))
             }
             "peer_left" => {
                 if self.phone.take().is_some() {
-                    println!(
-                        "Remote Control: the phone disconnected. Waiting for it to come back."
-                    );
+                    (self.status)(RemoteControlStatus::PhoneLeft);
                 }
                 self.dispatch = None;
                 self.code_host.reset();
@@ -475,8 +491,48 @@ impl<H: DeveloperSessionHost> Relay<H> {
     }
 }
 
+fn print_status(status: RemoteControlStatus) {
+    match status {
+        RemoteControlStatus::Waiting {
+            folder,
+            pairing_line,
+        } => {
+            println!("Remote Control is on for {folder}.");
+            println!("On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:");
+            println!();
+            println!("  {pairing_line}");
+            println!();
+            println!("Anyone with this line can control sessions in this folder until you stop. Press Ctrl+C to stop.");
+        }
+        RemoteControlStatus::Connected { phone } => {
+            println!("Remote Control: connected to {phone}.")
+        }
+        RemoteControlStatus::PhoneLeft => {
+            println!("Remote Control: the phone disconnected. Waiting for it to come back.")
+        }
+        RemoteControlStatus::PhoneNeedsUpdate => {
+            eprintln!(
+                "The phone runs an older AGI Workforce build. Update the app, then pair again."
+            )
+        }
+        RemoteControlStatus::Reconnecting => {
+            println!("Remote Control: the relay connection dropped. Reconnecting.")
+        }
+        RemoteControlStatus::Off => println!("Remote Control is off."),
+    }
+}
+
 pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Path) -> Result<()> {
-    let stop = stop_on_ctrl_c();
+    run_with(host, workspace, stop_on_ctrl_c(), print_status).await
+}
+
+pub async fn run_with<H: DeveloperSessionHost + 'static>(
+    host: Arc<H>,
+    workspace: &Path,
+    stop: Stop,
+    status: impl Fn(RemoteControlStatus) + Send + Sync + 'static,
+) -> Result<()> {
+    let status: StatusSink = Arc::new(status);
     let jwt = crate::tier_cache::load_jwt()
         .ok_or_else(|| anyhow!("Sign in with `agi login` before starting Remote Control"))?;
     let base = web_base()?;
@@ -503,14 +559,13 @@ pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Pa
         receipts: VecDeque::new(),
         receipt_keys: HashSet::new(),
         phone: None,
+        status: Arc::clone(&status),
     };
     let payload = format!("agiw3:{}:{}", relay.pairing.code, relay.secret);
-    println!("Remote Control is on for {folder}.");
-    println!("On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:");
-    println!();
-    println!("  {payload}");
-    println!();
-    println!("Anyone with this line can control sessions in this folder until you stop. Press Ctrl+C to stop.");
+    status(RemoteControlStatus::Waiting {
+        folder: folder.clone(),
+        pairing_line: payload,
+    });
 
     crate::device_registry::set_remote_control(true);
     let heartbeat = crate::device_registry::spawn_heartbeat_loop();
@@ -540,7 +595,7 @@ pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Pa
                 attempt += 1;
                 relay.dispatch = None;
                 relay.code_host.reset();
-                println!("Remote Control: the relay connection dropped. Reconnecting.");
+                status(RemoteControlStatus::Reconnecting);
                 if let Step::Stopped = or_stopped(&stop, tokio::time::sleep(backoff(attempt))).await
                 {
                     break Ok(());
@@ -558,7 +613,7 @@ pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Pa
         crate::device_registry::send_heartbeat(),
     )
     .await;
-    println!("Remote Control is off.");
+    status(RemoteControlStatus::Off);
     result
 }
 
