@@ -31,6 +31,8 @@ pub mod workspace_policy;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use serde::Deserialize;
+
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
 
@@ -430,6 +432,49 @@ pub async fn delete_conversation(
     let _: serde_json::Value = session
         .client
         .call(&delete_conversation_route(conversation_id), &[], None)
+        .await?;
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceListing {
+    #[serde(default)]
+    active_organization_id: Option<String>,
+    #[serde(default)]
+    workspaces: Vec<WorkspaceEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceEntry {
+    #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
+    name: String,
+}
+
+pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
+    let listing: WorkspaceListing = client.get("/api/settings/organization", &[]).await?;
+    let Some(active) = listing.active_organization_id else {
+        return Ok("your personal workspace".to_string());
+    };
+    Ok(listing
+        .workspaces
+        .into_iter()
+        .find(|workspace| workspace.organization_id.as_deref() == Some(active.as_str()))
+        .map(|workspace| workspace.name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .map(|name| format!("the {name} workspace"))
+        .unwrap_or_else(|| "your active workspace".to_string()))
+}
+
+pub async fn set_account_memory(privacy: PrivacyMode, enabled: bool) -> Result<(), CloudError> {
+    let client = CloudClient::connect(privacy)?;
+    let body = serde_json::json!({ "namespace": "capabilities", "patch": { "memory": enabled } });
+    let _: serde_json::Value = client
+        .call(&personalization::save_route(), &[], Some(&body))
         .await?;
     Ok(())
 }

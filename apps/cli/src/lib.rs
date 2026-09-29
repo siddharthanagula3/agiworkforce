@@ -1372,6 +1372,10 @@ enum MemorySubcommand {
         #[arg(long)]
         out: Option<std::path::PathBuf>,
     },
+    /// Turn memory on for the account: chats on every surface use and save memories.
+    On,
+    /// Turn memory off for the account: no chat uses or saves memories until it is on again.
+    Off,
     /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
     Never {
         /// Term to add. Repeatable.
@@ -3191,12 +3195,33 @@ async fn handle_history_command(
 async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
     let privacy = account_privacy_mode();
     match action {
-        MemorySubcommand::List => {
-            let cache = cloud::refresh_memory(privacy)
+        MemorySubcommand::On | MemorySubcommand::Off => {
+            let enabled = matches!(action, MemorySubcommand::On);
+            cloud::set_account_memory(privacy, enabled)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!(
+                "{}",
+                if enabled {
+                    "Memory is on for your account. Chats on every surface use and save memories."
+                } else {
+                    "Memory is off for your account. No chat on any surface uses or saves memories until you turn it on again."
+                }
+            );
+            Ok(())
+        }
+        MemorySubcommand::List => {
+            let (cache, workspace) = tokio::join!(
+                cloud::refresh_memory(privacy),
+                cloud::active_workspace_label(privacy)
+            );
+            let cache = cache.map_err(|error| anyhow::anyhow!("{error}"))?;
+            let workspace = workspace.unwrap_or_else(|_| "your active workspace".to_string());
+            if cache.account_memory_off {
+                println!("Memory is off for your account. Turn it on with `agi memory on`.");
+            }
             if cache.entries.is_empty() {
-                println!("Your AGI Workforce account holds no memories.");
+                println!("Your AGI Workforce account holds no memories in {workspace}.");
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
@@ -3208,7 +3233,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             topics.sort_unstable();
             topics.dedup();
             println!(
-                "{} memories in your account (* pinned, used first):",
+                "{} memories in {workspace} (* pinned, used first):",
                 cache.entries.len()
             );
             for topic in topics {
