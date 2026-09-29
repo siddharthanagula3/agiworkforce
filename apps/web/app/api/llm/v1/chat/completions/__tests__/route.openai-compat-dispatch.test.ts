@@ -175,6 +175,7 @@ vi.mock('@agiworkforce/providers-openai', () => ({
 
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 vi.mock('@/services/neon-db', () => ({ createNeonServerClient: vi.fn().mockResolvedValue({}) }));

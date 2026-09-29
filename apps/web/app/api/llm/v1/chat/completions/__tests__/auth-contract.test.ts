@@ -40,6 +40,7 @@ vi.mock('@shared/utils/env', () => ({
 
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   getAuthenticatedUser: vi.fn(),
 }));

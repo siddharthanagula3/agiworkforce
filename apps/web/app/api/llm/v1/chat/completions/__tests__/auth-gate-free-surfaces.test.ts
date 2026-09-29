@@ -17,6 +17,7 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mocks.getClerkAuthUser(...args),
 }));
 

@@ -55,6 +55,14 @@ vi.mock('../templates', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/effective-subscription-service', () => ({
+  EntitlementBundle: vi.fn(),
+  EntitlementResolutionOptions: vi.fn(),
+  EntitlementSource: vi.fn(),
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  provisionSeatMemberCreditAccounts: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(),
+  resolveEntitlementBundle: vi.fn(),
   resolveEffectiveSubscription: async () => ({ plan_tier: 'pro' }),
 }));
 

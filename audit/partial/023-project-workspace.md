@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile has no icon or colour picker, and the only view that renders a project's emoji and accent is the fetched header, which v1 hides behind the off crossDeviceSync flag. | ui, flag-off |
+| mobile | partial | Lead ruling: cross-device sync goes on (ChatGPT and Claude sync every chat). Switch-on FEATURES.crossDeviceSync in the final pass. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`
@@ -27,7 +27,7 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A cloud project's page shows only its name and 'Cloud project · synced across your devices'; the full header (description, counts) is fetched only when crossDeviceSync is on, and that v1 flag is off. | flag-off |
+| mobile | partial | Lead ruling: cross-device sync goes on (ChatGPT and Claude sync every chat). Switch-on FEATURES.crossDeviceSync in the final pass. | flag-off |
 
 Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
 
@@ -105,7 +105,7 @@ Code: `apps/cli/src/memory.rs:86-97`, `apps/cli/src/memory.rs:194-208`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile's Start Work sheet can file a new task under a project, but a project's page has no Work tab listing its tasks. | ui |
+| mobile | partial | post-codex/w-work-s23.14-mobile-project-work-tab.patch: cloud project screen gets a Work tab (new ProjectWorkTab) listing up to 50 AGI Work runs from GET /api/llm/v1/chat/completions/runs?projectId= across all states; title or "Untitled run", workState/state label and colour, tap opens the chat, "No work yet" empty copy, error with Try again, as web ProjectWorkPanel. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
