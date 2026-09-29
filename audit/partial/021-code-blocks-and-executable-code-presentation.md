@@ -172,13 +172,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/chat-gates cc4f6e2462: a completed or failed code step (execute_code) offers Run again. It reruns the cell in the chat's own sandbox, so earlier variables still exist, and shows the new output, error and plots in place. Owner, deployment switch, canUseCloudExecution, the account setting and managed-compute access are all checked, and compute is billed as a turn's is. Left: switch-on AGI_E2B_EXECUTION. Until then no execute_code step exists, and provider-native code results (CodeExecutionBlock) keep no code to rerun. | switch |
-| desktop | partial | partials/chat-gates cc4f6e2462: a completed or failed code step (execute_code) offers Run again. It reruns the cell in the chat's own sandbox, so earlier variables still exist, and shows the new output, error and plots in place. Owner, deployment switch, canUseCloudExecution, the account setting and managed-compute access are all checked, and compute is billed as a turn's is. Left: switch-on AGI_E2B_EXECUTION. Until then no execute_code step exists, and provider-native code results (CodeExecutionBlock) keep no code to rerun. | switch |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | mobile | partial | partials/chat-gates 93ad61382c: finished execute_code steps offer Run again and Stop through the code-runs route. MessageBubble passes the conversation in post-codex/w-chat-s21.21-mobile-code-run-again.patch. The web cell's switch-on (AGI_E2B_EXECUTION) applies. | switch |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:547-547`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:113-113`, `apps/web/app/api/chat/conversations/[id]/code-runs/route.ts:74-74`, `packages/contracts/cloud-contracts/src/chat-code-runs.ts:6-6`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:30-31`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:279-279`
 
 ## S21.22: Stop execution.
 
@@ -188,12 +188,12 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:547-547`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/chat-gates ae8cda75e1, cc4f6e2462: Stop now interrupts a running sandbox cell. The turn's abort signal restarts the cell's code context, where before the cell ran on to its own timeout. A rerun has its own Stop, which ends that execution alone. Left: switch-on AGI_E2B_EXECUTION. A per-execution stop inside a streaming turn (as opposed to the whole reply) was not confirmed at either leader (help.openai.com 403), so Stop keeps ChatGPT's whole-reply behaviour. | switch |
-| desktop | partial | partials/chat-gates ae8cda75e1, cc4f6e2462: Stop now interrupts a running sandbox cell. The turn's abort signal restarts the cell's code context, where before the cell ran on to its own timeout. A rerun has its own Stop, which ends that execution alone. Left: switch-on AGI_E2B_EXECUTION. A per-execution stop inside a streaming turn (as opposed to the whole reply) was not confirmed at either leader (help.openai.com 403), so Stop keeps ChatGPT's whole-reply behaviour. | switch |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | mobile | partial | Stop generating now also interrupts the sandbox cell on the server (ae8cda75e1), and a rerun has its own Stop. Waits on AGI_E2B_EXECUTION, as on web. | switch |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/e2b/runtime.ts:1070-1070`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2429-2429`, `apps/web/features/chat/components/messages/CodeRunAgain.tsx:97-97`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:95-96`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/runtime.ts:1070-1070`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:95-96`
 
 ## S21.23: Reset runtime.
 

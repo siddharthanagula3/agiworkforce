@@ -39,10 +39,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud picker lists GitHub App repositories or takes a URL, but cloud coding sessions need AGI_E2B_EXECUTION=1, which ships off; switch the managed sandbox on in production. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/features/code/hooks/use-code-repositories.ts:32-42`, `apps/web/lib/e2b/gate.ts:16-18`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.08: Branch picker.
 
@@ -52,11 +52,11 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.09: Device picker.
 

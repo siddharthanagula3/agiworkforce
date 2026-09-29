@@ -39,12 +39,12 @@ Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
-| desktop | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/plugins/server/directory/install-gate.ts:26-26`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
 
 ## S53.04: Project Skills.
 
@@ -100,14 +100,14 @@ Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-owned-source-service.ts:516-516`, `apps/web/app/api/plugins/authored/[entryId]/route.ts:56-56`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:552-552`, `packages/ui/ui/src/directory/PluginDetailView.tsx:682-682`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/tui_app.rs:3687-3701`, `apps/cli/src/skills.rs:142-160`
 
 ## S53.10: Reference-file bundle.
 
@@ -186,13 +186,13 @@ Code: `apps/cli/src/skills.rs:944-962`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
-| desktop | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/skills/route.ts:194-194`, `apps/web/features/plugins/server/directory/archive.ts:430-430`, `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/app/api/plugins/uploads/route.ts:120-120`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.22: Export.
 
