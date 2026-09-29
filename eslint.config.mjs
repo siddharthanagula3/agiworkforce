@@ -43,6 +43,12 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
     message:
       'Raw fetch() to an our-cloud URL (WEB_APP_URL/API_BASE_URL) bypasses the egress chokepoint and can leak a Local/BYOK session to our cloud. Use guardedFetch from @/lib/egressGuard so non-managed sessions fail closed. See apps/desktop/src/lib/egressGuard.ts.',
   },
+  {
+    selector:
+      'NewExpression[callee.name="Blob"] ObjectExpression Property[key.name="type"][value.value=/text\\/html/]',
+    message:
+      "Use 'text/plain' or 'application/octet-stream' for Blob; text/html in a Blob allows XSS via download attribute.",
+  },
 ];
 
 export default [

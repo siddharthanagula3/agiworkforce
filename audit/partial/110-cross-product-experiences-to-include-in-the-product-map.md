@@ -29,7 +29,7 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 | --- | --- | --- | --- |
 | web | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
 | desktop | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
-| mobile | partial | No deck action or editor; only the office-file tool can build a .pptx from chat text. | ui |
+| mobile | partial | Make the .pptx built by the office-file tool appear as a downloadable, shareable file card in the mobile chat; no deck editor required. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
