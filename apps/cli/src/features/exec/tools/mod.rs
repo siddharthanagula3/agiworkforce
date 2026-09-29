@@ -887,6 +887,18 @@ fn trust_boundary_approval(
             argument("url").unwrap_or_default(),
             "The agent wants to open an address in your signed-in Chrome.",
         ),
+        "browser_find" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to list the buttons, links and fields of the page open in your signed-in Chrome.",
+        ),
+        "browser_fill_form" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to fill in fields in your signed-in Chrome.",
+        ),
+        "browser_history" => computer_use(
+            argument("direction").unwrap_or_default(),
+            "The agent wants to go back or forward in your signed-in Chrome.",
+        ),
         "browser_console" => computer_use(
             "active tab".to_string(),
             "The agent wants to read the console messages of the page open in your signed-in Chrome.",
@@ -1475,6 +1487,17 @@ fn browser_command_args(
             }
         }
         "browser_navigate" => copy_string("url"),
+        "browser_find" => copy_string("query"),
+        "browser_history" => copy_string("direction"),
+        "browser_fill_form" => {
+            if let Some(fields) = args.get("fields") {
+                out.insert(
+                    "fields".to_string(),
+                    serde_json::from_str::<Value>(fields)
+                        .unwrap_or_else(|_| Value::String(fields.clone())),
+                );
+            }
+        }
         "browser_console" => {
             copy_string("pattern");
             copy_string("level");
@@ -2813,6 +2836,7 @@ decision = "deny"
             read_only_browser_tools,
             vec![
                 "browser_read_page",
+                "browser_find",
                 "browser_screenshot",
                 "browser_console",
                 "browser_network"

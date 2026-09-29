@@ -67,6 +67,7 @@ function context(
     resolveTabId: () => Promise.resolve(TAB_ID),
     send,
     navigate,
+    history: vi.fn(() => Promise.resolve()),
     capture: () => Promise.resolve('iVBORw0KGgo='),
   };
 }
@@ -110,6 +111,7 @@ describe('desktop-issued browser commands', () => {
       resolveTabId: () => Promise.resolve(null),
       send: vi.fn(),
       navigate: vi.fn(),
+      history: vi.fn(),
       capture: vi.fn(),
     });
     expect(result.ok).toBe(false);
@@ -152,6 +154,7 @@ describe('desktop-issued browser commands', () => {
       resolveTabId: () => Promise.resolve(TAB_ID),
       send: vi.fn(),
       navigate: vi.fn(),
+      history: vi.fn(),
       capture,
     });
     expect(capture).toHaveBeenCalledWith(TAB_ID);
@@ -167,6 +170,7 @@ describe('desktop-issued browser commands', () => {
       resolveTabId: () => Promise.resolve(TAB_ID),
       send,
       navigate: vi.fn(),
+      history: vi.fn(),
       capture: () => Promise.reject(new Error('activeTab required')),
     });
     expect((result.value as { dataUrl: string }).dataUrl).toBe('data:image/png;base64,zzz');
@@ -178,6 +182,7 @@ describe('desktop-issued browser commands', () => {
       resolveTabId: () => Promise.resolve(TAB_ID),
       send: vi.fn(async () => ({ success: false, error: 'activeTab required' })),
       navigate: vi.fn(),
+      history: vi.fn(),
       capture: () => Promise.reject(new Error('activeTab required')),
     });
     expect(result.ok).toBe(false);

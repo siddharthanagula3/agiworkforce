@@ -3152,6 +3152,10 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         navigate: async (tabId, url) => {
           await chrome.tabs.update(tabId, { url });
         },
+        history: async (tabId, direction) => {
+          if (direction === 'back') await chrome.tabs.goBack(tabId);
+          else await chrome.tabs.goForward(tabId);
+        },
         capture: (tabId) => captureThroughDebugger(tabId),
       });
 
@@ -3639,6 +3643,8 @@ async function handleMessageAsync(
     }
 
     case 'SELECT_OPTION':
+    case 'FIND_ELEMENTS':
+    case 'FILL_FIELDS':
     case 'CHECK':
     case 'UNCHECK':
     case 'FOCUS':
