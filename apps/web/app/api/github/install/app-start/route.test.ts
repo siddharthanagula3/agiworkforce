@@ -29,10 +29,11 @@ vi.mock('@/lib/github-install-app-return', () => ({
 
 import { POST } from './route';
 
-function startRequest(): NextRequest {
+function startRequest(body?: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/github/install/app-start', {
     method: 'POST',
-    headers: { authorization: 'Bearer token' },
+    headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -44,16 +45,14 @@ describe('POST /api/github/install/app-start', () => {
     mocks.installUrl.mockReturnValue('https://github.com/apps/agi-workforce/installations/new');
   });
 
-  it('opens a pending install for the signed-in account and returns the install URL', async () => {
+  it('opens a pending install and sends the phone to our requester page, not straight to GitHub', async () => {
     const response = await POST(startRequest());
 
     expect(response.status).toBe(200);
     expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
     const body = (await response.json()) as { url: string };
     const url = new URL(body.url);
-    expect(url.origin + url.pathname).toBe(
-      'https://github.com/apps/agi-workforce/installations/new',
-    );
+    expect(url.origin + url.pathname).toBe('http://localhost:3000/github/connect');
     expect(url.searchParams.get('state')).toBe('f'.repeat(64));
     expect(response.headers.get('cache-control')).toContain('no-store');
   });
@@ -74,5 +73,11 @@ describe('POST /api/github/install/app-start', () => {
 
     expect(response.status).toBe(503);
     expect(mocks.startAppInstall).not.toHaveBeenCalled();
+  });
+
+  it('ignores any platform the caller claims, so the starter cannot pick the return channel', async () => {
+    await POST(startRequest({ platform: 'ios' }));
+
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
   });
 });

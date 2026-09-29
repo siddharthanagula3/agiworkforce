@@ -74,6 +74,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'mcp_task_bindings', column: 'user_id' },
   { table: 'messaging_connections', column: 'user_id' },
   { table: 'github_installations', column: 'user_id' },
+  { table: 'github_install_authorizations', column: 'user_id' },
   { table: 'slack_account_links', column: 'user_id' },
   { table: 'slack_assistant_runs', column: 'user_id' },
   { table: 'plugin_installations', column: 'user_id' },

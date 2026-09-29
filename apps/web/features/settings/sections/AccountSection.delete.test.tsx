@@ -200,7 +200,12 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
         return jsonResponse({ sessions: [], totalCount: 0 });
       }
       if (url === '/api/user/delete-account' && init?.method === 'GET') {
-        return jsonResponse({ pending: false, canCancel: false });
+        return jsonResponse({
+          pending: false,
+          canCancel: false,
+          requestedAt: null,
+          scheduledFor: null,
+        });
       }
       if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
         return jsonResponse({ error: 'upstream exploded: trace 0xdeadbeef' }, 500);

@@ -49,7 +49,10 @@ describe('app.config.js, Android backup is disabled', () => {
       jest.isolateModules(() => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const releaseConfig = require('../app.config.js') as typeof appConfig;
-        expect(releaseConfig.expo.ios!.associatedDomains).toEqual(['applinks:agiworkforce.com']);
+        expect(releaseConfig.expo.ios!.associatedDomains).toEqual([
+          'applinks:agiworkforce.com',
+          'webcredentials:agiworkforce.com',
+        ]);
       });
     } finally {
       if (previousAppEnv === undefined) delete process.env['APP_ENV'];

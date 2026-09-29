@@ -428,11 +428,11 @@ export default function PerformanceScreen() {
       setLoadedModel(loadedLocalModel());
       setRuntimeState({ kind: 'idle' });
     } catch (error) {
+      console.warn('[local-model] load failed', error);
       setLoadedModel(loadedLocalModel());
       setRuntimeState({
         kind: 'failed',
-        message:
-          error instanceof Error && error.message ? error.message : 'The model did not load.',
+        message: 'Try again, or choose a smaller model.',
       });
     }
   }, [selectedModelId]);

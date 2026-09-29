@@ -15,6 +15,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const SEND_FAILED = 'Your answer was not sent. Check the Desktop connection and try again.';
+const REPLY_REJECTED = 'The computer did not accept that answer. Check it and send it again.';
 
 type InputStep = Extract<DispatchTaskPendingStep, { kind: 'input' }>;
 
@@ -220,7 +221,8 @@ export function DispatchTaskReply({
       next.delete(replyError.toolCallId);
       return next;
     });
-    setError(replyError.message);
+    console.warn('[dispatch] the computer rejected a reply', replyError.message);
+    setError(REPLY_REJECTED);
   }, [replyError]);
 
   const send = async (reply: DispatchTaskStepReply) => {

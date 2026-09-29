@@ -62,7 +62,7 @@ describe('answering a dispatched task on the phone', () => {
   });
 
   it('sends a valid answer and shows the step again when the computer refuses it', async () => {
-    const { getByLabelText, rerender, findByText } = render(
+    const { getByLabelText, rerender, findByText, queryByText } = render(
       <DispatchTaskReply taskRequestId="task-1" steps={[STEP]} />,
     );
     fireEvent.changeText(getByLabelText('Email'), 'ada@example.com');
@@ -88,7 +88,10 @@ describe('answering a dispatched task on the phone', () => {
         }}
       />,
     );
-    expect(await findByText('Room: Choose one of the options offered.')).toBeTruthy();
+    expect(
+      await findByText('The computer did not accept that answer. Check it and send it again.'),
+    ).toBeTruthy();
+    expect(queryByText('Room: Choose one of the options offered.')).toBeNull();
     expect(getByLabelText('Email')).toBeTruthy();
   });
 });
