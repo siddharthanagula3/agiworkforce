@@ -49,4 +49,6 @@ export type AppServerCapabilities = {
   savedPermissions?: boolean;
   mcpInspect?: boolean;
   pluginUpdates?: boolean;
+  permissionRules?: boolean;
+  trust?: boolean;
 };

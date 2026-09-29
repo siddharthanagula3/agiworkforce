@@ -114,6 +114,10 @@ pub mod method {
     pub const WORKTREE_REMOVE: &str = "worktree/remove";
     pub const PERMISSIONS_LIST: &str = "permissions/list";
     pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
+    pub const PERMISSIONS_RULES: &str = "permissions/rules";
+    pub const PERMISSIONS_ADD: &str = "permissions/add";
+    pub const TRUST_LIST: &str = "trust/list";
+    pub const TRUST_REVOKE: &str = "trust/revoke";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -384,6 +388,10 @@ pub struct AppServerCapabilities {
     pub mcp_inspect: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub plugin_updates: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub permission_rules: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub trust: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2481,6 +2489,76 @@ pub struct PermissionsListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PermissionRuleKind {
+    Command,
+    Domain,
+    File,
+    ExecPolicy,
+    Mcp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PermissionRuleDecision {
+    Allow,
+    Ask,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionRule {
+    pub id: String,
+    pub kind: PermissionRuleKind,
+    pub target: String,
+    pub label: String,
+    pub decision: PermissionRuleDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionRulesResponse {
+    pub rules: Vec<PermissionRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsAddParams {
+    pub kind: PermissionRuleKind,
+    pub target: String,
+    pub decision: PermissionRuleDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustedFolder {
+    pub path: String,
+    pub trusted_at: Option<String>,
+    pub trusted_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustListResponse {
+    pub folders: Vec<TrustedFolder>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustRevokeParams {
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
