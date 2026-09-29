@@ -1,15 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
-import {
-  deploymentEnvironment,
-  type DeploymentEnvironment,
-} from '@/lib/config/runtime-environment';
+import { deploymentEnvironment, isProductionRuntime } from '@/lib/config/runtime-environment';
+import { logger } from '@/lib/logger';
 
 const MIN_CSRF_SECRET_BYTES = 32;
-const EPHEMERAL_SECRET_ENVIRONMENTS: ReadonlySet<DeploymentEnvironment> = new Set([
-  'development',
-  'test',
-]);
 let cachedSecret: string | null = null;
 let cachedPrevSecret: string | null | undefined = undefined;
 
@@ -27,12 +21,15 @@ function getCsrfSecret(): string {
   }
   const secret = process.env['CSRF_SECRET'];
   if (!secret) {
-    const environment = deploymentEnvironment();
-    if (!EPHEMERAL_SECRET_ENVIRONMENTS.has(environment)) {
+    if (isProductionRuntime()) {
       throw new Error(
-        `CSRF protection needs CSRF_SECRET (at least ${MIN_CSRF_SECRET_BYTES} bytes) in ${environment}; a per-instance secret would reject tokens minted by any other instance`,
+        `CSRF protection needs CSRF_SECRET (at least ${MIN_CSRF_SECRET_BYTES} bytes) in production; a per-instance secret would reject tokens minted by any other instance`,
       );
     }
+    logger.warn(
+      { environment: deploymentEnvironment() },
+      'CSRF_SECRET is not set; this instance signs CSRF tokens with its own random secret, so a token minted by another instance is rejected',
+    );
     cachedSecret = randomBytes(MIN_CSRF_SECRET_BYTES).toString('hex');
     return cachedSecret;
   }
