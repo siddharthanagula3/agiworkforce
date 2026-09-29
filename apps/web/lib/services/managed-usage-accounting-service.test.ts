@@ -560,7 +560,7 @@ describe('managed usage accounting', () => {
 });
 
 describe('served speed on provider observations', () => {
-  it('prices each call with the speed the provider reported and flags the aggregate', () => {
+  it('prices each call with the speed the provider reported', () => {
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(
       usage,
@@ -576,7 +576,28 @@ describe('served speed on provider observations', () => {
     const calls = vi.mocked(LLMCostCalculator.calculateCostDollars).mock.calls;
     expect(calls.at(-2)?.[2]).toMatchObject({ speed: 'fast' });
     expect(calls.at(-1)?.[2]).not.toHaveProperty('speed');
-    expect(usage.speed).toBe('fast');
     expect(usage.providerCallObservations?.[0]?.speed).toBe('fast');
+  });
+
+  it('prices only the fast calls at their tier when the aggregate is the fallback', () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 100, outputTokens: 20, speed: 'fast' });
+    usage.providerCalls += 1;
+    usage.inputTokens += 50;
+    usage.outputTokens += 5;
+    const pricing = vi.mocked(LLMCostCalculator.calculateCostDollars);
+    pricing.mockClear();
+
+    calculateObservedProviderUsageCostDollars(usage, {
+      provider: 'anthropic',
+      model: ANTHROPIC_MODEL,
+    });
+
+    const priced = pricing.mock.calls.map((call) => call[2]);
+    expect(priced).toContainEqual(expect.objectContaining({ promptTokens: 100, speed: 'fast' }));
+    expect(priced).toContainEqual(
+      expect.objectContaining({ promptTokens: 50, completionTokens: 5 }),
+    );
+    expect(priced.find((tokens) => tokens.promptTokens === 50)).not.toHaveProperty('speed');
   });
 });
