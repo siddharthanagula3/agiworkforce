@@ -5,7 +5,7 @@ import {
   type BrowserCommandResult,
 } from '@agiworkforce/types';
 import { sanitizePageText } from '../../background/policy';
-import { authorizeBrowserToolTab } from '../browser-tools/tabAuthority';
+import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
@@ -101,6 +101,7 @@ async function execute(
     }
     case 'browser_navigate': {
       const url = httpUrl(args['url']);
+      await authorizeBrowserToolUrl(url);
       await context.navigate(tabId, url);
       return { url };
     }
