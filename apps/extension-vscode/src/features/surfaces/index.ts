@@ -332,8 +332,8 @@ export function openWorkSurface(cloudTasks: TreeSource, schedules: TreeSource): 
     title: 'AGI Workforce, Work',
     placeholder: 'Cloud tasks and schedules…',
     provider: composeSurfaceSections([
-      { label: 'Cloud tasks', provider: cloudTasks },
-      { label: 'Schedules', provider: schedules },
+      { label: 'Cloud tasks', rowType: 'Cloud task', provider: cloudTasks },
+      { label: 'Schedules', rowType: 'Schedule', provider: schedules },
     ]),
     rowActions: [...CLOUD_TASK_ROW_ACTIONS, ...SCHEDULE_ROW_ACTIONS],
     titleActions: CLOUD_TASK_TITLE_ACTIONS,
