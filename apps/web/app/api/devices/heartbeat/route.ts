@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  DEVICE_HEARTBEAT_INTERVAL_MS,
+  deviceHeartbeatIntervalMs,
   DeviceHeartbeatRequestSchema,
   type DeviceHeartbeatResponse,
 } from '@agiworkforce/cloud-contracts';
@@ -97,7 +97,7 @@ async function handleHeartbeat(request: NextRequest): Promise<NextResponse> {
 
   const body: DeviceHeartbeatResponse = {
     deviceId,
-    nextHeartbeatInMs: DEVICE_HEARTBEAT_INTERVAL_MS,
+    nextHeartbeatInMs: deviceHeartbeatIntervalMs(heartbeat.surface),
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }
