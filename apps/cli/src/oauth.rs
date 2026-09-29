@@ -462,6 +462,10 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
 pub enum DeviceSessionRenewal {
     Renewed(crate::auth::AuthEntry),
     Refused(Option<String>),
+    /// The refresh credential is gone for good (invalid_grant): revoked on the
+    /// web, replaced, or ended by a security change. Kept, it would fail every
+    /// call while the account still looked signed in.
+    Revoked,
     Unavailable,
 }
 
@@ -497,11 +501,54 @@ pub async fn renew_device_session(api_base: &str, refresh: &str) -> DeviceSessio
         return DeviceSessionRenewal::Unavailable;
     }
     let body: serde_json::Value = response.json().await.unwrap_or_default();
+    renewal_refusal(status, &body)
+}
+
+/// A refusal is either final (invalid_grant: the credential is gone) or a
+/// condition the account can meet, whose sentence the server sends.
+fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> DeviceSessionRenewal {
+    if status == reqwest::StatusCode::BAD_REQUEST
+        && body.get("error").and_then(|value| value.as_str()) == Some("invalid_grant")
+    {
+        return DeviceSessionRenewal::Revoked;
+    }
     DeviceSessionRenewal::Refused(
         body.get("error_description")
             .and_then(|value| value.as_str())
             .map(str::to_string),
     )
+}
+
+#[cfg(test)]
+mod renewal_refusal_tests {
+    use super::{renewal_refusal, DeviceSessionRenewal};
+    use reqwest::StatusCode;
+
+    #[test]
+    fn an_invalid_grant_is_final() {
+        assert!(matches!(
+            renewal_refusal(
+                StatusCode::BAD_REQUEST,
+                &serde_json::json!({ "error": "invalid_grant" })
+            ),
+            DeviceSessionRenewal::Revoked
+        ));
+    }
+
+    #[test]
+    fn a_terms_or_account_refusal_carries_its_sentence() {
+        let refused = renewal_refusal(
+            StatusCode::FORBIDDEN,
+            &serde_json::json!({
+                "error": "terms_acceptance_required",
+                "error_description": "Accept the Terms of Service at https://agiworkforce.com/login/complete to keep using AGI Workforce on this device."
+            }),
+        );
+        assert!(matches!(
+            refused,
+            DeviceSessionRenewal::Refused(Some(reason)) if reason.contains("Terms of Service")
+        ));
+    }
 }
 
 pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) -> bool {

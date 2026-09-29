@@ -3137,8 +3137,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .await
                 .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
             match poll {
-                crate::oauth::DeviceCodePoll::Pending
-                | crate::oauth::DeviceCodePoll::TermsRequired(_) => continue,
+                crate::oauth::DeviceCodePoll::Pending => continue,
+                // Waiting out the code's lifetime would only end in "expired";
+                // the account has to accept the terms on the web first.
+                crate::oauth::DeviceCodePoll::TermsRequired(url) => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some(format!(
+                            "Accept the updated Terms of Service at {url}, then sign in again."
+                        )),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
                 crate::oauth::DeviceCodePoll::SlowDown => {
                     pending.interval += std::time::Duration::from_secs(5);
                     continue;
