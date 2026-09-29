@@ -19,7 +19,7 @@ const STATE_RULES = [
       /<(?:Spinner|Skeleton|LoadingButton|Progress)\b/,
       /\baria-busy\b/,
       /\bloadingState\b/,
-      /\b(?:kind|state|status)\s*===\s*'(?:loading|checking|working)'/,
+      /(?:\bkind|(?<![\w$.])(?:state|status))\s*===\s*'(?:loading|checking|working)'/,
     ],
     advice:
       'render a Spinner or Skeleton while the request is in flight; a route that paints nothing reads as broken',
@@ -47,7 +47,7 @@ const STATE_RULES = [
       /\berror\s*(?:&&|\?)/,
       /\berrorMessage\b/,
       /\bloadError\b/,
-      /\b(?:kind|state|status)\s*===\s*'(?:error|failed)'/,
+      /\b(?:kind|state)\s*===\s*'(?:error|failed)'/,
     ],
     advice:
       'render a recovery affordance when the request fails; a swallowed rejection leaves the route on its loading state forever',
@@ -76,7 +76,8 @@ export function fetchesData(source) {
 
 // Only a route that renders rows can come back with none of them; a form, a
 // single record or a one-shot action has no empty answer to give.
-const RENDERS_ROWS = /\.map\(\s*\(?[\w{[\],\s]*\)?\s*=>\s*\(?\s*</;
+const RENDERS_ROWS =
+  /\.map\(\s*(?:(?:\([^()]*\)|[\w$]+)(?:\s*:\s*[^=]+?)?\s*=>|render[A-Z][\w$]*\s*[,)])/;
 
 export function missingStates(source) {
   const code = stripComments(source);
