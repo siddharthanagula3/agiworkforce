@@ -135,7 +135,7 @@ impl fmt::Debug for RedactedAuthEntry<'_> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// On Unix, restrict file to owner-only read/write (0o600).
-#[cfg(unix)]
+#[cfg(all(unix, test))]
 fn set_file_permissions(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let perms = std::fs::Permissions::from_mode(0o600);
@@ -144,7 +144,7 @@ fn set_file_permissions(path: &Path) -> Result<()> {
 }
 
 /// On non-Unix platforms, this is a no-op (Windows ACLs handle security differently).
-#[cfg(not(unix))]
+#[cfg(all(not(unix), test))]
 fn set_file_permissions(_path: &Path) -> Result<()> {
     Ok(())
 }
@@ -192,17 +192,13 @@ struct AuthKeyringIndex {
     providers: Vec<String>,
 }
 
-fn keyring_disabled() -> bool {
-    std::env::var("AGIWORKFORCE_NO_KEYRING")
-        .map(|value| !value.is_empty() && value != "0")
-        .unwrap_or(false)
-}
-
 pub fn credential_storage_label() -> &'static str {
-    if keyring_disabled() {
+    if crate::secure_store::uses_keychain() {
+        "OS credential store"
+    } else if crate::secure_store::keyring_disabled() {
         "owner-only credential file (OS keyring explicitly disabled)"
     } else {
-        "OS credential store"
+        "owner-only credential file"
     }
 }
 
@@ -266,9 +262,7 @@ fn parse_auth_keyring_index(data: &str) -> Option<AuthKeyringIndex> {
 }
 
 fn write_owner_only_file(path: &Path, data: &str) -> Result<()> {
-    std::fs::write(path, data).with_context(|| format!("Failed to write {}", path.display()))?;
-    set_file_permissions(path)
-        .with_context(|| format!("Failed to restrict permissions on {}", path.display()))
+    crate::secure_store::write_owner_only(path, data.as_bytes())
 }
 
 /// Read the file store, which holds credential material in the clear. The mode
@@ -361,14 +355,18 @@ impl AuthStore {
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
         if let Some(index) = parse_auth_keyring_index(&data) {
-            return load_keyring_auth(&OsKeyring, index);
+            let store = load_keyring_auth(&OsKeyring, index)?;
+            if !crate::secure_store::uses_keychain() {
+                store.save()?;
+            }
+            return Ok(store);
         }
 
         // One-time migration from the legacy owner-readable JSON file. We do
         // not silently fall back to plaintext when the OS keyring fails; an
         // explicit headless opt-out is required for that compatibility mode.
         let store = read_file_store(&path, &data)?;
-        if !keyring_disabled() {
+        if crate::secure_store::uses_keychain() {
             save_keyring_auth(&OsKeyring, &path, &store).context(
                 "Could not migrate auth.json into the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to retain the owner-only file store",
             )?;
@@ -376,11 +374,24 @@ impl AuthStore {
         Ok(store)
     }
 
+    /// Move a token read from the legacy plaintext auth.toml into this store.
+    /// The caller deletes the old file only once the store holds the token.
+    pub fn adopt_legacy_token(token: &str) -> Result<()> {
+        let mut store = Self::load()?;
+        store
+            .entries
+            .entry("managed_cloud".to_string())
+            .or_insert_with(|| AuthEntry::ApiKey {
+                key: token.to_string(),
+            });
+        store.save()
+    }
+
     pub fn save(&self) -> Result<()> {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
         let path = auth_path()?;
-        if keyring_disabled() {
+        if !crate::secure_store::uses_keychain() {
             let data =
                 serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
             return write_owner_only_file(&path, &data);

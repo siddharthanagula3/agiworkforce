@@ -16,12 +16,17 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const FIRST_FETCH_WAIT: Duration = Duration::from_secs(5);
 const CACHE_KEY_SERVICE: &str = "com.agiworkforce.cli.workspace-policy";
 const CACHE_KEY_ACCOUNT: &str = "cache-seal";
+/// A sealed policy older than this needs a fresh read before it counts.
+const SEALED_POLICY_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
+const CLOCK_SKEW_SECS: u64 = 5 * 60;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EffectiveWorkspacePolicy {
     #[serde(default)]
     organization_id: Option<String>,
+    #[serde(default)]
+    revision: u64,
     #[serde(default)]
     governed: bool,
     #[serde(default)]
@@ -51,13 +56,17 @@ struct WorkspaceControls {
 /// another account or for another workspace, no longer matches its seal and is
 /// ignored. This keeps honest clients honest; it is not a security boundary,
 /// since whoever controls the machine controls the binary that enforces it.
-/// Where no credential store answers (a headless Linux box without a session
-/// keyring), nothing is cached and an offline start fails closed.
+/// The seal also covers when the policy was read, so a copy older than a week
+/// is refused, and the newest revision seen is kept beside the key, so an
+/// older sealed copy put back in place is refused too. Where the key cannot be
+/// stored nothing is cached and an offline start fails closed.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct CachedPolicy {
     owner: String,
     #[serde(default)]
     organization: String,
+    #[serde(default)]
+    fetched_at: u64,
     policy: String,
     seal: String,
 }
@@ -75,9 +84,6 @@ impl EffectiveWorkspacePolicy {
 static CURRENT: RwLock<Option<EffectiveWorkspacePolicy>> = RwLock::new(None);
 static LAST_REFRESH: Mutex<Option<Instant>> = Mutex::new(None);
 static HOOKS_REFUSAL_REPORTED: AtomicBool = AtomicBool::new(false);
-/// Set when a signed-in account has no readable policy: whether an
-/// administrator governs it is unknown, so the switches are treated as off.
-static UNREADABLE_FOR_WORKSPACE: AtomicBool = AtomicBool::new(false);
 
 fn cache_path(config_dir: &Path) -> PathBuf {
     cloud_dir(config_dir).join("workspace-policy.json")
@@ -107,11 +113,13 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
         .into()
 }
 
-fn seal_for(key: &[u8], owner: &str, organization: &str, policy: &str) -> String {
+fn seal_for(key: &[u8], owner: &str, organization: &str, fetched_at: u64, policy: &str) -> String {
     let message = [
         owner.as_bytes(),
         b"\n",
         organization.as_bytes(),
+        b"\n",
+        fetched_at.to_string().as_bytes(),
         b"\n",
         policy.as_bytes(),
     ]
@@ -128,21 +136,53 @@ fn seal_matches(expected: &str, actual: &str) -> bool {
             == 0
 }
 
-fn open_sealed(key: &[u8], owner: &str, cached: &CachedPolicy) -> Option<EffectiveWorkspacePolicy> {
-    let expected = seal_for(key, owner, &cached.organization, &cached.policy);
+fn open_sealed(
+    key: &[u8],
+    owner: &str,
+    cached: &CachedPolicy,
+    now: u64,
+    newest_revision: u64,
+) -> Option<EffectiveWorkspacePolicy> {
+    let expected = seal_for(
+        key,
+        owner,
+        &cached.organization,
+        cached.fetched_at,
+        &cached.policy,
+    );
     if cached.owner != owner || !seal_matches(&expected, &cached.seal) {
         return None;
     }
+    let fresh = cached.fetched_at <= now + CLOCK_SKEW_SECS
+        && now.saturating_sub(cached.fetched_at) <= SEALED_POLICY_MAX_AGE_SECS;
     let policy: EffectiveWorkspacePolicy = serde_json::from_str(&cached.policy).ok()?;
-    (policy.organization_id.as_deref().unwrap_or_default() == cached.organization).then_some(policy)
+    (fresh
+        && policy.revision >= newest_revision
+        && policy.organization_id.as_deref().unwrap_or_default() == cached.organization)
+        .then_some(policy)
 }
 
-fn cache_key_entry() -> Option<keyring::Entry> {
-    keyring::Entry::new(CACHE_KEY_SERVICE, CACHE_KEY_ACCOUNT).ok()
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default()
+}
+
+fn revision_account(owner: &str, organization: &str) -> String {
+    format!("revision:{owner}:{organization}")
+}
+
+fn newest_revision(owner: &str, organization: &str) -> u64 {
+    crate::secure_store::get(CACHE_KEY_SERVICE, &revision_account(owner, organization))
+        .ok()
+        .flatten()
+        .and_then(|stored| stored.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 fn cache_key() -> Option<Vec<u8>> {
-    let stored = cache_key_entry()?.get_password().ok()?;
+    let stored = crate::secure_store::get(CACHE_KEY_SERVICE, CACHE_KEY_ACCOUNT).ok()??;
     let key: Option<Vec<u8>> = (stored.len() == 64)
         .then(|| {
             (0..64)
@@ -161,9 +201,12 @@ fn cache_key_or_create() -> Option<Vec<u8>> {
     use rand::Rng;
     let mut key = [0u8; 32];
     rand::rng().fill_bytes(&mut key);
-    cache_key_entry()?
-        .set_password(&crate::hex::encode(&key))
-        .ok()?;
+    crate::secure_store::set(
+        CACHE_KEY_SERVICE,
+        CACHE_KEY_ACCOUNT,
+        &crate::hex::encode(&key),
+    )
+    .ok()?;
     Some(key.to_vec())
 }
 
@@ -174,7 +217,8 @@ fn load_cached() -> Option<EffectiveWorkspacePolicy> {
     if cached.seal.is_empty() {
         return None;
     }
-    open_sealed(&cache_key()?, &owner, &cached)
+    let newest = newest_revision(&owner, &cached.organization);
+    open_sealed(&cache_key()?, &owner, &cached, now_secs(), newest)
 }
 
 fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
@@ -203,8 +247,11 @@ fn policy_known() -> bool {
         || load_cached().is_some()
 }
 
+/// A switch a signed-in account's administrator might have turned off counts
+/// as off until a policy is known, including for hooks that run before the
+/// first read of the session.
 pub fn feature_enabled(feature: &str) -> bool {
-    if UNREADABLE_FOR_WORKSPACE.load(Ordering::Relaxed) && !policy_known() {
+    if closes_on_failed_read(signed_in_owner().is_some(), policy_known()) {
         return false;
     }
     with_current(|policy| policy.feature_enabled(feature))
@@ -293,6 +340,8 @@ mod sealed_cache_tests {
     use super::*;
 
     const KEY: [u8; 32] = [7u8; 32];
+    const NOW: u64 = 1_790_000_000;
+    const DAY: u64 = 24 * 60 * 60;
 
     fn sealed(owner: &str, policy: &str) -> CachedPolicy {
         let organization = serde_json::from_str::<EffectiveWorkspacePolicy>(policy)
@@ -301,8 +350,9 @@ mod sealed_cache_tests {
             .unwrap_or_default();
         CachedPolicy {
             owner: owner.to_string(),
-            seal: seal_for(&KEY, owner, &organization, policy),
+            seal: seal_for(&KEY, owner, &organization, NOW, policy),
             organization,
+            fetched_at: NOW,
             policy: policy.to_string(),
         }
     }
@@ -322,7 +372,7 @@ mod sealed_cache_tests {
             "user_1",
             r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        let policy = open_sealed(&KEY, "user_1", &cached).expect("opens");
+        let policy = open_sealed(&KEY, "user_1", &cached, NOW, 0).expect("opens");
         assert!(policy.governed);
         assert_eq!(
             policy.code.and_then(|code| code.allow_mcp_servers),
@@ -336,11 +386,29 @@ mod sealed_cache_tests {
             "user_1",
             r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        assert!(open_sealed(&KEY, "user_2", &cached).is_none());
+        assert!(open_sealed(&KEY, "user_2", &cached, NOW, 0).is_none());
         cached.policy = r#"{"governed":true,"code":{"allowMcpServers":true}}"#.to_string();
-        assert!(open_sealed(&KEY, "user_1", &cached).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_none());
         let other_key = sealed("user_1", &cached.policy);
-        assert!(open_sealed(&[8u8; 32], "user_1", &other_key).is_none());
+        assert!(open_sealed(&[8u8; 32], "user_1", &other_key, NOW, 0).is_none());
+    }
+
+    #[test]
+    fn a_sealed_policy_expires_and_an_older_revision_is_refused() {
+        let cached = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","revision":4,"governed":true}"#,
+        );
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 6 * DAY, 4).is_some());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW + 8 * DAY, 4).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW - DAY, 4).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 5).is_none());
+        let mut rewound = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","revision":4,"governed":true}"#,
+        );
+        rewound.fetched_at = NOW + 6 * DAY;
+        assert!(open_sealed(&KEY, "user_1", &rewound, NOW + 7 * DAY, 4).is_none());
     }
 
     #[test]
@@ -349,9 +417,9 @@ mod sealed_cache_tests {
             "user_1",
             r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
         );
-        assert!(open_sealed(&KEY, "user_1", &cached).is_some());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_some());
         cached.organization = "org_b".to_string();
-        assert!(open_sealed(&KEY, "user_1", &cached).is_none());
+        assert!(open_sealed(&KEY, "user_1", &cached, NOW, 0).is_none());
         let mut moved = sealed(
             "user_1",
             r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
@@ -359,7 +427,7 @@ mod sealed_cache_tests {
         moved.policy =
             r#"{"organizationId":"org_b","governed":true,"code":{"allowMcpServers":false}}"#
                 .to_string();
-        assert!(open_sealed(&KEY, "user_1", &moved).is_none());
+        assert!(open_sealed(&KEY, "user_1", &moved, NOW, 0).is_none());
     }
 }
 
@@ -444,10 +512,20 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
         return;
     };
     let organization = policy.organization_id.clone().unwrap_or_default();
+    let fetched_at = now_secs();
+    if let Err(error) = crate::secure_store::set(
+        CACHE_KEY_SERVICE,
+        &revision_account(owner, &organization),
+        &policy.revision.to_string(),
+    ) {
+        tracing::debug!("[workspace_policy] could not record the policy revision: {error}");
+        return;
+    }
     let cached = CachedPolicy {
         owner: owner.to_string(),
-        seal: seal_for(&key, owner, &organization, &serialized),
+        seal: seal_for(&key, owner, &organization, fetched_at, &serialized),
         organization,
+        fetched_at,
         policy: serialized,
     };
     if let Err(error) = write_cache(&cache_path(&config_dir), &cached) {
@@ -475,22 +553,9 @@ pub async fn refresh_when_due() {
     let Some(first) = claim_refresh() else {
         return;
     };
-    // Until the first read lands, the account's switches are unknown, so they
-    // count as off rather than defaulting open while the read is in flight.
-    if closes_on_failed_read(signed_in_owner().is_some(), policy_known()) {
-        UNREADABLE_FOR_WORKSPACE.store(true, Ordering::Relaxed);
-    }
     let fetching = tokio::spawn(async {
-        match fetch(PrivacyMode::Managed).await {
-            Ok(()) => UNREADABLE_FOR_WORKSPACE.store(false, Ordering::Relaxed),
-            Err(error) => {
-                tracing::debug!("[workspace_policy] refresh failed: {error}");
-                let signed_in = !matches!(error, CloudError::SignedOut);
-                UNREADABLE_FOR_WORKSPACE.store(
-                    closes_on_failed_read(signed_in, policy_known()),
-                    Ordering::Relaxed,
-                );
-            }
+        if let Err(error) = fetch(PrivacyMode::Managed).await {
+            tracing::debug!("[workspace_policy] refresh failed: {error}");
         }
     });
     if first && load_cached().is_none() {
@@ -505,13 +570,15 @@ mod credential_store_tests {
     #[test]
     #[ignore = "touches the real OS credential store"]
     fn an_entry_survives_a_new_process() {
-        let entry = keyring::Entry::new(super::CACHE_KEY_SERVICE, "persistence-probe").unwrap();
+        let service = super::CACHE_KEY_SERVICE;
         match std::env::var("AGI_KEYRING_PROBE").as_deref() {
-            Ok("write") => entry.set_password("probe").unwrap(),
-            Ok("read") => {
-                assert_eq!(entry.get_password().unwrap(), "probe");
-                entry.delete_credential().unwrap();
-            }
+            Ok("write") => crate::secure_store::set(service, "persistence-probe", "probe").unwrap(),
+            Ok("read") => assert_eq!(
+                crate::secure_store::get(service, "persistence-probe")
+                    .unwrap()
+                    .as_deref(),
+                Some("probe")
+            ),
             _ => {}
         }
     }
