@@ -249,8 +249,31 @@ fn forget_managed(store: &mut AuthStore) {
     }
 }
 
-/// Revoke every managed device session this machine holds on the server.
-/// Returns false when one was held and the server did not confirm it.
+const RENEW_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
+
+pub async fn renew_managed_session_if_expiring() -> Option<String> {
+    let store = AuthStore::load().ok()?;
+    let refresh = match store.entries.get("agiworkforce") {
+        Some(AuthEntry::OAuth {
+            refresh, expires, ..
+        }) if !refresh.is_empty()
+            && *expires > 0
+            && *expires - chrono::Utc::now().timestamp_millis() < RENEW_WITHIN_MS =>
+        {
+            refresh.clone()
+        }
+        _ => return None,
+    };
+    match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
+        crate::oauth::DeviceSessionRenewal::Renewed(entry) => {
+            save_device_grant(entry).ok();
+            None
+        }
+        crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
+        crate::oauth::DeviceSessionRenewal::Unavailable => None,
+    }
+}
+
 pub async fn revoke_managed_sessions() -> bool {
     let Ok(store) = AuthStore::load() else {
         return true;
@@ -271,7 +294,6 @@ pub async fn revoke_managed_sessions() -> bool {
     confirmed
 }
 
-/// Revoke the managed sessions on the server, then forget them here.
 pub async fn sign_out() -> Result<bool> {
     let confirmed = revoke_managed_sessions().await;
     logout()?;

@@ -3090,7 +3090,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: AccountLoginWaitParams,
     ) -> Result<AccountLoginWaitResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
-        let pending = self
+        let mut pending = self
             .pending_logins
             .lock()
             .await
@@ -3114,7 +3114,19 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .await
                 .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
             match poll {
-                crate::oauth::DeviceCodePoll::Pending => continue,
+                crate::oauth::DeviceCodePoll::Pending
+                | crate::oauth::DeviceCodePoll::TermsRequired(_) => continue,
+                crate::oauth::DeviceCodePoll::SlowDown => {
+                    pending.interval += std::time::Duration::from_secs(5);
+                    continue;
+                }
+                crate::oauth::DeviceCodePoll::Denied => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some("The sign-in was denied in the browser".to_string()),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
                 crate::oauth::DeviceCodePoll::Expired => {
                     return Ok(AccountLoginWaitResponse {
                         outcome: AccountLoginOutcome::Expired,
@@ -3148,6 +3160,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
 
     async fn account_token(&self) -> Result<AccountTokenResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
+        if let Some(reason) = account::renew_managed_session_if_expiring().await {
+            return Err(DeveloperSessionHostError::unavailable(reason));
+        }
         let (token, expires_ms) = account::managed_credential().ok_or_else(|| {
             DeveloperSessionHostError::not_found(
                 "This machine holds no AGI Workforce credential; call account/login first",
