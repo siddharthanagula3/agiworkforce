@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
@@ -192,6 +192,21 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
               message: error.message,
               type: 'invalid_request_error',
               code: 'ip_not_allowed',
+            },
+          },
+          { status: 403 },
+        ),
+      };
+    }
+    if (isAccountUnavailableError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: 'account_unavailable',
             },
           },
           { status: 403 },

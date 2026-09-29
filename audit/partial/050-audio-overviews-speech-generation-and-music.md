@@ -27,13 +27,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | F3: the settings do exist (Speech language row and Voice row -> voice-language screen, settings/voice/index.tsx:361-375) and the companion applies them (voice.tsx:178 spreads speechSettings()), but the message "Read aloud" button, which is the spoken playback of a reply, calls voiceOutput.speak(message.content, {onDone, onStopped}) with no voice, rate or language (MessageBubble.tsx:433-440), so tts.ts falls back to the default voice, rate 1.0 and en-US (tts.ts:39-43). The chosen voice and language reach the companion only; partial: "apply the Voice settings to the message read-aloud path". |  |
+| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/settings/voice-language/index.tsx:79-79`, `apps/mobile/src/features/voice/services/tts.ts:39-39`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S50.03: Speaking-rate control where supported.
 
@@ -43,13 +43,13 @@ Code: `apps/mobile/src/features/settings/voice-language/index.tsx:79-79`, `apps/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Speed slider in Settings > Voice (0.5x-2x) applies to the voice companion and inline voice, but the message Read-aloud button speaks at rate 1.0 because it passes no rate; pass the speech settings into that call. | ui |
+| mobile | partial | codex: post-codex/w-connect-S49.06-S49.17-S50.02-S50.03-voice.patch (held ChatInput, VoiceInputButton, MessageBubble and two tests); free parts committed f38e0ddb2c; supersedes p-scanner-voice-S49.06-S49.17-S50.02-S50.03.patch | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/settings/voice-language/index.tsx:321-321`, `apps/mobile/src/features/settings/voice-language/index.tsx:205-205`, `apps/mobile/src/features/settings/voice/index.tsx:388-396`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:435-439`
+Code: `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx:1-1`
 
 ## S50.04: Download generated speech.
 

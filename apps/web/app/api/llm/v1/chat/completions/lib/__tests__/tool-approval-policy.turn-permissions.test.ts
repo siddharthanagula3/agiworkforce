@@ -144,7 +144,10 @@ describe('loadTurnToolPermissions', () => {
     permitAutonomy(true);
     const db = dbWithStoredPolicy('auto_approve_read_only');
 
-    const permissions = await loadTurnToolPermissions(db, 'user_1', { modelSupportsTools: false });
+    const permissions = await loadTurnToolPermissions(db, 'user_1', {
+      organizationId: null,
+      modelSupportsTools: false,
+    });
 
     expect(permissions.toolApprovalPolicy).toBe('auto_approve_read_only');
     expect(permissions.connectorPermissions).toBe(EMPTY_CONNECTOR_TOOL_PERMISSIONS);
@@ -154,6 +157,7 @@ describe('loadTurnToolPermissions', () => {
     permitAutonomy(true);
 
     const permissions = await loadTurnToolPermissions(dbWithStoredPolicy('autonomous'), 'user_1', {
+      organizationId: null,
       modelSupportsTools: false,
     });
 
@@ -166,7 +170,7 @@ describe('loadTurnToolPermissions', () => {
     const permissions = await loadTurnToolPermissions(
       dbWithStoredPolicy('auto_approve_read_only'),
       'user_1',
-      { modelSupportsTools: true },
+      { organizationId: null, modelSupportsTools: true },
     );
 
     expect(permissions.connectorPermissions).not.toBe(EMPTY_CONNECTOR_TOOL_PERMISSIONS);
@@ -177,6 +181,7 @@ describe('loadTurnToolPermissions', () => {
     const db = { query } as unknown as DatabaseAdapter;
 
     const permissions = await loadTurnToolPermissions(db, 'user_1', {
+      organizationId: null,
       modelSupportsTools: true,
       connectorPermissionsRequired: false,
       toolApprovalPolicyRequired: false,

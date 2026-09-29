@@ -5,6 +5,7 @@ import {
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { tPlural } from '../../l10n';
+import { accountRefusalMessage } from '../../utils/accountRefusal';
 
 export type ScheduleStatus = ManagedCloudScheduleTask['status'];
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
@@ -186,6 +187,8 @@ export function scheduleApprovalDetail(pending: ManagedCloudScheduleRunPendingAp
 const SCHEDULE_FAILURE_REASON_MAX_LENGTH = 240;
 
 export function describeScheduleFailure(error: unknown): string {
+  const refusal = accountRefusalMessage(error);
+  if (refusal) return refusal;
   const status = (error as { status?: unknown } | null)?.status;
   if (status === 401) return 'your AGI Cloud session expired, sign in again';
   if (status === 403) return 'this account cannot manage schedules on its current plan';

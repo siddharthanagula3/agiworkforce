@@ -120,15 +120,15 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 
 - Done when: HTML artifacts render as a live, interactive preview.
 - Wave: 2
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
 | desktop | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
-| mobile | partial | HTML previews render with JavaScript disabled (only Mermaid enables it), so interactive pages show layout only. | states |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:638-639`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
+Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S28.11: React or supported framework preview.
 
@@ -152,9 +152,9 @@ Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
+| mobile | partial | Same as S26.35: overlay with Retry is in; View source waits on post-codex/w-work-s28-mobile-preview-view-source.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
+Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`
 
 ## S28.18: Preview reload.
 

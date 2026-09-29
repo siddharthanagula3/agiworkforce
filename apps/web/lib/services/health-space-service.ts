@@ -33,6 +33,7 @@ export async function findHealthSpaceId(db: HealthSpaceDb, userId: string): Prom
     `select id::text as id
        from user_projects
       where user_id = $1
+        and organization_id is null
         and space_kind = $2
         and deleted_at is null
       limit 1`,
@@ -68,6 +69,7 @@ export async function conversationHealthSpaceId(
         and p.user_id = c.user_id
       where c.id = $1::uuid
         and c.user_id = $2
+        and p.organization_id is null
         and p.space_kind = $3
       limit 1`,
     [conversationId, userId, HEALTH_SPACE_KIND],

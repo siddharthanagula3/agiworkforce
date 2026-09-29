@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex holds schedules/index.tsx; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.01.patch adds the gallery under the list | states |
+| mobile | partial | codex: post-codex/w-connect-S63.01-schedule-template-gallery.patch shows the templates under a non-empty list | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/schedules/index.tsx:286-286`
+Code: `apps/mobile/app/(app)/schedules/index.tsx:1-1`
 
 ## S63.03: Create routine from a completed task.
 
@@ -156,14 +156,11 @@ Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:67
 
 - Done when: A "Run now" control starts the routine immediately and the run completes with a result.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: triggerScheduleNow exists in the service but no screen calls it; add a Run now button. Runs also fail until pending migration 0284 ships. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 ## S63.22: Run-history list.
 
@@ -227,7 +224,7 @@ Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex holds schedules service.ts and store.ts; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.33-held.patch carries the run timing and renders it | states |
+| mobile | partial | codex: post-codex/w-connect-S63.33-schedule-run-timing.patch (held service/store on Codex base, free ScheduleRunHistory on integration) shows late or skipped run notes | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/service.ts:104-104`
+Code: `packages/contracts/cloud-contracts/src/schedules.ts:707-707`

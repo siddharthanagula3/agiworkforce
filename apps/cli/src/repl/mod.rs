@@ -94,6 +94,7 @@ pub async fn run_repl(
     let mut session =
         AgentSession::new_with_provider(model, sys_context, custom_system_prompt, provider);
     session.apply_ui_config(config);
+    crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
@@ -264,6 +265,11 @@ pub async fn run_repl(
                             }
                         }
                         SlashResult::Logout => {
+                            if !crate::app_server::account::revoke_managed_sessions().await {
+                                output::print_info(
+                                    "AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices.",
+                                );
+                            }
                             dialogs::handle_logout();
                         }
                         SlashResult::Voice(lang) => {

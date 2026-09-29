@@ -247,7 +247,8 @@ async function invalidateAccountToken(
   await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
 }
 
-export type AccountSessionRenewal = 'renewed' | 'unavailable' | 'revoked' | 'terms-required';
+export type AccountSessionRenewal =
+  'renewed' | 'unavailable' | 'revoked' | 'terms-required' | 'account-unavailable';
 
 /**
  * Rotates the device session in place so an expired editor never has to repeat
@@ -272,6 +273,10 @@ export async function renewAccountSession(
     await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
     notifyAccountTierMayHaveChanged();
     return 'revoked';
+  }
+  if (result.kind === 'account-unavailable') {
+    void vscode.window.showWarningMessage(result.message);
+    return 'account-unavailable';
   }
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
 }

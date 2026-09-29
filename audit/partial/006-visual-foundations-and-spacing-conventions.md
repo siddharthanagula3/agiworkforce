@@ -50,9 +50,9 @@ Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/setting
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Modals set their own padding (24, 20 and 18pt in MessageEditModal and ModeSwitchModal); there is no shared dialog padding. | ui |
+| mobile | partial | partials/chat-gates c65ff13697: dialogPadding is defined and the edit dialog uses it. ModeSwitchModal is held by Codex and is in post-codex/w-chat-s6.23-s6.28-s6.29-s6.30-mobile-tokens.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageEditModal.tsx:144-144`, `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:80-80`
+Code: `apps/mobile/src/ui/theme/tokens.ts:283-283`, `apps/mobile/src/features/chat/components/MessageEditModal.tsx:149-149`
 
 ## S6.28: Shadow and elevation scale.
 
@@ -62,9 +62,9 @@ Code: `apps/mobile/src/features/chat/components/MessageEditModal.tsx:144-144`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A few components set literal shadow/elevation values; there is no shared elevation scale. | ui |
+| mobile | partial | partials/chat-gates c65ff13697: four elevation levels are defined, the memory button uses e3, and an invisible zero shadow is removed. FirstRunDisclosureModal (held) is in the tokens post-codex patch. The QR scanner's accent glow is a highlight, not elevation, and stays. | ui |
 
-Code: `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:64-67`, `apps/mobile/app/(app)/settings/memory.tsx:449-449`
+Code: `apps/mobile/src/ui/theme/tokens.ts:309-309`
 
 ## S6.29: Layering and z-index rules.
 
@@ -74,9 +74,9 @@ Code: `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.ts
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A handful of overlays set literal zIndex values; there is no shared layering ladder. | ui |
+| mobile | partial | partials/chat-gates c65ff13697: a z-index ladder mirroring the web's is defined and used by the memory button, lock screen and offline banner. voice.tsx, GeneratedImage and ImageFullScreen (held) are in the tokens post-codex patch. | ui |
 
-Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps/mobile/app/(app)/voice.tsx:360-360`
+Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`, `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`
 
 ## S6.30: Motion durations and easing.
 
@@ -86,6 +86,6 @@ Code: `apps/mobile/src/features/auth/components/AppLockOverlay.tsx:76-76`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Durations and easing are literals per component (about 20 files); no shared motion constants. | ui |
+| mobile | partial | partials/chat-gates c65ff13697: motion durations (instant 90, quick 160, moved 260, reveal 700) and curves mirror the web. 63 entering and exiting animations in 31 files use them. Five held files are in the tokens post-codex patch; MessageBubble's one duration is left for its own patches. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:46-46`, `apps/mobile/src/features/chat/components/ImageGenProgress.tsx:40-40`
+Code: `apps/mobile/src/ui/theme/tokens.ts:295-295`

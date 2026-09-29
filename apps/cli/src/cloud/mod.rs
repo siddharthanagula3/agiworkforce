@@ -10,9 +10,11 @@ pub mod chat;
 pub mod client;
 pub mod code_handoff;
 pub mod code_sessions;
+pub mod code_teleport;
 pub mod connectors;
 pub mod data_export;
 pub mod devices;
+pub mod feedback;
 pub mod handshake;
 pub mod image;
 pub mod image_provenance;
@@ -221,6 +223,23 @@ pub async fn sync_session(
     Ok(response.applied.messages.len())
 }
 
+/// Send a bug report or product feedback to the team's feedback store and say
+/// what happened, including why it could not be sent.
+pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
+    let client = match CloudClient::connect_managed() {
+        Ok(client) => client,
+        Err(error) => {
+            return format!(
+                "Feedback needs a signed-in AGI Workforce account ({error}). Sign in with `agi login`, then send it again."
+            )
+        }
+    };
+    match feedback::submit(&client, kind, message).await {
+        Ok(confirmation) => confirmation,
+        Err(error) => format!("Feedback was not sent: {error}"),
+    }
+}
+
 /// The account's conversations, newest first, with the cached cursor advanced.
 pub async fn hosted_conversations(
     privacy: PrivacyMode,
@@ -424,7 +443,9 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
     cache.apply(&response.memories);
-    cache.account_memory_off = response.memory_enabled == Some(false);
+    if let Some(enabled) = response.memory_enabled {
+        cache.account_memory_off = !enabled;
+    }
     memory::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the account memory: {error}"));

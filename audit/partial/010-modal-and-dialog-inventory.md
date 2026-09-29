@@ -339,9 +339,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
-
-Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
 
 ## S10.40: Remote-device pairing.
 
@@ -427,9 +424,9 @@ Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Diagnostics leave only when the user taps Export Diagnostics and shares the file, but nothing says what the bundle contains before sharing. | ui |
+| mobile | partial | Export Diagnostics sends the bundle to the server for redaction before the user sees anything. post-codex/w-chat-s10.46-mobile-diagnostics-consent.patch asks first, saying what the file holds and where it goes; the settings screen that calls it is held. | ui |
 
-Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`
+Code: `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:1-1`
 
 ## S10.47: Data-export request.
 
