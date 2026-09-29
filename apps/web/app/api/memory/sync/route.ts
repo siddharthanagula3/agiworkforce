@@ -57,8 +57,13 @@ async function handlePull(request: NextRequest, url: URL) {
                not (${activeMemoryPredicate('m.')}) as is_deleted,
                m.created_at, m.updated_at, m.server_version,
                origin.id::text as source_conversation_id,
-               origin.title as source_conversation_title
+               origin.title as source_conversation_title,
+               to_jsonb(m)->>'project_id' as project_id,
+               project.name as project_name
         from user_memories m
+        left join user_projects project
+          on project.id::text = to_jsonb(m)->>'project_id'
+         and project.deleted_at is null
         left join web_conversations origin
           on origin.id::text = to_jsonb(m)->>'source_conversation_id'
          and origin.user_id = m.user_id

@@ -145,6 +145,8 @@ export default function MemoryScreen() {
         const stored = settings as Partial<Record<AccountMemoryCapability, unknown>>;
         const cloud = useCloudSettingsStore.getState();
         if (typeof stored.memory === 'boolean') cloud.setMemoryEnabled(stored.memory);
+        else if (!cloud.memoryPolicyInitialized)
+          useCloudSettingsStore.setState({ memoryEnabled: false });
         if (typeof stored.searchPastChats === 'boolean') {
           cloud.setReferencePastChats(stored.searchPastChats);
         }

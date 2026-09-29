@@ -15,6 +15,8 @@ export interface CloudMemoryEntry {
   origin?: string | null;
   sourceConversationId?: string | null;
   sourceConversationTitle?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
 }
 
 interface CloudMemoryState {
