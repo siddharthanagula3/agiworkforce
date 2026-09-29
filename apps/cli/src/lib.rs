@@ -5644,7 +5644,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         let preview = cloud::library::text(&client, id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("{}", terminal_text::sanitize_terminal_text(&preview.text));
+                        match cloud::library::formatted_source(&preview) {
+                            Some(source) if std::io::IsTerminal::is_terminal(&std::io::stdout()) => {
+                                print!("{}", tui::markdown_renderer::render_markdown_ansi(&source));
+                            }
+                            _ => {
+                                println!("{}", terminal_text::sanitize_terminal_text(&preview.text))
+                            }
+                        }
                         if preview.truncated {
                             println!(
                                 "\n(The preview stops here; agi library download {id} saves the whole file.)"
