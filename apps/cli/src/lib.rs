@@ -2134,6 +2134,7 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         &title,
         None,
         code_teleport::history(&detail),
+        "the cloud Code session",
     )?;
     eprintln!(
         "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
@@ -2226,6 +2227,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
         &conversation.title,
         conversation.model.as_deref(),
         messages,
+        "your AGI Workforce account",
     )?;
     eprintln!(
         "Resuming '{}' from your account ({} messages).",

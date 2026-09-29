@@ -481,7 +481,12 @@ impl TuiApp {
         // follow-up prompt) had the full prior history. Hydrate the
         // transcript widget state from the same `session.messages` here so
         // the first render already shows the resumed conversation.
-        let chat_messages: Vec<ChatMessage> = session
+        let imported_from = session.managed_session.as_ref().and_then(|managed| {
+            crate::sessions::open_db()
+                .ok()
+                .and_then(|conn| crate::sessions::imported_from(&conn, &managed.session_id))
+        });
+        let mut chat_messages: Vec<ChatMessage> = session
             .messages
             .iter()
             .filter_map(|m| {
@@ -500,6 +505,15 @@ impl TuiApp {
                 Some(ChatMessage { role, text })
             })
             .collect();
+        if let Some(origin) = imported_from.filter(|_| !chat_messages.is_empty()) {
+            chat_messages.insert(
+                0,
+                ChatMessage {
+                    role: ChatRole::System,
+                    text: format!("The messages below came from {origin}."),
+                },
+            );
+        }
         let git_branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
