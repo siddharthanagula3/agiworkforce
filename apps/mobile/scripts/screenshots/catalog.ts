@@ -88,7 +88,7 @@ export const SCREENSHOTS: Screenshot[] = [
     name: 'first-message',
     spec: '03-chat-first-message.spec.ts',
     heading: 'Chat with local models',
-    subhead: 'Composer, model badge, and performance feedback.',
+    subhead: 'On-device answers with simple follow-up actions.',
   },
   {
     id: '04',

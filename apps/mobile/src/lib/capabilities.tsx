@@ -12,6 +12,12 @@ import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const CapabilityContext = createContext<SyncedAppSurface>('mobile');
 
@@ -21,6 +27,15 @@ const CapabilityContext = createContext<SyncedAppSurface>('mobile');
  * than keeping two lists that can drift apart.
  */
 const CAPABILITY_FLAG_PREFIX = 'capability.';
+let capabilityRefreshGeneration = 0;
+
+function canRefreshRemoteCapabilities(): boolean {
+  return (
+    useChatAppModeStore.getState().appMode === 'cloud' &&
+    useWaitlistStore.getState().cloudUnlocked &&
+    captureCloudAccountEpoch() !== null
+  );
+}
 
 export function capabilityFlagKey(capability: PlatformCapability): string {
   return `${CAPABILITY_FLAG_PREFIX}${capability.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}`;
@@ -44,8 +59,18 @@ export const useRemoteCapabilityStore = create<RemoteCapabilityState>((set) => (
   switchedOff: {},
   loadedAt: null,
   refresh: async () => {
+    if (!canRefreshRemoteCapabilities()) return;
+    const account = captureCloudAccountEpoch();
+    const generation = capabilityRefreshGeneration;
     try {
       const parsed = parseMeResponse(await api.get<unknown>('/api/me?surface=mobile'));
+      if (
+        !isCloudAccountEpochCurrent(account) ||
+        generation !== capabilityRefreshGeneration ||
+        !canRefreshRemoteCapabilities()
+      ) {
+        return;
+      }
       const switchedOff: Record<string, boolean> = {};
       for (const capability of ALL_PLATFORM_CAPABILITIES) {
         if (parsed.feature_flags[capabilityFlagKey(capability)] === false) {
@@ -54,10 +79,15 @@ export const useRemoteCapabilityStore = create<RemoteCapabilityState>((set) => (
       }
       set({ switchedOff, loadedAt: new Date().toISOString() });
     } catch (error) {
-      console.warn('[capabilities] refresh failed (keeping the last answer):', error);
+      if (isCloudAccountEpochCurrent(account) && canRefreshRemoteCapabilities()) {
+        console.warn('[capabilities] refresh failed (keeping the last answer):', error);
+      }
     }
   },
-  clear: () => set({ switchedOff: {}, loadedAt: null }),
+  clear: () => {
+    capabilityRefreshGeneration += 1;
+    set({ switchedOff: {}, loadedAt: null });
+  },
 }));
 
 export function refreshRemoteCapabilities(): Promise<void> {
@@ -71,6 +101,9 @@ export function CapabilityProvider({
   platform?: SyncedAppSurface;
   children: ReactNode;
 }) {
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+
   useEffect(() => {
     void refreshRemoteCapabilities();
     // A switch thrown while the app sits in the background has to reach it on
@@ -79,7 +112,7 @@ export function CapabilityProvider({
       if (next === 'active') void refreshRemoteCapabilities();
     });
     return () => subscription.remove();
-  }, []);
+  }, [appMode, cloudUnlocked]);
   return <CapabilityContext.Provider value={platform}>{children}</CapabilityContext.Provider>;
 }
 

@@ -34,7 +34,7 @@ interface VoiceInputButtonProps {
   onRecordingStop?: () => void;
   onMetering?: (event: VoiceMeteringEvent) => void;
   onLongPress?: () => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, permissionDenied?: boolean) => void;
   resetSignal?: number;
   disabled?: boolean;
 }
@@ -124,7 +124,10 @@ export function VoiceInputButton({
   const reportError = useCallback(
     (err: unknown) => {
       if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
-        onError?.('Voice input needs microphone and speech access. You can keep typing instead.');
+        onError?.(
+          'Voice input needs microphone and speech access. You can keep typing instead.',
+          true,
+        );
         return;
       }
       const message = err instanceof Error ? err.message : 'Voice capture failed';
@@ -303,11 +306,12 @@ export function VoiceInputButton({
   }, []);
 
   const handleLongPress = useCallback(() => {
+    if (!onLongPress) return;
     isLongPressRef.current = true;
     pressStartRef.current = 0;
     cancelActiveRecording();
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    onLongPress?.();
+    onLongPress();
   }, [hapticsEnabled, onLongPress, cancelActiveRecording]);
 
   const isActive = state === 'recording' || state === 'ptt';
@@ -356,7 +360,7 @@ export function VoiceInputButton({
         testID="voice-input-button"
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        onLongPress={handleLongPress}
+        onLongPress={onLongPress ? handleLongPress : undefined}
         delayLongPress={LONG_PRESS_DELAY_MS}
         disabled={isDisabled}
         hitSlop={8}

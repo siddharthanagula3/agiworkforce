@@ -241,11 +241,8 @@ export function ArtifactFullScreen({
         await shareFile(result.uri);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      Alert.alert(
-        'Download failed',
-        err instanceof Error ? err.message : 'Could not download this file.',
-      );
+    } catch {
+      Alert.alert('Download failed', 'Could not download or share this file. Try again.');
     } finally {
       setDownloading(false);
     }

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
@@ -69,6 +73,7 @@ interface ViewState {
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+let searchGeneration = 0;
 
 function buildSnippet(
   text: string,
@@ -133,23 +138,38 @@ function remoteProjectMatches(rows: ServerProjectRow[]): RemoteSearchMatch[] {
 
 async function runSearch(
   trimmed: string,
+  generation: number,
   set: (partial: Partial<ViewState>) => void,
-  _get: () => ViewState,
+  get: () => ViewState,
 ): Promise<void> {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatAppModeStore } =
     require('@/src/features/chat/store/appModeStore') as typeof import('@/src/features/chat/store/appModeStore');
+  const { useAuthStore } =
+    require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
   const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+  const account = isCloud ? captureCloudAccountEpoch() : null;
+  const isCurrent = () =>
+    generation === searchGeneration &&
+    get().searchQuery === trimmed &&
+    (useChatAppModeStore.getState().appMode === 'cloud') === isCloud &&
+    (!isCloud || (isCloudAccountEpochCurrent(account) && useAuthStore.getState().isClerkSignedIn));
+
+  if (isCloud && (!account || !useAuthStore.getState().isClerkSignedIn)) {
+    if (generation === searchGeneration && get().searchQuery === trimmed) {
+      set({ searchResults: [], ...EMPTY_REMOTE_MATCHES, isSearching: false });
+    }
+    return;
+  }
 
   if (isCloud) {
     try {
-      const { useAuthStore } =
-        require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
       if (useAuthStore.getState().isClerkSignedIn) {
         const { api } = require('@/services/api') as typeof import('@/services/api');
         const data = await api.get<{ results: ServerSearchRow[]; projects?: ServerProjectRow[] }>(
           `/api/search?q=${encodeURIComponent(trimmed)}&limit=50`,
         );
+        if (!isCurrent() || !useAuthStore.getState().isClerkSignedIn) return;
         const rows = data.results ?? [];
         const results: ConversationSearchResult[] = rows.map((r) => {
           const text = (r.contextBefore ?? '') + (r.matchedText ?? '') + (r.contextAfter ?? '');
@@ -171,14 +191,17 @@ async function runSearch(
         return;
       }
     } catch {
-      // Network/auth failure → fall through to local in-memory search.
+      if (!isCurrent()) return;
     }
   }
 
+  if (!isCurrent()) return;
   const { useChatMessageStore } =
     require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+  const { useChatCloudMessageStore } =
+    require('@/stores/chat/chatCloudMessageStore') as typeof import('@/stores/chat/chatCloudMessageStore');
   /* eslint-enable @typescript-eslint/no-require-imports */
-  const msgState = useChatMessageStore.getState();
+  const msgState = isCloud ? useChatCloudMessageStore.getState() : useChatMessageStore.getState();
   const lower = trimmed.toLowerCase();
   const results: ConversationSearchResult[] = [];
 
@@ -211,7 +234,7 @@ async function runSearch(
     }
   }
 
-  set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
+  if (isCurrent()) set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
 }
 
 export function migratePersistedChatView(
@@ -247,6 +270,8 @@ export const useChatViewStore = create<ViewState>()(
       imageAspectRatio: '1:1',
 
       searchConversations: (query: string) => {
+        searchGeneration += 1;
+        const generation = searchGeneration;
         const trimmed = query.trim();
         if (!trimmed) {
           if (searchDebounceTimer !== undefined) {
@@ -262,7 +287,12 @@ export const useChatViewStore = create<ViewState>()(
           return;
         }
 
-        set({ searchQuery: trimmed, isSearching: true });
+        set({
+          searchQuery: trimmed,
+          searchResults: [],
+          ...EMPTY_REMOTE_MATCHES,
+          isSearching: true,
+        });
 
         if (searchDebounceTimer !== undefined) {
           clearTimeout(searchDebounceTimer);
@@ -270,7 +300,7 @@ export const useChatViewStore = create<ViewState>()(
 
         searchDebounceTimer = setTimeout(() => {
           searchDebounceTimer = undefined;
-          void runSearch(trimmed, set, get);
+          void runSearch(trimmed, generation, set, get);
         }, SEARCH_INPUT_DEBOUNCE_MS);
       },
 
@@ -286,6 +316,7 @@ export const useChatViewStore = create<ViewState>()(
       setVideoResolution: (resolution) => set({ videoResolution: resolution }),
       setImageAspectRatio: (aspectRatio) => set({ imageAspectRatio: aspectRatio }),
       clearCloudSearchState: () => {
+        searchGeneration += 1;
         if (searchDebounceTimer !== undefined) {
           clearTimeout(searchDebounceTimer);
           searchDebounceTimer = undefined;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   formatCreditWindowUsage,
   formatPlanCreditAllowanceLine,
@@ -17,16 +17,11 @@ import {
   SettingsInfo,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { fetchUsageSnapshot, type UsageSnapshot } from '@/services/usage';
-import { openExternalUrl } from '@/lib/safeOpenURL';
-import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useCloudUsageStore } from './store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { useAuthStore } from '@/src/features/auth/store';
-import {
-  captureCloudAccountEpoch,
-  isCloudAccountEpochCurrent,
-} from '@/src/features/auth/services/cloudAccountSession';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
 function formatResetDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -110,51 +105,6 @@ function UsagePercentBar({
   );
 }
 
-function BillingUnavailablePlaceholder() {
-  const colors = useThemeColors();
-  return (
-    <View
-      style={{
-        borderRadius: 14,
-        backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 20,
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 18,
-      }}
-    >
-      <BarChart3 size={32} color={colors.textMuted} />
-      <Text
-        style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', textAlign: 'center' }}
-      >
-        Usage dashboard coming soon
-      </Text>
-      <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
-        Detailed usage ledger and credit tracking will be available once AGI Cloud billing is
-        active.
-      </Text>
-      <Pressable
-        onPress={() => void openExternalUrl('https://agiworkforce.com/settings/usage')}
-        accessibilityRole="button"
-        accessibilityLabel="View usage on web"
-        style={({ pressed }) => ({
-          marginTop: 4,
-          paddingHorizontal: 16,
-          paddingVertical: 9,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: pressed ? colors.surfaceHover : colors.surfaceBase,
-        })}
-      >
-        <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>View on web</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -165,44 +115,24 @@ export default function CloudUsageScreen() {
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
 
-  const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const account = captureCloudAccountEpoch();
-    if (!account) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchUsageSnapshot();
-      if (!isCloudAccountEpochCurrent(account)) return;
-      setSnapshot(data);
-      setLastUpdated(
-        new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      );
-    } catch (err) {
-      if (!isCloudAccountEpochCurrent(account)) return;
-      setError(err instanceof Error ? err.message : 'Could not load usage');
-    } finally {
-      if (isCloudAccountEpochCurrent(account)) setLoading(false);
-    }
-  }, []);
+  const ownerId = useCloudUsageStore((s) => s.ownerId);
+  const cachedSnapshot = useCloudUsageStore((s) => s.snapshot);
+  const loading = useCloudUsageStore((s) => s.loading);
+  const error = useCloudUsageStore((s) => s.error);
+  const updatedAt = useCloudUsageStore((s) => s.updatedAt);
+  const load = useCloudUsageStore((s) => s.refresh);
+  const snapshot = ownerId === clerkUserId ? cachedSnapshot : null;
+  const lastUpdated =
+    ownerId === clerkUserId && updatedAt !== null
+      ? new Date(updatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      : null;
 
   useEffect(() => {
-    setSnapshot(null);
-    setLoading(false);
-    setError(null);
-    setLastUpdated(null);
-  }, [clerkUserId]);
-
-  useEffect(() => {
-    if (FEATURES.usageDashboard && isClerkSignedIn && isCloudModeActive) void load();
+    if (isClerkSignedIn && isCloudModeActive) void load();
   }, [clerkUserId, load, isClerkSignedIn, isCloudModeActive]);
 
   const handleSignIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-usage'));
   }, [router]);
 
   const planLabel = snapshot ? getBillingPlanPricing(snapshot.planTier).label : '';
@@ -231,15 +161,10 @@ export default function CloudUsageScreen() {
         icon={BarChart3}
       />
 
-      {/* Usage backend not yet active */}
-      {!FEATURES.usageDashboard && <BillingUnavailablePlaceholder />}
-
-      {FEATURES.usageDashboard && !isCloudModeActive && (
-        <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
-      )}
+      {!isCloudModeActive && <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />}
 
       {/* Live usage */}
-      {FEATURES.usageDashboard && isCloudModeActive && (
+      {isCloudModeActive && (
         <>
           {loading && !snapshot && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>

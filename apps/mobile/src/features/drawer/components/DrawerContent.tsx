@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -9,8 +9,10 @@ import {
   Bot,
   Bell,
   CalendarClock,
+  ChevronRight,
   FolderOpen,
   HelpCircle,
+  BarChart3,
   MessageSquare,
   MonitorSmartphone,
   Pin,
@@ -35,6 +37,8 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
   RenameConversationModal,
@@ -51,6 +55,7 @@ import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 
 type RoutePath =
   | '/(app)/chats'
+  | '/(app)/search'
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
@@ -62,6 +67,7 @@ type RoutePath =
   | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
+  | '/(app)/settings/cloud-usage'
   | '/(app)/about'
   | '/(app)/profile'
   | '/(app)/projects/[id]'
@@ -269,12 +275,40 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const usageOwnerId = useCloudUsageStore((s) => s.ownerId);
+  const usageSnapshot = useCloudUsageStore((s) => s.snapshot);
+  const usageLoading = useCloudUsageStore((s) => s.loading);
+  const usageError = useCloudUsageStore((s) => s.error);
+  const refreshUsage = useCloudUsageStore((s) => s.refresh);
   // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
   // a plan that includes AGI Work. The server is still authoritative.
   const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
+
+  useEffect(() => {
+    if (
+      (drawerOpen || usesPersistentDrawer) &&
+      appMode === 'cloud' &&
+      isClerkSignedIn &&
+      clerkUserId
+    ) {
+      void refreshUsage();
+    }
+  }, [drawerOpen, usesPersistentDrawer, appMode, isClerkSignedIn, clerkUserId, refreshUsage]);
+
+  const visibleUsage = usageOwnerId === clerkUserId ? usageSnapshot : null;
+  const remainingUsage =
+    visibleUsage && !usageError
+      ? visibleUsage.weeklyResetAt !== null
+        ? `Week ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.weeklyUsagePercentage)))}%`
+        : visibleUsage.usageResetAt !== null
+          ? `Period ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.usagePercentage)))}%`
+          : null
+      : null;
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
@@ -298,11 +332,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
 
-  // Chats owns search for chats, projects, files, library and artifacts, so
-  // this hands off to it with its field already focused rather than keeping a
-  // second search implementation in the drawer.
   const handleOpenSearch = useCallback(() => {
-    navigate('/(app)/chats', { focusSearch: '1' });
+    navigate('/(app)/search');
   }, [navigate]);
 
   const displayedConversations = useMemo(() => {
@@ -457,7 +488,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                     accessibilityRole="button"
                     accessibilityLabel={`Open project: ${project.name}`}
                     style={{
-                      minHeight: 34,
+                      minHeight: 44,
                       borderRadius: 8,
                       paddingHorizontal: 10,
                       justifyContent: 'center',
@@ -505,7 +536,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                       accessibilityHint="Long press to pin or delete"
                       accessibilityState={{ selected: active }}
                       style={{
-                        minHeight: 34,
+                        minHeight: 44,
                         borderRadius: 8,
                         paddingHorizontal: 10,
                         flexDirection: 'row',
@@ -537,6 +568,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 No recent chats
               </Text>
             )}
+            <Pressable
+              onPress={() => navigate('/(app)/chats')}
+              accessibilityRole="button"
+              accessibilityLabel="See all chats"
+              style={{
+                minHeight: 44,
+                marginTop: 4,
+                paddingHorizontal: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>See all chats</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -551,6 +598,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           gap: 2,
         }}
       >
+        {appMode === 'cloud' && isClerkSignedIn && clerkUserId ? (
+          <NavRow
+            label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
+            icon={BarChart3}
+            onPress={() => navigate('/(app)/settings/cloud-usage')}
+          />
+        ) : null}
         <NavRow
           label="Settings"
           icon={Settings}

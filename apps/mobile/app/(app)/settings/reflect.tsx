@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import {
@@ -64,7 +65,7 @@ export default function ReflectScreen() {
         }
         setState({
           kind: 'error',
-          message: error instanceof Error ? error.message : 'Reflect could not load.',
+          message: 'Reflect could not load. Check your connection and try again.',
         });
       }
     },
@@ -127,7 +128,7 @@ export default function ReflectScreen() {
         <View className="flex-1 px-4">
           <CloudAccountRequired
             isLoading={!isClerkLoaded}
-            onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+            onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-reflect'))}
           />
         </View>
       </SafeAreaView>

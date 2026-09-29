@@ -90,16 +90,26 @@ export default function MemoryImportScreen() {
       content = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.UTF8,
       });
-    } catch (err) {
+    } catch {
       setState((s) => ({
         ...s,
         status: 'error',
-        errorMessage: err instanceof Error ? err.message : 'Could not read file',
+        errorMessage: 'Could not read this file. Choose another file and try again.',
       }));
       return;
     }
 
-    const importResult = await parseImportFile(content, fileName);
+    let importResult: Awaited<ReturnType<typeof parseImportFile>>;
+    try {
+      importResult = await parseImportFile(content, fileName);
+    } catch {
+      setState((s) => ({
+        ...s,
+        status: 'error',
+        errorMessage: 'Could not parse this export. Check the file format and try again.',
+      }));
+      return;
+    }
     const { facts, source } = importResult;
 
     if (facts.length === 0) {
@@ -132,11 +142,12 @@ export default function MemoryImportScreen() {
             try {
               const { inserted, skipped } = await bulkInsert(facts.map((f) => f.fact));
               setState((s) => ({ ...s, status: 'done', inserted, skipped }));
-            } catch (err) {
+            } catch {
               setState((s) => ({
                 ...s,
                 status: 'error',
-                errorMessage: err instanceof Error ? err.message : 'Import failed',
+                errorMessage:
+                  'Import could not finish. Some memories may have been saved. Check your memories before trying again.',
               }));
             }
           },

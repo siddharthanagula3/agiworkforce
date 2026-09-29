@@ -14,6 +14,7 @@ import {
   type UploadTask,
 } from 'expo-file-system/legacy';
 import {
+  TERMS_ACCEPTANCE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -23,7 +24,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
-import { ApiPaywallError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import {
+  ApiPaywallError,
+  CloudCredentialUnavailableError,
+  httpErrorFrom,
+  parseJsonBody,
+  rateLimitErrorFrom,
+} from './apiErrors';
 import { platformRequestHeaders } from '../lib/platformHeaders';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
@@ -75,11 +82,15 @@ async function tryRefreshToken(): Promise<boolean> {
 
   const generation = _accountGeneration;
   const operation = (async () => {
+    let refreshTimeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const refreshPromise = refreshAuthSession();
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
-      );
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        refreshTimeoutId = setTimeout(
+          () => reject(new Error('Token refresh timed out')),
+          REFRESH_TIMEOUT_MS,
+        );
+      });
       const refreshed = await Promise.race([refreshPromise, timeoutPromise]);
       if (generation !== _accountGeneration) return false;
       if (refreshed) {
@@ -96,6 +107,7 @@ async function tryRefreshToken(): Promise<boolean> {
       _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
       return false;
     } finally {
+      if (refreshTimeoutId !== undefined) clearTimeout(refreshTimeoutId);
       if (generation === _accountGeneration) {
         _refreshing = null;
       }
@@ -187,13 +199,21 @@ async function sendRequest(
   options: RequestOptions,
 ): Promise<SentRequest> {
   const accountGeneration = _accountGeneration;
+  const authHeaders = await getAuthHeaders();
   const headers = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     ...platformRequestHeaders(),
-    ...(await getAuthHeaders()),
+    ...authHeaders,
   };
   assertApiAccountGeneration(accountGeneration);
+  if (
+    path === TERMS_ACCEPTANCE_PATH &&
+    options.baseUrl === undefined &&
+    !authHeaders.Authorization
+  ) {
+    throw new CloudCredentialUnavailableError();
+  }
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -205,28 +225,34 @@ async function sendRequest(
   );
 
   try {
-    const response = await guardedFetch(`${options.baseUrl ?? API_URL}${path}`, {
-      ...init,
-      headers: {
-        ...headers,
-        ...(options.headers ?? {}),
-        ...(init.headers as Record<string, string>),
+    const response = await guardedFetch(
+      `${options.baseUrl ?? API_URL}${path}`,
+      {
+        ...init,
+        headers: {
+          ...headers,
+          ...(options.headers ?? {}),
+          ...(init.headers as Record<string, string>),
+        },
+        signal:
+          callerSignals.length > 0
+            ? combineAbortSignals([...callerSignals, controller.signal])
+            : controller.signal,
       },
-      signal:
-        callerSignals.length > 0
-          ? combineAbortSignals([...callerSignals, controller.signal])
-          : controller.signal,
-    });
+      { authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined },
+    );
     assertApiAccountGeneration(accountGeneration);
 
-    if (response.status === 401 && !options._skipAuthRetry) {
-      const refreshed = await tryRefreshToken();
-      assertApiAccountGeneration(accountGeneration);
-      release();
-      if (refreshed) {
-        return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+    if (response.status === 401) {
+      if (!options._skipAuthRetry) {
+        const refreshed = await tryRefreshToken();
+        assertApiAccountGeneration(accountGeneration);
+        if (refreshed) {
+          release();
+          return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+        }
       }
-
+      release();
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
@@ -452,11 +478,13 @@ export const api = {
       );
       assertApiAccountGeneration(accountGeneration);
 
-      if (presignResponse.status === 401 && !options?._skipAuthRetry) {
-        const refreshed = await tryRefreshToken();
-        assertApiAccountGeneration(accountGeneration);
-        if (refreshed) {
-          return api.uploadFile(file, { ...options, _skipAuthRetry: true });
+      if (presignResponse.status === 401) {
+        if (!options?._skipAuthRetry) {
+          const refreshed = await tryRefreshToken();
+          assertApiAccountGeneration(accountGeneration);
+          if (refreshed) {
+            return api.uploadFile(file, { ...options, _skipAuthRetry: true });
+          }
         }
         handleUnrecoverableAuth();
         throw new Error('Upload failed: session expired. Please sign in again.');
@@ -521,26 +549,48 @@ export const api = {
         );
       }
 
-      const completeResponse = await guardedFetch(
-        `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`,
-        {
+      const completionBody = JSON.stringify({
+        storageKey: presign.storageKey,
+        fileName: file.name,
+        mimeType,
+        byteCount,
+      });
+      const completeAttachment = (authToken: string) =>
+        guardedFetch(`${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...platformRequestHeaders(),
-            ...authHeaders,
+            Authorization: `Bearer ${authToken}`,
           },
-          body: JSON.stringify({
-            storageKey: presign.storageKey,
-            fileName: file.name,
-            mimeType,
-            byteCount,
-          }),
+          body: completionBody,
           signal,
-        },
-      );
+        });
+      const completionToken = await getAuthToken();
       assertApiAccountGeneration(accountGeneration);
+      if (!completionToken) {
+        handleUnrecoverableAuth();
+        throw new Error('Upload failed: session expired. Please sign in again.');
+      }
+      let completeResponse = await completeAttachment(completionToken);
+      assertApiAccountGeneration(accountGeneration);
+      if (completeResponse.status === 401) {
+        const refreshed = await tryRefreshToken();
+        assertApiAccountGeneration(accountGeneration);
+        const refreshedToken = refreshed ? await getAuthToken() : null;
+        assertApiAccountGeneration(accountGeneration);
+        if (!refreshedToken) {
+          handleUnrecoverableAuth();
+          throw new Error('Upload failed: session expired. Please sign in again.');
+        }
+        completeResponse = await completeAttachment(refreshedToken);
+        assertApiAccountGeneration(accountGeneration);
+        if (completeResponse.status === 401) {
+          handleUnrecoverableAuth();
+          throw new Error('Upload failed: session expired. Please sign in again.');
+        }
+      }
       if (!completeResponse.ok) {
         throw new Error(await uploadErrorMessage(completeResponse, file.name));
       }

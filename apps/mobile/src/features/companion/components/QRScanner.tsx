@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Pressable, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -75,7 +76,21 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     onScan(trimmed);
   }, [manualCode, onScan]);
 
-  if (!permission) {
+  const handlePaste = useCallback(async () => {
+    try {
+      const pasted = (await Clipboard.getStringAsync()).trim();
+      if (!pasted) {
+        setManualError('Clipboard is empty. Copy the pairing code from Desktop first.');
+        return;
+      }
+      setManualCode(pasted);
+      setManualError(null);
+    } catch {
+      setManualError('Could not read the clipboard. Enter the code manually.');
+    }
+  }, []);
+
+  if (!permission && !showManualEntry) {
     return (
       <View
         className="flex-1 items-center justify-center"
@@ -86,7 +101,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  if (!permission.granted) {
+  if (!permission?.granted && !showManualEntry) {
     return (
       <View
         className="flex-1 items-center justify-center px-8 gap-6"
@@ -112,6 +127,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             variant="ghost"
             onPress={() => setShowManualEntry(true)}
           />
+          <Button title="Close" variant="ghost" onPress={onClose} />
         </View>
       </View>
     );
@@ -172,6 +188,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               textAlign: 'center',
             }}
           />
+          <Button title="Paste code" variant="outline" onPress={handlePaste} />
           {manualError && <Text className="text-red-400 text-xs text-center">{manualError}</Text>}
         </View>
 
@@ -180,6 +197,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           variant="primary"
           size="lg"
           onPress={handleManualSubmit}
+          disabled={!manualCode.trim()}
           className="mt-2"
         />
 
@@ -190,11 +208,11 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             setManualCode('');
           }}
           className="items-center py-3"
-          accessibilityLabel="Back to QR Scanner"
+          accessibilityLabel={permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
           accessibilityRole="button"
         >
           <Text className="text-sm" style={{ color: colors.teal }}>
-            Back to QR Scanner
+            {permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
           </Text>
         </Pressable>
       </View>

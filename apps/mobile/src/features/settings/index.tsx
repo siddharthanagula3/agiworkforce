@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
-import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '@clerk/expo';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
@@ -17,11 +16,13 @@ import {
   CircleHelp,
   CreditCard,
   Database,
+  HardDrive,
   Info,
   Link2,
   LogOut,
   MessageCircleWarning,
   Mic,
+  MonitorSmartphone,
   Palette,
   Pencil,
   Shield,
@@ -38,8 +39,12 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
+import {
+  beginCloudPostAuthIntentForDestination,
+  type PostAuthDestination,
+} from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -49,6 +54,28 @@ import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { shareMobileDiagnostics } from '@/src/features/settings/diagnostics';
+import { useCloudProfilePhoto } from '@/src/features/settings/cloud-account/useCloudProfilePhoto';
+import { useCloudProfileStore } from '@/src/features/settings/cloud-account/cloudProfileStore';
+import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
+
+function remoteConnectionLabel(status: ConnectionStatus): string {
+  switch (status) {
+    case 'connected':
+      return 'Connected';
+    case 'connecting':
+      return 'Connecting';
+    case 'reconnecting':
+      return 'Reconnecting';
+    case 'stale':
+      return 'Connection lost';
+    case 'session_expired':
+      return 'Session expired';
+    case 'error':
+      return 'Needs attention';
+    case 'disconnected':
+      return 'Not paired';
+  }
+}
 
 type RowTone = 'default' | 'cloud' | 'danger';
 
@@ -199,15 +226,26 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
-  const [savingPhoto, setSavingPhoto] = useState(false);
+  const { changePhoto: handleEditPhoto, savingPhoto } = useCloudProfilePhoto(clerkUser);
+  const cloudProfileName = useCloudProfileStore((state) =>
+    state.ownerId === clerkUser?.id ? state.displayName : null,
+  );
+  const cloudProfileAvatar = useCloudProfileStore((state) =>
+    state.ownerId === clerkUser?.id && state.loaded ? state.avatarUrl : clerkUser?.imageUrl,
+  );
+  const loadCloudProfileName = useCloudProfileStore((state) => state.load);
+  useEffect(() => {
+    if (isCloudMode && isClerkSignedIn && clerkUser?.id) {
+      void loadCloudProfileName(clerkUser.id);
+    }
+  }, [clerkUser?.id, isClerkSignedIn, isCloudMode, loadCloudProfileName]);
   const providerName =
     clerkUser?.fullName ||
     clerkUser?.firstName ||
     clerkUser?.username ||
     clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0];
   const displayName = isCloudMode
-    ? personalization.nickname ||
-      personalization.fullName ||
+    ? cloudProfileName ||
       (providerName ? normalizeDisplayName(providerName) : undefined) ||
       'AGI Cloud'
     : personalization.nickname || personalization.fullName || 'Local profile';
@@ -216,36 +254,6 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
       (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Local mode active';
   const canEditPhoto = isCloudMode && isClerkSignedIn && Boolean(clerkUser);
-
-  const handleEditPhoto = useCallback(async () => {
-    if (!clerkUser || savingPhoto) return;
-    setSavingPhoto(true);
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: false,
-        quality: 0.85,
-        base64: true,
-        exif: false,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.base64) {
-        Alert.alert('Photo unavailable', 'That image could not be read. Pick another photo.');
-        return;
-      }
-      await clerkUser.setProfileImage({
-        file: `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`,
-      });
-    } catch {
-      Alert.alert(
-        'Could not update photo',
-        'Your profile photo was not changed. Check your connection and try again.',
-      );
-    } finally {
-      setSavingPhoto(false);
-    }
-  }, [clerkUser, savingPhoto]);
 
   return (
     <View style={{ marginBottom: 24 }}>
@@ -265,7 +273,7 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
       >
         <UserAvatar
           size={PROFILE_AVATAR_SIZE}
-          uri={clerkUser?.imageUrl}
+          uri={isCloudMode ? cloudProfileAvatar : undefined}
           initials={displayName}
           testID="settings-profile-avatar"
         />
@@ -355,6 +363,7 @@ export default function SettingsTabScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
+  const remoteStatus = useConnectionStore((s) => s.status);
   const { user: clerkUser } = useUser();
   const signOut = useAuthStore((s) => s.signOut);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
@@ -374,10 +383,10 @@ export default function SettingsTabScreen() {
   }, [router]);
 
   const openCloudRoute = useCallback(
-    (path: string) => () => {
+    (path: PostAuthDestination) => () => {
       if (!isClerkLoaded) return;
       if (!isClerkSignedIn) {
-        router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+        router.push(beginCloudPostAuthIntentForDestination(path));
         return;
       }
       router.push(path as Parameters<typeof router.push>[0]);
@@ -395,10 +404,10 @@ export default function SettingsTabScreen() {
   const handleExportDiagnostics = useCallback(() => {
     void shareMobileDiagnostics()
       .then((summary) => Alert.alert('Diagnostics exported', summary))
-      .catch((cause: unknown) =>
+      .catch(() =>
         Alert.alert(
           'Diagnostics export failed',
-          cause instanceof Error ? cause.message : 'Could not prepare the bundle.',
+          'Could not prepare the diagnostics bundle. Try again.',
         ),
       );
   }, []);
@@ -479,6 +488,17 @@ export default function SettingsTabScreen() {
             icon: SlidersHorizontal,
             onPress: push('/(app)/settings/general'),
           },
+          ...(FEATURES.companion
+            ? [
+                {
+                  key: 'remote',
+                  label: MOBILE_REMOTE_SCREEN_LABEL,
+                  icon: MonitorSmartphone,
+                  value: remoteConnectionLabel(remoteStatus),
+                  onPress: push('/(app)/companion'),
+                },
+              ]
+            : []),
           {
             key: 'notifications',
             label: 'Notifications',
@@ -512,6 +532,16 @@ export default function SettingsTabScreen() {
             label: 'Parental Controls',
             icon: Baby,
             onPress: push('/(app)/settings/parental-controls'),
+          },
+          {
+            key: 'storage',
+            label: 'Storage',
+            icon: HardDrive,
+            onPress: () =>
+              router.push({
+                pathname: '/(app)/settings/storage',
+                params: { returnTo: '/(app)/(tabs)/settings' },
+              } as Parameters<typeof router.push>[0]),
           },
         ],
       },
@@ -657,6 +687,7 @@ export default function SettingsTabScreen() {
       openCloudRoute,
       push,
       router,
+      remoteStatus,
       themeMode,
       billingTier,
       clerkUser,

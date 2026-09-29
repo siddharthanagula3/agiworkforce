@@ -17,17 +17,19 @@ import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
-import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { getCloudModelsForTier, getModelById, getProviderById, getDisplayName } from '@/lib/models';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { EgressBlockedError } from '@/lib/egressGuard';
 
@@ -64,8 +66,20 @@ function compareErrorMessage(err: unknown): string {
   return raw || 'This model could not respond. Please try again.';
 }
 
-const DEFAULT_MODEL_A = getProviderDefaultModel('anthropic') ?? 'anthropic/default';
-const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
+const DEFAULT_MODEL_A = requireProviderDefaultModel('anthropic');
+const DEFAULT_MODEL_B = requireProviderDefaultModel('openai');
+
+function comparisonModelsForTier(tier: string): [string, string] | null {
+  const models = getCloudModelsForTier(tier);
+  if (models.length < 2) return null;
+  const ids = models.map((model) => model.id);
+  const first = ids.includes(DEFAULT_MODEL_A) ? DEFAULT_MODEL_A : ids[0]!;
+  const second =
+    ids.includes(DEFAULT_MODEL_B) && DEFAULT_MODEL_B !== first
+      ? DEFAULT_MODEL_B
+      : ids.find((id) => id !== first)!;
+  return [first, second];
+}
 
 export default function CompareScreen() {
   const colors = useThemeColors();
@@ -74,10 +88,12 @@ export default function CompareScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const tier = useTierStore((state) => state.tier);
   const isCloudMode = appMode === 'cloud';
+  const availableModels = comparisonModelsForTier(tier);
 
-  const [modelA, setModelA] = useState(DEFAULT_MODEL_A);
-  const [modelB, setModelB] = useState(DEFAULT_MODEL_B);
+  const [modelA, setModelA] = useState(() => availableModels?.[0] ?? DEFAULT_MODEL_A);
+  const [modelB, setModelB] = useState(() => availableModels?.[1] ?? DEFAULT_MODEL_B);
 
   const [stateA, setStateA] = useState<CompareStreamState>(initialStreamState);
   const [stateB, setStateB] = useState<CompareStreamState>(initialStreamState);
@@ -91,6 +107,17 @@ export default function CompareScreen() {
   const modelPickerBRef = useRef<BottomSheet>(null);
 
   const [activePickerSlot, setActivePickerSlot] = useState<'A' | 'B' | null>(null);
+
+  const resetComparison = useCallback(() => {
+    compareGenerationRef.current += 1;
+    controllerARef.current?.abort();
+    controllerBRef.current?.abort();
+    controllerARef.current = null;
+    controllerBRef.current = null;
+    setLastPrompt(null);
+    setStateA(initialStreamState());
+    setStateB(initialStreamState());
+  }, []);
 
   const handleBack = useCallback(() => {
     compareGenerationRef.current += 1;
@@ -112,19 +139,21 @@ export default function CompareScreen() {
   }, []);
 
   useLayoutEffect(() => {
-    compareGenerationRef.current += 1;
-    controllerARef.current?.abort();
-    controllerBRef.current?.abort();
-    controllerARef.current = null;
-    controllerBRef.current = null;
-    setLastPrompt(null);
-    setStateA(initialStreamState());
-    setStateB(initialStreamState());
-  }, [clerkUserId]);
+    resetComparison();
+  }, [clerkUserId, appMode, resetComparison]);
+
+  useLayoutEffect(() => {
+    resetComparison();
+    const next = comparisonModelsForTier(tier);
+    if (next) {
+      setModelA(next[0]);
+      setModelB(next[1]);
+    }
+  }, [tier, resetComparison]);
 
   const handleSwitchToCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-compare'));
       return;
     }
     setAppMode('cloud');
@@ -153,6 +182,18 @@ export default function CompareScreen() {
         };
         setStateA(localModeState);
         setStateB(localModeState);
+        return false;
+      }
+
+      const eligibleIds = getCloudModelsForTier(useTierStore.getState().tier).map(
+        (model) => model.id,
+      );
+      if (
+        eligibleIds.length < 2 ||
+        !eligibleIds.includes(modelA) ||
+        !eligibleIds.includes(modelB) ||
+        modelA === modelB
+      ) {
         return false;
       }
 
@@ -310,15 +351,33 @@ export default function CompareScreen() {
     modelPickerBRef.current?.snapToIndex(0);
   }, []);
 
-  const handleSelectModelA = useCallback((id: string) => {
-    setModelA(id);
-    setActivePickerSlot(null);
-  }, []);
+  const handleSelectModelA = useCallback(
+    (id: string) => {
+      if (!getCloudModelsForTier(useTierStore.getState().tier).some((model) => model.id === id))
+        return;
+      if (id !== modelA) {
+        resetComparison();
+        if (id === modelB) setModelB(modelA);
+        setModelA(id);
+      }
+      setActivePickerSlot(null);
+    },
+    [modelA, modelB, resetComparison],
+  );
 
-  const handleSelectModelB = useCallback((id: string) => {
-    setModelB(id);
-    setActivePickerSlot(null);
-  }, []);
+  const handleSelectModelB = useCallback(
+    (id: string) => {
+      if (!getCloudModelsForTier(useTierStore.getState().tier).some((model) => model.id === id))
+        return;
+      if (id !== modelB) {
+        resetComparison();
+        if (id === modelA) setModelA(modelB);
+        setModelB(id);
+      }
+      setActivePickerSlot(null);
+    },
+    [modelA, modelB, resetComparison],
+  );
 
   return (
     <SafeAreaView
@@ -368,6 +427,25 @@ export default function CompareScreen() {
               message={LOCAL_MODE_COMPARE_NOTICE}
             />
           </ScrollView>
+        ) : !availableModels ? (
+          <View className="flex-1 items-center justify-center px-8">
+            <Text className="text-white text-center text-base font-semibold">
+              Compare two models
+            </Text>
+            <Text className="text-white/50 text-center text-sm leading-5 mt-3">
+              Your current plan has fewer than two models available for comparison. You can use your
+              available model in Chat.
+            </Text>
+            <Pressable
+              onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Chat"
+              className="rounded-xl px-5 py-3 mt-6"
+              style={{ backgroundColor: colors.surfaceElevated }}
+            >
+              <Text className="text-white font-medium">Go to Chat</Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             {/* ---- Model Selector Pills ---- */}
@@ -429,7 +507,7 @@ export default function CompareScreen() {
 
       {/* ---- Model Picker Sheets ---- */}
       {/* Rendered outside KeyboardAvoidingView so they overlay correctly */}
-      {isCloudMode ? (
+      {isCloudMode && availableModels ? (
         <>
           <ModelPickerSheet
             sheetRef={modelPickerARef}

@@ -1,6 +1,7 @@
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { ContinuityOnboardingGate } from '@/src/features/continuity';
+import { AppLockOffer } from '@/src/features/auth/components/AppLockOffer';
 import { useDeviceRegistryHeartbeat } from '@/src/features/device-registry';
 import { useThemeColors } from '@/src/ui/theme';
 import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
@@ -43,6 +44,7 @@ export default function AppLayout() {
 
         {/* New drawer-level routes */}
         <Drawer.Screen name="chats/index" options={HIDDEN} />
+        <Drawer.Screen name="search" options={HIDDEN} />
         <Drawer.Screen name="artifacts/index" options={HIDDEN} />
         <Drawer.Screen name="library/index" options={HIDDEN} />
         <Drawer.Screen name="connectors/index" options={HIDDEN} />
@@ -97,6 +99,7 @@ export default function AppLayout() {
         <Drawer.Screen name="widget-setup" options={HIDDEN} />
       </Drawer>
       <ContinuityOnboardingGate />
+      <AppLockOffer />
     </>
   );
 }
