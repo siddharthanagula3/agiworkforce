@@ -121,6 +121,7 @@ export function ConnectorApiKeySheet({
       transparent
       animationType="slide"
       onRequestClose={close}
+      accessibilityViewIsModal
     >
       <KeyboardAvoidingView
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
