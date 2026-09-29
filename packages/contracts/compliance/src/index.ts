@@ -82,6 +82,15 @@ export {
   isLlmGateOpen,
 } from './llm-gate';
 
+export {
+  FREE_PLAN_TRAINING_DATA_DISCLOSURE,
+  FREE_PLAN_TRAINING_NOTICE_TITLE,
+  FREE_PLAN_TRAINING_NOTICE_LEAD,
+  FREE_PLAN_TRAINING_NOTICE_TAIL,
+  FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
+  FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
+} from './free-plan-training-disclosure';
+
 import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,

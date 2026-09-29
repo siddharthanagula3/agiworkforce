@@ -13,6 +13,7 @@ const SourceSurfaceSchema = z.enum(SYNCED_APP_SURFACES);
 export const ManagedCloudProjectSchema = z.object({
   id: z.string().min(1),
   ownerUserId: z.string().min(1),
+  serverVersion: z.string().regex(/^\d+$/).optional(),
   organizationId: z.string().nullable().optional(),
   name: z.string(),
   description: z.string().nullable().optional(),
