@@ -431,6 +431,12 @@
           "date": "2026-09-21",
           "digest": "c215d548ab4086a0",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "ef51e709b9835d9b",
+          "note": "Material: the app now sends first-party product usage events to AGI Cloud in managed-cloud mode with the account's product analytics consent, so the page lists them as a data category and drops the sentence saying no usage event leaves the device.",
+          "summary": "Adds product usage events, sent only in managed-cloud mode and only after you allow product analytics, as a data category, and removes the statement that no usage event leaves your device."
         }
       ]
     },

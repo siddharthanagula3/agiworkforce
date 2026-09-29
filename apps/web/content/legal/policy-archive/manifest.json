@@ -145,6 +145,23 @@
         }
       ]
     },
+    "mobile": {
+      "route": "/mobile/legal",
+      "slug": "mobile-legal",
+      "current": "2026-09-29",
+      "versions": [
+        {
+          "date": "2026-09-29",
+          "summary": "Adds product usage events, sent only in managed-cloud mode and only after you allow product analytics, as a data category, and removes the statement that no usage event leaves your device.",
+          "status": "current"
+        },
+        {
+          "date": "2026-09-21",
+          "summary": null,
+          "status": "archived"
+        }
+      ]
+    },
     "copyright": {
       "route": "/copyright",
       "slug": "copyright",

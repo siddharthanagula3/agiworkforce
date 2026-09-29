@@ -102,6 +102,18 @@
       "ephemeral": false,
       "usedForTracking": false,
       "backedBy": "An app-generated UUID from apps/mobile/lib/deviceId.ts, registered with the push token by apps/mobile/services/notifications.ts. Created only when push is enabled; it is not an advertising identifier."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeProductInteraction",
+      "playCategory": "App activity",
+      "playDataType": "App interactions",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["Analytics"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "apps/mobile/services/productAnalytics.ts sends event names from the shared vocabulary to AGI Cloud only in cloud mode and only when the account's product analytics consent allows it; the server drops them otherwise (apps/web/lib/server/product-analytics.ts)."
     }
   ]
 }
