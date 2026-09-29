@@ -1790,6 +1790,10 @@ pub mod connectors {
         #[serde(default)]
         pub allowed_mcp_hosts: Vec<String>,
         #[serde(default)]
+        pub allowed_web_domains: Vec<String>,
+        #[serde(default)]
+        pub blocked_web_domains: Vec<String>,
+        #[serde(default)]
         pub tool_rules: Vec<WorkspaceToolRule>,
     }
 
@@ -1807,6 +1811,8 @@ pub mod connectors {
                 allowed_plugins: Vec::new(),
                 blocked_plugins: Vec::new(),
                 allowed_mcp_hosts: Vec::new(),
+                allowed_web_domains: Vec::new(),
+                blocked_web_domains: Vec::new(),
                 tool_rules: Vec::new(),
             }
         }
@@ -2022,6 +2028,29 @@ pub mod connectors {
         };
         set_cached_policy(policy.clone());
         Ok(policy)
+    }
+
+    /// The policy for a tool that runs on this machine in any privacy mode, such
+    /// as web_search and web_fetch, whose site rules bind Local and BYOK turns
+    /// too. Read once per process with the stored sign-in; reading it sends
+    /// nothing of the session. Signed out, or unreadable, it is unrestricted,
+    /// as the connector gate is.
+    pub async fn policy_for_local_tools() -> Option<ConnectorAccessPolicy> {
+        if let Some(read) = cache().lock().ok().and_then(|slot| slot.clone()) {
+            return read;
+        }
+        let policy = match CloudClient::connect_managed() {
+            Ok(client) => match client
+                .get::<PolicyResponse>(CONNECTOR_POLICY_PATH, &[])
+                .await
+            {
+                Ok(response) if response.configured => response.policy,
+                _ => None,
+            },
+            Err(_) => None,
+        };
+        set_cached_policy(policy.clone());
+        policy
     }
 
     pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
@@ -2821,6 +2850,8 @@ mod connector_contract_tests {
                 "mcp.example.com".to_string(),
                 "*.internal.example".to_string(),
             ],
+            allowed_web_domains: vec![],
+            blocked_web_domains: vec![],
             tool_rules: vec![],
         }
     }
