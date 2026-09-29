@@ -24,9 +24,10 @@ use agiworkforce_protocol::developer_session::{
     ModelListParams, PendingApprovalSnapshot, PermissionRulesResponse, PermissionsAddParams,
     PermissionsListResponse, PermissionsRemoveParams, PlanDecision, PlanDecisionParams,
     PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    PluginUpdateResponse, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
+    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
     SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
     ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
     ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
@@ -444,6 +445,7 @@ impl CliDeveloperSessionHost {
             trust: true,
             turn_tool_filters: true,
             plan_decision: true,
+            provider_keys: true,
         }
     }
 
@@ -3573,6 +3575,41 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
         };
         decided.map_err(DeveloperSessionHostError::invalid_request)
+    }
+
+    async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_provider_keys)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn set_provider_key(
+        &self,
+        params: ProviderSetKeyParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::save_api_key(&params.provider, &params.api_key)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+    }
+
+    async fn remove_provider_key(
+        &self,
+        params: ProviderParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::remove_api_key(&params.provider)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
     }
 
     async fn list_permission_rules(

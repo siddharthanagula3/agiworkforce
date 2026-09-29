@@ -119,6 +119,9 @@ pub mod method {
     pub const TRUST_LIST: &str = "trust/list";
     pub const TRUST_REVOKE: &str = "trust/revoke";
     pub const THREAD_PLAN_DECISION: &str = "thread/planDecision";
+    pub const PROVIDERS_LIST: &str = "providers/list";
+    pub const PROVIDERS_SET_KEY: &str = "providers/setKey";
+    pub const PROVIDERS_REMOVE_KEY: &str = "providers/removeKey";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -397,6 +400,8 @@ pub struct AppServerCapabilities {
     pub turn_tool_filters: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub plan_decision: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub provider_keys: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2510,6 +2515,48 @@ pub struct PermissionsListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeySummary {
+    pub provider: String,
+    pub label: String,
+    pub env_var: String,
+    pub configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProvidersListResponse {
+    pub providers: Vec<ProviderKeySummary>,
+    pub storage: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderSetKeyParams {
+    pub provider: String,
+    pub api_key: String,
+}
+
+impl std::fmt::Debug for ProviderSetKeyParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderSetKeyParams")
+            .field("provider", &self.provider)
+            .field("api_key", &"[redacted]")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderParams {
+    pub provider: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
