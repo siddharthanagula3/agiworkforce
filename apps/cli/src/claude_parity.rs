@@ -270,7 +270,9 @@ pub fn handle_shared_command(
         }
         "/stats" => ParityCommandResult::SystemMessage(render_stats(session)),
         "/passes" => ParityCommandResult::SystemMessage(render_passes(session)),
-        "/sandbox" => ParityCommandResult::SystemMessage(render_sandbox(session)),
+        "/sandbox" => {
+            ParityCommandResult::SystemMessage(crate::sandbox::handle_sandbox_command(arg))
+        }
         "/agents" => ParityCommandResult::SystemMessage(render_agents(arg)),
         "/chrome" => ParityCommandResult::SystemMessage(render_chrome()),
         "/ide" => ParityCommandResult::SystemMessage(render_ide()),
@@ -752,20 +754,6 @@ pub fn render_passes(session: &AgentSession) -> String {
         session.skip_permissions,
         crate::path_security::registered_additional_workspace_roots().len(),
     )
-}
-
-pub fn render_sandbox(session: &AgentSession) -> String {
-    let roots = crate::path_security::registered_additional_workspace_roots();
-    let mut lines = vec![
-        "Sandbox".to_string(),
-        format!("  permission mode: {:?}", session.permission_mode),
-        format!("  skip permissions: {}", session.skip_permissions),
-        format!("  additional roots: {}", roots.len()),
-    ];
-    for root in roots {
-        lines.push(format!("    {}", root.display()));
-    }
-    lines.join("\n")
 }
 
 pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {

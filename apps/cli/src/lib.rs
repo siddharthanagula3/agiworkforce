@@ -5505,7 +5505,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
     // the flags were inert (CLI-DEBUG-CONTROLS-INERT-01).
     let effective_log_filter = init_tracing(cli.verbose, cli.debug.as_ref());
 
-    sandbox::set_sandbox_disabled(cli.no_sandbox);
+    let no_sandbox_requested =
+        cli.no_sandbox || std::env::var_os("AGIWORKFORCE_NO_SANDBOX").is_some();
+    sandbox::set_sandbox_mode(sandbox::launch_mode(no_sandbox_requested, None, None));
     if cli.no_sandbox && sandbox::sandbox_settings().forced {
         eprintln!(
             "{} --no-sandbox is ignored: your organization requires the sandbox",
@@ -5608,6 +5610,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
     } else {
         config::CliConfig::load_without_project()?
     };
+    let user_sandbox_mode = config::CliConfig::load()
+        .ok()
+        .and_then(|config| config.default.sandbox_mode);
+    sandbox::set_sandbox_mode(sandbox::launch_mode(
+        no_sandbox_requested,
+        user_sandbox_mode.as_deref(),
+        app_config.default.sandbox_mode.as_deref(),
+    ));
 
     // Pull any user-defined `[providers.<name>]` blocks into the runtime
     // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
@@ -7784,7 +7794,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
             effective_provider_override.map(str::to_string),
             effective_permission_mode,
             effective_auto_approve_plan,
-            sandbox::sandbox_disabled(),
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
