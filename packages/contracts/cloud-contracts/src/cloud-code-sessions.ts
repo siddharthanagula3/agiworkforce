@@ -314,3 +314,13 @@ export interface DecideCloudCodeApprovalRequest {
 }
 
 export const CLOUD_CODE_TURN_STILL_RUNNING_CODE = 'turn_still_running';
+
+export type CloudCodeSessionReply = z.input<typeof CloudCodeSessionResponseSchema>;
+export type CloudCodeCommandReply = z.input<typeof CloudCodeCommandResponseSchema>;
+export type CloudCodeChangesReply = z.input<typeof CloudCodeChangesSchema>;
+export type CloudCodeDiscardReply = z.input<typeof CloudCodeDiscardResultSchema>;
+export type CloudCodePullRequestReply = z.input<typeof CloudCodePullRequestSchema>;
+export type CloudCodePullRequestStatusReply = z.input<typeof CloudCodePullRequestStatusSchema>;
+export type CloudCodeTurnCancellationReply = z.input<typeof CloudCodeTurnCancellationSchema>;
+export type CloudCodeAgentTurnReply = z.input<typeof CloudCodeAgentTurnSchema>;
+export type CloudCodeAgentApprovalsReply = z.input<typeof CloudCodeAgentApprovalsSchema>;
