@@ -21,6 +21,8 @@ const CACHE_KEY_ACCOUNT: &str = "cache-seal";
 #[serde(rename_all = "camelCase")]
 struct EffectiveWorkspacePolicy {
     #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
     governed: bool,
     #[serde(default)]
     controls: Option<WorkspaceControls>,
@@ -44,13 +46,18 @@ struct WorkspaceControls {
     feature_access: HashMap<String, bool>,
 }
 
-/// The policy as the server sent it, sealed with a key held in the OS
-/// credential store. A cache edited by hand no longer matches its seal and is
+/// The policy as the server sent it, sealed to the account and workspace with a
+/// key held in the OS credential store. A cache edited by hand, or read by
+/// another account or for another workspace, no longer matches its seal and is
 /// ignored. This keeps honest clients honest; it is not a security boundary,
 /// since whoever controls the machine controls the binary that enforces it.
+/// Where no credential store answers (a headless Linux box without a session
+/// keyring), nothing is cached and an offline start fails closed.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct CachedPolicy {
     owner: String,
+    #[serde(default)]
+    organization: String,
     policy: String,
     seal: String,
 }
@@ -68,8 +75,8 @@ impl EffectiveWorkspacePolicy {
 static CURRENT: RwLock<Option<EffectiveWorkspacePolicy>> = RwLock::new(None);
 static LAST_REFRESH: Mutex<Option<Instant>> = Mutex::new(None);
 static HOOKS_REFUSAL_REPORTED: AtomicBool = AtomicBool::new(false);
-/// Set when a signed-in account on a workspace plan has no readable policy:
-/// its administrator's switches are unknown, so they are treated as off.
+/// Set when a signed-in account has no readable policy: whether an
+/// administrator governs it is unknown, so the switches are treated as off.
 static UNREADABLE_FOR_WORKSPACE: AtomicBool = AtomicBool::new(false);
 
 fn cache_path(config_dir: &Path) -> PathBuf {
@@ -100,8 +107,15 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
         .into()
 }
 
-fn seal_for(key: &[u8], owner: &str, policy: &str) -> String {
-    let message = [owner.as_bytes(), b"\n", policy.as_bytes()].concat();
+fn seal_for(key: &[u8], owner: &str, organization: &str, policy: &str) -> String {
+    let message = [
+        owner.as_bytes(),
+        b"\n",
+        organization.as_bytes(),
+        b"\n",
+        policy.as_bytes(),
+    ]
+    .concat();
     crate::hex::encode(&hmac_sha256(key, &message))
 }
 
@@ -115,10 +129,12 @@ fn seal_matches(expected: &str, actual: &str) -> bool {
 }
 
 fn open_sealed(key: &[u8], owner: &str, cached: &CachedPolicy) -> Option<EffectiveWorkspacePolicy> {
-    if cached.owner != owner || !seal_matches(&seal_for(key, owner, &cached.policy), &cached.seal) {
+    let expected = seal_for(key, owner, &cached.organization, &cached.policy);
+    if cached.owner != owner || !seal_matches(&expected, &cached.seal) {
         return None;
     }
-    serde_json::from_str(&cached.policy).ok()
+    let policy: EffectiveWorkspacePolicy = serde_json::from_str(&cached.policy).ok()?;
+    (policy.organization_id.as_deref().unwrap_or_default() == cached.organization).then_some(policy)
 }
 
 fn cache_key_entry() -> Option<keyring::Entry> {
@@ -187,18 +203,6 @@ fn policy_known() -> bool {
         || load_cached().is_some()
 }
 
-/// Only a fresh tier read that names a personal plan clears an account of
-/// having an administrator. The tier cache lapses after minutes, so an absent
-/// read is not evidence of a personal account and must not open the gates.
-fn known_personal_plan() -> bool {
-    crate::tier_cache::read_tier_cache().is_some_and(|cached| {
-        !matches!(
-            cached.tier,
-            crate::tier_cache::UserTier::Team | crate::tier_cache::UserTier::Enterprise
-        )
-    })
-}
-
 pub fn feature_enabled(feature: &str) -> bool {
     if UNREADABLE_FOR_WORKSPACE.load(Ordering::Relaxed) && !policy_known() {
         return false;
@@ -206,11 +210,12 @@ pub fn feature_enabled(feature: &str) -> bool {
     with_current(|policy| policy.feature_enabled(feature))
 }
 
-/// Whether a failed read leaves this account's controls unknown. A signed-in
-/// account with no verified policy may belong to a workspace, so its switches
-/// count as off, unless a fresh tier read shows a personal plan.
-fn closes_on_failed_read(signed_in: bool, known: bool, personal_plan: bool) -> bool {
-    signed_in && !known && !personal_plan
+/// Whether a failed read leaves this account's controls unknown. Only the
+/// policy reply itself says whether an administrator governs the account, so a
+/// signed-in account with neither a fresh reply nor a sealed one counts as
+/// governed with its switches off.
+fn closes_on_failed_read(signed_in: bool, known: bool) -> bool {
+    signed_in && !known
 }
 
 pub fn governed() -> bool {
@@ -221,9 +226,7 @@ pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String>
     if signed_in_owner().is_some() && !policy_known() {
         let fetched = tokio::time::timeout(FIRST_FETCH_WAIT, fetch(PrivacyMode::Managed)).await;
         let signed_in = !matches!(fetched, Ok(Err(CloudError::SignedOut)));
-        if !matches!(fetched, Ok(Ok(())))
-            && closes_on_failed_read(signed_in, policy_known(), known_personal_plan())
-        {
+        if !matches!(fetched, Ok(Ok(()))) && closes_on_failed_read(signed_in, policy_known()) {
             return Some(format!(
                 "MCP server '{name}' was not started: your workspace policy could not be read, so MCP servers stay off until it can be. Check your connection and try again"
             ));
@@ -278,11 +281,10 @@ mod failed_read_tests {
     use super::closes_on_failed_read;
 
     #[test]
-    fn a_signed_in_account_with_no_known_policy_closes_unless_shown_personal() {
-        assert!(closes_on_failed_read(true, false, false));
-        assert!(!closes_on_failed_read(true, false, true));
-        assert!(!closes_on_failed_read(true, true, false));
-        assert!(!closes_on_failed_read(false, false, false));
+    fn a_signed_in_account_with_no_known_policy_closes() {
+        assert!(closes_on_failed_read(true, false));
+        assert!(!closes_on_failed_read(true, true));
+        assert!(!closes_on_failed_read(false, false));
     }
 }
 
@@ -293,10 +295,15 @@ mod sealed_cache_tests {
     const KEY: [u8; 32] = [7u8; 32];
 
     fn sealed(owner: &str, policy: &str) -> CachedPolicy {
+        let organization = serde_json::from_str::<EffectiveWorkspacePolicy>(policy)
+            .ok()
+            .and_then(|parsed| parsed.organization_id)
+            .unwrap_or_default();
         CachedPolicy {
             owner: owner.to_string(),
+            seal: seal_for(&KEY, owner, &organization, policy),
+            organization,
             policy: policy.to_string(),
-            seal: seal_for(&KEY, owner, policy),
         }
     }
 
@@ -334,6 +341,25 @@ mod sealed_cache_tests {
         assert!(open_sealed(&KEY, "user_1", &cached).is_none());
         let other_key = sealed("user_1", &cached.policy);
         assert!(open_sealed(&[8u8; 32], "user_1", &other_key).is_none());
+    }
+
+    #[test]
+    fn a_policy_sealed_for_one_workspace_does_not_open_for_another() {
+        let mut cached = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        assert!(open_sealed(&KEY, "user_1", &cached).is_some());
+        cached.organization = "org_b".to_string();
+        assert!(open_sealed(&KEY, "user_1", &cached).is_none());
+        let mut moved = sealed(
+            "user_1",
+            r#"{"organizationId":"org_a","governed":true,"code":{"allowMcpServers":false}}"#,
+        );
+        moved.policy =
+            r#"{"organizationId":"org_b","governed":true,"code":{"allowMcpServers":false}}"#
+                .to_string();
+        assert!(open_sealed(&KEY, "user_1", &moved).is_none());
     }
 }
 
@@ -417,9 +443,11 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
         tracing::debug!("[workspace_policy] no credential store key; the policy is not cached");
         return;
     };
+    let organization = policy.organization_id.clone().unwrap_or_default();
     let cached = CachedPolicy {
         owner: owner.to_string(),
-        seal: seal_for(&key, owner, &serialized),
+        seal: seal_for(&key, owner, &organization, &serialized),
+        organization,
         policy: serialized,
     };
     if let Err(error) = write_cache(&cache_path(&config_dir), &cached) {
@@ -449,11 +477,7 @@ pub async fn refresh_when_due() {
     };
     // Until the first read lands, the account's switches are unknown, so they
     // count as off rather than defaulting open while the read is in flight.
-    if closes_on_failed_read(
-        signed_in_owner().is_some(),
-        policy_known(),
-        known_personal_plan(),
-    ) {
+    if closes_on_failed_read(signed_in_owner().is_some(), policy_known()) {
         UNREADABLE_FOR_WORKSPACE.store(true, Ordering::Relaxed);
     }
     let fetching = tokio::spawn(async {
@@ -463,7 +487,7 @@ pub async fn refresh_when_due() {
                 tracing::debug!("[workspace_policy] refresh failed: {error}");
                 let signed_in = !matches!(error, CloudError::SignedOut);
                 UNREADABLE_FOR_WORKSPACE.store(
-                    closes_on_failed_read(signed_in, policy_known(), known_personal_plan()),
+                    closes_on_failed_read(signed_in, policy_known()),
                     Ordering::Relaxed,
                 );
             }
@@ -471,5 +495,24 @@ pub async fn refresh_when_due() {
     });
     if first && load_cached().is_none() {
         let _ = tokio::time::timeout(FIRST_FETCH_WAIT, fetching).await;
+    }
+}
+
+#[cfg(test)]
+mod credential_store_tests {
+    /// Run twice, with AGI_KEYRING_PROBE=write and then =read, to show an entry
+    /// written by one process is read by the next: the mock store never is.
+    #[test]
+    #[ignore = "touches the real OS credential store"]
+    fn an_entry_survives_a_new_process() {
+        let entry = keyring::Entry::new(super::CACHE_KEY_SERVICE, "persistence-probe").unwrap();
+        match std::env::var("AGI_KEYRING_PROBE").as_deref() {
+            Ok("write") => entry.set_password("probe").unwrap(),
+            Ok("read") => {
+                assert_eq!(entry.get_password().unwrap(), "probe");
+                entry.delete_credential().unwrap();
+            }
+            _ => {}
+        }
     }
 }
