@@ -62,7 +62,12 @@ describe('the paired browser under the workspace website rules', () => {
   });
 
   it('withholds a page read from a blocked site', async () => {
-    mocks.send.mockResolvedValue({ url: 'https://blocked.example/', title: 't', text: 'secret' });
+    mocks.send.mockResolvedValue({
+      url: 'https://blocked.example/',
+      title: 't',
+      text: 'secret',
+      tabUrl: 'https://blocked.example/',
+    });
 
     await expect(
       runBrowserStep(null, { command: 'browser_read_page', args: {}, siteRules: RULES }),
@@ -91,5 +96,43 @@ describe('the paired browser under the workspace website rules', () => {
     await runBrowserStep(null, { command: 'browser_click', args: { selector: '#next' } });
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('withholds a screenshot of a tab the extension reports on a blocked site', async () => {
+    mocks.send.mockResolvedValue({
+      dataUrl: 'data:image/png;base64,AA',
+      tabUrl: 'https://blocked.example/',
+    });
+
+    await expect(
+      runBrowserStep(null, { command: 'browser_screenshot', args: {}, siteRules: RULES }),
+    ).rejects.toBeInstanceOf(BrowserStepRefused);
+  });
+
+  it('refuses under an allow list when the page address cannot be read', async () => {
+    mocks.send.mockImplementation(async (command: string) => {
+      if (command === 'browser_list_tabs') throw new Error('no tabs');
+      return { typed: true };
+    });
+
+    await expect(
+      runBrowserStep(null, {
+        command: 'browser_type',
+        args: { selector: '#q', text: 'hello' },
+        siteRules: { allow: ['allowed.example'], deny: [] },
+      }),
+    ).rejects.toThrow(/could not be read/);
+  });
+
+  it('sends the rules to the extension with the command', async () => {
+    mocks.send.mockResolvedValue({ clicked: true, tabUrl: 'https://fine.example/' });
+
+    await runBrowserStep(null, {
+      command: 'browser_click',
+      args: { selector: '#a' },
+      siteRules: RULES,
+    });
+
+    expect(mocks.send).toHaveBeenCalledWith('browser_click', { selector: '#a' }, RULES);
   });
 });

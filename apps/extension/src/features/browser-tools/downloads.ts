@@ -1,3 +1,4 @@
+import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contracts';
 import { assertSiteAccess } from '../site-policy/store';
 import { authorizeBrowserToolTab } from './tabAuthority';
 
@@ -173,12 +174,19 @@ export async function resolveDownloadUrl(rawUrl: string, tabUrl: string): Promis
 export async function startBrowserToolDownload(
   tabId: number,
   rawUrl: string,
+  siteRules?: WebDomainRules,
 ): Promise<DownloadRecord> {
   const authorized = await authorizeBrowserToolTab(tabId);
   const url = await resolveDownloadUrl(rawUrl, authorized.url);
+  if (siteRules && !webDomainAllowed(siteRules, url)) {
+    throw new Error(
+      `${url} is a site your workspace administrator does not allow the assistant to download from.`,
+    );
+  }
   await ensureHydrated();
 
   const id = await chrome.downloads.download({ url, conflictAction: 'uniquify' });
+  if (siteRules) guardFinalDownloadUrl(id, siteRules);
   const record: DownloadRecord = {
     id,
     url,
@@ -192,6 +200,44 @@ export async function startBrowserToolDownload(
   put(record);
   void refreshDownload(id);
   return record;
+}
+
+/**
+ * A download can redirect to another site before a byte is saved. Chrome
+ * reports the final address on the item; one the workspace blocks is cancelled
+ * and its partial file removed, so nothing from that site stays on disk.
+ */
+function guardFinalDownloadUrl(id: number, rules: WebDomainRules): void {
+  let settled = false;
+  const refuse = async () => {
+    settled = true;
+    chrome.downloads.onChanged.removeListener(onChanged);
+    await chrome.downloads.cancel(id).catch(() => undefined);
+    await chrome.downloads.removeFile(id).catch(() => undefined);
+    await chrome.downloads.erase({ id }).catch(() => undefined);
+  };
+  const judge = (finalUrl: string | undefined, done: boolean) => {
+    if (settled) return;
+    if (finalUrl && !webDomainAllowed(rules, finalUrl)) {
+      void refuse();
+      return;
+    }
+    if (done) {
+      settled = true;
+      chrome.downloads.onChanged.removeListener(onChanged);
+    }
+  };
+  const onChanged = (delta: chrome.downloads.DownloadDelta) => {
+    if (delta.id !== id) return;
+    judge(
+      delta.finalUrl?.current,
+      delta.state?.current !== undefined && delta.state.current !== 'in_progress',
+    );
+  };
+  chrome.downloads.onChanged.addListener(onChanged);
+  void chrome.downloads.search({ id }).then(([item]) => {
+    judge(item?.finalUrl, item?.state !== undefined && item.state !== 'in_progress');
+  });
 }
 
 export async function listSessionDownloads(): Promise<DownloadRecord[]> {

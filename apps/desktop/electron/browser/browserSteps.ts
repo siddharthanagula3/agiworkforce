@@ -63,12 +63,13 @@ function siteRulesFrom(value: unknown): WebDomainRules | null {
   return rules.allow.length > 0 || rules.deny.length > 0 ? rules : null;
 }
 
-/** Commands after which the active tab may be on a page the step did not name. */
+/** Commands after which the tab may be on a page the step did not name. */
 const LANDING_COMMANDS: ReadonlySet<BrowserCommand> = new Set([
   'browser_navigate',
   'browser_click',
+  'browser_type',
+  'browser_fill_form',
   'browser_download',
-  'browser_history',
 ]);
 
 async function activeTabAddress(): Promise<string | null> {
@@ -80,31 +81,38 @@ async function activeTabAddress(): Promise<string | null> {
   return typeof active?.url === 'string' ? active.url : null;
 }
 
+/** The page the command's tab is on, as the extension reported it with the result. */
+function reportedAddress(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as { tabUrl?: unknown; url?: unknown };
+  if (typeof record.tabUrl === 'string') return record.tabUrl;
+  return null;
+}
+
 /**
- * The workspace's website rules, applied to the page the step ended on: a
- * redirect or a click can land somewhere the request never named. A blocked
- * landing is left, by going back, and the step reports it instead of content.
+ * The workspace's website rules, applied again to every result: the extension
+ * checks before and after acting, and this is the desktop's own check of the
+ * address it reported. A result from a blocked page is withheld, a tab that
+ * moved onto one goes back, and an address nobody could read is refused under
+ * an allow list.
  */
 async function refuseBlockedLanding(
   command: BrowserCommand,
   value: unknown,
   rules: WebDomainRules | null,
 ): Promise<void> {
-  if (!rules) return;
-  const read = value && typeof value === 'object' ? (value as { url?: unknown }).url : undefined;
-  const landed =
-    command === 'browser_read_page' && typeof read === 'string'
-      ? read
-      : LANDING_COMMANDS.has(command)
-        ? await activeTabAddress().catch(() => null)
-        : null;
-  if (landed === null || webDomainAllowed(rules, landed)) return;
-  if (command !== 'browser_read_page') {
+  if (!rules || command === 'browser_list_tabs') return;
+  const landed = reportedAddress(value) ?? (await activeTabAddress().catch(() => null));
+  const allowed = landed === null ? rules.allow.length === 0 : webDomainAllowed(rules, landed);
+  if (allowed) return;
+  if (LANDING_COMMANDS.has(command)) {
     await sendBrowserCommand('browser_history', { direction: 'back' }).catch(() => undefined);
   }
   throw new BrowserStepRefused(
     'site',
-    `The page moved to ${landed}, a site your workspace administrator does not allow, so the browser went back and nothing from it was read.`,
+    landed === null
+      ? 'The address of the page could not be read, so under your workspace website rules nothing from it was used.'
+      : `The page is on ${landed}, a site your workspace administrator does not allow, so nothing from it was read.`,
   );
 }
 
@@ -161,7 +169,11 @@ export async function runBrowserStep(
   const activity = recordBrowserActivity(ASSISTANT_BROWSER_CLIENT, plan.command, plan.args);
   let value: unknown;
   try {
-    value = await sendBrowserCommand(plan.command, plan.args);
+    value = await sendBrowserCommand(
+      plan.command,
+      plan.args,
+      siteRules ? { allow: [...siteRules.allow], deny: [...siteRules.deny] } : undefined,
+    );
     settleBrowserActivity(activity, null);
     consumeSingleUse(plan.capability, GLOBAL_SCOPE);
   } catch (error) {
