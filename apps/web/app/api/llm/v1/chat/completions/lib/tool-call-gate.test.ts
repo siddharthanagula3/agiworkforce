@@ -87,6 +87,11 @@ const TOOL_CORPUS: readonly string[] = [
   UNDECLARED_CONNECTOR_TOOL,
 ];
 
+const READ_ONLY_BROWSER_COMMANDS: readonly string[] = ['browser_find', 'browser_list_tabs'];
+const EGRESS_BROWSER_COMMANDS: readonly string[] = BROWSER_COMMANDS.filter(
+  (command) => !READ_ONLY_BROWSER_COMMANDS.includes(command),
+);
+
 type ToolClass = 'read_only' | 'mutating' | 'exfiltrating';
 
 function toolClass(name: string): ToolClass {
@@ -495,8 +500,8 @@ describe('a browser or computer-use action goes through the same gate', () => {
     }
   });
 
-  it('refuses every browser command kind after a page has been read, unattended', () => {
-    for (const command of BROWSER_COMMANDS) {
+  it('refuses every egress-bearing browser command after a page has been read, unattended', () => {
+    for (const command of EGRESS_BROWSER_COMMANDS) {
       const gate = resolveToolCallGate(
         { qualifiedName: command, savedLevel: 'allow', batchIntroducesUntrustedContent: false },
         {
@@ -513,10 +518,18 @@ describe('a browser or computer-use action goes through the same gate', () => {
     }
   });
 
-  it('classifies every browser command as egress-bearing, so none of them slips the escalation', () => {
-    for (const command of BROWSER_COMMANDS) {
+  it('classifies every browser command that acts or is undeclared as egress-bearing', () => {
+    expect(EGRESS_BROWSER_COMMANDS.length).toBeGreaterThan(0);
+    for (const command of EGRESS_BROWSER_COMMANDS) {
       expect(toolCreatesEgressPath(command), command).toBe(true);
       expect(toolClass(command), command).toBe('exfiltrating');
+    }
+  });
+
+  it('declares only the two read-only browser commands as reads without egress', () => {
+    for (const command of READ_ONLY_BROWSER_COMMANDS) {
+      expect(resolveToolMetadata(command).actionClass, command).toBe('read');
+      expect(resolveToolMetadata(command).createsEgressPath, command).toBe(false);
     }
   });
 });

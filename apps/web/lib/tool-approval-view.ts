@@ -297,6 +297,51 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Downloads a file through your paired Chrome into your downloads folder. The desktop app always asks first.',
   },
+  agi_reconnect: {
+    label: 'Offer to reconnect an app',
+    description:
+      'Shows you a button to reconnect a connected app whose sign-in expired or was revoked. None of its tools run until you reconnect it.',
+  },
+  browser_list_tabs: {
+    label: 'List your Chrome tabs',
+    description:
+      'Lists the titles and addresses of the tabs open in your paired Chrome, so you can choose which one to read.',
+  },
+  device_calendar_events: {
+    label: 'Read your phone calendar',
+    description:
+      'Reads the events in a date range from the calendars on your phone, after the phone asks for calendar access.',
+  },
+  device_calendar_availability: {
+    label: 'Check your free time',
+    description:
+      'Reads when you are busy or free in a date range from the calendars on your phone, without the event details.',
+  },
+  device_calendar_create_event: {
+    label: 'Add a calendar event',
+    description:
+      'Adds an event to a calendar on your phone. Your phone asks for calendar access, and AGI asks before it adds anything.',
+  },
+  device_reminder_create: {
+    label: 'Add a reminder',
+    description:
+      'Adds a reminder on your phone. Your phone asks for reminders access, and AGI asks before it adds anything.',
+  },
+  browser_find: {
+    label: 'Find on your Chrome tab',
+    description:
+      'Lists the buttons, links and fields on the active tab of your paired Chrome, optionally matching a search term, on sites you approved in the extension.',
+  },
+  browser_fill_form: {
+    label: 'Fill a form in Chrome',
+    description:
+      'Fills fields of a form on the active tab of your paired Chrome, on sites you approved in the extension. It does not submit the form.',
+  },
+  browser_history: {
+    label: 'Go back or forward in Chrome',
+    description:
+      'Moves the active tab of your paired Chrome back or forward in its history, on sites you approved in the extension.',
+  },
 };
 
 export function buildToolApprovalToolRows(
