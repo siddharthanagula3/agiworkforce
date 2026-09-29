@@ -3921,6 +3921,7 @@ enum SlashResult {
     RunCompact(String),
     RunLogin,
     RunLogout,
+    StatusReport(String),
     SendFeedback {
         kind: crate::feedback::FeedbackKind,
         text: String,
@@ -4212,7 +4213,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.total_output_tokens,
                 app.context_percent(),
             );
-            SlashResult::SystemMessage(format!(
+            SlashResult::StatusReport(format!(
                 "{msg}\n{}",
                 app.session.session_status_lines().join("\n")
             ))
@@ -5859,6 +5860,16 @@ async fn run_event_loop(
                                         result.after.used_tokens,
                                         (result.after.used_fraction * 100.0) as u32
                                     ),
+                                });
+                            }
+                            SlashResult::StatusReport(report) => {
+                                let connectivity = crate::cloud::client::connectivity_line(
+                                    app.session.privacy_mode,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: format!("{report}\n{connectivity}"),
                                 });
                             }
                             SlashResult::SendFeedback { kind, text } => {
@@ -8414,7 +8425,7 @@ mod tests {
         }
 
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Provider: DeepSeek"), "{message}");
                 assert!(!message.contains("api_key_env"), "{message}");
             }
@@ -8431,7 +8442,7 @@ mod tests {
 
         app.sandbox_type = Some(crate::sandbox::SandboxType::MacosSeatbelt);
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: seatbelt"), "{message}");
             }
             _ => panic!("/status must report in place"),
@@ -8439,7 +8450,7 @@ mod tests {
 
         app.sandbox_type = None;
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: no sandbox"), "{message}");
             }
             _ => panic!("/status must report in place"),
