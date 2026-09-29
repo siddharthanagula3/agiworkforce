@@ -144,6 +144,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       "Searches the files you uploaded and your project's knowledge for passages about a topic and returns the best excerpts. Classified as accepting untrusted content, because a document can carry attacker-written text.",
   },
+  open_file: {
+    label: 'Open one of your files',
+    description:
+      "Reads one of the files you uploaded or your project's knowledge files whole, by the id a file search returned. Classified as accepting untrusted content, because a document can carry attacker-written text.",
+  },
   create_schedule: {
     label: 'Create a scheduled task',
     description:

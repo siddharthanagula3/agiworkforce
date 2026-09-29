@@ -147,10 +147,10 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | live check only: the list row now shows Reconnect beside the warning (5cbd0fea9f), the detail shows Reconnect, and an expired grant offers agi_reconnect in turns so the chat card appears; verify in a browser against a real expired grant | states |
-| desktop | partial | live check only: the list row now shows Reconnect beside the warning (5cbd0fea9f), the detail shows Reconnect, and an expired grant offers agi_reconnect in turns so the chat card appears; verify in a browser against a real expired grant | states |
+| web | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
+| desktop | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:160-160`, `apps/web/lib/user-connector-tools.ts:2452-2452`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:473-473`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 
 ## S55.21: Test connection.
 

@@ -39,10 +39,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud picker lists GitHub App repositories or takes a URL, but cloud coding sessions need AGI_E2B_EXECUTION=1, which ships off; switch the managed sandbox on in production. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/features/code/hooks/use-code-repositories.ts:32-42`, `apps/web/lib/e2b/gate.ts:16-18`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.08: Branch picker.
 
@@ -52,11 +52,11 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.09: Device picker.
 
@@ -286,6 +286,6 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates e8552caa7c adds a catalogue of 32 destinations and settings matched by title and by purpose ('dark mode' finds Appearance, 'password' finds Account security), with a test that every route exists. post-codex/w-chat-s9.38-mobile-search-destinations.patch shows them as a 'Go to' section in the held chat search. Still open: a hardware-keyboard shortcut. React Native has no global key command, so it needs a native module in the held package.json; proposed as a decline of the keyboard part. | codex, ui |
+| mobile | partial | Destination search is built (e8552caa7c plus post-codex/w-chat-s9.38-mobile-search-destinations.patch). The hardware-keyboard part is declined for now under D-2026-09-28-26 because it needs a native key-command module in the Codex-held package.json. | codex |
 
 Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`

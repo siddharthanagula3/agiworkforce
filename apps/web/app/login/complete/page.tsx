@@ -1,5 +1,5 @@
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
 import { StaleSessionRecovery } from './StaleSessionRecovery';
 import {
@@ -17,7 +17,12 @@ const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkfo
 export default async function LoginCompletePage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; surface?: string; authRetry?: string }>;
+  searchParams: Promise<{
+    redirectTo?: string;
+    surface?: string;
+    authRetry?: string;
+    review?: string;
+  }>;
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/');
@@ -51,7 +56,13 @@ export default async function LoginCompletePage({
     );
   }
 
-  if (await hasAcceptedCurrentTerms(userId)) {
+  // An account on an older valid version continues without a click-through;
+  // review=terms is the notice's link for accepting a published revision early.
+  const mustAccept =
+    params.review === 'terms'
+      ? !(await hasAcceptedCurrentTerms(userId).catch(() => true))
+      : await mustAcceptTerms(userId, 'login-complete');
+  if (!mustAccept) {
     return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
   }
 

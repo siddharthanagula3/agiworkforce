@@ -104,6 +104,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `search_memory`             | asks                   | runs                           | read, reversible                                                                 |
 | `forget_memory`             | asks                   | asks                           | delete, not reversible                                                           |
 | `search_files`              | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `open_file`                 | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `create_schedule`           | asks                   | asks                           | write, reversible                                                                |
 | `draft_plugin`              | asks                   | runs                           | read, reversible                                                                 |
 | `agi_work`                  | asks                   | asks                           | write, reversible                                                                |

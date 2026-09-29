@@ -1,4 +1,5 @@
 jest.mock('@/src/ui/theme', () => ({
+  ...jest.requireActual('@/src/ui/theme/tokens'),
   spacing: {
     xs: 4,
     sm: 8,

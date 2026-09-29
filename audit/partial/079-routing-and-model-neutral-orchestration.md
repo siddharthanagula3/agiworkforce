@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's projects rework lands; CloudProject has no defaultModelId on mobile yet. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

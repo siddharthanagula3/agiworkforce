@@ -124,11 +124,11 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
-| desktop | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
+| web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
+| desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S28.11: React or supported framework preview.
 
@@ -137,12 +137,12 @@ Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
-| desktop | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
+| web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
+| desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S28.16: Runtime-error overlay.
 
