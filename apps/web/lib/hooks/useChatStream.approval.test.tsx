@@ -554,6 +554,47 @@ describe('useChatStream, tool approval → resume', () => {
     ).toBe(false);
   });
 
+  it('stops following a waiting run the server no longer knows, and when the conversation changes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockSseStream([approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    vi.mocked(fetch).mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { message: 'Run not found' } }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    const runReads = () =>
+      vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).startsWith(RUN_PATH)).length;
+    expect(runReads()).toBe(1);
+
+    __resetPendingTurnsForTests();
+    mockSseStream([approvalEvent]);
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 8', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    useChatStore.setState({ activeConversationId: 'another-conversation', messages: [] });
+    const before = runReads();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(runReads()).toBe(before);
+  });
+
   it('sends decision "rejected" and marks the card failed without executing', async () => {
     mockSseStream([approvalEvent]);
     const { result } = renderHook(() => useChatStream());
