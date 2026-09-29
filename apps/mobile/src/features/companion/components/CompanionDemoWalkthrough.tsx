@@ -231,7 +231,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
               style={{ backgroundColor: colors.accentSurface }}
             >
               <Text
-                className="text-[10px] font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold uppercase tracking-wider"
                 style={{ color: colors.teal }}
               >
                 Step {step.stepNumber} of {DEMO_STEPS.length}
@@ -247,10 +247,10 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
           {/* Hint pill */}
           <View className="flex-row items-start gap-2 px-4 py-3 rounded-xl bg-white/5 mb-6">
-            <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.teal }}>
+            <Text className="text-xs font-semibold mt-0.5" style={{ color: colors.teal }}>
               TIP
             </Text>
-            <Text className="text-[11px] text-white/50 flex-1 leading-4">{step.hint}</Text>
+            <Text className="text-xs text-white/50 flex-1 leading-4">{step.hint}</Text>
           </View>
 
           {/* Navigation */}

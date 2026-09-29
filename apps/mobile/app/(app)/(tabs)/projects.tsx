@@ -24,7 +24,7 @@ import { ProjectCard } from '@/src/features/projects';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import {
@@ -395,7 +395,7 @@ export default function ProjectsTabScreen() {
             accessibilityLabel="Clear active project"
             accessibilityRole="button"
           >
-            <Text className="text-[11px]" style={{ color: colors.textSecondary }}>
+            <Text className="text-xs" style={{ color: colors.textSecondary }}>
               Clear
             </Text>
           </Pressable>
@@ -595,7 +595,13 @@ export default function ProjectsTabScreen() {
             keyboardShouldPersistTaps="handled"
           >
             {!editingProject ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 20 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.subhead,
+                  marginBottom: 20,
+                }}
+              >
                 {isCloud
                   ? 'Keep related chats, files, and instructions together in one place.'
                   : 'Keep related chats and instructions together in one place.'}
@@ -669,7 +675,7 @@ export default function ProjectsTabScreen() {
                             justifyContent: 'center',
                           }}
                         >
-                          <Text style={{ color: colors.textPrimary, fontSize: 13 }}>
+                          <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
                             {template.label}
                           </Text>
                         </Pressable>
@@ -677,7 +683,9 @@ export default function ProjectsTabScreen() {
                     })}
                   </View>
                 </ScrollView>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 8 }}
+                >
                   {getProjectTemplate(selectedTemplateId)?.summary}
                 </Text>
               </View>
@@ -718,7 +726,7 @@ export default function ProjectsTabScreen() {
               >
                 Custom Instructions
               </Text>
-              <Text className="text-[11px] mb-2" style={{ color: colors.textMuted }}>
+              <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
                 These instructions will be included as system context when this project is active.
               </Text>
               <TextInput
@@ -768,7 +776,7 @@ export default function ProjectsTabScreen() {
               <Text
                 style={{
                   color: formName.trim() ? colors.surfaceElevated : colors.textMuted,
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                 }}
               >

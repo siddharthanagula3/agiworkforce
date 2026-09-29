@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, TextInput, View } from
 import { Check, Globe, X } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
 
 interface TimezonePickerFieldProps {
   value: string;
@@ -72,10 +72,12 @@ export function TimezonePickerField({
         }}
       >
         <Globe size={16} color={colors.textMuted} />
-        <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+        <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
           {value.replace(/_/g, ' ')}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>{zoneOffsetLabel(value)}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+          {zoneOffsetLabel(value)}
+        </Text>
       </Pressable>
       {error ? <Text className="text-xs text-red-400 mt-1">{error}</Text> : null}
 
@@ -94,7 +96,12 @@ export function TimezonePickerField({
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
               <Text
                 accessibilityRole="header"
-                style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+                style={{
+                  flex: 1,
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '600',
+                }}
               >
                 Time zone
               </Text>
@@ -148,11 +155,11 @@ export function TimezonePickerField({
                     gap: 8,
                   }}
                 >
-                  <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                  <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
                     {item.replace(/_/g, ' ')}
                     {item === deviceTimezone ? '  (this device)' : ''}
                   </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
                     {zoneOffsetLabel(item)}
                   </Text>
                   {item === value ? <Check size={16} color={colors.teal} /> : null}

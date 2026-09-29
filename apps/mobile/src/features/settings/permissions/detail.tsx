@@ -7,7 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import { PERMISSION_REGISTRY, isPermissionGranted } from './registry';
 import {
@@ -105,7 +105,14 @@ export default function PermissionDetailScreen() {
           >
             <ArrowLeft size={22} color={c.textPrimary} />
           </Pressable>
-          <Text style={{ color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}>
+          <Text
+            style={{
+              color: c.textPrimary,
+              fontSize: typeScale.title3,
+              fontWeight: '700',
+              marginLeft: 4,
+            }}
+          >
             Permission
           </Text>
         </View>
@@ -154,7 +161,7 @@ export default function PermissionDetailScreen() {
           style={{
             flex: 1,
             color: c.textPrimary,
-            fontSize: 20,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             marginLeft: 4,
           }}
@@ -196,10 +203,17 @@ export default function PermissionDetailScreen() {
             <Icon size={23} color={granted ? c.teal : c.textSecondary} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: c.textPrimary, fontSize: 17, fontWeight: '700' }}>
+            <Text style={{ color: c.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}>
               {STATUS_HEADLINES[osStatus]}
             </Text>
-            <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontSize: typeScale.footnote,
+                lineHeight: 18,
+                marginTop: 3,
+              }}
+            >
               {entry.description}
             </Text>
           </View>
@@ -208,7 +222,7 @@ export default function PermissionDetailScreen() {
         <Text
           style={{
             color: c.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 18,
             marginTop: 14,
             paddingHorizontal: 2,
@@ -239,10 +253,17 @@ export default function PermissionDetailScreen() {
           }}
         >
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>
+            <Text style={{ color: c.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}>
               {actionLabel}
             </Text>
-            <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontSize: typeScale.footnote,
+                lineHeight: 18,
+                marginTop: 2,
+              }}
+            >
               {actionHint}
             </Text>
           </View>
@@ -260,7 +281,7 @@ export default function PermissionDetailScreen() {
             borderColor: c.border,
           }}
         >
-          <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
+          <Text style={{ color: c.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
             This screen shows what your device currently reports. AGI cannot change a device
             permission on your behalf.
           </Text>

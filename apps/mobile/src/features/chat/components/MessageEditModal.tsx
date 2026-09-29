@@ -3,7 +3,7 @@ import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } f
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';
@@ -117,14 +117,14 @@ export function MessageEditModal({
                   <View key={attachment.url} style={styles.attachmentRow}>
                     <Paperclip size={12} color={colors.textMuted} />
                     <Text
-                      style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}
+                      style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
                       numberOfLines={1}
                     >
                       {attachment.fileName}
                     </Text>
                   </View>
                 ))}
-                <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                   These stay attached when you send the edit.
                 </Text>
               </View>
@@ -132,7 +132,9 @@ export function MessageEditModal({
 
             <View style={styles.buttonRow}>
               <Pressable {...cancelControl} style={[styles.cancelBtn, cancelControl.style]}>
-                <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 style={styles.submitBtn}
@@ -140,7 +142,9 @@ export function MessageEditModal({
                 accessibilityRole="button"
                 accessibilityLabel="Submit edit"
               >
-                <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>Send</Text>
+                <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
+                  Send
+                </Text>
               </Pressable>
             </View>
           </Pressable>
@@ -165,14 +169,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dialogTitle: {
-    fontSize: 16,
+    fontSize: typeScale.callout,
     fontWeight: '600',
     marginBottom: 12,
   },
   input: {
     borderRadius: 8,
     padding: 12,
-    fontSize: 15,
+    fontSize: typeScale.body,
     minHeight: 80,
     maxHeight: 200,
     textAlignVertical: 'top',

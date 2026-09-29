@@ -16,7 +16,7 @@ import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { ApprovalHistory } from '@/src/features/settings/tool-approvals/ApprovalHistory';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 const POLICY_ICONS: Record<ToolApprovalPolicy, LucideIcon> = {
   ask_every_time: Shield,
@@ -79,10 +79,17 @@ export default function AutoApproveScreen() {
           marginBottom: 18,
         }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}>
           {error ? 'Approval default not in sync' : 'Safety default'}
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.footnote,
+            lineHeight: 19,
+            marginTop: 4,
+          }}
+        >
           {error
             ? error
             : `Current setting: ${selectedLabel}. AGI should never perform destructive, external, or expensive actions without a clear review step.`}
@@ -157,7 +164,12 @@ function ApprovalChoiceRow({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text
             numberOfLines={1}
-            style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', flexShrink: 1 }}
+            style={{
+              color: colors.textPrimary,
+              fontSize: typeScale.body,
+              fontWeight: '600',
+              flexShrink: 1,
+            }}
           >
             {label}
           </Text>
@@ -173,7 +185,13 @@ function ApprovalChoiceRow({
                 flexShrink: 0,
               }}
             >
-              <Text style={{ color: colors.agentSuccess, fontSize: 10, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.agentSuccess,
+                  fontSize: typeScale.caption,
+                  fontWeight: '700',
+                }}
+              >
                 {tag}
               </Text>
             </View>
@@ -181,7 +199,12 @@ function ApprovalChoiceRow({
         </View>
         <Text
           numberOfLines={3}
-          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginTop: 3,
+          }}
         >
           {description}
         </Text>

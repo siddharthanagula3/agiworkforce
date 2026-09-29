@@ -86,7 +86,7 @@ import {
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -936,7 +936,7 @@ export default function ChatTabScreen() {
             <AgiMark size={30} />
             <Text
               style={{
-                fontSize: 26,
+                fontSize: typeScale.title1,
                 lineHeight: 30,
                 fontFamily: 'Newsreader_600SemiBold',
                 letterSpacing: 0.5,
@@ -948,7 +948,7 @@ export default function ChatTabScreen() {
           </View>
           <Text
             style={{
-              fontSize: 28,
+              fontSize: typeScale.title1,
               lineHeight: 34,
               fontWeight: '500',
               color: c.textPrimary,
@@ -962,7 +962,7 @@ export default function ChatTabScreen() {
             <>
               <Text
                 style={{
-                  fontSize: 14,
+                  fontSize: typeScale.subhead,
                   lineHeight: 20,
                   color: c.textMuted,
                   textAlign: 'center',
@@ -986,7 +986,10 @@ export default function ChatTabScreen() {
                   ) : (
                     <UserRound size={14} color={c.textMuted} />
                   )}
-                  <Text numberOfLines={1} style={{ fontSize: 13, color: c.textMuted }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: typeScale.footnote, color: c.textMuted }}
+                  >
                     {t('newChat.workspace', { name: newChatWorkspace.name })}
                   </Text>
                 </View>
@@ -1147,10 +1150,10 @@ function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
         <Download size={16} color={c.teal} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textPrimary }}>
+        <Text style={{ fontSize: typeScale.footnote, fontWeight: '600', color: c.textPrimary }}>
           Download a model to chat
         </Text>
-        <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+        <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>
           Run AI privately on this device, no account needed.
         </Text>
       </View>

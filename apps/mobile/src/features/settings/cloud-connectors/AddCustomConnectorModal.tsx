@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import { addCustomConnector, type CustomConnectorResult } from '@/services/connectors';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -126,7 +126,7 @@ export function AddCustomConnectorModal({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: colors.textPrimary,
-    fontSize: 15,
+    fontSize: typeScale.body,
   } as const;
 
   return (
@@ -153,10 +153,12 @@ export function AddCustomConnectorModal({
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.headline, fontWeight: '700', color: colors.textPrimary }}
+          >
             Add custom MCP connector
           </Text>
-          <Text style={{ fontSize: 13, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
             Connect a remote MCP server by its HTTPS URL. Its tools become available to the model.
           </Text>
 
@@ -192,7 +194,9 @@ export function AddCustomConnectorModal({
             style={inputStyle}
           />
 
-          {error ? <Text style={{ fontSize: 13, color: colors.agentError }}>{error}</Text> : null}
+          {error ? (
+            <Text style={{ fontSize: typeScale.footnote, color: colors.agentError }}>{error}</Text>
+          ) : null}
 
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
             <Pressable

@@ -16,7 +16,7 @@ import {
 } from '@agiworkforce/types';
 import { getAuthHeaders } from '@/services/authSession';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageFullScreen } from './ImageFullScreen';
 import { translatePlural } from '@/src/i18n/plural';
@@ -149,7 +149,12 @@ function MapTiles({
         )}
         <Text
           selectable
-          style={{ textAlign: 'center', fontSize: 12, lineHeight: 17, color: colors.textMuted }}
+          style={{
+            textAlign: 'center',
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            color: colors.textMuted,
+          }}
         >
           {copy}
         </Text>
@@ -208,7 +213,9 @@ function MapTiles({
                 borderColor: colors.cameraOverlayText,
               }}
             >
-              <Text style={{ color: colors.accentText, fontSize: 11, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
+              >
                 {index + 1}
               </Text>
             </View>
@@ -261,7 +268,12 @@ function MapSearchCard({
           <MapPinned size={16} color={colors.teal} />
           <Text
             selectable
-            style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+            style={{
+              flex: 1,
+              fontSize: typeScale.body,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
             numberOfLines={1}
           >
             {body.title}
@@ -283,19 +295,24 @@ function MapSearchCard({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
+              >
                 {index + 1}
               </Text>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 selectable
-                style={{ fontSize: 13, color: colors.textPrimary }}
+                style={{ fontSize: typeScale.footnote, color: colors.textPrimary }}
                 numberOfLines={1}
               >
                 {place.label.split(',')[0]}
               </Text>
-              <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>
+              <Text
+                style={{ fontSize: typeScale.caption, color: colors.textMuted }}
+                numberOfLines={1}
+              >
                 {place.kind ? `${place.kind} · ` : ''}
                 {place.label.split(',').slice(1, 3).join(',').trim()}
               </Text>
@@ -328,13 +345,15 @@ function MapSearchCard({
             }}
           >
             <Navigation size={14} color={colors.accentText} />
-            <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.accentText, fontSize: typeScale.footnote, fontWeight: '600' }}
+            >
               {places.length > 1 ? 'Open route' : 'Open in Maps'}
             </Text>
           </Pressable>
         ) : null}
 
-        <Text selectable style={{ fontSize: 10, color: colors.textMuted }}>
+        <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           {body.view ? `${body.view.attribution} · ` : ''}Opens a provider search. Confirm the place
           before navigating.
         </Text>
@@ -423,18 +442,26 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
             <Text
               selectable
               accessibilityRole="header"
-              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+              style={{
+                flex: 1,
+                fontSize: typeScale.body,
+                fontWeight: '600',
+                color: colors.textPrimary,
+              }}
             >
               {body.title}
             </Text>
           </View>
-          <Text selectable style={{ fontSize: 12, color: colors.textMuted }}>
+          <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             {body.region.label}
           </Text>
         </View>
 
         {body.summary ? (
-          <Text selectable style={{ fontSize: 14, lineHeight: 20, color: colors.textSecondary }}>
+          <Text
+            selectable
+            style={{ fontSize: typeScale.subhead, lineHeight: 20, color: colors.textSecondary }}
+          >
             {body.summary}
           </Text>
         ) : null}
@@ -454,19 +481,29 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ color: colors.accentText, fontSize: 11, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.accentText,
+                    fontSize: typeScale.caption,
+                    fontWeight: '700',
+                  }}
+                >
                   {stop.pin}
                 </Text>
               </View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 {stop.startTimeLabel ? (
-                  <Text selectable style={{ fontSize: 11, color: colors.textMuted }}>
+                  <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                     {stop.startTimeLabel}
                   </Text>
                 ) : null}
                 <Text
                   selectable
-                  style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}
+                  style={{
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}
                 >
                   {resolved
                     ? resolved.displayName
@@ -477,7 +514,7 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
                 {resolved ? (
                   <Text
                     selectable
-                    style={{ fontSize: 12, color: colors.textMuted }}
+                    style={{ fontSize: typeScale.caption, color: colors.textMuted }}
                     numberOfLines={2}
                   >
                     {resolved.formattedAddress}
@@ -485,7 +522,10 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <AlertCircle size={12} color={colors.textSecondary} />
-                    <Text selectable style={{ fontSize: 12, color: colors.textSecondary }}>
+                    <Text
+                      selectable
+                      style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+                    >
                       {unresolvedStopLabel(place)}
                     </Text>
                   </View>
@@ -493,7 +533,11 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
                 {stop.note ? (
                   <Text
                     selectable
-                    style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}
+                    style={{
+                      fontSize: typeScale.footnote,
+                      lineHeight: 19,
+                      color: colors.textSecondary,
+                    }}
                   >
                     {stop.note}
                   </Text>
@@ -505,7 +549,7 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
 
         {directions && routeLegs.length > 0 ? (
           <View style={{ gap: 8 }}>
-            <Text selectable style={{ fontSize: 11, color: colors.textMuted }}>
+            <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
               {directions}
             </Text>
             {routeLegs.map((leg) => (
@@ -535,20 +579,26 @@ function ItineraryCard({ body }: { body: ItineraryCardBody }) {
                 }}
               >
                 <Navigation size={14} color={colors.textPrimary} />
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   {leg.label}
                 </Text>
               </Pressable>
             ))}
           </View>
         ) : routeMessage ? (
-          <Text selectable style={{ fontSize: 12, color: colors.textSecondary }}>
+          <Text selectable style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
             {routeMessage}
           </Text>
         ) : null}
 
         {attribution ? (
-          <Text selectable style={{ fontSize: 10, color: colors.textMuted }}>
+          <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             {attribution.providerLabel}
           </Text>
         ) : null}
@@ -636,12 +686,16 @@ export function InteractiveCardBlock({
               <ExternalLink size={14} color={colors.textMuted} />
               <Text
                 selectable
-                style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+                style={{
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
               >
                 {card.fallback.headline}
               </Text>
             </View>
-            <Text selectable style={{ fontSize: 12, color: colors.textMuted }}>
+            <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
               {card.fallback.text}
             </Text>
           </View>

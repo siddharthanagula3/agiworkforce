@@ -5,7 +5,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { ThemeMode } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
 const OPTIONS: Array<{ mode: ThemeMode; label: string; description: string; icon: typeof Sun }> = [
@@ -55,10 +55,14 @@ export default function AppearanceScreen() {
             >
               <Icon size={19} color={selected ? colors.teal : colors.textSecondary} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+                >
                   {label}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+                >
                   {description}
                 </Text>
               </View>

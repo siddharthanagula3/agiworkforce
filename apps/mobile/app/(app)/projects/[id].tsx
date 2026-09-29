@@ -13,7 +13,7 @@ import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSou
 import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
 import { Text } from '@/components/ui/text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { loadMissingCloudProject } from '@/src/features/projects/service';
@@ -42,10 +42,10 @@ function LocalOnlyFallback({
       }}
       testID="project-detail-local-fallback"
     >
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>
+      <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.textPrimary }}>
         {localProject?.name ?? projectId}
       </Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+      <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
         Local project. Details, chats, and sources stay on this device.
       </Text>
     </View>
@@ -87,26 +87,30 @@ function CloudProjectHeader({
     >
       <Text
         accessibilityRole="header"
-        style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+        style={{ fontSize: typeScale.body, fontWeight: '600', color: colors.textPrimary }}
       >
         {project?.name ?? 'Project'}
       </Text>
       {description ? (
-        <Text style={{ fontSize: 14, color: colors.textSecondary }}>{description}</Text>
+        <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
+          {description}
+        </Text>
       ) : null}
       {instructions ? (
         <Text
           testID="project-detail-instructions"
           numberOfLines={2}
-          style={{ fontSize: 13, color: colors.textSecondary }}
+          style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
+          >
             Instructions:{' '}
           </Text>
           {instructions}
         </Text>
       ) : null}
-      <Text style={{ fontSize: 13, color: colors.textMuted }}>
+      <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
         {lastUsedAt
           ? `Last used ${formatRelativeTime(lastUsedAt)}. Synced across your devices.`
           : 'Cloud project. Synced across your devices.'}
@@ -140,8 +144,10 @@ function ProjectNotice({
         gap: 12,
       }}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}>{title}</Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{message}</Text>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}>
+        {title}
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{message}</Text>
       {action && onPress ? (
         <Pressable
           accessibilityRole="button"
@@ -149,7 +155,9 @@ function ProjectNotice({
           onPress={onPress}
           style={{ minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>{action}</Text>
+          <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
+            {action}
+          </Text>
         </Pressable>
       ) : null}
     </View>
@@ -206,7 +214,7 @@ function TabBar({
           >
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 fontWeight: isActive ? '600' : '500',
                 color: isActive ? colors.textPrimary : colors.textMuted,
               }}
@@ -327,7 +335,7 @@ export default function ProjectDetailScreen() {
           style={{
             flex: 1,
             textAlign: 'center',
-            fontSize: 16,
+            fontSize: typeScale.callout,
             fontWeight: '600',
             color: colors.textPrimary,
             marginHorizontal: 8,

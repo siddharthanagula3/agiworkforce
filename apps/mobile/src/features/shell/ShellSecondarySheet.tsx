@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 export interface ShellSecondaryControl {
   key: string;
@@ -29,7 +29,7 @@ export function ShellSecondarySheet({
         <Text
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '600',
             marginBottom: 8,
             paddingHorizontal: 2,
@@ -53,7 +53,7 @@ export function ShellSecondarySheet({
             }}
           >
             <Icon size={19} color={colors.textSecondary} strokeWidth={1.8} />
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>{label}</Text>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>{label}</Text>
           </Pressable>
         ))}
       </View>

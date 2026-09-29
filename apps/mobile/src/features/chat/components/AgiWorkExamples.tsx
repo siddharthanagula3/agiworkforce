@@ -3,7 +3,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { ListChecks } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 const PROMPT_SLOTS = ['p1', 'p2', 'p3', 'p4'] as const;
 
@@ -16,12 +16,19 @@ export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => vo
         <ListChecks size={15} color={colors.textSecondary} />
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}
+          style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textSecondary }}
         >
           {t('newChat.agiWorkExamples')}
         </Text>
       </View>
-      <Text style={{ fontSize: 13, lineHeight: 18, color: colors.textMuted, marginBottom: 6 }}>
+      <Text
+        style={{
+          fontSize: typeScale.footnote,
+          lineHeight: 18,
+          color: colors.textMuted,
+          marginBottom: 6,
+        }}
+      >
         {t('newChat.agiWorkIntro')}
       </Text>
       {PROMPT_SLOTS.map((slot) => {
@@ -40,7 +47,9 @@ export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => vo
               backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
             })}
           >
-            <Text style={{ fontSize: 14, lineHeight: 19, color: colors.textPrimary }}>
+            <Text
+              style={{ fontSize: typeScale.subhead, lineHeight: 19, color: colors.textPrimary }}
+            >
               {prompt}
             </Text>
           </PressableBox>

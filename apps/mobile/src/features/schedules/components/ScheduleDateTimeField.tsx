@@ -7,7 +7,7 @@ import DateTimePicker, {
 import { CalendarDays, Clock } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 type ScheduleFieldMode = 'date' | 'time';
 
@@ -108,7 +108,9 @@ export function ScheduleDateTimeField({
         }}
       >
         <Icon size={16} color={colors.textMuted} />
-        <Text style={{ color: shown ? colors.textPrimary : colors.textMuted, fontSize: 15 }}>
+        <Text
+          style={{ color: shown ? colors.textPrimary : colors.textMuted, fontSize: typeScale.body }}
+        >
           {shown ?? (mode === 'date' ? 'Choose a date' : 'Choose a time')}
         </Text>
       </Pressable>

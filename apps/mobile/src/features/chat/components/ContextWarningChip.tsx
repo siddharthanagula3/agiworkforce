@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { computeContextBudget } from '@/src/features/memory/services/contextBudgeter';
 import type { ChatMessage } from '@/types/chat';
 import { ContextDetailsSheet } from './ContextDetailsSheet';
@@ -51,7 +51,12 @@ export function ContextWarningChip({
         >
           <AlertTriangle size={13} color={colors.agentWarning} strokeWidth={2} />
           <Text
-            style={{ fontSize: 12, color: colors.agentWarning, fontWeight: '500', flex: 1 }}
+            style={{
+              fontSize: typeScale.caption,
+              color: colors.agentWarning,
+              fontWeight: '500',
+              flex: 1,
+            }}
             numberOfLines={1}
           >
             Chat is getting long. Start a fresh chat for faster responses.
@@ -71,7 +76,9 @@ export function ContextWarningChip({
             accessibilityRole="button"
             accessibilityLabel="Start fresh chat"
           >
-            <Text style={{ fontSize: 11, color: colors.agentWarning, fontWeight: '600' }}>
+            <Text
+              style={{ fontSize: typeScale.caption, color: colors.agentWarning, fontWeight: '600' }}
+            >
               New chat
             </Text>
           </Pressable>

@@ -16,7 +16,7 @@ import { DEFAULT_AUTO_MODE_ID, getShortDisplayName } from '@/src/features/model-
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors, radii } from '@/src/ui/theme';
+import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;
@@ -95,7 +95,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
         numberOfLines={1}
         style={{
           color: colors.textSecondary,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           lineHeight: 16,
           fontWeight: '500',
           flexShrink: 1,
@@ -109,7 +109,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
           numberOfLines={1}
           style={{
             color: colors.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 16,
             includeFontPadding: false,
           }}

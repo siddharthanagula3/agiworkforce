@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Menu } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { useNotificationCenter } from '@/services/notifications';
 
 const BUTTON_SIZE = 36;
@@ -62,7 +62,9 @@ export function DrawerButton({ onPress, testID }: { onPress: () => void; testID?
           {/* No "99+" truncation: the notification centre keeps at most 50
               items (services/notifications.ts), so the count is always two
               digits and the pip's width is already bounded. */}
-          <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
+          >
             {String(unreadCount)}
           </Text>
         </View>

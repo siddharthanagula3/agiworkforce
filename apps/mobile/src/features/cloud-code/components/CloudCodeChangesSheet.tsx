@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { dialogPadding, radii, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, radii, useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   CLOUD_CODE_CHANGES_COPY as COPY,
   CLOUD_CODE_CHANGE_STATE_LABELS,
@@ -114,7 +114,11 @@ function DiffBody({ body }: { body: string }) {
             key={`${index}:${line}`}
             variant="mono"
             selectable
-            style={{ color: tone[cloudCodeDiffLineKind(line)], fontSize: 12, lineHeight: 17 }}
+            style={{
+              color: tone[cloudCodeDiffLineKind(line)],
+              fontSize: typeScale.caption,
+              lineHeight: 17,
+            }}
           >
             {line || ' '}
           </Text>
@@ -178,12 +182,14 @@ function ChangedFile({
           accessibilityLabel={`${state} ${path}`}
           style={{ flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}
         >
-          <Text style={{ color: colors.textMuted, fontSize: 12, width: 72 }}>{state}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, width: 72 }}>
+            {state}
+          </Text>
           <Text
             variant="mono"
             numberOfLines={1}
             ellipsizeMode="middle"
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 13 }}
+            style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.footnote }}
           >
             {path}
           </Text>
@@ -256,7 +262,7 @@ function PullRequestChecks({ load }: { load: () => Promise<CloudCodePullRequestS
           style={{
             flex: 1,
             color: status?.checksState === 'failing' ? colors.agentError : colors.textSecondary,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 19,
           }}
         >
@@ -277,7 +283,10 @@ function PullRequestChecks({ load }: { load: () => Promise<CloudCodePullRequestS
 function SectionLabel({ children }: { children: string }) {
   const colors = useThemeColors();
   return (
-    <Text accessibilityRole="header" style={{ color: colors.textSecondary, fontSize: 13 }}>
+    <Text
+      accessibilityRole="header"
+      style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+    >
       {children}
     </Text>
   );
@@ -382,14 +391,21 @@ export function CloudCodeChangesSheet({
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {hasRepository && workingBranch ? (
                 <>
-                  <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+                  >
                     {base ?? cloudCodeRepositoryLabel(session.repositoryUrl ?? '')}
                   </Text>
                   <ArrowRight size={14} color={colors.textMuted} />
                   <Text
                     variant="mono"
                     numberOfLines={1}
-                    style={{ flexShrink: 1, color: colors.textPrimary, fontSize: 13 }}
+                    style={{
+                      flexShrink: 1,
+                      color: colors.textPrimary,
+                      fontSize: typeScale.footnote,
+                    }}
                   >
                     {workingBranch}
                   </Text>
@@ -397,7 +413,11 @@ export function CloudCodeChangesSheet({
               ) : (
                 <Text
                   accessibilityRole="header"
-                  style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.headline,
+                    fontWeight: '600',
+                  }}
                 >
                   {COPY.heading}
                 </Text>
@@ -425,20 +445,27 @@ export function CloudCodeChangesSheet({
                 accessibilityRole="alert"
                 accessibilityLabel={view.error}
               >
-                <Text selectable style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}>
+                <Text
+                  selectable
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
+                >
                   {view.error}
                 </Text>
               </Pressable>
             ) : null}
 
             {!hasRepository ? (
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>{COPY.noRepository}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                {COPY.noRepository}
+              </Text>
             ) : view.loading && !changes ? (
               <View accessibilityLabel={COPY.loading} style={{ paddingVertical: 24 }}>
                 <ActivityIndicator color={colors.textSecondary} />
               </View>
             ) : changes && changes.files.length === 0 ? (
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>{COPY.none}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                {COPY.none}
+              </Text>
             ) : changes ? (
               <View>
                 {changes.files.map((file) => (
@@ -454,7 +481,9 @@ export function CloudCodeChangesSheet({
                   />
                 ))}
                 {changes.diffTruncated ? (
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+                  <Text
+                    style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}
+                  >
                     {COPY.diffTruncated}
                   </Text>
                 ) : null}
@@ -473,7 +502,7 @@ export function CloudCodeChangesSheet({
                   style={{ ...inputStyle, flex: undefined }}
                 />
                 {choosingFiles ? (
-                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                     {nothingChosen
                       ? COPY.commitNoFilesChosen
                       : cloudCodeCommitChosenLabel(includedPaths.length, changedPaths.length)}
@@ -482,7 +511,7 @@ export function CloudCodeChangesSheet({
                 {view.notice ? (
                   <Text
                     accessibilityLiveRegion="polite"
-                    style={{ color: colors.textSecondary, fontSize: 12 }}
+                    style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
                   >
                     {view.notice}
                   </Text>
@@ -510,7 +539,13 @@ export function CloudCodeChangesSheet({
                       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                     >
                       <ExternalLink size={14} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontSize: typeScale.subhead,
+                          fontWeight: '600',
+                        }}
+                      >
                         {pullRequestLabel}
                       </Text>
                     </Pressable>
@@ -530,7 +565,7 @@ export function CloudCodeChangesSheet({
                       onPress={view.createPullRequest}
                     />
                     {pullRequestBlocked ? (
-                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                         {pullRequestBlocked}
                       </Text>
                     ) : null}
@@ -542,7 +577,9 @@ export function CloudCodeChangesSheet({
             <View style={{ gap: 8 }}>
               <SectionLabel>{COPY.terminal}</SectionLabel>
               {entries.length === 0 ? (
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>{COPY.terminalEmpty}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+                  {COPY.terminalEmpty}
+                </Text>
               ) : (
                 entries.map((entry) => {
                   const failed = entry.exitCode !== EXIT_CODE_OK;
@@ -559,13 +596,13 @@ export function CloudCodeChangesSheet({
                       <Text
                         variant="mono"
                         selectable
-                        style={{ color: colors.textPrimary, fontSize: 12 }}
+                        style={{ color: colors.textPrimary, fontSize: typeScale.caption }}
                       >{`$ ${entry.command}`}</Text>
                       {entry.stdout ? (
                         <Text
                           variant="mono"
                           selectable
-                          style={{ color: colors.textSecondary, fontSize: 12 }}
+                          style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
                         >
                           {entry.stdout}
                         </Text>
@@ -574,7 +611,7 @@ export function CloudCodeChangesSheet({
                         <Text
                           variant="mono"
                           selectable
-                          style={{ color: colors.agentError, fontSize: 12 }}
+                          style={{ color: colors.agentError, fontSize: typeScale.caption }}
                         >
                           {entry.stderr}
                         </Text>
@@ -583,7 +620,7 @@ export function CloudCodeChangesSheet({
                         variant="mono"
                         style={{
                           color: failed ? colors.agentError : colors.textMuted,
-                          fontSize: 12,
+                          fontSize: typeScale.caption,
                         }}
                       >
                         {`exit ${entry.exitCode}`}

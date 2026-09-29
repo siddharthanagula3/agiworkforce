@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { radii, useThemeColors } from '@/src/ui/theme';
+import { radii, useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   clarifyCardAcceptsResponse,
   clarifyResponseDeadlineMs,
@@ -149,16 +149,16 @@ export function ClarifyCard({
       }}
     >
       <View style={{ gap: 4 }}>
-        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+        <Text style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textPrimary }}>
           {body.prompt ?? card.fallback.headline}
         </Text>
         {body.state.status === 'expired' ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             These questions are no longer answerable{expiredReason(body.state.reason)}
           </Text>
         ) : null}
         {body.state.status === 'dismissed' ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             You answered in your own words instead.
           </Text>
         ) : null}
@@ -171,7 +171,7 @@ export function ClarifyCard({
             <View style={{ gap: 2 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   letterSpacing: 0.4,
                   textTransform: 'uppercase',
@@ -180,11 +180,13 @@ export function ClarifyCard({
               >
                 {question.header}
               </Text>
-              <Text style={{ fontSize: 14, color: colors.textPrimary }}>{question.question}</Text>
+              <Text style={{ fontSize: typeScale.subhead, color: colors.textPrimary }}>
+                {question.question}
+              </Text>
             </View>
 
             {body.state.status === 'answered' ? (
-              <Text style={{ fontSize: 14, color: colors.textSecondary }}>
+              <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
                 {describeAnswer(answersById.get(question.id))}
               </Text>
             ) : (
@@ -220,7 +222,7 @@ export function ClarifyCard({
                         {selected ? <Check size={12} color={colors.teal} /> : null}
                         <Text
                           style={{
-                            fontSize: 13,
+                            fontSize: typeScale.footnote,
                             color: selected ? colors.textPrimary : colors.textSecondary,
                           }}
                         >
@@ -267,7 +269,10 @@ export function ClarifyCard({
       ) : null}
 
       {interactive && submissionError ? (
-        <Text accessibilityRole="alert" style={{ fontSize: 12, color: colors.agentError }}>
+        <Text
+          accessibilityRole="alert"
+          style={{ fontSize: typeScale.caption, color: colors.agentError }}
+        >
           {submissionError}
         </Text>
       ) : null}

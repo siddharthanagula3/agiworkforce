@@ -66,7 +66,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { cardRadius, useThemeColors } from '@/src/ui/theme';
+import { cardRadius, useThemeColors, typeScale } from '@/src/ui/theme';
 import { ConnectorApiKeySheet } from './ConnectorApiKeySheet';
 import { connectorFailureMessage } from './connectorFailureMessage';
 import { ConnectorLogo } from './ConnectorLogo';
@@ -153,9 +153,18 @@ function SectionHeading({ title, body }: { title: string; body?: string }) {
   const colors = useThemeColors();
   return (
     <View style={{ marginBottom: 10 }}>
-      <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>{title}</Text>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}>
+        {title}
+      </Text>
       {body ? (
-        <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 5 }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.caption,
+            lineHeight: 18,
+            marginTop: 5,
+          }}
+        >
           {body}
         </Text>
       ) : null}
@@ -201,7 +210,9 @@ function PermissionRow({
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}
+          >
             {title}
           </Text>
           <Text
@@ -209,7 +220,7 @@ function PermissionRow({
             numberOfLines={1}
             style={{
               color: colors.textMuted,
-              fontSize: 11,
+              fontSize: typeScale.caption,
               marginTop: 3,
               fontFamily: 'monospace',
             }}
@@ -219,13 +230,20 @@ function PermissionRow({
           {description ? (
             <Text
               numberOfLines={2}
-              style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 5 }}
+              style={{
+                color: colors.textSecondary,
+                fontSize: typeScale.caption,
+                lineHeight: 17,
+                marginTop: 5,
+              }}
             >
               {description}
             </Text>
           ) : null}
           {note ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 5 }}>{note}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 5 }}>
+              {note}
+            </Text>
           ) : null}
         </View>
         {saved ? (
@@ -278,7 +296,7 @@ function PermissionRow({
               <Text
                 style={{
                   color: selected ? colors.textPrimary : colors.textSecondary,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: selected ? '700' : '600',
                 }}
               >
@@ -711,7 +729,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
       ) : loading && !loaded ? (
         <View style={{ alignItems: 'center', gap: 10, paddingVertical: 36 }}>
           <ActivityIndicator size="large" color={colors.teal} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Loading connector…</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+            Loading connector…
+          </Text>
         </View>
       ) : error ? (
         <View
@@ -724,16 +744,20 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             borderColor: colors.dangerBorder,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}
+          >
             Could not load connector
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{error}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>{error}</Text>
           <Pressable
             onPress={() => void load()}
             accessibilityRole="button"
             accessibilityLabel="Retry loading connector"
           >
-            <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '700' }}>Try again</Text>
+            <Text style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '700' }}>
+              Try again
+            </Text>
           </Pressable>
         </View>
       ) : loaded && !connection && !listing ? (
@@ -764,11 +788,23 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <AlertTriangle size={16} color={colors.agentWarning} />
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '700',
+                  }}
+                >
                   Not responding
                 </Text>
               </View>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 {connectorName} has not answered its recent requests, so its tools may fail. If this
                 continues, reconnect it.
               </Text>
@@ -780,7 +816,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 accessibilityState={{ disabled: loading }}
                 style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
               >
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '700' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '700' }}
+                >
                   {loading ? 'Checking…' : 'Check again'}
                 </Text>
               </Pressable>
@@ -799,10 +837,22 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 borderColor: colors.dangerBorder,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '700',
+                }}
+              >
                 Needs to be reconnected
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 {keyCredentialsPath
                   ? `${connectorName} tools will not run until it has a working key. Replace its API key below.`
                   : `${connectorName} tools will not run until it is connected again. Disconnect it here, then add it again.`}
@@ -849,10 +899,22 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                     borderColor: colors.dangerBorder,
                   }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.subhead,
+                      fontWeight: '700',
+                    }}
+                  >
                     Authorization expired
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: typeScale.footnote,
+                      lineHeight: 18,
+                    }}
+                  >
                     This grant can no longer be renewed, so {connectorName} tools will not run until
                     you authorize it again.
                   </Text>
@@ -882,7 +944,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 ) : (
                   <RotateCcw size={17} color={colors.teal} />
                 )}
-                <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '700' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '700' }}
+                >
                   {reconnecting ? 'Opening authorization…' : 'Reauthorize'}
                 </Text>
               </Pressable>
@@ -909,7 +973,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               })}
             >
               <KeyRound size={17} color={colors.teal} />
-              <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '700' }}>
+              <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '700' }}>
                 Replace API key
               </Text>
             </Pressable>
@@ -926,7 +990,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }}
             >
               <ActivityIndicator size="small" color={colors.teal} />
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Loading tools…</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                Loading tools…
+              </Text>
             </View>
           ) : null}
 
@@ -942,10 +1008,22 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 borderColor: colors.dangerBorder,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '700',
+                }}
+              >
                 Could not load the tool list
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 The tools for {connectorName} did not load. Try again.
               </Text>
               <Pressable
@@ -954,7 +1032,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 accessibilityLabel="Retry loading tools"
                 style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
               >
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '700' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '700' }}
+                >
                   Try again
                 </Text>
               </Pressable>
@@ -967,7 +1047,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                   <Text
                     style={{
                       color: colors.textSecondary,
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       fontWeight: '700',
                       marginBottom: 8,
                     }}
@@ -1003,7 +1083,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             <Text
               style={{
                 color: colors.textSecondary,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 19,
                 marginBottom: 24,
               }}
@@ -1062,7 +1142,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             ) : (
               <Trash2 size={17} color={colors.agentError} />
             )}
-            <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.agentError, fontSize: typeScale.subhead, fontWeight: '700' }}
+            >
               {disconnecting ? 'Disconnecting…' : 'Disconnect'}
             </Text>
           </Pressable>
@@ -1076,11 +1158,23 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               iconUrl={connectorListingIconUrl(listing)}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '700',
+                }}
+              >
                 {listing.name}
               </Text>
               {listing.publisher ? (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    marginTop: 2,
+                  }}
+                >
                   By {listing.publisher}
                 </Text>
               ) : null}
@@ -1091,7 +1185,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             <Text
               style={{
                 color: colors.textSecondary,
-                fontSize: 14,
+                fontSize: typeScale.subhead,
                 lineHeight: 20,
                 marginBottom: 18,
               }}
@@ -1120,7 +1214,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               })}
             >
               {connecting ? <ActivityIndicator size="small" color={colors.accentText} /> : null}
-              <Text style={{ color: colors.accentText, fontSize: 15, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.body, fontWeight: '700' }}
+              >
                 {connecting ? 'Connecting…' : 'Connect'}
               </Text>
             </Pressable>
@@ -1157,7 +1253,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                     borderBottomColor: colors.border,
                   }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontSize: 14 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
                     {formatToolName(toolName)}
                   </Text>
                 </View>

@@ -13,7 +13,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
@@ -211,10 +211,16 @@ export function SupportTicketsScreen() {
 
 const styles = StyleSheet.create({
   form: { borderRadius: 14, padding: 14, gap: 8, marginBottom: 24 },
-  label: { fontSize: 13 },
-  input: { minHeight: 44, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, fontSize: 15 },
+  label: { fontSize: typeScale.footnote },
+  input: {
+    minHeight: 44,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    fontSize: typeScale.body,
+  },
   multiline: { minHeight: 120, paddingTop: 10 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  toggleText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  toggleText: { flex: 1, fontSize: typeScale.footnote, lineHeight: 18 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

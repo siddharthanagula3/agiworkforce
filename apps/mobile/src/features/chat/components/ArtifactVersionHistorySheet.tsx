@@ -3,7 +3,7 @@ import { FlatList, Modal, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   summarizeArtifactVersions,
   type VersionedContent,
@@ -45,7 +45,12 @@ export function ArtifactVersionHistorySheet({
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <Text
             accessibilityRole="header"
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+            }}
           >
             Version history
           </Text>
@@ -89,18 +94,30 @@ export function ArtifactVersionHistorySheet({
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 15,
+                      fontSize: typeScale.body,
                       fontWeight: isShown ? '600' : '400',
                     }}
                   >
                     {title}
                   </Text>
                   {item.when ? (
-                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: typeScale.footnote,
+                        marginTop: 2,
+                      }}
+                    >
                       {item.when}
                     </Text>
                   ) : null}
-                  <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: typeScale.footnote,
+                      marginTop: 2,
+                    }}
+                  >
                     {item.change}
                   </Text>
                 </Pressable>
@@ -118,7 +135,13 @@ export function ArtifactVersionHistorySheet({
                       justifyContent: 'center',
                     }}
                   >
-                    <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '500' }}>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: typeScale.footnote,
+                        fontWeight: '500',
+                      }}
+                    >
                       Restore
                     </Text>
                   </Pressable>

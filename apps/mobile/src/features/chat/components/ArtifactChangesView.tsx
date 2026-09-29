@@ -7,7 +7,7 @@ import {
   type ArtifactChangeUnit,
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { translatePlural } from '@/src/i18n/plural';
 
 interface ArtifactChangesViewProps {
@@ -94,7 +94,7 @@ export function ArtifactChangesView({
         } added, ${changes.removed} removed`;
   const header = (
     <Text
-      style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 12 }}
+      style={{ fontSize: typeScale.caption, color: colors.textSecondary, marginBottom: 12 }}
       testID="artifact-changes-summary"
     >
       {summary}
@@ -121,7 +121,7 @@ export function ArtifactChangesView({
                 width: 24,
                 textAlign: 'center',
                 fontFamily: MONOSPACE,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 20,
                 color: ink(item.kind),
               }}
@@ -133,7 +133,7 @@ export function ArtifactChangesView({
                 flex: 1,
                 paddingRight: 12,
                 fontFamily: MONOSPACE,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 20,
                 color: ink(item.kind),
               }}
@@ -154,7 +154,7 @@ export function ArtifactChangesView({
     >
       {header}
       <Text
-        style={{ fontSize: 15, lineHeight: 24, color: colors.textPrimary }}
+        style={{ fontSize: typeScale.body, lineHeight: 24, color: colors.textPrimary }}
         accessibilityLabel={spoken(changes.runs)}
         selectable
       >

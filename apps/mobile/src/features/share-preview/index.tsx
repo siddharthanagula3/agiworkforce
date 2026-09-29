@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { X, Send, AlertTriangle, FileText, Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -138,7 +138,13 @@ export default function SharePreviewScreen() {
           borderBottomColor: themeColors.border,
         }}
       >
-        <Text style={{ fontSize: 17, fontWeight: '600', color: themeColors.textPrimary }}>
+        <Text
+          style={{
+            fontSize: typeScale.headline,
+            fontWeight: '600',
+            color: themeColors.textPrimary,
+          }}
+        >
           Shared Content
         </Text>
         <Pressable
@@ -165,7 +171,9 @@ export default function SharePreviewScreen() {
             }}
           >
             <AlertTriangle size={16} color={themeColors.agentWarning} />
-            <Text style={{ flex: 1, color: themeColors.agentWarning, fontSize: 13 }}>
+            <Text
+              style={{ flex: 1, color: themeColors.agentWarning, fontSize: typeScale.footnote }}
+            >
               Content was truncated to 100 KB before sending.
             </Text>
           </View>
@@ -209,10 +217,13 @@ export default function SharePreviewScreen() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={{ color: themeColors.textPrimary, fontSize: 14 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: themeColors.textPrimary, fontSize: typeScale.subhead }}
+                  >
                     {attachment.fileName}
                   </Text>
-                  <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>
+                  <Text style={{ color: themeColors.textMuted, fontSize: typeScale.caption }}>
                     {attachment.mimeType}
                   </Text>
                 </View>
@@ -235,7 +246,7 @@ export default function SharePreviewScreen() {
             <Text
               style={{
                 color: themeColors.textSecondary,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 lineHeight: 20,
                 fontFamily: 'monospace',
               }}
@@ -247,7 +258,9 @@ export default function SharePreviewScreen() {
           </View>
         )}
 
-        <Text style={{ color: themeColors.textMuted, fontSize: 12, textAlign: 'center' }}>
+        <Text
+          style={{ color: themeColors.textMuted, fontSize: typeScale.caption, textAlign: 'center' }}
+        >
           {hasAttachments
             ? 'Review what was shared. It is attached to your next message, which you send yourself.'
             : 'Review the shared content above before sending to your AI chat.'}

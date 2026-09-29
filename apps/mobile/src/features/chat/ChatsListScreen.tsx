@@ -38,7 +38,7 @@ import {
   FLOATING_PRIMARY_ACTION_LIST_PADDING,
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
@@ -415,11 +415,14 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           <View style={{ flex: 1, gap: 3 }}>
             <Text
               numberOfLines={1}
-              style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
             >
               {item.title}
             </Text>
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+            >
               {item.subtitle}
             </Text>
           </View>
@@ -483,11 +486,14 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         <View style={{ flex: 1 }}>
           <Text
             maxFontSizeMultiplier={2}
-            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
           >
             {searchOnly ? 'Search' : 'Chats'}
           </Text>
-          <Text maxFontSizeMultiplier={2} style={{ color: colors.textMuted, fontSize: 11 }}>
+          <Text
+            maxFontSizeMultiplier={2}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+          >
             {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
           </Text>
         </View>
@@ -553,7 +559,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 letterSpacing: 0.7,
                 textTransform: 'uppercase',
@@ -576,7 +582,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               accessibilityRole="alert"
               style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
                 {conversationLoadError}
               </Text>
               <Pressable
@@ -584,7 +590,11 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                 accessibilityLabel="Retry loading chats"
                 onPress={() => void loadConversations({ firstPageOnly: true })}
               >
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Retry
+                </Text>
               </Pressable>
             </View>
           ) : null
@@ -599,14 +609,19 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}
             >
               {conversationLoadError ? (
-                <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                <Text
+                  accessibilityRole="alert"
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+                >
                   {conversationLoadError}
                 </Text>
               ) : null}
               {isLoadingMoreConversations ? (
                 <ActivityIndicator color={colors.teal} accessibilityLabel="Loading older chats" />
               ) : (
-                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
                   Load older chats
                 </Text>
               )}
@@ -632,7 +647,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               ) : (
                 <MessageSquare size={34} color={colors.textMuted} />
               )}
-              <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '600',
+                }}
+              >
                 {searchOnly && !isSearching
                   ? 'Search your workspace'
                   : appMode === 'cloud' && isLoadingConversations
@@ -644,7 +665,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                         : 'No chats here'}
               </Text>
               {appMode === 'cloud' && isLoadingConversations ? null : (
-                <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: typeScale.footnote,
+                    textAlign: 'center',
+                  }}
+                >
                   {searchOnly && !isSearching
                     ? 'Find chats, projects, files, library images, and artifacts in this mode.'
                     : isSearching

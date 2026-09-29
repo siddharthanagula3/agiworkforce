@@ -5,7 +5,7 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { useThemeColors, zIndex, typeScale } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -83,7 +83,7 @@ export function GeneratedImage({
         <ImageOff size={28} color={colors.textMuted} />
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             color: colors.textMuted,
           }}
         >
@@ -164,7 +164,7 @@ export function GeneratedImage({
       {revisedPrompt && loadState === 'loaded' ? (
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: colors.textMuted,
             marginTop: 6,

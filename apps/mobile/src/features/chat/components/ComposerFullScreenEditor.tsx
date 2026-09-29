@@ -2,7 +2,7 @@ import { View, TextInput, Modal, Pressable, KeyboardAvoidingView } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, radii } from '@/src/ui/theme';
+import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SendButton } from './SendButton';
@@ -92,7 +92,7 @@ export function ComposerFullScreenEditor({
               flex: 1,
               textAlign: 'center',
               color: colors.textSecondary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               fontWeight: '600',
             }}
           >
@@ -115,7 +115,7 @@ export function ComposerFullScreenEditor({
             paddingTop: 16,
             paddingBottom: Math.max(insets.bottom, 16),
             color: colors.textPrimary,
-            fontSize: 16,
+            fontSize: typeScale.callout,
             lineHeight: 22,
             textAlignVertical: 'top',
           }}

@@ -34,7 +34,7 @@ import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   executionModeForConversation,
@@ -198,7 +198,9 @@ function Tag({ label }: { label: string }) {
         paddingVertical: 2,
       }}
     >
-      <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -275,7 +277,7 @@ function NavRow({
         style={{
           flex: 1,
           color: active ? colors.textPrimary : colors.textSecondary,
-          fontSize: 15,
+          fontSize: typeScale.body,
           fontWeight: active ? '600' : '400',
         }}
       >
@@ -469,7 +471,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             style={{
               flex: 1,
               color: active ? colors.textPrimary : colors.textSecondary,
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               fontWeight: active ? '600' : '400',
             }}
           >
@@ -542,7 +544,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 20,
+              fontSize: typeScale.title3,
               fontFamily: 'Newsreader_600SemiBold',
               letterSpacing: 0.4,
               flex: 1,
@@ -596,7 +598,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   marginBottom: 8,
                   paddingHorizontal: 2,
@@ -625,7 +627,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                         >
                           <Text
                             numberOfLines={1}
-                            style={{ color: colors.textSecondary, fontSize: 14 }}
+                            style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}
                           >
                             {project.name}
                           </Text>
@@ -668,7 +670,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                                 justifyContent: 'center',
                               }}
                             >
-                              <Text style={{ color: colors.textMuted, fontSize: 14 }}>See all</Text>
+                              <Text
+                                style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
+                              >
+                                See all
+                              </Text>
                             </Pressable>
                           ) : null}
                         </View>
@@ -684,7 +690,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 marginBottom: 8,
                 paddingHorizontal: 2,
@@ -698,7 +704,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 {displayedConversations.map((conversation) => renderConversationRow(conversation))}
               </View>
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: 14, paddingHorizontal: 10 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.subhead,
+                  paddingHorizontal: 10,
+                }}
+              >
                 No recent chats
               </Text>
             )}
@@ -715,7 +727,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 justifyContent: 'space-between',
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>See all chats</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                See all chats
+              </Text>
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
           </View>

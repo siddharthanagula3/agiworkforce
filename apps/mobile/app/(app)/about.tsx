@@ -18,7 +18,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import pkg from '../../package.json';
 
@@ -63,7 +63,7 @@ function LinkRow({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Icon size={18} color={c.textSecondary} />
-        <Text style={{ color: c.textPrimary, fontSize: 14 }}>{label}</Text>
+        <Text style={{ color: c.textPrimary, fontSize: typeScale.subhead }}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -83,8 +83,11 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         gap: 16,
       }}
     >
-      <Text style={{ color: c.textSecondary, fontSize: 14 }}>{label}</Text>
-      <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: 14, flexShrink: 1 }}>
+      <Text style={{ color: c.textSecondary, fontSize: typeScale.subhead }}>{label}</Text>
+      <Text
+        numberOfLines={1}
+        style={{ color: c.textMuted, fontSize: typeScale.subhead, flexShrink: 1 }}
+      >
         {value}
       </Text>
     </View>
@@ -179,15 +182,15 @@ export default function AboutScreen() {
             <Sparkles size={30} color={c.teal} />
           </View>
           <View style={{ alignItems: 'center', gap: 4 }}>
-            <Text style={{ color: c.textPrimary, fontSize: 22, fontWeight: '700' }}>
+            <Text style={{ color: c.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}>
               AGI Workforce
             </Text>
-            <Text style={{ color: c.textMuted, fontSize: 16 }}>v{APP_VERSION}</Text>
+            <Text style={{ color: c.textMuted, fontSize: typeScale.callout }}>v{APP_VERSION}</Text>
           </View>
           <Text
             style={{
               color: c.textMuted,
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               textAlign: 'center',
               paddingHorizontal: 32,
               lineHeight: 19,
@@ -286,7 +289,9 @@ export default function AboutScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <MessageCircle size={18} color={c.textSecondary} />
-              <Text style={{ color: c.textPrimary, fontSize: 14 }}>Send Feedback</Text>
+              <Text style={{ color: c.textPrimary, fontSize: typeScale.subhead }}>
+                Send Feedback
+              </Text>
             </View>
           </Pressable>
           <Separator />
@@ -305,7 +310,9 @@ export default function AboutScreen() {
 
         {/* Footer */}
         <View style={{ alignItems: 'center', paddingTop: 8 }}>
-          <Text style={{ color: c.textMuted, fontSize: 11 }}>AGI Automation LLC · USA</Text>
+          <Text style={{ color: c.textMuted, fontSize: typeScale.caption }}>
+            AGI Automation LLC · USA
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

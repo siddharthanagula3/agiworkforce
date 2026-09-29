@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 
 export type AppMode = 'chat' | 'agent' | 'voice' | 'cloud' | 'local';
 
@@ -80,10 +80,19 @@ export function ModeSwitchModal({
             padding: dialogPadding,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 19, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+          >
             {title}
           </Text>
-          <Text style={{ marginTop: 8, color: colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
+          <Text
+            style={{
+              marginTop: 8,
+              color: colors.textSecondary,
+              fontSize: typeScale.footnote,
+              lineHeight: 20,
+            }}
+          >
             {targetsCloud
               ? 'Sign in to use AGI Cloud chat. Your local chat stays on this device unless you choose to start a Cloud session.'
               : 'This changes the active model path for the conversation.'}
@@ -104,7 +113,13 @@ export function ModeSwitchModal({
                 paddingHorizontal: 16,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 Cancel
               </Text>
             </Pressable>
@@ -119,7 +134,9 @@ export function ModeSwitchModal({
                 paddingHorizontal: 16,
               }}
             >
-              <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '700' }}
+              >
                 {targetsCloud ? 'Continue' : 'Switch'}
               </Text>
             </Pressable>

@@ -17,7 +17,7 @@ import {
   type ScheduleTemplate,
 } from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -271,7 +271,7 @@ export default function SchedulesScreen() {
                 <Text
                   style={{
                     color: selected ? colors.accentText : colors.textSecondary,
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     fontWeight: '600',
                   }}
                 >
@@ -285,7 +285,9 @@ export default function SchedulesScreen() {
 
       {schedules.length > 0 && sortOpen ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, fontWeight: '600' }}
+          >
             Sort by
           </Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>

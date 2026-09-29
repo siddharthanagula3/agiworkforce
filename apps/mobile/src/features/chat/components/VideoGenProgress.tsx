@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 
 export interface VideoGenProgressProps {
   prompt: string;
@@ -79,7 +79,7 @@ export function VideoGenProgress({
         </Animated.View>
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             fontWeight: '600',
             color: isError ? colors.agentError : colors.textPrimary,
           }}
@@ -87,11 +87,13 @@ export function VideoGenProgress({
           {STATUS_LABEL[status]}
         </Text>
         {progress !== undefined && !isError ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>{Math.round(progress)}%</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+            {Math.round(progress)}%
+          </Text>
         ) : null}
       </View>
 
-      <Text style={{ fontSize: 12, color: colors.textMuted }} numberOfLines={2}>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }} numberOfLines={2}>
         {isError ? (errorMessage ?? 'Something went wrong.') : prompt}
       </Text>
 
@@ -118,7 +120,7 @@ export function VideoGenProgress({
       ) : null}
 
       {!isError ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           This usually takes a minute or two. You can keep using the app.
         </Text>
       ) : null}
@@ -145,7 +147,9 @@ export function VideoGenProgress({
           }}
         >
           <Square size={11} color={colors.textSecondary} />
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}
+          >
             {stopping === true ? 'Stopping…' : 'Stop generating'}
           </Text>
         </Pressable>
@@ -155,7 +159,7 @@ export function VideoGenProgress({
         <Text
           testID="video-gen-stop-error"
           accessibilityRole="alert"
-          style={{ fontSize: 11, color: colors.agentError }}
+          style={{ fontSize: typeScale.caption, color: colors.agentError }}
         >
           Could not stop this generation: {stopError}
         </Text>

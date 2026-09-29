@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 interface ProvenanceFooterProps {
   provider?: string;
@@ -17,7 +17,7 @@ export function ProvenanceFooter({ provider, model }: ProvenanceFooterProps) {
     <View style={{ marginTop: 4, paddingHorizontal: 2 }}>
       <Text
         style={{
-          fontSize: 11,
+          fontSize: typeScale.caption,
           color: c.textMuted,
           letterSpacing: 0.1,
         }}

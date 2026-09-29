@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, View, Pressable } from 'react-native';
 import { Globe, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { setChineseHqProviderConsent } from '@/services/providerConsent';
 import { NamedProviderConsentModal } from '@/src/features/settings/cloud-privacy/NamedProviderConsentModal';
 import {
@@ -65,7 +65,12 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
       >
         <Globe size={14} color={colors.teal} strokeWidth={2} />
         <Text
-          style={{ fontSize: 12, color: colors.textPrimary, fontWeight: '500', flex: 1 }}
+          style={{
+            fontSize: typeScale.caption,
+            color: colors.textPrimary,
+            fontWeight: '500',
+            flex: 1,
+          }}
           numberOfLines={3}
         >
           {message}
@@ -77,7 +82,7 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
           accessibilityRole="button"
           accessibilityLabel={`Review ${state.displayName} provider consent`}
         >
-          <Text style={{ fontSize: 12, color: colors.teal, fontWeight: '600' }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '600' }}>
             {ENABLE_LABEL}
           </Text>
         </Pressable>

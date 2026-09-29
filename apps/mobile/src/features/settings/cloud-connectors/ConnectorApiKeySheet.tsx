@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
@@ -138,12 +138,16 @@ export function ConnectorApiKeySheet({
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.headline, fontWeight: '700', color: colors.textPrimary }}
+          >
             Connect {connectorName}
           </Text>
 
           {loadFailed ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: colors.agentError }}>
+            <Text
+              style={{ fontSize: typeScale.footnote, lineHeight: 19, color: colors.agentError }}
+            >
               Could not check how {connectorName} takes a key. Try again.
             </Text>
           ) : !spec ? (
@@ -152,18 +156,26 @@ export function ConnectorApiKeySheet({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
             >
               <ActivityIndicator color={colors.teal} />
-              <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+              <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                 Checking how {connectorName} takes a key…
               </Text>
             </View>
           ) : !acceptsKey ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+            <Text
+              style={{ fontSize: typeScale.footnote, lineHeight: 19, color: colors.textSecondary }}
+            >
               {spec.name} takes its key in the request {spec.placement}, which AGI Workforce does
               not send, so it cannot be connected.
             </Text>
           ) : (
             <>
-              <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: 19,
+                  color: colors.textSecondary,
+                }}
+              >
                 {spec.name} needs an API key. AGI Cloud tests it with {spec.name}, then stores it
                 encrypted.
               </Text>
@@ -179,12 +191,20 @@ export function ConnectorApiKeySheet({
                 onSubmitEditing={() => void submit()}
                 {...(saveError ? { error: saveError } : {})}
               />
-              <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary }}>
+              <Text
+                style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textSecondary }}
+              >
                 Sent as the {spec.headerName} header on every request.
                 {spec.connected ? ' A key is already saved, and a new one replaces it.' : ''}
               </Text>
               {spec.description ? (
-                <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    lineHeight: 17,
+                    color: colors.textSecondary,
+                  }}
+                >
                   {spec.description}
                 </Text>
               ) : null}
@@ -195,7 +215,9 @@ export function ConnectorApiKeySheet({
                   accessibilityLabel={`Where to find the ${spec.name} API key`}
                   style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.teal }}>
+                  <Text
+                    style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.teal }}
+                  >
                     Where to find this key
                   </Text>
                 </PressableBox>

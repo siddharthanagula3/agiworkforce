@@ -89,7 +89,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
 
           {/* Footer: last updated */}
           <View className="flex-row items-center justify-between pt-1">
-            <Text variant="caption" className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
               Updated {formatRelativeTime(project.updatedAt)}
             </Text>
           </View>

@@ -51,14 +51,12 @@ export function DesktopInfoCard({
               <View className="flex-row items-center gap-4">
                 <View className="flex-row items-center gap-1.5">
                   <Cpu size={12} color={colors.textMuted} />
-                  <Text className="text-[10px] text-white/40">{String(desktopMetadata.os)}</Text>
+                  <Text className="text-xs text-white/40">{String(desktopMetadata.os)}</Text>
                 </View>
                 {desktopMetadata.arch != null && (
                   <View className="flex-row items-center gap-1.5">
                     <HardDrive size={12} color={colors.textMuted} />
-                    <Text className="text-[10px] text-white/40">
-                      {String(desktopMetadata.arch)}
-                    </Text>
+                    <Text className="text-xs text-white/40">{String(desktopMetadata.arch)}</Text>
                   </View>
                 )}
               </View>

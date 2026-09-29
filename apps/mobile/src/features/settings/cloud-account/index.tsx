@@ -24,7 +24,7 @@ import {
   type AccountDeletionStatus,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -497,7 +497,7 @@ export default function CloudAccountScreen() {
                 numberOfLines={1}
                 style={{
                   color: colors.textPrimary,
-                  fontSize: 17,
+                  fontSize: typeScale.headline,
                   fontWeight: '700',
                   flexShrink: 1,
                 }}
@@ -507,7 +507,10 @@ export default function CloudAccountScreen() {
               <Pencil size={13} color={colors.textMuted} />
             </Pressable>
           )}
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}
+          >
             {userEmail || 'Signed in'}
           </Text>
         </View>
@@ -636,7 +639,7 @@ export default function CloudAccountScreen() {
             accessibilityRole="header"
             style={{
               color: colors.agentError,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               fontWeight: '700',
               letterSpacing: 0.4,
               textTransform: 'uppercase',

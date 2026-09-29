@@ -9,7 +9,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Text } from './text';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   title: string;
@@ -120,7 +120,7 @@ export function Button({
       accessibilityState={{ disabled: disabled || loading }}
       {...rest}
     >
-      <Text style={{ color: textColor, fontSize: 14, fontWeight: '500' }}>
+      <Text style={{ color: textColor, fontSize: typeScale.subhead, fontWeight: '500' }}>
         {loading ? 'Loading...' : title}
       </Text>
     </Pressable>

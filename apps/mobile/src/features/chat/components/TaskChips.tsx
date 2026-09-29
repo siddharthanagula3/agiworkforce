@@ -4,7 +4,7 @@ import { Image as ImageIcon, PenLine, Search } from 'lucide-react-native';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { useCapability } from '@/src/lib/capabilities';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
@@ -122,7 +122,7 @@ export function TaskChips({
                 <chip.Icon size={17} color={contentColor} strokeWidth={1.75} />
                 <Text
                   style={{
-                    fontSize: 14,
+                    fontSize: typeScale.subhead,
                     color: contentColor,
                     fontWeight: active ? '500' : '400',
                   }}

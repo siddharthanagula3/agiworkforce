@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,
@@ -174,7 +174,7 @@ export function ConversationExportSheet({
               <View style={{ flex: 1 }}>
                 <Text variant="subheading">Export Conversation</Text>
                 <Text
-                  style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}
+                  style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}
                   numberOfLines={1}
                 >
                   {title}
@@ -266,7 +266,7 @@ export function ConversationExportSheet({
                         <View style={{ flex: 1 }}>
                           <Text
                             style={{
-                              fontSize: 14,
+                              fontSize: typeScale.subhead,
                               fontWeight: '500',
                               color: isCopied
                                 ? colors.agentSuccess
@@ -279,7 +279,13 @@ export function ConversationExportSheet({
                               ? copyControlLabel(copyStatus, option.label)
                               : option.label}
                           </Text>
-                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: typeScale.caption,
+                              color: colors.textMuted,
+                              marginTop: 1,
+                            }}
+                          >
                             {option.description}
                           </Text>
                         </View>

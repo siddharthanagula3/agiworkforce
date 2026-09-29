@@ -12,7 +12,7 @@ import {
 } from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { CloudCodeGate } from './components/CloudCodeGate';
 import { CloudCodeSessionRow } from './components/CloudCodeSessionRow';
 import { NewCloudCodeSessionSheet } from './components/NewCloudCodeSessionSheet';
@@ -192,7 +192,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
               <Text
                 style={{
                   color: selected ? colors.accentText : colors.textSecondary,
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   fontWeight: '600',
                 }}
               >
@@ -224,7 +224,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
               {error ? (
                 <Text
                   accessibilityRole="alert"
-                  style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
                 >
                   {error}
                 </Text>
@@ -235,9 +235,21 @@ function SessionList({ onBack }: { onBack: () => void }) {
                 accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                  }}
+                >
                   {REMOTE_NOTE}{' '}
-                  <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.footnote,
+                      fontWeight: '700',
+                    }}
+                  >
                     {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
                   </Text>
                 </Text>

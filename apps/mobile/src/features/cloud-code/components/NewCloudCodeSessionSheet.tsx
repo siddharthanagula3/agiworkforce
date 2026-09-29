@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
 import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from '../service';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
@@ -166,7 +166,12 @@ export function NewCloudCodeSessionSheet({
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <Text
               accessibilityRole="header"
-              style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+              style={{
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.headline,
+                fontWeight: '600',
+              }}
             >
               New cloud session
             </Text>
@@ -189,7 +194,9 @@ export function NewCloudCodeSessionSheet({
             contentContainerStyle={{ gap: 16, paddingBottom: 32 }}
           >
             <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Task</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                Task
+              </Text>
               <TextInput
                 value={task}
                 onChangeText={setTask}
@@ -204,7 +211,9 @@ export function NewCloudCodeSessionSheet({
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Repository</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                Repository
+              </Text>
               <TextInput
                 value={search}
                 onChangeText={setSearch}
@@ -231,7 +240,9 @@ export function NewCloudCodeSessionSheet({
                       }
                       style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 }}
                     >
-                      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                      <Text
+                        style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}
+                      >
                         {label}
                       </Text>
                       {selected ? <Check size={16} color={colors.textPrimary} /> : null}
@@ -241,7 +252,10 @@ export function NewCloudCodeSessionSheet({
               </View>
               {loadingRepositories ? <ActivityIndicator color={colors.textMuted} /> : null}
               {repositoriesError ? (
-                <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                <Text
+                  accessibilityRole="alert"
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+                >
                   {repositoriesError}
                 </Text>
               ) : null}
@@ -264,7 +278,9 @@ export function NewCloudCodeSessionSheet({
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Network access</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                Network access
+              </Text>
               <View accessibilityRole="radiogroup">
                 {NETWORK_OPTIONS.map((option) => {
                   const locked = repository !== null && option.id === 'none';
@@ -286,10 +302,10 @@ export function NewCloudCodeSessionSheet({
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+                        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
                           {option.label}
                         </Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
                           {option.description}
                         </Text>
                       </View>
@@ -301,7 +317,10 @@ export function NewCloudCodeSessionSheet({
             </View>
 
             {error ? (
-              <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+              <Text
+                accessibilityRole="alert"
+                style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+              >
                 {error}
               </Text>
             ) : null}

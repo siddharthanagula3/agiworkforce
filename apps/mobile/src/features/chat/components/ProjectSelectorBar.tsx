@@ -8,7 +8,7 @@ import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion, typeScale } from '@/src/ui/theme';
 
 interface ProjectOption {
   id: string;
@@ -62,7 +62,12 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
         </Text>
         {project.description ? (
           <Text
-            style={{ color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: 2 }}
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.caption,
+              lineHeight: 15,
+              marginTop: 2,
+            }}
             numberOfLines={1}
           >
             {project.description}
@@ -186,7 +191,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
             accessibilityRole="button"
           >
             <FolderMinus size={12} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>No project</Text>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>No project</Text>
             <ChevronDown size={11} color={colors.textMuted} />
           </Pressable>
         )}
@@ -250,13 +255,19 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                   paddingBottom: 10,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.title3,
+                    fontWeight: '700',
+                  }}
+                >
                   Projects
                 </Text>
                 <Text
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 18,
                     marginTop: 3,
                   }}
@@ -277,7 +288,13 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                   borderBottomColor: colors.border,
                 }}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   Select project
                 </Text>
                 <Pressable
@@ -328,7 +345,14 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                 >
                   <FolderMinus size={16} color={colors.textMuted} />
                 </View>
-                <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 19, flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: typeScale.subhead,
+                    lineHeight: 19,
+                    flex: 1,
+                  }}
+                >
                   No project
                 </Text>
                 {!activeProjectId && <Check size={16} color={colors.textMuted} />}

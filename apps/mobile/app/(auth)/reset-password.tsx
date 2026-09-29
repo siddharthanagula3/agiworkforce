@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
@@ -50,7 +50,7 @@ export default function ResetPasswordScreen() {
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16 }}>
         <Text
           style={{
-            fontSize: 24,
+            fontSize: typeScale.title2,
             lineHeight: 30,
             fontWeight: '700',
             color: themeColors.textPrimary,
@@ -59,7 +59,7 @@ export default function ResetPasswordScreen() {
           Recover your AGI account
         </Text>
 
-        <Text style={{ color: themeColors.textMuted, fontSize: 15, lineHeight: 22 }}>
+        <Text style={{ color: themeColors.textMuted, fontSize: typeScale.body, lineHeight: 22 }}>
           For account security, password recovery opens in your AGI web account. If you lost the
           email address or two-factor device on the account, a person can verify it is yours and
           restore access. Local Mode data on this device stays separate.

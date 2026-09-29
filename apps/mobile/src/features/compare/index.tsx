@@ -26,7 +26,7 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getCloudModelsForTier, getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getPlanMaxConcurrentTurns, requireProviderDefaultModel } from '@agiworkforce/types';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -540,7 +540,9 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
           className="w-5 h-5 rounded-md items-center justify-center"
           style={{ backgroundColor: `${slotColor}30` }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: slotColor }}>{slot}</Text>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '700', color: slotColor }}>
+            {slot}
+          </Text>
         </View>
 
         <View className="flex-1">
@@ -548,7 +550,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
             {displayName}
           </Text>
           {provider && (
-            <Text className="text-[10px] text-fg-muted" numberOfLines={1}>
+            <Text className="text-xs text-fg-muted" numberOfLines={1}>
               {provider.name}
             </Text>
           )}
@@ -561,7 +563,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
         )}
         {winner === 'tie' && (
           <View className="flex-row items-center gap-0.5">
-            <Text style={{ fontSize: 10, color: colors.textMuted }}>tie</Text>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>tie</Text>
           </View>
         )}
       </View>
@@ -589,7 +591,9 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
           className="w-5 h-5 rounded-md items-center justify-center"
           style={{ backgroundColor: `${slotColor}30` }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: slotColor }}>{slot}</Text>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '700', color: slotColor }}>
+            {slot}
+          </Text>
         </View>
         <Text className="flex-1 text-[13px] font-medium text-white" numberOfLines={1}>
           {displayName}
@@ -599,7 +603,9 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         {winner && (
           <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
             <Trophy size={10} color="#f59e0b" />
-            <Text style={{ fontSize: 10, fontWeight: '600', color: '#f59e0b' }}>Faster</Text>
+            <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: '#f59e0b' }}>
+              Faster
+            </Text>
           </View>
         )}
       </View>
@@ -665,7 +671,7 @@ function StatChip({ icon, label, title }: StatChipProps) {
   return (
     <View className="flex-row items-center gap-1" accessibilityLabel={title}>
       {icon}
-      <Text className="text-[10px] text-fg-muted">{label}</Text>
+      <Text className="text-xs text-fg-muted">{label}</Text>
     </View>
   );
 }

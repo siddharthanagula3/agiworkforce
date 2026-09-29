@@ -10,7 +10,7 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { toUserMessage } from '@/services/userMessage';
 
 const PREFERENCE_NAMESPACE = 'memory';
@@ -180,7 +180,7 @@ export default function MemoryExclusionsScreen() {
             borderColor: colors.border,
             backgroundColor: colors.surfaceElevated,
             color: colors.textPrimary,
-            fontSize: 15,
+            fontSize: typeScale.body,
           }}
         />
         <Pressable
@@ -201,14 +201,21 @@ export default function MemoryExclusionsScreen() {
             opacity: busy || draft.trim().length === 0 ? 0.55 : 1,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>Add</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+            Add
+          </Text>
         </Pressable>
       </View>
 
       {error ? (
         <Text
           accessibilityRole="alert"
-          style={{ color: colors.agentError, fontSize: 13, lineHeight: 18, marginBottom: 12 }}
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginBottom: 12,
+          }}
         >
           {error}
         </Text>
@@ -221,7 +228,14 @@ export default function MemoryExclusionsScreen() {
           style={{ marginVertical: 16 }}
         />
       ) : exclusions.excludedTerms.length === 0 ? (
-        <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginBottom: 24 }}>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginBottom: 24,
+          }}
+        >
           No exclusions yet. Everything the assistant learns is eligible to be remembered.
         </Text>
       ) : (
@@ -239,7 +253,9 @@ export default function MemoryExclusionsScreen() {
                 backgroundColor: colors.surfaceElevated,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{term}</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
+                {term}
+              </Text>
               <Pressable
                 onPress={() => removeTerm(term)}
                 disabled={saving}
@@ -257,7 +273,7 @@ export default function MemoryExclusionsScreen() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 11,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           letterSpacing: 0.7,
           marginBottom: 8,
@@ -278,7 +294,14 @@ export default function MemoryExclusionsScreen() {
           />
         ))}
       </SettingsGroup>
-      <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginBottom: 24 }}>
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: typeScale.caption,
+          lineHeight: 17,
+          marginBottom: 24,
+        }}
+      >
         Turn a source off to keep its memories out of every answer. They stay saved and listed, and
         turning off automatic capture also stops new ones being written.
       </Text>
