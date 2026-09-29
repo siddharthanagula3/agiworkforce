@@ -228,6 +228,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
       planTier: entitlement.plan,
       signal: request.signal,
       plan,
+      idempotencyKey: request.headers.get('idempotency-key'),
     });
     const body: ArtifactRuntimeCompleteResponse = { text };
     return NextResponse.json(body, { headers: NO_STORE });

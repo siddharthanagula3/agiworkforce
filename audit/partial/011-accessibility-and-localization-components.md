@@ -23,9 +23,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
+| mobile | partial | partials/chat-gates 4c1978e857: heading and subheading text is a header for screen readers, which covers projects, companion and about. Settings section titles are held: post-codex/w-chat-s11.02-mobile-settings-headers.patch. | ui |
 
-Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
+Code: `apps/mobile/components/ui/text.tsx:38-38`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -35,18 +35,6 @@ Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S11.07: Screen-reader announcements for completed events.
-
-- Done when: When something finishes (a reply, a tool step, a save, a connection), a screen reader hears a short announcement without moving focus.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only the benchmark screen announces; finished replies, tool steps and saves are never announced (no announceForAccessibility or live region in chat). | ui |
-
-Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 
 ## S11.08: Non-spammy streaming announcements.
 
@@ -66,9 +54,9 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Text follows the OS font scale, but several labels cap it at 1.3-1.4x (maxFontSizeMultiplier), below the 200% target. | ui |
+| mobile | partial | partials/chat-gates 9d7c2a2985: the mode toggle scales to 2x. The chats list and settings rows are held: post-codex/w-chat-s11.12-mobile-text-scale.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:406-406`
+Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`
 
 ## S11.13: Browser-zoom reflow.
 
@@ -78,30 +66,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S11.15: Captions.
-
-- Done when: Spoken audio (voice conversations) can be shown as live captions.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Prints "You said:" and the streamed reply text. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:213-213`
-
-## S11.16: Transcripts.
-
-- Done when: A voice conversation leaves a readable text transcript kept with the chat.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
-
-Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
 
 ## S11.19: Right-to-left layouts.
 
@@ -157,9 +121,9 @@ Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
+| mobile | partial | partials/chat-gates aa8c3e8703: counts use each language's plural rules through translatePlural over the shared catalogs, with five new keys in all twelve locales. The held archived-chats and workspace screens are in post-codex/w-chat-s11.24-mobile-held-plurals.patch. The Russian and Arabic forms await the owner's native-speaker review. | ui |
 
-Code: `apps/mobile/app/(app)/notifications/index.tsx:307-307`
+Code: `apps/mobile/src/i18n/plural.ts:16-16`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:94-94`
 
 ## S11.25: Translated error messages.
 

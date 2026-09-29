@@ -219,7 +219,10 @@ export function applyCloudSettings(partial: CloudSettings): void {
   if (partial.general) {
     const { preferredName, workDescription, aboutYou, instructions } = partial.general;
     const patch: Partial<Personalization> = {};
-    if (preferredName !== undefined) patch.nickname = preferredName;
+    if (preferredName !== undefined) {
+      patch.nickname = preferredName;
+      patch.nameOptedOut = preferredName.trim() === '';
+    }
     if (workDescription !== undefined) patch.occupation = workDescription;
     if (typeof aboutYou === 'string') patch.aboutYou = aboutYou;
     if (instructions !== undefined) patch.instructions = instructions;

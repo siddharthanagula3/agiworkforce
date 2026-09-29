@@ -12,6 +12,7 @@ const WEBVIEW_IMPORT = /from 'react-native-webview'/;
 // and no third may appear: a hand-rolled WebView sign-in is the pattern both
 // stores reject and the one this contract exists to keep out.
 const WEBVIEW_SURFACES = [
+  'src/features/chat/components/GeneratedVideo.tsx',
   'src/features/chat/components/MathBlock.tsx',
   'src/features/chat/components/SafeArtifactPreview.tsx',
 ];

@@ -16,18 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S8.07: Button groups.
-
-- Done when: Related buttons are grouped into a labelled button group in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Choices are grouped as tab or radio sets (ModeToggle tablist, StyleSelector radiogroup), but there is no labelled group of ordinary action buttons. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:136-136`
-
 ## S8.13: One-time-code fields.
 
 - Done when: A one-time-code field (short numeric code, one-time-code autofill or paste) is used where the product asks for a code.
@@ -111,11 +99,11 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mob
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule dates are typed into a text field (YYYY-MM-DD) and validated; add a native date picker. | ui |
+| mobile | partial | post-codex/w-chat-s8.25-s8.26-mobile-native-date-time-pickers.patch adds @react-native-community/datetimepicker 9.1.0 (Expo SDK 57's bundled version) to the held apps/mobile/package.json and replaces the typed date with the native date picker (Android dialog, iOS inline). Lead installs after Codex commits; the patch is typechecked once the module is installed. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:55-56`
+Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.26: Time pickers.
 
@@ -125,23 +113,11 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:55-56`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule times are typed as HH:MM text and validated; add a native time picker. | ui |
+| mobile | partial | Same post-codex patch as S8.25: the hour and minute lists become the native time picker. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:83-83`
-
-## S8.27: Timezone pickers.
-
-- Done when: A time zone picker (searchable list of zones, defaulting to the device zone) is used where schedules take a zone.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The time zone defaults to the device zone but is edited as free text validated against Intl; add a zone picker. | ui |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:29-29`
+Code: `apps/mobile/src/features/schedules/components/RecurrencePicker.tsx:1-1`
 
 ## S8.28: Color pickers.
 
@@ -232,10 +208,10 @@ Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only Android's 'Press back again to exit' uses a toast; other transient feedback on both platforms is inline state or Alert dialogs. Add a cross-platform toast. | ui |
+| mobile | partial | A cross-platform toast (showToast, ToastHost, with an optional action, announced to screen readers, dismissing after 5 s) mounted at the app root, in post-codex/w-chat-s8.45-s10.05-mobile-toast-and-archive-undo.patch. The root layout is held, so the new file ships inside the patch. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/_layout.tsx:671-671`
+Code: `apps/mobile/src/ui/theme/tokens.ts:285-285`
 
 ## S8.48: Pagination controls.
 
@@ -255,6 +231,6 @@ Code: `apps/mobile/app/_layout.tsx:671-671`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Route error boundaries exist, but the main Chats list has no load-error or loading state: a failed load shows "No chats yet" (ListEmptyComponent) instead of an error with retry. | states |
+| mobile | partial | Codex's held ChatsListScreen already shows a load error with Retry and a Loading chats state instead of No chats yet. Done once Codex commits it; nothing to add. | codex |
 
-Code: `apps/mobile/app/(app)/_layout.tsx:9-9`, `apps/mobile/app/(app)/error.tsx:14-14`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:471-484`
+Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:1-1`

@@ -261,29 +261,23 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:892-892`, `pa
 ## S13.36: Dictation control.
 
 - Done when: A microphone control dictates speech into the composer text (without sending) for review.
-- Wave: 2
-- Already works on: web, desktop, mobile, chrome
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done: /dictate records into the composer without sending, transcribing on the account for Managed sessions. Stays flag-off until the voice cargo feature ships. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4945-4945`, `apps/cli/src/voice.rs:299-299`
 
 ## S13.37: Voice-conversation control.
 
 - Done when: A control starts a hands-free voice conversation (speak, hear the reply) from the composer.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Account transcription added in 572286763; flag-off until the voice cargo feature ships. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 ## S13.38: Queued next prompt.
 
@@ -304,11 +298,11 @@ Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add Edit for queued messages; each queued message can only be cancelled. | ui |
+| mobile | partial | A queued message gets Edit beside Cancel, which takes it out of the queue into the message box, in post-codex/w-chat-s13.39-s14.31-mobile-queue-edit-and-duplicates.patch. ChatInput is held. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:1-1`
 
 ## S13.40: Mid-task steering input.
 

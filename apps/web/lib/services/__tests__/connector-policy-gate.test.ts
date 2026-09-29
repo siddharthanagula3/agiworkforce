@@ -23,8 +23,8 @@ vi.mock('@/lib/services/connector-policy-service', () => ({ readConnectorPolicyS
 vi.mock('@/lib/connectors/connector-capability', () => ({
   connectorsAllowedWithoutRequest: connectorsAllowed,
 }));
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
+vi.mock('@/lib/services/entitlement-resolution', () => ({
+  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
 }));
 
 import {

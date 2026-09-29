@@ -286,10 +286,10 @@ async function handleGetMe(request: NextRequest) {
       catalogVersion: entitlement.catalogVersion,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
-      closedCapabilities: [
-        ...platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),
+      closedCapabilities: platformCapabilitiesOf([
+        ...(killSwitches?.closedCapabilities ?? []),
         ...workspaceCapabilities.unreadable,
-      ],
+      ]),
       userDisabledCapabilities: await userDisabledCapabilities(db, userId),
       workspaceDisabledCapabilities: workspaceCapabilities.disabled,
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),

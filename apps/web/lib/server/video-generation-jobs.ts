@@ -376,8 +376,9 @@ export async function createVideoGenerationJob(input: {
            from public.web_conversations
           where id = $1
             and user_id = $2
+            and organization_id is not distinct from $3::uuid
             and deleted_at is null`,
-        [conversationId, input.userId],
+        [conversationId, input.userId, input.organizationId],
       );
       if (!conversationRows[0]) {
         throw new Error('Video chat conversation is missing or belongs to another account.');
@@ -417,7 +418,7 @@ export async function createVideoGenerationJob(input: {
          $15, $16, $17, $18, $19,
          exists (
            select 1 from public.web_conversations c
-            where c.id = $4::uuid and coalesce(c.is_temporary, false)
+            where c.id = $4::uuid and coalesce(c.is_temporary, false) and c.deleted_at is null
          )
        )
        returning ${JOB_COLUMNS}`,

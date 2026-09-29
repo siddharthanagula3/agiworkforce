@@ -276,7 +276,7 @@ describe('the Work kill switch', () => {
     await startCloudAgentWorkflowExecution(baseInput());
 
     const [subject, capability, label] = workflowMocks.assertCapabilityAvailable.mock.calls[0]!;
-    expect(capability).toBe('work');
+    expect(capability).toBe('canUseAgiWork');
     expect(label).toBe('Work');
     expect(subject).toMatchObject({ userId: 'user-1', workspaceId: null });
   });

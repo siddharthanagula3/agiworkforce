@@ -66,11 +66,8 @@ Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/li
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only an iOS route choice (speaker, Bluetooth, headset); no list of individual devices and nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-61`
 
 ## S9.11: Member and recipient picker.
 
@@ -150,10 +147,7 @@ Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 ## S9.22: Stepper.
 
@@ -173,10 +167,7 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | On tablets the drawer stays open beside the chat at a fixed width; let the user resize it, and add a chat-plus-artifact split. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:50-50`
 
 ## S9.25: Docking layout manager.
 
@@ -217,15 +208,12 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`,
 
 - Done when: The user can open an answer's sources and see each one's title, origin and the excerpt it contributed, then open it.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources expand to a list of titles and domains that open in the browser; show the excerpt each source contributed. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`
 
 ## S9.30: Credit-balance card.
 
@@ -257,12 +245,12 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Warns only about plan tier (premium model on Free) and reference images for image models; add warnings when the model cannot read an attachment or use tools. | handler |
+| mobile | partial | Before sending, the composer warns when the chosen model cannot read attached images (vision false; Auto excluded), in post-codex/w-chat-s9.34-s78.03-mobile-image-capability-warning.patch. Tool and context-size warnings remain. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ModelTierWarningBanner.tsx:33-33`, `apps/mobile/app/(app)/chat/[id].tsx:1467-1467`
+Code: `packages/contracts/types/src/model-catalog.ts:113-113`
 
 ## S9.36: Interactive result widget.
 
