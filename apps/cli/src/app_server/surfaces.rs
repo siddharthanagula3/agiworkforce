@@ -1494,58 +1494,62 @@ mod tests {
 
     #[test]
     fn instruction_preview_names_exactly_the_files_a_turn_loads() {
-        let root = tempdir().expect("fixture root");
-        let root_path = root.path();
-        std::fs::create_dir_all(root_path.join(".git")).expect("root marker");
-        std::fs::write(root_path.join("AGENTS.md"), "root contract").expect("root AGENTS.md");
+        let home = tempfile::tempdir().expect("config home");
+        crate::compaction::with_config_home(home.path(), || {
+            let root = tempdir().expect("fixture root");
+            let root_path = root.path();
+            std::fs::create_dir_all(root_path.join(".git")).expect("root marker");
+            std::fs::write(root_path.join("AGENTS.md"), "root contract").expect("root AGENTS.md");
 
-        let nested = root_path.join("apps").join("web");
-        std::fs::create_dir_all(nested.join(".agiworkforce")).expect("nested dirs");
-        std::fs::write(nested.join("CLAUDE.md"), "nested adapter").expect("nested CLAUDE.md");
-        std::fs::write(
-            nested.join(".agiworkforce").join("instructions.md"),
-            "nested instructions",
-        )
-        .expect("nested instructions");
+            let nested = root_path.join("apps").join("web");
+            std::fs::create_dir_all(nested.join(".agiworkforce")).expect("nested dirs");
+            std::fs::write(nested.join("CLAUDE.md"), "nested adapter").expect("nested CLAUDE.md");
+            std::fs::write(
+                nested.join(".agiworkforce").join("instructions.md"),
+                "nested instructions",
+            )
+            .expect("nested instructions");
 
-        let preview = context_instructions(&nested);
-        let previewed: Vec<String> = preview.files.iter().map(|file| file.path.clone()).collect();
+            let preview = context_instructions(&nested);
+            let previewed: Vec<String> =
+                preview.files.iter().map(|file| file.path.clone()).collect();
 
-        let loaded =
-            crate::compaction::load_instructions(&nested).expect("turn loads instructions");
-        for path in &previewed {
-            assert!(
-                loaded.contains(path.as_str()),
-                "preview names {path}, which the turn never loaded"
+            let loaded =
+                crate::compaction::load_instructions(&nested).expect("turn loads instructions");
+            for path in &previewed {
+                assert!(
+                    loaded.contains(path.as_str()),
+                    "preview names {path}, which the turn never loaded"
+                );
+            }
+            let loaded_count = loaded.matches("<!-- Instructions from: ").count();
+            assert_eq!(
+                loaded_count,
+                previewed.len(),
+                "the turn loaded {loaded_count} files but the preview named {}",
+                previewed.len()
             );
-        }
-        let loaded_count = loaded.matches("<!-- Instructions from: ").count();
-        assert_eq!(
-            loaded_count,
-            previewed.len(),
-            "the turn loaded {loaded_count} files but the preview named {}",
-            previewed.len()
-        );
 
-        assert!(previewed
-            .iter()
-            .any(|path| path.ends_with("AGENTS.md") && path.starts_with(&display(root_path))));
-        assert!(previewed.iter().any(|path| path.ends_with("CLAUDE.md")));
-        assert!(previewed
-            .iter()
-            .any(|path| path.ends_with("instructions.md")));
-        assert_eq!(
-            preview.project_root.as_deref(),
-            Some(display(root_path).as_str())
-        );
-        assert!(!preview.truncated);
+            assert!(previewed
+                .iter()
+                .any(|path| path.ends_with("AGENTS.md") && path.starts_with(&display(root_path))));
+            assert!(previewed.iter().any(|path| path.ends_with("CLAUDE.md")));
+            assert!(previewed
+                .iter()
+                .any(|path| path.ends_with("instructions.md")));
+            assert_eq!(
+                preview.project_root.as_deref(),
+                Some(display(root_path).as_str())
+            );
+            assert!(!preview.truncated);
 
-        let root_first = preview
-            .files
-            .first()
-            .expect("at least one instruction file");
-        assert_eq!(root_first.kind, InstructionFileKind::Agents);
-        assert_eq!(root_first.root, display(root_path));
+            let root_first = preview
+                .files
+                .first()
+                .expect("at least one instruction file");
+            assert_eq!(root_first.kind, InstructionFileKind::Agents);
+            assert_eq!(root_first.root, display(root_path));
+        })
     }
 
     #[test]
