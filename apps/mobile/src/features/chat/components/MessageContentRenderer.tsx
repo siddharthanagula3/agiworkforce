@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { View, Linking, Pressable, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
