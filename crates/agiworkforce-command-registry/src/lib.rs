@@ -212,6 +212,27 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "thread",
+            "Start a parallel thread on a copy of this conversation (/thread <instruction>)",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "threads",
+            "List the parallel threads started from this conversation",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "gather",
+            "Bring finished threads' results back into this conversation",
+            false,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "background",
             "Move this conversation to a background run (/bg <instruction>)",
             false,

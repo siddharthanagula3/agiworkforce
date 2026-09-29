@@ -1548,6 +1548,7 @@ fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
                 resume_session: None,
                 model: model.as_deref(),
                 permission_mode: mode.as_deref(),
+                parent_session: None,
             })?;
             println!(
                 "Started background run {id}. It keeps going after this terminal closes.\n  agi background logs {id}    see its output\n  agi background attach {id}  continue the conversation when it is done\n  agi background stop {id}    stop it",

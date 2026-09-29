@@ -42,6 +42,9 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "table",
         "background",
         "bg",
+        "thread",
+        "threads",
+        "gather",
         "new",
         "mcp",
         "output-style",
@@ -134,6 +137,18 @@ pub fn handle_shared_command(
     match command.as_str() {
         "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
+        "/thread" => ParityCommandResult::SystemMessage(
+            match crate::background::spawn_thread(session, arg) {
+                Ok(message) | Err(message) => message,
+            },
+        ),
+        "/threads" => {
+            ParityCommandResult::SystemMessage(crate::background::threads_summary(session))
+        }
+        "/gather" => match crate::background::gather_prompt(session) {
+            Ok(prompt) => ParityCommandResult::Prompt(prompt),
+            Err(message) => ParityCommandResult::SystemMessage(message),
+        },
         "/background" | "/bg" => ParityCommandResult::SystemMessage(
             match crate::background::hand_off(session, arg) {
                 Ok(message) | Err(message) => message,
