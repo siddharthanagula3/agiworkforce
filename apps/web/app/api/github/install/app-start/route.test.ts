@@ -29,10 +29,11 @@ vi.mock('@/lib/github-install-app-return', () => ({
 
 import { POST } from './route';
 
-function startRequest(): NextRequest {
+function startRequest(body?: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/github/install/app-start', {
     method: 'POST',
-    headers: { authorization: 'Bearer token' },
+    headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -48,7 +49,7 @@ describe('POST /api/github/install/app-start', () => {
     const response = await POST(startRequest());
 
     expect(response.status).toBe(200);
-    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1');
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_scheme');
     const body = (await response.json()) as { url: string };
     const url = new URL(body.url);
     expect(url.origin + url.pathname).toBe(
@@ -73,6 +74,25 @@ describe('POST /api/github/install/app-start', () => {
     const response = await POST(startRequest());
 
     expect(response.status).toBe(503);
+    expect(mocks.startAppInstall).not.toHaveBeenCalled();
+  });
+
+  it('asks for the verified App Link return when Android starts the install', async () => {
+    await POST(startRequest({ platform: 'android' }));
+
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_link');
+  });
+
+  it('keeps the auth-session scheme for iOS', async () => {
+    await POST(startRequest({ platform: 'ios' }));
+
+    expect(mocks.startAppInstall).toHaveBeenCalledWith('user-1', 'app_scheme');
+  });
+
+  it('rejects an unknown platform', async () => {
+    const response = await POST(startRequest({ platform: 'windows' }));
+
+    expect(response.status).toBe(400);
     expect(mocks.startAppInstall).not.toHaveBeenCalled();
   });
 });

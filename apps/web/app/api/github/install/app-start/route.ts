@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { GitHubInstallAppStartResponse } from '@agiworkforce/cloud-contracts';
+import {
+  GitHubInstallAppStartRequestSchema,
+  type GitHubInstallAppStartResponse,
+} from '@agiworkforce/cloud-contracts';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
@@ -21,6 +24,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse as NextResponse;
 
+  const parsed = GitHubInstallAppStartRequestSchema.safeParse(
+    (await request.json().catch(() => null)) ?? {},
+  );
+  if (!parsed.success) {
+    throw createError.validation('Invalid GitHub install request', parsed.error.flatten());
+  }
+
   const codeGate = await buildWorkspaceCodeGateResponse(
     getNeonDb(),
     userId,
@@ -34,7 +44,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw createError.serviceUnavailable('GitHub cannot be connected right now.');
   }
 
-  const state = await startAppInstall(userId);
+  const state = await startAppInstall(
+    userId,
+    parsed.data.platform === 'android' ? 'app_link' : 'app_scheme',
+  );
   const target = new URL(installUrl);
   target.searchParams.set('state', state);
 

@@ -20,8 +20,10 @@ vi.mock('@/lib/github-app', () => ({
 }));
 
 import {
+  appInstallReturn,
   appInstallReturnUrl,
   consumeAppInstall,
+  pendingAppInstallation,
   recordAppInstallation,
   startAppInstall,
 } from '../github-install-app-return';
@@ -35,7 +37,7 @@ describe('GitHub app install state', () => {
   });
 
   it("purges the account's spent rows, then stores only the hash of the install state", async () => {
-    const state = await startAppInstall('user-1');
+    const state = await startAppInstall('user-1', 'app_link');
 
     const [purge, purgeParams] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(purge).toMatch(/delete from public\.github_install_authorizations/);
@@ -43,12 +45,14 @@ describe('GitHub app install state', () => {
     expect(purgeParams).toEqual(['user-1']);
     const [sql, params] = mocks.query.mock.calls[1] as [string, unknown[]];
     expect(sql).toMatch(/insert into public\.github_install_authorizations/);
-    expect(params).toEqual(['user-1', sha256(state), 10]);
+    expect(params).toEqual(['user-1', sha256(state), 10, 'app_link']);
     expect(params).not.toContain(state);
   });
 
   it('records an installation only once, on an open row', async () => {
-    mocks.query.mockResolvedValueOnce([{ user_id: 'user-1' }]).mockResolvedValueOnce([]);
+    mocks.query
+      .mockResolvedValueOnce([{ user_id: 'user-1', return_target: 'app_link' }])
+      .mockResolvedValueOnce([]);
 
     const recorded = await recordAppInstallation('e'.repeat(64), 42);
     expect(await recordAppInstallation('e'.repeat(64), 43)).toBeNull();
@@ -64,6 +68,7 @@ describe('GitHub app install state', () => {
     expect(recorded).toEqual({
       oauthState: 'a'.repeat(64),
       codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
+      returnTarget: 'app_link',
     });
   });
 
@@ -90,9 +95,41 @@ describe('GitHub app install state', () => {
     expect(await consumeAppInstall('user-1', 'b'.repeat(64))).toBeNull();
   });
 
-  it('builds the app return link with only the values present', () => {
-    expect(appInstallReturnUrl({ state: 's', code: null, error: 'denied' }).toString()).toBe(
-      'agiworkforce://github/installed?state=s&error=denied',
+  it('builds the return link for each target with only the values present', () => {
+    expect(
+      appInstallReturnUrl('app_scheme', { state: 's', code: null, error: 'denied' }).toString(),
+    ).toBe('agiworkforce://github/installed?state=s&error=denied');
+    expect(appInstallReturnUrl('app_link', { state: 's', code: 'c' }).toString()).toBe(
+      'https://agiworkforce.com/github/installed?state=s&code=c',
     );
+  });
+
+  it('reads the return target of an open row and treats anything unknown as the scheme', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ user_id: 'user-1', return_target: 'app_link' }])
+      .mockResolvedValueOnce([{ user_id: 'user-1', return_target: 'other' }])
+      .mockResolvedValueOnce([]);
+
+    expect(await appInstallReturn('b'.repeat(64))).toEqual({
+      userId: 'user-1',
+      returnTarget: 'app_link',
+    });
+    expect(await appInstallReturn('b'.repeat(64))).toEqual({
+      userId: 'user-1',
+      returnTarget: 'app_scheme',
+    });
+    expect(await appInstallReturn('b'.repeat(64))).toBeNull();
+  });
+
+  it('shows a pending installation only to the account that started it', async () => {
+    mocks.query.mockResolvedValueOnce([{ installation_id: '42' }]).mockResolvedValueOnce([]);
+
+    expect(await pendingAppInstallation('user-1', 'b'.repeat(64))).toBe(42);
+    expect(await pendingAppInstallation('user-2', 'b'.repeat(64))).toBeNull();
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/user_id = \$2/);
+    expect(sql).toMatch(/consumed_at is null/);
+    expect(params).toEqual([sha256('b'.repeat(64)), 'user-1']);
   });
 });

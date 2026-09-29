@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   findInstallation: vi.fn(),
   linkingAvailable: vi.fn(),
   query: vi.fn(),
-  appInstallOwner: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
+  appInstallReturn: vi.fn(
+    async (..._args: unknown[]): Promise<{ userId: string; returnTarget: string } | null> => null,
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -53,7 +55,7 @@ vi.mock('@/lib/github-app', () => ({
 
 vi.mock('@/lib/github-install-app-return', async (importActual) => ({
   ...(await importActual<typeof import('@/lib/github-install-app-return')>()),
-  appInstallOwner: (...args: unknown[]) => mocks.appInstallOwner(...args),
+  appInstallReturn: (...args: unknown[]) => mocks.appInstallReturn(...args),
 }));
 
 import { GET } from './route';
@@ -88,7 +90,7 @@ describe('GitHub OAuth callback ownership proof', () => {
       verifiedRepositories: ['verified-org/app'],
     });
     mocks.query.mockResolvedValue([{ id: 'row-1' }]);
-    mocks.appInstallOwner.mockResolvedValue(null);
+    mocks.appInstallReturn.mockResolvedValue(null);
   });
 
   it('rejects a state mismatch before exchanging the code', async () => {
@@ -215,7 +217,7 @@ describe('GitHub OAuth callback ownership proof', () => {
   });
 
   it('hands an app install back to the app without a web session or finishing it', async () => {
-    mocks.appInstallOwner.mockResolvedValue('user-1');
+    mocks.appInstallReturn.mockResolvedValue({ userId: 'user-1', returnTarget: 'app_scheme' });
     mocks.cookieValues.clear();
 
     const response = await GET(callbackRequest());
@@ -233,12 +235,23 @@ describe('GitHub OAuth callback ownership proof', () => {
   });
 
   it('passes a denied app authorization back as denied without the code', async () => {
-    mocks.appInstallOwner.mockResolvedValue('user-1');
+    mocks.appInstallReturn.mockResolvedValue({ userId: 'user-1', returnTarget: 'app_scheme' });
 
     const response = await GET(callbackRequest(`error=access_denied&state=${OAUTH_STATE}`));
 
     const location = new URL(response.headers.get('location') ?? '');
     expect(location.searchParams.get('error')).toBe('denied');
     expect(location.searchParams.get('code')).toBeNull();
+  });
+
+  it('returns an Android install over the verified https App Link, never the custom scheme', async () => {
+    mocks.appInstallReturn.mockResolvedValue({ userId: 'user-1', returnTarget: 'app_link' });
+
+    const response = await GET(callbackRequest());
+
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.origin + location.pathname).toBe('https://agiworkforce.com/github/installed');
+    expect(location.searchParams.get('code')).toBe('one-time-code');
+    expect(getClerkAuthUser).not.toHaveBeenCalled();
   });
 });

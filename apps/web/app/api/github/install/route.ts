@@ -32,7 +32,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     const appAuthorization = await recordAppInstallation(state, installationId);
     if (appAuthorization) {
       if (!isGitHubInstallationLinkingAvailable()) {
-        return NextResponse.redirect(appInstallReturnUrl({ error: 'unavailable' }));
+        return NextResponse.redirect(
+          appInstallReturnUrl(appAuthorization.returnTarget, { error: 'unavailable' }),
+        );
       }
       try {
         const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
@@ -45,7 +47,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         );
       } catch (error) {
         logger.error({ error }, 'Failed to start GitHub user authorization for an app install');
-        return NextResponse.redirect(appInstallReturnUrl({ error: 'failed' }));
+        return NextResponse.redirect(
+          appInstallReturnUrl(appAuthorization.returnTarget, { error: 'failed' }),
+        );
       }
     }
   }

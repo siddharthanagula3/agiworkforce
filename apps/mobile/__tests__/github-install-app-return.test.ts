@@ -1,6 +1,13 @@
 const mockPost = jest.fn();
 const mockOpenAuthSession = jest.fn();
+const mockOpenBrowser = jest.fn();
+const mockPlatform = { OS: 'ios' as 'ios' | 'android' };
 
+jest.mock('react-native', () => ({
+  get Platform() {
+    return mockPlatform;
+  },
+}));
 jest.mock('@/services/api', () => ({
   api: {
     get: jest.fn(),
@@ -11,79 +18,104 @@ jest.mock('@/services/api', () => ({
 }));
 jest.mock('expo-web-browser', () => ({
   openAuthSessionAsync: (...args: unknown[]) => mockOpenAuthSession(...args),
+  openBrowserAsync: (...args: unknown[]) => mockOpenBrowser(...args),
 }));
 
 import {
   completeGitHubInstall,
-  connectGitHubInApp,
   describeGitHubInstallOutcome,
+  fetchPendingGitHubInstall,
+  readGitHubInstallReturn,
+  startGitHubInstallInApp,
 } from '../src/features/cloud-code/githubInstall';
 
 const STATE = 'b'.repeat(64);
 const INSTALL_URL = `https://github.com/apps/agi-workforce/installations/new?state=${'f'.repeat(64)}`;
 
-describe('a GitHub app install that returns to the app', () => {
+describe('a GitHub app install started on the phone', () => {
   beforeEach(() => {
     mockPost.mockReset();
     mockOpenAuthSession.mockReset();
+    mockOpenBrowser.mockReset();
+    mockPlatform.OS = 'ios';
   });
 
-  it('starts over the signed-in session, installs in an auth session and finishes in the app', async () => {
-    mockPost
-      .mockResolvedValueOnce({ url: INSTALL_URL })
-      .mockResolvedValueOnce({ status: 'connected' });
+  it('on iOS installs in an auth session and hands back what GitHub returned, unlinked', async () => {
+    mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
     mockOpenAuthSession.mockResolvedValue({
       type: 'success',
       url: `agiworkforce://github/installed?state=${STATE}&code=one-time-code`,
     });
 
-    await expect(connectGitHubInApp()).resolves.toBe('connected');
-
-    expect(mockPost).toHaveBeenNthCalledWith(1, '/api/github/install/app-start');
+    await expect(startGitHubInstallInApp()).resolves.toEqual({
+      kind: 'returned',
+      result: { state: STATE, code: 'one-time-code' },
+    });
+    expect(mockPost).toHaveBeenCalledWith('/api/github/install/app-start', { platform: 'ios' });
     expect(mockOpenAuthSession).toHaveBeenCalledWith(
       INSTALL_URL,
       'agiworkforce://github/installed',
     );
-    expect(mockPost).toHaveBeenNthCalledWith(2, '/api/github/install/complete', {
-      state: STATE,
-      code: 'one-time-code',
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('on Android opens the install and waits for the verified App Link, never a scheme listener', async () => {
+    mockPlatform.OS = 'android';
+    mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
+
+    await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'opened' });
+    expect(mockPost).toHaveBeenCalledWith('/api/github/install/app-start', {
+      platform: 'android',
     });
+    expect(mockOpenBrowser).toHaveBeenCalledWith(INSTALL_URL);
+    expect(mockOpenAuthSession).not.toHaveBeenCalled();
   });
 
   it('never opens an install URL that is not on github.com', async () => {
     mockPost.mockResolvedValueOnce({ url: 'https://evil.example/installations/new' });
 
-    await expect(connectGitHubInApp()).resolves.toBe('failed');
+    await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'failed' });
     expect(mockOpenAuthSession).not.toHaveBeenCalled();
+    expect(mockOpenBrowser).not.toHaveBeenCalled();
   });
 
-  it('treats a closed install sheet as dismissed without finishing anything', async () => {
+  it('treats a closed install sheet as dismissed', async () => {
     mockPost.mockResolvedValueOnce({ url: INSTALL_URL });
     mockOpenAuthSession.mockResolvedValue({ type: 'cancel' });
 
-    await expect(connectGitHubInApp()).resolves.toBe('dismissed');
-    expect(mockPost).toHaveBeenCalledTimes(1);
+    await expect(startGitHubInstallInApp()).resolves.toEqual({ kind: 'dismissed' });
   });
 
-  it('does not post a return link without a valid state', async () => {
-    await expect(completeGitHubInstall('agiworkforce://github/installed?code=x')).resolves.toBe(
-      'invalid_state',
-    );
-    expect(mockPost).not.toHaveBeenCalled();
-  });
-
-  it('passes a denial through and explains every refused outcome', async () => {
-    mockPost.mockResolvedValueOnce({ status: 'denied' });
-
-    await expect(
-      completeGitHubInstall(`agiworkforce://github/installed?state=${STATE}&error=denied`),
-    ).resolves.toBe('denied');
-    expect(mockPost).toHaveBeenCalledWith('/api/github/install/complete', {
+  it('reads only a well-formed return', () => {
+    expect(readGitHubInstallReturn({ state: STATE, code: 'c' })).toEqual({
       state: STATE,
-      error: 'denied',
+      code: 'c',
     });
+    expect(readGitHubInstallReturn({ code: 'c' })).toBeNull();
+    expect(readGitHubInstallReturn({ state: 'short' })).toBeNull();
+  });
+
+  it('asks which installation is pending and finishes only when told to', async () => {
+    mockPost
+      .mockResolvedValueOnce({ status: 'ready', accountLogin: 'acme', accountType: 'Organization' })
+      .mockResolvedValueOnce({ status: 'connected' });
+
+    await expect(fetchPendingGitHubInstall(STATE)).resolves.toEqual({
+      status: 'ready',
+      accountLogin: 'acme',
+      accountType: 'Organization',
+    });
+    expect(mockPost).toHaveBeenLastCalledWith('/api/github/install/pending', { state: STATE });
+
+    await expect(completeGitHubInstall({ state: STATE, code: 'c' })).resolves.toBe('connected');
+    expect(mockPost).toHaveBeenLastCalledWith('/api/github/install/complete', {
+      state: STATE,
+      code: 'c',
+    });
+  });
+
+  it('explains every refused outcome', () => {
     expect(describeGitHubInstallOutcome('connected')).toBeNull();
-    expect(describeGitHubInstallOutcome('dismissed')).toBeNull();
     for (const outcome of [
       'already_linked',
       'ownership_failed',
