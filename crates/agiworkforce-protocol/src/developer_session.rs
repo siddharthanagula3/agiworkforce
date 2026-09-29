@@ -402,6 +402,8 @@ pub struct AppServerCapabilities {
     pub plan_decision: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub provider_keys: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub questions: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

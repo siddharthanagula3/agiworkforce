@@ -54,4 +54,5 @@ export type AppServerCapabilities = {
   turnToolFilters?: boolean;
   planDecision?: boolean;
   providerKeys?: boolean;
+  questions?: boolean;
 };
