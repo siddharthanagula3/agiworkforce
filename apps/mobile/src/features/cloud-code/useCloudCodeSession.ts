@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import {
+  CLOUD_CODE_TURN_STILL_RUNNING_CODE,
+  CloudCodeApiError,
   buildCodeTranscript,
   toCodeTurnRecord,
   type CloudCodeAgentApproval,
@@ -64,6 +66,10 @@ export interface CloudCodeSessionActions {
 
 function approvalKey(approval: Pick<CloudCodeAgentApproval, 'turnId' | 'stepIndex'>): string {
   return `${approval.turnId}:${approval.stepIndex}`;
+}
+
+function isTurnStillRunning(error: unknown): boolean {
+  return error instanceof CloudCodeApiError && error.code === CLOUD_CODE_TURN_STILL_RUNNING_CODE;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -183,7 +189,7 @@ export function useCloudCodeSession(
           idempotencyKey: newCloudCodeIdempotencyKey(),
         });
       } catch (error) {
-        if (!isAbortError(error)) {
+        if (!isAbortError(error) && !isTurnStillRunning(error)) {
           sent = false;
           if (mounted.current) setActionError(describeCloudCodeError(error, CLOUD_CODE_SEND_ERROR));
         }
