@@ -286,6 +286,6 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a composer slash list (/image, /voice, /compare, /export); add a searchable palette for destinations and settings, reachable from a hardware keyboard. | ui |
+| mobile | partial | partials/chat-gates e8552caa7c adds a catalogue of 32 destinations and settings matched by title and by purpose ('dark mode' finds Appearance, 'password' finds Account security), with a test that every route exists. post-codex/w-chat-s9.38-mobile-search-destinations.patch shows them as a 'Go to' section in the held chat search. Still open: a hardware-keyboard shortcut. React Native has no global key command, so it needs a native module in the held package.json; proposed as a decline of the keyboard part. | codex, ui |
 
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`
+Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`
