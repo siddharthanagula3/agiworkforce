@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CloudCodeSession, CloudCodeSessionStatusFilter } from '@agiworkforce/types';
+import type {
+  CloudCodeAvailability,
+  CloudCodeRuntime,
+  CloudCodeSession,
+  CloudCodeSessionStatusFilter,
+} from '@agiworkforce/types';
 import { CLOUD_CODE_LIST_ERROR, cloudCodeApi, describeCloudCodeError } from './service';
 
 export type CloudCodeListLoad = 'initial' | 'refresh' | 'background';
@@ -7,6 +12,8 @@ export type CloudCodeListLoad = 'initial' | 'refresh' | 'background';
 export interface CloudCodeSessionList {
   status: 'loading' | 'ready' | 'error';
   sessions: CloudCodeSession[];
+  availability: CloudCodeAvailability | null;
+  runtimes: CloudCodeRuntime[];
   error: string | null;
   refreshing: boolean;
 }
@@ -14,6 +21,8 @@ export interface CloudCodeSessionList {
 const INITIAL_LIST: CloudCodeSessionList = {
   status: 'loading',
   sessions: [],
+  availability: null,
+  runtimes: [],
   error: null,
   refreshing: false,
 };
@@ -36,7 +45,14 @@ export function useCloudCodeSessions(
       try {
         const body = await cloudCodeApi.list(filter);
         if (current !== generation.current) return;
-        setList({ status: 'ready', sessions: body.sessions, error: null, refreshing: false });
+        setList({
+          status: 'ready',
+          sessions: body.sessions,
+          availability: body.availability,
+          runtimes: body.runtimes,
+          error: null,
+          refreshing: false,
+        });
       } catch (error) {
         if (current !== generation.current) return;
         setList((previous) => ({
