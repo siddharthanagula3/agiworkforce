@@ -87,6 +87,10 @@
       },
       {
         "from": "@agiworkforce/client-runtime",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/client-runtime",
         "to": "@agiworkforce/local-runtime-contract"
       },
       {
@@ -196,6 +200,10 @@
       {
         "from": "@agiworkforce/desktop",
         "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/artifacts"
       },
       {
         "from": "@agiworkforce/extension",

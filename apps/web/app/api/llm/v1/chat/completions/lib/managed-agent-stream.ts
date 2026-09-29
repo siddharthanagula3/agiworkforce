@@ -37,11 +37,8 @@ import {
 } from './assistant-turn-sources';
 import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
 import { isEmptyTurnOutput } from './turn-completeness';
-import { enqueueJob } from '@/lib/jobs/job-service';
-import {
-  recordResearchReportSettledCost,
-  type PersistedResearchReport,
-} from '@/lib/services/research-report-service';
+import { recordResearchRunSettledCost } from '@/lib/services/research-report-settlement';
+import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -318,32 +315,12 @@ export function buildManagedAgentStream(
   const recordResearchRunCost = async (): Promise<void> => {
     const report = input.getResearchReport?.() ?? null;
     if (!report || settledCostMicrousd === null || !input.runJournal) return;
-    try {
-      await recordResearchReportSettledCost(input.runJournal.db, {
-        userId: input.runJournal.userId,
-        requestId: input.processed.requestId,
-        settledCostMicrousd,
-      });
-      report.settledCostMicrousd = settledCostMicrousd;
-    } catch (error) {
-      logger.warn(
-        { error, requestId: input.processed.requestId },
-        'Settled research cost could not be recorded on the report; queued for retry',
-      );
-      try {
-        await enqueueJob(input.runJournal.db, {
-          kind: 'research.settle-report-cost',
-          userId: input.runJournal.userId,
-          idempotencyKey: `research-cost:${input.processed.requestId}`.slice(0, 255),
-          payload: { requestId: input.processed.requestId, settledCostMicrousd },
-        });
-      } catch (queueError) {
-        logger.error(
-          { error: queueError, requestId: input.processed.requestId },
-          'Settled research cost could neither be recorded nor queued',
-        );
-      }
-    }
+    const recorded = await recordResearchRunSettledCost(input.runJournal.db, {
+      userId: input.runJournal.userId,
+      requestId: input.processed.requestId,
+      settledCostMicrousd,
+    });
+    if (recorded) report.settledCostMicrousd = settledCostMicrousd;
   };
 
   const settle = async (
