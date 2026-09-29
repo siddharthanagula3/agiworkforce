@@ -109,7 +109,7 @@ export async function runInlineCommand(
           { autoApply: autoApplyFixes && command === 'fix' },
         );
         if (resolution) {
-          trackProductEvent('code_suggestion_resolved', {
+          trackProductEvent('code_suggestion_resolved', 'managed', {
             outcome: resolution,
             properties: { kind: command, source: 'inline_command' },
           });

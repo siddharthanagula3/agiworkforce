@@ -44,10 +44,14 @@ export function activateProductAnalytics(context: vscode.ExtensionContext): vsco
   });
 }
 
+export type ProductAnalyticsTrustMode = 'local' | 'byok' | 'managed' | 'unknown';
+
 export function trackProductEvent(
   name: ProductAnalyticsEventName,
+  trustMode: ProductAnalyticsTrustMode | undefined,
   input?: { outcome?: ProductAnalyticsOutcome; properties?: ProductAnalyticsProperties },
 ): void {
+  if (trustMode !== 'managed') return;
   try {
     analytics?.track(name, input);
   } catch {
