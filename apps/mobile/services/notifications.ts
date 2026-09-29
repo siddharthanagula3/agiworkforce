@@ -242,7 +242,14 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
   { prefix: '/(app)/notifications', flag: 'cloudChat' },
   { prefix: '/(app)/schedules', flag: 'schedules' },
   { prefix: '/(app)/tasks', flag: 'cloudTasks' },
+  { prefix: '/(app)/chat/', flag: null },
+  { prefix: '/(app)/reports', flag: null },
+  { prefix: '/(app)/cloud-code', flag: null },
+  { prefix: '/(app)/library', flag: null },
+  { prefix: '/(app)/artifacts', flag: null },
 ];
+
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isAllowedRoute(route: string): boolean {
   return ALLOWED_ROUTE_PREFIXES.some(
@@ -417,7 +424,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'chat_message':
-      if (data.route && typeof data.route === 'string') {
+      if (typeof data.conversationId === 'string' && CONVERSATION_ID.test(data.conversationId)) {
+        safeNavigate({
+          pathname: '/(app)/chat/[id]',
+          params: { id: data.conversationId },
+        } as Parameters<typeof router.push>[0]);
+      } else if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
           safeNavigate(data.route as Parameters<typeof router.push>[0]);
         } else {
