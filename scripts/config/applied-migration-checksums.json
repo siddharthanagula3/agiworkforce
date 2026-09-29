@@ -343,5 +343,6 @@
   "0342_connector_oauth_app_return.sql": "69eea74f0a2acf9e84b1d1f0e99d97ca2af252ed45a899528984b2666d6fe907",
   "0343_github_install_app_return.sql": "e5872c76f5c2cc59326a24f1066c1ed45e4c15a93d77fd25f569be1493aad160",
   "0344_conversation_google_user_data.sql": "e4c05538465fc5c4eaf9a434dbec904f35dc45640eb7761c5dd9be2332ac1f41",
-  "0345_support_access_grant_purpose.sql": "7eb505ccbcc5614b248bdf97f8b29144a1232e45e9147c9777cecf469b4bdb74"
+  "0345_support_access_grant_purpose.sql": "7eb505ccbcc5614b248bdf97f8b29144a1232e45e9147c9777cecf469b4bdb74",
+  "0346_managed_usage_extra_usage_reservation.sql": "6a560a5b5472625942e03d1329ed0b6f3e0d5bbac21440f8cbbaeb762a14a7f4"
 }
