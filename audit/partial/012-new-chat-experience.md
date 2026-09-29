@@ -18,18 +18,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S12.03: Neutral greeting when personalization is disabled.
-
-- Done when: When personalization is off (or no name is known), the new-chat greeting is neutral and shows no personal details.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | greetingHeadline without a name gives the neutral greeting and is now importable from @agiworkforce/utils/greeting. What remains is ChatEmptyState passing no name when personalization is off. | ui |
-
-Code: `packages/platform/utils/src/greeting.ts:88-88`
-
 ## S12.04: Suggested prompts.
 
 - Done when: The new-chat screen offers clickable suggested prompts that fill or send a message.
