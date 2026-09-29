@@ -18,6 +18,10 @@ describe('relayed control payloads', () => {
       'code.sessions',
       'code.session.snapshot',
       'code.session.event',
+      'code.session.start',
+      'code.session.history',
+      'code.session.started',
+      'code.session.transcript',
       'control.receipt',
     ]) {
       expect(controlPayloadSchema.safeParse({ action, data: envelope(10) }).success).toBe(true);

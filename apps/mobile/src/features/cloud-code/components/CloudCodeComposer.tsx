@@ -1,8 +1,11 @@
 import { TextInput, View } from 'react-native';
+import { SlidersHorizontal } from 'lucide-react-native';
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { SendButton } from '@/src/features/chat/components/SendButton';
 import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const SEND_LABEL = 'Send to this session';
 const INPUT_LABEL = 'Message for this session';
@@ -11,18 +14,22 @@ export function CloudCodeComposer({
   value,
   working,
   stopping,
-  modelName,
+  detail,
+  optionsLabel,
   onChangeText,
   onSend,
   onStop,
+  onOpenOptions,
 }: {
   value: string;
   working: boolean;
   stopping: boolean;
-  modelName: string;
+  detail: string;
+  optionsLabel: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
   onStop: () => void;
+  onOpenOptions: () => void;
 }) {
   const colors = useThemeColors();
   const empty = value.trim().length === 0;
@@ -60,7 +67,7 @@ export function CloudCodeComposer({
             maxHeight: 140,
             paddingVertical: 6,
             color: colors.textPrimary,
-            fontSize: 16,
+            fontSize: typeScale.callout,
             lineHeight: 22,
             textAlignVertical: 'top',
           }}
@@ -80,9 +87,25 @@ export function CloudCodeComposer({
           />
         </View>
       </View>
-      <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, paddingLeft: 16 }}>
-        {modelName}
-      </Text>
+      <Pressable
+        onPress={onOpenOptions}
+        accessibilityRole="button"
+        accessibilityLabel={`${optionsLabel}. ${detail}`}
+        style={{
+          minHeight: 32,
+          alignSelf: 'flex-start',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          paddingLeft: 16,
+          paddingRight: 8,
+        }}
+      >
+        <SlidersHorizontal size={13} color={colors.textMuted} />
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+          {detail}
+        </Text>
+      </Pressable>
     </View>
   );
 }

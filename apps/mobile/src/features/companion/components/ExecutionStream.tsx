@@ -50,7 +50,7 @@ function SpinningLoader({ size = 14, color }: { size?: number; color: string }) 
 
   useEffect(() => {
     rotation.value = withRepeat(
-      withTiming(360, { duration: 900, easing: Easing.linear }),
+      withTiming(360, { duration: motion.pulse, easing: Easing.linear }),
       -1,
       false,
     );
@@ -164,20 +164,20 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
             {call.command ? `: ${call.command}` : ''}
           </Text>
           {call.duration != null && (
-            <Text className="text-[10px] text-white/30">{call.duration}ms</Text>
+            <Text className="text-xs text-white/30">{call.duration}ms</Text>
           )}
         </View>
 
         {/* Brief result */}
         {call.output && isTerminalToolStatus(call.status) && (
-          <Text className="text-[11px] text-white/40 leading-4" numberOfLines={2}>
+          <Text className="text-xs text-white/40 leading-4" numberOfLines={2}>
             {call.output}
           </Text>
         )}
 
         {/* File path hint */}
         {call.filePath && (
-          <Text className="text-[10px] mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
+          <Text className="text-xs mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
             {call.filePath}
           </Text>
         )}
@@ -278,7 +278,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
         {/* Elapsed timer */}
         <View className="flex-row items-center gap-1">
           <Clock size={10} color={colors.textMuted} />
-          <Text className="text-[10px] text-white/40">{elapsedLabel}</Text>
+          <Text className="text-xs text-white/40">{elapsedLabel}</Text>
         </View>
       </View>
 
@@ -292,7 +292,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
           style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}
         >
           <Zap size={10} color={colors.agentActive} />
-          <Text className="text-[11px] text-blue-400 flex-1" numberOfLines={1}>
+          <Text className="text-xs text-blue-400 flex-1" numberOfLines={1}>
             {agent.currentAction}
           </Text>
         </Animated.View>
@@ -309,13 +309,13 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
               className="flex-row items-center gap-1 mb-2"
             >
               <Text
-                className="text-[10px] uppercase tracking-wider flex-1"
+                className="text-xs uppercase tracking-wider flex-1"
                 style={{ color: colors.textMuted }}
                 numberOfLines={1}
               >
                 Showing {visibleCalls.length} of {toolCalls.length} tool calls
               </Text>
-              <Text className="text-[10px] font-medium" style={{ color: colors.agentActive }}>
+              <Text className="text-xs font-medium" style={{ color: colors.agentActive }}>
                 Show {revealCount} earlier
               </Text>
               <ChevronUp size={10} color={colors.agentActive} />

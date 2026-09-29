@@ -6,6 +6,7 @@ import { Plus, Mic, MicOff, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VoiceOrb } from './VoiceOrb';
 
@@ -67,7 +68,7 @@ export function VoiceInlineBar({
           <Plus size={22} color={colors.textSecondary} />
         </Pressable>
       ) : null}
-      <Text style={{ color: colors.textMuted, fontSize: 16 }}>Ask AGI</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.callout }}>Ask AGI</Text>
     </>
   );
 
@@ -84,7 +85,7 @@ export function VoiceInlineBar({
           testID="voice-inline-notice"
           style={{
             color: colors.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             textAlign: 'center',
             marginBottom: 10,
           }}

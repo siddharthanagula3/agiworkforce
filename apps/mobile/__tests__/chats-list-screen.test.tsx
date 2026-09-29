@@ -369,7 +369,7 @@ describe('ChatsListScreen', () => {
     fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
 
     expect(getAllByTestId(/^conversation-action-/).map((node) => node.props.accessibilityLabel)) //
-      .toEqual(['Rename', 'Pin', 'Delete', 'Cancel']);
+      .toEqual(['Rename', 'Pin', 'Move to project', 'Mark as unread', 'Delete', 'Cancel']);
 
     fireEvent.press(getByTestId('conversation-action-pin'));
     dismissSheet();
@@ -380,7 +380,7 @@ describe('ChatsListScreen', () => {
     dismissSheet();
 
     fireEvent.changeText(getByLabelText('Chat title'), 'Launch checklist v2');
-    fireEvent.press(getByLabelText('Submit rename'));
+    fireEvent(getByLabelText('Chat title'), 'submitEditing');
 
     expect(mockRenameConversation).toHaveBeenCalledWith('chat-1', 'Launch checklist v2');
     expect(getByText('Launch checklist')).toBeTruthy();

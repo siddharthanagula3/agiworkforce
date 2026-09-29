@@ -77,7 +77,7 @@ export function DispatchTaskComposer() {
             editable={!isSending}
           />
           <View className="flex-row items-center justify-between pt-2">
-            <Text className="text-[10px] text-white/30">{prompt.trim().length}/20,000</Text>
+            <Text className="text-xs text-white/30">{prompt.trim().length}/20,000</Text>
             <Pressable
               onPress={() => void handleSend()}
               disabled={!canSend}
@@ -116,7 +116,7 @@ export function DispatchTaskComposer() {
 
         {visibleTasks.length > 0 && (
           <View className="mt-4 gap-2">
-            <Text className="text-[10px] uppercase tracking-wider text-white/40">
+            <Text className="text-xs uppercase tracking-wider text-white/40">
               Recent Dispatch tasks
             </Text>
             {visibleTasks.map((task) => {
@@ -136,7 +136,7 @@ export function DispatchTaskComposer() {
                     <Text className="flex-1 text-xs font-medium text-white" numberOfLines={1}>
                       {task.title}
                     </Text>
-                    <Text className="text-[10px] text-white/45">
+                    <Text className="text-xs text-white/45">
                       {STATUS_LABELS[task.status] ?? task.status}
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
@@ -152,7 +152,7 @@ export function DispatchTaskComposer() {
                   </View>
                   {(task.error || task.message) && (
                     <Text
-                      className={`mt-1 text-[10px] ${isError ? 'text-red-300' : 'text-white/40'}`}
+                      className={`mt-1 text-xs ${isError ? 'text-red-300' : 'text-white/40'}`}
                       numberOfLines={2}
                     >
                       {task.error ?? task.message}

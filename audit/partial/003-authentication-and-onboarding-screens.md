@@ -95,7 +95,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | handler |
+| mobile | partial | Owner: enable Authenticator and Backup codes in the Clerk Dashboard, then a live second-factor sign-in check; code path (MobileSignIn onNativeFallback) unchanged. | handler |
 
 Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/settings/account-security/service.ts:70-80`
 
@@ -122,16 +122,16 @@ Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/sett
 
 - Done when: Before first use the user reviews and accepts the current Terms (versioned), acceptance is recorded, and a terms change re-prompts.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 | desktop | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
-| mobile | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision | handler |
 | chrome | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 | api | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 
-Code: `apps/web/app/login/complete/page.tsx:54-71`, `apps/web/app/signup/complete/RecordTermsAcceptance.tsx:37-56`, `apps/web/lib/server/require-current-terms.ts:7-12`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:270-272`
+Code: `apps/web/app/login/complete/page.tsx:54-71`, `apps/web/app/signup/complete/RecordTermsAcceptance.tsx:37-56`, `apps/web/lib/server/require-current-terms.ts:7-12`
 
 ## S3.20: Age or eligibility verification where applicable.
 
@@ -147,30 +147,6 @@ Code: `apps/web/app/login/complete/page.tsx:54-71`, `apps/web/app/signup/complet
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S3.21: Profile setup.
-
-- Done when: During onboarding the user sets up basic profile details (at least the name the assistant uses) and they are saved to the account.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | apply after w-chat-s6.23-s6.28-s6.29-s6.30-mobile-tokens once Codex commits onboarding.tsx | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`, `apps/mobile/app/(public)/onboarding.tsx:232-240`
-
-## S3.23: Role or use-case selection.
-
-- Done when: Onboarding asks the user their role or intended use and uses the answer (e.g. to tailor replies or suggestions).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | apply after Codex commits onboarding.tsx | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
-
 ## S3.27: Recommended-app connection flow.
 
 - Done when: New users are shown a few recommended apps/connectors (e.g. based on their role) and can connect them in a guided flow.
@@ -183,18 +159,6 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S3.31: Mobile device pairing.
-
-- Done when: A phone can be paired with the desktop app by QR or short code, and the pairing is bound to the signed-in account.
-- Wave: 3
-- Already works on: desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/auth 34de0ffbe fixed /pair; the phone's own checklist is in Codex-held ConnectionStateViews.tsx, patch saved as post-codex/p-auth-S3.31.patch | ui |
-
-Code: `apps/web/app/pair/pair-body.tsx:27-27`
 
 ## S3.36: Resumable onboarding checklist.
 

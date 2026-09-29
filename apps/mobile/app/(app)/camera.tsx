@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
@@ -427,14 +428,14 @@ function createStyles(colors: ColorScheme) {
     permissionTitle: {
       color: colors.textPrimary,
       textAlign: 'center',
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
       marginTop: 16,
     },
     permissionDescription: {
       color: colors.textSecondary,
       textAlign: 'center',
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       lineHeight: 20,
       marginTop: 8,
     },
@@ -451,7 +452,7 @@ function createStyles(colors: ColorScheme) {
     },
     primaryButtonText: {
       color: colors.accentText,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       fontWeight: '600',
     },
     outlineButton: {
@@ -463,11 +464,11 @@ function createStyles(colors: ColorScheme) {
     },
     outlineButtonText: {
       color: colors.textSecondary,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
     },
     cancelButtonText: {
       color: colors.textMuted,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
     },
     topBarSafeArea: {
       position: 'absolute',
@@ -512,7 +513,7 @@ function createStyles(colors: ColorScheme) {
       overflow: 'hidden',
       paddingHorizontal: 14,
       paddingVertical: 8,
-      fontSize: 13,
+      fontSize: typeScale.footnote,
       fontWeight: '600',
     },
     bottomBarSafeArea: {
@@ -571,7 +572,7 @@ function createStyles(colors: ColorScheme) {
     promptInput: {
       flex: 1,
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       lineHeight: 22,
       maxHeight: 120,
       paddingVertical: 0,

@@ -28,6 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
@@ -132,7 +133,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
               />
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} bounces={false}>
+            <ScrollView
+              contentContainerStyle={{ padding: dialogPadding, paddingBottom: 40 }}
+              bounces={false}
+            >
               {/* Header */}
               <View className="items-center mb-5">
                 <View

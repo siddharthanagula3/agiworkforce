@@ -84,7 +84,7 @@ describe('Dispatch pairing recovery', () => {
 
     expect(screen.getByText('Pairing failed')).toBeTruthy();
     expect(screen.getByText('A few things to check on your computer:')).toBeTruthy();
-    expect(screen.getByText(/Dispatch is turned on/)).toBeTruthy();
+    expect(screen.getByText(/Remote Control is on in Desktop/)).toBeTruthy();
     expect(screen.getByText('Desktop is signed in and in Managed Cloud')).toBeTruthy();
     expect(screen.getByText(/phone and Desktop accounts do not need to match/)).toBeTruthy();
     expect(screen.getByText('Desktop is open and up to date')).toBeTruthy();
@@ -105,7 +105,7 @@ describe('Dispatch pairing recovery', () => {
     const screen = render(<ErrorView error={null} onRetry={jest.fn()} />);
 
     expect(screen.queryByLabelText('Show error details')).toBeNull();
-    expect(screen.getByText(/Dispatch is turned on/)).toBeTruthy();
+    expect(screen.getByText(/Remote Control is on in Desktop/)).toBeTruthy();
   });
 
   it('does not make phone-account identity a pairing requirement', () => {

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   computeContextBudget,
   summarizeContext,
@@ -55,7 +56,12 @@ export function ContextDetailsSheet({
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <Text
             accessibilityRole="header"
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+            }}
           >
             What is in context
           </Text>
@@ -70,11 +76,11 @@ export function ContextDetailsSheet({
         </View>
         <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 32 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
               {getManagedDisplayName(modelId)}
             </Text>
             <Text
-              style={{ color: colors.textPrimary, fontSize: 15 }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.body }}
               testID="context-details-usage"
             >
               {`About ${numberFormat.format(budget.usedTokens)} of ${numberFormat.format(budget.contextWindowTokens)} tokens (${percent}%)`}
@@ -93,7 +99,13 @@ export function ContextDetailsSheet({
               <View style={{ width: `${percent}%`, height: 6, backgroundColor: barColor }} />
             </View>
             {budget.status !== 'ok' ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 19,
+                }}
+              >
                 {budget.status === 'compact'
                   ? 'The oldest messages are summarized so the newest fit. A fresh chat keeps answers fast and complete.'
                   : 'This chat is close to the point where the oldest messages get summarized.'}
@@ -114,10 +126,10 @@ export function ContextDetailsSheet({
                 }}
                 testID={`context-details-row-${row.key}`}
               >
-                <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
                   {row.label}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                   {row.key === 'attachments'
                     ? numberFormat.format(row.count)
                     : `${numberFormat.format(row.count)}, about ${numberFormat.format(row.tokens)} tokens`}
@@ -126,7 +138,7 @@ export function ContextDetailsSheet({
             ))}
           </View>
 
-          <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
             Counts are estimated on this device. Instructions, memory and sources added when a
             message is sent are not included.
           </Text>

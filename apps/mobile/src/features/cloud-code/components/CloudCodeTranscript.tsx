@@ -14,6 +14,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const EXIT_CODE_OK = 0;
 const CHEVRON_SIZE = 14;
@@ -50,7 +51,7 @@ function Disclosure({
         style={{
           flex: 1,
           color: failed ? colors.agentError : colors.textSecondary,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
         }}
       >
         {label}
@@ -76,7 +77,10 @@ function OutputBlock({ text, failed }: { text: string; failed: boolean }) {
       <Text
         variant="mono"
         selectable
-        style={{ color: failed ? colors.agentError : colors.textSecondary, fontSize: 12 }}
+        style={{
+          color: failed ? colors.agentError : colors.textSecondary,
+          fontSize: typeScale.caption,
+        }}
       >
         {text}
       </Text>
@@ -98,7 +102,7 @@ function StepRow({ step }: { step: CloudCodeAgentStep }) {
         onToggle={() => setExpanded((open) => !open)}
       />
       {!expanded && summary ? (
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {summary}
         </Text>
       ) : null}
@@ -122,7 +126,7 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
         onToggle={() => setExpanded((open) => !open)}
       />
       {!expanded && summary ? (
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {summary}
         </Text>
       ) : null}
@@ -132,7 +136,10 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
           {entry.stderr ? <OutputBlock text={entry.stderr} failed /> : null}
           <Text
             variant="mono"
-            style={{ color: failed ? colors.agentError : colors.textMuted, fontSize: 12 }}
+            style={{
+              color: failed ? colors.agentError : colors.textMuted,
+              fontSize: typeScale.caption,
+            }}
           >
             {`exit ${entry.exitCode}`}
           </Text>
@@ -157,7 +164,7 @@ function CommandGroup({ entries }: { entries: CloudCodeTerminalEntry[] }) {
       />
       {!expanded
         ? failed.map((entry) => (
-            <Text key={entry.id} style={{ color: colors.agentError, fontSize: 12 }}>
+            <Text key={entry.id} style={{ color: colors.agentError, fontSize: typeScale.caption }}>
               {`${entry.command} exited ${entry.exitCode}`}
             </Text>
           ))
@@ -180,7 +187,10 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
         backgroundColor: colors.surfaceHover,
       }}
     >
-      <Text selectable style={{ color: colors.textPrimary, fontSize: 16, lineHeight: 24 }}>
+      <Text
+        selectable
+        style={{ color: colors.textPrimary, fontSize: typeScale.callout, lineHeight: 24 }}
+      >
         {text}
       </Text>
     </View>
@@ -203,7 +213,7 @@ function Reply({
         <Text
           style={{
             color: cloudCodeStopReasonIsFailure(stopReason) ? colors.agentError : colors.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
           }}
         >
           {CLOUD_CODE_STOP_REASON_LABELS[stopReason]}
@@ -227,7 +237,7 @@ export function CloudCodeWorkingRow({
       style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
     >
       <ActivityIndicator size="small" color={colors.textSecondary} />
-      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{label}</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{label}</Text>
     </View>
   );
 }

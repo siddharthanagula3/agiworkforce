@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 
 export interface StartWorkSubmission {
@@ -71,7 +72,7 @@ export function StartWorkSheet({
     borderCurve: 'continuous' as const,
     padding: 12,
     color: colors.textPrimary,
-    fontSize: 15,
+    fontSize: typeScale.body,
   };
 
   return (
@@ -114,7 +115,13 @@ export function StartWorkSheet({
             keyboardShouldPersistTaps="handled"
           >
             <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 What should it accomplish?
               </Text>
               <TextInput
@@ -131,7 +138,13 @@ export function StartWorkSheet({
             </View>
 
             <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 Constraints (optional)
               </Text>
               <TextInput
@@ -147,7 +160,13 @@ export function StartWorkSheet({
             </View>
 
             <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 Deliverable (optional)
               </Text>
               <TextInput
@@ -163,7 +182,13 @@ export function StartWorkSheet({
 
             {selectableProjects.length > 0 && (
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   Project (optional)
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -189,7 +214,7 @@ export function StartWorkSheet({
                         <Text
                           style={{
                             color: selected ? colors.accentText : colors.textSecondary,
-                            fontSize: 13,
+                            fontSize: typeScale.footnote,
                             fontWeight: '600',
                           }}
                         >
@@ -203,12 +228,12 @@ export function StartWorkSheet({
             )}
 
             {error ? (
-              <Text selectable style={{ color: colors.agentError, fontSize: 13 }}>
+              <Text selectable style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
                 {error}
               </Text>
             ) : null}
 
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 18 }}>
               The task runs on your AGI Cloud account with the tools your plan allows, and pauses
               here for approval when one needs your decision.
             </Text>
@@ -238,7 +263,9 @@ export function StartWorkSheet({
               ) : (
                 <Check size={18} color={colors.accentText} />
               )}
-              <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
+              <Text
+                style={{ color: colors.accentText, fontWeight: '700', fontSize: typeScale.body }}
+              >
                 {submitting ? 'Starting…' : 'Start task'}
               </Text>
             </Pressable>

@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 
@@ -111,11 +112,21 @@ export function StreamingArtifactCard({
           <Code2 size={14} color={colors.textSecondary} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+            style={{
+              flex: 1,
+              fontSize: typeScale.footnote,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
           >
             {`${artifact.title} · ${typeLabel}`}
           </Text>
-          <Text style={{ fontSize: 11, color: failed ? colors.agentError : colors.textMuted }}>
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              color: failed ? colors.agentError : colors.textMuted,
+            }}
+          >
             {stateLabel}
           </Text>
         </View>
@@ -123,7 +134,7 @@ export function StreamingArtifactCard({
           style={{
             paddingHorizontal: 12,
             paddingBottom: 10,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 18,
             color: colors.textMuted,
             fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
@@ -137,7 +148,7 @@ export function StreamingArtifactCard({
             style={{
               paddingHorizontal: 12,
               paddingBottom: 10,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               color: colors.textSecondary,
             }}
           >

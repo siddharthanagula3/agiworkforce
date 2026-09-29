@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Platform, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import {
   OSS_LICENSES_GENERATED_AT,
@@ -42,11 +43,16 @@ export default function LicensesScreen() {
           marginBottom: 20,
         }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}>
           {OSS_PACKAGES.length} open source packages
         </Text>
         <Text
-          style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 6 }}
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.footnote,
+            lineHeight: 19,
+            marginTop: 6,
+          }}
           accessibilityLabel={`AGI Workforce is built with ${OSS_PACKAGES.length} open source packages. Their licenses and copyright notices are reproduced below.`}
         >
           AGI Workforce is built with open source software. Each package below is listed with its
@@ -67,10 +73,17 @@ export default function LicensesScreen() {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700', flex: 1 }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: typeScale.subhead,
+                fontWeight: '700',
+                flex: 1,
+              }}
+            >
               {group.licenses.join(' · ')}
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               {translatePlural('common', 'counts.packages', group.packages.length, {
                 one: '{{count}} package',
                 other: '{{count}} packages',
@@ -78,7 +91,10 @@ export default function LicensesScreen() {
             </Text>
           </View>
 
-          <Text selectable style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+          <Text
+            selectable
+            style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 18 }}
+          >
             {packageLines(group)}
           </Text>
 
@@ -88,14 +104,14 @@ export default function LicensesScreen() {
               style={{
                 color: colors.textMuted,
                 fontFamily: MONOSPACE,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 lineHeight: 16,
               }}
             >
               {group.body}
             </Text>
           ) : (
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 18 }}>
               These packages bundle no license file. The license id above is the one they declare in
               their package manifest.
             </Text>

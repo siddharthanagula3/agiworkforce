@@ -14,6 +14,7 @@ import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 import { APP_PATH, CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -297,7 +298,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   title: {
-    fontSize: 28,
+    fontSize: typeScale.title1,
     lineHeight: 36,
     fontWeight: '700',
     letterSpacing: 0,
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 32,
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     minHeight: 64,
-    fontSize: 22,
+    fontSize: typeScale.title2,
     lineHeight: 28,
     fontWeight: '600',
     textAlign: 'center',
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -339,17 +340,17 @@ const styles = StyleSheet.create({
   },
   ctaBtnText: {
     fontWeight: '600',
-    fontSize: 17,
+    fontSize: typeScale.headline,
     lineHeight: 22,
   },
   policyNote: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
   },
   body: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 16,

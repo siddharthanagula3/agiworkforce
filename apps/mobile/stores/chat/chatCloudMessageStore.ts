@@ -99,6 +99,7 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               executionMode: c.executionMode ?? ('cloud' as const),
               ...(serverVersion !== undefined ? { serverVersion } : {}),
               ...(activeLeafMessageId !== undefined ? { activeLeafMessageId } : {}),
+              ...(c.unread === undefined && local?.unread ? { unread: true } : {}),
             };
             if (dirtyIds.includes(c.id)) {
               if (local) return { ...base, ...local, serverVersion };

@@ -9,6 +9,7 @@ import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-g
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -71,9 +72,9 @@ export function ImageFullScreen({
       'worklet';
       savedScale.value = scale.value;
       if (scale.value < 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -100,14 +101,14 @@ export function ImageFullScreen({
     .onEnd(() => {
       'worklet';
       if (scale.value > 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
-        scale.value = withTiming(2.5, { duration: 300 });
+        scale.value = withTiming(2.5, { duration: motion.moved });
         savedScale.value = 2.5;
       }
     });
@@ -290,7 +291,7 @@ export function ImageFullScreen({
               {prompt ? (
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 19,
                     color: colors.cameraOverlayTextMuted,
                     textAlign: 'center',
@@ -304,7 +305,7 @@ export function ImageFullScreen({
               {settingsCaption ? (
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     lineHeight: 17,
                     marginTop: prompt ? 6 : 0,
                     color: colors.cameraOverlayTextMuted,

@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S16.04: Source and context chips.
-
-- Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A sent message shows its quoted reply and the skill it ran with as chips above the bubble; the skill is recorded as sendReplay.skillName, the key the web reads. In post-codex/chat-gates-s16.04-mobile-sent-context-chips.patch. | ui |
-
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`
-
 ## S16.05: Timestamp.
 
 - Done when: Each user message exposes when it was sent (inline or on demand).
@@ -67,18 +55,6 @@ Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S16.09: Resend action.
-
-- Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Resend on the user's own message is built in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (MessageBubble is held by Codex); the store already re-runs from a user message (retryMessage). Claude's user message row has Retry. | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:522-522`
-
 ## S16.10: Branch-from-message action.
 
 - Done when: From a chosen user message the user can start a new branch conversation that contains the thread up to that message.
@@ -93,16 +69,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/sr
 
 - Done when: When a user message has several revisions the user can page between them (n of m) and the thread follows the chosen revision.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Threaded Cloud chats show '< n / m >' on a revised question and a regenerated answer, switch the visible branch with the shared resolveLeafForSibling and save the choice through updateConversation, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S16.12: Expand long message.
 

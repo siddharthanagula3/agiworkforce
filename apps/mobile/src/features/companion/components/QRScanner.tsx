@@ -13,6 +13,7 @@ import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
@@ -37,7 +38,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   useEffect(() => {
     scanLineY.value = withRepeat(
       withTiming(VIEWFINDER_SIZE - 4, {
-        duration: 2000,
+        duration: motion.ambient,
         easing: Easing.inOut(Easing.ease),
       }),
       -1,
@@ -182,7 +183,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               paddingHorizontal: 16,
               paddingVertical: 14,
               color: colors.textPrimary,
-              fontSize: 18,
+              fontSize: typeScale.headline,
               fontFamily: 'Menlo',
               letterSpacing: 2,
               textAlign: 'center',

@@ -516,6 +516,17 @@ export async function exportConversationToPDF(
   return exportToPDF(md, title);
 }
 
+export async function printConversation(messages: ChatMessage[], title: string): Promise<void> {
+  const md = formatConversationAsMarkdown(messages, title);
+  if (!md.trim()) throw new Error('Cannot print empty content');
+  try {
+    await Print.printAsync({ html: markdownToHtml(md, title) });
+  } catch (error) {
+    if (error instanceof Error && /did not complete|cancel/i.test(error.message)) return;
+    throw error;
+  }
+}
+
 export async function exportConversationToText(
   messages: ChatMessage[],
   title: string,

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Sparkles, ArrowLeft, Lock, CreditCard, ShieldOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export type UnavailableReason = 'unsupported' | 'permission' | 'entitlement' | 'policy';
 
@@ -72,11 +73,23 @@ export function FeatureUnavailable({ feature, reason = 'unsupported' }: FeatureU
           <Icon size={28} color={c.textMuted} />
         </View>
         <Text
-          style={{ color: c.textPrimary, fontSize: 18, fontWeight: '700', textAlign: 'center' }}
+          style={{
+            color: c.textPrimary,
+            fontSize: typeScale.headline,
+            fontWeight: '700',
+            textAlign: 'center',
+          }}
         >
           {headingFor(reason, feature)}
         </Text>
-        <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
+        <Text
+          style={{
+            color: c.textMuted,
+            fontSize: typeScale.subhead,
+            textAlign: 'center',
+            lineHeight: 20,
+          }}
+        >
           {bodyFor(reason)}
         </Text>
         <Pressable
@@ -91,7 +104,9 @@ export function FeatureUnavailable({ feature, reason = 'unsupported' }: FeatureU
           }}
         >
           <ArrowLeft size={15} color={c.teal} />
-          <Text style={{ color: c.teal, fontSize: 15, fontWeight: '600' }}>Go back</Text>
+          <Text style={{ color: c.teal, fontSize: typeScale.body, fontWeight: '600' }}>
+            Go back
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>

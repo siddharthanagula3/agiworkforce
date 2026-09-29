@@ -420,3 +420,4 @@ export {
 } from './response-style-preferences';
 export * from './chart-spec';
 export * from './connector-connect-required';
+export * from './image-jobs';

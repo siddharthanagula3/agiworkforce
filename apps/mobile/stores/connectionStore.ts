@@ -695,7 +695,9 @@ function handleControlMessageInner(payload: unknown): void {
     }
     case 'code.sessions':
     case 'code.session.snapshot':
-    case 'code.session.event': {
+    case 'code.session.event':
+    case 'code.session.started':
+    case 'code.session.transcript': {
       ingestRemoteCodeControl(action, normalizedPayload);
       break;
     }
@@ -966,11 +968,16 @@ export const useConnectionStore = create<ConnectionState>()(
             app: string;
             version: string;
             dispatchSalt: string;
+            deviceName?: string;
           } = {
             deviceType: 'mobile',
             app: 'agiworkforce-mobile',
             version: appVersion,
             dispatchSalt: '',
+            // The computer names the phone it is paired with from this.
+            ...(Constants.deviceName?.trim()
+              ? { deviceName: Constants.deviceName.trim().slice(0, 120) }
+              : {}),
           };
 
           try {

@@ -13,6 +13,7 @@ import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 import { ArtifactAudienceChip } from './ArtifactAudienceChip';
 
@@ -182,7 +183,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         <Text
           style={{
             flex: 1,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             fontWeight: '600',
             color: colors.textPrimary,
           }}
@@ -205,7 +206,9 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
             }}
           >
             <Shield size={10} color={colors.textMuted} />
-            <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textMuted }}>
+            <Text
+              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+            >
               {generatedFileSummary.privacyShortLabel}
             </Text>
           </View>
@@ -222,7 +225,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
       >
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 18,
             color: colors.textMuted,
             fontFamily:
@@ -236,19 +239,19 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         </Text>
         {hasGeneratedFileManifest ? (
           <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
               {generatedFileSummary.statusLabel}
             </Text>
-            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
               {generatedFileSummary.kindLabel}
             </Text>
             {generatedFileSummary.byteCountLabel ? (
-              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                 {generatedFileSummary.byteCountLabel}
               </Text>
             ) : null}
             {generatedFileSummary.sourceSurfaceLabel ? (
-              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                 Source: {generatedFileSummary.sourceSurfaceLabel}
               </Text>
             ) : null}

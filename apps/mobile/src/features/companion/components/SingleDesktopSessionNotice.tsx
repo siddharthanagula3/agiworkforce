@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function SingleDesktopSessionNotice() {
   const colors = useThemeColors();
@@ -25,10 +26,17 @@ export function SingleDesktopSessionNotice() {
     >
       <LockKeyhole size={16} color={colors.textSecondary} />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '700' }}>
           One active Desktop per pairing session
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.caption,
+            lineHeight: 16,
+            marginTop: 3,
+          }}
+        >
           Pairing codes and session keys are short-lived and are not saved as reusable device
           access.
         </Text>

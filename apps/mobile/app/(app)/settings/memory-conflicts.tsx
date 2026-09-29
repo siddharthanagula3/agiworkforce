@@ -14,6 +14,7 @@ import {
   type MemoryConflict,
 } from '@/src/features/memory/services/memoryConflicts';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const LOAD_FAILED_MESSAGE = 'Could not load replaced memories. Try again later.';
 const RESTORE_FAILED_MESSAGE = 'Could not switch back to that memory. Try again.';
@@ -72,7 +73,12 @@ export default function MemoryConflictsScreen() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          style={{ color: colors.agentError, fontSize: 13, lineHeight: 18, marginBottom: 12 }}
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginBottom: 12,
+          }}
         >
           {error}
         </Text>
@@ -87,7 +93,12 @@ export default function MemoryConflictsScreen() {
         </View>
       ) : conflicts.length === 0 ? (
         <Text
-          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19, paddingVertical: 16 }}
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            lineHeight: 19,
+            paddingVertical: 16,
+          }}
         >
           No memory has replaced another.
         </Text>
@@ -104,10 +115,18 @@ export default function MemoryConflictsScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 20 }}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.subhead, lineHeight: 20 }}
+              >
                 {`Using: ${conflict.kept}`}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 {`Replaced: ${conflict.replaced}`}
               </Text>
               <Pressable
@@ -126,7 +145,13 @@ export default function MemoryConflictsScreen() {
                   opacity: restoringId !== null && restoringId !== conflict.id ? 0.5 : 1,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '500' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '500',
+                  }}
+                >
                   {restoringId === conflict.id ? 'Switching…' : 'Use the replaced one instead'}
                 </Text>
               </Pressable>

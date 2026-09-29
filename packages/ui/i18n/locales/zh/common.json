@@ -174,7 +174,9 @@
     "packages_other": "{{count}} 个软件包",
     "unreadNotifications_other": "{{count}} 条未读通知",
     "packages_one": "{{count}} 个软件包",
-    "unreadNotifications_one": "{{count}} 条未读通知"
+    "unreadNotifications_one": "{{count}} 条未读通知",
+    "textBlocks_one": "{{count}} 个文本块",
+    "textBlocks_other": "{{count}} 个文本块"
   },
   "relative": {
     "minutesAgo_one": "{{count}} 分钟前",

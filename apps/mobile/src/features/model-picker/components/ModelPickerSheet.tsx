@@ -40,6 +40,7 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',
@@ -155,13 +156,16 @@ function AutoModeRow({
         <Text
           style={{
             color: selected ? colors.teal : colors.textPrimary,
-            fontSize: 15,
+            fontSize: typeScale.body,
             fontWeight: '700',
           }}
         >
           {mode.name}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+        <Text
+          style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+          numberOfLines={1}
+        >
           {mode.description}
         </Text>
       </View>
@@ -203,13 +207,16 @@ function RoutingProfileRow({
         <Text
           style={{
             color: selected ? colors.teal : colors.textPrimary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             fontWeight: '600',
           }}
         >
           {label}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>
+        <Text
+          style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+          numberOfLines={2}
+        >
           {description}
         </Text>
       </View>
@@ -579,7 +586,7 @@ export function ModelPickerSheet({
             <Text
               style={{
                 color: colors.textPrimary,
-                fontSize: 17,
+                fontSize: typeScale.headline,
                 fontWeight: '600',
                 flex: 1,
                 textAlign: 'center',
@@ -606,7 +613,7 @@ export function ModelPickerSheet({
               <XIcon size={16} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
             {modelScope === 'cloud'
               ? 'AGI Cloud models are managed separately from Local Mode.'
               : modelScope === 'all'
@@ -614,20 +621,24 @@ export function ModelPickerSheet({
                 : 'Local models run on this device. AGI Cloud is managed separately.'}
           </Text>
           {cloudUnlocked && modelScope !== 'local' && freeQuotaLoading ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
               Checking provider-funded Free models…
             </Text>
           ) : null}
           {cloudUnlocked && modelScope !== 'local' && freeQuotaError ? (
             <View style={{ marginTop: 6 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{freeQuotaError}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                {freeQuotaError}
+              </Text>
               <Pressable
                 onPress={() => void refreshFreeQuotaCatalogue()}
                 accessibilityRole="button"
                 accessibilityLabel="Retry loading provider-funded Free models"
                 style={{ minHeight: 40, justifyContent: 'center' }}
               >
-                <Text style={{ color: colors.teal, fontSize: 12 }}>Retry Free models</Text>
+                <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
+                  Retry Free models
+                </Text>
               </Pressable>
             </View>
           ) : null}
@@ -639,7 +650,7 @@ export function ModelPickerSheet({
           !freeQuotaCatalogue?.models.some(
             (model) => model.category === 'chat' && model.status === 'ready',
           ) ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
               No provider-funded Free chat models are available right now.
             </Text>
           ) : null}
@@ -670,7 +681,7 @@ export function ModelPickerSheet({
               flex: 1,
               minHeight: 32,
               color: colors.textPrimary,
-              fontSize: 16,
+              fontSize: typeScale.callout,
               lineHeight: 21,
               letterSpacing: 0,
               paddingTop: 0,
@@ -718,11 +729,15 @@ export function ModelPickerSheet({
                 paddingBottom: 4,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '700' }}
+              >
                 Effort
               </Text>
               {selectedRequiresReasoning ? (
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                  Always on
+                </Text>
               ) : null}
             </View>
             {effortOptions.map((effort) => {
@@ -760,14 +775,20 @@ export function ModelPickerSheet({
                         <Text
                           style={{
                             color: active ? colors.teal : colors.textPrimary,
-                            fontSize: 14,
+                            fontSize: typeScale.subhead,
                             fontWeight: active ? '600' : '500',
                           }}
                         >
                           {label}
                         </Text>
                         {tradeoff ? (
-                          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+                          <Text
+                            style={{
+                              color: colors.textMuted,
+                              fontSize: typeScale.caption,
+                              marginTop: 2,
+                            }}
+                          >
                             {tradeoff}
                           </Text>
                         ) : null}
@@ -789,7 +810,9 @@ export function ModelPickerSheet({
             accessibilityLabel="Loading models"
           >
             <ActivityIndicator size="small" color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading models…</Text>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+              Loading models…
+            </Text>
           </View>
         ) : null}
 
@@ -827,7 +850,7 @@ export function ModelPickerSheet({
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   paddingHorizontal: 16,
                   paddingVertical: 6,
@@ -845,7 +868,7 @@ export function ModelPickerSheet({
                 accessibilityRole="header"
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   paddingHorizontal: 16,
                   paddingVertical: 6,
@@ -862,7 +885,7 @@ export function ModelPickerSheet({
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   paddingHorizontal: 16,
                   paddingVertical: 6,
@@ -882,7 +905,7 @@ export function ModelPickerSheet({
                 <Text
                   style={{
                     color: colors.textMuted,
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     fontWeight: '700',
                     paddingHorizontal: 16,
                     paddingVertical: 6,
@@ -904,7 +927,13 @@ export function ModelPickerSheet({
                 paddingHorizontal: 28,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center' }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.subhead,
+                  textAlign: 'center',
+                }}
+              >
                 No models matching “{search}”
               </Text>
             </View>

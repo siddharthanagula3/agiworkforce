@@ -23,6 +23,9 @@ vi.mock('@agiworkforce/utils/signaling', () => ({
   },
 }));
 vi.mock('@/lib/client/csrf', () => ({
+  CsrfTokenError: class CsrfTokenError extends Error {},
+  clearCsrfToken: vi.fn(),
+  getCsrfToken: vi.fn(),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 vi.mock('./dispatch-envelope', () => ({

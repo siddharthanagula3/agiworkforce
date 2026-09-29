@@ -2,13 +2,18 @@ import { useEffect } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/text';
 import { CONNECTOR_OAUTH_APP_RETURN_URL } from '@agiworkforce/cloud-contracts';
 import { completeConnectorAuthorization } from '@/services/connectors';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ConnectorOAuthReturnRoute() {
   const router = useRouter();
   const colors = useThemeColors();
+  const handleCancel = useGoBack('/(app)/connectors');
   const params = useLocalSearchParams<{
     state?: string;
     code?: string;
@@ -46,6 +51,14 @@ export default function ConnectorOAuthReturnRoute() {
       accessibilityLabel="Finishing the connection"
     >
       <ActivityIndicator color={colors.textPrimary} />
+      <Pressable
+        onPress={handleCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+        style={{ marginTop: 24, minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>Cancel</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }

@@ -5,6 +5,7 @@ import type { ConnectorConnectRequest } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 function headlineFor(request: ConnectorConnectRequest): string {
   if (request.connectUrl === null) return `${request.connectorName} can’t be connected here`;
@@ -64,11 +65,18 @@ export function ConnectorConnectCard({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Plug size={16} color={colors.textSecondary} />
-        <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: typeScale.subhead,
+            fontWeight: '600',
+            color: colors.textPrimary,
+          }}
+        >
           {headlineFor(request)}
         </Text>
       </View>
-      <Text style={{ fontSize: 13, lineHeight: 18, color: colors.textSecondary }}>
+      <Text style={{ fontSize: typeScale.footnote, lineHeight: 18, color: colors.textSecondary }}>
         {explanationFor(request)}
       </Text>
       {connectable ? (
@@ -84,7 +92,9 @@ export function ConnectorConnectCard({
             accessibilityLabel={`${request.reason === 'not_connected' ? 'Connect' : 'Reconnect'} ${request.connectorName}`}
             style={{ ...buttonStyle, backgroundColor: colors.teal }}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.accentText }}>
+            <Text
+              style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.accentText }}
+            >
               {request.reason === 'not_connected' ? 'Connect' : 'Reconnect'}
             </Text>
           </Pressable>
@@ -95,7 +105,13 @@ export function ConnectorConnectCard({
               accessibilityLabel="Retry this turn"
               style={{ ...buttonStyle, borderWidth: 1, borderColor: colors.border }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 Retry this turn
               </Text>
             </Pressable>

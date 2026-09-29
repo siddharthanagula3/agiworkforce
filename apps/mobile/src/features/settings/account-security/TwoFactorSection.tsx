@@ -27,6 +27,7 @@ import {
   verifyAuthenticatorCode,
   type AccountSecurityStatus,
 } from './service';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 type Stage =
   | { name: 'idle' }
@@ -64,7 +65,7 @@ function ActionButton({
     >
       <Text
         style={{
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           fontWeight: '600',
           color: primary ? colors.accentText : colors.textPrimary,
         }}
@@ -238,10 +239,22 @@ export function TwoFactorSection({
           >
             {stage.name === 'enrolling' ? (
               <>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.callout,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}
+                >
                   Set up authenticator app
                 </Text>
-                <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                    color: colors.textSecondary,
+                  }}
+                >
                   Add AGI Workforce to your authenticator app, then enter the 6-digit code it shows.
                   The setup key works for 30 minutes.
                 </Text>
@@ -249,7 +262,7 @@ export function TwoFactorSection({
                   selectable
                   accessibilityLabel="Setup key"
                   style={{
-                    fontSize: 15,
+                    fontSize: typeScale.body,
                     letterSpacing: 1,
                     color: colors.textPrimary,
                     fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
@@ -289,7 +302,7 @@ export function TwoFactorSection({
                     borderColor: colors.border,
                     borderRadius: 10,
                     paddingHorizontal: 12,
-                    fontSize: 18,
+                    fontSize: typeScale.headline,
                     color: colors.textPrimary,
                   }}
                 />
@@ -306,17 +319,29 @@ export function TwoFactorSection({
               </>
             ) : stage.name === 'codes' ? (
               <>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.callout,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}
+                >
                   Save your backup codes
                 </Text>
-                <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                    color: colors.textSecondary,
+                  }}
+                >
                   Each code works once. Keep them somewhere safe: they are shown only now, and any
                   earlier codes no longer work.
                 </Text>
                 <Text
                   selectable
                   style={{
-                    fontSize: 15,
+                    fontSize: typeScale.body,
                     lineHeight: 24,
                     color: colors.textPrimary,
                     fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),

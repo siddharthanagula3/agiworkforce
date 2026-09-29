@@ -3,6 +3,7 @@ import { View, Pressable } from 'react-native';
 import { AlertTriangle, RotateCcw, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   freeCapacityCountdownMessage,
   freeCapacityRetrySeconds,
@@ -66,7 +67,12 @@ export function SendErrorBanner({
     >
       <AlertTriangle size={14} color={colors.agentError} strokeWidth={2} />
       <Text
-        style={{ fontSize: 12, color: colors.agentError, fontWeight: '500', flex: 1 }}
+        style={{
+          fontSize: typeScale.caption,
+          color: colors.agentError,
+          fontWeight: '500',
+          flex: 1,
+        }}
         numberOfLines={2}
       >
         {message}
@@ -80,7 +86,9 @@ export function SendErrorBanner({
           accessibilityLabel={action.label}
           accessibilityRole="button"
         >
-          <Text style={{ fontSize: 12, color: colors.agentError, fontWeight: '700' }}>
+          <Text
+            style={{ fontSize: typeScale.caption, color: colors.agentError, fontWeight: '700' }}
+          >
             {action.label}
           </Text>
         </Pressable>
@@ -96,7 +104,9 @@ export function SendErrorBanner({
           accessibilityState={{ disabled: waitingForCapacity }}
         >
           <RotateCcw size={13} color={retryColor} strokeWidth={2} />
-          <Text style={{ fontSize: 12, color: retryColor, fontWeight: '600' }}>Retry</Text>
+          <Text style={{ fontSize: typeScale.caption, color: retryColor, fontWeight: '600' }}>
+            Retry
+          </Text>
         </Pressable>
       )}
       <Pressable

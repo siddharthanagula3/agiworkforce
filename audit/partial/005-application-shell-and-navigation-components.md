@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: From the shell, the user can see the active workspace and switch between personal and team workspaces.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Switching workspace exists only inside Settings > Workspace; the drawer/shell has no workspace switcher. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/features/settings/index.tsx:451-456`
 
 ## S5.09: Pinned-item section.
 
@@ -37,15 +34,12 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 
 - Done when: Recent conversations can be shown grouped under their projects in navigation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 ## S5.12: Date-grouped recents.
 
@@ -62,57 +56,45 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
 
 ## S5.19: Unread-result indicator.
 
 - Done when: Items with new results the user has not seen are marked unread (visually and for assistive tech) and clear when opened.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after Codex commits ChatsListScreen.tsx and DrawerContent.tsx | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 ## S5.20: Item overflow menu.
 
 - Done when: Each row has an overflow (⋯) menu with its actions (share, rename, pin, archive, move, delete).
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after Codex commits ChatsListScreen.tsx; share and move stay out until leader research (founder file) |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
 
 ## S5.21: Inline rename field.
 
 - Done when: A row can be renamed in place (inline field, Enter to save, Escape to cancel) and the new title persists.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply after w-auth-S5.19-S5.20-mobile-chat-rows once Codex commits |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
 
 ## S5.28: Notification center.
 
@@ -136,7 +118,7 @@ Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx
 | --- | --- | --- | --- |
 | web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
-| mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
+| mobile | partial | Owner hold: billing waitlist stays on (rulings, w-auth sweep); Upgrade leads to the subscription screen until FEATURES.billing is on. | flag-off |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 

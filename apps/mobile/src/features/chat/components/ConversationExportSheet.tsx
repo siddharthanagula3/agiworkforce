@@ -1,15 +1,26 @@
 import React, { useCallback, useState } from 'react';
 import { View, Pressable, ActivityIndicator, Alert, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FileText, File, Hash, Copy, CheckCircle2, TriangleAlert, X } from 'lucide-react-native';
+import {
+  FileText,
+  File,
+  Hash,
+  Copy,
+  CheckCircle2,
+  Printer,
+  TriangleAlert,
+  X,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,
   exportConversationToText,
   exportToMarkdown,
   formatConversationAsMarkdown,
+  printConversation,
   shareFile,
 } from '@/services/fileCreation';
 import type { ChatMessage } from '@/types/chat';
@@ -21,7 +32,7 @@ interface ConversationExportSheetProps {
   title: string;
 }
 
-type ExportOptionKey = 'pdf' | 'text' | 'markdown' | 'copy';
+type ExportOptionKey = 'pdf' | 'print' | 'text' | 'markdown' | 'copy';
 
 interface ExportOption {
   key: ExportOptionKey;
@@ -36,6 +47,12 @@ const EXPORT_OPTIONS: ExportOption[] = [
     label: 'Export as PDF',
     description: 'Styled document with role headers',
     Icon: File,
+  },
+  {
+    key: 'print',
+    label: 'Print',
+    description: 'Send the styled document to a printer',
+    Icon: Printer,
   },
   {
     key: 'text',
@@ -88,6 +105,17 @@ export function ConversationExportSheet({
       }
 
       setLoadingKey(key);
+      if (key === 'print') {
+        try {
+          await printConversation(filtered, title);
+          handleClose();
+        } catch {
+          Alert.alert('Print Failed', 'Could not open printing for this conversation. Try again.');
+        } finally {
+          setLoadingKey(null);
+        }
+        return;
+      }
       try {
         let result;
         if (key === 'pdf') {
@@ -147,7 +175,7 @@ export function ConversationExportSheet({
               <View style={{ flex: 1 }}>
                 <Text variant="subheading">Export Conversation</Text>
                 <Text
-                  style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}
+                  style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}
                   numberOfLines={1}
                 >
                   {title}
@@ -239,7 +267,7 @@ export function ConversationExportSheet({
                         <View style={{ flex: 1 }}>
                           <Text
                             style={{
-                              fontSize: 14,
+                              fontSize: typeScale.subhead,
                               fontWeight: '500',
                               color: isCopied
                                 ? colors.agentSuccess
@@ -252,7 +280,13 @@ export function ConversationExportSheet({
                               ? copyControlLabel(copyStatus, option.label)
                               : option.label}
                           </Text>
-                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: typeScale.caption,
+                              color: colors.textMuted,
+                              marginTop: 1,
+                            }}
+                          >
                             {option.description}
                           </Text>
                         </View>

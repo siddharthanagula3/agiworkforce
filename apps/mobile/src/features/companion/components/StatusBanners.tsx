@@ -26,7 +26,7 @@ export function StaleApprovalBanner({ lastHeartbeatAt }: StaleApprovalBannerProp
           <Text className="text-xs font-semibold text-amber-400 mb-0.5">
             Approval may be outdated
           </Text>
-          <Text className="text-[11px] text-amber-400/70 leading-4">
+          <Text className="text-xs text-amber-400/70 leading-4">
             Last desktop contact {ageLabel}. The desktop may have moved on.
           </Text>
         </View>
@@ -47,7 +47,7 @@ export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBa
         <SignalZero size={14} color={colors.agentError} />
         <View className="flex-1">
           <Text className="text-xs font-semibold text-red-400 mb-0.5">Desktop unreachable</Text>
-          <Text className="text-[11px] text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
+          <Text className="text-xs text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
         </View>
         <Pressable
           onPress={onReconnect}
@@ -77,7 +77,7 @@ export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBanne
           <Text className="text-xs font-semibold text-amber-400 mb-0.5">
             Reconnecting in {countdown}s
           </Text>
-          <Text className="text-[11px] text-amber-400/70">Desktop connection lost.</Text>
+          <Text className="text-xs text-amber-400/70">Desktop connection lost.</Text>
         </View>
         <Pressable
           onPress={onReconnect}
