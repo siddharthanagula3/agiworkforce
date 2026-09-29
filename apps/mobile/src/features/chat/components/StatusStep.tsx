@@ -43,7 +43,7 @@ function PulsingIndicator({ color }: { color: string }) {
 
   useEffect(() => {
     opacity.value = withRepeat(
-      withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: motion.reveal, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );

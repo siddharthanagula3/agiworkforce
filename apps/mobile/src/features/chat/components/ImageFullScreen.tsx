@@ -8,7 +8,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { useThemeColors, zIndex, motion } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -71,9 +71,9 @@ export function ImageFullScreen({
       'worklet';
       savedScale.value = scale.value;
       if (scale.value < 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -100,14 +100,14 @@ export function ImageFullScreen({
     .onEnd(() => {
       'worklet';
       if (scale.value > 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
-        scale.value = withTiming(2.5, { duration: 300 });
+        scale.value = withTiming(2.5, { duration: motion.moved });
         savedScale.value = 2.5;
       }
     });
