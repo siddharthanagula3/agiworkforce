@@ -67,6 +67,7 @@ const cloudModules = [
   'free-quota',
   'account-deletion',
   'terms-acceptance',
+  'mobile-push',
 ];
 
 const cloudMovedFiles = [

@@ -45,9 +45,13 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success' },
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
+});
 
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
@@ -63,6 +67,8 @@ jest.mock('lucide-react-native', () => {
     BookOpen: iconFactory('book'),
     Image: iconFactory('image'),
     FileText: iconFactory('file-text'),
+    FileCode: iconFactory('file-code'),
+    FileDown: iconFactory('file-down'),
     BarChart3: iconFactory('bar-chart'),
     ExternalLink: iconFactory('external-link'),
     Globe: iconFactory('globe'),

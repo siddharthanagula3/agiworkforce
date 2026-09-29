@@ -12,11 +12,17 @@ import {
   type ConnectorToolPermissionLevel,
   type CustomConnectorResult,
 } from '@agiworkforce/client-runtime';
+import * as WebBrowser from 'expo-web-browser';
 import {
   CONNECTOR_DIRECTORY_MAX_LIMIT,
   CONNECTOR_DIRECTORY_PATH,
+  CONNECTOR_OAUTH_APP_RETURN_URL,
+  CONNECTOR_OAUTH_COMPLETE_PATH,
   CONNECTOR_OAUTH_START_PATH,
   ConnectorCapabilityCatalogSchema,
+  ConnectorOAuthCompleteRequestSchema,
+  ConnectorOAuthCompleteResponseSchema,
+  type ConnectorOAuthCallbackStatus,
   ConnectorCredentialStatusResponseSchema,
   ConnectorDirectoryEntryResponseSchema,
   ConnectorDirectoryListResponseSchema,
@@ -114,6 +120,7 @@ export async function connectConnector(connectorId: string): Promise<ConnectConn
     kind: 'oauth-required',
     connectorId: result.connectorId,
     authorizeUrl: new URL(result.installUrl, API_URL).toString(),
+    appReturn: false,
   };
 }
 
@@ -215,4 +222,39 @@ export async function saveConnectorApiKey(credentialsPath: string, apiKey: strin
     } satisfies SaveConnectorCredentialRequest),
   );
   if (!parsed.success) throw new ConnectorResponseError(INVALID_CREDENTIALS);
+}
+
+export type InAppConnectorAuthorization = ConnectorOAuthCallbackStatus | 'dismissed';
+
+export async function authorizeConnectorInApp(
+  authorizeUrl: string,
+): Promise<InAppConnectorAuthorization> {
+  const session = await WebBrowser.openAuthSessionAsync(
+    authorizeUrl,
+    CONNECTOR_OAUTH_APP_RETURN_URL,
+  );
+  if (session.type !== 'success') return 'dismissed';
+  return completeConnectorAuthorization(session.url);
+}
+
+export async function completeConnectorAuthorization(
+  returnUrl: string,
+): Promise<ConnectorOAuthCallbackStatus> {
+  let params: URLSearchParams;
+  try {
+    params = new URL(returnUrl).searchParams;
+  } catch {
+    return 'invalid_state';
+  }
+  const request = ConnectorOAuthCompleteRequestSchema.safeParse({
+    state: params.get('state') ?? '',
+    ...(params.get('code') ? { code: params.get('code') } : {}),
+    ...(params.get('iss') ? { iss: params.get('iss') } : {}),
+    ...(params.get('error') ? { error: params.get('error') } : {}),
+  });
+  if (!request.success) return 'invalid_state';
+  const response = ConnectorOAuthCompleteResponseSchema.parse(
+    await api.post<unknown>(CONNECTOR_OAUTH_COMPLETE_PATH, request.data),
+  );
+  return response.status;
 }

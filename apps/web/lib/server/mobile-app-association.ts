@@ -34,6 +34,10 @@ export function appleAppSiteAssociationResponse(): Response {
                 '/': '/auth/reset-password',
                 comment: 'Clerk account recovery handoff.',
               },
+              {
+                '/': '/open/*',
+                comment: 'A notice or email link to a task, report, schedule, artifact or file.',
+              },
             ],
           },
         ],
