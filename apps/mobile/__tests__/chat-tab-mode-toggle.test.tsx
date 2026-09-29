@@ -507,11 +507,14 @@ describe('Chat tab mode toggle', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
 
     await waitFor(() => {
-      expect(mockGenerateImage).toHaveBeenCalledWith({
-        prompt: 'a red circle on a white background',
-        model: expect.any(String),
-        aspect_ratio: expect.any(String),
-      });
+      expect(mockGenerateImage).toHaveBeenCalledWith(
+        {
+          prompt: 'a red circle on a white background',
+          model: expect.any(String),
+          aspect_ratio: expect.any(String),
+        },
+        { operationId: expect.any(String) },
+      );
     });
     await waitFor(() => {
       expect(mockCompleteImageGeneration).toHaveBeenCalledWith(
@@ -555,11 +558,14 @@ describe('Chat tab mode toggle', () => {
       );
     });
     expect(mockSendMessage).not.toHaveBeenCalled();
-    expect(mockGenerateImage).toHaveBeenCalledWith({
-      prompt: 'Create an image of a blue observatory on Mars',
-      model: expect.any(String),
-      aspect_ratio: expect.any(String),
-    });
+    expect(mockGenerateImage).toHaveBeenCalledWith(
+      {
+        prompt: 'Create an image of a blue observatory on Mars',
+        model: expect.any(String),
+        aspect_ratio: expect.any(String),
+      },
+      { operationId: expect.any(String) },
+    );
   });
 
   it.each([
