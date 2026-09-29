@@ -83,6 +83,7 @@ export function TimezonePickerField({
         visible={open}
         animationType="slide"
         presentationStyle="pageSheet"
+        accessibilityViewIsModal
         onRequestClose={() => setOpen(false)}
       >
         <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
