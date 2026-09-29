@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
+import {
+  listAllManagedCloudProjects,
+  type ManagedCloudProject,
+} from '@agiworkforce/cloud-contracts';
 import {
   describeProjectFailure,
   projectContextValue,
@@ -11,7 +14,6 @@ import {
 
 export const PROJECTS_VIEW_ID = 'agi-workforce.projects';
 export const PROJECTS_REFRESH_INTERVAL_MS = 60_000;
-const PROJECTS_PAGE_LIMIT = 50;
 
 export const OPEN_PROJECT_COMMAND = 'agi-workforce.openProject';
 export const REFRESH_PROJECTS_COMMAND = 'agi-workforce.refreshProjects';
@@ -21,8 +23,7 @@ export interface ProjectListClient {
 }
 
 export type ProjectListClientResolution =
-  | { status: 'ready'; client: ProjectListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ProjectListClient } | { status: 'signed-out' };
 
 export class ProjectTreeItem extends vscode.TreeItem {
   constructor(readonly project: ManagedCloudProject) {
@@ -100,7 +101,7 @@ export class ProjectsTreeProvider
 
     let projects: ManagedCloudProject[];
     try {
-      projects = await resolution.client.listProjects({ limit: PROJECTS_PAGE_LIMIT, offset: 0 });
+      projects = await listAllManagedCloudProjects(resolution.client);
     } catch (error) {
       return [
         new ProjectNoticeItem(

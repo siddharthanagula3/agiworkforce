@@ -212,6 +212,8 @@ export interface WebMcpToolDef {
   inputSchema: Record<string, unknown>;
 }
 
+export const CONNECTOR_RECONNECT_TOOL_NAME = 'agi_reconnect';
+
 export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
   return catalog.tools.map((t) => ({
     qualifiedName: `mcp__${t.serverName}__${t.toolName}`,

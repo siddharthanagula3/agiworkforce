@@ -4554,6 +4554,33 @@ export function useResolveToolApproval(
         }
       };
 
+      const closeAnsweredApprovalTurn = async (reason: string) => {
+        pendingTurns.delete(assistantMessageId);
+        for (const call of turn.calls) {
+          updateToolEntry(
+            assistantMessageId,
+            call.toolCallId,
+            { status: 'failed', requiresApproval: false, error: reason },
+            turn.conversationId,
+          );
+        }
+        const message = findConversationMessage(turn.conversationId, assistantMessageId);
+        const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
+        updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
+        if (turn.isTemporaryConversation || !message) return;
+        await saveMessageToDb(
+          turn.conversationId,
+          {
+            id: assistantMessageId,
+            role: message.role,
+            content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model: message.model ?? turn.model,
+            metadata,
+          },
+          getAuthToken,
+        ).catch((error) => notifyPersistenceFailure('assistant', error));
+      };
+
       let authToken: string;
       try {
         authToken = await getAuthToken();
@@ -4689,7 +4716,11 @@ export function useResolveToolApproval(
         }
       } catch (error) {
         if (error instanceof ChatApiError) {
-          await restoreApprovalControls();
+          if (error.status !== undefined && ANSWERED_APPROVAL_STATUSES.has(error.status)) {
+            await closeAnsweredApprovalTurn(getVisibleErrorMessage(error));
+          } else {
+            await restoreApprovalControls();
+          }
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
@@ -4718,6 +4749,7 @@ export function useResolveToolApproval(
 }
 
 const INACTIVE_INPUT_STATUSES = new Set([404, 410]);
+const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,

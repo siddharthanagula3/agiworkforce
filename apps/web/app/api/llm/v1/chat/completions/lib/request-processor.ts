@@ -2892,10 +2892,9 @@ export async function processRequest(
       return new Map<string, boolean>();
     });
   skillInstallOverridesPromise.catch(() => {});
+  const pluginsAllowed = !workspaceControls || workspaceControls.featureAccess.plugins;
   const loadEnabledPluginIds = memoizeAsync(async () =>
-    workspaceControls && !workspaceControls.featureAccess.plugins
-      ? new Set<string>()
-      : listEnabledPluginIds((await scopedDbPromise).db, userId),
+    pluginsAllowed ? listEnabledPluginIds((await scopedDbPromise).db, userId) : new Set<string>(),
   );
 
   // safety legs so both keep seeing the caller's own words.
@@ -4348,6 +4347,7 @@ export async function processRequest(
       userId,
       loadEnabledPluginIds,
       loadInstallOverrides: loadSkillInstallOverrides,
+      pluginsAllowed,
       ...options,
     });
   if (chatRequest.skill_name) {

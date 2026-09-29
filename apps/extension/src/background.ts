@@ -4345,6 +4345,11 @@ async function handleMessageAsync(
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
         siteTools,
+        refreshSiteTools: async () => {
+          const tab = await chrome.tabs.get(cuTabId).catch(() => null);
+          if (!tab?.url) return;
+          siteTools.splice(0, siteTools.length, ...(await discoverRunSiteTools(cuTabId, tab.url)));
+        },
         callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
         runId: lease.runId,
         signal: lease.controller.signal,

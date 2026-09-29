@@ -1,6 +1,7 @@
 'use client';
 
 import { translateUiPlural } from '@agiworkforce/ui';
+import { useCapability } from '@agiworkforce/unified-chat';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import {
@@ -335,12 +336,15 @@ export interface ConnectorsSettingsAdapterResult {
   setToolPermissionsConnectorId: (id: string | null) => void;
 }
 
+const CONNECTORS_UNAVAILABLE_COPY = 'Connectors are unavailable right now';
+
 export function useConnectorsSettingsAdapter({
   open,
   authedHeaders,
   onOpenCustomConnector,
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
+  const connectorsAllowed = useCapability('canUseConnectors');
   const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
   const [customConnectorPreset, setCustomConnectorPreset] = useState<CustomConnectorPreset | null>(
     null,
@@ -510,9 +514,9 @@ export function useConnectorsSettingsAdapter({
         phase: 1,
         iconBg: CUSTOM_CONNECTOR_ICON_BG,
         iconText: CUSTOM_CONNECTOR_ICON_TEXT,
-        canConnect: customSignInPending(c),
+        canConnect: connectorsAllowed && customSignInPending(c),
       })),
-    [selfAddedConnectors],
+    [selfAddedConnectors, connectorsAllowed],
   );
 
   const [toolPermissionsConnector, setToolPermissionsConnector] =
@@ -523,11 +527,15 @@ export function useConnectorsSettingsAdapter({
     () =>
       [
         ...SETTINGS_CONNECTORS.map((c) =>
-          availableIds.includes(c.id) ? { ...c, canConnect: true, statusLabel: undefined } : c,
+          !connectorsAllowed
+            ? { ...c, canConnect: false, statusLabel: CONNECTORS_UNAVAILABLE_COPY }
+            : availableIds.includes(c.id)
+              ? { ...c, canConnect: true, statusLabel: undefined }
+              : c,
         ),
         ...customSettingsConnectors,
       ] as typeof SETTINGS_CONNECTORS,
-    [availableIds, customSettingsConnectors],
+    [availableIds, customSettingsConnectors, connectorsAllowed],
   );
 
   const mergedConnectedConnectors = useMemo(() => {
