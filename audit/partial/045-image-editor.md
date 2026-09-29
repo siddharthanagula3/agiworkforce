@@ -106,7 +106,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Exactly one attached photo, only with an edit-capable model; no reference slots. | ui |
+| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: up to 4 attached images for an edit-capable model, the first edited and the rest sent as reference_images, with web's 4-image cap and wording. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
