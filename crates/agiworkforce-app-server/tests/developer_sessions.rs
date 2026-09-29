@@ -1571,6 +1571,34 @@ async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth
 }
 
 #[tokio::test]
+async fn rules_and_keys_are_not_saved_over_a_connection_that_did_not_prove_header_auth() {
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    for (id, method, params) in [
+        (
+            2,
+            method::PERMISSIONS_ADD,
+            serde_json::json!({ "kind": "command", "target": "git status", "decision": "allow" }),
+        ),
+        (
+            3,
+            method::PROVIDERS_SET_KEY,
+            serde_json::json!({ "provider": "openai", "apiKey": "sk-test" }),
+        ),
+    ] {
+        let refused = processor.process(request(id, method, params)).await;
+        let error = refused.error.expect("the write must be refused");
+        assert_eq!(error.code, -32006, "{method}");
+        assert!(refused.result.is_none(), "{method}");
+    }
+}
+
+#[tokio::test]
 async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
     let host = Arc::new(SurfaceHost::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
