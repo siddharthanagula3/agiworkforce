@@ -77,7 +77,8 @@ vi.mock('@/lib/free-chat-surface-policy', () => ({
   readSurfaceHint: vi.fn(),
   resolveCloudChatSurface: () => 'web',
 }));
-vi.mock('@/lib/connectors/bank-accounts', () => ({
+vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
   bankAccountsToolDefs: vi.fn(),
   createBankAccountsLinkToken: vi.fn(),
   executeBankAccountsTool: vi.fn(),

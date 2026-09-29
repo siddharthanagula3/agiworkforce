@@ -35,10 +35,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/artifacts` lists cloud artifacts as a system message; answers carry no per-answer artifact link. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713-4722`
 
 ## S17.10: Image results.
 
@@ -61,18 +58,6 @@ Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S17.13: Interactive widgets.
-
-- Done when: Answers can contain interactive widgets (cards with choices, maps, actions) the user operates in place.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only MCP elicitation forms and approval prompts are interactive in the terminal; answer cards (choices, maps) are not rendered. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`
 
 ## S17.14: Follow-up suggestions.
 

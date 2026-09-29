@@ -16,14 +16,3 @@ nothing is left.
 | platform | partial | Two separate services: local threads (agi app-server, shared by CLI/VS Code/desktop/phone) and cloud Code sessions (web, flag-off); nothing joins them into one service. | handler |
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
-
-## S99.30: Local-to-cloud handoff coordinator.
-
-- Done when: A coordinator hands local work to the cloud (and back) with admission checks.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | partials/platform-final 5df311dcb6: the cloud importer exists (POST /api/code/sessions/handoff admits a Cloud-addressed record with version, destination, trust mode, 15 min age and account-fingerprint checks, opens the session through the normal gates, replay-safe by receipt-derived requestId, returns the seed prompt). Left: the CLI app-server must POST the record when thread/handoff targets Cloud and start the first turn with seedPrompt (apps/cli, asked of c-cli). | handler |
-
-Code: `apps/web/app/api/code/sessions/handoff/route.ts:75-75`, `apps/web/app/api/code/sessions/handoff/route.ts:103-103`, `packages/contracts/cloud-contracts/src/cloud-code-handoff.ts:147-147`

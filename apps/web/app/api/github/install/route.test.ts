@@ -18,25 +18,30 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('next/headers', () => ({
+vi.mock('next/headers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/headers')>()),
   cookies: vi.fn(async () => ({
     get: (name: string) => mocks.cookieGet(name),
     set: (options: unknown) => mocks.cookieSet(options),
   })),
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'attacker-user' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
   getNeonDb: vi.fn(() => ({
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -44,7 +49,8 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
   },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   generateGitHubInstallState: () => mocks.generateState(),
   getGitHubUserAuthorizationUrl: (state: string, redirectUri: string, challenge?: string) =>
     challenge === undefined
