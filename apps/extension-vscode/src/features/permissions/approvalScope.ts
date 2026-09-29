@@ -13,14 +13,11 @@ const TOOL_LABELS: Readonly<Record<string, string>> = Object.freeze({
   LoopDetection: 'repeated actions',
   McpElicitation: 'prompts from this MCP server',
   AskUser: 'questions from the agent',
-  Question: 'questions from the agent',
   Hook: 'hooks',
   Subagent: 'subagents',
   TrustDirectory: 'directory trust',
   WorkspacePolicy: 'this workspace policy tool',
 });
-
-export const QUESTION_APPROVAL_IDENTITY = 'Question';
 
 function variantOf(kind: string): string {
   const trimmed = kind.trim();

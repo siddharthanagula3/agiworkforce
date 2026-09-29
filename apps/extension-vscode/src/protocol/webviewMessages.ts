@@ -243,14 +243,6 @@ const respondToApproval = z.object({
   }),
 });
 
-const answerQuestion = z.object({
-  type: z.literal('answerQuestion'),
-  payload: z.object({
-    requestId: z.string().min(1).max(200),
-    answer: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength),
-  }),
-});
-
 const resolveTurnFailure = z.object({
   type: z.literal('resolveTurnFailure'),
   payload: z.object({
@@ -334,7 +326,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openToolDiff,
   resolveTurnFailure,
   respondToApproval,
-  answerQuestion,
   attachFiles,
   removePendingAttachment,
   clearActiveProject,

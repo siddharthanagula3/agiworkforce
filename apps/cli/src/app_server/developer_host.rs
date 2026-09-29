@@ -360,7 +360,6 @@ impl CliDeveloperSessionHost {
         workspace_root: PathBuf,
     ) -> Result<Self, DeveloperSessionHostError> {
         let store = ManagedSessionStore::user_config().map_err(internal_error)?;
-        crate::tools::enable_interactive_questions();
         Self::new_with_store(config, workspace_root, store, true)
     }
 
@@ -3984,12 +3983,6 @@ fn approval_callback(
         Box::pin(async move {
             let request_id = request.id.to_string();
             let risk = request.kind.risk();
-            let question_options = match &request.kind {
-                crate::tui::approval_broker::ApprovalRequestKind::Question { options, .. } => {
-                    Some(options.clone())
-                }
-                _ => None,
-            };
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
@@ -4035,7 +4028,6 @@ fn approval_callback(
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
                     "alwaysAllowSaved": snapshot.always_allow_saved,
-                    "questionOptions": question_options,
                 }),
             ) {
                 let _ = notifications.send(notification);
