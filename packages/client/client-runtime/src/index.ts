@@ -139,6 +139,7 @@ export {
   pollDeviceAuthorization,
   refreshDeviceSession,
   requestDeviceAuthorization,
+  slowedDevicePollIntervalMs,
 } from './deviceAuthorization';
 export type {
   DeviceAuthorizationPollResult,
