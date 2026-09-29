@@ -1495,7 +1495,7 @@
       "id": "no-memory-from-google-turns",
       "section": "5.5 Google user data (Limited Use)",
       "kind": "prose",
-      "sentence": "New memories are not saved from a turn that holds Google data.",
+      "sentence": "**Memories.** New memories are not saved from a turn that holds Google data.",
       "implementation": [
         "apps/web/lib/services/managed-auto-memory-service.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
@@ -1975,14 +1975,6 @@
       "rows": 3,
       "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
       "why": "blocked-by-human"
-    },
-    {
-      "id": "legacy-memories-unattributed",
-      "section": "5.5 Google user data (Limited Use)",
-      "kind": "prose",
-      "sentence": "A memory written before source links were recorded has no source conversation, so it cannot be attributed and is not filtered.",
-      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
-      "why": "accepted-risk"
     }
   ]
 }

@@ -1127,14 +1127,15 @@ erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
 
 The privacy policy commits to the Google API Services User Data Policy,
 including Limited Use, for data from Google connectors. The routing rule lives
-in `apps/web/lib/connectors/google-user-data.ts`. Two residual risks are
-accepted and recorded here rather than on the privacy page:
+in `apps/web/lib/connectors/google-user-data.ts`. Memory is held to the same
+rule, and one residual risk is accepted and recorded here rather than on the
+privacy page:
 
-- **Legacy memories with no source.** Memory injection leaves out memories
-  whose source conversation holds the Google mark. A memory written before
-  source links were recorded has no source conversation, so it cannot be
-  attributed and is not filtered. New memories are not saved from a turn that
-  holds Google data.
+- **Memories.** New memories are not saved from a turn that holds Google data.
+  Memory injection leaves out memories whose source conversation holds the
+  Google mark, and a memory with no recorded source, written before source
+  links existed, is left out for any account that holds a marked conversation.
+  Settings still lists such memories so the user can delete them.
 - **Copies already synced to devices.** Memory sync stops serving memories from
   marked conversations, but a client that pulled one earlier keeps its local
   copy until the user clears it or the memory is deleted on the server.
