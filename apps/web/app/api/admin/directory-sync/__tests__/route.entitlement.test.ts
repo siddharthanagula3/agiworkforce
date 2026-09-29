@@ -26,7 +26,8 @@ const { mockGetClerkAuthUser } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(async () => ({ userId: 'admin-user' })),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...(args as [])),
 }));
 

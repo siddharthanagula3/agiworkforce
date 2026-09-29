@@ -21,7 +21,8 @@ vi.mock('@/lib/error-handler', () => ({
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: () => Promise.reject(new Error('anonymous')),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: () => Promise.reject(new Error('anonymous')),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
