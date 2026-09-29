@@ -334,7 +334,7 @@ const threadReadResponseSchema = z.object({
     .array(
       z.object({
         path: z.string(),
-        kind: z.enum(['created', 'modified']),
+        kind: z.enum(['created', 'modified', 'deleted']),
         tool: z.string(),
         toolCallId: z.string(),
         changedAt: z.string(),
@@ -399,6 +399,53 @@ const savedPermissionsResponseSchema = z.object({
 });
 
 export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
+
+const permissionRulesResponseSchema = z.object({
+  rules: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(512),
+        kind: z.enum(['command', 'domain', 'file', 'exec_policy', 'mcp']),
+        target: z.string().max(4_000),
+        label: z.string().max(4_000),
+        decision: z.enum(['allow', 'ask', 'deny']),
+      }),
+    )
+    .max(5_000),
+});
+
+export type PermissionRuleList = z.infer<typeof permissionRulesResponseSchema>;
+export type PermissionRule = PermissionRuleList['rules'][number];
+
+const trustListResponseSchema = z.object({
+  folders: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(16_384),
+        trustedAt: z.string().max(200).nullish(),
+        trustedBy: z.string().max(200).nullish(),
+      }),
+    )
+    .max(5_000),
+});
+
+export type TrustedFolderList = z.infer<typeof trustListResponseSchema>;
+
+const providerKeysResponseSchema = z.object({
+  providers: z
+    .array(
+      z.object({
+        provider: z.string().min(1).max(200),
+        label: z.string().max(200),
+        envVar: z.string().max(200),
+        configured: z.boolean(),
+      }),
+    )
+    .max(200),
+  storage: z.string().max(200),
+});
+
+export type ProviderKeyList = z.infer<typeof providerKeysResponseSchema>;
 
 const pullRequestPlanSchema = z.object({
   remote: z.string(),
@@ -551,6 +598,10 @@ const skillListResponseSchema = z.object({
         path: z.string().min(1).max(16_384),
         enabled: z.boolean(),
         consented: z.boolean(),
+        requiredTools: z.array(z.string().max(200)).max(200).default([]),
+        requiredEnvVars: z.array(z.string().max(200)).max(200).default([]),
+        missingTools: z.array(z.string().max(200)).max(200).default([]),
+        missingEnvVars: z.array(z.string().max(200)).max(200).default([]),
       }),
     )
     .max(2_000),
@@ -808,6 +859,13 @@ const approvalRequestedEventSchema = z.object({
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
   alwaysAllowSaved: z.boolean().optional().catch(undefined),
+  question: z
+    .object({
+      question: z.string().max(8_000),
+      options: z.array(z.string().max(1_000)).max(50).default([]),
+    })
+    .nullish()
+    .catch(undefined),
 });
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
@@ -1387,6 +1445,53 @@ export class LocalRuntimeClient {
     return savedPermissionsResponseSchema.parse(
       await connection.request('permissions/remove', { id }),
     );
+  }
+
+  async listPermissionRules(): Promise<PermissionRuleList> {
+    const connection = await this.readyConnection();
+    return permissionRulesResponseSchema.parse(await connection.request('permissions/rules', {}));
+  }
+
+  async addPermissionRule(rule: {
+    kind: 'command' | 'domain' | 'mcp';
+    target: string;
+    decision: PermissionRule['decision'];
+  }): Promise<PermissionRuleList> {
+    const connection = await this.readyConnection();
+    return permissionRulesResponseSchema.parse(await connection.request('permissions/add', rule));
+  }
+
+  async listTrustedFolders(): Promise<TrustedFolderList> {
+    const connection = await this.readyConnection();
+    return trustListResponseSchema.parse(await connection.request('trust/list', {}));
+  }
+
+  async revokeTrustedFolder(path: string): Promise<TrustedFolderList> {
+    const connection = await this.readyConnection();
+    return trustListResponseSchema.parse(await connection.request('trust/revoke', { path }));
+  }
+
+  async listProviderKeys(): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    return providerKeysResponseSchema.parse(await connection.request('providers/list', {}));
+  }
+
+  async setProviderKey(provider: string, apiKey: string): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    const keys = providerKeysResponseSchema.parse(
+      await connection.request('providers/setKey', { provider, apiKey }),
+    );
+    await this.listLocalModels({ refresh: true });
+    return keys;
+  }
+
+  async removeProviderKey(provider: string): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    const keys = providerKeysResponseSchema.parse(
+      await connection.request('providers/removeKey', { provider }),
+    );
+    await this.listLocalModels({ refresh: true });
+    return keys;
   }
 
   async unarchiveThread(threadId: string): Promise<void> {
