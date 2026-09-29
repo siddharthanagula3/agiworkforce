@@ -1,0 +1,177 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { ChatCodeRunResponseSchema } from '@agiworkforce/cloud-contracts';
+import { createError } from '@/lib/errors';
+
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  e2bEnabled: vi.fn(() => true),
+  assertCapability: vi.fn(async () => undefined),
+  codePolicy: vi.fn(async () => ({ allowed: true }) as { allowed: boolean; reason?: string }),
+  computeAccess: vi.fn(async () => ({
+    allowed: true,
+    code: 'allowed',
+    reason: '',
+    organizationId: null,
+  })),
+  getExecutor: vi.fn(),
+  runCode: vi.fn(),
+  dispose: vi.fn(async () => undefined),
+}));
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: 'user-1',
+    organizationId: null,
+  }),
+}));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/cors', () => ({
+  withCorsRoute: <T>(handler: T) => handler,
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
+vi.mock('@/lib/e2b/gate', () => ({ e2bCutoverEnabled: () => mocks.e2bEnabled() }));
+vi.mock('@/lib/e2b/runtime', () => ({
+  getE2BExecutor: (...args: unknown[]) => mocks.getExecutor(...args),
+}));
+vi.mock('@/lib/feature-flags/capability-gate', () => ({
+  assertCapabilityAvailable: (...args: unknown[]) => mocks.assertCapability(...args),
+}));
+vi.mock('@/lib/feature-flags/flag-evaluation-service', () => ({
+  buildFlagSubject: (_request: unknown, facts: unknown) => facts,
+}));
+vi.mock('@/lib/free-chat-surface-policy', () => ({ resolveCloudChatSurface: () => 'web' }));
+vi.mock('@/lib/server/code-execution-policy', () => ({
+  resolveCloudCodeExecutionPolicy: () => mocks.codePolicy(),
+}));
+vi.mock('@/lib/services/entitlement-resolution', () => ({
+  resolveEntitlementBundle: async () => ({ plan: 'pro', subscription: null }),
+}));
+vi.mock('@/lib/services/managed-compute-access', async () => {
+  const { NextResponse } = await import('next/server');
+  return {
+    evaluateManagedComputeAccess: () => mocks.computeAccess(),
+    buildManagedComputeAccessGateResponse: (decision: { allowed: boolean; code: string }) =>
+      decision.allowed
+        ? null
+        : NextResponse.json({ error: { code: decision.code } }, { status: 403 }),
+  };
+});
+
+const { POST } = await import('./route');
+
+const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
+const context = { params: Promise.resolve({ id: CONVERSATION_ID }) };
+
+function request(body: unknown = { language: 'python', code: 'print(1)' }) {
+  return new NextRequest(
+    `https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}/code-runs`,
+    { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } },
+  );
+}
+
+describe('POST /api/chat/conversations/[id]/code-runs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
+    mocks.runCode.mockResolvedValue({ ok: true, output: '1', pngResults: ['iVBORw0KGgo='] });
+    mocks.getExecutor.mockResolvedValue({ runCode: mocks.runCode, dispose: mocks.dispose });
+  });
+
+  it('runs the cell in the conversation sandbox and returns its output', async () => {
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(200);
+    const body = ChatCodeRunResponseSchema.parse(await response.json());
+    expect(body).toEqual({ ok: true, output: '1', error: null, images: ['iVBORw0KGgo='] });
+    expect(mocks.getExecutor.mock.calls[0]![0]).toMatchObject({
+      userId: 'user-1',
+      conversationId: CONVERSATION_ID,
+    });
+    expect(mocks.runCode).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'python', code: 'print(1)' }),
+    );
+    expect(mocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers 404 for a conversation the caller does not own', async () => {
+    mocks.query.mockResolvedValue([]);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(404);
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain('user_id = $2');
+    expect(sql).toContain('deleted_at is null');
+    expect(params).toEqual([CONVERSATION_ID, 'user-1', null]);
+    expect(mocks.getExecutor).not.toHaveBeenCalled();
+  });
+
+  it('refuses while the cloud execution switch is closed', async () => {
+    mocks.assertCapability.mockRejectedValueOnce(
+      createError.serviceUnavailable('Running code is temporarily switched off.').asUserSafe(),
+    );
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(503);
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', plan: 'pro', surface: 'web' }),
+      'canUseCloudExecution',
+      'Running code',
+    );
+    expect(mocks.getExecutor).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the account turned code execution off', async () => {
+    mocks.codePolicy.mockResolvedValueOnce({ allowed: false, reason: 'disabled' });
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(403);
+    expect(mocks.getExecutor).not.toHaveBeenCalled();
+  });
+
+  it('refuses when managed compute access is denied', async () => {
+    mocks.computeAccess.mockResolvedValueOnce({
+      allowed: false,
+      code: 'spend_limit_reached',
+      reason: 'Spend limit reached.',
+      organizationId: null,
+    });
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(403);
+    expect(mocks.getExecutor).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the sandbox compute cannot be reserved', async () => {
+    mocks.getExecutor.mockImplementationOnce(
+      async (_scope: unknown, onUnavailable: (cause: string) => void) => {
+        onUnavailable('over-quota');
+        return null;
+      },
+    );
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(503);
+    expect(mocks.runCode).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the deployment does not run code', async () => {
+    mocks.e2bEnabled.mockReturnValueOnce(false);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(503);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
