@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  hasAccepted: vi.fn(),
+  standing: vi.fn(),
   record: vi.fn(),
   csrf: vi.fn(),
 }));
@@ -30,7 +30,7 @@ vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
   ...(await importOriginal()),
   CURRENT_TERMS_VERSION: 'current-policy',
-  hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAccepted(...args),
+  readTermsStanding: (...args: unknown[]) => mocks.standing(...args),
   recordTermsAcceptance: (...args: unknown[]) => mocks.record(...args),
 }));
 
@@ -43,13 +43,24 @@ describe('native Terms acceptance API', () => {
   });
 
   it('reports the current version and account-specific acceptance without caching', async () => {
-    mocks.hasAccepted.mockResolvedValue(false);
+    mocks.standing.mockResolvedValue({ kind: 'required', reason: 'never_accepted' });
     const response = await GET(new NextRequest('https://agiworkforce.com/api/terms/accept'));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await response.json()).toEqual({ currentVersion: 'current-policy', accepted: false });
-    expect(mocks.hasAccepted).toHaveBeenCalledWith('person-a');
+    expect(mocks.standing).toHaveBeenCalledWith('person-a');
+  });
+
+  it('treats an older version that is still valid as accepted, as the chat gate does', async () => {
+    mocks.standing.mockResolvedValue({
+      kind: 'notice',
+      acceptedVersion: 'older',
+      requiredFrom: null,
+    });
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/terms/accept'));
+
+    expect(await response.json()).toEqual({ currentVersion: 'current-policy', accepted: true });
   });
 
   it('records an explicit native acceptance at the current version', async () => {
