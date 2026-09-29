@@ -157,7 +157,6 @@ import {
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
   type SitePolicyAdminState,
-  type BrowserTabSummary,
 } from '@agiworkforce/types';
 import {
   captureThroughDebugger,
@@ -181,10 +180,6 @@ import {
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
-import {
-  DESKTOP_TAB_LIST_REFUSAL,
-  readDesktopTabListConsent,
-} from './features/privacy/desktopTabList';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
 import {
   BROWSER_TOOL_DEFINITIONS,
@@ -3085,19 +3080,6 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
   }
 }
 
-const MAX_LISTED_TAB_TITLE_CHARS = 200;
-
-async function listDesktopVisibleTabs(): Promise<BrowserTabSummary[]> {
-  if (!(await readDesktopTabListConsent())) throw new Error(DESKTOP_TAB_LIST_REFUSAL);
-  const tabs = await chrome.tabs.query({ lastFocusedWindow: true });
-  return tabs.filter(isWebTab).map((tab) => ({
-    tabId: tab.id as number,
-    title: (tab.title ?? '').slice(0, MAX_LISTED_TAB_TITLE_CHARS),
-    url: tab.url as string,
-    active: tab.active === true,
-  }));
-}
-
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
@@ -3138,8 +3120,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
       if (!command) continue;
 
       const result = await runDesktopBrowserCommand(command, {
-        resolveTabId: (requestedTabId) => resolveBrowserToolTabId(requestedTabId),
-        listTabs: listDesktopVisibleTabs,
+        resolveTabId: () => resolveBrowserToolTabId(undefined),
         send: async (tabId, message) =>
           (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
             id: chrome.runtime.id,
