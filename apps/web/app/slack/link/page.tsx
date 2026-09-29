@@ -218,6 +218,10 @@ function SlackLinkForm() {
                   ))}
                 </select>
               </div>
+            ) : preview.workspaces.length === 0 ? (
+              <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
+                This account has no workspace that can answer in Slack.
+              </p>
             ) : (
               <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
                 Answers run in your {workspace?.name ?? 'Personal'} workspace.

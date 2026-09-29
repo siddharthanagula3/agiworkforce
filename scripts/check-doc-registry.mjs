@@ -175,7 +175,7 @@ const APP_ROUTER_ACTION_FILE = /\/app\/.*\/(archive)\/(route|page|layout)(\.[^/]
 // /legal/archive does. Its pages, nested dynamic segments and their tests are
 // product code.
 const APP_ROUTER_ARCHIVE_SEGMENT =
-  /\/app\/(?:[^/]+\/)*archive\/(?:(?:\[[^/]+\]|__tests__)\/)*[^/]*\.(?:test\.)?tsx?$/i;
+  /^apps\/web\/app\/legal\/archive\/(?:(?:\[[^/]+\]|__tests__)\/)*[^/]+\.tsx?$/;
 
 function checkArchiveDirectories(files) {
   for (const file of files) {
