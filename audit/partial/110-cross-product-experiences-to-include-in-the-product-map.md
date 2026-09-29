@@ -132,11 +132,10 @@ Code: `apps/web/app/api/github/webhook/route.ts:223-223`, `apps/web/lib/services
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The design source can be viewed and downloaded, a dedicated spec handoff was declined (D-2026-09-27-02), and cloud Code needs AGI_E2B_EXECUTION=1 and edits files only through approved shell commands. | ui, flag-off |
-| desktop | partial | Local sessions run the bundled CLI with full file tools, but the design must be downloaded and referenced by hand. | ui |
 | mobile | partial | The phone can steer an existing desktop Code session and download the design source as text; no design-to-code handoff. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/desktop/electron/runtime/developerSessionService.ts:169-169`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -204,11 +203,10 @@ Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/develope
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Continue in VS Code hands the cloud branch to VS Code, which pulls it into the checkout after a review and an overwrite check; it needs VS Code with the extension and AGI_E2B_EXECUTION=1 for cloud sessions to exist. | flag-off, handler |
-| desktop | partial | The same Continue in VS Code handoff opens from the desktop through its editor-handoff allowance (the ledger's 'missing' is stale); no native pull, and AGI_E2B_EXECUTION=1 is needed. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Bring the branch in pulls a cloud session's branch after review; needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/desktop/electron/windowPolicy.ts:47-47`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
+Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
 
 ## S110.24: Existing notebook → main assistant context.
 

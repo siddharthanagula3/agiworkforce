@@ -2,7 +2,9 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { logger } from '@/lib/logger';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
 import {
@@ -105,8 +107,41 @@ export async function evaluateConnectorPolicyForUser(
     connectorId: string | null;
     isCustom?: boolean;
     url?: string | null;
+    surface?: string | null;
   },
 ): Promise<ConnectorPolicyGateResult> {
+  const organizationId =
+    params.organizationId !== undefined || !params.userId
+      ? (params.organizationId ?? null)
+      : await resolveActiveOrganizationId(params.db, params.userId, params.request).catch(
+          (error: unknown) => {
+            logger.error(
+              { error, userId: params.userId },
+              '[connector-policy] workspace unresolved',
+            );
+            return null;
+          },
+        );
+  const subscription = await SubscriptionService.getSubscription(params.db, params.userId).catch(
+    (error: unknown) => {
+      logger.error({ error, userId: params.userId }, '[connector-policy] plan unreadable');
+      return null;
+    },
+  );
+  const connectorsAllowed = await connectorsAllowedWithoutRequest({
+    userId: params.userId,
+    organizationId,
+    planTier: subscription?.plan_tier ?? null,
+    surface: params.surface ?? null,
+  });
+  if (!connectorsAllowed) {
+    return {
+      allowed: false,
+      code: 'connectors_unavailable',
+      reason: 'Connectors are unavailable right now.',
+      organizationId,
+    };
+  }
   return evaluateWorkspacePolicy(
     params,
     { connectorId: params.connectorId },

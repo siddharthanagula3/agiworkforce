@@ -54,11 +54,13 @@ export {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
+  DEVELOPER_SESSION_EVENT_MESSAGE_KINDS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
   WORKING_TREE_CHANGE_STATES,
   isDeveloperSessionCommand,
+  messageKindForDeveloperSessionEvent,
   parseWorkingTreeStatus,
 } from './developer-sessions';
 export type {
@@ -368,5 +370,6 @@ export {
   DESKTOP_SIGN_IN_PATH,
   desktopSignInLink,
   isDesktopSignInLink,
+  readDesktopSignInChallenge,
   readDesktopSignInCode,
 } from './desktop-sign-in';

