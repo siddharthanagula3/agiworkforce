@@ -201,6 +201,7 @@ pub struct AgentSession {
     pub(crate) runtime_session_id: String,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
+    pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
     /// A reviewed Local→cloud continuation that has been drafted but not sent.
     /// The source durable session remains authoritative until the reviewed
@@ -740,6 +741,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            allowed_mcp_servers: None,
             cloud_project: None,
             pending_image_blocks: Vec::new(),
             search_next_turn: false,
@@ -839,14 +841,32 @@ impl AgentSession {
         }
         self.mcp_manager
             .as_ref()
-            .map(|manager| std::sync::Arc::new(manager.tool_definitions(self.privacy_mode)))
+            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
+    }
+
+    fn permitted_mcp_definitions(&self, manager: &crate::mcp::McpManager) -> Vec<ToolDefinition> {
+        manager
+            .tool_definitions(self.privacy_mode)
+            .into_iter()
+            .filter(|definition| self.mcp_server_permitted(&definition.name))
+            .collect()
+    }
+
+    pub(crate) fn mcp_server_permitted(&self, tool_name: &str) -> bool {
+        let Some(servers) = self.allowed_mcp_servers.as_ref() else {
+            return true;
+        };
+        servers.iter().any(|server| {
+            let prefix = crate::mcp::mcp_tool_name(server, "");
+            tool_name.starts_with(&prefix)
+        })
     }
 
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions =
             crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
@@ -891,7 +911,7 @@ impl AgentSession {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut callable = offered.to_vec();
         callable.extend(

@@ -2107,6 +2107,13 @@ impl TurnHostAdapter<'_> {
                     output: format!("tool error: {:#}", e),
                 },
             }
+        } else if call.name.starts_with("mcp_") && !self.session.mcp_server_permitted(&call.name) {
+            crate::tools::ToolResult {
+                tool_name: call.name.clone(),
+                success: false,
+                output: "This agent is not set up to use that MCP server, so the tool did not run."
+                    .to_string(),
+            }
         } else if call.name.starts_with("mcp_") {
             let approval_callback = self.session.recorded_approval_callback();
             let require_confirmation = !self.session.skips_approval();

@@ -453,6 +453,7 @@ mod tests {
             max_budget_usd: None,
             system_prompt: "Body.".to_string(),
             path: PathBuf::from(format!("/tmp/.agiworkforce/agents/{name}.md")),
+            mcp_servers: None,
         }
     }
 
