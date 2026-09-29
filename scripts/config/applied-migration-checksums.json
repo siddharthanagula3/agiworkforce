@@ -345,5 +345,6 @@
   "0344_conversation_google_user_data.sql": "e4c05538465fc5c4eaf9a434dbec904f35dc45640eb7761c5dd9be2332ac1f41",
   "0345_support_access_grant_purpose.sql": "7eb505ccbcc5614b248bdf97f8b29144a1232e45e9147c9777cecf469b4bdb74",
   "0346_managed_usage_extra_usage_reservation.sql": "6a560a5b5472625942e03d1329ed0b6f3e0d5bbac21440f8cbbaeb762a14a7f4",
-  "0347_managed_usage_headroom_under_lock.sql": "6333f7919bf946233c6560d84349ef51f726e59b59169365a977dc4d68791036"
+  "0347_managed_usage_headroom_under_lock.sql": "6333f7919bf946233c6560d84349ef51f726e59b59169365a977dc4d68791036",
+  "0348_workspace_product_analytics_switch.sql": "e7aa986de3facb9205ec4bbcf3b383cc01455236c277d0a53c18532fd6f60979"
 }
