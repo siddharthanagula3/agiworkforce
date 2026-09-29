@@ -1,8 +1,10 @@
 'use client';
 
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { create } from 'zustand';
 
-export type MediaJobStatus = 'pending' | 'generating' | 'completed' | 'failed';
+export type MediaJobStatus =
+  Extract<LifecycleStatus, 'pending' | 'completed' | 'failed'> | 'generating';
 export type MediaJobType = 'image' | 'video';
 
 export interface MediaJob {
