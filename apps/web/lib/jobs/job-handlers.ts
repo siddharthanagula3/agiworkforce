@@ -25,6 +25,11 @@ import {
 } from '@/lib/services/schedule-notification-service';
 import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
+import {
+  DEVICE_REVOCATION_REASONS,
+  sendRelayRevocation,
+  type DeviceRevocationReason,
+} from '@/lib/device-steps/device-registry';
 
 import type { JobHandlerContext, JobHandlerRegistry } from './job-drain';
 import { PermanentJobError, enqueueJob } from './job-service';
@@ -215,7 +220,24 @@ async function settleResearchReportCost(
   return { requestId, settledCostMicrousd };
 }
 
+/**
+ * A device unlinked while the relay was down still holds a live socket; this
+ * retries the relay's revoke until it answers.
+ */
+async function retryRelayRevocation(context: JobHandlerContext): Promise<Record<string, unknown>> {
+  const deviceId = readString(context.job.payload, 'deviceId');
+  const reason = readString(context.job.payload, 'reason');
+  if (!(DEVICE_REVOCATION_REASONS as readonly string[]).includes(reason)) {
+    throw new PermanentJobError('Device revocation job names no known reason');
+  }
+  const relay = await sendRelayRevocation(deviceId, reason as DeviceRevocationReason);
+  if (!relay.configured) throw new PermanentJobError('The signaling relay is not configured');
+  if (!relay.reachable) throw new Error('The signaling relay did not take the revoke');
+  return { deviceId, closed: relay.closed };
+}
+
 export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
+  'webhooks.signaling-device-revoke': retryRelayRevocation,
   'notifications.schedule-completed': announceScheduleCompletion,
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,
