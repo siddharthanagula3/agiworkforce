@@ -275,6 +275,15 @@ describe('sweepOrganizationRetention', () => {
     expect(h.deletes[0]).not.toMatch(/created_at </);
   });
 
+  it('revokes the shared links and published artifacts of the chats it deletes, in the same statement', async () => {
+    const h = harness();
+    await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(h.deletes[0]).toMatch(/delete from public\.web_conversations/);
+    expect(h.deletes[0]).toMatch(/delete from public\.shared_sessions share\s+using swept/);
+    expect(h.deletes[0]).toMatch(/delete from public\.published_artifacts artifact\s+using swept/);
+  });
+
   it('computes the cutoff from the workspace retention window', async () => {
     const h = harness({ policy: { retention_days: 90, retention_enforced: true } });
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
