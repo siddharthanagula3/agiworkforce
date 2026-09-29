@@ -6,30 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S4.03: Conversation search.
-
-- Done when: A search destination where the user types a keyword, gets past conversations matching titles or message text, and opens one.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The Sessions History quick pick filters only session titles, model and folder; message text is not searched, so add content search. | handler |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
-
 ## S4.04: Archived conversations.
 
 - Done when: A destination lists the user's archived conversations and lets them open, restore or delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
 
 ## S4.05: Pinned conversations.
 
@@ -190,18 +175,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.23: Library.
-
-- Done when: A Library destination lists everything the account produced or uploaded (files, images, videos, documents, artifacts) with filters and open/download actions.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The Artifacts drawer lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
-
-Code: `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
-
 ## S4.24: Shared-with-me resources.
 
 - Done when: A destination lists resources (projects, conversations, artifacts, connectors) that other people shared with the user, and opens them.
@@ -318,11 +291,8 @@ Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /agents create writes a markdown template (name, description, model, tools, maxTurns); there is no guided builder or preview, the user fills the file by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
 
 ## S4.35: Skills manager.
 
@@ -358,18 +328,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S4.38: Model catalog.
-
-- Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
-
 ## S4.40: Billing settings.
 
 - Done when: A billing settings destination shows the current plan, renewal, payment method and invoices, and lets the user change or cancel the plan.
@@ -380,7 +338,6 @@ Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features
 | web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
-| chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |
 
 Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
 
@@ -397,15 +354,3 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
-
-## S4.44: Help and feedback.
-
-- Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The feedback route now accepts cli as a source; the CLI's /feedback and /bug still print the GitHub issues URL and need a handler that posts the report to /api/feedback with metadata.source cli (CLI phase) (progress: partials/desktop-cli 5e45bbdb93) | surface-only |
-
-Code: `apps/web/app/api/feedback/route.ts:49-49`, `apps/cli/src/claude_parity.rs:145-145`

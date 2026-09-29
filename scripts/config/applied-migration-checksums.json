@@ -336,5 +336,7 @@
   "0335_cloud_code_plan_turns.sql": "7b85058cfb0d1349be9bfb0784009145d80aad7bf39ff39918da92ab30520db5",
   "0336_workspace_web_domain_policy.sql": "3732b781fac985ac42d26eac84444b865777a3dae7be9353d9045f52a87c94e0",
   "0337_health_space.sql": "2ff40daf00119803fbce10a4060b6bf98a42c613c22a6dae1867768a3e962ba1",
-  "0338_account_security.sql": "64a23aeda3d9334b75a13487486d75f4f369ed5047fa3a6de9b4bdbf4f4d8480"
+  "0338_account_security.sql": "64a23aeda3d9334b75a13487486d75f4f369ed5047fa3a6de9b4bdbf4f4d8480",
+  "0339_temporary_chat_media_jobs.sql": "8b51a2fa4370e8a4a17e24705d70fa66fe9b52fc2c64858fa763a17cdda1d8bc",
+  "0340_workspace_connector_tool_rules.sql": "e35630488871ac9ec70aa0fcac13e50bb95fa040ef0dcb7ff0263bf7d808cfd2"
 }

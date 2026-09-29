@@ -85,9 +85,8 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile cannot apply any promotion: its invite-code modal is unmounted and stubbed, and store purchases (where store offers would apply) are gated off. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code (plan/trial grant) but shows no promotional credit or discount; bonus credits and promo codes are applied on web. | surface-only |
 
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/extension/src/side_panel.ts:8149-8168`, `apps/extension/src/lib/waitlistService.ts:116-125`
+Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
 ## S81.20: Purchased credit balances.
 
@@ -98,23 +97,8 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Native top-up products exist but are gated off (MOBILE_IAP_ENABLED unset) and the app never shows the purchased balance. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off, ui |
-| cli | partial | CLI shows the purchased balance and overage state (agi usage) but cannot buy credits; top-ups happen on web. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-| vscode | partial | VS Code shows the credit balance with an 'Add credits' action that opens web billing; no in-extension purchase. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`, `apps/cli/src/usage_summary.rs:317-329`
-
-## S81.21: Optional overage.
-
-- Done when: Users can opt in to spending purchased credits past a plan limit (overage), off by default, and overage use is accounted separately from the plan windows.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Migration 0281 is now applied in production (2026-09-27). Still open: CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-| vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-
-Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/usageMeter.ts:220-223`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S81.23: Upgrade effective time.
 

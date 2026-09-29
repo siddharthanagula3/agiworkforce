@@ -57,7 +57,11 @@ async function handleBulkConversationAction(request: NextRequest) {
   const bulkUpdateSql = isDelete
     ? `
         update web_conversations
-           set deleted_at = now(), updated_at = now()
+           set deleted_at = now(),
+               updated_at = now(),
+               compaction_summary = null,
+               compaction_summary_through_message_id = null,
+               compaction_summary_digest = null
          where user_id = $1
            and organization_id is not distinct from $2
            and deleted_at is null
@@ -66,7 +70,7 @@ async function handleBulkConversationAction(request: NextRequest) {
       `
     : `
         update web_conversations
-           set archived = true, updated_at = now()
+           set archived = true, pinned = false, updated_at = now()
          where user_id = $1
            and organization_id is not distinct from $2
            and deleted_at is null

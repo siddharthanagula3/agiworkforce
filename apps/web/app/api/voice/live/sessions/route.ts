@@ -20,6 +20,7 @@ import {
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { isAppError } from '@/lib/errors';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import {
@@ -366,20 +367,29 @@ async function handleCreateLiveSession(request: NextRequest) {
     }
   };
 
-  const functionToolsLoad = resolveLiveVoiceFunctionTools({
-    db: scoped.db,
-    userId,
+  const functionToolsLoad = connectorsAllowedForTurn(request, userId, {
     organizationId: scoped.organizationId,
-    planTier,
-    backendModel,
-    clientHandoffs: body.clientHandoffs ?? [],
-  }).catch((error: unknown): LiveVoiceFunctionTools => {
-    logger.error(
-      { event: 'live_voice_function_tools_failed', error, userId },
-      'Live voice function tools could not be loaded; starting with hosted tools only',
-    );
-    return { tools: [], names: [] };
-  });
+    subscriptionTier: planTier ?? undefined,
+    chatSurface: resolveCloudChatSurface(request),
+  })
+    .then((connectorsAllowed) =>
+      resolveLiveVoiceFunctionTools({
+        db: scoped.db,
+        userId,
+        organizationId: scoped.organizationId,
+        planTier,
+        backendModel,
+        connectorsAllowed,
+        clientHandoffs: body.clientHandoffs ?? [],
+      }),
+    )
+    .catch((error: unknown): LiveVoiceFunctionTools => {
+      logger.error(
+        { event: 'live_voice_function_tools_failed', error, userId },
+        'Live voice function tools could not be loaded; starting with hosted tools only',
+      );
+      return { tools: [], names: [] };
+    });
 
   let context: LiveVoiceContextBundle = EMPTY_LIVE_VOICE_CONTEXT;
   try {

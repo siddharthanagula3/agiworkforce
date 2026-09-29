@@ -121,16 +121,11 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 - Done when: Each attachment shows its file name and size before sending.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
-| desktop | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
-| mobile | partial | As on web: documents show name and size as text; a photo thumbnail stays bare like ChatGPT's and Claude's and carries its name and size as its accessibility label. A visible caption on photos departs from both leaders (observed, undocumented), owner call. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
 
 ## S14.21: Indexing progress.
 
@@ -153,18 +148,6 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`
 | mobile | partial | The truncation header and its copy moved into cloud-contracts (b9343c110f, with a fallback where Intl.ListFormat is missing, as on Hermes). What remains is the mobile stream reading X-AGI-Attachments-Truncated and showing describeAttachmentTruncation. | ui |
 
 Code: `packages/contracts/cloud-contracts/src/chat-attachment-truncation.ts:50-50`
-
-## S14.25: Password-protected-file notice.
-
-- Done when: A password-protected file produces a notice that says it is locked and how to fix it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Tell the user a PDF is password protected; the on-device parser detects it (ENCRYPTED_PDF) but the message only tells the model the content could not be extracted. | ui |
-
-Code: `apps/mobile/services/docParser.ts:272-276`, `apps/mobile/services/attachmentContext.ts:24-27`
 
 ## S14.31: Duplicate-file treatment.
 

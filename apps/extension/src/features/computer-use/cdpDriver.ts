@@ -347,6 +347,16 @@ async function dispatchMouseClick(
   });
 }
 
+export async function keepPageFocused(tabId: number, signal?: AbortSignal): Promise<void> {
+  await withDebugger(
+    tabId,
+    async () => {
+      await sendCommand(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }, signal);
+    },
+    signal,
+  );
+}
+
 export async function screenshot(tabId: number, signal?: AbortSignal): Promise<string> {
   return withDebugger(
     tabId,

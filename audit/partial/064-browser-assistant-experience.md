@@ -40,7 +40,6 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 | --- | --- | --- | --- |
 | mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
-| vscode | partial | No summarize command: the user asks in chat and the local CLI runtime reads the page. | ui |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 
@@ -215,7 +214,7 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 
 - Done when: The user can pause or stop the assistant's browser task at any moment.
 - Wave: 3
-- Already works on: chrome
+- Already works on: vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -223,9 +222,8 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Interrupting the turn stops further browser calls, but there is no pause that keeps the task to resume. | ui |
-| vscode | partial | Stopping the turn in the runtime ends browser calls; there is no pause. | ui |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
+Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 
 ## S64.26: Download review.
 

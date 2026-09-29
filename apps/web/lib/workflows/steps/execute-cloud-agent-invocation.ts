@@ -516,6 +516,7 @@ export async function executeCloudAgentWorkflowInvocation(
     : undefined;
   const toolPermissionGate = createCloudAgentToolPermissionGate(db, {
     userId: input.userId,
+    organizationId: input.processed.organizationId ?? null,
     connectorToolNames: connectorToolNames(input.mcpTools),
   });
   let nextInput: CloudAgentWorkflowInput | null = null;

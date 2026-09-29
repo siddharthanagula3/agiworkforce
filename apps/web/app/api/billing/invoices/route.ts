@@ -6,9 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
 
@@ -20,7 +18,7 @@ async function handleGetInvoices(request: NextRequest) {
   try {
     scoped = await getUserScopedDb(request, { resolveOrganization: false });
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized('Authentication required');

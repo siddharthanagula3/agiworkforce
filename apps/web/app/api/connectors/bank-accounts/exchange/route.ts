@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -44,6 +45,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     organizationId,
     connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 

@@ -4031,6 +4031,29 @@ export function getWebviewContent(
         vscode.postMessage({ type: 'regenerate' });
       });
       row.appendChild(regenerate);
+      var branch = document.createElement('button');
+      branch.type = 'button';
+      branch.className = 'message-action';
+      branch.title = L10N.branchFromAnswer;
+      branch.setAttribute('aria-label', L10N.branchFromAnswerLabel);
+      var branchIcon = document.createElement('span');
+      branchIcon.className = 'codicon codicon-repo-forked';
+      branchIcon.setAttribute('aria-hidden', 'true');
+      branch.appendChild(branchIcon);
+      branch.addEventListener('click', function () {
+        var text = assistantSources.get(messageEl) || '';
+        var occurrence = 0;
+        var answers = messagesEl.querySelectorAll('.message.assistant');
+        for (var i = 0; i < answers.length; i++) {
+          if (answers[i] === messageEl) break;
+          if (assistantSources.get(answers[i]) === text) occurrence++;
+        }
+        vscode.postMessage({
+          type: 'messageAction',
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+        });
+      });
+      row.appendChild(branch);
       if (meta && meta.label) {
         var metaEl = document.createElement('span');
         metaEl.className = 'message-meta';
@@ -6092,6 +6115,15 @@ export function getWebviewContent(
           'queued',
           msg.payload.queueRemaining > 0
         );
+      }
+
+      else if (msg.type === 'turnResumed') {
+        removeTyping();
+        showTyping();
+        setStreaming(true);
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
       }
 
       else if (msg.type === 'token') {

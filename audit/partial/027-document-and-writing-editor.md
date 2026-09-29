@@ -82,16 +82,13 @@ nothing is left.
 
 - Done when: Selecting text in a document shows a toolbar of actions for that selection.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Selecting text in any file, including .md/.txt, shows AGI actions in the editor right-click menu (Explain, Fix, Refactor, Send Selection to a New Chat) via the code-edit flow; no document editor, floating toolbar or writing-specific actions. | ui |
-| chrome | partial | Selecting text on a web page offers right-click Ask / Explain / Translate that open the side panel chat; there is no floating selection toolbar and nothing is written back into the page. | ui |
-
-Code: `apps/extension-vscode/package.json:813-860`, `apps/extension-vscode/src/core/commandSetup.ts:964-975`, `apps/extension/src/background.ts:4526-4530`, `apps/extension/src/side_panel.ts:10950-10958`
 
 ## S27.16: Rewrite selection.
 
@@ -103,10 +100,7 @@ Code: `apps/extension-vscode/package.json:813-860`, `apps/extension-vscode/src/c
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Refactor Code sends a selection of any file with a coding prompt; on .md/.txt it replaces the selection only if the reply contains a fenced block in that language, otherwise it opens the reply in a new tab, so prose rewrite in place is best-effort, and there is no prose-specific rewrite. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/package.json:824-828`, `apps/extension-vscode/src/core/commandSetup.ts:972-975`, `apps/extension-vscode/src/core/runInlineCommand.ts:21-48`, `apps/extension-vscode/src/platform/applyEdit.ts:30-36`
 
 ## S27.21: Translate selection.
 

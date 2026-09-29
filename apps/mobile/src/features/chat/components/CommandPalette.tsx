@@ -4,7 +4,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 export type ChatCommand = '/image' | '/voice' | '/compare' | '/export';
 
@@ -131,8 +131,8 @@ export function CommandPalette({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(100)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.instant)}
       className="mb-1 rounded-xl border overflow-hidden"
       style={{ backgroundColor: colors.surfaceOverlay, borderColor: colors.border }}
       accessibilityLabel="Command suggestions"

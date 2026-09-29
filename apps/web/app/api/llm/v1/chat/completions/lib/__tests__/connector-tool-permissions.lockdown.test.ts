@@ -34,7 +34,7 @@ describe('lockdown mode gating connector tools', () => {
       [{ connector_id: 'notion', tool_name: 'search', level: 'always-allow' }],
     );
 
-    const permissions = await loadConnectorToolPermissions(db, 'user_1');
+    const permissions = await loadConnectorToolPermissions(db, 'user_1', null);
 
     expect(permissions).toBe(LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS);
     expect(permissions.isConnectorToolDenied('notion', 'search')).toBe(true);
@@ -47,7 +47,7 @@ describe('lockdown mode gating connector tools', () => {
       [{ connector_id: 'github', tool_name: 'fetch', level: 'always-allow' }],
     );
 
-    const permissions = await loadConnectorToolPermissions(db, 'user_1');
+    const permissions = await loadConnectorToolPermissions(db, 'user_1', null);
 
     expect(permissions.levelForConnectorTool('github', 'fetch')).toBe('deny');
   });
@@ -61,7 +61,7 @@ describe('lockdown mode gating connector tools', () => {
       ],
     );
 
-    const permissions = await loadConnectorToolPermissions(db, 'user_1');
+    const permissions = await loadConnectorToolPermissions(db, 'user_1', null);
 
     expect(permissions.levelForConnectorTool('notion', 'search')).toBe('allow');
     expect(permissions.isConnectorToolDenied('notion', 'delete')).toBe(true);
@@ -74,7 +74,7 @@ describe('lockdown mode gating connector tools', () => {
       [{ connector_id: 'notion', tool_name: 'search', level: 'always-allow' }],
     );
 
-    const permissions = await loadConnectorToolPermissions(db, 'user_1');
+    const permissions = await loadConnectorToolPermissions(db, 'user_1', null);
 
     expect(permissions.levelForConnectorTool('notion', 'search')).toBe('allow');
   });
@@ -84,7 +84,7 @@ describe('lockdown mode gating connector tools', () => {
       { connector_id: 'notion', tool_name: 'search', level: 'always-allow' },
     ]);
 
-    const permissions = await loadConnectorToolPermissions(db, 'user_1');
+    const permissions = await loadConnectorToolPermissions(db, 'user_1', null);
 
     expect(permissions).toBe(LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS);
   });
@@ -92,7 +92,7 @@ describe('lockdown mode gating connector tools', () => {
   it('resolves an anonymous caller before it reaches the settings query', async () => {
     const db = dbReturning(new Error('should not be queried'));
 
-    const permissions = await loadConnectorToolPermissions(db, '');
+    const permissions = await loadConnectorToolPermissions(db, '', null);
 
     expect(permissions).toBe(EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   });

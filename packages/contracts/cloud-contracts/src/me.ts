@@ -47,6 +47,12 @@ export const MeProfileSchema = z.object({
   work_description: z.string().nullable(),
 });
 
+/** The region the member's active workspace stores its data in; null outside a workspace. */
+export const MeWorkspaceDataRegionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+
 export const MeResponseSchema = z.object({
   id: z.string(),
   email: z.string().nullable(),
@@ -61,12 +67,14 @@ export const MeResponseSchema = z.object({
   routing_preferences: MeRoutingPreferencesSchema,
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
   disabled_features: z.array(MeDisabledFeatureSchema).optional(),
+  workspace_data_region: MeWorkspaceDataRegionSchema.nullable().optional(),
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
 export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeDisabledFeature = z.infer<typeof MeDisabledFeatureSchema>;
+export type MeWorkspaceDataRegion = z.infer<typeof MeWorkspaceDataRegionSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export function parseMeResponse(data: unknown): MeResponse {

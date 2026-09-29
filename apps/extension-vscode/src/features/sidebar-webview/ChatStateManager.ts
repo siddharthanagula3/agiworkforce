@@ -24,6 +24,9 @@ import {
   capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canAccessManualModelSelection,
+  getBillingPlanPricing,
   isAutoModeModelId,
   managedUsageBucketLabel,
   modelDisplayNameById,
@@ -57,6 +60,7 @@ import {
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
+  type ThreadActiveTurn,
   type ThreadCheckpointList,
   type ThreadRewindOutcome,
 } from '../../integrations/localRuntimeClient';
@@ -321,7 +325,7 @@ export type WebviewToExtMessage =
   | { type: 'openArchivedSessions' }
   | {
       type: 'messageAction';
-      payload: { action: 'resend' | 'branch'; text: string; occurrence: number };
+      payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
     }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
@@ -420,6 +424,7 @@ export type ExtToWebviewMessage =
         notice: string;
       };
     }
+  | { type: 'turnResumed' }
   | {
       type: 'turnStarted';
       payload: {
@@ -762,6 +767,15 @@ interface DeveloperThreadState {
   provider?: string;
   runtime: LocalRuntimeClient;
   updatedAt: string;
+}
+
+function manualModelUnlockText(): string {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canAccessManualModelSelection(candidate),
+  );
+  return tier === undefined
+    ? 'Your plan uses Auto; upgrade your AGI plan to choose these models'
+    : `Your plan uses Auto; upgrade to ${getBillingPlanPricing(tier).label} to choose these models`;
 }
 
 export class ChatStateManager {
@@ -1530,7 +1544,9 @@ export class ChatStateManager {
                     ? 'Requests go directly to this provider using your key'
                     : reachableOnBoundary === 'cloud'
                       ? 'Prompts are sent to AGI infrastructure under your plan'
-                      : 'Sign in or add a provider key to unlock these models',
+                      : tier === 'free' || tier === 'basic'
+                        ? manualModelUnlockText()
+                        : 'Sign in or add a provider key to unlock these models',
                 boundary: reachableOnBoundary,
                 models: [],
               };
@@ -1956,7 +1972,7 @@ export class ChatStateManager {
     }
     try {
       const [page, codeSessions, workspaceRepositories] = await Promise.all([
-        resolution.workspace.chat.listConversations({ limit: 50 }),
+        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }),
         code.status === 'ready' ? code.api.list('open') : null,
         workspaceGitHubRepositories(),
       ]);
@@ -2226,6 +2242,7 @@ export class ChatStateManager {
       await this.pushUsageMeter(isCommittedAttempt);
       if (!isCommittedAttempt()) return false;
       this._postSessionBoundary(resumed.trustMode, resumed.provider);
+      void this._reattachRunningTurn(resolved.runtime, resumed.id, committedEpoch);
       return true;
     } catch (error) {
       if (!isCurrentAttempt()) return false;
@@ -2233,6 +2250,110 @@ export class ChatStateManager {
         error instanceof Error ? error.message : t('chatNotice.resumeFailed'),
         RUNTIME_REFUSAL,
       );
+    }
+  }
+
+  private async _reattachRunningTurn(
+    runtime: LocalRuntimeClient,
+    threadId: string,
+    epoch: number,
+  ): Promise<void> {
+    if (!(await runtime.offers('reconnect'))) return;
+    const buffered: LocalRuntimeEvent[] = [];
+    let snapshot: ThreadActiveTurn | null | undefined;
+    let attached = false;
+    let terminal = false;
+    let uiSettled = false;
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const complete = (): void => {
+      uiSettled = true;
+      if (!terminal) {
+        terminal = true;
+        resolveCompletion();
+      }
+    };
+    const deliver = (event: LocalRuntimeEvent): void => {
+      if (
+        event.type === 'output_delta' &&
+        event.index !== undefined &&
+        snapshot?.nextDeltaIndex !== undefined &&
+        event.index < snapshot.nextDeltaIndex
+      ) {
+        return;
+      }
+      void this._handleRuntimeEvent(runtime, event, complete);
+    };
+    const subscription = runtime.onEvent((event) => {
+      if (event.type === 'runtime_disconnected') {
+        if (attached) void this._handleRuntimeEvent(runtime, event, complete);
+        return;
+      }
+      if (event.type === 'mcp_status' || event.threadId !== threadId) return;
+      if (snapshot === undefined) {
+        buffered.push(event);
+        return;
+      }
+      if (attached && event.turnId === snapshot?.turnId) deliver(event);
+    });
+    try {
+      snapshot = await runtime.reconnectThread(threadId).catch(() => null);
+      if (
+        snapshot === null ||
+        epoch !== this._conversationEpoch ||
+        this._thread?.id !== threadId ||
+        this._thread.runtime !== runtime ||
+        this._turnLifecycleActive ||
+        this._activeTurn !== undefined
+      ) {
+        return;
+      }
+      const active = snapshot;
+      attached = true;
+      this._turnLifecycleActive = true;
+      this._turnLifecycleEpoch = epoch;
+      this._activeTurn = {
+        threadId,
+        turnId: active.turnId,
+        runtime,
+        complete,
+        isUiSettled: () => uiSettled,
+      };
+      this._post({ type: 'turnResumed' });
+      if (active.partialResponse !== '') {
+        this._post({ type: 'token', payload: { text: active.partialResponse } });
+      }
+      for (const approval of active.pendingApprovals) {
+        void this._handleRuntimeEvent(
+          runtime,
+          { type: 'approval_requested', threadId, turnId: active.turnId, ...approval },
+          complete,
+        );
+      }
+      for (const event of buffered.splice(0)) {
+        if (
+          event.type !== 'runtime_disconnected' &&
+          event.type !== 'mcp_status' &&
+          event.turnId === active.turnId
+        ) {
+          deliver(event);
+        }
+      }
+      await completion;
+      if (this._thread?.id === threadId && this._thread.runtime === runtime) {
+        await this._refreshLoadedConversation(runtime, threadId, true);
+      }
+    } finally {
+      subscription.dispose();
+      if (attached) {
+        if (this._activeTurn?.turnId === snapshot?.turnId) delete this._activeTurn;
+        this._turnLifecycleActive = false;
+        this._turnLifecycleEpoch = undefined;
+        const next = this._queuedSends.shift();
+        if (next !== undefined) void this._drainSendLifecycle(next, true);
+      }
     }
   }
 
@@ -3569,7 +3690,7 @@ export class ChatStateManager {
   }
 
   private async _messageAction(action: {
-    action: 'resend' | 'branch';
+    action: 'resend' | 'branch' | 'branchAnswer';
     text: string;
     occurrence: number;
   }): Promise<void> {
@@ -3583,8 +3704,9 @@ export class ChatStateManager {
       void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
       return;
     }
+    const role = action.action === 'branchAnswer' ? 'assistant' : 'user';
     const target = loaded.messages
-      .filter((message) => message.role === 'user' && message.text === action.text)
+      .filter((message) => message.role === role && message.text === action.text)
       .at(action.occurrence);
     if (target === undefined) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
@@ -3596,7 +3718,9 @@ export class ChatStateManager {
     }
     try {
       if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
-      else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+      else if (action.action === 'branchAnswer') {
+        await this._branchFromAnswer(thread, loaded.title, target.index);
+      } else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
     } catch (error) {
       void vscode.window.showErrorMessage(
         t('messageActions.failed', {
@@ -3634,6 +3758,24 @@ export class ChatStateManager {
     if (await this.resumeConversation(thread.id)) {
       this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
     }
+  }
+
+  private async _branchFromAnswer(
+    thread: DeveloperThreadState,
+    title: string,
+    messageIndex: number,
+  ): Promise<void> {
+    if (!(await thread.runtime.offers('forkAtMessage'))) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    const forked = await thread.runtime.forkThread(
+      thread.id,
+      t('messageActions.branchTitle', { title }),
+      messageIndex,
+    );
+    this._conversationTreeProvider?.refresh();
+    await this.resumeConversation(forked.id);
   }
 
   private async _branchFromMessage(

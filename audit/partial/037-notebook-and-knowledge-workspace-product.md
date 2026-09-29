@@ -222,16 +222,3 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:126-126`, `apps
 | mobile | partial | The chat project selector applies only the project's instructions (local system message); its sources are not brought in on mobile. | handler |
 
 Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`
-
-## S37.38: Cross-application notebook synchronization.
-
-- Done when: A notebook and its sources and notes are available in every app the user signs into.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | VS Code shows projects and their knowledge files read-only; nothing else from the notebook. | ui |
-| chrome | partial | The Chrome side panel lists projects and recent chat titles, but not their sources or notes. | ui |
-
-Code: `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-48`, `apps/extension/src/features/side-panel/projectsDrawer.ts:489-489`

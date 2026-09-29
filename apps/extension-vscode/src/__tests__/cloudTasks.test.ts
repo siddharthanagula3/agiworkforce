@@ -231,7 +231,7 @@ describe('cloud task detail', () => {
     expect(client.resumeRun).not.toHaveBeenCalled();
   });
 
-  it('offers approve, reject, stop and the web link for a blocked run', () => {
+  it('offers approve, reject, stop, rename and the web link for a blocked run', () => {
     const run = makeRun({ state: 'awaiting_input', pendingApproval: PENDING_APPROVAL });
 
     const actions = buildCloudRunDetailItems(run, []).map((item) => item.action);
@@ -240,6 +240,7 @@ describe('cloud task detail', () => {
       'approve',
       'reject',
       'cancel',
+      'rename',
       'open-web',
     ]);
   });

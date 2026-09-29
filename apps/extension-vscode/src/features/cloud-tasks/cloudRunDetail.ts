@@ -37,7 +37,16 @@ export type CloudRunDetailClient = Pick<
 >;
 
 export type CloudRunAction =
-  'approve' | 'reject' | 'cancel' | 'steer' | 'open-web' | 'open-artifact' | 'copy-result';
+  | 'approve'
+  | 'reject'
+  | 'cancel'
+  | 'steer'
+  | 'rename'
+  | 'open-web'
+  | 'open-artifact'
+  | 'copy-result';
+
+const MAX_CLOUD_TASK_TITLE_LENGTH = 500;
 
 export interface CloudRunDetailItem extends vscode.QuickPickItem {
   action?: CloudRunAction;
@@ -169,6 +178,13 @@ export function buildCloudRunDetailItems(
       action: 'cancel',
     });
   }
+  if (run.conversationId !== null) {
+    items.push({
+      label: '$(edit) Rename task',
+      description: cloudRunTitle(run),
+      action: 'rename',
+    });
+  }
   items.push({
     label: '$(link-external) Open on web',
     description: run.conversationId === null ? 'Task list' : 'Conversation',
@@ -191,6 +207,7 @@ export function cloudRunDetailPlaceholder(run: CloudAgentRun): string {
 export interface CloudRunDetailHost {
   webOrigin: string;
   onChanged: () => void;
+  renameConversation?: (conversationId: string, title: string) => Promise<void>;
   listArtifacts?: () => Promise<ManagedCloudArtifactIndexEntry[]>;
   openArtifact?: (artifactId: string) => Promise<void>;
 }
@@ -261,6 +278,33 @@ export async function showCloudRunDetail(
       () => client.steerRun(run.id, text),
       t('cloudSteer.sent'),
       t('cloudSteer.failed'),
+      host,
+    );
+    return;
+  }
+
+  if (picked.action === 'rename') {
+    const conversationId = run.conversationId;
+    const rename = host.renameConversation;
+    if (conversationId === null || rename === undefined) return;
+    const title = (
+      await vscode.window.showInputBox({
+        title: 'Rename task',
+        value: cloudRunTitle(run),
+        ignoreFocusOut: true,
+        validateInput: (value) =>
+          value.trim() === ''
+            ? 'Enter a name.'
+            : value.trim().length > MAX_CLOUD_TASK_TITLE_LENGTH
+              ? `Keep the name under ${MAX_CLOUD_TASK_TITLE_LENGTH.toLocaleString()} characters.`
+              : undefined,
+      })
+    )?.trim();
+    if (title === undefined || title === '' || title === cloudRunTitle(run)) return;
+    await runCloudRunMutation(
+      () => rename(conversationId, title),
+      'Renamed the task.',
+      'this task could not be renamed',
       host,
     );
     return;

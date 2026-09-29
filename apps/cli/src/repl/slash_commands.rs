@@ -94,6 +94,10 @@ pub(super) async fn handle_slash_command(
                 provider,
             };
         }
+        crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
+            eprintln!("{}", crate::cloud::send_feedback(kind, &message).await);
+            return SlashResult::Handled;
+        }
         crate::claude_parity::ParityCommandResult::NotHandled => {}
     }
 
@@ -274,6 +278,10 @@ pub(super) async fn handle_slash_command(
         "/status" => {
             eprintln!("{}", ts::accent_header("Status:"));
             eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
+            eprintln!(
+                "  {}",
+                crate::cloud::client::connectivity_line(session.privacy_mode).await
+            );
             eprintln!(
                 "  Model:      {}",
                 crate::terminal_text::sanitize_terminal_text(&session.model)
