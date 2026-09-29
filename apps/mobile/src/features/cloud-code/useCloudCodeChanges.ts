@@ -38,6 +38,7 @@ export function useCloudCodeChanges(
   const [notice, setNotice] = useState<string | null>(null);
   const mounted = useRef(true);
   const generation = useRef(0);
+  const inFlight = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -69,7 +70,8 @@ export function useCloudCodeChanges(
 
   const perform = useCallback(
     async (action: CloudCodeChangesAction, run: () => Promise<void>, fallback: string) => {
-      if (busy !== null) return false;
+      if (inFlight.current) return false;
+      inFlight.current = true;
       setBusy(action);
       setError(null);
       setNotice(null);
@@ -80,6 +82,7 @@ export function useCloudCodeChanges(
         if (mounted.current) setError(describeCloudCodeError(actionError, fallback));
         return false;
       } finally {
+        inFlight.current = false;
         if (mounted.current) {
           setBusy(null);
           onSessionChanged();
@@ -87,7 +90,7 @@ export function useCloudCodeChanges(
         }
       }
     },
-    [busy, load, onSessionChanged],
+    [load, onSessionChanged],
   );
 
   const commit = useCallback(
