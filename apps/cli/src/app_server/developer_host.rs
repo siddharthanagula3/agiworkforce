@@ -73,7 +73,7 @@ use crate::runtime::session_handoff::{
     developer_session_handoff, file_change_record, HandoffContext,
 };
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
-use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
@@ -361,6 +361,7 @@ impl CliDeveloperSessionHost {
         workspace_root: PathBuf,
     ) -> Result<Self, DeveloperSessionHostError> {
         let store = ManagedSessionStore::user_config().map_err(internal_error)?;
+        crate::tools::enable_interactive_questions();
         Self::new_with_store(config, workspace_root, store, true)
     }
 
@@ -446,6 +447,7 @@ impl CliDeveloperSessionHost {
             turn_tool_filters: true,
             plan_decision: true,
             provider_keys: true,
+            questions: true,
         }
     }
 
@@ -4014,6 +4016,13 @@ fn approval_callback(
         Box::pin(async move {
             let request_id = request.id.to_string();
             let risk = request.kind.risk();
+            let question = match &request.kind {
+                ApprovalRequestKind::Question { question, options } => Some(serde_json::json!({
+                    "question": question,
+                    "options": options,
+                })),
+                _ => None,
+            };
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
@@ -4059,6 +4068,7 @@ fn approval_callback(
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
                     "alwaysAllowSaved": snapshot.always_allow_saved,
+                    "question": question,
                 }),
             ) {
                 let _ = notifications.send(notification);
