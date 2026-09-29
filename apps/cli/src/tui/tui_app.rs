@@ -53,7 +53,8 @@ const STATUS_NOTICE_TTL: Duration = Duration::from_secs(2);
 
 /// Permission modes available in the TUI, cycling with Shift+Tab.
 ///
-/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default
+/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default,
+/// where the two approval-skipping modes join only a session launched with them available.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InteractionMode {
     /// Normal conversation mode (maps to `PermissionMode::Default`).
@@ -104,13 +105,21 @@ impl InteractionMode {
         }
     }
 
-    fn allowed_under(self, pinned: Option<crate::cli_options::PermissionMode>) -> bool {
-        self.permission_mode().within(pinned) == self.permission_mode()
+    fn skips_approval(self) -> bool {
+        matches!(self, Self::BypassPermissions | Self::FullAuto)
     }
 
-    fn next_allowed(self, pinned: Option<crate::cli_options::PermissionMode>) -> Self {
+    fn available_in(self, session: &crate::agent::AgentSession) -> bool {
+        (session.bypass_permissions_available || !self.skips_approval())
+            && self
+                .permission_mode()
+                .within(session.pinned_permission_mode)
+                == self.permission_mode()
+    }
+
+    fn next_available(self, session: &crate::agent::AgentSession) -> Self {
         let mut next = self.next();
-        while next != self && !next.allowed_under(pinned) {
+        while next != self && !next.available_in(session) {
             next = next.next();
         }
         next
@@ -2027,7 +2036,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), accept edits, then no prompts.",
+            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), or accept edits.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
@@ -4205,7 +4214,7 @@ fn mode_is_permission_escalating(mode: InteractionMode) -> bool {
 
 /// Apply a mode change to the app and session.
 fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
-    if !mode.allowed_under(app.session.pinned_permission_mode) {
+    if !mode.available_in(&app.session) {
         return false;
     }
     app.mode = mode;
@@ -4228,6 +4237,20 @@ fn pinned_mode_notice(app: &TuiApp) -> String {
         "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
         app.session.governed_permission_mode().name()
     )
+}
+
+fn unavailable_mode_notice(app: &TuiApp, mode: InteractionMode) -> String {
+    if mode.skips_approval()
+        && !app.session.bypass_permissions_available
+        && app.session.pinned_permission_mode.is_none()
+    {
+        return format!(
+            "{} is off for this session. Start agi with --allow-dangerously-skip-permissions \
+             to make it available, or --dangerously-skip-permissions to start in it.",
+            mode.label()
+        );
+    }
+    pinned_mode_notice(app)
 }
 
 fn mode_description(mode: InteractionMode) -> &'static str {
@@ -5529,6 +5552,7 @@ pub async fn run(
     resume_managed_session: Option<(crate::runtime::session::ManagedSession, std::path::PathBuf)>,
     max_turns: Option<usize>,
     skip_permissions: bool,
+    allow_bypass_permissions: bool,
     fallback_chain: crate::routing::fallback::FallbackChain,
     _session_name: Option<String>,
     team_mode: bool,
@@ -5583,6 +5607,7 @@ pub async fn run(
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
+    session.bypass_permissions_available = skip_permissions || allow_bypass_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
     if fallback_chain.primaries.len() > 1 {
@@ -5984,7 +6009,7 @@ async fn run_event_loop(
                 }
 
                 InputAction::CycleMode => {
-                    let new_mode = app.mode.next_allowed(app.session.pinned_permission_mode);
+                    let new_mode = app.mode.next_available(&app.session);
                     if new_mode == app.mode {
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
@@ -6093,7 +6118,7 @@ async fn run_event_loop(
                         } else {
                             app.chat_messages.push(ChatMessage {
                                 role: ChatRole::System,
-                                text: pinned_mode_notice(app),
+                                text: unavailable_mode_notice(app, new_mode),
                             });
                         }
                         // A pure utterance that escalates into a permission-weakening
@@ -7941,6 +7966,83 @@ mod tests {
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config, true /* sandbox_disabled */)
+    }
+
+    fn modes_reached_by_shift_tab(app: &TuiApp) -> Vec<InteractionMode> {
+        let mut reached = vec![app.mode];
+        let mut mode = app.mode;
+        for _ in 0..10 {
+            mode = mode.next_available(&app.session);
+            reached.push(mode);
+        }
+        reached
+    }
+
+    #[test]
+    fn shift_tab_never_reaches_an_approval_skipping_mode_without_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+
+        let reached = modes_reached_by_shift_tab(&app);
+
+        assert!(
+            reached.contains(&InteractionMode::AcceptEdits),
+            "{reached:?}"
+        );
+        assert!(
+            !reached.contains(&InteractionMode::BypassPermissions),
+            "{reached:?}"
+        );
+        assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
+    }
+
+    #[test]
+    fn a_typed_bypass_command_is_refused_without_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+
+        assert!(!apply_mode(&mut app, InteractionMode::BypassPermissions));
+        assert!(!apply_mode(&mut app, InteractionMode::FullAuto));
+        assert!(!app.session.skip_permissions);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        assert!(
+            unavailable_mode_notice(&app, InteractionMode::BypassPermissions)
+                .contains("--allow-dangerously-skip-permissions"),
+            "the refusal names the opt-in"
+        );
+    }
+
+    #[test]
+    fn the_launch_opt_in_puts_bypass_and_full_auto_back_in_the_cycle() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+        app.session.bypass_permissions_available = true;
+
+        assert_eq!(
+            InteractionMode::AcceptEdits.next_available(&app.session),
+            InteractionMode::BypassPermissions
+        );
+        assert_eq!(
+            InteractionMode::BypassPermissions.next_available(&app.session),
+            InteractionMode::FullAuto
+        );
+        assert!(apply_mode(&mut app, InteractionMode::BypassPermissions));
+        assert!(app.session.skip_permissions);
+    }
+
+    #[test]
+    fn an_organization_pin_still_outranks_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = Some(crate::cli_options::PermissionMode::AcceptEdits);
+        app.session.bypass_permissions_available = true;
+
+        let reached = modes_reached_by_shift_tab(&app);
+
+        assert!(
+            !reached.contains(&InteractionMode::BypassPermissions),
+            "{reached:?}"
+        );
+        assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
     }
 
     /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
