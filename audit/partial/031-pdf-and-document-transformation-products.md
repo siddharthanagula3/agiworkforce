@@ -96,7 +96,7 @@ Code: `apps/web/lib/e2b/chat-template.ts:3-3`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Text is extracted only as model input; there is no action to show, copy or download the extracted text, and the assistant must retype it within its output limit. | ui |
+| mobile | partial | Parity by prompt, accepted by lead. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

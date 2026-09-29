@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-99 open items.
+98 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -48,7 +48,6 @@ Nothing left in this wave.
 | 23. Project workspace | 2 | [partial/023-project-workspace.md](../partial/023-project-workspace.md) |
 | 28. Code Canvas and application preview | 3 | [partial/028-code-canvas-and-application-preview.md](../partial/028-code-canvas-and-application-preview.md) |
 | 31. PDF and document-transformation products | 1 | [partial/031-pdf-and-document-transformation-products.md](../partial/031-pdf-and-document-transformation-products.md) |
-| 41. Temporary and private experiences | 1 | [partial/041-temporary-and-private-experiences.md](../partial/041-temporary-and-private-experiences.md) |
 | 43. Image and visual understanding | 11 | [partial/043-image-and-visual-understanding.md](../partial/043-image-and-visual-understanding.md) |
 | 48. Voice conversation interface | 1 | [partial/048-voice-conversation-interface.md](../partial/048-voice-conversation-interface.md) |
 | 49. Dictation, transcription, and recording | 3 | [partial/049-dictation-transcription-and-recording.md](../partial/049-dictation-transcription-and-recording.md) |
@@ -70,7 +69,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1371 open items.
+1372 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -113,7 +112,7 @@ Nothing left in this wave.
 | 38. Learning and study products | 4 | [partial/038-learning-and-study-products.md](../partial/038-learning-and-study-products.md) |
 | 39. Memory product | 19 | [partial/039-memory-product.md](../partial/039-memory-product.md) |
 | 40. Instructions, preferences, and personal style | 11 | [partial/040-instructions-preferences-and-personal-style.md](../partial/040-instructions-preferences-and-personal-style.md) |
-| 41. Temporary and private experiences | 14 | [partial/041-temporary-and-private-experiences.md](../partial/041-temporary-and-private-experiences.md) |
+| 41. Temporary and private experiences | 15 | [partial/041-temporary-and-private-experiences.md](../partial/041-temporary-and-private-experiences.md) |
 | 42. Proactive assistance, briefings, and reflection | 9 | [partial/042-proactive-assistance-briefings-and-reflection.md](../partial/042-proactive-assistance-briefings-and-reflection.md) |
 | 43. Image and visual understanding | 2 | [partial/043-image-and-visual-understanding.md](../partial/043-image-and-visual-understanding.md) |
 | 44. Image-generation studio | 22 | [partial/044-image-generation-studio.md](../partial/044-image-generation-studio.md) |

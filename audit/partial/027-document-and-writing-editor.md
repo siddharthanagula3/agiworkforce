@@ -143,7 +143,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The 'vN/M' chip appears only when there are two or more versions and steps one at a time; no list of versions to jump to. | ui |
+| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): same Versions sheet. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
