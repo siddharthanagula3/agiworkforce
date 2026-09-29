@@ -533,9 +533,9 @@ fn tier_rank(t: &UserTier) -> u8 {
 
 /// Reconcile a freshly-fetched tier against a still-valid cached tier.
 ///
-/// `/api/me` fails OPEN to `plan.tier='free'` on transient DB/auth errors,
-/// so a freshly-fetched `Free` is non-authoritative when a higher tier is
-/// still valid in the cache.  Prefer the cached tier in that case.
+/// `/api/me` now errors instead of reporting `free` when a workspace member's
+/// seat lookup fails, but a lower fetched tier is still not trusted over a
+/// higher one the cache holds within its lifetime: prefer the cached tier.
 ///
 /// If the fetched tier is higher (or equal), use the fetched tier (cache refresh).
 pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier {
@@ -832,13 +832,23 @@ pub fn load_jwt() -> Option<String> {
         }
     }
 
-    // Legacy auth store, look for a `managed_cloud` or `agiworkforce` token.
+    // The legacy plaintext auth.toml moves into the credential store on first
+    // read and is then deleted, so the token stops living in the clear.
     let auth_path = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".agiworkforce")
         .join("auth.toml");
     let content = std::fs::read_to_string(&auth_path).ok()?;
-    jwt_from_legacy_auth_toml(&content)
+    let token = jwt_from_legacy_auth_toml(&content)?;
+    match crate::auth::AuthStore::adopt_legacy_token(&token) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&auth_path);
+        }
+        Err(error) => {
+            tracing::warn!("[tier_cache] could not move auth.toml into the store: {error}")
+        }
+    }
+    Some(token)
 }
 
 // ---------------------------------------------------------------------------
