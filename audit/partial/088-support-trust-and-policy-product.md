@@ -161,7 +161,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The searches covered appeal vocabulary only. The criterion is "appeal or report the refusal from that notice". Mobile renders no safety-refusal notice (the only refusal token is a finish-reason enum in agentActivityState.ts:40), but every finished assistant turn, including a refusal, carries the Report flag with a category modal that posts to /api/mobile/content-report, so a user can report the refusal from where it appears. No appeal category and no refusal-specific notice. Suggested cell: partial, miss [ui], remaining "Show a safety-refusal notice and offer an appeal from it; today only the generic per-message Report flag exists." |  |
+| mobile | partial | The refusal notice offers only Switch model; there is no appeal or report action from the notice itself (only the generic per-message Report flag below the turn). |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

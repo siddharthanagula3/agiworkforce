@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The auditor scoped every mobile search to apps/mobile/app, which excludes apps/mobile/native where the iOS App Shortcuts provider lives. AGIAppShortcuts registers one-tap actions (Start Chat, Ask AGI, Scan, Summarize...) that iOS surfaces in Spotlight, the Shortcuts app and Siri, each opening the app on the right screen via agiworkforce://intent/<verb>; the config plugin ships those files. That is the phone equivalent of a quick-action menu, and the same auditor credited exactly this code as partial for S109.11 and done for S109.07. Still partial: no home-screen quick actions (UIApplicationShortcutItems) and nothing on Android. |  |
+| mobile | partial | iOS App Shortcuts exist but there are no home-screen quick actions and nothing on Android. |  |
 
 ## S109.05: Compact floating assistant.
 
@@ -34,7 +34,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Siri "Ask/Talk to AGI" takes a spoken prompt from anywhere, but it opens the prompt for review in chat instead of starting dictation or voice mode; Android has no voice entry. | handler |
+| mobile | partial | Siri Ask AGI opens the prompt for review in chat rather than starting dictation or voice mode; Android has no voice entry. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/app/_layout.tsx:529-544`
@@ -47,7 +47,7 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mob
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | On Android, selected text can be sent to AGI and opens in a chat review screen, but nothing rewrites it and puts it back; iOS has no selected-text action. | handler |
+| mobile | partial | No action rewrites selected text and puts it back; Android share-target opens chat review only, iOS has no selected-text action. | handler |
 
 Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGIShareIntent.cjs:48-52`
 
@@ -59,7 +59,7 @@ Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGISh
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A screenshot can reach chat only by sharing it to AGI from the share sheet; no shortcut captures the screen into a chat. | ui |
+| mobile | partial | Screenshots reach chat only through the share sheet; no shortcut captures the screen into a chat. | ui |
 
 Code: `apps/mobile/app.config.js:166-176`
 
@@ -71,7 +71,7 @@ Code: `apps/mobile/app.config.js:166-176`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS exposes AGI App Shortcuts (Ask, Start Chat, Scan...) that the Action Button or Shortcuts app can run, but nothing in the app explains it and Android has no equivalent. | ui |
+| mobile | partial | iOS App Shortcuts can be run from the Action Button, but nothing in the app explains it and Android has no equivalent. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/app/_layout.tsx:529-544`
@@ -84,7 +84,7 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mob
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Saying "Hey Siri, talk to AGI Workforce" through AirPods works, but the intent opens the app for review, so the phone must be unlocked and nothing is spoken back; there is no headset-button trigger and no Android path. | handler |
+| mobile | partial | Siri via earbuds opens the app for review (phone unlocked, nothing spoken back); no headset-button trigger and no Android path. | handler |
 
 Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`
 
@@ -139,7 +139,7 @@ Code: `apps/web/app/api/github/webhook/route.ts:253-253`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Models load automatically on first use and swap when another is chosen; the runtime can release a model (tier3Release) but no control lets the user load or unload one. | ui |
+| mobile | partial | No control lets the user load or unload a local model; models load on first use only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -153,7 +153,7 @@ Code: `packages/platform/local-llm/src/tier3.ts:228-238`, `packages/platform/loc
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Performance shows device tier, runtimes and thermal state, but not whether a model is actually loaded or failing; "No local model loaded" is based on the selection, not the runtime. | ui |
+| mobile | partial | Performance screen does not show whether a model is actually loaded or failing; "No local model loaded" reflects the selection, not the runtime. | ui |
 
 Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app/(app)/settings/performance.tsx:636-642`
 
@@ -164,7 +164,7 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Performance runs a benchmark and shows thermal state, but the tok/s, latency and memory charts stay empty because nothing records real inferences (recordPerfEvent has no caller) and peak memory is always 0. | handler |
+| mobile | partial | recordPerfEvent still has no caller, so tok/s, latency and memory charts stay empty. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
