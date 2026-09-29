@@ -15,9 +15,11 @@ import {
 } from '../src/features/auth/actions/postAuthIntent';
 import {
   beginCloudPostAuthIntent,
+  beginCloudPostAuthIntentForDestination,
   clearPostAuthIntent,
   CLOUD_CHAT_POST_AUTH_INTENT,
   consumePostAuthIntent,
+  consumePostAuthDestination,
   parsePostAuthIntent,
   peekPostAuthIntent,
   POST_AUTH_INTENT_PARAM,
@@ -37,6 +39,68 @@ describe('post-auth Cloud intent', () => {
     expect(parsePostAuthIntent(['cloud-chat'])).toBeNull();
     expect(parsePostAuthIntent('cloud')).toBeNull();
     expect(parsePostAuthIntent(undefined)).toBeNull();
+    expect(parsePostAuthIntent('cloud-schedules')).toBe('cloud-schedules');
+    expect(parsePostAuthIntent('cloud-tasks')).toBe('cloud-tasks');
+    expect(parsePostAuthIntent('/(app)/settings/cloud-billing')).toBeNull();
+  });
+
+  it.each([
+    ['/(app)/settings/cloud-account', 'cloud-account'],
+    ['/(app)/settings/account-security', 'cloud-account-security'],
+    ['/(app)/settings/cloud-billing', 'cloud-billing'],
+    ['/(app)/settings/shared-links', 'cloud-shared-links'],
+    ['/(app)/settings/workspace', 'cloud-workspace'],
+    ['/(app)/settings/reflect', 'cloud-reflect'],
+    ['/(app)/settings/archived-chats', 'cloud-archived-chats'],
+    ['/(app)/settings/cloud-privacy', 'cloud-privacy'],
+    ['/(app)/settings/cloud-usage', 'cloud-usage'],
+    ['/(app)/settings/cloud-connectors', 'cloud-connectors'],
+  ] as const)('returns to %s after Cloud sign-in', (destination, intent) => {
+    expect(beginCloudPostAuthIntentForDestination(destination).params.postAuthIntent).toBe(intent);
+    useWaitlistStore.getState().setCloudAccess(true);
+    expect(
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded: true,
+        isSignedIn: true,
+        userId: 'person-a',
+        termsAccepted: true,
+        cloudUnlocked: true,
+        subscriptionTier: 'free',
+      }),
+    ).toBe(true);
+    expect(consumePostAuthDestination()).toBe(destination);
+  });
+
+  it('restores the requested Cloud feature only after the authenticated gate passes', () => {
+    const href = beginCloudPostAuthIntent('cloud-schedules');
+    expect(href.params.postAuthIntent).toBe('cloud-schedules');
+
+    expect(
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded: true,
+        isSignedIn: true,
+        userId: 'person-a',
+        termsAccepted: false,
+        cloudUnlocked: false,
+        subscriptionTier: 'free',
+      }),
+    ).toBe(false);
+    expect(consumePostAuthDestination()).toBeNull();
+
+    useWaitlistStore.getState().setCloudAccess(true);
+    expect(
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded: true,
+        isSignedIn: true,
+        userId: 'person-a',
+        termsAccepted: true,
+        cloudUnlocked: true,
+        subscriptionTier: 'free',
+      }),
+    ).toBe(true);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(consumePostAuthDestination()).toBe('/(app)/schedules');
+    expect(consumePostAuthDestination()).toBeNull();
   });
 
   it('stages an explicit route intent and consumes it only once', () => {
@@ -85,11 +149,29 @@ describe('post-auth Cloud intent', () => {
       isLoaded: true,
       isSignedIn: false,
       userId: null,
+      termsAccepted: false,
       cloudUnlocked: false,
       subscriptionTier: useTierStore.getState().tier,
     });
 
     expect(completed).toBe(false);
+    expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
+  it('does not consume a signed-in Cloud intent before Terms acceptance', () => {
+    beginCloudPostAuthIntent();
+
+    expect(
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded: true,
+        isSignedIn: true,
+        userId: 'terms-pending-owner',
+        termsAccepted: false,
+        cloudUnlocked: true,
+        subscriptionTier: useTierStore.getState().tier,
+      }),
+    ).toBe(false);
     expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
     expect(useChatAppModeStore.getState().appMode).toBe('local');
   });
@@ -113,6 +195,12 @@ describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
     'app/(app)/chat/[id].tsx',
     'app/(app)/(tabs)/chat.tsx',
     'app/(public)/onboarding.tsx',
+    'app/(app)/schedules/index.tsx',
+    'app/(app)/schedules/create.tsx',
+    'app/(app)/models.tsx',
+    'src/features/tasks/CloudTasksScreen.tsx',
+    'src/features/compare/index.tsx',
+    'src/features/skills/SkillsScreen.tsx',
   ];
 
   it.each(entryPoints)(

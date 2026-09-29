@@ -44,9 +44,14 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-const mockStorageSet = jest.fn();
-const mockStorageGet = jest.fn().mockReturnValue(undefined);
-const mockStorageDelete = jest.fn();
+const mockStoredValues = new Map<string, string>();
+const mockStorageSet = jest.fn((key: unknown, value: unknown) => {
+  mockStoredValues.set(String(key), String(value));
+});
+const mockStorageGet = jest.fn((key: unknown) => mockStoredValues.get(String(key)));
+const mockStorageDelete = jest.fn((key: unknown) => {
+  mockStoredValues.delete(String(key));
+});
 let mockModelPickerProps: { onSelect?: (modelId: string) => void } | null = null;
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -94,7 +99,16 @@ const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
     { id: 'moonshot', displayName: 'Moonshot AI / Kimi (China)', defaultEnabled: false },
   ],
 });
-const mockRecordDisclosureAcceptance = jest.fn().mockResolvedValue(undefined);
+const mockRecordDisclosureAcceptance = jest.fn().mockImplementation(async (args) => {
+  args.ledger.write({
+    version: 1,
+    acceptedAt: new Date().toISOString(),
+    surface: args.surface,
+    disclosureCopyHash: 'fixture-disclosure-hash',
+    managedCloudAccepted: args.managedCloudAccepted,
+    chineseHqProvidersAccepted: [...args.chineseHqProvidersAccepted],
+  });
+});
 jest.mock('@agiworkforce/compliance', () => ({
   ...jest.requireActual('@agiworkforce/compliance'),
   composeFirstRunDisclosure: (...args: unknown[]) => mockComposeFirstRunDisclosure(...args),
@@ -189,6 +203,7 @@ describe('Onboarding', () => {
   beforeEach(() => {
     jest.useRealTimers();
     jest.clearAllMocks();
+    mockStoredValues.clear();
     mockModelPickerProps = null;
     mockIsDisclosureSatisfied.mockReturnValue(false);
     mockGetInstalledModel.mockResolvedValue(null);

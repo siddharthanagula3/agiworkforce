@@ -2,6 +2,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ApiHttpError } from '../services/apiErrors';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -64,6 +65,7 @@ jest.mock('lucide-react-native', () => {
     RefreshCw: icon,
     Search: icon,
     CloudOff: icon,
+    ShieldCheck: icon,
   };
 });
 
@@ -184,6 +186,21 @@ describe('Cloud Connectors, OAuth connect flow', () => {
     expect(alertSpy.mock.calls[0]?.[0]).toBe('Could not open Linear authorization');
     expect(mockFetchDirectory).toHaveBeenCalledTimes(1);
     expect(getByLabelText('Linear. Connect')).toBeTruthy();
+  });
+
+  it('explains unavailable deployment configuration without exposing server diagnostics', async () => {
+    mockConnect.mockRejectedValue(new ApiHttpError('Private OAuth configuration detail', 501));
+
+    const { getByLabelText } = render(<CloudConnectorsScreen />);
+    await waitFor(() => expect(getByLabelText('Linear. Connect')).toBeTruthy());
+
+    fireEvent.press(getByLabelText('Linear. Connect'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    expect(alertSpy.mock.calls[0]?.[1]).toBe(
+      'This connector is unavailable in this deployment. Try another connector.',
+    );
+    expect(mockOpenUntrusted).not.toHaveBeenCalled();
   });
 
   it('shows an expired grant as expired rather than connected', async () => {
