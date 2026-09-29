@@ -15,6 +15,6 @@ pub mod linux_sandbox;
 
 #[allow(unused_imports)]
 pub use engine::{
-    mcp_rule_target, set_user_mcp_rule, user_mcp_rules, PolicyDecision, PolicyEngine, PolicyLayer,
-    PolicyResolution, PolicyRule, WorkspacePolicy,
+    mcp_rule_target, remove_user_mcp_rule, set_user_mcp_rule, user_mcp_rules, PolicyDecision,
+    PolicyEngine, PolicyLayer, PolicyResolution, PolicyRule, WorkspacePolicy,
 };
