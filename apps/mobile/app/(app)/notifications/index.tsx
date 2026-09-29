@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatNotificationTime } from '@/src/features/notifications/time';
 import {
+  cloudRunNotificationRoute,
   useNotificationCenter,
   getPriorityLabel,
   type NotificationCenterItem,
@@ -179,6 +180,11 @@ export default function NotificationCenterScreen() {
     (item: NotificationCenterItem) => {
       markRead(item.id);
       const route = item.data.route;
+      const runRoute = cloudRunNotificationRoute(item.data);
+      if (runRoute) {
+        router.push(runRoute);
+        return;
+      }
 
       switch (item.data.type) {
         case 'agent_failed':

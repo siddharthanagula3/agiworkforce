@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "このアプリがあなたのアカウントで AI を使い、{{apps}} のデータを読み取ったり変更したりしようとしています。アプリはそれらのアプリが返す内容を見ることができ、各リクエストはプランの使用量に含まれます。",
     "runtimeAllow": "許可",
     "runtimeDecline": "許可しない",
+    "runtimeConnectorsLoading": "接続済みのアプリを確認しています",
+    "runtimeConnectorNotConnected": "未接続です。このアプリのこの部分を使うには、設定の「コネクタ」で接続してください。",
+    "runtimeToolNeedsApproval": "使うたびに確認が必要なため、このアプリでは使えません。",
+    "runtimeToolBlocked": "設定でブロックされています。",
+    "runtimeManageConnectors": "接続済みのアプリ",
     "saveCopy": "コピーを自分のチャットに保存",
     "saveCopyBusy": "コピー中…",
     "saveCopyFailed": "このアーティファクトをコピーできませんでした。"

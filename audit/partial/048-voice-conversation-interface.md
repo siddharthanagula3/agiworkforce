@@ -9,116 +9,35 @@ nothing is left.
 ## S48.01: Voice entry from an existing chat.
 
 - Done when: From an open existing chat, a control starts a voice conversation bound to that chat.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:75-75`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.02: Start a new voice conversation.
 
 - Done when: A control starts a brand-new voice conversation (a new chat is created for it).
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:75-75`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.03: Integrated voice-and-text layout.
-
-- Done when: Voice runs inside the chat view: the transcript of spoken turns appears in the same message list as typed turns.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/tui/tui_app.rs:2804-2804`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.05: Listening indicator.
-
-- Done when: While the assistant is listening, a visible (and announced) listening state is shown.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.07: Thinking/working indicator.
-
-- Done when: While the assistant is working (thinking or running a tool), a thinking/working state is shown.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.08: Waveform or amplitude visualization.
-
-- Done when: A waveform or amplitude visual follows the live microphone or reply audio level during voice.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.10: End conversation.
-
-- Done when: A control ends the voice conversation, closing the session (and settling its usage).
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.11: Pause/resume.
-
-- Done when: The user can pause the whole voice conversation (mic and assistant) and resume it later without ending it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mute (live bar and companion) only stops listening; there is no pause that holds a spoken reply and resumes it. | ui |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
 
 ## S48.12: Push-to-talk.
 
 - Done when: A push-to-talk mode records only while a key or button is held and sends on release.
-- Wave: 2
-- Already works on: mobile
+- Wave: 3
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:661-661`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.13: Hands-free mode.
 
@@ -143,18 +62,6 @@ Code: `apps/cli/src/voice.rs:661-661`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:14-14`, `apps/web/features/chat/lib/voice-samples.ts:5-5`, `scripts/generate-voice-samples.mjs:95-95`
 
-## S48.17: Language selection.
-
-- Done when: The user can choose the spoken language of the voice conversation, and it is applied to recognition.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:89-89`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
 ## S48.18: Input-device selection.
 
 - Done when: The user can choose which microphone (input device) voice uses.
@@ -164,22 +71,7 @@ Code: `apps/cli/src/voice.rs:89-89`, `apps/cli/src/voice.rs:320-320`, `apps/cli/
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS-only route choice (Automatic, Speaker, Bluetooth, Headset) steers input and output classes; no per-device microphone list, nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:48-48`, `apps/mobile/src/features/voice/services/audioRoute.ts:66-66`
-
-## S48.19: Output-device selection.
-
-- Done when: The user can choose which speaker (output device) voice plays through.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Route picker (Speaker, Bluetooth, Headset) is iOS only; Android has no output choice. | ui |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:221-221`, `apps/mobile/src/features/voice/services/audioRoute.ts:60-60`
 
 ## S48.20: Speaker/Bluetooth routing.
 
@@ -188,71 +80,16 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:221-221`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Speaker, Bluetooth and headset routing works on iOS only; add Android audio routing. | ui |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:48-48`, `apps/mobile/src/features/voice/services/audioRoute.ts:29-29`
-
-## S48.21: Captions.
-
-- Done when: Live captions of both speakers can be shown during voice.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:221-221`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.22: Transcript display.
-
-- Done when: A transcript of the voice conversation is displayed and kept with the chat.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.26: View tool results during Voice.
-
-- Done when: Tool activity and results from a voice turn are viewable during the conversation.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only "Working on your request" is shown while a delegated tool runs; no tool name or result. | ui |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.27: Approve an action during Voice.
-
-- Done when: An action requested by voice that needs approval can be approved or denied without leaving voice.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.28: Open a generated document from Voice.
 
 - Done when: A document generated during voice can be opened from the voice view.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.29: Attach image during Voice.
 
@@ -263,33 +100,6 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | The turn-based inline voice bar has an attach button, but it closes voice before opening the attach sheet; nothing can be attached while voice continues. | handler |
-
-Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `apps/mobile/app/(app)/chat/[id].tsx:1028-1028`
-
-## S48.38: Continue unfinished work in text.
-
-- Done when: The user can leave voice and continue the same unfinished conversation by typing.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
-
-## S48.39: Resume a previous voice conversation.
-
-- Done when: The user can reopen a previous voice conversation and continue it by voice with its earlier turns as context.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
-
-Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.40: Remote coding-session voice control.
 

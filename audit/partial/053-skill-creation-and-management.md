@@ -14,12 +14,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists only the skills already on the account (GET /api/skills without catalog=all); it cannot browse or install others. | ui |
+| mobile | partial | codex: apply post-codex/w-connect-S53.01-S49.03-skills-speech-held.patch (skills service committed e20a7db581) | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:326-329`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S53.02: Installed Skills.
 
@@ -231,9 +231,6 @@ Code: `apps/cli/src/agent/chat.rs:1046-1062`, `apps/cli/src/skill_learner.rs:1-1
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Rows show the source label and required tools only; no permission or provenance summary. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`

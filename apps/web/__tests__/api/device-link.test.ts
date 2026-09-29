@@ -8,6 +8,7 @@ const mockExecute = vi.fn();
 const mockRecordAuditEvent = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: () => mockGetClerkAuthUser(),
 }));
 
@@ -33,6 +34,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 vi.mock('@shared/utils/env', () => ({
+  getOptionalEnv: vi.fn(),
   requireEnv: vi.fn((key: string) => {
     if (key === 'NEON_DATABASE_URL') return 'https://localhost';
     if (key === 'CLERK_SECRET_KEY') return 'test-anon-key';
@@ -46,6 +48,7 @@ vi.mock('@shared/utils/env', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => ({
     execute: mockExecute,
     query: vi.fn(async (sql: string) =>

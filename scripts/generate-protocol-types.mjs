@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,7 +31,10 @@ try {
     stdio: 'inherit',
     env: {
       ...process.env,
-      CARGO_TARGET_DIR: path.join(os.tmpdir(), 'agi-protocol-types-target'),
+      CARGO_TARGET_DIR: path.join(
+        os.tmpdir(),
+        `agi-protocol-types-target-${createHash('sha256').update(repoRoot).digest('hex').slice(0, 12)}`,
+      ),
       TS_RS_EXPORT_DIR: stagingDir,
     },
   });

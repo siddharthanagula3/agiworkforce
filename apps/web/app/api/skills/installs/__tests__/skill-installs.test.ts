@@ -23,6 +23,7 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
 

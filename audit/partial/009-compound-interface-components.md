@@ -66,11 +66,8 @@ Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/li
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only an iOS route choice (speaker, Bluetooth, headset); no list of individual devices and nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-61`
 
 ## S9.11: Member and recipient picker.
 
@@ -150,10 +147,7 @@ Code: `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 ## S9.22: Stepper.
 
@@ -173,10 +167,7 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | On tablets the drawer stays open beside the chat at a fixed width; let the user resize it, and add a chat-plus-artifact split. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:50-50`
 
 ## S9.25: Docking layout manager.
 
@@ -197,11 +188,11 @@ Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/u
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
+| mobile | partial | partials/chat-gates 279d031081 records when each version was saved and adds a history sheet listing every version newest first with what changed, open and restore. post-codex/w-chat-s9.26-mobile-artifact-version-history.patch makes the vN/M label in the held ArtifactFullScreen open it. | codex |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`
+Code: `apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx:21-21`, `apps/mobile/src/features/artifacts/versionSummary.ts:73-73`, `apps/mobile/src/features/artifacts/store.ts:49-49`
 
 ## S9.27: Diff viewer.
 

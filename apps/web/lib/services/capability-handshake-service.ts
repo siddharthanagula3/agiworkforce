@@ -136,8 +136,8 @@ function buildSettingsLayerGrant(
     granted.delete(capability);
     denialReasons[capability] = 'disabled_by_workspace';
   }
+  for (const capability of closedCapabilities) granted.delete(capability);
   for (const capability of closedCapabilities) {
-    granted.delete(capability);
     denialReasons[capability] = 'temporarily_unavailable';
   }
   const sources = [

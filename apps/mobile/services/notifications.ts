@@ -309,6 +309,22 @@ function approvalRoute(data: NotificationData): Parameters<typeof router.push>[0
   return { pathname: '/(app)/companion' as const };
 }
 
+const CLOUD_RUN_NOTIFICATION_TYPES: readonly NotificationEventType[] = [
+  'agent_approval_needed',
+  'agent_paused',
+  'agent_failed',
+  'task_completed',
+];
+
+export function cloudRunNotificationRoute(
+  data: NotificationData,
+): Parameters<typeof router.push>[0] | null {
+  const runId = readIdentifier(data, 'runId');
+  if (!runId || !CLOUD_RUN_NOTIFICATION_TYPES.includes(data.type)) return null;
+  if (!isAllowedRoute('/(app)/tasks')) return null;
+  return { pathname: '/(app)/tasks', params: { runId } } as Parameters<typeof router.push>[0];
+}
+
 function readIdentifier(data: NotificationData, key: string): string | null {
   const value = data[key];
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -345,6 +361,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
   if (readIdentifier(data, 'threadId') && readIdentifier(data, 'rootId')) {
     safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
+    return;
+  }
+
+  const runRoute = cloudRunNotificationRoute(data);
+  if (runRoute) {
+    safeNavigate(runRoute);
     return;
   }
 

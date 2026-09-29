@@ -53,6 +53,10 @@ vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeAccess: mocks.evaluateManagedComputeAccess,
   buildManagedComputeAccessGateResponse: mocks.buildManagedComputeAccessGateResponse,
 }));
+// The viewer's connector consent has its own tests; these cases start past it.
+vi.mock('@/lib/services/artifact-connector-gate', () => ({
+  artifactConnectorsGateResponse: vi.fn(async () => null),
+}));
 vi.mock('@/lib/moderation', () => ({ moderateManagedPrompt: mocks.moderateManagedPrompt }));
 vi.mock('@/lib/services/managed-content-safety-service', () => ({
   enforceManagedContentSafetyPreference: mocks.enforceManagedContentSafetyPreference,

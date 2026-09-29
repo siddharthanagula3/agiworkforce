@@ -44,7 +44,7 @@ export function capabilityAllowed(
   document: CapabilityDocument | null,
   capability: PlatformCapability,
 ): boolean {
-  return resolveCapabilityDocumentDecision(document, capability)?.allowed ?? true;
+  return resolveCapabilityDocumentDecision(document, capability)?.allowed ?? false;
 }
 
 async function readAccountError(response: Response): Promise<string> {

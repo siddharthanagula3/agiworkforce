@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "Diese App möchte KI mit deinem Konto nutzen und Daten in {{apps}} lesen oder ändern. Sie sieht, was diese Apps zurückgeben, und jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeAllow": "Zulassen",
     "runtimeDecline": "Nicht zulassen",
+    "runtimeConnectorsLoading": "Deine verbundenen Apps werden geprüft",
+    "runtimeConnectorNotConnected": "Nicht verbunden. Verbinde die App unter Einstellungen, Connectors, um diesen Teil der App zu nutzen.",
+    "runtimeToolNeedsApproval": "Fragt vor jeder Nutzung nach, daher kann diese App sie nicht verwenden.",
+    "runtimeToolBlocked": "In deinen Einstellungen blockiert.",
+    "runtimeManageConnectors": "Verbundene Apps",
     "saveCopy": "Eine Kopie in meinen Chats speichern",
     "saveCopyBusy": "Wird kopiert…",
     "saveCopyFailed": "Dieses Artefakt konnte nicht kopiert werden."

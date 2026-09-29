@@ -41,18 +41,6 @@ Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:22-22`
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`
 
-## S19.11: Streaming structured output.
-
-- Done when: Structured output (markdown lists, tables, code blocks) renders correctly while it is still streaming.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | While streaming, the TUI shows the raw text tail; markdown (tables, code) is rendered only after the turn ends. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1588-1600`, `apps/cli/src/tui/tui_app.rs:1528-1531`
-
 ## S19.12: Building an artifact.
 
 - Done when: While an artifact/file is being produced, the surface shows it is being built.

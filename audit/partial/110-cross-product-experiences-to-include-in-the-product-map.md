@@ -27,29 +27,29 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the office-file tool makes a new fixed-layout, download-only .pptx; there is no turn-into-deck action, deck viewer or deck editing. Uploaded source documents need UPLOAD_SCAN_WEBHOOK_URL in production. | ui |
-| desktop | partial | Only the office-file tool makes a new fixed-layout, download-only .pptx; there is no turn-into-deck action, deck viewer or deck editing. Uploaded source documents need UPLOAD_SCAN_WEBHOOK_URL in production. | ui |
+| web | partial | A document becomes a .pptx through the office-file tool; a deck viewer or editor is declined by D-2026-09-27-02 (no slide editor at ChatGPT or Claude). Left: UPLOAD_SCAN_WEBHOOK_URL so uploaded source documents are admitted. | switch-on |
+| desktop | partial | A document becomes a .pptx through the office-file tool; a deck viewer or editor is declined by D-2026-09-27-02 (no slide editor at ChatGPT or Claude). Left: UPLOAD_SCAN_WEBHOOK_URL so uploaded source documents are admitted. | switch-on |
 | mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
+Code: `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.03: Spreadsheet → chart → report.
 
 - Done when: A spreadsheet the user brings is analysed, charted, and turned into a report that contains the chart.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A chart can land only in a new .xlsx sheet; the DOCX/PDF report input takes text and tables, so the chart never reaches the report. Spreadsheet upload needs UPLOAD_SCAN_WEBHOOK_URL in production. | ui, flag-off |
-| desktop | partial | A chart can land only in a new .xlsx sheet; the DOCX/PDF report input takes text and tables, so the chart never reaches the report. Spreadsheet upload needs UPLOAD_SCAN_WEBHOOK_URL in production. | ui, flag-off |
+| web | partial | Chart-into-report runs through sandbox code execution, as Claude's file creation does; switch on AGI_E2B_EXECUTION (office template AGI_E2B_CHAT_TEMPLATE) and UPLOAD_SCAN_WEBHOOK_URL, then live-check that the template has python-docx and matplotlib. | switch-on, live-check |
+| desktop | partial | Chart-into-report runs through sandbox code execution, as Claude's file creation does; switch on AGI_E2B_EXECUTION (office template AGI_E2B_CHAT_TEMPLATE) and UPLOAD_SCAN_WEBHOOK_URL, then live-check that the template has python-docx and matplotlib. | switch-on, live-check |
 | mobile | partial | Chart artifacts render as text in the mobile artifact viewer and the report tool cannot embed a chart. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/lib/services/managed-office-file-service.ts:67-68`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
+Code: `apps/web/lib/e2b/execution-tools.ts:62-62`, `apps/web/scripts/build-e2b-office-template.mjs:4-4`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.05: Research → interactive page.
 
@@ -67,32 +67,28 @@ Code: `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/
 ## S110.07: Voice → durable work task.
 
 - Done when: A request made in voice mode becomes a durable AGI Work task (runs in background, tracked in Tasks) without the user retyping it.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | agi_work is unreachable from live voice; the user must switch to text and start a task from the Tasks screen, carrying no voice context. | handler |
-| cli | partial | A /voice turn is an ordinary agent turn, but voice ships only in builds with the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`, `apps/cli/Cargo.toml:111-111`, `apps/cli/src/tui/tui_app.rs:4451-4451`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`
 
 ## S110.08: Voice → generated document.
 
 - Done when: A spoken request in voice mode produces a document (docx/pdf/markdown artifact) the user can open from the voice session.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Files a /voice turn writes land in the workspace, but voice is behind the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/Cargo.toml:111-111`, `apps/cli/src/voice.rs:255-255`
 
 ## S110.10: Email thread → agent task.
 
@@ -254,12 +250,10 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
-| desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`, `apps/cli/src/cloud/connectors.rs:53-53`, `apps/cli/src/models/streaming.rs:619-619`, `crates/agiworkforce-llm/src/stream.rs:845-845`
 
 ## S110.28: Published output → versioned update.
 
