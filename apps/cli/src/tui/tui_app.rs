@@ -6350,19 +6350,16 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunLogout => {
-                                let revoked =
-                                    crate::app_server::account::revoke_managed_sessions().await;
-                                let mut store = crate::auth::load_auth().unwrap_or_default();
-                                store.entries.clear();
-                                let _ = crate::auth::save_auth(&store);
-                                crate::claude_parity::connectors::forget_local_tool_policy();
+                                let text =
+                                    match crate::app_server::account::sign_out_of_every_provider()
+                                        .await
+                                    {
+                                        Ok(signed_out) => signed_out.message(),
+                                        Err(error) => format!("Could not log out: {error:#}"),
+                                    };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: if revoked {
-                                        "Logged out from all providers.".to_string()
-                                    } else {
-                                        "Logged out from all providers. AGI Cloud did not confirm the sign-out; the device session ends when it expires, or unlink it in Settings, Account, Linked devices.".to_string()
-                                    },
+                                    text,
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
