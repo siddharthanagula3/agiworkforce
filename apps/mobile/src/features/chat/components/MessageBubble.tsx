@@ -109,6 +109,7 @@ import {
   generatedFileArtifactsFromMetadata,
   mergeDerivedAndGeneratedFileArtifacts,
 } from '@/src/features/chat/utils/generatedFileArtifacts';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
@@ -454,6 +455,8 @@ interface MessageBubbleProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
+  onDeleteImageConversation?: () => void;
   variant?: VariantInfo;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
@@ -503,6 +506,8 @@ export const MessageBubble = memo(function MessageBubble({
   onReject,
   onDeleteMessage,
   onRetryMessage,
+  onEditImageArea,
+  onDeleteImageConversation,
   onRetryWithModel,
   variant,
   onSelectVariant,
@@ -1797,6 +1802,16 @@ export const MessageBubble = memo(function MessageBubble({
         visible={fullScreenImageUrl !== null}
         allowEphemeral={message.imageGenPersisted === false}
         onClose={handleCloseFullScreenImage}
+        onEditArea={
+          onEditImageArea
+            ? (edit) => {
+                handleCloseFullScreenImage();
+                onEditImageArea(message, edit);
+              }
+            : undefined
+        }
+        onDelete={onDeleteImageConversation}
+        deleteMessage="Deleting this image deletes the chat it was made in, with all of its messages."
       />
 
       {/* VoiceOver rotor actions cannot reach the nested timeline controls while
