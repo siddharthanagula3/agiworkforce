@@ -4077,24 +4077,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::cli_options::PermissionMode::Plan
             ) {
                 "/plan accept: not in plan mode. Use /plan to enter it first.".to_string()
-            } else if app.session.current_plan.is_none() {
+            } else if app.session.approve_plan().is_err() {
                 "/plan accept: no plan to approve yet. Ask the model to call update_plan first."
                     .to_string()
             } else {
-                app.session.plan_approved = true;
                 "Plan approved. Mutating tools enabled for this session.".to_string()
             },
         ),
 
         "/plan" if arg.starts_with("reject") => {
             let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
-            SlashResult::SystemMessage(if feedback.is_empty() {
+            SlashResult::SystemMessage(if app.session.reject_plan(&feedback).is_err() {
                 "/plan reject: needs a reason. Usage: /plan reject <feedback>".to_string()
             } else {
-                app.session.plan_rejection_feedback = Some(feedback);
-                app.session.current_plan = None;
-                app.session.current_plan_path = None;
-                app.session.plan_approved = false;
                 "Plan rejected. Feedback queued for the model on the next turn.".to_string()
             })
         }

@@ -118,6 +118,7 @@ pub mod method {
     pub const PERMISSIONS_ADD: &str = "permissions/add";
     pub const TRUST_LIST: &str = "trust/list";
     pub const TRUST_REVOKE: &str = "trust/revoke";
+    pub const THREAD_PLAN_DECISION: &str = "thread/planDecision";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -392,6 +393,10 @@ pub struct AppServerCapabilities {
     pub permission_rules: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub trust: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub turn_tool_filters: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan_decision: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1329,6 +1334,14 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cloud_project_id: Option<String>,
+    /// Tools this thread may use from this turn on. `Some(empty)` clears the
+    /// allow list; the host's own boundary rules still apply on top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub disallowed_tools: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1905,6 +1918,14 @@ pub struct SkillSummary {
     /// Project skills load only after explicit per-workspace consent. User and
     /// plugin skills carry no consent gate and report `true`.
     pub consented: bool,
+    #[serde(default)]
+    pub required_tools: Vec<String>,
+    #[serde(default)]
+    pub required_env_vars: Vec<String>,
+    #[serde(default)]
+    pub missing_tools: Vec<String>,
+    #[serde(default)]
+    pub missing_env_vars: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2489,6 +2510,25 @@ pub struct PermissionsListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PlanDecision {
+    Approve,
+    Reject,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PlanDecisionParams {
+    pub thread_id: String,
+    pub decision: PlanDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub feedback: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

@@ -788,6 +788,32 @@ impl AgentSession {
         ));
     }
 
+    pub fn approve_plan(&mut self) -> Result<(), &'static str> {
+        if !matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) {
+            return Err("Not in plan mode.");
+        }
+        if self.current_plan.is_none() {
+            return Err("There is no plan to approve yet.");
+        }
+        self.plan_approved = true;
+        Ok(())
+    }
+
+    pub fn reject_plan(&mut self, feedback: &str) -> Result<(), &'static str> {
+        let feedback = feedback.trim();
+        if feedback.is_empty() {
+            return Err("Say what to change in the plan.");
+        }
+        self.plan_rejection_feedback = Some(feedback.to_string());
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_approved = false;
+        Ok(())
+    }
+
     pub(crate) fn apply_tool_filters(
         &mut self,
         allowed_tools: &[String],

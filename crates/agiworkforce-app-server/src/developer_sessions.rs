@@ -10,18 +10,18 @@ use agiworkforce_protocol::developer_session::{
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginSetEnabledParams, PluginUpdateResponse, ProtocolVersionUnsupportedData,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
-    WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    PermissionsRemoveParams, PlanDecisionParams, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
+    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
     PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
     THREAD_WRITER_CONFLICT_ERROR_CODE,
@@ -438,6 +438,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PermissionsAddParams,
     ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PERMISSIONS_ADD))
+    }
+
+    async fn decide_plan(
+        &self,
+        _params: PlanDecisionParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_PLAN_DECISION))
     }
 
     async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
@@ -1176,6 +1183,16 @@ impl DeveloperSessionProcessor {
                     .add_permission(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::THREAD_PLAN_DECISION => {
+                let params = match parse_params::<PlanDecisionParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .decide_plan(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
             method::TRUST_LIST => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {

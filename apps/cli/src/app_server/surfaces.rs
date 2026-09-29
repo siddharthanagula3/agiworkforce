@@ -103,9 +103,17 @@ fn skill_scope(origin: SkillOrigin) -> SkillCatalogScope {
 }
 
 pub fn list_skills(workspace_root: &Path) -> SkillListResponse {
+    let available_tools: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .map(|definition| definition.name)
+        .collect();
     let skills = skills::skill_catalog(workspace_root)
         .into_iter()
         .map(|entry| SkillSummary {
+            missing_tools: skills::missing_tool_dependencies(&entry.skill, &available_tools),
+            missing_env_vars: entry.skill.check_env_deps().err().unwrap_or_default(),
+            required_tools: entry.skill.required_tools.clone(),
+            required_env_vars: entry.skill.required_env_vars.clone(),
             name: entry.skill.name,
             description: entry.skill.description,
             scope: skill_scope(entry.origin),

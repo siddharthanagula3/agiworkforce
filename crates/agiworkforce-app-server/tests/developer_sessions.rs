@@ -351,6 +351,8 @@ fn capabilities() -> AppServerCapabilities {
         plugin_updates: false,
         permission_rules: false,
         trust: false,
+        turn_tool_filters: false,
+        plan_decision: false,
     }
 }
 
@@ -1205,6 +1207,10 @@ impl DeveloperSessionHost for SurfaceHost {
                 path: "/home/dev/.agiworkforce/skills/release-notes/SKILL.md".to_string(),
                 enabled: true,
                 consented: true,
+                required_tools: Vec::new(),
+                required_env_vars: Vec::new(),
+                missing_tools: Vec::new(),
+                missing_env_vars: Vec::new(),
             }],
         })
     }
