@@ -96,7 +96,7 @@ export interface ToolMetadata {
   externalDelivery?: ToolExternalDelivery;
   /**
    * Runs without asking under the read-only policy even though it reaches the
-   * public internet or the sandbox: web search, page fetch and sandboxed code
+   * public internet or the sandbox: web search, place search, page fetch and sandboxed code
    * are the leaders' automatic tools (D-2026-09-15-01). Never set on a tool
    * that can write, send, buy, change credentials or touch the user's machine.
    */
@@ -133,6 +133,21 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     declared: true,
   },
   search_maps: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_places: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: true,
+    declared: true,
+    autoInReadOnlyMode: true,
+  },
+  ask_clarifying_questions: {
     actionClass: 'read',
     reversible: true,
     acceptsUntrustedContent: false,
