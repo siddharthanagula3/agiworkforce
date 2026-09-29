@@ -6176,11 +6176,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             "AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr",
                         )
                     });
-                if !allow_public_listen && !addr.ip().is_loopback() {
-                    anyhow::bail!(
-                        "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
-                    );
-                }
                 let token = auth_token
                     .clone()
                     .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
@@ -6197,6 +6192,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         auth_token: Some(token),
                         allowed_origins: allowed_origin.clone(),
                         allow_query_token: *allow_query_token,
+                        allow_public_listen: *allow_public_listen,
                     },
                     host,
                     capabilities,
