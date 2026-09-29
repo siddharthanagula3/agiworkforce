@@ -602,6 +602,20 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             output: reason,
         });
     }
+    // The workspace's website rules bind the signed-in browser as they bind
+    // web_fetch; web_fetch and web_search apply them where they run.
+    if canonical_name == "browser_navigate" {
+        if let Some(reason) = match call.args.get("url") {
+            Some(url) => web::workspace_site_refusal(url).await,
+            None => None,
+        } {
+            return Ok(ToolResult {
+                tool_name: canonical_name.to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    }
 
     let boundary_gated = match canonical_name {
         "web_fetch" => opts.require_confirmation,

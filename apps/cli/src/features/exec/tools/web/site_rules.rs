@@ -86,12 +86,23 @@ impl SiteRules {
     }
 }
 
-/// The rules in force for this process, read with the stored sign-in.
-pub(crate) async fn current() -> Option<SiteRules> {
-    crate::claude_parity::connectors::policy_for_local_tools()
-        .await
-        .as_ref()
-        .and_then(SiteRules::from_policy)
+/// The rules in force for this process, read with the stored sign-in. Err
+/// refuses every website: the account's workspace rules could not be read.
+pub(crate) async fn current() -> Result<Option<SiteRules>, String> {
+    use crate::claude_parity::connectors::{policy_for_local_tools, LocalToolPolicy};
+    match policy_for_local_tools().await {
+        LocalToolPolicy::Unrestricted => Ok(None),
+        LocalToolPolicy::Rules(policy) => Ok(SiteRules::from_policy(&policy)),
+        LocalToolPolicy::Unreadable(reason) => Err(reason),
+    }
+}
+
+/// Why the workspace's rules refuse this URL, if they do.
+pub(crate) async fn refusal_for(url: &str) -> Option<String> {
+    match current().await {
+        Ok(rules) => rules.and_then(|rules| rules.refusal(url)),
+        Err(reason) => Some(reason),
+    }
 }
 
 #[cfg(test)]
@@ -147,5 +158,64 @@ mod tests {
             }),
             None
         );
+    }
+
+    mod policy_read {
+        use crate::claude_parity::connectors::{
+            local_tool_policy_from, ConnectorAccessPolicy, LocalToolPolicy,
+        };
+        use crate::cloud::CloudError;
+
+        fn transport() -> CloudError {
+            CloudError::Transport("connection reset".to_string())
+        }
+
+        #[test]
+        fn signed_out_or_personal_accounts_stay_unrestricted() {
+            assert_eq!(
+                local_tool_policy_from(Err(CloudError::SignedOut), true),
+                LocalToolPolicy::Unrestricted
+            );
+            let not_member = CloudError::Api {
+                status: 403,
+                message: "not a member".to_string(),
+            };
+            assert_eq!(
+                local_tool_policy_from(Err(not_member), true),
+                LocalToolPolicy::Unrestricted
+            );
+            assert_eq!(
+                local_tool_policy_from(Err(transport()), false),
+                LocalToolPolicy::Unrestricted
+            );
+            assert_eq!(
+                local_tool_policy_from(Ok(None), true),
+                LocalToolPolicy::Unrestricted
+            );
+        }
+
+        #[test]
+        fn a_workspace_member_whose_rules_cannot_be_read_is_refused() {
+            assert!(matches!(
+                local_tool_policy_from(Err(transport()), true),
+                LocalToolPolicy::Unreadable(_)
+            ));
+            assert!(matches!(
+                local_tool_policy_from(Err(CloudError::SessionExpired), true),
+                LocalToolPolicy::Unreadable(reason) if reason.contains("agi login")
+            ));
+        }
+
+        #[test]
+        fn read_rules_apply() {
+            let policy = ConnectorAccessPolicy {
+                blocked_web_domains: vec!["example.com".to_string()],
+                ..ConnectorAccessPolicy::default()
+            };
+            assert_eq!(
+                local_tool_policy_from(Ok(Some(policy.clone())), false),
+                LocalToolPolicy::Rules(policy)
+            );
+        }
     }
 }

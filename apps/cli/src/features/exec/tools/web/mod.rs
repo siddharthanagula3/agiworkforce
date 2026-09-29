@@ -8,6 +8,7 @@ use super::common::{print_tool_status, truncate_output_with_save, SCRIPT_RE, STY
 use super::ToolResult;
 
 mod site_rules;
+pub(super) use site_rules::refusal_for as workspace_site_refusal;
 use site_rules::SiteRules;
 
 const BLOCKED_HOSTS: &[&str] = &[
@@ -369,6 +370,17 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
         .unwrap_or(5)
         .clamp(1, 20);
 
+    let site_rules = match site_rules::current().await {
+        Ok(rules) => rules,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "web_search".to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    };
+
     print_tool_status("web_search", &format!("WebSearch({})", query));
 
     let failed = |output: String| {
@@ -417,7 +429,7 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
     let mut found = search_results(&body, max_results);
     // The search engine cannot be told the workspace's site rules, so the
     // results they refuse are dropped before the model sees them.
-    if let Some(rules) = site_rules::current().await {
+    if let Some(rules) = site_rules {
         let before = found.len();
         found.retain(|source| rules.refusal(&source.url).is_none());
         if before > 0 && found.is_empty() {
@@ -505,7 +517,16 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
         });
     }
 
-    let site_rules = site_rules::current().await;
+    let site_rules = match site_rules::current().await {
+        Ok(rules) => rules,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "web_fetch".to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    };
     if let Some(reason) = site_rules.as_ref().and_then(|rules| rules.refusal(url)) {
         return Ok(ToolResult {
             tool_name: "web_fetch".to_string(),
