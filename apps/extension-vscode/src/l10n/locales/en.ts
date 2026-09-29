@@ -441,6 +441,9 @@ const en = {
   'webview.resendMessage': 'Resend',
   'webview.resendMessageLabel': 'Resend this message',
   'webview.branchFromMessage': 'Branch',
+  'webview.branchFromAnswer': 'Branch from here',
+  'webview.branchFromAnswerLabel':
+    'Start a new session that keeps the conversation up to this answer',
   'webview.branchFromMessageLabel': 'Start a new session from here with this message ready to edit',
   'localServers.running_one': '{provider} is running · {count} model',
   'localServers.running_other': '{provider} is running · {count} models',
